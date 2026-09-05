@@ -199,7 +199,7 @@ To keep concurrent development controlled during final handover:
 
 ## Remaining P0
 
-1. Anonymous SECURITY DEFINER login exposure: CLOSED ✅
+1. Anonymous SECURITY DEFININER login exposure: CLOSED ✅
 2. Permission/scope hardening batch #25: CLOSED ✅
 3. Continue separate narrow hardening for confirmed authenticated gaps above.
 4. Re-run Advisor after each promoted hardening batch instead of chasing warning count by bulk mutation.
