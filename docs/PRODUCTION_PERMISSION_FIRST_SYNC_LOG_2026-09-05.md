@@ -46,7 +46,9 @@ Authorization rules in the repair:
 - `user_may_access_branch`: Super Admin bypass + explicit `user_branch_access` + active primary branch only.
 - `get_user_branch_access`: explicit/primary grants only; cross-user inspection requires explicit user-management capability.
 - branch creation/deletion: `branches.manage` plus branch/org scope; Super Admin remains the only implicit bypass.
+- successful branch creation records explicit `user_branch_access` for the authorized creator; no owner/admin role inheritance is restored.
 - shift opening: `shifts.open` plus canonical branch access; no `cashier` role-name gate.
+- only one open shift is allowed per user globally; successful `open_shift` returns both `shift_id` and `branch_id`.
 - repaired SECURITY DEFINER functions use `search_path = public, pg_temp` and explicit EXECUTE grants.
 
 Regression coverage added:
@@ -55,6 +57,34 @@ Regression coverage added:
 
 The test fails if any of the five endpoints regresses to fixed operational role authorization or loses its canonical capability checks.
 
+## Verify #737 — first preflight run
+
+Run `33987695872` / Verify #737:
+
+- DB identity ✅
+- API contract ✅
+- lint ✅
+- typecheck ✅
+- test typecheck ✅
+- unit ✅
+- build ✅
+- Fresh DB migrations ✅
+- schema verification ✅
+- Integration/Security/RLS ❌
+- Browser Smoke skipped because DB gate failed
+
+The uploaded Integration log showed seven failures with three root causes:
+
+1. `create_organization_branch` changed the established cross-organization denial error from `FORBIDDEN` to `PERMISSION_DENIED`.
+2. a branch created through an explicit `branches.manage` capability was not added to the creator's explicit branch-access map, so later branch reads/deactivation failed unless legacy owner-wide access was restored.
+3. `open_shift` did not preserve the V2 contract: it omitted `branch_id` in the success payload and allowed one simultaneous open shift per branch instead of one per user globally. The two later close-shift failures were downstream because the first open-shift assertion never captured `shift_id`.
+
+Corrections were made in the preflight migration only; tests/RLS were not weakened:
+
+- cross-org branch creation returns the established `FORBIDDEN` contract.
+- successful authorized branch creation inserts explicit `user_branch_access` for the creator.
+- `open_shift` returns `branch_id` and checks for any existing open shift for the user, regardless of branch.
+
 ## Safety rule
 
-No Production audit was bypassed and no RLS/test was weakened. The preflight migration must pass Fresh DB + Integration/Security/RLS + Browser Smoke before it is applied to Production. After that, the original `10600`, `10610`, `10625`, and P0-B security hardening migrations are retried/applied in source order.
+No Production audit was bypassed and no RLS/test was weakened. The corrected preflight migration must pass Fresh DB + Integration/Security/RLS + Browser Smoke before it is applied to Production. After that, the original `10600`, `10610`, `10625`, and P0-B security hardening migrations are retried/applied in source order.
