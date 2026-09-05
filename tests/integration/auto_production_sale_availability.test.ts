@@ -41,7 +41,7 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
     );
     await client.query(
       `INSERT INTO public.users (id,email,full_name,role,branch_id,is_active)
-       VALUES ($1,$2,'Auto Production Owner','owner',$3,true)`,
+       VALUES ($1,$2,'Auto Production Super Admin','super_admin',$3,true)`,
       [userId, `auto-prod-${userId}@example.test`, branchId],
     );
     await client.query(`INSERT INTO public.warehouses (id,name,branch_id,is_active) VALUES ($1,'Auto Production WH',$2,true)`, [warehouseId, branchId]);

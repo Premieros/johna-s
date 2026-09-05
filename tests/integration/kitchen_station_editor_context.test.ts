@@ -16,6 +16,11 @@ describe.skipIf(skip)('kitchen station editor context', () => {
     await client.connect();
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = permissions || '["settings.manage"]'::jsonb
+       WHERE role = 'branch_manager'`,
+    );
     imp = await canImpersonate(client);
   });
 

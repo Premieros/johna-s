@@ -42,7 +42,7 @@ describe.skipIf(skip)('ready-product sale deduction with legacy recipe', () => {
     );
     await client.query(
       `INSERT INTO public.users (id,email,full_name,role,branch_id,is_active)
-       VALUES ($1,$2,'Ready Product Owner','owner',$3,true)`,
+       VALUES ($1,$2,'Ready Product Super Admin','super_admin',$3,true)`,
       [userId, `ready-product-${userId}@example.test`, branchId],
     );
     await client.query(

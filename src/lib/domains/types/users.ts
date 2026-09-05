@@ -3,14 +3,9 @@ import type { Branch } from './organization';
 export type Language = 'ar' | 'en';
 export type Theme = 'light' | 'dark';
 
-export type Role =
-  | 'super_admin'
-  | 'owner'
-  | 'branch_manager'
-  | 'cashier'
-  | 'warehouse_manager'
-  | 'accountant'
-  | 'production_manager';
+// Roles are display/assignment labels only. Authorization is derived exclusively
+// from roles.permissions; no operational capability is implied by this string.
+export type Role = string;
 
 export interface AppUser {
   id: string;

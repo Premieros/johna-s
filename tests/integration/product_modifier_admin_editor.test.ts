@@ -33,15 +33,17 @@ describe('product modifier admin editor security', () => {
     expect(r.rows[0]).toMatchObject({ admin_rpc: true, anon_rpc: false, effect_select: false });
   });
 
-  it('enforces privileged role plus branch access inside the admin RPC', async () => {
+  it('enforces explicit modifier permission plus branch access inside the admin RPC', async () => {
     if (!canRun) return;
     const r = await client.query(`
       SELECT pg_get_functiondef('public.get_product_modifiers_admin(uuid)'::regprocedure) AS def
     `);
     const def = String(r.rows[0]?.def || '');
-    expect(def).toContain("v_role NOT IN ('super_admin', 'owner', 'branch_manager')");
+    expect(def).toContain("can_permission('products.modifiers.manage')");
     expect(def).toContain('user_may_access_branch');
     expect(def).toContain('product_modifier_inventory_effects');
     expect(def).toContain('PERMISSION_DENIED');
+    expect(def).not.toContain("'owner'");
+    expect(def).not.toContain("'branch_manager'");
   });
 });

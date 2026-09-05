@@ -43,7 +43,7 @@ describe.skipIf(skip)('purchase UOM -> raw stock -> availability -> auto product
     );
     await client.query(
       `INSERT INTO public.users (id,email,full_name,role,branch_id,is_active)
-       VALUES ($1,$2,'Purchase UOM Owner','owner',$3,true)`,
+       VALUES ($1,$2,'Purchase UOM Super Admin','super_admin',$3,true)`,
       [userId, `purchase-uom-${userId}@example.test`, branchId],
     );
     await client.query(`INSERT INTO public.warehouses (id,name,branch_id,is_active) VALUES ($1,'Purchase UOM WH',$2,true)`, [warehouseId, branchId]);

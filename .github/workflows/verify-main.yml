@@ -81,8 +81,20 @@ jobs:
         run: node scripts/db/apply-migration.js --file supabase/ci/disable_subscription_guard.sql
       - name: Seed raw-material branch helper (CI only, never on real Supabase)
         run: node scripts/db/apply-migration.js --file supabase/ci/seed_raw_material_branch.sql
+      - name: Seed explicit Permission-First role capabilities (CI only)
+        run: node scripts/db/apply-migration.js --file supabase/ci/permission_first_role_fixture.sql
       - name: Run integration and security/RLS regression tests
-        run: npm run test:integration
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee integration-test.log
+      - name: Upload integration failure log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-integration-log
+          path: integration-test.log
+          retention-days: 3
 
   browser-smoke:
     needs: [verify, db]

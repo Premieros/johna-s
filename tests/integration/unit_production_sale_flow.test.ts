@@ -44,11 +44,11 @@ describe.skipIf(skip)('Product -> manufactured unit -> sale stock flow', () => {
     );
     await client.query(
       `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
-       VALUES ($1, $2, 'Unit Flow Test User', 'owner', $3, true)
+       VALUES ($1, $2, 'Unit Flow Test Super Admin', 'super_admin', $3, true)
        ON CONFLICT (id) DO UPDATE
        SET email = EXCLUDED.email,
            full_name = EXCLUDED.full_name,
-           role = 'owner',
+           role = 'super_admin',
            branch_id = EXCLUDED.branch_id,
            is_active = true`,
       [testUserId, `unit-flow-${testUserId}@example.test`, branchId],
