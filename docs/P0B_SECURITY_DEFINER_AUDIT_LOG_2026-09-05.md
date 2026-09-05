@@ -75,13 +75,60 @@ Run: `33985254811`.
 - Fixed by creating a rollback-only test branch and assigning both test principals to it in commit `0b5a9ef...`.
 - Browser Smoke was skipped because the DB job failed before the new suite could execute.
 
+## Verify #730 — batch 1 closure
+Run: `33985474473`.
+- Frontend/API/lint/typecheck/unit/build ✅
+- Fresh DB + Schema ✅
+- Integration / Security / RLS ✅
+- Browser Smoke ✅
+- Batch 1 fully green.
+
 ## Broader authenticated SECURITY DEFINER classification
 Read-only Production classification:
 - authenticated-executable SECURITY DEFINER: **163**.
 - **143/163** have a direct or known delegated authorization/scope guard (`auth.uid`, Super Admin/platform admin, `can_permission`, `user_may_access_branch`, or organization access).
 - **20/163** require manual classification; wrappers are not automatically treated as vulnerabilities.
-- Examples already classified as delegated wrappers include `cancel_sent_order_item(...)` and summary helpers that call hardened target functions.
-- Remaining manual candidates include `get_user_branch_access(uuid)`, `get_cost_history(uuid,integer)`, and `next_document_number(text)`; these require call-site and branch/permission contract review before any change.
+- Examples classified as delegated wrappers include `cancel_sent_order_item(...)` and summary helpers that call hardened target functions.
+- `next_document_number(text)` remains manual because its correct capability depends on document type; no guessed blanket permission has been added.
+
+## Hardening batch 2 — branch-scoped read RPCs
+Production read-only inspection confirmed two additional SECURITY DEFINER read surfaces:
+- `get_cost_history(uuid,integer)` could read cost history by product UUID without permission or branch validation.
+- `get_user_branch_access(uuid)` could expose another user's branch map by user UUID without caller authorization/scope validation.
+
+Added migration:
+- `supabase/migrations/20260905222000_p0b_branch_scoped_security_definer_reads.sql`
+
+Changes:
+- `get_cost_history` now requires authenticated `products.view`, resolves the product branch, and requires `user_may_access_branch(branch_id)`; it revokes `PUBLIC`/`anon` and caps the requested row limit.
+- `get_user_branch_access` now allows self-inspection, or requires `users.branches.manage` for another user; delegated callers cannot inspect Super Admin and cannot inspect targets outside their branch scope; returned branches are filtered to caller scope.
+- Super Admin remains the only implicit bypass.
+- No Production DDL was applied.
+
+Added regression test:
+- `tests/integration/security_definer_branch_scope_reads.test.ts`
+
+It covers:
+- in-scope vs cross-branch product cost history;
+- self branch-access inspection;
+- delegated in-scope vs out-of-scope target inspection;
+- Super Admin invisibility to delegated managers;
+- Super Admin cross-branch access.
+
+Commits:
+- `089a32452fc5c9d6d03f03090dbbbe22d3cd8695` — batch 2 migration.
+- `45d184cc2973d4315bdcca2eed657e138a0e2811` — batch 2 regression suite.
+
+## Verify #732 — fixture-only failure
+Run: `33985771050`.
+- Frontend/API/lint/typecheck/unit/build ✅
+- Fresh DB canonical migrations ✅
+- Schema verification ✅
+- Existing integration/security/RLS tests passed before the new suite setup failure.
+- The new branch-scope suite stopped in `beforeAll` because schema triggers may already mirror `users.branch_id` into `user_branch_access`; the fixture then inserted the same `(user_id, branch_id)` pair again and hit the unique constraint.
+- Root cause: non-idempotent test fixture, not authorization/migration logic.
+- Fixed in commit `43d07e685fa3fc0f86616e5b5c3f0f97d9b49250` by using `ON CONFLICT (user_id, branch_id) DO NOTHING` for rollback-only fixture grants.
+- Browser Smoke skipped because the DB job failed at fixture setup.
 
 ## Locked remediation rules
 - Super Admin remains the only implicit bypass.
@@ -93,4 +140,4 @@ Read-only Production classification:
 - No Production DDL in this PR.
 
 ## Status
-`IN_PROGRESS — Verify #728 fixture defect fixed; current-head full Verify pending; manual classification continues.`
+`IN_PROGRESS — batch 1 fully green; batch 2 fixture fixed; current-head full Verify pending; remaining manual candidates continue after batch 2 is proven green.`
