@@ -23,7 +23,7 @@ Applied successfully before drift was exposed:
 
 The next migration, `20260905110600_permission_first_runtime_reconcile.sql`, correctly failed closed on Production instead of bypassing its audit.
 
-Exact Production drift detected:
+Exact Production function drift detected:
 
 - `create_organization_branch(uuid,text,text,text,text)`
 - `delete_branch_cascade(uuid)`
@@ -33,7 +33,7 @@ Exact Production drift detected:
 
 The Production copies still contained fixed-role or organization-membership authorization (`owner`, `admin`, `cashier`) that is absent from the clean Fresh DB state.
 
-## Reconciliation
+## Function reconciliation
 
 Added preflight migration:
 
@@ -55,36 +55,59 @@ Regression coverage added:
 
 - `tests/integration/production_permission_first_drift.test.ts`
 
-The test fails if any of the five endpoints regresses to fixed operational role authorization or loses its canonical capability checks.
-
 ## Verify #737 — first preflight run
 
-Run `33987695872` / Verify #737:
+Run `33987695872` / Verify #737 passed frontend + Fresh DB/schema, then Integration/Security/RLS failed with seven assertions and Browser Smoke was skipped. Exact root causes were:
 
-- DB identity ✅
-- API contract ✅
-- lint ✅
-- typecheck ✅
-- test typecheck ✅
-- unit ✅
-- build ✅
-- Fresh DB migrations ✅
-- schema verification ✅
-- Integration/Security/RLS ❌
-- Browser Smoke skipped because DB gate failed
+1. branch creation denial contract changed from `FORBIDDEN`.
+2. authorized branch creation did not create an explicit branch-access grant for the creator.
+3. `open_shift` omitted `branch_id` and allowed simultaneous open shifts per branch instead of one per user.
 
-The uploaded Integration log showed seven failures with three root causes:
+No tests/RLS were weakened. The preflight was corrected accordingly.
 
-1. `create_organization_branch` changed the established cross-organization denial error from `FORBIDDEN` to `PERMISSION_DENIED`.
-2. a branch created through an explicit `branches.manage` capability was not added to the creator's explicit branch-access map, so later branch reads/deactivation failed unless legacy owner-wide access was restored.
-3. `open_shift` did not preserve the V2 contract: it omitted `branch_id` in the success payload and allowed one simultaneous open shift per branch instead of one per user globally. The two later close-shift failures were downstream because the first open-shift assertion never captured `shift_id`.
+## Verify #739 / PR #22
 
-Corrections were made in the preflight migration only; tests/RLS were not weakened:
+Run `33988027648` / Verify #739 passed all required gates:
 
-- cross-org branch creation returns the established `FORBIDDEN` contract.
-- successful authorized branch creation inserts explicit `user_branch_access` for the creator.
-- `open_shift` returns `branch_id` and checks for any existing open shift for the user, regardless of branch.
+- frontend verify ✅
+- Fresh DB migrations/schema ✅
+- Integration/Security/RLS ✅
+- Browser Smoke ✅
+
+PR #22 was merged as `main@0cde328020f6ea4532179cf41f959e97723ccc14`.
+
+The verified `10590` preflight was then applied successfully to Production.
+
+## Production RLS drift found by 10600
+
+Retrying the existing `20260905110600_permission_first_runtime_reconcile.sql` again failed closed, now only on six Production RLS policies:
+
+- `products:auth_insert_products`
+- `products:auth_update_products`
+- `products:auth_delete_products`
+- `inventory:auth_insert_inventory`
+- `inventory:auth_update_inventory`
+- `inventory:auth_delete_inventory`
+
+Read-only inspection confirmed the Production policies still referenced retired coarse permissions:
+
+- `products.manage`
+- `inventory.manage`
+
+Added a second preflight migration:
+
+- `20260905110595_production_rls_permission_first_drift_reconcile.sql`
+
+It keeps RLS enabled and maps the six policies to canonical granular capabilities:
+
+- product INSERT → `products.create`
+- product UPDATE → `products.edit`
+- product DELETE → `products.delete`
+- inventory INSERT/UPDATE/DELETE → `inventory.adjust`
+- all non-Super-Admin operations remain scoped by `user_may_access_branch(branch_id)`.
+
+This second preflight must pass Fresh DB + Integration/Security/RLS + Browser Smoke before Production application. The original `10600` fail-closed audit remains unchanged and must pass afterward.
 
 ## Safety rule
 
-No Production audit was bypassed and no RLS/test was weakened. The corrected preflight migration must pass Fresh DB + Integration/Security/RLS + Browser Smoke before it is applied to Production. After that, the original `10600`, `10610`, `10625`, and P0-B security hardening migrations are retried/applied in source order.
+No Production audit was bypassed and no RLS/test was weakened. All Production changes are applied only to `azzdesuowpdcoflmyezn`, and every drift repair is promoted through CI before Production.
