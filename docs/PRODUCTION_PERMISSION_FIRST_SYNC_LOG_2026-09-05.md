@@ -108,6 +108,43 @@ It keeps RLS enabled and maps the six policies to canonical granular capabilitie
 
 This second preflight must pass Fresh DB + Integration/Security/RLS + Browser Smoke before Production application. The original `10600` fail-closed audit remains unchanged and must pass afterward.
 
+## Production tail synchronization — current main
+
+Production synchronization continued only after the Permission-First reconciliation path had reached `permission_first_runtime_reconcile` successfully.
+
+Migration source for this tail batch was pinned to:
+
+- `main@8168b53c42218897cb4c2a90651f6b7e432b8ce1`
+- Production project: `azzdesuowpdcoflmyezn`
+
+The following repository-tracked migrations were applied successfully, in order, with no ad-hoc Production DDL:
+
+1. `20260905110610_permission_first_regression_closure.sql` → Production migration `20260905204921 permission_first_regression_closure` ✅
+2. `20260905110625_permission_first_regression_closure.sql` → Production migration `20260905204954 permission_first_regression_closure` ✅
+3. `20260905214500_security_definer_handover_hardening.sql` → Production migration `20260905205014 security_definer_handover_hardening` ✅
+
+The two regression-closure migrations keep role management capability-first and branch-scoped, align stock-count approval with canonical branch access, and preserve Super Admin as the only implicit bypass. The `10625` closure also replaces the historical role-name shift behavior with capability-based `pos.payment.take` / `shifts.manage` logic.
+
+The P0-B handover migration changed `_production_schema_contract_kitchen_v1()` to `SECURITY INVOKER`, restricted Super Admin cross-user/statistics RPCs with explicit Super Admin predicates and grants, and made future `public` functions fail closed by default for `PUBLIC`, `anon`, and `authenticated` EXECUTE unless a later migration explicitly opts in.
+
+## Security Advisor after tail sync
+
+A fresh Security Advisor run after all three migrations confirms that `_production_schema_contract_kitchen_v1()` no longer appears as an anonymous SECURITY DEFINER warning.
+
+Remaining security-advisor work is intentionally not bulk-mutated:
+
+- anonymous SECURITY DEFINER exposure remains for `get_login_email(text)` and `record_login_failure(text)`;
+- many authenticated API RPCs remain SECURITY DEFINER and must be classified individually as intended API, internal helper, or privileged/admin-only before changing EXECUTE or invoker semantics;
+- Supabase Auth Leaked Password Protection remains disabled.
+
+Relevant Supabase remediation references:
+
+- anon SECURITY DEFINER: https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable
+- authenticated SECURITY DEFINER: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+- leaked-password protection: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+No blanket revokes or SECURITY INVOKER conversions were applied because several listed RPCs are intentional authenticated application endpoints and require contract-aware review first.
+
 ## Safety rule
 
 No Production audit was bypassed and no RLS/test was weakened. All Production changes are applied only to `azzdesuowpdcoflmyezn`, and every drift repair is promoted through CI before Production.
