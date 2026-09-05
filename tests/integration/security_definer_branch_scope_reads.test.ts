@@ -77,9 +77,12 @@ describe.skipIf(skip)('P0-B branch-scoped SECURITY DEFINER reads', () => {
       ],
     );
 
+    // Some schema revisions automatically mirror users.branch_id into
+    // user_branch_access. Keep the fixture idempotent across those revisions.
     await client.query(
       `INSERT INTO public.user_branch_access (user_id, branch_id)
-       VALUES ($1, $2), ($3, $2), ($4, $5)`,
+       VALUES ($1, $2), ($3, $2), ($4, $5)
+       ON CONFLICT (user_id, branch_id) DO NOTHING`,
       [managerId, branchA, targetA, targetB, branchB],
     );
 
