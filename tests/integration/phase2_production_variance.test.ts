@@ -127,7 +127,27 @@ describe.skipIf(skip)('Phase 2 — production enhancements', () => {
     });
   });
 
-  it('get_production_variance returns variance rows', async () => {
+  it('get_production_variance requires reports.costing and then returns variance rows', async () => {
+    await asAdmin(async () => {
+      const deniedRows = await q<{ raw_material_name: string }>(
+        `SELECT raw_material_name FROM public.get_production_variance($1, $2)`,
+        [unitId, branchId]
+      );
+      expect(deniedRows).toHaveLength(0);
+    });
+
+    const userRows = await q<{ role: string }>(`SELECT role FROM public.users WHERE id = $1`, [testUserId]);
+    expect(userRows).toHaveLength(1);
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = CASE
+         WHEN COALESCE(permissions, '[]'::jsonb) ? 'reports.costing' THEN permissions
+         ELSE COALESCE(permissions, '[]'::jsonb) || '["reports.costing"]'::jsonb
+       END
+       WHERE role = $1`,
+      [userRows[0].role]
+    );
+
     await asAdmin(async () => {
       const rows = await q<{ raw_material_name: string; theoretical_qty: string; actual_qty: string }>(
         `SELECT raw_material_name, theoretical_qty::text, actual_qty::text FROM public.get_production_variance($1, $2)`,
