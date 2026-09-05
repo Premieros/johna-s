@@ -60,6 +60,28 @@ The test asserts:
 Commits in this batch:
 - `d5a444948e1f7c3187d88d16b337a4d63b3c5c05` — migration.
 - `16d1723f355df7756490f2e83786e8abf5f831fe` — integration regression test.
+- `0b5a9efcbb63c5624cf630e520f13fbf3b64afec` — required branch fixture for the new integration principals.
+
+## Verify #728
+Run: `33985254811`.
+- Database Identity Lock ✅
+- API Contract / lint / typecheck / test typecheck / unit / build ✅
+- Fresh DB canonical migrations ✅
+- Schema verification ✅
+- Existing integration/security/RLS tests: **463 passed** ✅
+- New P0-B suite did not execute because its `beforeAll` inserted users without the now-required `users.branch_id`.
+- Exact DB error: `null value in column "branch_id" of relation "users" violates not-null constraint`.
+- This was a test-fixture defect, not a migration or authorization failure.
+- Fixed by creating a rollback-only test branch and assigning both test principals to it in commit `0b5a9ef...`.
+- Browser Smoke was skipped because the DB job failed before the new suite could execute.
+
+## Broader authenticated SECURITY DEFINER classification
+Read-only Production classification:
+- authenticated-executable SECURITY DEFINER: **163**.
+- **143/163** have a direct or known delegated authorization/scope guard (`auth.uid`, Super Admin/platform admin, `can_permission`, `user_may_access_branch`, or organization access).
+- **20/163** require manual classification; wrappers are not automatically treated as vulnerabilities.
+- Examples already classified as delegated wrappers include `cancel_sent_order_item(...)` and summary helpers that call hardened target functions.
+- Remaining manual candidates include `get_user_branch_access(uuid)`, `get_cost_history(uuid,integer)`, and `next_document_number(text)`; these require call-site and branch/permission contract review before any change.
 
 ## Locked remediation rules
 - Super Admin remains the only implicit bypass.
@@ -71,4 +93,4 @@ Commits in this batch:
 - No Production DDL in this PR.
 
 ## Status
-`IN_PROGRESS — privileged RPC guards patched; full Verify and broader authenticated/internal helper classification pending.`
+`IN_PROGRESS — Verify #728 fixture defect fixed; current-head full Verify pending; manual classification continues.`
