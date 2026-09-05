@@ -8,6 +8,7 @@ const skip = !dbUrl;
 
 describe.skipIf(skip)('P0-B privileged SECURITY DEFINER guards', () => {
   let client: pg.Client;
+  const branchId = randomUUID();
   const normalUserId = randomUUID();
   const superAdminId = randomUUID();
 
@@ -41,12 +42,17 @@ describe.skipIf(skip)('P0-B privileged SECURITY DEFINER guards', () => {
     await client.connect();
     await client.query('BEGIN');
 
+    await client.query(
+      `INSERT INTO public.branches (id, name)
+       VALUES ($1, 'P0-B Security Branch')`,
+      [branchId],
+    );
     await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
     await client.query(
-      `INSERT INTO public.users (id, email, full_name, role, is_active)
-       VALUES ($1, $2, 'P0-B ordinary user', 'cashier', true),
-              ($3, $4, 'P0-B super admin', 'super_admin', true)`,
-      [normalUserId, `${randomUUID()}@test.local`, superAdminId, `${randomUUID()}@test.local`],
+      `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
+       VALUES ($1, $2, 'P0-B ordinary user', 'cashier', $5, true),
+              ($3, $4, 'P0-B super admin', 'super_admin', $5, true)`,
+      [normalUserId, `${randomUUID()}@test.local`, superAdminId, `${randomUUID()}@test.local`, branchId],
     );
   });
 
