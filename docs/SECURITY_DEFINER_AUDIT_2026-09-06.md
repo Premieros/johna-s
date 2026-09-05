@@ -139,38 +139,55 @@ The audit found several functions that need separate narrow hardening rather tha
    - `delete_demo_data`
    These still reference `is_branch_manager()` in the inspected Production definitions, which conflicts with the Permission-First contract if they are still live canonical functions.
 
-## Permission/scope hardening preflight — PR #25
+## Permission/scope hardening — closed batch #25
 
-Branch: `fix/security-definer-permission-scope-20260906`
+PR #25 (`fix/security-definer-permission-scope-20260906`) hardened four confirmed gaps without changing public RPC signatures:
+
+- `update_branch(...)` requires `branches.manage` + `user_may_access_branch`.
+- `deactivate_branch(...)` requires `branches.manage` + `user_may_access_branch`.
+- `get_cost_history(...)` requires `reports.costing` + product branch access.
+- `get_production_variance(...)` requires `reports.costing` + requested branch access.
+- `PUBLIC` execute is revoked and only `authenticated, service_role` retain execute.
+- `search_path = public, pg_temp` is enforced.
 
 Migration:
 
 - `20260905224500_security_definer_permission_scope.sql`
 
-The narrow batch hardens four confirmed gaps without changing their public signatures:
-
-- `update_branch(...)` -> requires `branches.manage` + `user_may_access_branch(p_branch_id)`.
-- `deactivate_branch(uuid)` -> requires `branches.manage` + `user_may_access_branch(p_branch_id)`.
-- `get_cost_history(uuid,integer)` -> requires `reports.costing` + product branch access.
-- `get_production_variance(uuid,uuid)` -> requires `reports.costing` + requested branch access.
-- all four deny `PUBLIC` execute and use `search_path = public, pg_temp`.
-
 Regression coverage:
 
 - `tests/integration/security_definer_permission_scope.test.ts`
-- existing `tests/integration/phase2_production_variance.test.ts` strengthened to prove that a role label alone does not authorize costing data: the request is denied before `reports.costing` is explicitly granted inside the rollback-only fixture, then succeeds after the capability is granted.
+- `tests/integration/phase2_production_variance.test.ts` now proves Permission-First behavior explicitly: denial without `reports.costing`, success only after granting the permission inside the rollback-only test transaction. No `owner` bypass was restored.
 
-### Verify #749 — first preflight result
+Verify #751 / run `33993476931` passed all required gates on head `e342e66608a2ba1d9c5d6c2602f28643c2b1b018`:
 
-Run `33993183583` passed frontend verification, Fresh DB and schema, then Integration/Security/RLS reported exactly one failure out of 474 tests:
+- frontend verify ✅
+- Database Identity Lock ✅
+- API contract ✅
+- lint ✅
+- TypeScript app/tests ✅
+- unit ✅
+- build ✅
+- Fresh DB canonical migrations/schema ✅
+- Integration/Security/RLS ✅
+- Browser Smoke ✅
 
-- `tests/integration/phase2_production_variance.test.ts`
-- `get_production_variance returns variance rows`
-- expected at least one row, received zero.
+PR #25 was merged into `main` as:
 
-Root cause: the historical fixture created an `owner` user and implicitly expected the role label to authorize the read. The new RPC correctly required `reports.costing`, so the fixture exposed a stale role-first assumption. The function authorization was not weakened. The test was corrected to explicitly grant `reports.costing` and also assert denial before the grant.
+- `main@3aa2ae907bc64ffd73bf1ca024ac7afc9c38beb1`
 
-No Production DDL has been applied from PR #25. A new full Verify on the final documented head is required before merge or Production application.
+The exact merged migration was applied to Production project `azzdesuowpdcoflmyezn` successfully. A fresh Advisor run confirms the anonymous SECURITY DEFINER findings remain closed; authenticated SECURITY DEFINER warnings remain a classification signal rather than an automatic defect and will continue to be handled function-by-function.
+
+## Branch/workflow organization rule — 2026-09-06
+
+To keep concurrent development controlled during final handover:
+
+- `main` remains the production/release branch.
+- Exactly one development branch should remain active at a time: `development/final-handover`.
+- New work must start from the latest `main` and land into that single development branch or a short-lived PR branch that is deleted immediately after merge.
+- Historical development/fix branches must not be reused after their PR is merged or superseded.
+- No force-push and no direct overwrite of concurrent work.
+- Every batch must update the relevant project log before handover closure.
 
 ## Safety decisions
 
@@ -183,7 +200,7 @@ No Production DDL has been applied from PR #25. A new full Verify on the final d
 ## Remaining P0
 
 1. Anonymous SECURITY DEFINER login exposure: CLOSED ✅
-2. Complete PR #25 permission/scope preflight and promote only if every gate is green.
-3. Continue separate narrow hardening for remaining authenticated gaps: internal sequence helper, sent-item wrapper oracle, modifier resolver, stale demo helpers and costing-detail scope.
+2. Permission/scope hardening batch #25: CLOSED ✅
+3. Continue separate narrow hardening for confirmed authenticated gaps above.
 4. Re-run Advisor after each promoted hardening batch instead of chasing warning count by bulk mutation.
 5. Resolve Supabase Auth Leaked Password Protection as P0-C; do not mark complete until the platform setting is actually enabled and verified.
