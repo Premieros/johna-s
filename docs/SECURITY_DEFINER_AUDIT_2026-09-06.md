@@ -139,6 +139,39 @@ The audit found several functions that need separate narrow hardening rather tha
    - `delete_demo_data`
    These still reference `is_branch_manager()` in the inspected Production definitions, which conflicts with the Permission-First contract if they are still live canonical functions.
 
+## Permission/scope hardening preflight — PR #25
+
+Branch: `fix/security-definer-permission-scope-20260906`
+
+Migration:
+
+- `20260905224500_security_definer_permission_scope.sql`
+
+The narrow batch hardens four confirmed gaps without changing their public signatures:
+
+- `update_branch(...)` -> requires `branches.manage` + `user_may_access_branch(p_branch_id)`.
+- `deactivate_branch(uuid)` -> requires `branches.manage` + `user_may_access_branch(p_branch_id)`.
+- `get_cost_history(uuid,integer)` -> requires `reports.costing` + product branch access.
+- `get_production_variance(uuid,uuid)` -> requires `reports.costing` + requested branch access.
+- all four deny `PUBLIC` execute and use `search_path = public, pg_temp`.
+
+Regression coverage:
+
+- `tests/integration/security_definer_permission_scope.test.ts`
+- existing `tests/integration/phase2_production_variance.test.ts` strengthened to prove that a role label alone does not authorize costing data: the request is denied before `reports.costing` is explicitly granted inside the rollback-only fixture, then succeeds after the capability is granted.
+
+### Verify #749 — first preflight result
+
+Run `33993183583` passed frontend verification, Fresh DB and schema, then Integration/Security/RLS reported exactly one failure out of 474 tests:
+
+- `tests/integration/phase2_production_variance.test.ts`
+- `get_production_variance returns variance rows`
+- expected at least one row, received zero.
+
+Root cause: the historical fixture created an `owner` user and implicitly expected the role label to authorize the read. The new RPC correctly required `reports.costing`, so the fixture exposed a stale role-first assumption. The function authorization was not weakened. The test was corrected to explicitly grant `reports.costing` and also assert denial before the grant.
+
+No Production DDL has been applied from PR #25. A new full Verify on the final documented head is required before merge or Production application.
+
 ## Safety decisions
 
 - No blanket `REVOKE EXECUTE` on authenticated application RPCs.
@@ -150,6 +183,7 @@ The audit found several functions that need separate narrow hardening rather tha
 ## Remaining P0
 
 1. Anonymous SECURITY DEFINER login exposure: CLOSED ✅
-2. Continue separate narrow hardening for confirmed authenticated gaps above.
-3. Re-run Advisor after each promoted hardening batch instead of chasing warning count by bulk mutation.
-4. Resolve Supabase Auth Leaked Password Protection as P0-C; do not mark complete until the platform setting is actually enabled and verified.
+2. Complete PR #25 permission/scope preflight and promote only if every gate is green.
+3. Continue separate narrow hardening for remaining authenticated gaps: internal sequence helper, sent-item wrapper oracle, modifier resolver, stale demo helpers and costing-detail scope.
+4. Re-run Advisor after each promoted hardening batch instead of chasing warning count by bulk mutation.
+5. Resolve Supabase Auth Leaked Password Protection as P0-C; do not mark complete until the platform setting is actually enabled and verified.
