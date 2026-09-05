@@ -145,6 +145,19 @@ Relevant Supabase remediation references:
 
 No blanket revokes or SECURITY INVOKER conversions were applied because several listed RPCs are intentional authenticated application endpoints and require contract-aware review first.
 
+## Post-sync verification — 2026-09-06 00:08 Africa/Cairo
+
+A follow-up reconciliation was performed after `main` advanced to `2ba220ba35223c825feb703bd1dd2b1ba57808f7`.
+
+- Repository checked: `Premieros/johna-s` only.
+- Production checked: `azzdesuowpdcoflmyezn` only.
+- Production migration history already contained the complete Permission-First tail through `20260905205014 security_definer_handover_hardening`.
+- No missing current-main tail migration was identified in this verification pass.
+- No migration was re-applied and no ad-hoc Production DDL was executed.
+- This was intentionally a no-op database pass to avoid duplicate mutation while another development session may be updating the repository concurrently.
+
+Result: Production remained synchronized with the already-recorded Permission-First tail; the next open work remains the contract-aware SECURITY DEFINER audit and remaining security-advisor items rather than migration replay.
+
 ## Safety rule
 
 No Production audit was bypassed and no RLS/test was weakened. All Production changes are applied only to `azzdesuowpdcoflmyezn`, and every drift repair is promoted through CI before Production.
