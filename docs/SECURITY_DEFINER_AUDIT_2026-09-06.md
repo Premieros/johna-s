@@ -9,7 +9,7 @@
 
 ## Security Advisor baseline
 
-The Production Security Advisor currently reports:
+The Production Security Advisor initially reported:
 
 1. Two anonymous-executable `SECURITY DEFINER` functions in the exposed `public` schema:
    - `get_login_email(text)`
@@ -19,15 +19,15 @@ The Production Security Advisor currently reports:
 
 The authenticated warning class is not treated as an automatic vulnerability. Several listed RPCs are intentional application endpoints and already enforce `auth.uid()`, canonical permissions, branch access, manager approval, or explicit Super Admin checks.
 
-## Anonymous login boundary — confirmed fix
+## Anonymous login boundary — closed
 
 The two anonymous functions are required before a user session exists, so simply revoking `anon` would break username login.
 
-PR #24 (`fix/security-definer-anon-wrappers-20260906`) therefore keeps the public RPC contract but removes privileged execution from the exposed functions:
+PR #24 (`fix/security-definer-anon-wrappers-20260906`) keeps the public RPC contract but removes privileged execution from the exposed functions:
 
 - `public.get_login_email(text)` -> `SECURITY INVOKER` wrapper
 - `public.record_login_failure(text)` -> `SECURITY INVOKER` wrapper
-- privileged implementations move to non-exposed schema `app_private`
+- privileged implementations moved to non-exposed schema `app_private`
 - internal implementations remain `SECURITY DEFINER` with `search_path = public, pg_temp`
 - `PUBLIC` receives no schema/function privilege
 - only `anon`, `authenticated`, and `service_role` receive the minimum required usage/execute grants
@@ -40,11 +40,37 @@ Regression coverage:
 
 - `tests/integration/login_rpc_security_boundary.test.ts`
 
-Verify #745 / run `33992644940`:
+### Verification and merge
 
-- frontend verify: PASS ✅
-- Fresh DB / Integration / RLS: running at the time of this log entry
-- no Production DDL has been applied from PR #24 yet
+Verify #746 / run `33992781112` passed all required gates on the final PR head `8d45831db74fa297d96e7baf64f4953e791133d6`:
+
+- frontend verify ✅
+- Database Identity Lock ✅
+- API contract ✅
+- lint ✅
+- TypeScript app/tests ✅
+- unit ✅
+- build ✅
+- Fresh DB canonical migrations/schema ✅
+- Integration/Security/RLS ✅
+- Browser Smoke ✅
+
+PR #24 was merged into `main` as:
+
+- `main@7193275c8bba97ff5dde35f3c083fe1e609cdaf0`
+
+### Production application
+
+The exact repository migration from merged `main` was applied to Production project `azzdesuowpdcoflmyezn` using the tracked migration path only. No ad-hoc DDL was used.
+
+Post-application catalog verification confirms:
+
+- `public.get_login_email(text)` -> `SECURITY INVOKER`, `anon` EXECUTE yes, `PUBLIC` EXECUTE no, search path includes `app_private, public, pg_temp` ✅
+- `public.record_login_failure(text)` -> `SECURITY INVOKER`, `anon` EXECUTE yes, `PUBLIC` EXECUTE no, search path includes `app_private, public, pg_temp` ✅
+- `app_private.get_login_email(text)` -> `SECURITY DEFINER`, `PUBLIC` EXECUTE no, `search_path = public, pg_temp` ✅
+- `app_private.record_login_failure(text)` -> `SECURITY DEFINER`, `PUBLIC` EXECUTE no, `search_path = public, pg_temp` ✅
+
+A fresh Security Advisor run after Production application no longer reports any `anon_security_definer_function_executable` finding for the two login RPCs. The anonymous SECURITY DEFINER exposure tracked by this batch is therefore closed.
 
 ## Authenticated SECURITY DEFINER classification
 
@@ -97,7 +123,7 @@ The audit found several functions that need separate narrow hardening rather tha
 
 4. `next_document_number(type)`
    - mutates shared sequence state under `SECURITY DEFINER` without a direct authorization check
-   - must be classified as internal helper versus public RPC by tracing every caller before revoking or changing execution semantics.
+   - read-only caller tracing found it is used internally by multiple order, purchasing, stock, treasury and accounting RPCs; it must be hardened as an internal helper without breaking those callers.
 
 5. `cancel_sent_order_item(...)`
    - terminal exact handler is properly guarded
@@ -123,7 +149,7 @@ The audit found several functions that need separate narrow hardening rather tha
 
 ## Remaining P0
 
-1. Finish PR #24 Verify and merge/apply only when all gates are green.
-2. Re-run Security Advisor and confirm the two exposed anonymous `SECURITY DEFINER` warnings are removed without breaking pre-auth login.
-3. Open a separate narrow hardening batch for confirmed authenticated gaps above.
+1. Anonymous SECURITY DEFINER login exposure: CLOSED ✅
+2. Continue separate narrow hardening for confirmed authenticated gaps above.
+3. Re-run Advisor after each promoted hardening batch instead of chasing warning count by bulk mutation.
 4. Resolve Supabase Auth Leaked Password Protection as P0-C; do not mark complete until the platform setting is actually enabled and verified.
