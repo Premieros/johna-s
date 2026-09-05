@@ -1,4 +1,4 @@
-# P0-B SECURITY DEFININER Audit Log — 2026-09-05
+# P0-B SECURITY DEFINER Audit Log — 2026-09-05
 
 > Mandatory execution log for SECURITY DEFINER hardening.
 > Repository: `Premieros/johna-s`.
@@ -31,10 +31,35 @@ Current Security Advisor categories:
 
 ### Confirmed high-risk authenticated RPCs
 Production read-only inspection found:
-- `get_super_admin_all_users()` is SECURITY DEFINER, executable by `authenticated`, and has no internal Super Admin guard while returning cross-user identity/profile data.
-- `get_super_admin_tenant_stats()` is SECURITY DEFINER, executable by `authenticated`, and has no internal Super Admin guard while returning global tenant statistics.
+- `get_super_admin_all_users(text)` is SECURITY DEFINER, executable by `authenticated`, and had no internal Super Admin guard while returning cross-user identity/profile data.
+- `get_super_admin_tenant_stats()` is SECURITY DEFINER, executable by `authenticated`, and had no internal Super Admin guard while returning global tenant statistics.
 
-These are the first P0-B hardening targets.
+## Hardening batch 1 — privileged Super Admin RPCs
+Branch: `fix/security-definer-hardening`.
+
+Added migration:
+- `supabase/migrations/20260905214500_p0b_privileged_security_definer_guards.sql`
+
+Changes:
+- Preserves the current RPC signatures/result shapes.
+- Recreates both privileged RPCs as fail-closed `SECURITY DEFINER` functions.
+- Requires `public.is_pos_admin()` before any privileged data is returned; after P0-A this means Super Admin only.
+- Pins `search_path = public, pg_temp`.
+- Revokes `PUBLIC` and `anon` EXECUTE.
+- Grants EXECUTE only to `authenticated` and `service_role`; authenticated callers are still subject to the internal Super Admin guard.
+
+Added regression test:
+- `tests/integration/security_definer_super_admin_guard.test.ts`
+
+The test asserts:
+- ordinary authenticated user cannot enumerate cross-user data;
+- ordinary authenticated user cannot read tenant-wide stats;
+- Super Admin can call both RPCs;
+- `anon` has no EXECUTE grant on either privileged RPC.
+
+Commits in this batch:
+- `d5a444948e1f7c3187d88d16b337a4d63b3c5c05` — migration.
+- `16d1723f355df7756490f2e83786e8abf5f831fe` — integration regression test.
 
 ## Locked remediation rules
 - Super Admin remains the only implicit bypass.
@@ -46,4 +71,4 @@ These are the first P0-B hardening targets.
 - No Production DDL in this PR.
 
 ## Status
-`IN_PROGRESS — initial audit complete; high-risk privileged RPC hardening next.`
+`IN_PROGRESS — privileged RPC guards patched; full Verify and broader authenticated/internal helper classification pending.`
