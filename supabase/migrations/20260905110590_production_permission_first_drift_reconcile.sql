@@ -99,11 +99,9 @@ BEGIN
   END IF;
 
   IF NOT public.is_pos_admin() THEN
-    IF NOT public.can_permission('branches.manage') THEN
-      RETURN jsonb_build_object('success', false, 'error', 'PERMISSION_DENIED');
-    END IF;
-    IF NOT public.user_can_access_organization(p_organization_id) THEN
-      RETURN jsonb_build_object('success', false, 'error', 'ORGANIZATION_OUT_OF_SCOPE');
+    IF NOT public.can_permission('branches.manage')
+       OR NOT public.user_can_access_organization(p_organization_id) THEN
+      RETURN jsonb_build_object('success', false, 'error', 'FORBIDDEN');
     END IF;
   END IF;
 
@@ -128,6 +126,13 @@ BEGIN
 
   INSERT INTO public.branch_subscriptions (branch_id, status, trial_starts_at, trial_ends_at)
   VALUES (v_branch_id, 'trial', now(), now() + interval '14 days');
+
+  -- Creating a branch through an explicit capability grants the creator
+  -- explicit access to that new branch. This preserves multi-branch behavior
+  -- without restoring any implicit owner/admin role authorization.
+  INSERT INTO public.user_branch_access (user_id, branch_id)
+  VALUES (auth.uid(), v_branch_id)
+  ON CONFLICT (user_id, branch_id) DO NOTHING;
 
   RETURN jsonb_build_object('success', true, 'branch_id', v_branch_id, 'warehouse_id', v_warehouse_id);
 EXCEPTION WHEN OTHERS THEN
@@ -251,9 +256,11 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
 
+  -- One cashier/user can have only one open shift globally, independent of
+  -- the currently selected branch in the UI.
   IF EXISTS (
     SELECT 1 FROM public.shifts
-    WHERE cashier_id = v_uid AND branch_id = p_branch_id AND status = 'open'
+    WHERE cashier_id = v_uid AND status = 'open'
   ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'SHIFT_ALREADY_OPEN');
   END IF;
@@ -265,7 +272,7 @@ BEGIN
   INSERT INTO public.shift_operations (shift_id, operation_type, amount, payment_method, reference_type)
   VALUES (v_shift_id, 'opening', COALESCE(p_opening_amount, 0), 'cash', 'shift_opening');
 
-  RETURN jsonb_build_object('success', true, 'shift_id', v_shift_id);
+  RETURN jsonb_build_object('success', true, 'shift_id', v_shift_id, 'branch_id', p_branch_id);
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object('success', false, 'error', 'UNKNOWN_ERROR', 'detail', SQLERRM);
 END;
