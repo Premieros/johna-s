@@ -134,13 +134,12 @@ export async function nextInvoiceNumber(): Promise<string | null> {
   try {
     const { data, error } = await posApi.nextDocumentNumber({ p_type: 'sale' });
     if (!error && data?.success) return (data as { number?: string }).number || null;
+    return null;
   } catch {
-    // Network fallback.
+    // An online numbering failure is authoritative. Do not fabricate a second
+    // numbering source because it can create non-canonical or duplicate invoices.
+    return null;
   }
-
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `INV-${dateStr}-${rand}`;
 }
 
 export async function fetchBranchWarehouseId(branchId: string, orderId?: string | null): Promise<string | null> {
