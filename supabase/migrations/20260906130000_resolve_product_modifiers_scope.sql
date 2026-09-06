@@ -23,11 +23,14 @@ DECLARE
   v_invalid uuid;
   v_active_user boolean;
   v_uid uuid := auth.uid();
-  v_auth_role text := auth.role();
+  v_auth_role text := COALESCE(
+    NULLIF(current_setting('request.jwt.claim.role', true), ''),
+    NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'
+  );
 BEGIN
   -- External authenticated callers must have a real JWT user identity.
-  -- Trusted internal DB calls have no auth role, while service_role is an
-  -- intentionally privileged server path; both must remain compatible with
+  -- Trusted internal DB calls have no JWT role, while service_role is an
+  -- intentionally privileged server path; both remain compatible with the
   -- existing pricing/inventory trigger and server-side call chains.
   IF v_uid IS NULL THEN
     IF COALESCE(v_auth_role, '') NOT IN ('', 'service_role') THEN
