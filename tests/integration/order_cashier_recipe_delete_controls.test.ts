@@ -82,7 +82,7 @@ describe.skipIf(skip)('order cashier assignment + recipe delete controls', () =>
     expect(def).toContain('user_branch_access');
     expect(def).toContain('TARGET_USER_NOT_IN_BRANCH');
     expect(def).toContain('ORDER_CASHIER_REASSIGNED');
-    expect(def.toLowerCase()).toContain("old.status <> all (array['open'::text, 'held'::text])");
+    expect(def.toLowerCase()).toContain("old.status not in ('open', 'held')");
   });
 
   it('guard trigger is installed only on cashier_id updates', async () => {
