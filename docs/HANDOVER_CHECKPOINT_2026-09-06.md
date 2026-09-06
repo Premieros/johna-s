@@ -11,19 +11,15 @@
 - Never force-push `main`.
 
 ## Current main / Production baseline
-- `main@5ba86ef67966d99e99d62a28717e2f87cf2c54a4`
-- Merge commit for PR #37: `security: harden warehouse lifecycle and rejection scope`.
-- Verify #834 on PR #37 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Verify #835 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #568 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
-- Migration `warehouse_lifecycle_security` was applied successfully to Production `azzdesuowpdcoflmyezn`.
-- Production post-check confirms:
-  - `auth_delete_warehouses` is authenticated-only and calls `warehouse_delete_allowed(id, branch_id)`.
-  - direct hard delete is allowed only with `warehouses.manage` + canonical branch access (or Super Admin implicit bypass) and only when the warehouse has zero FK references.
-  - `delete_warehouse_safe(uuid)` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, Permission-First authorization, branch-scoped non-oracle lookup, and dependency blockers returning `WAREHOUSE_HAS_OPERATIONAL_HISTORY` + `DEACTIVATE_WAREHOUSE`.
-  - `reject_warehouse_transfer(uuid,text)` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, `inventory.transfer.approve`, branch-scoped lookup, and inaccessible IDs return `TRANSFER_NOT_FOUND`.
-  - `trg_guard_warehouse_branch_change` prevents changing `warehouses.branch_id` after creation.
-- `development/final-handover` was fast-forwarded to verified `main@5ba86ef67966d99e99d62a28717e2f87cf2c54a4` with `force=false` before this documentation commit.
+- `main@b7f65d5f9031baaf6ab74d50dc965ed7b491a77c`
+- Merge commit for PR #38: `security: make close shift permission-first`.
+- Verify #838 on PR #38 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Verify #839 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Deploy #569 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
+- Migration `close_shift_permission_first` was applied successfully to Production `azzdesuowpdcoflmyezn`.
+- Production post-check confirms `close_shift(uuid,numeric,text)` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, `shifts.close` for any normal close, `shifts.manage` for closing another cashier's shift, canonical branch-scoped lookup, and inaccessible IDs return `SHIFT_NOT_FOUND`.
+- The published denial contract remains `SHIFT_CLOSE_DENIED`; role labels such as `branch_manager` grant no authority.
+- `development/final-handover` was fast-forwarded to verified `main@b7f65d5f9031baaf6ab74d50dc965ed7b491a77c` with `force=false` before this documentation commit.
 
 ### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
 Do not reopen without a new Regression.
@@ -95,18 +91,43 @@ Regression coverage:
 - `tests/integration/warehouse_transfer_branch_scope.test.ts`.
 - existing RLS branch-isolation suite remains intact and green.
 
-## Active next work — P0-B SECURITY DEFINER Remaining Audit
-Follow `docs/CURRENT_WORK_PLAN.md` and close Function-by-Function only.
+## P0-B SECURITY DEFINER Remaining Audit
 
-Start with:
-1. `seed_demo_data` / `delete_demo_data`.
-2. Prove current callers and intended capability before changing authorization.
-3. Remove role-name authorization outside Super Admin implicit bypass.
-4. Harden `search_path` to `public, pg_temp` where confirmed necessary.
-5. Review auth, canonical permission, branch scope, grants, and caller behavior.
-6. Add Regression for every confirmed defect.
-7. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
-8. Continue costing/detail/admin SECURITY DEFINER functions only after the first pair is closed.
+### Demo helpers — CLOSED / no change required ✅
+Production inspection confirmed:
+- `seed_demo_data` and `delete_demo_data` are already service-role-only.
+- both are hardened with `search_path = public, pg_temp`.
+- no frontend caller was found in the current project path.
+- no code or Production migration was needed for this item.
+
+### PR #38 — `close_shift` Permission-First hardening — CLOSED on Production ✅
+Confirmed defects closed:
+- old `close_shift` used the literal `branch_manager` role label to authorize closing another cashier's shift.
+- function used `search_path = public` only.
+- shift lookup happened by raw ID before canonical branch scope.
+
+Final contract:
+- unauthenticated/inactive users are denied.
+- any non-Super-Admin close requires `shifts.close`.
+- closing another cashier's shift additionally requires `shifts.manage`.
+- role labels grant no authority; Super Admin remains the only implicit bypass.
+- shift lookup is branch scoped through `user_may_access_branch` and inaccessible IDs return `SHIFT_NOT_FOUND`.
+- `search_path = public, pg_temp`.
+- EXECUTE is authenticated-only; anon/PUBLIC revoked.
+- existing public denial contract `SHIFT_CLOSE_DENIED` is preserved.
+
+Regression coverage:
+- `tests/integration/close_shift_permission_first.test.ts`.
+- existing shift Permission-First tests remain green.
+
+## Active next work — continue P0-B Function-by-Function
+1. Re-extract Production SECURITY DEFINER functions executable by `authenticated`.
+2. Prioritize confirmed cases with role-name authorization, `search_path = public` only, missing auth, or raw-ID lookup before branch scope.
+3. Prove current callers and intended capability before changing authorization.
+4. Apply narrow fixes only; clean and organize touched code/tests while preserving API contracts.
+5. Add Regression for every confirmed defect.
+6. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
+7. Continue until no confirmed P0-B SECURITY DEFINER deviation remains.
 
 ## Mandatory rules
 - Work only on confirmed deviations; do not reopen closed batches without regression evidence.
@@ -117,5 +138,6 @@ Start with:
 - Never apply unverified branch DDL to Production.
 - Before every write, re-fetch current branch HEAD and review new commits.
 - No force push.
+- Clean, organize, and remove local duplication while fixing the confirmed scope; do not perform unrelated broad refactors.
 - Update work log/checkpoint whenever a batch closes.
 - Final target: `Published Site = Verified Main = Production DB Contract = Zero Drift`.
