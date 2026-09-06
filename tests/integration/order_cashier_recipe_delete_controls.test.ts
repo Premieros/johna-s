@@ -17,7 +17,7 @@ describe.skipIf(skip)('order cashier assignment + recipe delete controls', () =>
     if (client) await client.end().catch(() => {});
   });
 
-  it('recipe delete policies require recipes.manage and branch access', async () => {
+  it('keeps direct recipe deletes denied by RLS', async () => {
     const { rows } = await client.query<{ tablename: string; qual: string }>(`
       SELECT tablename, qual
       FROM pg_policies
@@ -26,11 +26,49 @@ describe.skipIf(skip)('order cashier assignment + recipe delete controls', () =>
       ORDER BY tablename
     `);
     expect(rows).toHaveLength(2);
-    for (const row of rows) {
-      expect(row.qual).toContain("can_permission('recipes.manage'::text)");
-      expect(row.qual).toContain('user_may_access_branch');
-      expect(row.qual).not.toBe('false');
-    }
+    for (const row of rows) expect(row.qual).toBe('false');
+  });
+
+  it('updates recipe items only through a permission and branch guarded RPC', async () => {
+    const { rows } = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('public.update_recipe_with_items(uuid,text,numeric,text,boolean,jsonb)'::regprocedure) AS def
+    `);
+    const def = rows[0].def;
+    expect(def).toContain("can_permission('recipes.manage')");
+    expect(def).toContain('user_may_access_branch(v_branch_id)');
+    expect(def).toContain('DELETE FROM public.recipe_items');
+    expect(def).toContain('RAW_MATERIAL_NOT_IN_BRANCH');
+    expect(def).toContain('DUPLICATE_RAW_MATERIAL');
+  });
+
+  it('deletes a whole recipe only through the guarded RPC', async () => {
+    const { rows } = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('public.delete_recipe_controlled(uuid)'::regprocedure) AS def
+    `);
+    const def = rows[0].def;
+    expect(def).toContain("can_permission('recipes.manage')");
+    expect(def).toContain('user_may_access_branch(v_branch_id)');
+    expect(def).toContain('DELETE FROM public.recipes');
+    expect(def).toContain('RECIPE_DELETED');
+  });
+
+  it('recipe mutation RPCs are authenticated/service only', async () => {
+    const { rows } = await client.query<{
+      update_anon: boolean; update_auth: boolean; update_service: boolean;
+      delete_anon: boolean; delete_auth: boolean; delete_service: boolean;
+    }>(`
+      SELECT
+        has_function_privilege('anon','public.update_recipe_with_items(uuid,text,numeric,text,boolean,jsonb)','EXECUTE') AS update_anon,
+        has_function_privilege('authenticated','public.update_recipe_with_items(uuid,text,numeric,text,boolean,jsonb)','EXECUTE') AS update_auth,
+        has_function_privilege('service_role','public.update_recipe_with_items(uuid,text,numeric,text,boolean,jsonb)','EXECUTE') AS update_service,
+        has_function_privilege('anon','public.delete_recipe_controlled(uuid)','EXECUTE') AS delete_anon,
+        has_function_privilege('authenticated','public.delete_recipe_controlled(uuid)','EXECUTE') AS delete_auth,
+        has_function_privilege('service_role','public.delete_recipe_controlled(uuid)','EXECUTE') AS delete_service
+    `);
+    expect(rows[0]).toEqual({
+      update_anon: false, update_auth: true, update_service: true,
+      delete_anon: false, delete_auth: true, delete_service: true,
+    });
   });
 
   it('cashier reassignment is manager-capability scoped, branch checked, and audited', async () => {
@@ -44,7 +82,7 @@ describe.skipIf(skip)('order cashier assignment + recipe delete controls', () =>
     expect(def).toContain('user_branch_access');
     expect(def).toContain('TARGET_USER_NOT_IN_BRANCH');
     expect(def).toContain('ORDER_CASHIER_REASSIGNED');
-    expect(def).toContain("OLD.status <> ALL (ARRAY['open'::text, 'held'::text])");
+    expect(def.toLowerCase()).toContain("old.status <> all (array['open'::text, 'held'::text])");
   });
 
   it('guard trigger is installed only on cashier_id updates', async () => {
