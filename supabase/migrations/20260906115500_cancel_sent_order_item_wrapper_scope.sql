@@ -48,8 +48,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
 
-  SELECT count(*), min(oi.id)
-  INTO v_count, v_item_id
+  SELECT count(*)
+  INTO v_count
   FROM public.order_items oi
   WHERE oi.order_id = p_order_id
     AND oi.product_id = p_product_id
@@ -71,6 +71,18 @@ BEGIN
       'matching_lines', v_count
     );
   END IF;
+
+  SELECT oi.id
+  INTO v_item_id
+  FROM public.order_items oi
+  WHERE oi.order_id = p_order_id
+    AND oi.product_id = p_product_id
+    AND EXISTS (
+      SELECT 1
+      FROM public.order_kitchen_sends s
+      WHERE s.order_item_id = oi.id
+    )
+  LIMIT 1;
 
   RETURN public.cancel_sent_order_item_exact(
     p_order_id,
