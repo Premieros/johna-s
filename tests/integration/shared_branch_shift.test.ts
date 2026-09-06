@@ -19,19 +19,23 @@ describe.skipIf(skip)('shared branch shift invariant', () => {
     await client.end().catch(() => {});
   });
 
-  it('enforces one open shift per branch at the database boundary', async () => {
-    const { rows } = await client.query<{ indexdef: string }>(`
-      SELECT indexdef
-      FROM pg_indexes
-      WHERE schemaname = 'public'
-        AND tablename = 'shifts'
-        AND indexname = 'uq_shifts_one_open_per_branch'
+  it('enforces one open shift per branch with a deferred database constraint', async () => {
+    const { rows } = await client.query<{ def: string; deferrable: boolean; deferred: boolean }>(`
+      SELECT
+        pg_get_constraintdef(c.oid) AS def,
+        c.condeferrable AS deferrable,
+        c.condeferred AS deferred
+      FROM pg_constraint c
+      WHERE c.conrelid = 'public.shifts'::regclass
+        AND c.conname = 'uq_shifts_one_open_per_branch_deferred'
     `);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0].indexdef).toContain('UNIQUE');
-    expect(rows[0].indexdef).toContain('(branch_id)');
-    expect(rows[0].indexdef).toContain("status = 'open'");
+    expect(rows[0].def).toContain('UNIQUE');
+    expect(rows[0].def).toContain('branch_id');
+    expect(rows[0].def).toContain('open_branch_guard');
+    expect(rows[0].deferrable).toBe(true);
+    expect(rows[0].deferred).toBe(true);
   });
 
   it('resolves the active shift by branch rather than by cashier', async () => {
@@ -51,7 +55,7 @@ describe.skipIf(skip)('shared branch shift invariant', () => {
     expect(def).not.toContain('cashier_id = auth.uid()');
   });
 
-  it('returns the existing branch shift instead of creating a per-cashier shift', async () => {
+  it('serializes branch opening and returns the existing shift instead of creating a per-cashier shift', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef(p.oid) AS def
       FROM pg_proc p
@@ -62,6 +66,7 @@ describe.skipIf(skip)('shared branch shift invariant', () => {
     `);
 
     const def = rows[0].def;
+    expect(def).toContain('pg_advisory_xact_lock');
     expect(def).toContain("branch_id = p_branch_id AND status = 'open'");
     expect(def).toContain("'already_open', true");
     expect(def).toContain("'shared', true");
