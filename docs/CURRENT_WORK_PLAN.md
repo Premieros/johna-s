@@ -15,7 +15,7 @@
 - Production/Release branch: `main`.
 - فرع التطوير الدائم الوحيد: `development/final-handover`.
 - Production DB: `azzdesuowpdcoflmyezn` فقط.
-- Current Production code baseline: `main@605b526ff181cd2341e6b3397e90433da7e0e33c` بعد إغلاق scope الخاص بـ`resolve_product_modifiers`.
+- Current Production code baseline: `main@9cbd09eedf1e210088f317ed88f2443ba3d5bdeb` بعد إغلاق Shared Branch Shift.
 - Permission-First Root Closure: **مغلق ✅**.
 - Super Admin فقط يملك implicit full-access.
 - `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من canonical permissions + branch/RLS.
@@ -28,40 +28,51 @@
 4. `cancel_sent_order_item(...)` wrapper مغلق بالكامل.
 5. `resolve_product_modifiers(uuid, uuid, jsonb)` أصبح branch-scoped ومغلق من cross-branch lookup.
 
-## 2) الحزمة النشطة الآن — Purchase + POS Stock Regression 🚧
+## 2) آخر الحزم التشغيلية المغلقة ✅
 
-Regression مثبت على النسخة الحالية بعد hardening الأخير:
+### Purchase + POS Stock Regression — PR #29 ✅
 
-1. **إنشاء فاتورة المشتريات يتوقف قبل `process_purchase`:**
-   - Frontend كان يستدعي `next_document_number('purchase')` مباشرة.
-   - الدالة العامة أصبحت internal-only كما هو مقصود أمنيًا.
-   - الإصلاح لا يعيد فتح الدالة العامة؛ تمت إضافة wrapper ضيق `next_purchase_document_number()` يطلب `purchases.manage` ثم يفوض للدالة الداخلية.
+تم إغلاق الانحرافات التالية على `main` وProduction:
 
-2. **الرصيد المتاح في POS يختفي بالكامل:**
-   - `get_pos_product_availability` يسقط عندما تصل `check_product_availability` إلى recipe/component duplicate يكرر نفس conflict key داخل `INSERT ... ON CONFLICT` واحد.
-   - Production أثبت duplicate recipe حقيقي في `Johnas Omelate`.
-   - الإصلاح يجمع (`GROUP BY` + `SUM`) كل مصادر الـUPSERT المتشابهة قبل `ON CONFLICT`: product-unit links، direct raw recipe items، inventory-unit raw recipes، inventory-unit component recipes.
-   - لا يتم حذف recipe rows أو تغيير إجمالي الكميات؛ الحساب يصبح duplicate-safe فقط.
+1. **فاتورة المشتريات:**
+   - لم يعد Frontend يستدعي generic `next_document_number('purchase')` غير المسموح مباشرة.
+   - `next_purchase_document_number(p_type)` هو الـwrapper المحمي بـ`purchases.manage`.
 
-3. **عطل مشابه تم اكتشافه أثناء العمل — ترقيم البيع:**
-   - POS كان يستدعي generic `next_document_number('sale')`، ثم قد يولد رقمًا عشوائيًا Online عند فشل السيرفر.
-   - تمت إضافة `next_sale_document_number()` المحمية بـ`pos.payment.take`.
-   - Online numbering أصبح fail-closed؛ لا يوجد مصدر أرقام مالي ثانٍ من العميل.
-   - Offline numbering يبقى منفصلًا بصيغة `INV-OFF-*` ضمن outbox الحالي.
+2. **رصيد POS / Availability:**
+   - `check_product_availability` أصبح duplicate-safe لكل مصادر recipe/unit UPSERT باستخدام `GROUP BY` + `SUM` قبل `ON CONFLICT`.
+   - خطأ PostgreSQL `21000` الذي كان يمسح stock map بالكامل لم يعد يحدث مع recipe duplicates مثل `Johnas Omelate`.
 
-ملفات الحزمة:
-- `supabase/migrations/20260906144500_purchase_sale_numbering_and_pos_availability_regression.sql`
-- `src/api/domains/trade.ts`
-- `src/api/domains/pos.ts`
-- `src/features/pos/services/payment.ts`
+3. **ترقيم البيع:**
+   - `next_sale_document_number(p_type)` محمي بـ`pos.payment.take`.
+   - Online numbering fail-closed ولا يوجد fallback عشوائي للرقم المالي.
 
-قواعد الحزمة:
-- `next_document_number(text)` يبقى REVOKED من `PUBLIC`, `anon`, `authenticated`.
-- لا weakening لـRLS أو permission-first.
-- لا Production DDL قبل Full Green.
-- لا Merge إلى `main` قبل Fresh DB + Integration/Security/RLS + Browser Smoke.
+### Shared Branch Shift — PR #30 ✅
 
-الحالة الحالية: **الكود موجود على `development/final-handover` فقط؛ مطلوب PR/Verify قبل أي Production action.**
+طلب التشغيل النهائي: **كل كاشير في نفس الفرع يعمل على نفس الشفت المفتوح**.
+
+العقد المطبق:
+
+1. الشفت المفتوح أصبح **Branch-Scoped** وليس Cashier-Scoped.
+2. `shifts.cashier_id` يبقى هو فاتح الشفت لأغراض Audit فقط، وليس مالكًا حصريًا للشفت.
+3. كل كاشير مخول لنفس الفرع يحصل من `get_active_shift(branch_id)` على نفس `shift_id`.
+4. استدعاء `open_shift` من كاشير ثانٍ في نفس الفرع يعيد نفس الشفت مع `shared=true` و`already_open=true` بدل إنشاء شفت آخر.
+5. البيع والمرتجع يسجلان على شفت الفرع بدون شرط `cashier_id = auth.uid()` على الشفت.
+6. نسبة العملية للكاشير لا تضيع:
+   - البيع يحتفظ بـ`sales.cashier_id`.
+   - حركة الشفت تحتفظ بـ`shift_operations.created_by`.
+7. قاعدة البيانات تمنع أكثر من شفت مفتوح لنفس الفرع بواسطة:
+   - generated guard `open_branch_guard`.
+   - constraint `uq_shifts_one_open_per_branch_deferred` = `UNIQUE(branch_id, open_branch_guard) DEFERRABLE INITIALLY DEFERRED`.
+   - `open_shift` يستخدم transaction advisory lock للفرع لمنع race بين كاشيرين يفتحان في اللحظة نفسها.
+8. أي legacy duplicate open shifts يتم reconciliation لها بدون حذف audit rows؛ العمليات تنتقل للشفت الأساسي مع بقاء `created_by`.
+9. وقت تطبيق PR #30 على Production لم يكن هناك أي شفت مفتوح، لذلك لم يحدث أي دمج لبيانات تشغيل حية أثناء النشر.
+
+التحقق:
+- PR Verify #799: frontend ✅ / Fresh DB ✅ / Schema ✅ / Integration + Security/RLS ✅ / Browser Smoke ✅.
+- Merge: `main@9cbd09eedf1e210088f317ed88f2443ba3d5bdeb`.
+- Production migrations مطبقة على `azzdesuowpdcoflmyezn` ✅.
+- Production post-check: لا يوجد `cashier_id = auth.uid()` في shift lookup داخل sale/refund cores ✅.
+- Deploy GitHub Pages #561: ✅.
 
 ## 3) هدف العمل النهائي — Zero Drift للموقع المنشور
 
@@ -83,6 +94,7 @@ Regression مثبت على النسخة الحالية بعد hardening الأخ
 
 1. `seed_demo_data` / `delete_demo_data` — Production مثبت أنهما ما زالا يستخدمان `is_pos_admin()` / `is_branch_manager()` و`search_path=public`؛ يجب تحويلهما Permission-First واختيار capability canonical بعد مراجعة الاستخدام.
 2. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
+3. أي `SECURITY DEFINER` يظهر أثناء العمل بـ`search_path=public` فقط يسجل كمرشح hardening ولا يعدل عشوائيًا بدون caller/regression review.
 
 Definition of Done:
 - كل external SECURITY DEFINER إما مقصود وموثق ومختبر أو مغلق/داخلي.
@@ -117,7 +129,7 @@ Security Advisor ما زال يسجل `Leaked Password Protection Disabled`.
 - Inventory effect وعدم double deduction.
 - Sent-item void/approval.
 - Tables occupancy/transfer/split where applicable.
-- Shift close.
+- Shared branch shift / shift close.
 - Products/Recipes/Components/Costing runtime.
 - Dialog usability Desktop/Mobile.
 - RTL/LTR + navigation + stale dynamic import recovery.
@@ -153,21 +165,21 @@ Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
 9. أي mutation تشغيلي يجب أن يكون عبر RPC/event موثق وقابل للتدقيق.
 10. توثيق السجل إلزامي لكل دفعة عمل.
 11. لا يعتبر الموقع Zero-Drift حتى يطابق آخر `main` verified وقاعدة Production الفعلية.
+12. الشفت التشغيلي هو شفت فرع واحد مشترك؛ لا يعاد ربطه بمالك كاشير منفرد.
 
 ## 6) ترتيب التنفيذ من الآن
 
-1. Verify حزمة Purchase/POS Stock regression الحالية وإصلاح أي Regression حقيقي بدون تخفيف الاختبارات.
-2. إذا Full Green: Merge الحزمة -> Sync `development/final-handover` -> تطبيق migration على Production -> read-only parity verification -> runtime smoke للمشتريات وPOS stock/payment.
-3. Audit/Fix `seed_demo_data` / `delete_demo_data` Permission-First + search_path.
-4. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
-5. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
-6. Full Verify نهائي.
-7. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
-8. Production parity + Deploy النهائي من verified `main`.
-9. Runtime operational smoke كامل.
-10. Protect `main` إن أمكن.
-11. `HANDOVER.md` + Final Zero-Drift report.
-12. تنظيف الفروع القصيرة/التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
+1. إكمال post-merge Verify/Production parity للشفت المشترك وعدم فتحه مجددًا بدون Regression مثبت.
+2. Audit/Fix `seed_demo_data` / `delete_demo_data` Permission-First + search_path.
+3. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
+4. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
+5. Full Verify نهائي.
+6. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
+7. Production parity + Deploy النهائي من verified `main`.
+8. Runtime operational smoke كامل، ويشمل كاشيرين على نفس branch shift.
+9. Protect `main` إن أمكن.
+10. `HANDOVER.md` + Final Zero-Drift report.
+11. تنظيف الفروع القصيرة/التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
 
 ## 7) معيار إعلان "جاهز للتسليم"
 
