@@ -124,7 +124,7 @@ export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Prom
   }
 }
 
-export async function nextInvoiceNumber(): Promise<string | null> {
+export async function nextInvoiceNumber(): Promise<string> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const rand = Math.floor(1000 + Math.random() * 9000);
@@ -133,12 +133,13 @@ export async function nextInvoiceNumber(): Promise<string | null> {
 
   try {
     const { data, error } = await posApi.nextDocumentNumber({ p_type: 'sale' });
-    if (!error && data?.success) return (data as { number?: string }).number || null;
-    return null;
-  } catch {
-    // An online numbering failure is authoritative. Do not fabricate a second
-    // numbering source because it can create non-canonical or duplicate invoices.
-    return null;
+    const number = !error && data?.success ? (data as { number?: string }).number : null;
+    if (number) return number;
+    throw new Error(error?.message || (data as RpcResult | null)?.detail || (data as RpcResult | null)?.error || 'Could not allocate sale invoice number');
+  } catch (err) {
+    // Online numbering is server-authoritative. Failing closed prevents a
+    // second client-side numbering source from producing financial drift.
+    throw err instanceof Error ? err : new Error('Could not allocate sale invoice number');
   }
 }
 
