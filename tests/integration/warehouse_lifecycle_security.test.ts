@@ -51,8 +51,8 @@ describe.skipIf(!dbUrl)('warehouse lifecycle security', () => {
 
     await client.query(
       `INSERT INTO public.warehouses (id,name,branch_id,is_active) VALUES
-       ($1,'History Warehouse',$4,true),($2,'Foreign Warehouse',$5,true)`,
-      [historyWarehouse, foreignWarehouse, emptyWarehouse, branchA, branchB],
+       ($1,'History Warehouse',$3,true),($2,'Foreign Warehouse',$4,true)`,
+      [historyWarehouse, foreignWarehouse, branchA, branchB],
     );
     await client.query(
       `INSERT INTO public.products (id,name,sale_price,branch_id,is_active)
@@ -125,9 +125,15 @@ describe.skipIf(!dbUrl)('warehouse lifecycle security', () => {
   });
 
   it('prevents moving a warehouse between branches even outside RLS', async () => {
-    await expect(
-      client.query(`UPDATE public.warehouses SET branch_id=$1 WHERE id=$2`, [branchB, historyWarehouse]),
-    ).rejects.toThrow(/WAREHOUSE_BRANCH_IMMUTABLE/);
+    await client.query('SAVEPOINT warehouse_branch_probe');
+    try {
+      await expect(
+        client.query(`UPDATE public.warehouses SET branch_id=$1 WHERE id=$2`, [branchB, historyWarehouse]),
+      ).rejects.toThrow(/WAREHOUSE_BRANCH_IMMUTABLE/);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT warehouse_branch_probe');
+      await client.query('RELEASE SAVEPOINT warehouse_branch_probe');
+    }
   });
 
   it('does not allow direct DELETE even with warehouses.manage', async () => {
