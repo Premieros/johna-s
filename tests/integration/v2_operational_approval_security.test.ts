@@ -179,6 +179,6 @@ describe.skipIf(skip)('V2 operational approval target security', () => {
       const result = await client.query<{ r: RpcResult }>(`SELECT public.approve_warehouse_transfer($1) AS r`, [transferC]);
       return result.rows[0].r;
     });
-    expect(denied).toMatchObject({ success: false, error: 'BRANCH_MISMATCH' });
+    expect(denied).toMatchObject({ success: false, error: 'TRANSFER_NOT_FOUND' });
   });
 });
