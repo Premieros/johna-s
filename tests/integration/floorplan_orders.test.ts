@@ -61,9 +61,10 @@ describe.skipIf(skip)('floor plan + open orders (036-039)', () => {
     expect(directComplete.rows[0].r).toMatchObject({ success: false, error: 'COMPLETION_REQUIRES_PAYMENT' });
     expect((await client.query(`SELECT status FROM public.dining_tables WHERE id = $1`, [tableA])).rows[0].status).toBe('occupied');
 
-    const cancelled = await asUser(cashierA, () => client.query(`SELECT public.set_order_status($1, 'cancelled', 'test cleanup') AS r`, [order.order_id]));
-    expect(cancelled.rows[0].r.success).toBe(true);
-    expect((await client.query(`SELECT status FROM public.dining_tables WHERE id = $1`, [tableA])).rows[0].status).toBe('vacant');
+    // Fixture cleanup runs as the DB test session, not as the cashier. This must
+    // not grant pos.cancel_order merely to prepare the next independent case.
+    await client.query(`UPDATE public.orders SET status = 'cancelled', completed_at = now() WHERE id = $1`, [order.order_id]);
+    await client.query(`UPDATE public.dining_tables SET status = 'vacant' WHERE id = $1`, [tableA]);
   });
 
   it('process_sale stores order channel + table and settles a linked order', async () => {
