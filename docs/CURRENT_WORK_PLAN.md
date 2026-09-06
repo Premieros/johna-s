@@ -15,7 +15,7 @@
 - Production/Release branch: `main`.
 - فرع التطوير الدائم الوحيد: `development/final-handover`.
 - Production DB: `azzdesuowpdcoflmyezn` فقط.
-- Current Production code baseline: `main@9cbd09eedf1e210088f317ed88f2443ba3d5bdeb` بعد إغلاق Shared Branch Shift.
+- Current Production code baseline: `main@dd3d374b48dd0e4a62506044145453eb859c57e1` بعد إغلاق POS Discount / Payment / Order Completion controls.
 - Permission-First Root Closure: **مغلق ✅**.
 - Super Admin فقط يملك implicit full-access.
 - `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من canonical permissions + branch/RLS.
@@ -73,6 +73,50 @@
 - Production migrations مطبقة على `azzdesuowpdcoflmyezn` ✅.
 - Production post-check: لا يوجد `cashier_id = auth.uid()` في shift lookup داخل sale/refund cores ✅.
 - Deploy GitHub Pages #561: ✅.
+
+### POS Discount / Payment / Order Completion — PR #31 ✅
+
+تمت مراجعة ضوابط الخصم وإغلاق الطلب من الواجهة إلى RPC ثم Production، وثبتت طرق التفاف قديمة وتم إغلاقها دون توسيع الصلاحيات أو تخفيف RLS/tests.
+
+العقد النهائي المطبق:
+
+1. **الدفع:**
+   - `process_sale(...)` و`process_sale_split(...)` يطلبان `pos.payment.take` داخل RPC نفسها، وليس اعتمادًا على الواجهة فقط.
+   - كلا المسارين يتحقق من `user_may_access_branch(p_branch_id)` قبل الكتابة المالية.
+
+2. **الخصم:**
+   - الخصم يتطلب `pos.discount`.
+   - عند غياب الصلاحية، خصم مستوى الفاتورة يحتاج Manager Approval صالح ومطابق للفرع والمستخدم ونوع الخصم وقيمته وServer Subtotal، ثم يتم استهلاكه وتسجيله في Audit.
+   - Split Tender أصبح يخضع لنفس ضوابط الخصم بدل وجود مسار أضعف.
+
+3. **إغلاق الطلب:**
+   - الطلب المرتبط لا يمكن إغلاقه بدفع جزئي؛ `process_sale` يعيد `FULL_PAYMENT_REQUIRED_TO_CLOSE_ORDER` إذا كان المدفوع أقل من المستحق.
+   - Split Tender يطلب تطابق مجموع الدفعات تمامًا مع المستحق عبر `SPLIT_PAYMENT_TOTAL_MISMATCH`.
+   - `set_order_status(...,'completed')` لا يغلق الطلب ماليًا؛ يعيد `COMPLETION_REQUIRES_PAYMENT`.
+   - الحالة `completed` تصبح نتيجة لمسار Checkout المالي المضبوط فقط.
+
+4. **حالة الدفع:**
+   - `set_payment_status(uuid,text)` لم تعد executable لـ`PUBLIC`, `anon`, أو `authenticated`؛ بقيت `service_role` فقط.
+
+5. **Cancel / Hold:**
+   - الإلغاء يطلب `pos.cancel_order` صراحة.
+   - `open/held` يطلبان `pos.hold` صراحة.
+   - إلغاء طلب أرسل للمطبخ لا يتم بمجرد status flip؛ يعاد `SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID` حتى تتم معالجة sent items عبر المسار المراقب.
+   - الإلغاء العادي يتطلب سببًا صالحًا ويكتب Audit.
+
+التحقق:
+- PR #31: `fix: harden POS discounts and order completion` ✅.
+- Verify #805: frontend ✅ / lint ✅ / typecheck ✅ / unit ✅ / build ✅ / Fresh DB ✅ / Schema ✅ / Integration + Security/RLS ✅ / Browser Smoke ✅.
+- Merge: `main@dd3d374b48dd0e4a62506044145453eb859c57e1` ✅.
+- Production migrations مطبقة على `azzdesuowpdcoflmyezn` ✅.
+- Production post-check:
+  - `process_sale`: `pos.payment.take` + `pos.discount` + full settlement guard ✅.
+  - `process_sale_split`: `pos.payment.take` + matching discount controls + exact tender total ✅.
+  - `set_order_status`: direct completion blocked + `pos.cancel_order` + `pos.hold` + sent-order cancellation guard ✅.
+  - `set_payment_status`: anon/authenticated EXECUTE = false؛ service_role = true ✅.
+- `development/final-handover` تم Fast-Forward بعد الدمج إلى `dd3d374b48dd0e4a62506044145453eb859c57e1` بدون Force وبدون تعارض ✅.
+
+قاعدة المتابعة: **لا يعاد فتح الخصم/الدفع/إغلاق الطلب إلا عند Regression مثبت جديد.**
 
 ## 3) هدف العمل النهائي — Zero Drift للموقع المنشور
 
@@ -166,17 +210,19 @@ Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
 10. توثيق السجل إلزامي لكل دفعة عمل.
 11. لا يعتبر الموقع Zero-Drift حتى يطابق آخر `main` verified وقاعدة Production الفعلية.
 12. الشفت التشغيلي هو شفت فرع واحد مشترك؛ لا يعاد ربطه بمالك كاشير منفرد.
+13. إغلاق الطلب المالي لا يتم عبر تغيير status يدوي؛ يتم فقط عبر checkout مضبوط ومكتمل الدفع.
+14. الخصم والدفع يجب حمايتهما داخل RPC boundary، وليس في UI فقط.
 
 ## 6) ترتيب التنفيذ من الآن
 
-1. إكمال post-merge Verify/Production parity للشفت المشترك وعدم فتحه مجددًا بدون Regression مثبت.
+1. عدم إعادة فتح Shared Branch Shift أو POS Discount/Payment/Order Completion بدون Regression مثبت.
 2. Audit/Fix `seed_demo_data` / `delete_demo_data` Permission-First + search_path.
 3. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
 4. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
 5. Full Verify نهائي.
 6. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
 7. Production parity + Deploy النهائي من verified `main`.
-8. Runtime operational smoke كامل، ويشمل كاشيرين على نفس branch shift.
+8. Runtime operational smoke كامل، ويشمل كاشيرين على نفس branch shift + Discount/Payment/Order Completion.
 9. Protect `main` إن أمكن.
 10. `HANDOVER.md` + Final Zero-Drift report.
 11. تنظيف الفروع القصيرة/التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
