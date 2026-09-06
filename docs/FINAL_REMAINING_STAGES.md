@@ -1,111 +1,109 @@
 # FINAL REMAINING STAGES — Countdown to Handover
 
 > هذا الملف هو عدّاد المراحل المتبقية حتى التسليم النهائي.
-> يُقرأ بعد `docs/CURRENT_WORK_PLAN.md` و`docs/HANDOVER_CHECKPOINT_2026-09-06.md`، ويُحدّث عند إغلاق كل مرحلة.
+> Source of truth التفصيلي للأخطاء: `docs/FINAL_BUG_REGISTER.md`.
+> أحدث حالة Production: `docs/HANDOVER_CHECKPOINT_2026-09-06.md`.
 
 ## الحالة الحالية
-
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn` فقط
 - Production branch: `main`
 - Development branch: `development/final-handover`
-- Verified Production baseline قبل PR #41: `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879`
-- PR #41: مفتوح / غير مدمج / غير مطبق على Production.
-- آخر Verify للـPR #41: #844 — Frontend + Fresh DB + Schema ✅، Integration/Security/RLS ❌، Browser Smoke لم يبدأ.
+- Verified Production baseline: `main@80f5ed535e07cb3c839266e7e8d5dda5b3cd5f87` — PR #43.
+- PR #43 Verify #852 ✅ / merged-main Verify #853 ✅ / Deploy #574 ✅.
+- Production parity وPost-Check لآخر دفعة ✅.
+- Current confirmed unique deviations: **74** حسب `FINAL_BUG_REGISTER.md`.
 
 # المتبقي: 6 مراحل
 
 ## 6 → P0-B SECURITY DEFINER Remaining Audit — ACTIVE 🔴
+الحصر الحالي:
+- 162 SECURITY DEFINER callable للـauthenticated إجمالًا؛ هذا ليس عدد أخطاء.
+- **71 دالة مؤكدة** ما زالت تستخدم legacy/unhardened search path بدل `public, pg_temp`.
+- 50 منها mutation/operational/identity، و21 read/helper-like.
+- الفحص الآلي الحالي لم يجد role-label authorization واضحًا (`owner`/`manager`/`branch_manager`) في المجموعة المتبقية.
 
-الهدف: إغلاق كل انحراف SECURITY DEFINER مؤكد Function-by-Function بدون bulk rewrite.
-
-الحالي:
-- إكمال تشخيص PR #41 وإصلاح Regression فقط.
-- Subscription Admin functions: search-path/grants hardening مع الحفاظ على Super Admin contract.
-- مراجعة runtime subscription helpers منفصلة، خصوصًا أي raw tenant-id/status oracle محتمل.
-- مراجعة بقية الدوال الحساسة: auth / permission / branch scope / search_path / grants / callers.
-
-لا تغلق المرحلة إلا عندما:
-- لا يبقى external SECURITY DEFINER غير مبرر أو غير مختبر.
-- لا role-name authorization خارج Super Admin implicit bypass.
-- لا cross-branch / cross-tenant information oracle.
-- Full Verify + merge + Production migration/post-check + Deploy/runtime parity كلها خضراء.
+طريقة الإصلاح:
+- معالجة root cause بعناقيد مراجَعة، لا broad blind rewrite.
+- إذا كان العيب search-path فقط: exact-signature `ALTER FUNCTION ... SET search_path TO public, pg_temp` بدون إعادة كتابة body.
+- إذا ظهر auth/branch/tenant defect: Regression مستقل + migration ضيقة.
+- لا تنخفض المرحلة من 6 إلى 5 إلا بعد وصول الانحرافات المؤكدة في P0-B إلى صفر والتحقق Production/CI.
 
 ## 5 → P0-C Auth Password Hardening 🔴
+المؤكد حاليًا:
+- Supabase Security Advisor: `Leaked Password Protection Disabled`.
 
-الهدف:
-- مراجعة `Leaked Password Protection Disabled`.
-- تفعيله إذا كانت Supabase plan/tooling تسمح.
+الإغلاق يتطلب:
+- تفعيل الحماية إذا سمحت المنصة/الخطة.
 - اختبار Login / Create User / Password Update.
 - إعادة Security Advisor.
-- إذا كان الإجراء يحتاج Dashboard/Admin خارجيًا، يوثق بوضوح كقيد منصة ولا يدّعى إغلاقه تقنيًا.
+- توثيق أي قيد منصة بدل ادعاء الإغلاق.
 
 ## 4 → P1-A Published Runtime / UI Zero-Drift Audit 🟠
+لا توجد أخطاء Runtime محسوبة قبل إعادة إنتاجها.
 
-اختبار تشغيل فعلي للنسخة المنشورة، وليس static review فقط:
-- Login / bootstrap.
-- POS create/edit.
-- Send to Kitchen / delta send / KDS.
-- Payment / discount / completion.
-- Inventory effects وعدم double deduction.
-- sent-item void / approval.
-- tables / transfer / split حيث ينطبق.
-- shared branch shift + close shift.
+الدورة المطلوبة:
+- Login/bootstrap.
+- فتح وردية ورصيد افتتاحي.
+- POS create/edit + send to kitchen + KDS.
+- Cash/Card + discounts/voids/returns.
+- inventory effects وعدم double deduction.
+- close shift + report + day-close/offline path حيث ينطبق.
+- tables / transfer / split.
 - products / recipes / components / costing.
-- Desktop + Mobile dialogs.
-- RTL/LTR + navigation + stale dynamic import recovery.
-
-يصلح فقط Regression مثبت على النسخة المنشورة.
+- reports.
+- Desktop/Mobile + RTL/LTR + navigation.
 
 ## 3 → P2 Printing Finalization 🟡
+المؤكد حاليًا:
+- `set_print_status(uuid,text)` ما زالت legacy `search_path=public`، وهي محسوبة بالفعل ضمن الـ71 وليست خطأ إضافيًا.
 
-الهدف:
-- تثبيت local printing contract.
-- stations القياسية: cashier / kitchen / barista.
-- fallback للصنف بلا station إلى kitchen مع warning مناسب.
-- first print / reprint / kitchen print تحت صلاحيات واضحة.
-- اختبار عدم الطباعة المزدوجة ومسارات reprint/cancel المطلوبة.
+الإغلاق الوظيفي يتطلب:
+- cashier/kitchen/barista stations.
+- fallback station behavior.
+- first print/reprint تحت صلاحيات واضحة.
+- منع duplicate print غير المصرح به.
+- طباعة تقارير إغلاق الورديات واليوم.
 
 ## 2 → Release Hardening / Protection / Final Gates 🟠
+المؤكد حاليًا:
+- `main` غير Protected / لا توجد required checks مفروضة على الفرع.
 
-الهدف:
+الإغلاق يتطلب:
 - Full Verify نهائي.
 - Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Production API/DB parity.
-- Deploy من verified `main` فقط.
-- Runtime operational smoke كامل.
-- Protect `main` مع required checks إذا سمحت صلاحيات GitHub Admin؛ وإلا توثيق القيد صراحة.
+- Production parity.
+- verified-main deploy فقط.
+- Runtime smoke كامل.
+- تفعيل branch protection إن سمحت صلاحيات GitHub، أو توثيق القيد.
 
 ## 1 → Final Handover + Cleanup + Zero-Drift Report 🟢
-
-الهدف النهائي:
+الإغلاق يتطلب:
 - `Published Site = Verified Main = Production DB Contract = Zero Drift`.
-- تحديث `HANDOVER.md` / checkpoint النهائي.
-- تقرير نهائي بما تم، القيود إن وجدت، ونتائج Verify/Deploy/Production post-check.
-- تنظيف الفروع القصيرة/التاريخية بعد التأكد من عدم احتوائها على عمل غير مدمج؛ إبقاء `main` و`development/final-handover` كفروع دائمة فقط.
-- إعلان Remaining Stages = 0 فقط بعد تحقق جميع بوابات التسليم.
+- تحديث checkpoint/HANDOVER النهائي.
+- مزامنة السجلات وعدم ترك documentation drift.
+- تنظيف الفروع التاريخية فقط بعد التأكد من عدم وجود عمل غير مدمج.
+- إبقاء `main` و`development/final-handover` كفروع دائمة.
 
 # قاعدة العدّ التنازلي
+`6 → 5 → 4 → 3 → 2 → 1 → 0`
 
-- يبدأ العد الحالي من **6**.
-- عند إغلاق مرحلة كاملة فقط ينخفض العداد: `6 → 5 → 4 → 3 → 2 → 1 → 0`.
-- لا يتم خفض العداد لمجرد كتابة fix أو نجاح test جزئي.
-- المرحلة تغلق فقط بعد بواباتها المطلوبة: Regression → Full Verify → Merge → Production parity/migration عند الحاجة → Post-Check → Deploy/Runtime verification.
+لا تنخفض مرحلة إلا بعد:
+`Regression → Full Verify → Merge → Production migration/parity عند الحاجة → Post-Check → merged-main Verify → Deploy/Runtime verification`.
 
-# قاعدة التنظيف والترتيب أثناء الإصلاح
-
-تطبق في كل مرحلة، داخل نفس النطاق فقط:
-
-1. إزالة التكرار والكود/الاختبارات/التعليقات القديمة المرتبطة مباشرة بالإصلاح.
-2. توحيد أسماء الأخطاء والعقود والتعليقات بدون كسر API contract.
-3. ترتيب migrations/tests/docs بحيث يسهل تتبع سبب التغيير ونتيجته.
-4. تحديث checkpoint والسجل عند إغلاق كل batch/مرحلة.
-5. عدم تنفيذ broad refactor أو لمس ملفات غير مرتبطة لمجرد التنظيف.
-6. عدم حذف أو إضعاف RLS/tests؛ التنظيف لا يسبق الأمان.
-7. قبل كل WRITE: إعادة جلب HEAD ومراجعة أي commits متوازية، بدون force push.
+# قواعد الإصلاح والتنظيف
+1. إصلاح الجذر الذي يزيل عدة أعراض متكررة أفضل من ترقيع كل عرض منفصل.
+2. لا يتم جمع مشاكل مختلفة تحت تغيير واسع غير مبرر.
+3. إزالة التكرار/التعليقات/الاختبارات القديمة داخل نطاق الإصلاح فقط.
+4. لا broad refactor غير مرتبط.
+5. لا حذف أو إضعاف RLS/tests.
+6. Super Admin فقط implicit bypass؛ باقي الأدوار Labels.
+7. قبل كل WRITE: إعادة جلب HEAD ومراجعة commits المتوازية.
+8. لا force push.
+9. لا Production DDL قبل Full Verify.
+10. تحديث `FINAL_BUG_REGISTER.md` والـcheckpoint بعد كل batch مغلق.
 
 # الحالة التالية مباشرة
-
 **Remaining = 6**
 
-العمل النشط الآن: تشخيص فشل Integration في PR #41 وإغلاق P0-B تدريجيًا، مع إبقاء Production بلا أي DDL غير مجتاز للـFull Verify.
+العمل النشط: خفض **71** انحراف SECURITY DEFINER المتبقية بعناقيد root-cause آمنة ومراجَعة، مع حماية كل العقود المغلقة السابقة.
