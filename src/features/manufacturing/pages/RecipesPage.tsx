@@ -23,6 +23,12 @@ interface ItemForm {
   wastage_percent: number;
 }
 
+interface RecipeMutationResult {
+  success?: boolean;
+  error?: string;
+  detail?: string;
+}
+
 const EMPTY_ITEM: ItemForm = { raw_material_id: '', quantity: 1, wastage_percent: 0 };
 
 export function RecipesPage() {
@@ -136,20 +142,28 @@ export function RecipesPage() {
 
     let recipeId = editing?.id || '';
     if (editing) {
-      const { error: updateError } = await supabase.from('recipes').update(payload).eq('id', editing.id);
-      if (updateError) { show(updateError.message, 'error'); return; }
-      const { error: deleteItemsError } = await supabase.from('recipe_items').delete().eq('recipe_id', editing.id);
-      if (deleteItemsError) { show(deleteItemsError.message, 'error'); return; }
+      const { data, error: rpcError } = await supabase.rpc('update_recipe_with_items', {
+        p_recipe_id: editing.id,
+        p_name: form.name.trim(),
+        p_yield_quantity: Number(form.yield_quantity) || 1,
+        p_notes: form.notes.trim(),
+        p_is_active: form.is_active,
+        p_items: itemRows,
+      });
+      const result = data as RecipeMutationResult | null;
+      if (rpcError || !result?.success) {
+        show(rpcError?.message || result?.detail || result?.error || t('error'), 'error');
+        return;
+      }
     } else {
       const { data, error: insertError } = await supabase.from('recipes').insert(payload).select().single();
       if (insertError || !data) { show(insertError?.message || t('error'), 'error'); return; }
       recipeId = (data as Recipe).id;
+      const { error: itemsError } = await supabase.from('recipe_items').insert(itemRows.map((item) => ({ ...item, recipe_id: recipeId })));
+      if (itemsError) { show(itemsError.message, 'error'); return; }
+      await logAudit('create', 'recipes', recipeId);
     }
 
-    const { error: itemsError } = await supabase.from('recipe_items').insert(itemRows.map((item) => ({ ...item, recipe_id: recipeId })));
-    if (itemsError) { show(itemsError.message, 'error'); return; }
-
-    await logAudit(editing ? 'update' : 'create', 'recipes', recipeId);
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadRecipes();
@@ -157,9 +171,10 @@ export function RecipesPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error: deleteError } = await supabase.from('recipes').delete().eq('id', deleteId);
-    if (deleteError) show(deleteError.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'recipes', deleteId); }
+    const { data, error: deleteError } = await supabase.rpc('delete_recipe_controlled', { p_recipe_id: deleteId });
+    const result = data as RecipeMutationResult | null;
+    if (deleteError || !result?.success) show(deleteError?.message || result?.detail || result?.error || t('error'), 'error');
+    else show(t('deleteSuccess'), 'success');
     setDeleteId(null);
     reloadRecipes();
   };
