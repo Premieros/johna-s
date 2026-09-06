@@ -52,11 +52,12 @@ describe.skipIf(skip)('POS discount and order close controls', () => {
     expect(split).toContain('SPLIT_PAYMENT_TOTAL_MISMATCH');
   });
 
-  it('does not allow direct order completion or unsafe cancellation of sent orders', async () => {
+  it('does not allow direct completion and uses canonical status permissions', async () => {
     const status = await def('set_order_status');
-    expect(status).toContain("can_permission('pos.order.edit')");
     expect(status).toContain('user_may_access_branch(v_order.branch_id)');
     expect(status).toContain('COMPLETION_REQUIRES_PAYMENT');
+    expect(status).toContain("can_permission('pos.cancel_order')");
+    expect(status).toContain("can_permission('pos.hold')");
     expect(status).toContain('SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID');
     expect(status).toContain('REASON_REQUIRED');
   });
