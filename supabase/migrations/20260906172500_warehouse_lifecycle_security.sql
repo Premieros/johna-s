@@ -1,13 +1,79 @@
 -- Batch 2: warehouse lifecycle safety + transfer rejection branch isolation.
--- Do not rewrite historical FK contracts. Direct warehouse DELETE is fail-closed;
--- a controlled RPC permits deletion only when the warehouse is genuinely unreferenced.
+-- Do not rewrite historical FK contracts. Warehouse deletion is allowed only
+-- when the caller is authorized for the branch and the warehouse has no FK references.
+
+CREATE OR REPLACE FUNCTION public.warehouse_delete_allowed(
+  p_warehouse_id uuid,
+  p_branch_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_has_rows boolean;
+  r record;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN false;
+  END IF;
+
+  IF NOT public.is_pos_admin() THEN
+    IF NOT public.can_permission('warehouses.manage')
+       OR NOT public.user_may_access_branch(p_branch_id) THEN
+      RETURN false;
+    END IF;
+  END IF;
+
+  FOR r IN
+    SELECT DISTINCT
+      tc.table_schema,
+      tc.table_name,
+      kcu.column_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name
+     AND tc.constraint_schema = kcu.constraint_schema
+    JOIN information_schema.constraint_column_usage ccu
+      ON ccu.constraint_name = tc.constraint_name
+     AND ccu.constraint_schema = tc.constraint_schema
+    WHERE tc.constraint_type = 'FOREIGN KEY'
+      AND tc.table_schema = 'public'
+      AND ccu.table_schema = 'public'
+      AND ccu.table_name = 'warehouses'
+      AND ccu.column_name = 'id'
+  LOOP
+    EXECUTE format(
+      'SELECT EXISTS (SELECT 1 FROM %I.%I WHERE %I = $1)',
+      r.table_schema,
+      r.table_name,
+      r.column_name
+    )
+    INTO v_has_rows
+    USING p_warehouse_id;
+
+    IF v_has_rows THEN
+      RETURN false;
+    END IF;
+  END LOOP;
+
+  RETURN true;
+EXCEPTION WHEN OTHERS THEN
+  RETURN false;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.warehouse_delete_allowed(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.warehouse_delete_allowed(uuid, uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.warehouse_delete_allowed(uuid, uuid) TO authenticated;
 
 DROP POLICY IF EXISTS auth_delete_warehouses ON public.warehouses;
 CREATE POLICY auth_delete_warehouses
 ON public.warehouses
 FOR DELETE
 TO authenticated
-USING (false);
+USING (public.warehouse_delete_allowed(id, branch_id));
 
 CREATE OR REPLACE FUNCTION public.guard_warehouse_branch_change()
 RETURNS trigger
