@@ -72,13 +72,12 @@ describe.skipIf(!dbUrl)('admin SECURITY DEFINER hardening', () => {
     expect(byName.get('is_super_admin')).toContain('auth.uid()');
     expect(byName.get('is_super_admin')).toContain("role = 'super_admin'");
 
-    for (const name of [
-      'admin_data_delete_section',
-      'admin_data_seed_all',
-      'verify_auth_account',
-      'repair_auth_account',
-    ]) {
+    for (const name of ['admin_data_delete_section', 'admin_data_seed_all']) {
       expect(byName.get(name), `${name} Super Admin guard`).toContain('public.is_super_admin()');
+    }
+
+    for (const name of ['verify_auth_account', 'repair_auth_account']) {
+      expect(byName.get(name), `${name} Super Admin guard`).toContain('public.is_pos_admin()');
     }
 
     expect(byName.get('toggle_organization_status')).toContain('public.is_platform_admin()');
