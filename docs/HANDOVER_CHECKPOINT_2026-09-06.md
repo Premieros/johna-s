@@ -11,14 +11,19 @@
 - Never force-push `main`.
 
 ## Current main / Production baseline
-- `main@c7ef63a8550ea3c070a20faa8bdb78c76000c268`
-- Merge commit for PR #36: `security: make branch hard delete dependency-safe`.
-- Verify #828 on PR #36 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Verify #829 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #567 completed successfully with Production parity and GitHub Pages deploy ✅.
-- Migration `controlled_branch_delete` was applied successfully to Production `azzdesuowpdcoflmyezn` and is present in Production migration history.
-- Production post-check confirms `auth_delete_branches` is fail-closed (`USING(false)`) and `delete_branch_cascade` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only execute, `branches.manage`, branch scope, current-branch protection, and operational-history blockers.
-- `development/final-handover` was fast-forwarded to verified `main@c7ef63a8550ea3c070a20faa8bdb78c76000c268` with `force=false` before this documentation commit.
+- `main@5ba86ef67966d99e99d62a28717e2f87cf2c54a4`
+- Merge commit for PR #37: `security: harden warehouse lifecycle and rejection scope`.
+- Verify #834 on PR #37 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Verify #835 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Deploy #568 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
+- Migration `warehouse_lifecycle_security` was applied successfully to Production `azzdesuowpdcoflmyezn`.
+- Production post-check confirms:
+  - `auth_delete_warehouses` is authenticated-only and calls `warehouse_delete_allowed(id, branch_id)`.
+  - direct hard delete is allowed only with `warehouses.manage` + canonical branch access (or Super Admin implicit bypass) and only when the warehouse has zero FK references.
+  - `delete_warehouse_safe(uuid)` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, Permission-First authorization, branch-scoped non-oracle lookup, and dependency blockers returning `WAREHOUSE_HAS_OPERATIONAL_HISTORY` + `DEACTIVATE_WAREHOUSE`.
+  - `reject_warehouse_transfer(uuid,text)` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, `inventory.transfer.approve`, branch-scoped lookup, and inaccessible IDs return `TRANSFER_NOT_FOUND`.
+  - `trg_guard_warehouse_branch_change` prevents changing `warehouses.branch_id` after creation.
+- `development/final-handover` was fast-forwarded to verified `main@5ba86ef67966d99e99d62a28717e2f87cf2c54a4` with `force=false` before this documentation commit.
 
 ### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
 Do not reopen without a new Regression.
@@ -69,19 +74,39 @@ Final contract:
 Regression coverage:
 - `tests/integration/branch_hard_delete.test.ts` verifies direct-delete closure, Permission-First custom-role authorization, current-branch protection, empty branch delete, history rejection, deactivate success, and history persistence.
 
-## Active next work — Warehouse lifecycle + safe delete
-Audit and close only confirmed deviations for:
-1. create warehouse.
-2. edit warehouse.
-3. deactivate / re-enable warehouse.
-4. delete empty warehouse.
-5. warehouse with stock must not hard-delete operational state.
-6. warehouse with inventory history must not hard-delete history.
-7. warehouse referenced by transfers, purchases, counts, waste, or other operational records must fail safely or require explicit operational handling.
-8. cross-branch warehouse read/write attempts.
-9. direct RPC attacks and SECURITY DEFINER review: auth, permission, branch scope, search_path, grants, caller behavior.
-10. refresh/persistence after lifecycle actions.
-11. add Regression for every confirmed defect, then Full Verify → merge → Production migration/post-check → deploy/runtime verify.
+### PR #37 — Warehouse lifecycle + safe delete — CLOSED on Production ✅
+Confirmed defects closed:
+- `reject_warehouse_transfer` had incomplete auth/branch hardening and could expose transfer existence/status cross-branch.
+- warehouse hard delete could erase referenced operational/history data through FK cascades.
+- `warehouses.branch_id` could be changed after creation.
+
+Final contract:
+- warehouse create/edit/disable/re-enable remains Permission-First and branch scoped.
+- warehouse `branch_id` is immutable after creation.
+- authorized, completely unreferenced warehouse may be hard-deleted and recreated.
+- any warehouse referenced by stock, transfers, purchases, counts, waste, or any other FK dependency is not hard-deleted.
+- `delete_warehouse_safe` provides explicit dependency blockers and directs operational removal to `DEACTIVATE_WAREHOUSE`.
+- cross-branch warehouse reads/deletes are non-oracle and denied.
+- transfer rejection is auth + permission + branch scoped and uses `TRANSFER_NOT_FOUND` for inaccessible IDs.
+- stock/history survives deactivate/re-enable.
+
+Regression coverage:
+- `tests/integration/warehouse_lifecycle_security.test.ts`.
+- `tests/integration/warehouse_transfer_branch_scope.test.ts`.
+- existing RLS branch-isolation suite remains intact and green.
+
+## Active next work — P0-B SECURITY DEFINER Remaining Audit
+Follow `docs/CURRENT_WORK_PLAN.md` and close Function-by-Function only.
+
+Start with:
+1. `seed_demo_data` / `delete_demo_data`.
+2. Prove current callers and intended capability before changing authorization.
+3. Remove role-name authorization outside Super Admin implicit bypass.
+4. Harden `search_path` to `public, pg_temp` where confirmed necessary.
+5. Review auth, canonical permission, branch scope, grants, and caller behavior.
+6. Add Regression for every confirmed defect.
+7. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
+8. Continue costing/detail/admin SECURITY DEFINER functions only after the first pair is closed.
 
 ## Mandatory rules
 - Work only on confirmed deviations; do not reopen closed batches without regression evidence.
