@@ -53,7 +53,7 @@ async function mockPosBackend(page: Page) {
     if (name === 'record_login_success' || name === 'record_login_failure') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
     if (name === 'get_active_shift') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, open: true, shift_id: '00000000-0000-0000-0000-000000000050', branch_id: BRANCH_ID, user_id: TEST_USER_ID }) });
     if (name === 'get_pos_product_availability') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, available_quantity: 20, is_available: true }]) });
-    if (name === 'next_document_number') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, number: 'E2E-INV-001' }) });
+    if (name === 'next_sale_document_number') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, number: 'E2E-INV-001' }) });
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, id: 'e2e-order-id', order_id: 'e2e-order-id', order_number: 'E2E-001', sale_id: 'e2e-sale-id', sent: [{ product_name: product.name, quantity: 1, unit_name: 'piece' }], items_sent_count: 1 }) });
   });
 }
@@ -169,6 +169,7 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('pos-payment-method-cash').click();
     await page.getByTestId('pos-payment-confirm').click();
+    await expect.poll(() => rpcCalls.includes('next_sale_document_number'), { timeout: 10000 }).toBe(true);
     await expect.poll(() => rpcCalls.includes('process_sale'), { timeout: 10000 }).toBe(true);
     const payload = (rpcPayloads.process_sale?.[0] || {}) as { p_status?: string; p_payment_method?: string; p_order_type?: string };
     expect(payload.p_status).toBe('completed');
