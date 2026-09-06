@@ -135,7 +135,7 @@ describe.skipIf(!dbUrl)('close_shift Permission-First security', () => {
       ),
     );
 
-    expect(result.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_NOT_ALLOWED' });
+    expect(result.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_CLOSE_DENIED' });
     await forceClose(shiftId);
   });
 
@@ -169,7 +169,7 @@ describe.skipIf(!dbUrl)('close_shift Permission-First security', () => {
         [shiftId],
       ),
     );
-    expect(labelOnly.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_NOT_ALLOWED' });
+    expect(labelOnly.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_CLOSE_DENIED' });
 
     const managed = await asUser(managerUser, async () =>
       client.query<{ r: { success?: boolean; shift_id?: string } }>(
