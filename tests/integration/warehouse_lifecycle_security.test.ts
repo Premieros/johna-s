@@ -12,6 +12,7 @@ describe.skipIf(!dbUrl)('warehouse lifecycle security', () => {
   const userA = randomUUID();
   const role = `qa_wh_${randomUUID().slice(0, 8)}`;
   const emptyWarehouse = randomUUID();
+  const directEmptyWarehouse = randomUUID();
   const historyWarehouse = randomUUID();
   const foreignWarehouse = randomUUID();
   const productA = randomUUID();
@@ -72,13 +73,13 @@ describe.skipIf(!dbUrl)('warehouse lifecycle security', () => {
     await client.end().catch(() => {});
   });
 
-  it('closes direct authenticated warehouse DELETE', async () => {
+  it('gates direct warehouse DELETE through the dependency-safe helper', async () => {
     const policy = await client.query<{ qual: string | null }>(
       `SELECT qual FROM pg_policies
        WHERE schemaname='public' AND tablename='warehouses' AND policyname='auth_delete_warehouses'`,
     );
     expect(policy.rows).toHaveLength(1);
-    expect(policy.rows[0].qual).toBe('false');
+    expect(policy.rows[0].qual ?? '').toContain('warehouse_delete_allowed');
   });
 
   it('uses Permission-First warehouse management with an arbitrary role label', async () => {
@@ -136,16 +137,26 @@ describe.skipIf(!dbUrl)('warehouse lifecycle security', () => {
     }
   });
 
-  it('does not allow direct DELETE even with warehouses.manage', async () => {
+  it('allows direct DELETE only for an authorized unreferenced warehouse', async () => {
     await asUser(async () => {
-      const deleted = await client.query(`DELETE FROM public.warehouses WHERE id=$1 RETURNING id`, [emptyWarehouse]);
-      expect(deleted.rows).toHaveLength(0);
+      await client.query(
+        `INSERT INTO public.warehouses (id,name,branch_id,is_active)
+         VALUES ($1,'Direct Empty Warehouse',$2,true)`,
+        [directEmptyWarehouse, branchA],
+      );
+
+      const emptyDelete = await client.query(`DELETE FROM public.warehouses WHERE id=$1 RETURNING id`, [directEmptyWarehouse]);
+      expect(emptyDelete.rows).toHaveLength(1);
+
+      const historyDelete = await client.query(`DELETE FROM public.warehouses WHERE id=$1 RETURNING id`, [historyWarehouse]);
+      expect(historyDelete.rows).toHaveLength(0);
     });
-    const stillThere = await client.query(`SELECT id FROM public.warehouses WHERE id=$1`, [emptyWarehouse]);
-    expect(stillThere.rows).toHaveLength(1);
+
+    const historicalStillThere = await client.query(`SELECT id FROM public.warehouses WHERE id=$1`, [historyWarehouse]);
+    expect(historicalStillThere.rows).toHaveLength(1);
   });
 
-  it('hard-deletes only a genuinely empty warehouse and allows recreation', async () => {
+  it('hard-deletes only a genuinely empty warehouse through the safe RPC and allows recreation', async () => {
     await asUser(async () => {
       const deleted = await client.query<{ r: { success?: boolean; warehouse_id?: string } }>(
         `SELECT public.delete_warehouse_safe($1) AS r`,
@@ -199,6 +210,6 @@ describe.skipIf(!dbUrl)('warehouse lifecycle security', () => {
       `SELECT quantity::text AS quantity FROM public.inventory WHERE warehouse_id=$1`, [historyWarehouse],
     );
     expect(stock.rows).toHaveLength(1);
-    expect(stock.rows[0].quantity).toBe('5');
+    expect(Number(stock.rows[0].quantity)).toBe(5);
   });
 });
