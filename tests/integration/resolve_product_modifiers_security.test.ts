@@ -34,7 +34,7 @@ describe.skipIf(skip)('resolve_product_modifiers security boundary', () => {
 
     const definition = rows[0]?.definition ?? '';
     const uidPos = definition.indexOf('v_uid uuid := auth.uid()');
-    const rolePos = definition.indexOf('v_auth_role text := auth.role()');
+    const rolePos = definition.indexOf("current_setting('request.jwt.claim.role', true)");
     const userPos = definition.indexOf('u.id = v_uid');
     const branchPos = definition.indexOf('user_may_access_branch');
     const productPos = definition.indexOf('FROM public.products p');
