@@ -25,7 +25,7 @@ describe.skipIf(skip)('resolve_product_modifiers security boundary', () => {
     await client.end().catch(() => {});
   });
 
-  it('authorizes branch access before product/modifier lookups', async () => {
+  it('authorizes user branch access before product/modifier lookups', async () => {
     const { rows } = await client.query<{ definition: string }>(`
       SELECT pg_get_functiondef(
         'public.resolve_product_modifiers(uuid,uuid,jsonb)'::regprocedure
@@ -33,14 +33,16 @@ describe.skipIf(skip)('resolve_product_modifiers security boundary', () => {
     `);
 
     const definition = rows[0]?.definition ?? '';
-    const authPos = definition.indexOf('auth.uid() IS NULL');
-    const userPos = definition.indexOf('u.id = auth.uid()');
+    const uidPos = definition.indexOf('v_uid uuid := auth.uid()');
+    const rolePos = definition.indexOf('v_auth_role text := auth.role()');
+    const userPos = definition.indexOf('u.id = v_uid');
     const branchPos = definition.indexOf('user_may_access_branch');
     const productPos = definition.indexOf('FROM public.products p');
     const optionPos = definition.indexOf('product_modifier_options');
 
-    expect(authPos).toBeGreaterThan(-1);
-    expect(userPos).toBeGreaterThan(authPos);
+    expect(uidPos).toBeGreaterThan(-1);
+    expect(rolePos).toBeGreaterThan(uidPos);
+    expect(userPos).toBeGreaterThan(rolePos);
     expect(branchPos).toBeGreaterThan(userPos);
     expect(productPos).toBeGreaterThan(branchPos);
     expect(optionPos).toBeGreaterThan(productPos);
@@ -65,7 +67,16 @@ describe.skipIf(skip)('resolve_product_modifiers security boundary', () => {
     });
   });
 
-  it('returns branch mismatch before revealing a foreign product', async (ctx) => {
+  it('preserves the trusted internal DB path used by pricing/inventory', async () => {
+    const { rows } = await client.query<{ r: { success: boolean; error?: string } }>(
+      `SELECT public.resolve_product_modifiers($1,$2,'[]'::jsonb) AS r`,
+      [ids.prodA, ids.branchA],
+    );
+
+    expect(rows[0]?.r).toMatchObject({ success: true });
+  });
+
+  it('returns branch mismatch before revealing a foreign product to an authenticated user', async (ctx) => {
     if (!impersonationAvailable) return ctx.skip();
 
     const foreign = await runAsPersist(
