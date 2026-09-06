@@ -36,28 +36,45 @@ PR #26 hardened `public.next_document_number(text)` as an internal sequence help
 
 Verify #775 / run `33994683355` passed. PR #26 merged into `main` as `8a68e153d96e0e1e01f0bd0c07637ff470512c15`. The exact tracked migration was applied to Production `azzdesuowpdcoflmyezn` successfully. Post-application catalog verification confirms `anon_exec=false`, `authenticated_exec=false`, `service_exec=true`, and `search_path=public, pg_temp`. CLOSED ✅
 
+### cancel_sent_order_item wrapper boundary — PR #27
+
+PR #27 hardened `public.cancel_sent_order_item(uuid, uuid, numeric, text)` so authentication and branch authorization occur before any sent-item lookup:
+
+- migration `20260906115500_cancel_sent_order_item_wrapper_scope.sql`
+- requires `auth.uid()` and an active application user
+- resolves the order branch and requires `user_may_access_branch(...)` before `order_items` / `order_kitchen_sends` lookup
+- preserves the public RPC signature and terminal `cancel_sent_order_item_exact(...)` behavior
+- keeps `anon` denied and authenticated/service-role API access explicit
+- regression test `tests/integration/cancel_sent_order_item_wrapper_security.test.ts`
+
+PR #27 merged into `main` as `9f69a67c596609c71420b1190e77e702a5029f1e`. Verify main #781 / run `34026096066` passed frontend, Fresh DB/schema, Integration/Security/RLS and Browser Smoke. GitHub Pages deploy #558 passed on the same merge SHA. The exact tracked migration was then applied to Production `azzdesuowpdcoflmyezn`; catalog verification confirms `search_path=public, pg_temp`, `anon_exec=false`, authenticated/service-role EXECUTE retained, and the branch guard appears before the sent-item lookup. CLOSED ✅
+
 ## Final handover branch organization
 
 - `main` is Production/Release only.
-- The single active development line is `development/final-handover`.
+- The single permanent development line is `development/final-handover`.
+- Short-lived fix branches may be used for isolated reviewed batches and must be removed after promotion.
 - Historical fix/development branches are superseded and must not be reused.
 - No force-update workaround is used for cleanup.
 
-## cancel_sent_order_item wrapper boundary — IN VERIFICATION ⏳
+## resolve_product_modifiers branch boundary — IN VERIFICATION ⏳
 
-Read-only Production inspection confirmed that `public.cancel_sent_order_item(uuid, uuid, numeric, text)` is `SECURITY DEFINER` and performs its sent-item lookup before authentication and branch authorization. Because it can return `SENT_ITEM_NOT_FOUND` or `AMBIGUOUS_SENT_ITEM` before delegating to the guarded exact handler, the wrapper can act as a sent-item information oracle for a caller that knows foreign identifiers.
+Read-only Production inspection confirmed that `public.resolve_product_modifiers(uuid, uuid, jsonb)` is `SECURITY DEFINER` and externally executable by `authenticated`, but currently trusts the caller-supplied `p_branch_id` without first proving that the current user may access that branch. Product and modifier existence checks therefore occur before current-user branch authorization and can act as a cross-branch information oracle.
 
-Final-handover hardening prepared on `development/final-handover`:
+Call-graph inspection confirmed the resolver is also used by normal POS pricing/inventory paths including `process_sale`, order-item pricing triggers, and sale inventory deduction, so the public contract must be preserved and regression-tested rather than removed.
 
-- migration `20260906115500_cancel_sent_order_item_wrapper_scope.sql`
+Hardening prepared on short-lived branch `fix/resolve-product-modifiers-scope`:
+
+- migration `20260906130000_resolve_product_modifiers_scope.sql`
 - require `auth.uid()` first
-- require an active application user before order lookup
-- resolve the order branch and require `user_may_access_branch(...)` before any `order_items` / `order_kitchen_sends` lookup
-- preserve the existing public RPC signature and terminal `cancel_sent_order_item_exact(...)` behavior
-- preserve authenticated/service-role API access and keep anon denied
-- regression test `tests/integration/cancel_sent_order_item_wrapper_security.test.ts`
+- require an active application user
+- require `user_may_access_branch(p_branch_id)` before any product/modifier lookup
+- preserve modifier validation, pricing, snapshot generation, and public RPC signature
+- preserve authenticated/service-role grants and keep anon denied
+- regression test `tests/integration/resolve_product_modifiers_security.test.ts`
+- existing full modifier lifecycle integration test remains the operational regression gate
 
-No Production DDL for this batch until frontend + Fresh DB/schema + Integration/Security/RLS + Browser Smoke gates are green.
+No Production DDL for this batch until frontend + Fresh DB/schema + Integration/Security/RLS + Browser Smoke gates are green and the change is merged to `main`.
 
 ## Authenticated SECURITY DEFINER classification
 
@@ -71,10 +88,10 @@ The remaining Advisor warnings are not treated as automatic vulnerabilities. Man
 
 They must be reviewed function-by-function; there will be no blanket revoke or blanket conversion to SECURITY INVOKER.
 
-Remaining focused candidates after the sent-item wrapper:
+Remaining focused candidates after the modifier resolver:
 
-- `resolve_product_modifiers(...)` current-user branch access
 - stale demo helpers (`seed_demo_data`, `delete_demo_data`) if still canonical in Production
+- remaining costing/detail RPCs and admin/Super Admin grants identified by the function-by-function audit
 
 ## P0-C
 
@@ -94,7 +111,8 @@ Supabase Auth Leaked Password Protection remains reported as disabled by Securit
 1. Anonymous SECURITY DEFINER exposure: CLOSED ✅
 2. Permission/scope hardening batch #25: CLOSED ✅
 3. `next_document_number` internal-only boundary: CLOSED ✅
-4. `cancel_sent_order_item(...)` wrapper boundary: IN VERIFICATION ⏳
-5. Remaining narrow authenticated helper candidates: OPEN
-6. Leaked Password Protection: OPEN — requires Supabase Auth configuration
-7. Final full Verify + runtime smoke + handover/Zero-Drift documentation after P0 closure.
+4. `cancel_sent_order_item(...)` wrapper boundary: CLOSED ✅
+5. `resolve_product_modifiers(...)` branch boundary: IN VERIFICATION ⏳
+6. Remaining narrow authenticated helper candidates: OPEN
+7. Leaked Password Protection: OPEN — requires Supabase Auth configuration
+8. Final full Verify + runtime smoke + handover/Zero-Drift documentation after P0 closure.
