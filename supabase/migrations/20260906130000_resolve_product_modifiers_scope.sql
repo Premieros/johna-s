@@ -1,6 +1,7 @@
 -- P0-B final handover hardening.
 -- Prevent resolve_product_modifiers from disclosing cross-branch product/modifier
--- information before authentication and branch authorization are established.
+-- information before authentication and branch authorization are established,
+-- while preserving trusted internal DB/service-role call paths used by pricing/inventory.
 
 CREATE OR REPLACE FUNCTION public.resolve_product_modifiers(
   p_product_id uuid,
@@ -21,25 +22,33 @@ DECLARE
   v_snapshot jsonb := '[]'::jsonb;
   v_invalid uuid;
   v_active_user boolean;
+  v_uid uuid := auth.uid();
+  v_auth_role text := auth.role();
 BEGIN
-  IF auth.uid() IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
-  END IF;
+  -- External authenticated callers must have a real JWT user identity.
+  -- Trusted internal DB calls have no auth role, while service_role is an
+  -- intentionally privileged server path; both must remain compatible with
+  -- existing pricing/inventory trigger and server-side call chains.
+  IF v_uid IS NULL THEN
+    IF COALESCE(v_auth_role, '') NOT IN ('', 'service_role') THEN
+      RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+    END IF;
+  ELSE
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.users u
+      WHERE u.id = v_uid
+        AND u.is_active = true
+    )
+    INTO v_active_user;
 
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.users u
-    WHERE u.id = auth.uid()
-      AND u.is_active = true
-  )
-  INTO v_active_user;
+    IF NOT COALESCE(v_active_user, false) THEN
+      RETURN jsonb_build_object('success', false, 'error', 'USER_NOT_FOUND');
+    END IF;
 
-  IF NOT COALESCE(v_active_user, false) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'USER_NOT_FOUND');
-  END IF;
-
-  IF NOT public.user_may_access_branch(p_branch_id) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+    IF NOT public.user_may_access_branch(p_branch_id) THEN
+      RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+    END IF;
   END IF;
 
   IF p_option_ids IS NULL OR jsonb_typeof(p_option_ids) <> 'array' THEN
