@@ -8,17 +8,18 @@
 - Production branch: `main`
 - Permanent development branch: `development/final-handover`
 - Never mix with `pos.v2` or Supabase `scpovyrqmsbiduanykod`.
-- Never force-push `main`.
+- Never force-push `main` or development.
 
 ## Current main / Production baseline
-- `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879`
-- Merge commit for PR #40: `security: harden identity security definer search paths`.
-- Verify #842 on PR #40 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Verify #843 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #571 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
-- Migration `identity_security_definer_search_path` was applied successfully to Production `azzdesuowpdcoflmyezn`.
-- Production post-check confirms `login_as_user(uuid,text,text,text)` and `password_matches(uuid,text)` use `search_path = public, pg_temp`, authenticated-only EXECUTE, anon denied, and their existing authorization guards/behavior are unchanged.
-- `development/final-handover` was fast-forwarded to verified `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879` with `force=false` before this documentation commit.
+- Verified Production baseline: `main@bb703cf4c6ad799d7395708f7255daaedb80cdad`.
+- Merge commit for PR #42: `security: scope subscription status to accessible tenant`.
+- PR #42 Verify #848 was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Merged-main Verify #849 was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Deploy #573 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
+- Production migration `subscription_tenant_scope` was applied successfully to `azzdesuowpdcoflmyezn`.
+- Production Post-Check confirms `subscription_is_active(uuid)` and `user_can_access_organization(uuid)` are SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, anon/PUBLIC denied, and tenant-scope protection present.
+- `development/final-handover` was fast-forwarded to verified `main@bb703cf4c6ad799d7395708f7255daaedb80cdad` with `force=false` before this documentation commit.
+- Remaining phase counter stays **6**. P0-B SECURITY DEFINER audit is not closed yet; Production still contains additional authenticated-executable SECURITY DEFINER functions using legacy `search_path = public` that require function-by-function review.
 
 ### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
 Do not reopen without a new Regression.
@@ -120,9 +121,6 @@ Regression coverage:
 - existing shift Permission-First tests remain green.
 
 ### PR #39 — Admin SECURITY DEFINER search-path hardening — CLOSED on Production ✅
-Confirmed deviation:
-- six high-risk authenticated-executable admin/security functions still used `search_path = public` only while their authorization contracts were already correct.
-
 Targeted functions:
 - `is_super_admin()`
 - `admin_data_delete_section(uuid,text)`
@@ -132,57 +130,89 @@ Targeted functions:
 - `toggle_organization_status(uuid,boolean)`
 
 Final contract:
-- all six now use `search_path = public, pg_temp`.
+- all six use `search_path = public, pg_temp`.
 - authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
-- function bodies and business behavior were not rewritten.
-- `admin_data_delete_section` and `admin_data_seed_all` retain `is_super_admin()` guards.
-- `verify_auth_account` and `repair_auth_account` retain `is_pos_admin()` guards.
-- `toggle_organization_status` retains `is_platform_admin()`.
-- `is_super_admin()` retains the explicit active `super_admin` caller check.
-
-Regression coverage:
-- `tests/integration/admin_security_definer_search_path.test.ts` asserts exact signatures, hardened search path, grants, and preservation of existing guards.
+- existing authorization contracts preserved.
 
 Verification / release:
 - PR Verify #840 Full Green ✅.
 - merged `main@3182de0b83d09e1414512e75982e066518d72645`.
 - Production migration `admin_security_definer_search_path` applied ✅.
-- Production Post-Check passed for all six functions ✅.
+- Production Post-Check passed ✅.
 - main Verify #841 Full Green ✅.
-- Deploy #570: build + Production parity + Pages deploy ✅.
+- Deploy #570 Full Green ✅.
 
 ### PR #40 — Identity SECURITY DEFINER search-path hardening — CLOSED on Production ✅
-Confirmed deviation:
-- `login_as_user(uuid,text,text,text)` and `password_matches(uuid,text)` were authenticated-executable SECURITY DEFINER functions with legacy `search_path = public` only.
+Targeted functions:
+- `login_as_user(uuid,text,text,text)`
+- `password_matches(uuid,text)`
 
 Final contract:
-- both now use `search_path = public, pg_temp`.
+- both use `search_path = public, pg_temp`.
 - authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
-- no function body or business behavior was changed.
-- `login_as_user` remains restricted to an active Super Admin and continues to reject self-impersonation and Super Admin targets.
-- `password_matches` retains its existing `is_pos_admin()` guard.
-
-Regression coverage:
-- `tests/integration/identity_security_definer_search_path.test.ts` verifies exact signatures, hardened search path, grants, and preservation of the existing guards.
+- `login_as_user` remains active-Super-Admin-only and blocks self/Super-Admin targets.
+- `password_matches` retains the existing Super-Admin-equivalent `is_pos_admin()` guard.
 
 Verification / release:
-- PR #40 head `6243eea52517cb1e296811d3702330caf64bad2f`.
 - PR Verify #842 Full Green ✅.
 - merged `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879`.
 - Production migration `identity_security_definer_search_path` applied ✅.
-- Production Post-Check passed for both functions ✅.
+- Production Post-Check passed ✅.
 - main Verify #843 Full Green ✅.
-- Deploy #571: build + Production parity + Pages deploy ✅.
+- Deploy #571 Full Green ✅.
+
+### PR #41 — Subscription admin SECURITY DEFINER search-path hardening — CLOSED on Production ✅
+Confirmed deviation:
+- authenticated-executable subscription admin mutation/settings functions retained legacy `search_path = public` while their Super Admin authorization guards were already correct.
+
+Final contract:
+- targeted subscription admin functions now use `search_path = public, pg_temp`.
+- authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
+- Super Admin guards and business behavior preserved.
+- the only CI failure encountered was a test regex that expected unqualified `is_super_admin()`; the test was corrected to accept both `is_super_admin()` and `public.is_super_admin()` without weakening the guard requirement.
+
+Verification / release:
+- PR Verify #846 Full Green ✅.
+- merged `main@56e822a133b1bd8885aafa1bab9b5ac67b99bf49`.
+- Production migration applied successfully ✅.
+- Production Post-Check passed ✅.
+- main Verify #847 Full Green ✅.
+- Deploy #572 Full Green ✅.
+
+### PR #42 — Subscription tenant-scope oracle hardening — CLOSED on Production ✅
+Confirmed defect:
+- `subscription_is_active(uuid)` accepted an arbitrary tenant UUID from any authenticated caller and read organization/subscription state before proving access, allowing a cross-tenant subscription-status oracle.
+- its scope helper `user_can_access_organization(uuid)` still used legacy `search_path = public`.
+
+Final contract:
+- authentication required.
+- Super Admin is the only implicit cross-tenant bypass.
+- `NULL` tenant inference for the caller's current tenant remains supported.
+- explicit tenant probes require `user_can_access_organization(...)` before organization/subscription reads.
+- inaccessible/foreign tenant probes return `false` without revealing existence or status.
+- `subscription_is_active(uuid)` and `user_can_access_organization(uuid)` use `search_path = public, pg_temp`.
+- authenticated EXECUTE retained; anon/PUBLIC revoked.
+
+Regression coverage:
+- `tests/integration/subscription_tenant_scope.test.ts` covers own tenant, NULL inference, foreign tenant non-oracle denial, Super Admin bypass, search path, and grants.
+
+Verification / release:
+- PR Verify #848 Full Green ✅.
+- merged `main@bb703cf4c6ad799d7395708f7255daaedb80cdad`.
+- Production migration `subscription_tenant_scope` applied ✅.
+- Production Post-Check passed for both functions ✅.
+- main Verify #849 Full Green ✅.
+- Deploy #573: build + Production parity + Pages deploy ✅.
 
 ## Active next work — continue P0-B Function-by-Function
-1. Review the subscription SECURITY DEFINER cluster discovered on Production; do not bulk-rewrite it.
-2. Separate branch-facing read/gate functions from Super-Admin-only mutation/settings functions.
-3. Inspect callers and existing tests before changing any authorization contract.
-4. Prioritize confirmed `search_path = public` deviations and any branch-scope/existence-oracle defects found during that review.
-5. Apply narrow fixes only; preserve API/error contracts unless a regression proves they are unsafe.
-6. Add Regression for every confirmed defect.
-7. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
-8. Continue until no confirmed P0-B SECURITY DEFINER deviation remains.
+1. Continue the Production SECURITY DEFINER inventory; do not bulk-rewrite.
+2. Prioritize functions that both use legacy `search_path = public` and read/write tenant/branch-sensitive data.
+3. Inspect frontend/server callers and existing regressions before changing authorization behavior.
+4. Separate pure constant/no-data helpers from functions that can create information or mutation oracles.
+5. For every confirmed defect: narrow migration + explicit Regression + Full Verify before Production.
+6. Preserve public API/error contracts unless a confirmed security regression requires a safer non-oracle response.
+7. Full Verify → merge → Production migration/post-check → merged-main Verify + Deploy.
+8. Do not reduce Remaining below **6** until the P0-B audit has no confirmed SECURITY DEFINER deviation left.
 
 ## Mandatory rules
 - Work only on confirmed deviations; do not reopen closed batches without regression evidence.
