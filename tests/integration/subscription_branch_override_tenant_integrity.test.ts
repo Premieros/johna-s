@@ -35,7 +35,7 @@ describe.skipIf(!dbUrl)('subscription branch override tenant integrity', () => {
     featureKey = `tenant-integrity-${randomUUID()}`;
     await client.query(
       `INSERT INTO public.features (key, name, category, is_active, is_system)
-       VALUES ($1, 'Tenant Integrity Test', 'test', true, false)`,
+       VALUES ($1, 'Tenant Integrity Test', 'management', true, false)`,
       [featureKey],
     );
   });
