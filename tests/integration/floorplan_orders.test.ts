@@ -56,8 +56,14 @@ describe.skipIf(skip)('floor plan + open orders (036-039)', () => {
     expect(o.rows[0].status).toBe('open'); expect(o.rows[0].order_type).toBe('dine_in'); expect(String(o.rows[0].order_number)).toContain('-');
     expect((await client.query(`SELECT status FROM public.dining_tables WHERE id = $1`, [tableA])).rows[0].status).toBe('occupied');
     expect((await client.query(`SELECT count(*)::int AS c FROM public.order_items WHERE order_id = $1`, [order.order_id])).rows[0].c).toBe(1);
-    const comp = await asUser(cashierA, () => client.query(`SELECT public.set_order_status($1, 'completed') AS r`, [order.order_id]));
-    expect(comp.rows[0].r.success).toBe(true); expect((await client.query(`SELECT status FROM public.dining_tables WHERE id = $1`, [tableA])).rows[0].status).toBe('vacant');
+
+    const directComplete = await asUser(cashierA, () => client.query(`SELECT public.set_order_status($1, 'completed') AS r`, [order.order_id]));
+    expect(directComplete.rows[0].r).toMatchObject({ success: false, error: 'COMPLETION_REQUIRES_PAYMENT' });
+    expect((await client.query(`SELECT status FROM public.dining_tables WHERE id = $1`, [tableA])).rows[0].status).toBe('occupied');
+
+    const cancelled = await asUser(cashierA, () => client.query(`SELECT public.set_order_status($1, 'cancelled', 'test cleanup') AS r`, [order.order_id]));
+    expect(cancelled.rows[0].r.success).toBe(true);
+    expect((await client.query(`SELECT status FROM public.dining_tables WHERE id = $1`, [tableA])).rows[0].status).toBe('vacant');
   });
 
   it('process_sale stores order channel + table and settles a linked order', async () => {
