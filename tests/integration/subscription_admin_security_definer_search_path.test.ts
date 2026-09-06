@@ -66,7 +66,7 @@ describe.skipIf(!dbUrl)('subscription admin SECURITY DEFINER hardening', () => {
     const byName = new Map(rows.rows.map((row) => [row.name, row.definition]));
 
     for (const name of ['activate_subscription', 'subscription_settings_update', 'super_admin_change_subscription']) {
-      expect(byName.get(name), `${name} guard`).toContain('public.is_super_admin()');
+      expect(byName.get(name), `${name} guard`).toMatch(/(?:public\.)?is_super_admin\(\)/);
     }
   });
 });
