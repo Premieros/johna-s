@@ -15,9 +15,7 @@
 - Production/Release branch: `main`.
 - فرع التطوير الدائم الوحيد: `development/final-handover`.
 - Production DB: `azzdesuowpdcoflmyezn` فقط.
-- Current Production code baseline: `main@9f69a67c596609c71420b1190e77e702a5029f1e` بعد PR #27.
-- GitHub Pages Deploy #558 على نفس SHA: PASS ✅.
-- Verify main #781 / run `34026096066`: PASS كامل ✅ بما فيه Fresh DB، Integration/Security/RLS، وBrowser Smoke.
+- Current Production code baseline: `main@605b526ff181cd2341e6b3397e90433da7e0e33c` بعد إغلاق scope الخاص بـ`resolve_product_modifiers`.
 - Permission-First Root Closure: **مغلق ✅**.
 - Super Admin فقط يملك implicit full-access.
 - `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من canonical permissions + branch/RLS.
@@ -27,31 +25,43 @@
 1. Anonymous login SECURITY DEFINER boundary مغلق.
 2. Permission/scope hardening مغلق لـ`update_branch`, `deactivate_branch`, `get_cost_history`, `get_production_variance`.
 3. `next_document_number(text)` أصبح internal-only boundary ومطبق على Production.
-4. `cancel_sent_order_item(...)` wrapper مغلق بالكامل:
-   - PR #27 merged إلى `main`.
-   - migration `20260906115500_cancel_sent_order_item_wrapper_scope.sql` مطبقة على Production.
-   - `search_path = public, pg_temp` ✅
-   - `anon EXECUTE = false` ✅
-   - authenticated/service-role grants محفوظة ✅
-   - Authentication + active-user + branch guard تسبق sent-item lookup ✅
+4. `cancel_sent_order_item(...)` wrapper مغلق بالكامل.
+5. `resolve_product_modifiers(uuid, uuid, jsonb)` أصبح branch-scoped ومغلق من cross-branch lookup.
 
-## 2) الحزمة النشطة الآن — PR #28 🚧
+## 2) الحزمة النشطة الآن — Purchase + POS Stock Regression 🚧
 
-العنوان: `security: scope product modifier resolution by branch`
+Regression مثبت على النسخة الحالية بعد hardening الأخير:
 
-Production inspection أثبت أن `resolve_product_modifiers(uuid, uuid, jsonb)` هو `SECURITY DEFINER` ومتاح لـ`authenticated`، لكنه كان يبدأ product/modifier lookup اعتمادًا على `p_branch_id` الذي يرسله caller بدون إثبات current-user branch access.
+1. **إنشاء فاتورة المشتريات يتوقف قبل `process_purchase`:**
+   - Frontend كان يستدعي `next_document_number('purchase')` مباشرة.
+   - الدالة العامة أصبحت internal-only كما هو مقصود أمنيًا.
+   - الإصلاح لا يعيد فتح الدالة العامة؛ تمت إضافة wrapper ضيق `next_purchase_document_number()` يطلب `purchases.manage` ثم يفوض للدالة الداخلية.
 
-الحل الموجود في PR #28:
-- migration `20260906130000_resolve_product_modifiers_scope.sql`.
-- `auth.uid()` أولًا.
-- active application user مطلوب.
-- `user_may_access_branch(p_branch_id)` مطلوب قبل أي product/modifier lookup.
-- الحفاظ على modifier validation/pricing/snapshots والـRPC signature.
-- الحفاظ على authenticated/service-role grants مع منع anon.
-- regression جديد: `tests/integration/resolve_product_modifiers_security.test.ts`.
-- existing modifier lifecycle integration test يبقى Operational regression gate لضمان عدم كسر POS/KDS/payment/inventory.
+2. **الرصيد المتاح في POS يختفي بالكامل:**
+   - `get_pos_product_availability` يسقط عندما تصل `check_product_availability` إلى recipe/component duplicate يكرر نفس conflict key داخل `INSERT ... ON CONFLICT` واحد.
+   - Production أثبت duplicate recipe حقيقي في `Johnas Omelate`.
+   - الإصلاح يجمع (`GROUP BY` + `SUM`) كل مصادر الـUPSERT المتشابهة قبل `ON CONFLICT`: product-unit links، direct raw recipe items، inventory-unit raw recipes، inventory-unit component recipes.
+   - لا يتم حذف recipe rows أو تغيير إجمالي الكميات؛ الحساب يصبح duplicate-safe فقط.
 
-الحالة: PR #28 مفتوح، Verify #782 بدأ. **ممنوع Production DDL لهذه الحزمة قبل Full Green + Merge إلى main.**
+3. **عطل مشابه تم اكتشافه أثناء العمل — ترقيم البيع:**
+   - POS كان يستدعي generic `next_document_number('sale')`، ثم قد يولد رقمًا عشوائيًا Online عند فشل السيرفر.
+   - تمت إضافة `next_sale_document_number()` المحمية بـ`pos.payment.take`.
+   - Online numbering أصبح fail-closed؛ لا يوجد مصدر أرقام مالي ثانٍ من العميل.
+   - Offline numbering يبقى منفصلًا بصيغة `INV-OFF-*` ضمن outbox الحالي.
+
+ملفات الحزمة:
+- `supabase/migrations/20260906144500_purchase_sale_numbering_and_pos_availability_regression.sql`
+- `src/api/domains/trade.ts`
+- `src/api/domains/pos.ts`
+- `src/features/pos/services/payment.ts`
+
+قواعد الحزمة:
+- `next_document_number(text)` يبقى REVOKED من `PUBLIC`, `anon`, `authenticated`.
+- لا weakening لـRLS أو permission-first.
+- لا Production DDL قبل Full Green.
+- لا Merge إلى `main` قبل Fresh DB + Integration/Security/RLS + Browser Smoke.
+
+الحالة الحالية: **الكود موجود على `development/final-handover` فقط؛ مطلوب PR/Verify قبل أي Production action.**
 
 ## 3) هدف العمل النهائي — Zero Drift للموقع المنشور
 
@@ -71,9 +81,8 @@ Production inspection أثبت أن `resolve_product_modifiers(uuid, uuid, jsonb
 
 ### P0-B — SECURITY DEFINER Remaining Audit 🔴
 
-1. `resolve_product_modifiers(...)` — PR #28 ACTIVE.
-2. `seed_demo_data` / `delete_demo_data` — Production مثبت أنهما ما زالا يستخدمان `is_pos_admin()` / `is_branch_manager()` و`search_path=public`؛ يجب تحويلهما Permission-First واختيار capability canonical بعد مراجعة الاستخدام.
-3. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
+1. `seed_demo_data` / `delete_demo_data` — Production مثبت أنهما ما زالا يستخدمان `is_pos_admin()` / `is_branch_manager()` و`search_path=public`؛ يجب تحويلهما Permission-First واختيار capability canonical بعد مراجعة الاستخدام.
+2. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
 
 Definition of Done:
 - كل external SECURITY DEFINER إما مقصود وموثق ومختبر أو مغلق/داخلي.
@@ -147,8 +156,8 @@ Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
 
 ## 6) ترتيب التنفيذ من الآن
 
-1. إكمال Verify #782 لـPR #28 وإصلاح أي Regression حقيقي بدون تخفيف الاختبارات.
-2. إذا Full Green: Merge PR #28 -> Sync `development/final-handover` -> تطبيق migration على Production -> read-only parity verification.
+1. Verify حزمة Purchase/POS Stock regression الحالية وإصلاح أي Regression حقيقي بدون تخفيف الاختبارات.
+2. إذا Full Green: Merge الحزمة -> Sync `development/final-handover` -> تطبيق migration على Production -> read-only parity verification -> runtime smoke للمشتريات وPOS stock/payment.
 3. Audit/Fix `seed_demo_data` / `delete_demo_data` Permission-First + search_path.
 4. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
 5. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
