@@ -12,142 +12,164 @@
 
 ## 1) الحالة الحالية
 
-- Latest verified security code baseline: `3aa2ae907bc64ffd73bf1ca024ac7afc9c38beb1`.
-- آخر `main` قبل تحديث هذا السجل: `5bc8d78839f17d66f7bb6dddacb9ead4a16e7b75` (توثيق فقط فوق الـsecurity baseline).
+- Production/Release branch: `main`.
+- فرع التطوير الدائم الوحيد: `development/final-handover`.
 - Production DB: `azzdesuowpdcoflmyezn` فقط.
+- Current Production code baseline بعد PR #26: `main@8a68e153d96e0e1e01f0bd0c07637ff470512c15`.
 - Permission-First Root Closure: **مغلق ✅**.
 - Super Admin فقط يملك implicit full-access.
-- `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من `roles.permissions` + branch/RLS.
-- Verify #751 على آخر حزمة P0-B: **PASS كامل ✅**:
-  - Database Identity Lock ✅
-  - API Contract ✅
-  - lint ✅
-  - typecheck app/tests ✅
-  - unit ✅
-  - build ✅
-  - Fresh DB + canonical migrations ✅
-  - schema verification ✅
-  - Integration/Security/RLS ✅
-  - Browser Smoke ✅
-- PR #25 تم دمجه، وmigration `20260905224500_security_definer_permission_scope.sql` طُبق على Production بنجاح.
+- `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من canonical permissions + branch/RLS.
 
-## 2) ما تم إغلاقه أمنيًا ✅
+### P0-B المغلق على Production ✅
 
-### P0-A — Permission-First Root Closure
-مغلق بالكامل على `main`.
-
-### P0-B — SECURITY DEFINER (الدفعات المغلقة)
-
-1. Anonymous login boundary مغلق:
-   - `public.get_login_email(text)` أصبح wrapper `SECURITY INVOKER`.
-   - `public.record_login_failure(text)` أصبح wrapper `SECURITY INVOKER`.
-   - التنفيذ المميز انتقل إلى `app_private`.
-   - تحذيرا anon SECURITY DEFINER اختفيا من Security Advisor.
-2. Permission/scope hardening مغلق للوظائف:
+1. Anonymous login SECURITY DEFINER boundary مغلق.
+2. Permission/scope hardening مغلق لـ:
    - `update_branch`
    - `deactivate_branch`
    - `get_cost_history`
    - `get_production_variance`
-3. `branches.manage` مستخدمة لإدارة الفروع.
-4. `reports.costing` مستخدمة لقراءات التكلفة مع `user_may_access_branch`.
-5. لا يوجد bypass لدور `owner` أو أي Role آخر.
-6. لم يتم تعطيل أو تخفيف RLS أو الاختبارات لإمرار CI.
+3. `next_document_number(text)` أصبح internal-only boundary:
+   - PR #26 مدمج إلى `main`.
+   - migration `20260905230000_next_document_number_internal_only.sql` مطبقة على Production.
+   - `anon EXECUTE = false` ✅
+   - `authenticated EXECUTE = false` ✅
+   - `service_role EXECUTE = true` ✅
+   - `search_path = public, pg_temp` ✅
 
-السجل الأمني التفصيلي:
-`docs/SECURITY_DEFINER_AUDIT_2026-09-06.md`
+## 2) الحزمة النشطة الآن — PR #27 🚧
 
-## 3) العمل المفتوح قبل التسليم النهائي
+العنوان: `security: harden sent item cancel wrapper scope`
+
+الهدف:
+- منع `cancel_sent_order_item(...)` من كشف وجود/تعدد sent items قبل Authentication وBranch Authorization.
+- الحفاظ على public RPC signature والسلوك النهائي عبر `cancel_sent_order_item_exact(...)`.
+
+### Verify #778
+
+- Database Identity Lock ✅
+- API Contract ✅
+- lint ✅
+- typecheck app/tests ✅
+- unit ✅
+- build ✅
+- Fresh DB migrations ✅
+- schema verification ✅
+- Regression test الجديد نفسه ✅
+- Integration/Security/RLS ❌ بسبب خطأ SQL branch-only: `min(uuid)` غير مدعوم في PostgreSQL 16.
+- بقية 5 failures كانت cascade بعد abort للـtransaction.
+- Browser Smoke لم يبدأ بسبب فشل db gate.
+- **لم يتم دمج PR #27 ولم يتم تطبيق migration الخاصة به على Production.**
+
+تم تصحيح السبب باستخدام `count(*)` ثم SELECT منفصل لـ`order_item_id` بدون تغيير منطق الحماية. المطلوب الآن إعادة Full Verify للحزمة.
+
+## 3) هدف العمل النهائي — Zero Drift للموقع المنشور
+
+لا نعتبر أي انحراف مغلقًا لمجرد إصلاحه على فرع تطوير. الانحراف يغلق فقط عندما يتحقق الآتي:
+
+1. الإصلاح موجود على `development/final-handover` مع regression coverage.
+2. Verify كامل أخضر: frontend + Fresh DB/schema + Integration/Security/RLS + Browser Smoke.
+3. Merge إلى `main`.
+4. أي migration مطلوبة تطبق على `azzdesuowpdcoflmyezn` فقط.
+5. Production read-only verification يثبت parity.
+6. الموقع المنشور يتم نشره من آخر `main` verified.
+7. Runtime smoke على النسخة المنشورة يثبت عدم وجود regression.
+
+الهدف النهائي: **Published Site = Verified Main = Production DB Contract = Zero Drift**.
+
+## 4) الانحرافات المتبقية — ترتيب الإغلاق الإلزامي
 
 ### P0-B — SECURITY DEFINER Remaining Audit 🔴
 
-لا نحاول إسكات Security Advisor بعمليات revoke جماعية؛ تحذيرات `authenticated SECURITY DEFINER` قد تكون RPCs تشغيلية مقصودة. التدقيق يستمر Function-by-Function.
-
-الأولوية التالية:
-- `next_document_number`
-- `cancel_sent_order_item` wrapper
-- `resolve_product_modifiers`
-- `seed_demo_data` / `delete_demo_data` وأي Role-based drift متبقٍ
-- Costing/detail RPCs المتبقية
-- Admin/Super Admin RPC grants + internal guards
+1. `cancel_sent_order_item(...)` wrapper — PR #27 ACTIVE.
+2. `resolve_product_modifiers(...)` — التحقق من current-user branch access وإغلاق أي cross-branch oracle مثبت.
+3. `seed_demo_data` / `delete_demo_data` — مقارنة Production بالتعريف canonical وإزالة أي role-name authorization قديم إذا كان ما زال live.
+4. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
 
 Definition of Done:
-- كل external SECURITY DEFINER إما مقصود وموثق ومختبر أو مغلق/منقول إلى schema داخلي.
+- كل external SECURITY DEFINER إما مقصود وموثق ومختبر أو مغلق/داخلي.
 - لا privileged helper exposed بلا حاجة.
 - لا cross-branch information oracle.
+- لا role-name authorization خارج Super Admin implicit bypass.
 
 ### P0-C — Auth Password Hardening 🔴
 
-Security Advisor ما زال يسجل:
-`Leaked Password Protection Disabled`.
+Security Advisor ما زال يسجل `Leaked Password Protection Disabled`.
 
 المطلوب:
 1. تفعيل Leaked Password Protection من Supabase Auth إذا كانت الخطة الحالية تسمح.
 2. اختبار Login/Create User/Password Update.
 3. إعادة Advisor.
 
-إذا تعذر من أداة الاتصال الحالية، يوثق كخطوة Dashboard/Admin خارجية ولا ندعي أنها مكتملة.
+إذا تعذر من أداة الاتصال الحالية، يوثق كقيد Dashboard/Admin خارجي ولا يتم الادعاء بأنه مكتمل.
 
-### P1 — Handover Safety 🟠
+### P1-A — Published Runtime / UI Zero-Drift Audit 🟠
 
-1. Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
-   - verify
-   - db
-   - browser-smoke
-2. Full Verify نهائي بعد آخر P0 commit.
-3. Production parity / Deploy النهائي.
-4. Runtime smoke مختصر:
-   - Login
-   - POS order
-   - Send to Kitchen
-   - Payment
-   - Inventory effect
-   - Shift close
-5. Final Zero-Drift / Handover report.
+بعد إغلاق P0-B:
+1. إعادة التحقق على الموقع المنشور الحالي من الدورة التشغيلية الفعلية.
+2. عدم إعادة فتح أي UI item قديم بدون Regression مثبت.
+3. الإصلاح فقط لما يظهر فعليًا على النسخة المنشورة.
 
-## 4) تنظيم الفروع — قاعدة العمل الجديدة
+النطاق الإلزامي:
+- Login / bootstrap.
+- POS create/edit order.
+- Send to Kitchen / delta send.
+- KDS visibility/status.
+- Payment.
+- Inventory effect وعدم double deduction.
+- Sent-item void/approval.
+- Tables occupancy/transfer/split where applicable.
+- Shift close.
+- Products/Recipes/Components/Costing runtime.
+- Dialog usability Desktop/Mobile.
+- RTL/LTR + navigation + stale dynamic import recovery.
 
-من الآن:
+### P1-B — Protect main 🟠
 
-- `main` = Production / Release فقط.
-- فرع التطوير الدائم الوحيد: **`development/final-handover`**.
-- أي fix branch قصير العمر يجوز إنشاؤه عند الحاجة فقط، ثم يجب حذفه بعد الدمج.
-- ممنوع استمرار أكثر من فرع تطوير دائم واحد.
-- ممنوع Force Push أو إعادة كتابة تاريخ `main`.
-- قبل أي تعديل موجود: refetch آخر file SHA/branch HEAD للحفاظ على عمل أي نموذج آخر.
-- عند 409: refetch + merge intent، ولا overwrite.
+Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
+- verify
+- db
+- browser-smoke
+- production parity/deploy gate عند الحاجة.
 
-### تنظيف الفروع
+إذا لم تسمح صلاحيات الأداة، يوثق القيد ولا ندعي أن `main` Protected.
 
-الهدف النهائي للمستودع:
-- `main`
-- `development/final-handover`
+### P2 — Printing Finalization 🟡
 
-فقط كفروع دائمة.
-
-الفروع التاريخية/المندمجة/المستبدلة يجب حذفها من GitHub بعد التأكد من عدم وجود عمل فريد غير مدمج. إذا لم تسمح أداة GitHub الحالية بحذف branch، تبقى العملية Admin cleanup يدوية ولا يتم استخدام هذه الفروع في أي تطوير جديد.
+بعد إغلاق P0/P1:
+- تثبيت local printing contract.
+- stations القياسية: cashier / kitchen / barista.
+- fallback للصنف بلا station إلى kitchen مع Manager warning.
+- first print / reprint / kitchen print تخضع للصلاحيات.
 
 ## 5) قواعد غير قابلة للتفاوض
 
 1. المشروع لا يتصل إلا بـ`azzdesuowpdcoflmyezn`.
 2. Super Admin فقط implicit bypass.
-3. الصلاحيات هي أساس التفويض؛ الأدوار Labels.
+3. Permission-first؛ الأدوار Labels.
 4. لا Legacy permission aliases جديدة.
 5. لا weakening لـRLS أو tests.
 6. لا Production DDL من branch غير مجتاز للـCI.
 7. لا Merge قبل Fresh DB + Integration/Security/RLS + Browser Smoke.
 8. Guided Routing يفضل على raw DB/RLS errors في خطوات الإعداد الإلزامية.
-9. أي تعديل تشغيلي يجب أن يحدث عبر RPC/event موثق لا mutation جانبي غير متتبع.
+9. أي mutation تشغيلي يجب أن يكون عبر RPC/event موثق وقابل للتدقيق.
 10. توثيق السجل إلزامي لكل دفعة عمل.
+11. لا يعتبر الموقع Zero-Drift حتى يطابق آخر `main` verified وقاعدة Production الفعلية.
 
 ## 6) ترتيب التنفيذ من الآن
 
-1. استكمال P0-B Function-by-Function.
-2. P0-C Leaked Password Protection.
-3. Full Verify نهائي.
-4. Protect `main` إن أمكن.
-5. Runtime operational smoke.
-6. Zero-Drift + `HANDOVER.md` نهائي.
-7. تنظيف فروع GitHub القديمة وترك فرع تطوير دائم واحد فقط.
+1. إعادة Verify لـPR #27 بعد إصلاح PostgreSQL `min(uuid)`.
+2. إذا أخضر: Merge PR #27 -> تطبيق migration على Production -> read-only verification.
+3. Audit/Fix `resolve_product_modifiers`.
+4. Audit/Fix `seed_demo_data` / `delete_demo_data` إذا ثبت drift.
+5. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
+6. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
+7. Full Verify نهائي.
+8. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
+9. Production parity + Deploy النهائي من verified `main`.
+10. Runtime operational smoke كامل.
+11. Protect `main` إن أمكن.
+12. `HANDOVER.md` + Final Zero-Drift report.
+13. تنظيف الفروع التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
 
 ## 7) معيار إعلان "جاهز للتسليم"
 
@@ -159,8 +181,9 @@ Security Advisor ما زال يسجل:
 - Full Verify ✅
 - Fresh DB + Integration/Security/RLS ✅
 - Browser Smoke ✅
-- Production parity/deploy ✅
-- Runtime smoke للدورة الأساسية ✅
+- Production DB parity ✅
+- Published site على آخر verified `main` ✅
+- Runtime operational smoke ✅
+- Runtime/UI regressions المثبتة = 0 ✅
 - `main` protection أو توثيق عدم توفر صلاحية الإدارة ✅
-- branch workflow منظم ✅
 - Final Handover + Zero-Drift docs ✅
