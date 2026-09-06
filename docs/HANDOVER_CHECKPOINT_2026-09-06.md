@@ -11,15 +11,14 @@
 - Never force-push `main`.
 
 ## Current main / Production baseline
-- `main@b7f65d5f9031baaf6ab74d50dc965ed7b491a77c`
-- Merge commit for PR #38: `security: make close shift permission-first`.
-- Verify #838 on PR #38 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Verify #839 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #569 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
-- Migration `close_shift_permission_first` was applied successfully to Production `azzdesuowpdcoflmyezn`.
-- Production post-check confirms `close_shift(uuid,numeric,text)` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, `shifts.close` for any normal close, `shifts.manage` for closing another cashier's shift, canonical branch-scoped lookup, and inaccessible IDs return `SHIFT_NOT_FOUND`.
-- The published denial contract remains `SHIFT_CLOSE_DENIED`; role labels such as `branch_manager` grant no authority.
-- `development/final-handover` was fast-forwarded to verified `main@b7f65d5f9031baaf6ab74d50dc965ed7b491a77c` with `force=false` before this documentation commit.
+- `main@3182de0b83d09e1414512e75982e066518d72645`
+- Merge commit for PR #39: `security: harden admin security definer search paths`.
+- Verify #840 on PR #39 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Verify #841 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Deploy #570 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
+- Migration `admin_security_definer_search_path` was applied successfully to Production `azzdesuowpdcoflmyezn`.
+- Production post-check confirms the six targeted admin/security functions use `search_path = public, pg_temp`, authenticated-only EXECUTE, anon denied, and their existing authorization guards are unchanged.
+- `development/final-handover` was fast-forwarded to verified `main@3182de0b83d09e1414512e75982e066518d72645` with `force=false` before this documentation commit.
 
 ### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
 Do not reopen without a new Regression.
@@ -120,10 +119,42 @@ Regression coverage:
 - `tests/integration/close_shift_permission_first.test.ts`.
 - existing shift Permission-First tests remain green.
 
+### PR #39 — Admin SECURITY DEFINER search-path hardening — CLOSED on Production ✅
+Confirmed deviation:
+- six high-risk authenticated-executable admin/security functions still used `search_path = public` only while their authorization contracts were already correct.
+
+Targeted functions:
+- `is_super_admin()`
+- `admin_data_delete_section(uuid,text)`
+- `admin_data_seed_all(uuid)`
+- `verify_auth_account(uuid)`
+- `repair_auth_account(uuid)`
+- `toggle_organization_status(uuid,boolean)`
+
+Final contract:
+- all six now use `search_path = public, pg_temp`.
+- authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
+- function bodies and business behavior were not rewritten.
+- `admin_data_delete_section` and `admin_data_seed_all` retain `is_super_admin()` guards.
+- `verify_auth_account` and `repair_auth_account` retain `is_pos_admin()` guards.
+- `toggle_organization_status` retains `is_platform_admin()`.
+- `is_super_admin()` retains the explicit active `super_admin` caller check.
+
+Regression coverage:
+- `tests/integration/admin_security_definer_search_path.test.ts` asserts exact signatures, hardened search path, grants, and preservation of existing guards.
+
+Verification / release:
+- PR Verify #840 Full Green ✅.
+- merged `main@3182de0b83d09e1414512e75982e066518d72645`.
+- Production migration `admin_security_definer_search_path` applied ✅.
+- Production Post-Check passed for all six functions ✅.
+- main Verify #841 Full Green ✅.
+- Deploy #570: build + Production parity + Pages deploy ✅.
+
 ## Active next work — continue P0-B Function-by-Function
 1. Re-extract Production SECURITY DEFINER functions executable by `authenticated`.
-2. Prioritize confirmed cases with role-name authorization, `search_path = public` only, missing auth, or raw-ID lookup before branch scope.
-3. Prove current callers and intended capability before changing authorization.
+2. Prioritize destructive/high-privilege functions with missing auth/branch guards, role-label authorization, raw-ID lookup before canonical scope, or legacy `search_path = public`.
+3. Inspect callers and existing tests before changing authorization.
 4. Apply narrow fixes only; clean and organize touched code/tests while preserving API contracts.
 5. Add Regression for every confirmed defect.
 6. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
