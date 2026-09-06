@@ -11,14 +11,14 @@
 - Never force-push `main`.
 
 ## Current main / Production baseline
-- `main@3182de0b83d09e1414512e75982e066518d72645`
-- Merge commit for PR #39: `security: harden admin security definer search paths`.
-- Verify #840 on PR #39 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Verify #841 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #570 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
-- Migration `admin_security_definer_search_path` was applied successfully to Production `azzdesuowpdcoflmyezn`.
-- Production post-check confirms the six targeted admin/security functions use `search_path = public, pg_temp`, authenticated-only EXECUTE, anon denied, and their existing authorization guards are unchanged.
-- `development/final-handover` was fast-forwarded to verified `main@3182de0b83d09e1414512e75982e066518d72645` with `force=false` before this documentation commit.
+- `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879`
+- Merge commit for PR #40: `security: harden identity security definer search paths`.
+- Verify #842 on PR #40 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Verify #843 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Deploy #571 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
+- Migration `identity_security_definer_search_path` was applied successfully to Production `azzdesuowpdcoflmyezn`.
+- Production post-check confirms `login_as_user(uuid,text,text,text)` and `password_matches(uuid,text)` use `search_path = public, pg_temp`, authenticated-only EXECUTE, anon denied, and their existing authorization guards/behavior are unchanged.
+- `development/final-handover` was fast-forwarded to verified `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879` with `force=false` before this documentation commit.
 
 ### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
 Do not reopen without a new Regression.
@@ -151,14 +151,38 @@ Verification / release:
 - main Verify #841 Full Green ✅.
 - Deploy #570: build + Production parity + Pages deploy ✅.
 
+### PR #40 — Identity SECURITY DEFINER search-path hardening — CLOSED on Production ✅
+Confirmed deviation:
+- `login_as_user(uuid,text,text,text)` and `password_matches(uuid,text)` were authenticated-executable SECURITY DEFINER functions with legacy `search_path = public` only.
+
+Final contract:
+- both now use `search_path = public, pg_temp`.
+- authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
+- no function body or business behavior was changed.
+- `login_as_user` remains restricted to an active Super Admin and continues to reject self-impersonation and Super Admin targets.
+- `password_matches` retains its existing `is_pos_admin()` guard.
+
+Regression coverage:
+- `tests/integration/identity_security_definer_search_path.test.ts` verifies exact signatures, hardened search path, grants, and preservation of the existing guards.
+
+Verification / release:
+- PR #40 head `6243eea52517cb1e296811d3702330caf64bad2f`.
+- PR Verify #842 Full Green ✅.
+- merged `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879`.
+- Production migration `identity_security_definer_search_path` applied ✅.
+- Production Post-Check passed for both functions ✅.
+- main Verify #843 Full Green ✅.
+- Deploy #571: build + Production parity + Pages deploy ✅.
+
 ## Active next work — continue P0-B Function-by-Function
-1. Re-extract Production SECURITY DEFINER functions executable by `authenticated`.
-2. Prioritize destructive/high-privilege functions with missing auth/branch guards, role-label authorization, raw-ID lookup before canonical scope, or legacy `search_path = public`.
-3. Inspect callers and existing tests before changing authorization.
-4. Apply narrow fixes only; clean and organize touched code/tests while preserving API contracts.
-5. Add Regression for every confirmed defect.
-6. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
-7. Continue until no confirmed P0-B SECURITY DEFINER deviation remains.
+1. Review the subscription SECURITY DEFINER cluster discovered on Production; do not bulk-rewrite it.
+2. Separate branch-facing read/gate functions from Super-Admin-only mutation/settings functions.
+3. Inspect callers and existing tests before changing any authorization contract.
+4. Prioritize confirmed `search_path = public` deviations and any branch-scope/existence-oracle defects found during that review.
+5. Apply narrow fixes only; preserve API/error contracts unless a regression proves they are unsafe.
+6. Add Regression for every confirmed defect.
+7. Full Verify → merge → Production migration/post-check → Deploy/runtime verification.
+8. Continue until no confirmed P0-B SECURITY DEFINER deviation remains.
 
 ## Mandatory rules
 - Work only on confirmed deviations; do not reopen closed batches without regression evidence.
