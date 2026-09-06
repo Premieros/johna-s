@@ -13,7 +13,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   const [tRes, oRes] = await Promise.all([
     supabase.from('dining_tables').select('*').eq('branch_id', branchId).order('name'),
     supabase.from('orders')
-      .select('*, table:dining_tables(*)')
+      .select('*, table:dining_tables(*), cashier:users!orders_cashier_id_fkey(id, full_name, email)')
       .eq('branch_id', branchId)
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),

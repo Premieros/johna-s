@@ -42,6 +42,12 @@ export interface DiningTable {
   updated_at: string;
 }
 
+export interface OrderCashierSummary {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -62,6 +68,7 @@ export interface Order {
   updated_at: string;
   completed_at: string | null;
   table?: DiningTable;
+  cashier?: OrderCashierSummary | null;
   items?: OrderItem[];
 }
 

@@ -28,6 +28,12 @@ interface FilterState {
   filter?: '' | 'held' | 'delivery' | 'takeaway' | null;
 }
 
+interface CashierOption {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+}
+
 export function ActiveOrdersPage() {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
@@ -41,6 +47,7 @@ export function ActiveOrdersPage() {
   const [areas, setAreas] = useState<DiningArea[]>([]);
   const [products, setProducts] = useState<{ id: string; name: string; name_en: string | null }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; name_en: string | null }[]>([]);
+  const [cashiers, setCashiers] = useState<CashierOption[]>([]);
   const [selectedBranch, setSelectedBranch] = useState(branchFilter || '');
   const [areasLoading, setAreasLoading] = useState(false);
   const [orderTypeFilter, setOrderTypeFilter] = useState<OrderType | ''>('');
@@ -60,11 +67,10 @@ export function ActiveOrdersPage() {
   const effectiveBranch = selectedBranch || branchFilter || user?.branch_id || '';
   const isAdmin = isAdminRole(user?.role);
   const canManage = can('floor_plan.manage');
+  const canReassignCashier = can('pos.order.transfer') && can('pos.order.edit') && can('users.manage');
 
   const { orders, tables, counts, ordersByTable, itemsByOrder, loading, error } = useActiveOrders(effectiveBranch);
 
-  // Areas and product names are not part of the realtime snapshot; load them
-  // separately (reloaded after area/table CRUD via loadAreas).
   const loadAreas = async () => {
     if (!effectiveBranch) { setAreas([]); return; }
     setAreasLoading(true);
@@ -90,11 +96,24 @@ export function ActiveOrdersPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!effectiveBranch) { setCashiers([]); return undefined; }
+    supabase.from('users')
+      .select('id, full_name, email')
+      .eq('branch_id', effectiveBranch)
+      .eq('is_active', true)
+      .order('full_name')
+      .then(({ data }) => {
+        if (!cancelled) setCashiers((data as CashierOption[]) || []);
+      });
+    return () => { cancelled = true; };
+  }, [effectiveBranch]);
+
+  useEffect(() => {
     void loadAreas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveBranch]);
 
-  // Apply a filter passed from the POS workspace summary tiles.
   useEffect(() => {
     const st = (location.state || {}) as FilterState;
     const filter = st.filter;
@@ -109,6 +128,17 @@ export function ActiveOrdersPage() {
     return map;
   }, [products, isAr]);
 
+  const cashierName = (order: Order) => order.cashier?.full_name || order.cashier?.email || (isAr ? 'غير محدد' : 'Unassigned');
+
+  const assignCashier = async (order: Order, cashierId: string) => {
+    if (!cashierId || cashierId === order.cashier_id) return;
+    setBusy(true);
+    const { error: updateError } = await supabase.from('orders').update({ cashier_id: cashierId }).eq('id', order.id);
+    if (updateError) show(updateError.message, 'error');
+    else show(isAr ? 'تم تغيير مستخدم الطلب' : 'Order user reassigned', 'success');
+    setBusy(false);
+  };
+
   const goToPos = (opts: { orderId?: string; tableId?: string; orderType?: OrderType; branchId?: string }) => {
     if (opts.orderId) {
       navigate(`/pos/${opts.orderId}`, { state: { branchId: opts.branchId || effectiveBranch } });
@@ -118,7 +148,6 @@ export function ActiveOrdersPage() {
   };
 
   const startOrder = (table: DiningTable) => goToPos({ tableId: table.id, orderType: 'dine_in', branchId: table.branch_id });
-
   const resumeOrder = (order: Order) => goToPos({ orderId: order.id, orderType: order.order_type, branchId: order.branch_id });
 
   const setStatus = async (tableId: string, status: string) => {
@@ -240,7 +269,6 @@ export function ActiveOrdersPage() {
         }
       />
 
-      {/* Branch selector (admins) */}
       {isAdmin && (
         <DesignPanel testId="active-orders-branch-panel">
           <div className="flex items-center gap-3 flex-wrap">
@@ -260,7 +288,6 @@ export function ActiveOrdersPage() {
         </DesignPanel>
       )}
 
-      {/* Live summary tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         {statCards.map((s) => (
           <StatCard key={s.key} title={s.title} value={s.value} icon={s.icon} color={s.color} />
@@ -278,7 +305,6 @@ export function ActiveOrdersPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* ===== FLOOR CANVAS ===== */}
           <div className="xl:col-span-2 space-y-5">
             {error && (
               <DesignPanel className="text-sm text-ui-danger border-ui-danger/30 bg-ui-danger/10" bodyClassName="p-3">
@@ -297,7 +323,6 @@ export function ActiveOrdersPage() {
             />
           </div>
 
-          {/* ===== OPEN ORDERS PANEL ===== */}
           <div className="space-y-3">
             <DesignPanel testId="active-orders-list">
               <div className="flex items-center justify-between mb-3">
@@ -311,30 +336,14 @@ export function ActiveOrdersPage() {
               </div>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {(['', 'dine_in', 'takeaway', 'delivery', 'drive_thru'] as const).map((ot) => (
-                  <button
-                    key={ot}
-                    onClick={() => setOrderTypeFilter(ot)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                      orderTypeFilter === ot
-                        ? 'bg-ui-primary text-ui-primary-fg'
-                        : 'bg-ui-page-alt text-ui-muted'
-                    }`}
-                  >
+                  <button key={ot} onClick={() => setOrderTypeFilter(ot)} className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${orderTypeFilter === ot ? 'bg-ui-primary text-ui-primary-fg' : 'bg-ui-page-alt text-ui-muted'}`}>
                     {ot === '' ? (isAr ? 'الكل' : 'All') : orderTypeLabel(t, ot)}
                   </button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {(['all', 'open', 'held'] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStatusFilter(s)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                      statusFilter === s
-                        ? 'bg-ui-accent text-ui-primary-fg'
-                        : 'bg-ui-page-alt text-ui-muted'
-                    }`}
-                  >
+                  <button key={s} onClick={() => setStatusFilter(s)} className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${statusFilter === s ? 'bg-ui-accent text-ui-primary-fg' : 'bg-ui-page-alt text-ui-muted'}`}>
                     {s === 'all' ? (isAr ? 'الكل' : 'All') : t(s)}
                   </button>
                 ))}
@@ -351,30 +360,33 @@ export function ActiveOrdersPage() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs font-bold text-ui-text truncate">{order.order_number}</span>
-                          <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-ui-page-alt text-ui-muted">
-                            {orderTypeLabel(t, order.order_type)}
-                          </span>
-                          <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-ui-warning/15 text-ui-warning">
-                            {t(order.status === 'held' ? 'holdOrder' : 'open')}
-                          </span>
+                          <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-ui-page-alt text-ui-muted">{orderTypeLabel(t, order.order_type)}</span>
+                          <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-ui-warning/15 text-ui-warning">{t(order.status === 'held' ? 'holdOrder' : 'open')}</span>
                         </div>
-                        <span className="text-sm font-bold text-ui-accent shrink-0">
-                          {formatCurrency(order.total, 'EGP', lang)}
-                        </span>
+                        <span className="text-sm font-bold text-ui-accent shrink-0">{formatCurrency(order.total, 'EGP', lang)}</span>
                       </div>
                       <div className="text-[11px] text-ui-subtle">
                         {order.table ? `${order.table.name} · ` : ''}{formatDateTime(order.created_at, lang)}
                       </div>
+                      <div className="flex items-center gap-2 text-[11px] text-ui-muted">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'المستخدم:' : 'User:'} {cashierName(order)}</span>
+                      </div>
+                      {canReassignCashier && cashiers.length > 0 && (
+                        <select
+                          value={order.cashier_id || ''}
+                          onChange={(e) => void assignCashier(order, e.target.value)}
+                          disabled={busy}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-ui-border bg-ui-surface-raised text-xs text-ui-text"
+                        >
+                          {!order.cashier_id && <option value="" disabled>{isAr ? 'اختر المستخدم' : 'Select user'}</option>}
+                          {cashiers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.email || c.id}</option>)}
+                        </select>
+                      )}
                       <div className="flex flex-wrap gap-1.5">
-                        <Button size="sm" onClick={() => resumeOrder(order)}>
-                          <UtensilsCrossed className="w-3.5 h-3.5" /> {t('resumeOrder')}
-                        </Button>
-                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}>
-                          <Banknote className="w-3.5 h-3.5" /> {t('payOrder')}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}>
-                          <XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}
-                        </Button>
+                        <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-3.5 h-3.5" /> {t('resumeOrder')}</Button>
+                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-3.5 h-3.5" /> {t('payOrder')}</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>
                       </div>
                     </div>
                   ))
@@ -385,7 +397,6 @@ export function ActiveOrdersPage() {
         </div>
       )}
 
-      {/* ===== TABLE ACTION MODAL ===== */}
       <Modal open={!!tableTarget} onClose={() => setTableTarget(null)} title={tableTarget?.name || ''} size="md">
         {tableTarget && (() => {
           const st = STATUS_STYLES[tableTarget.status] || STATUS_STYLES.vacant;
@@ -412,6 +423,13 @@ export function ActiveOrdersPage() {
                         <span className="px-1.5 py-0.5 rounded-full bg-ui-page-alt text-ui-muted font-bold">{orderTypeLabel(t, order.order_type)}</span>
                         <span>{formatDateTime(order.created_at, lang)}</span>
                       </div>
+                      <div className="flex items-center gap-2 text-[11px] text-ui-muted"><Users className="w-3.5 h-3.5" /><span>{isAr ? 'المستخدم:' : 'User:'} {cashierName(order)}</span></div>
+                      {canReassignCashier && cashiers.length > 0 && (
+                        <select value={order.cashier_id || ''} onChange={(e) => void assignCashier(order, e.target.value)} disabled={busy} className="w-full px-2.5 py-1.5 rounded-lg border border-ui-border bg-ui-surface-raised text-xs text-ui-text">
+                          {!order.cashier_id && <option value="" disabled>{isAr ? 'اختر المستخدم' : 'Select user'}</option>}
+                          {cashiers.map((c) => <option key={c.id} value={c.id}>{c.full_name || c.email || c.id}</option>)}
+                        </select>
+                      )}
                       <div className="space-y-1">
                         {orderItemsOf(order).map((item) => (
                           <div key={item.id} className="flex justify-between text-sm text-ui-muted">
@@ -421,24 +439,16 @@ export function ActiveOrdersPage() {
                         ))}
                       </div>
                       <div className="flex flex-wrap gap-2 pt-1">
-                        <Button size="sm" onClick={() => resumeOrder(order)}>
-                          <UtensilsCrossed className="w-4 h-4" /> {t('resumeOrder')}
-                        </Button>
-                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}>
-                          <Banknote className="w-4 h-4" /> {t('payOrder')}
-                        </Button>
+                        <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-4 h-4" /> {t('resumeOrder')}</Button>
+                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-4 h-4" /> {t('payOrder')}</Button>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div>
-                  <p className="text-sm text-ui-muted mb-3">
-                    {isAr ? 'لا يوجد طلب مفتوح على هذه الطاولة.' : 'No open order on this table.'}
-                  </p>
-                  <Button size="lg" className="w-full" onClick={() => { startOrder(tableTarget); }}>
-                    <UtensilsCrossed className="w-5 h-5" /> {t('openOrder')}
-                  </Button>
+                  <p className="text-sm text-ui-muted mb-3">{isAr ? 'لا يوجد طلب مفتوح على هذه الطاولة.' : 'No open order on this table.'}</p>
+                  <Button size="lg" className="w-full" onClick={() => { startOrder(tableTarget); }}><UtensilsCrossed className="w-5 h-5" /> {t('openOrder')}</Button>
                 </div>
               )}
 
@@ -448,24 +458,13 @@ export function ActiveOrdersPage() {
                     <p className="text-xs font-bold text-ui-subtle mb-2">{isAr ? 'حالة الطاولة' : 'Table status'}</p>
                     <div className="grid grid-cols-4 gap-1.5">
                       {(['vacant', 'reserved', 'closed'] as const).map((s) => (
-                        <button
-                          key={s}
-                          disabled={busy || tableTarget.status === s}
-                          onClick={() => setStatus(tableTarget.id, s)}
-                          className={`px-2 py-2 rounded-xl border text-xs font-medium transition-all disabled:opacity-40 ${STATUS_STYLES[s].badge} border-ui-border`}
-                        >
-                          {t(s)}
-                        </button>
+                        <button key={s} disabled={busy || tableTarget.status === s} onClick={() => setStatus(tableTarget.id, s)} className={`px-2 py-2 rounded-xl border text-xs font-medium transition-all disabled:opacity-40 ${STATUS_STYLES[s].badge} border-ui-border`}>{t(s)}</button>
                       ))}
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => { setEditTarget(tableTarget); setTableModal(true); setTableTarget(null); }}>
-                      <Pencil className="w-4 h-4" /> {isAr ? 'تعديل' : 'Edit'}
-                    </Button>
-                    <Button variant="danger" className="flex-1" onClick={() => { deleteTable(tableTarget); setTableTarget(null); }}>
-                      <Trash2 className="w-4 h-4" /> {isAr ? 'حذف' : 'Delete'}
-                    </Button>
+                    <Button variant="outline" className="flex-1" onClick={() => { setEditTarget(tableTarget); setTableModal(true); setTableTarget(null); }}><Pencil className="w-4 h-4" /> {isAr ? 'تعديل' : 'Edit'}</Button>
+                    <Button variant="danger" className="flex-1" onClick={() => { deleteTable(tableTarget); setTableTarget(null); }}><Trash2 className="w-4 h-4" /> {isAr ? 'حذف' : 'Delete'}</Button>
                   </div>
                 </>
               )}
@@ -474,52 +473,31 @@ export function ActiveOrdersPage() {
         })()}
       </Modal>
 
-      {/* ===== ADD AREA ===== */}
       <Modal open={areaModal} onClose={() => setAreaModal(false)} title={t('addArea')} size="sm">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-ui-muted mb-1.5">{t('areaName')}</label>
-            <input
-              value={areaName}
-              onChange={(e) => setAreaName(e.target.value)}
-              placeholder={isAr ? 'مثال: التراس' : 'e.g. Terrace'}
-              className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring"
-            />
+            <input value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={isAr ? 'مثال: التراس' : 'e.g. Terrace'} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring" />
           </div>
           <Button className="w-full" onClick={createArea}>{t('saveSuccess')}</Button>
         </div>
       </Modal>
 
-      {/* ===== ADD / EDIT TABLE ===== */}
       <Modal open={tableModal} onClose={() => { setTableModal(false); setEditTarget(null); }} title={editTarget ? `${isAr ? 'تعديل' : 'Edit'} ${editTarget.name}` : t('addTable')} size="md">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-ui-muted mb-1.5">{t('tableName')}</label>
-              <input
-                value={tableForm.name}
-                onChange={(e) => setTableForm({ ...tableForm, name: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring"
-              />
+              <input value={tableForm.name} onChange={(e) => setTableForm({ ...tableForm, name: e.target.value })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring" />
             </div>
             <div>
               <label className="block text-sm font-medium text-ui-muted mb-1.5">{t('capacity')}</label>
-              <input
-                type="number"
-                value={tableForm.capacity}
-                min={1}
-                onChange={(e) => setTableForm({ ...tableForm, capacity: parseInt(e.target.value) || 1 })}
-                className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring"
-              />
+              <input type="number" value={tableForm.capacity} min={1} onChange={(e) => setTableForm({ ...tableForm, capacity: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-ui-muted mb-1.5">{isAr ? 'المنطقة' : 'Area'}</label>
-            <select
-              value={tableForm.area_id}
-              onChange={(e) => setTableForm({ ...tableForm, area_id: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring"
-            >
+            <select value={tableForm.area_id} onChange={(e) => setTableForm({ ...tableForm, area_id: e.target.value })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring">
               <option value="">{isAr ? 'بدون منطقة' : 'No area'}</option>
               {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
@@ -528,12 +506,7 @@ export function ActiveOrdersPage() {
             {(['x', 'y', 'w', 'h'] as const).map((k) => (
               <div key={k}>
                 <label className="block text-sm font-medium text-ui-muted mb-1.5 uppercase">{k}</label>
-                <input
-                  type="number"
-                  value={tableForm[k]}
-                  onChange={(e) => setTableForm({ ...tableForm, [k]: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring"
-                />
+                <input type="number" value={tableForm[k]} onChange={(e) => setTableForm({ ...tableForm, [k]: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring" />
               </div>
             ))}
           </div>
