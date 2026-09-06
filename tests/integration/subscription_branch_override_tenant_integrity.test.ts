@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
-import { canImpersonate, runAs, seedRlsFixture } from './rls';
+import { canImpersonate, runAs, runAsPersist, seedRlsFixture } from './rls';
 import type { RlsIds } from './rls';
 
 const dbUrl = getDbUrl();
@@ -106,7 +106,7 @@ describe.skipIf(!dbUrl)('subscription branch override tenant integrity', () => {
 
   it('preserves Super Admin success for a matching tenant and branch', async () => {
     if (!canImp) return;
-    const res = await runAs(
+    const res = await runAsPersist(
       client,
       ids.users.super_admin,
       `SELECT public.super_admin_set_branch_override($1,$2,$3,true,7,'matching-test') AS result`,
