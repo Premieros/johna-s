@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-05T00:20:00.000Z",
+  "generated_at": "2026-09-06T12:14:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {"name":"activate_subscription","params":["activate","billing_period","branch_id","plan_id"]},
@@ -67,7 +67,8 @@
     {"name":"get_trial_balance","params":["branch_id","to_date"]},
     {"name":"get_trial_balance_summary","params":["branch_id","to_date"]},
     {"name":"match_bank_line","params":["journal_entry_id","line_id"]},
-    {"name":"next_document_number","params":["type"]},
+    {"name":"next_purchase_document_number","params":["type"]},
+    {"name":"next_sale_document_number","params":["type"]},
     {"name":"open_shift","params":["branch_id","notes","opening_amount"]},
     {"name":"pay_supplier","params":["amount","branch_id","notes","payment_method","purchase_id","supplier_id"]},
     {"name":"perform_pos_order_action","params":["action_type","order_id","payload","reason"]},
