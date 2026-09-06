@@ -11,14 +11,14 @@
 - Never force-push `main`.
 
 ## Current main / Production baseline
-- `main@3939c48f301abf1d0c826aa825155e9920bb7c4a`
-- Merge commit for PR #35: `security: enforce warehouse transfer branch isolation`.
-- Verify #826 on PR head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Verify #827 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #566 completed successfully with Production parity ✅.
-- Migration `warehouse_transfer_branch_scope` was applied successfully to Production `azzdesuowpdcoflmyezn` and is present in Production migration history.
-- Production post-check confirms both warehouse-transfer SECURITY DEFINER RPCs use `search_path = public, pg_temp`, require auth + canonical transfer permissions, enforce branch-scoped warehouses/products, and use non-oracle `TRANSFER_NOT_FOUND` for inaccessible approvals.
-- `development/final-handover` was fast-forwarded to verified `main` with `force=false` before this documentation commit.
+- `main@c7ef63a8550ea3c070a20faa8bdb78c76000c268`
+- Merge commit for PR #36: `security: make branch hard delete dependency-safe`.
+- Verify #828 on PR #36 head was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Verify #829 on merged `main` was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+- Deploy #567 completed successfully with Production parity and GitHub Pages deploy ✅.
+- Migration `controlled_branch_delete` was applied successfully to Production `azzdesuowpdcoflmyezn` and is present in Production migration history.
+- Production post-check confirms `auth_delete_branches` is fail-closed (`USING(false)`) and `delete_branch_cascade` is SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only execute, `branches.manage`, branch scope, current-branch protection, and operational-history blockers.
+- `development/final-handover` was fast-forwarded to verified `main@c7ef63a8550ea3c070a20faa8bdb78c76000c268` with `force=false` before this documentation commit.
 
 ### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
 Do not reopen without a new Regression.
@@ -35,10 +35,6 @@ Closed contract includes:
 ## Batch 2 — Branches + Warehouses + Cross-Branch Isolation
 
 ### PR #35 — Warehouse transfer branch isolation — CLOSED on Production ✅
-
-Closed defect:
-- `create_warehouse_transfer(...)` and `approve_warehouse_transfer(...)` previously allowed incomplete branch integrity checks and approval lookup could expose cross-branch transfer existence/status.
-
 Final contract:
 - auth required.
 - canonical transfer permissions required.
@@ -46,31 +42,46 @@ Final contract:
 - From/To warehouses tied to the same transfer branch.
 - products tied to the same transfer branch.
 - approval scopes transfer lookup by accessible branch.
-- inaccessible transfer returns `TRANSFER_NOT_FOUND`, not `BRANCH_MISMATCH`, to avoid an existence/status oracle.
+- inaccessible transfer returns `TRANSFER_NOT_FOUND` to avoid a cross-branch existence/status oracle.
 - warehouse/product integrity revalidated before inventory movement.
 - `search_path = public, pg_temp`.
-- stock-count denial contract remains `BRANCH_MISMATCH` and was not changed.
+- stock-count denial contract remains `BRANCH_MISMATCH`.
 
 Regression coverage:
 - `tests/integration/warehouse_transfer_branch_scope.test.ts`.
 - `tests/integration/v2_operational_approval_security.test.ts` aligned only for the inaccessible warehouse-transfer assertion.
 
-## Active next defect — Controlled Branch Delete 🔴
+### PR #36 — Controlled Branch Delete — CLOSED on Production ✅
+Confirmed old risk:
+- branch hard-delete could cascade across operational/history data and the old RPC explicitly removed accounting/auth rows.
 
-Confirmed read-only risk:
-- direct branch hard-delete remains dangerous because many child foreign keys use `ON DELETE CASCADE` across operational/history tables.
-- current DELETE access being limited to Super Admin is not sufficient protection against accidental loss of operational history.
+Final contract:
+- direct authenticated `DELETE` on `branches` is fail-closed.
+- permanent deletion routes through controlled `delete_branch_cascade(...)`.
+- authorization is Permission-First via `branches.manage`; Super Admin is the only implicit bypass.
+- branch/current-branch guards remain enforced.
+- setup-only unused branch may be deleted.
+- branch with operational/history dependencies returns `BRANCH_HAS_OPERATIONAL_HISTORY` + `DEACTIVATE_BRANCH` and is not mutated.
+- `deactivate_branch` remains the normal operational removal path and preserves history.
+- no mass FK rewrite was introduced.
+- no automatic auth-user deletion remains in the safe-delete path.
 
-Required controlled contract:
-1. Empty/setup-only branch may be hard-deleted only after explicit dependency checks.
-2. Branch with operational/history dependencies must reject hard delete with a clear error and direct the caller to `deactivate_branch`.
-3. `deactivate_branch` is the normal operational removal path and must preserve all history.
-4. Do not globally rewrite dozens of foreign keys without evidence.
-5. Add regressions for:
-   - empty branch delete succeeds;
-   - branch with operational history rejects hard delete;
-   - deactivate branch succeeds and preserves history.
-6. After branch delete is closed, audit warehouse create/edit/deactivate/delete and stock/history dependency behavior with the same safe-delete principle.
+Regression coverage:
+- `tests/integration/branch_hard_delete.test.ts` verifies direct-delete closure, Permission-First custom-role authorization, current-branch protection, empty branch delete, history rejection, deactivate success, and history persistence.
+
+## Active next work — Warehouse lifecycle + safe delete
+Audit and close only confirmed deviations for:
+1. create warehouse.
+2. edit warehouse.
+3. deactivate / re-enable warehouse.
+4. delete empty warehouse.
+5. warehouse with stock must not hard-delete operational state.
+6. warehouse with inventory history must not hard-delete history.
+7. warehouse referenced by transfers, purchases, counts, waste, or other operational records must fail safely or require explicit operational handling.
+8. cross-branch warehouse read/write attempts.
+9. direct RPC attacks and SECURITY DEFINER review: auth, permission, branch scope, search_path, grants, caller behavior.
+10. refresh/persistence after lifecycle actions.
+11. add Regression for every confirmed defect, then Full Verify → merge → Production migration/post-check → deploy/runtime verify.
 
 ## Mandatory rules
 - Work only on confirmed deviations; do not reopen closed batches without regression evidence.

@@ -18,6 +18,7 @@ describe.skipIf(skip)('warehouse transfer branch scope', () => {
   const whB2 = randomUUID();
   const productA = randomUUID();
   const productB = randomUUID();
+  const transferA = randomUUID();
   const transferB = randomUUID();
 
   async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
@@ -66,8 +67,14 @@ describe.skipIf(skip)('warehouse transfer branch scope', () => {
     await client.query(
       `INSERT INTO public.warehouse_transfers
        (id,transfer_number,from_warehouse_id,to_warehouse_id,branch_id,status)
-       VALUES ($1,$2,$3,$4,$5,'pending')`,
-      [transferB, `QA-${randomUUID()}`, whB1, whB2, branchB],
+       VALUES
+       ($1,$3,$4,$5,$6,'pending'),
+       ($2,$7,$8,$9,$10,'pending')`,
+      [
+        transferA, transferB,
+        `QA-A-${randomUUID()}`, whA1, whA2, branchA,
+        `QA-B-${randomUUID()}`, whB1, whB2, branchB,
+      ],
     );
   });
 
@@ -77,13 +84,14 @@ describe.skipIf(skip)('warehouse transfer branch scope', () => {
     await client.end().catch(() => {});
   });
 
-  it('hardens both transfer RPC search paths', async () => {
+  it('hardens all transfer mutation RPC search paths', async () => {
     const rows = await client.query<{ proname: string; cfg: string[] | null }>(
       `SELECT p.proname, p.proconfig AS cfg
        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='public' AND p.proname IN ('create_warehouse_transfer','approve_warehouse_transfer')`,
+       WHERE n.nspname='public'
+         AND p.proname IN ('create_warehouse_transfer','approve_warehouse_transfer','reject_warehouse_transfer')`,
     );
-    expect(rows.rows).toHaveLength(2);
+    expect(rows.rows).toHaveLength(3);
     for (const row of rows.rows) expect(row.cfg ?? []).toContain('search_path=public, pg_temp');
   });
 
@@ -134,5 +142,37 @@ describe.skipIf(skip)('warehouse transfer branch scope', () => {
       `SELECT status FROM public.warehouse_transfers WHERE id=$1`, [transferB],
     );
     expect(status.rows[0].status).toBe('pending');
+  });
+
+  it('does not expose or reject a transfer from another branch', async () => {
+    const result = await asUser(userA, async () => {
+      const r = await client.query<{ r: { success?: boolean; error?: string } }>(
+        `SELECT public.reject_warehouse_transfer($1,$2) AS r`,
+        [transferB, 'cross-branch probe'],
+      );
+      return r.rows[0].r;
+    });
+    expect(result).toMatchObject({ success: false, error: 'TRANSFER_NOT_FOUND' });
+
+    const status = await client.query<{ status: string }>(
+      `SELECT status FROM public.warehouse_transfers WHERE id=$1`, [transferB],
+    );
+    expect(status.rows[0].status).toBe('pending');
+  });
+
+  it('allows rejection inside the authorized branch', async () => {
+    const result = await asUser(userA, async () => {
+      const r = await client.query<{ r: { success?: boolean; error?: string } }>(
+        `SELECT public.reject_warehouse_transfer($1,$2) AS r`,
+        [transferA, 'same branch'],
+      );
+      return r.rows[0].r;
+    });
+    expect(result).toMatchObject({ success: true, transfer_id: transferA });
+
+    const status = await client.query<{ status: string; rejection_reason: string | null }>(
+      `SELECT status,rejection_reason FROM public.warehouse_transfers WHERE id=$1`, [transferA],
+    );
+    expect(status.rows[0]).toMatchObject({ status: 'rejected', rejection_reason: 'same branch' });
   });
 });
