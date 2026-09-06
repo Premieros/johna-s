@@ -61,7 +61,7 @@ export const pos = {
   },
 
   sendToKitchen(p: { p_order_id: string; p_sent_by?: string | null }): ApiResult<RpcResult & { order_id?: string; sent?: unknown[]; items_sent_count?: number; all_sent?: boolean }> { return rpc('send_to_kitchen', p); },
-  nextDocumentNumber(p: { p_type: string }): ApiResult<RpcResult> { return rpc('next_document_number', p); },
+  nextDocumentNumber(p: { p_type: string }): ApiResult<RpcResult> { return rpc('next_sale_document_number', p); },
   transferOrderItemToTable(p: { p_order_id: string; p_order_item_id: string; p_target_table_id: string }): ApiResult<RpcResult & { target_order_id?: string; target_order_number?: string; source_order_empty?: boolean; inventory_changed?: boolean; kds_changed?: boolean }> {
     return rpc('transfer_order_item_to_table', p);
   },
