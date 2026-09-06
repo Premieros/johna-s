@@ -1,6 +1,6 @@
 # HANDOVER CHECKPOINT — 2026-09-06
 
-> Read `docs/CURRENT_WORK_PLAN.md` first. This checkpoint records the newer live state when that file is stale.
+> Read `docs/CURRENT_WORK_PLAN.md` first. This checkpoint records the newer verified live state when that file is stale.
 
 ## Fixed identity
 - Repository: `Premieros/johna-s`
@@ -10,219 +10,133 @@
 - Never mix with `pos.v2` or Supabase `scpovyrqmsbiduanykod`.
 - Never force-push `main` or development.
 
-## Current main / Production baseline
-- Verified Production baseline: `main@bb703cf4c6ad799d7395708f7255daaedb80cdad`.
-- Merge commit for PR #42: `security: scope subscription status to accessible tenant`.
-- PR #42 Verify #848 was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Merged-main Verify #849 was Full Green: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-- Deploy #573 completed successfully: build ✅ / Production API parity ✅ / GitHub Pages deploy ✅.
-- Production migration `subscription_tenant_scope` was applied successfully to `azzdesuowpdcoflmyezn`.
-- Production Post-Check confirms `subscription_is_active(uuid)` and `user_can_access_organization(uuid)` are SECURITY DEFINER with `search_path = public, pg_temp`, authenticated-only EXECUTE, anon/PUBLIC denied, and tenant-scope protection present.
-- `development/final-handover` was fast-forwarded to verified `main@bb703cf4c6ad799d7395708f7255daaedb80cdad` with `force=false` before this documentation commit.
-- Remaining phase counter stays **6**. P0-B SECURITY DEFINER audit is not closed yet; Production still contains additional authenticated-executable SECURITY DEFINER functions using legacy `search_path = public` that require function-by-function review.
+## Current verified baseline
+- Verified Production/Main: `80f5ed535e07cb3c839266e7e8d5dda5b3cd5f87` — PR #43 merge.
+- PR #43 Verify #852: Full Green ✅.
+- Merged-main Verify #853: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke Full Green ✅.
+- Deploy #574: build + Production API parity + GitHub Pages Full Green ✅.
+- Production migration `subscription_branch_override_tenant_integrity` applied successfully to `azzdesuowpdcoflmyezn` ✅.
+- Production Post-Check for `super_admin_set_branch_override(...)`: SECURITY DEFINER ✅, `search_path = public, pg_temp` ✅, authenticated-only EXECUTE ✅, Super Admin guard ✅, branch→tenant validation ✅, `BRANCH_TENANT_MISMATCH` guard ✅.
+- `development/final-handover` fast-forwarded to verified main with `force=false` before this documentation commit.
+- Remaining phase counter stays **6**. P0-B SECURITY DEFINER audit is still open.
 
-### Batch 1 — Users / Roles / Permission-First — CLOSED on Production ✅
-Do not reopen without a new Regression.
+## Closed Production work — do not reopen without regression
 
-Closed contract includes:
-- `create_user` uses `users.manage` + branch scope; no role-label authorization.
+### Batch 1 — Users / Roles / Permission-First ✅
+- roles are labels only; Super Admin is the sole implicit bypass.
+- `create_user` uses `users.manage` + branch scope.
 - User Creation Toggle enforced inside RPC.
-- `guard_user_role_changes` prevents self-escalation and over-assignment of permissions.
-- `update_user_password` is `users.manage` + branch scoped.
-- `delete_user` preserves operational/audit history and requires disable instead of hard delete when dependencies exist.
-- `users` SELECT RLS allows same-branch management visibility through `users.manage` while preserving cross-branch isolation.
-- Super Admin only has implicit full bypass; all other roles are labels.
+- self-escalation and over-assignment guarded.
+- password update/delete are permission + branch scoped and operational history is preserved.
+- users SELECT RLS supports authorized same-branch management and prevents cross-branch visibility.
 
-## Batch 2 — Branches + Warehouses + Cross-Branch Isolation
+### PR #35 — Warehouse transfer branch isolation ✅
+- canonical transfer permissions + branch scope.
+- From/To warehouses and products must match transfer branch.
+- inaccessible transfer uses non-oracle `TRANSFER_NOT_FOUND`.
+- hardened `search_path = public, pg_temp`.
 
-### PR #35 — Warehouse transfer branch isolation — CLOSED on Production ✅
-Final contract:
-- auth required.
-- canonical transfer permissions required.
-- `user_may_access_branch(...)` enforced.
-- From/To warehouses tied to the same transfer branch.
-- products tied to the same transfer branch.
-- approval scopes transfer lookup by accessible branch.
-- inaccessible transfer returns `TRANSFER_NOT_FOUND` to avoid a cross-branch existence/status oracle.
-- warehouse/product integrity revalidated before inventory movement.
-- `search_path = public, pg_temp`.
-- stock-count denial contract remains `BRANCH_MISMATCH`.
+### PR #36 — Controlled Branch Delete ✅
+- direct authenticated DELETE fail-closed.
+- safe hard delete only for setup-only branch.
+- operational/history branch returns `BRANCH_HAS_OPERATIONAL_HISTORY` + `DEACTIVATE_BRANCH`.
+- no mass FK rewrite and no automatic auth-user delete.
 
-Regression coverage:
-- `tests/integration/warehouse_transfer_branch_scope.test.ts`.
-- `tests/integration/v2_operational_approval_security.test.ts` aligned only for the inaccessible warehouse-transfer assertion.
+### PR #37 — Warehouse lifecycle + safe delete ✅
+- warehouse branch immutable.
+- only truly unreferenced warehouse can hard-delete.
+- dependency-bearing warehouse routes to deactivate.
+- cross-branch delete/read non-oracle.
+- transfer rejection auth/permission/branch scoped.
 
-### PR #36 — Controlled Branch Delete — CLOSED on Production ✅
-Confirmed old risk:
-- branch hard-delete could cascade across operational/history data and the old RPC explicitly removed accounting/auth rows.
+## P0-B SECURITY DEFINER audit — closed items
 
-Final contract:
-- direct authenticated `DELETE` on `branches` is fail-closed.
-- permanent deletion routes through controlled `delete_branch_cascade(...)`.
-- authorization is Permission-First via `branches.manage`; Super Admin is the only implicit bypass.
-- branch/current-branch guards remain enforced.
-- setup-only unused branch may be deleted.
-- branch with operational/history dependencies returns `BRANCH_HAS_OPERATIONAL_HISTORY` + `DEACTIVATE_BRANCH` and is not mutated.
-- `deactivate_branch` remains the normal operational removal path and preserves history.
-- no mass FK rewrite was introduced.
-- no automatic auth-user deletion remains in the safe-delete path.
+### Demo helpers ✅
+- `seed_demo_data` / `delete_demo_data` service-role-only, hardened, no frontend caller found.
 
-Regression coverage:
-- `tests/integration/branch_hard_delete.test.ts` verifies direct-delete closure, Permission-First custom-role authorization, current-branch protection, empty branch delete, history rejection, deactivate success, and history persistence.
+### PR #38 — `close_shift` Permission-First ✅
+- removed role-label authorization.
+- non-Super-Admin requires `shifts.close`; other-cashier close also requires `shifts.manage`.
+- branch-scoped lookup + `SHIFT_NOT_FOUND` non-oracle.
+- hardened search path/grants.
 
-### PR #37 — Warehouse lifecycle + safe delete — CLOSED on Production ✅
-Confirmed defects closed:
-- `reject_warehouse_transfer` had incomplete auth/branch hardening and could expose transfer existence/status cross-branch.
-- warehouse hard delete could erase referenced operational/history data through FK cascades.
-- `warehouses.branch_id` could be changed after creation.
-
-Final contract:
-- warehouse create/edit/disable/re-enable remains Permission-First and branch scoped.
-- warehouse `branch_id` is immutable after creation.
-- authorized, completely unreferenced warehouse may be hard-deleted and recreated.
-- any warehouse referenced by stock, transfers, purchases, counts, waste, or any other FK dependency is not hard-deleted.
-- `delete_warehouse_safe` provides explicit dependency blockers and directs operational removal to `DEACTIVATE_WAREHOUSE`.
-- cross-branch warehouse reads/deletes are non-oracle and denied.
-- transfer rejection is auth + permission + branch scoped and uses `TRANSFER_NOT_FOUND` for inaccessible IDs.
-- stock/history survives deactivate/re-enable.
-
-Regression coverage:
-- `tests/integration/warehouse_lifecycle_security.test.ts`.
-- `tests/integration/warehouse_transfer_branch_scope.test.ts`.
-- existing RLS branch-isolation suite remains intact and green.
-
-## P0-B SECURITY DEFINER Remaining Audit
-
-### Demo helpers — CLOSED / no change required ✅
-Production inspection confirmed:
-- `seed_demo_data` and `delete_demo_data` are already service-role-only.
-- both are hardened with `search_path = public, pg_temp`.
-- no frontend caller was found in the current project path.
-- no code or Production migration was needed for this item.
-
-### PR #38 — `close_shift` Permission-First hardening — CLOSED on Production ✅
-Confirmed defects closed:
-- old `close_shift` used the literal `branch_manager` role label to authorize closing another cashier's shift.
-- function used `search_path = public` only.
-- shift lookup happened by raw ID before canonical branch scope.
-
-Final contract:
-- unauthenticated/inactive users are denied.
-- any non-Super-Admin close requires `shifts.close`.
-- closing another cashier's shift additionally requires `shifts.manage`.
-- role labels grant no authority; Super Admin remains the only implicit bypass.
-- shift lookup is branch scoped through `user_may_access_branch` and inaccessible IDs return `SHIFT_NOT_FOUND`.
-- `search_path = public, pg_temp`.
-- EXECUTE is authenticated-only; anon/PUBLIC revoked.
-- existing public denial contract `SHIFT_CLOSE_DENIED` is preserved.
-
-Regression coverage:
-- `tests/integration/close_shift_permission_first.test.ts`.
-- existing shift Permission-First tests remain green.
-
-### PR #39 — Admin SECURITY DEFINER search-path hardening — CLOSED on Production ✅
-Targeted functions:
+### PR #39 — Admin SECURITY DEFINER search-path hardening ✅
+Hardened without changing existing authority:
 - `is_super_admin()`
 - `admin_data_delete_section(uuid,text)`
 - `admin_data_seed_all(uuid)`
 - `verify_auth_account(uuid)`
 - `repair_auth_account(uuid)`
 - `toggle_organization_status(uuid,boolean)`
+Verify #840 / main #841 / Deploy #570 all green.
 
-Final contract:
-- all six use `search_path = public, pg_temp`.
-- authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
-- existing authorization contracts preserved.
-
-Verification / release:
-- PR Verify #840 Full Green ✅.
-- merged `main@3182de0b83d09e1414512e75982e066518d72645`.
-- Production migration `admin_security_definer_search_path` applied ✅.
-- Production Post-Check passed ✅.
-- main Verify #841 Full Green ✅.
-- Deploy #570 Full Green ✅.
-
-### PR #40 — Identity SECURITY DEFINER search-path hardening — CLOSED on Production ✅
-Targeted functions:
+### PR #40 — Identity SECURITY DEFINER hardening ✅
 - `login_as_user(uuid,text,text,text)`
 - `password_matches(uuid,text)`
+Search path/grants hardened; existing guards preserved.
+Verify #842 / main #843 / Deploy #571 all green.
 
-Final contract:
-- both use `search_path = public, pg_temp`.
-- authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
-- `login_as_user` remains active-Super-Admin-only and blocks self/Super-Admin targets.
-- `password_matches` retains the existing Super-Admin-equivalent `is_pos_admin()` guard.
+### PR #41 — Subscription admin SECURITY DEFINER hardening ✅
+- targeted Super-Admin subscription admin/settings functions hardened to `public, pg_temp`.
+- authenticated-only EXECUTE; existing Super Admin guards/business behavior preserved.
+- test regex corrected to accept qualified or unqualified `is_super_admin()` without weakening the guard requirement.
+Verify #846 / main #847 / Deploy #572 all green.
 
-Verification / release:
-- PR Verify #842 Full Green ✅.
-- merged `main@9d8a2c248140930de3a77d8b0b1f83bbcd1ee879`.
-- Production migration `identity_security_definer_search_path` applied ✅.
-- Production Post-Check passed ✅.
-- main Verify #843 Full Green ✅.
-- Deploy #571 Full Green ✅.
-
-### PR #41 — Subscription admin SECURITY DEFINER search-path hardening — CLOSED on Production ✅
-Confirmed deviation:
-- authenticated-executable subscription admin mutation/settings functions retained legacy `search_path = public` while their Super Admin authorization guards were already correct.
-
-Final contract:
-- targeted subscription admin functions now use `search_path = public, pg_temp`.
-- authenticated EXECUTE retained; anon/PUBLIC EXECUTE revoked.
-- Super Admin guards and business behavior preserved.
-- the only CI failure encountered was a test regex that expected unqualified `is_super_admin()`; the test was corrected to accept both `is_super_admin()` and `public.is_super_admin()` without weakening the guard requirement.
-
-Verification / release:
-- PR Verify #846 Full Green ✅.
-- merged `main@56e822a133b1bd8885aafa1bab9b5ac67b99bf49`.
-- Production migration applied successfully ✅.
-- Production Post-Check passed ✅.
-- main Verify #847 Full Green ✅.
-- Deploy #572 Full Green ✅.
-
-### PR #42 — Subscription tenant-scope oracle hardening — CLOSED on Production ✅
-Confirmed defect:
-- `subscription_is_active(uuid)` accepted an arbitrary tenant UUID from any authenticated caller and read organization/subscription state before proving access, allowing a cross-tenant subscription-status oracle.
-- its scope helper `user_can_access_organization(uuid)` still used legacy `search_path = public`.
-
+### PR #42 — Subscription tenant-scope oracle hardening ✅
+Confirmed defect closed:
+- `subscription_is_active(uuid)` previously accepted arbitrary tenant UUID and could reveal foreign subscription status.
 Final contract:
 - authentication required.
-- Super Admin is the only implicit cross-tenant bypass.
-- `NULL` tenant inference for the caller's current tenant remains supported.
-- explicit tenant probes require `user_can_access_organization(...)` before organization/subscription reads.
-- inaccessible/foreign tenant probes return `false` without revealing existence or status.
-- `subscription_is_active(uuid)` and `user_can_access_organization(uuid)` use `search_path = public, pg_temp`.
-- authenticated EXECUTE retained; anon/PUBLIC revoked.
+- Super Admin only cross-tenant bypass.
+- NULL/current-tenant inference preserved.
+- foreign/inaccessible tenant returns `false` without existence/status disclosure.
+- `subscription_is_active(uuid)` and `user_can_access_organization(uuid)` hardened.
+Regression: `tests/integration/subscription_tenant_scope.test.ts`.
+Verify #848 / main #849 / Deploy #573 all green.
 
-Regression coverage:
-- `tests/integration/subscription_tenant_scope.test.ts` covers own tenant, NULL inference, foreign tenant non-oracle denial, Super Admin bypass, search path, and grants.
+### PR #43 — Subscription branch override tenant integrity ✅
+Confirmed defect closed:
+- `super_admin_set_branch_override(...)` accepted `p_tenant_id` and `p_branch_id` independently.
+- schema had separate FKs but no invariant proving the branch belonged to the supplied tenant.
+- this could create an override/event attributed to the wrong tenant.
+Final contract:
+- existing Super Admin-only authority preserved.
+- resolve `branches.organization_id` before any write.
+- tenant/branch mismatch returns `BRANCH_TENANT_MISMATCH`.
+- mismatch writes neither override nor event.
+- matching tenant/branch preserves normal success behavior.
+- function hardened to `search_path = public, pg_temp` and authenticated-only EXECUTE.
+Regression: `tests/integration/subscription_branch_override_tenant_integrity.test.ts`.
+CI notes:
+- Verify #850 failed only because test fixture used invalid feature category `test`; changed fixture to valid `management`.
+- Verify #851 failed only because `runAs` intentionally rolls back DML; success-path test switched to existing `runAsPersist`.
+- migration itself was unchanged across these test-harness fixes.
+Release:
+- PR Verify #852 Full Green ✅.
+- merged `main@80f5ed535e07cb3c839266e7e8d5dda5b3cd5f87`.
+- Production migration `subscription_branch_override_tenant_integrity` applied ✅.
+- Production Post-Check passed ✅.
+- main Verify #853 Full Green ✅.
+- Deploy #574 Full Green ✅.
 
-Verification / release:
-- PR Verify #848 Full Green ✅.
-- merged `main@bb703cf4c6ad799d7395708f7255daaedb80cdad`.
-- Production migration `subscription_tenant_scope` applied ✅.
-- Production Post-Check passed for both functions ✅.
-- main Verify #849 Full Green ✅.
-- Deploy #573: build + Production parity + Pages deploy ✅.
-
-## Active next work — continue P0-B Function-by-Function
-1. Continue the Production SECURITY DEFINER inventory; do not bulk-rewrite.
-2. Prioritize functions that both use legacy `search_path = public` and read/write tenant/branch-sensitive data.
-3. Inspect frontend/server callers and existing regressions before changing authorization behavior.
-4. Separate pure constant/no-data helpers from functions that can create information or mutation oracles.
-5. For every confirmed defect: narrow migration + explicit Regression + Full Verify before Production.
-6. Preserve public API/error contracts unless a confirmed security regression requires a safer non-oracle response.
-7. Full Verify → merge → Production migration/post-check → merged-main Verify + Deploy.
-8. Do not reduce Remaining below **6** until the P0-B audit has no confirmed SECURITY DEFINER deviation left.
+## Active next work — continue P0-B function-by-function
+1. Continue Production SECURITY DEFINER inventory; never bulk-rewrite.
+2. Prioritize functions using legacy `search_path = public` that read/write branch or tenant sensitive data.
+3. Inspect actual callers and existing regressions before changing authorization behavior.
+4. Separate constant/no-data helpers from real information or mutation oracles.
+5. Every confirmed defect requires: narrow migration + explicit Regression + Full Verify before Production.
+6. Preserve public API/error contracts unless a confirmed security defect requires a safer non-oracle response.
+7. Release sequence: Full Verify → merge → Production migration/post-check → merged-main Verify + Deploy → fast-forward dev with `force=false` → checkpoint update.
+8. Do not reduce Remaining below **6** until P0-B has no confirmed SECURITY DEFINER deviation left.
 
 ## Mandatory rules
 - Work only on confirmed deviations; do not reopen closed batches without regression evidence.
-- Super Admin is the only implicit bypass. `owner`, `manager`, `branch_manager`, etc. are labels only.
+- Super Admin is the only implicit bypass; all other role names are labels only.
 - Permission-First + branch/RLS isolation.
 - Never weaken RLS or tests to get CI green.
-- SECURITY DEFINER requires explicit auth/permission/branch/search_path/grant review.
+- SECURITY DEFINER review always includes auth, permission, branch/tenant scope, search_path, grants, and caller behavior.
 - Never apply unverified branch DDL to Production.
 - Before every write, re-fetch current branch HEAD and review new commits.
 - No force push.
-- Clean, organize, and remove local duplication while fixing the confirmed scope; do not perform unrelated broad refactors.
-- Update work log/checkpoint whenever a batch closes.
+- No unrelated broad refactors.
 - Final target: `Published Site = Verified Main = Production DB Contract = Zero Drift`.
