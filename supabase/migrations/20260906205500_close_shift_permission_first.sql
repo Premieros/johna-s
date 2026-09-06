@@ -32,7 +32,7 @@ BEGIN
   IF NOT public.is_pos_admin() AND NOT public.can_permission('shifts.close') THEN
     RETURN jsonb_build_object(
       'success', false,
-      'error', 'SHIFT_NOT_ALLOWED',
+      'error', 'SHIFT_CLOSE_DENIED',
       'detail', 'Closing shifts requires shifts.close.'
     );
   END IF;
