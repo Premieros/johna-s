@@ -15,7 +15,9 @@
 - Production/Release branch: `main`.
 - فرع التطوير الدائم الوحيد: `development/final-handover`.
 - Production DB: `azzdesuowpdcoflmyezn` فقط.
-- Current Production code baseline بعد PR #26: `main@8a68e153d96e0e1e01f0bd0c07637ff470512c15`.
+- Current Production code baseline: `main@9f69a67c596609c71420b1190e77e702a5029f1e` بعد PR #27.
+- GitHub Pages Deploy #558 على نفس SHA: PASS ✅.
+- Verify main #781 / run `34026096066`: PASS كامل ✅ بما فيه Fresh DB، Integration/Security/RLS، وBrowser Smoke.
 - Permission-First Root Closure: **مغلق ✅**.
 - Super Admin فقط يملك implicit full-access.
 - `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من canonical permissions + branch/RLS.
@@ -23,50 +25,39 @@
 ### P0-B المغلق على Production ✅
 
 1. Anonymous login SECURITY DEFINER boundary مغلق.
-2. Permission/scope hardening مغلق لـ:
-   - `update_branch`
-   - `deactivate_branch`
-   - `get_cost_history`
-   - `get_production_variance`
-3. `next_document_number(text)` أصبح internal-only boundary:
-   - PR #26 مدمج إلى `main`.
-   - migration `20260905230000_next_document_number_internal_only.sql` مطبقة على Production.
-   - `anon EXECUTE = false` ✅
-   - `authenticated EXECUTE = false` ✅
-   - `service_role EXECUTE = true` ✅
+2. Permission/scope hardening مغلق لـ`update_branch`, `deactivate_branch`, `get_cost_history`, `get_production_variance`.
+3. `next_document_number(text)` أصبح internal-only boundary ومطبق على Production.
+4. `cancel_sent_order_item(...)` wrapper مغلق بالكامل:
+   - PR #27 merged إلى `main`.
+   - migration `20260906115500_cancel_sent_order_item_wrapper_scope.sql` مطبقة على Production.
    - `search_path = public, pg_temp` ✅
+   - `anon EXECUTE = false` ✅
+   - authenticated/service-role grants محفوظة ✅
+   - Authentication + active-user + branch guard تسبق sent-item lookup ✅
 
-## 2) الحزمة النشطة الآن — PR #27 🚧
+## 2) الحزمة النشطة الآن — PR #28 🚧
 
-العنوان: `security: harden sent item cancel wrapper scope`
+العنوان: `security: scope product modifier resolution by branch`
 
-الهدف:
-- منع `cancel_sent_order_item(...)` من كشف وجود/تعدد sent items قبل Authentication وBranch Authorization.
-- الحفاظ على public RPC signature والسلوك النهائي عبر `cancel_sent_order_item_exact(...)`.
+Production inspection أثبت أن `resolve_product_modifiers(uuid, uuid, jsonb)` هو `SECURITY DEFINER` ومتاح لـ`authenticated`، لكنه كان يبدأ product/modifier lookup اعتمادًا على `p_branch_id` الذي يرسله caller بدون إثبات current-user branch access.
 
-### Verify #778
+الحل الموجود في PR #28:
+- migration `20260906130000_resolve_product_modifiers_scope.sql`.
+- `auth.uid()` أولًا.
+- active application user مطلوب.
+- `user_may_access_branch(p_branch_id)` مطلوب قبل أي product/modifier lookup.
+- الحفاظ على modifier validation/pricing/snapshots والـRPC signature.
+- الحفاظ على authenticated/service-role grants مع منع anon.
+- regression جديد: `tests/integration/resolve_product_modifiers_security.test.ts`.
+- existing modifier lifecycle integration test يبقى Operational regression gate لضمان عدم كسر POS/KDS/payment/inventory.
 
-- Database Identity Lock ✅
-- API Contract ✅
-- lint ✅
-- typecheck app/tests ✅
-- unit ✅
-- build ✅
-- Fresh DB migrations ✅
-- schema verification ✅
-- Regression test الجديد نفسه ✅
-- Integration/Security/RLS ❌ بسبب خطأ SQL branch-only: `min(uuid)` غير مدعوم في PostgreSQL 16.
-- بقية 5 failures كانت cascade بعد abort للـtransaction.
-- Browser Smoke لم يبدأ بسبب فشل db gate.
-- **لم يتم دمج PR #27 ولم يتم تطبيق migration الخاصة به على Production.**
-
-تم تصحيح السبب باستخدام `count(*)` ثم SELECT منفصل لـ`order_item_id` بدون تغيير منطق الحماية. المطلوب الآن إعادة Full Verify للحزمة.
+الحالة: PR #28 مفتوح، Verify #782 بدأ. **ممنوع Production DDL لهذه الحزمة قبل Full Green + Merge إلى main.**
 
 ## 3) هدف العمل النهائي — Zero Drift للموقع المنشور
 
 لا نعتبر أي انحراف مغلقًا لمجرد إصلاحه على فرع تطوير. الانحراف يغلق فقط عندما يتحقق الآتي:
 
-1. الإصلاح موجود على `development/final-handover` مع regression coverage.
+1. Regression coverage واضح.
 2. Verify كامل أخضر: frontend + Fresh DB/schema + Integration/Security/RLS + Browser Smoke.
 3. Merge إلى `main`.
 4. أي migration مطلوبة تطبق على `azzdesuowpdcoflmyezn` فقط.
@@ -80,10 +71,9 @@
 
 ### P0-B — SECURITY DEFINER Remaining Audit 🔴
 
-1. `cancel_sent_order_item(...)` wrapper — PR #27 ACTIVE.
-2. `resolve_product_modifiers(...)` — التحقق من current-user branch access وإغلاق أي cross-branch oracle مثبت.
-3. `seed_demo_data` / `delete_demo_data` — مقارنة Production بالتعريف canonical وإزالة أي role-name authorization قديم إذا كان ما زال live.
-4. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
+1. `resolve_product_modifiers(...)` — PR #28 ACTIVE.
+2. `seed_demo_data` / `delete_demo_data` — Production مثبت أنهما ما زالا يستخدمان `is_pos_admin()` / `is_branch_manager()` و`search_path=public`؛ يجب تحويلهما Permission-First واختيار capability canonical بعد مراجعة الاستخدام.
+3. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
 
 Definition of Done:
 - كل external SECURITY DEFINER إما مقصود وموثق ومختبر أو مغلق/داخلي.
@@ -157,19 +147,18 @@ Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
 
 ## 6) ترتيب التنفيذ من الآن
 
-1. إعادة Verify لـPR #27 بعد إصلاح PostgreSQL `min(uuid)`.
-2. إذا أخضر: Merge PR #27 -> تطبيق migration على Production -> read-only verification.
-3. Audit/Fix `resolve_product_modifiers`.
-4. Audit/Fix `seed_demo_data` / `delete_demo_data` إذا ثبت drift.
-5. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
-6. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
-7. Full Verify نهائي.
-8. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
-9. Production parity + Deploy النهائي من verified `main`.
-10. Runtime operational smoke كامل.
-11. Protect `main` إن أمكن.
-12. `HANDOVER.md` + Final Zero-Drift report.
-13. تنظيف الفروع التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
+1. إكمال Verify #782 لـPR #28 وإصلاح أي Regression حقيقي بدون تخفيف الاختبارات.
+2. إذا Full Green: Merge PR #28 -> Sync `development/final-handover` -> تطبيق migration على Production -> read-only parity verification.
+3. Audit/Fix `seed_demo_data` / `delete_demo_data` Permission-First + search_path.
+4. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
+5. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
+6. Full Verify نهائي.
+7. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
+8. Production parity + Deploy النهائي من verified `main`.
+9. Runtime operational smoke كامل.
+10. Protect `main` إن أمكن.
+11. `HANDOVER.md` + Final Zero-Drift report.
+12. تنظيف الفروع القصيرة/التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
 
 ## 7) معيار إعلان "جاهز للتسليم"
 
