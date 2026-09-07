@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-06T12:14:00.000Z",
+  "generated_at": "2026-09-07T13:12:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {"name":"activate_subscription","params":["activate","billing_period","branch_id","plan_id"]},
@@ -25,7 +25,7 @@
     {"name":"create_production_order","params":["batch_number","branch_id","notes","planned_at","product_id","quantity","warehouse_id"]},
     {"name":"create_purchase_order","params":["branch_id","items","notes","payment_method","quotation_id","supplier_id","warehouse_id"]},
     {"name":"create_purchase_request","params":["branch_id","expected_date","items","notes","priority","supplier_id"]},
-    {"name":"create_rfq","params":["branch_id","due_date","items","notes","request_id"]},
+    {"name":"create_rfq","params":["due_date","items","notes","request_id"]},
     {"name":"create_stock_count","params":["branch_id","count_type","items","notes","warehouse_id"]},
     {"name":"create_user","params":["branch_id","email","full_name","is_active","password","role","username"]},
     {"name":"create_warehouse_transfer","params":["branch_id","from_warehouse_id","items","notes","reason","to_warehouse_id"]},
@@ -102,6 +102,7 @@
     {"name":"submit_stock_count","params":["stock_count_id"]},
     {"name":"subscription_status","params":["branch_id"]},
     {"name":"transfer_order_item_to_table","params":["order_id","order_item_id","target_table_id"]},
+    {"name":"transfer_order_operator","params":["order_id","target_user_id"]},
     {"name":"update_branch","params":["address","branch_id","is_active","name","name_en","phone"]},
     {"name":"update_financial_visibility_settings","params":["historical_percent","recent_days"]},
     {"name":"update_order","params":["customer_id","discount_amount","discount_type","guest_count","items","notes","order_id","order_type","status","subtotal","table_id","tax_amount","total"]},
