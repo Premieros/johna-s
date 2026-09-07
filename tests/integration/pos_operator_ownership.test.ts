@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
-import { canImpersonate, runAs, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
+import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -196,13 +196,13 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     expect(deniedEdit.success).toBe(false);
     expect(`${deniedEdit.error || ''} ${deniedEdit.detail || ''}`).toContain('ORDER_OPERATOR_REQUIRED');
 
-    const deniedCancel = await runAs(
-      client,
+    const deniedCancel = await rpc(
       ids.users.branch_manager,
-      `SELECT public.set_order_status($1, 'cancelled', 'B cancel attempt')`,
+      `SELECT public.set_order_status($1, 'cancelled', 'B cancel attempt') AS r`,
       [orderId],
     );
-    expect(deniedCancel.error || '').toContain('ORDER_OPERATOR_REQUIRED');
+    expect(deniedCancel.success).toBe(false);
+    expect(deniedCancel.error).toBe('ORDER_OPERATOR_REQUIRED');
 
     const blockedInvoice = `OWN-BLOCK-${randomUUID()}`;
     const deniedPay = await rpc(
