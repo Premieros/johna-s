@@ -2,68 +2,102 @@
 
 > هذا الملف هو عدّاد المراحل المتبقية حتى التسليم النهائي.
 > Source of truth التفصيلي للأخطاء: `docs/FINAL_BUG_REGISTER.md`.
-> أحدث حالة Production: `docs/HANDOVER_CHECKPOINT_2026-09-06.md`.
+> أحدث Production checkpoint: `docs/HANDOVER_CHECKPOINT_2026-09-06.md`.
 
 ## الحالة الحالية
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn` فقط
 - Production branch: `main`
 - Development branch: `development/final-handover`
-- Verified Production baseline: `main@80f5ed535e07cb3c839266e7e8d5dda5b3cd5f87` — PR #43.
-- PR #43 Verify #852 ✅ / merged-main Verify #853 ✅ / Deploy #574 ✅.
-- Production parity وPost-Check لآخر دفعة ✅.
-- Current confirmed unique deviations: **74** حسب `FINAL_BUG_REGISTER.md`.
+- Verified Production baseline: `main@8b671fca36d60a200e743a2192581d83c3fa1f6e` — PR #46.
+- PR #46 Verify #864 ✅ / merged-main Verify #865 ✅ / Deploy #577 ✅.
+- Production SECURITY DEFINER legacy search-path deviations: **0** ✅.
+- Stage 6 مغلقة بالكامل ولا تعاد إلا عند Regression مثبت.
 
-# المتبقي: 6 مراحل
-
-## 6 → P0-B SECURITY DEFINER Remaining Audit — ACTIVE 🔴
-الحصر الحالي:
-- 162 SECURITY DEFINER callable للـauthenticated إجمالًا؛ هذا ليس عدد أخطاء.
-- **71 دالة مؤكدة** ما زالت تستخدم legacy/unhardened search path بدل `public, pg_temp`.
-- 50 منها mutation/operational/identity، و21 read/helper-like.
-- الفحص الآلي الحالي لم يجد role-label authorization واضحًا (`owner`/`manager`/`branch_manager`) في المجموعة المتبقية.
-
-طريقة الإصلاح:
-- معالجة root cause بعناقيد مراجَعة، لا broad blind rewrite.
-- إذا كان العيب search-path فقط: exact-signature `ALTER FUNCTION ... SET search_path TO public, pg_temp` بدون إعادة كتابة body.
-- إذا ظهر auth/branch/tenant defect: Regression مستقل + migration ضيقة.
-- لا تنخفض المرحلة من 6 إلى 5 إلا بعد وصول الانحرافات المؤكدة في P0-B إلى صفر والتحقق Production/CI.
+# المتبقي: 5 مراحل
 
 ## 5 → P0-C Auth Password Hardening 🔴
 المؤكد حاليًا:
-- Supabase Security Advisor: `Leaked Password Protection Disabled`.
+- Supabase Auth `Leaked Password Protection` ما زالت disabled.
 
 الإغلاق يتطلب:
 - تفعيل الحماية إذا سمحت المنصة/الخطة.
-- اختبار Login / Create User / Password Update.
+- اختبار Login / Create User / Password Update / Reset حسب العقد الحالي.
 - إعادة Security Advisor.
 - توثيق أي قيد منصة بدل ادعاء الإغلاق.
 
-## 4 → P1-A Published Runtime / UI Zero-Drift Audit 🟠
-لا توجد أخطاء Runtime محسوبة قبل إعادة إنتاجها.
+## 4 → P1-A Published Runtime / UI Zero-Drift Audit — ACTIVE 🟠
+لا يحسب أي Runtime defect قبل إثباته. العمل الحالي منقسم إلى batches صغيرة قابلة للتحقق، ولا يتم دمج مشاكل مختلفة في refactor واسع.
 
-الدورة المطلوبة:
+### 4.1 Shift Cash Integrity + Branch Scope — ACTIVE via PR #47
+الهدف:
+- منع direct authenticated DML على `shift_operations` خارج RPCs الموثوقة.
+- توحيد معادلة expected cash بين get/close/force-close.
+- استخدام canonical branch access ومنع cross-branch status oracle.
+- الحفاظ على shared branch shift contract وPermission-First.
+
+الإغلاق يتطلب:
+`Regression -> Full Verify -> Merge -> Production migration/parity -> Post-Check -> merged-main Verify -> Deploy`.
+
+### 4.2 POS Operator Ownership & Table Transfer — QUEUED بعد إغلاق 4.1
+العقد التشغيلي الرسمي:
+1. الوردية مفتوحة على مستوى الفرع ومشتركة بين المستخدمين المخولين، وليست Shift مستقلًا لكل كاشير.
+2. أي مستخدم نشط يملك `shifts.open` + branch access يستطيع فتح Shift الفرع؛ إذا كانت مفتوحة يعاد نفس shift.
+3. أي مستخدم يملك صلاحيات POS اللازمة يستطيع العمل على شاشة البيع داخل فرعه.
+4. كل Order جديد ينسب افتراضيًا إلى `auth.uid()`؛ لا يسمح للمستخدم العادي بانتحال `cashier_id` لمستخدم آخر.
+5. صاحب الطلب فقط يستطيع تعديل/استكمال/دفع/إلغاء/تحريك طلبه وفق الصلاحيات التفصيلية اللازمة.
+6. طاولة Dine-in تستمد مالك التشغيل من الطلب المفتوح/المعلق المرتبط بها؛ لا نكرر owner داخل `dining_tables` بلا حاجة ما لم يثبت احتياج مستقل.
+7. باقي مستخدمي الفرع يمكنهم رؤية أن الطاولة مشغولة واسم الموظف المسؤول عنها، لكن لا يمكنهم العمل عليها.
+8. نقل الطلب/الطاولة من مستخدم إلى آخر يحتاج صلاحية نقل مستقلة ومحددة، وليس اسم دور مثل `manager`.
+9. النقل يجب أن يثبت أن source user / target user / order / table كلها ضمن نفس الفرع المصرح، مع Audit واضح للمالك القديم والجديد والمنفذ والوقت والسبب إن كان مطلوبًا.
+10. Super Admin فقط يحتفظ بالـimplicit bypass؛ بقية الأدوار Labels فقط.
+11. Enforcement يجب أن يكون Server-Side/RPC/RLS-safe؛ إخفاء الأزرار في الواجهة وحده غير كافٍ.
+12. جميع مسارات create/update/hold/payment/cancel/table-transfer/item-transfer التي تلمس Order مفتوح تخضع لنفس ownership contract، لمنع bypass عبر RPC أقدم أو direct table DML.
+
+النقاط المؤكدة التي يجب إغلاقها في 4.2:
+- `create_order(...)` يقبل حاليًا `p_cashier_id` ويمكنه نسبة الطلب لغير المستدعي دون عقد delegation واضح.
+- `update_order(...)` يتحقق من الفرع لكنه لا يفرض أن المستدعي هو `orders.cashier_id` أو يملك override/transfer permission.
+- table/order transfer paths الحالية تعتمد branch scope أكثر من owner + transfer permission.
+- RLS الحالية على `orders` و`dining_tables` branch-scoped، لذلك يجب مراجعة direct UPDATE/INSERT paths حتى لا تتجاوز ownership RPCs.
+
+اختبارات الإغلاق المطلوبة:
+- User A وUser B في نفس الفرع ونفس الشفت.
+- كلاهما يستطيع POS حسب صلاحياته.
+- A ينشئ Order/Table؛ B يراه occupied باسم A لكنه لا يعدله/يدفعه/يلغيه/ينقله دون صلاحية.
+- caller cannot spoof `cashier_id` عند إنشاء order.
+- مستخدم يملك transfer permission يستطيع نقل Order/Table من A إلى B داخل نفس الفرع.
+- مستخدم بلا transfer permission يفشل دون كشف معلومات إضافية.
+- cross-branch target/source يفشل fail-closed.
+- بعد النقل B يصبح owner التشغيلي، وA يفقد سلطة التعديل العادية.
+- Audit + KDS + inventory + payment attribution لا تتكسر بعد النقل.
+
+### 4.3 Remaining Published Operating Cycle
+بعد 4.1 و4.2:
 - Login/bootstrap.
-- فتح وردية ورصيد افتتاحي.
-- POS create/edit + send to kitchen + KDS.
+- opening balance / shared shift behavior.
+- POS order types: Dine-in / Take Away / Drive Thru / Delivery / Quick Order.
+- Send to Kitchen once / delta send / KDS lifecycle.
+- inventory consumption وعدم double deduction.
 - Cash/Card + discounts/voids/returns.
-- inventory effects وعدم double deduction.
-- close shift + report + day-close/offline path حيث ينطبق.
-- tables / transfer / split.
+- hold/resume / split / merge / transfer حسب العقود.
+- shift close + report + day-close/offline path حيث ينطبق.
 - products / recipes / components / costing.
 - reports.
+- guided routing للخطوات الإلزامية.
 - Desktop/Mobile + RTL/LTR + navigation.
 
 ## 3 → P2 Printing Finalization 🟡
-المؤكد حاليًا:
-- `set_print_status(uuid,text)` ما زالت legacy `search_path=public`، وهي محسوبة بالفعل ضمن الـ71 وليست خطأ إضافيًا.
+`set_print_status(uuid,text)` search-path defect مغلق بالفعل بواسطة PR #46؛ المتبقي Functional Runtime فقط.
 
 الإغلاق الوظيفي يتطلب:
 - cashier/kitchen/barista stations.
 - fallback station behavior.
 - first print/reprint تحت صلاحيات واضحة.
 - منع duplicate print غير المصرح به.
-- طباعة تقارير إغلاق الورديات واليوم.
+- receipt + kitchen ticket.
+- shift close report + day close report.
+- cross-branch isolation.
+- offline behavior حيث ينطبق.
 
 ## 2 → Release Hardening / Protection / Final Gates 🟠
 المؤكد حاليًا:
@@ -75,18 +109,18 @@
 - Production parity.
 - verified-main deploy فقط.
 - Runtime smoke كامل.
-- تفعيل branch protection إن سمحت صلاحيات GitHub، أو توثيق القيد.
+- تفعيل branch protection إن سمحت صلاحيات GitHub، أو توثيق القيد وعدم الادعاء بالإغلاق.
 
 ## 1 → Final Handover + Cleanup + Zero-Drift Report 🟢
 الإغلاق يتطلب:
 - `Published Site = Verified Main = Production DB Contract = Zero Drift`.
 - تحديث checkpoint/HANDOVER النهائي.
 - مزامنة السجلات وعدم ترك documentation drift.
-- تنظيف الفروع التاريخية فقط بعد التأكد من عدم وجود عمل غير مدمج.
+- تنظيف scoped فقط بعد التأكد من عدم وجود عمل غير مدمج.
 - إبقاء `main` و`development/final-handover` كفروع دائمة.
 
 # قاعدة العدّ التنازلي
-`6 → 5 → 4 → 3 → 2 → 1 → 0`
+`5 → 4 → 3 → 2 → 1 → 0`
 
 لا تنخفض مرحلة إلا بعد:
 `Regression → Full Verify → Merge → Production migration/parity عند الحاجة → Post-Check → merged-main Verify → Deploy/Runtime verification`.
@@ -101,9 +135,9 @@
 7. قبل كل WRITE: إعادة جلب HEAD ومراجعة commits المتوازية.
 8. لا force push.
 9. لا Production DDL قبل Full Verify.
-10. تحديث `FINAL_BUG_REGISTER.md` والـcheckpoint بعد كل batch مغلق.
+10. تحديث `FINAL_BUG_REGISTER.md` والـcheckpoint بعد كل batch مغلق أو عند اعتماد عقد تشغيلي جديد مؤثر على خطة التسليم.
 
 # الحالة التالية مباشرة
-**Remaining = 6**
+**Remaining = 5**
 
-العمل النشط: خفض **71** انحراف SECURITY DEFINER المتبقية بعناقيد root-cause آمنة ومراجَعة، مع حماية كل العقود المغلقة السابقة.
+العمل النشط: **Stage 4.1 / PR #47 — Shift Cash Integrity**. بعد إغلاقها مباشرة يبدأ **Stage 4.2 — POS Operator Ownership & Table Transfer** قبل استكمال بقية دورة Runtime.

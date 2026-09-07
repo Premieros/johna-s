@@ -1,100 +1,104 @@
 # FINAL BUG REGISTER
 
-> Source of truth for remaining confirmed deviations. Update after every verified fix batch.
+> Source of truth for remaining confirmed deviations. Update after every verified fix batch and when a newly confirmed root-cause is admitted into the final-stage plan.
 
 ## Fixed identity
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn` ONLY
 - Production branch: `main`
 - Development branch: `development/final-handover`
-- Verified Production baseline: `main@3f0d777202a3329e9af85fead0c3828647ed9e47` (PR #45)
+- Verified Production baseline: `main@8b671fca36d60a200e743a2192581d83c3fa1f6e` (PR #46)
 
 ## Counting rules
-- Count only confirmed, unique deviations.
-- Do not count a Supabase advisor warning as a defect when SECURITY DEFINER exposure is intentional and guarded.
-- Do not double-count the same root cause across stages.
-- Runtime/UI items are counted only after reproduction.
-- Every fix must preserve closed contracts and pass Regression -> Full Verify -> Merge -> Production Post-Check -> merged-main Verify/Deploy.
+- Count only confirmed, unique root-cause deviations.
+- Do not count one intentional and guarded exposure as a defect.
+- Do not double-count symptoms that share one root cause.
+- Runtime/UI items are counted only after reproduction or direct contract verification.
+- Every code/database fix must preserve closed contracts and pass Regression -> Full Verify -> Merge -> Production Post-Check -> merged-main Verify/Deploy.
 
-## Current confirmed unique deviations: 67
+## Current confirmed unique deviations: 4
 
-### Stage 6 — P0-B SECURITY DEFINER audit — 65 confirmed
-Production inventory after PR #45:
-- authenticated-executable SECURITY DEFINER functions are inventory context only; total count is not the defect count.
-- functions still using legacy/unhardened search_path rather than `public, pg_temp`: **65**.
-- automated scan previously found **0** obvious role-label authorization checks for `owner`, `manager`, or `branch_manager` in the remaining SECURITY DEFINER set.
-- the separate deep `produce_inventory_unit(...)` authorization/scope defect is now CLOSED on Production and no longer counted.
-
-PR #44 root fix closed 5 legacy search-path deviations without rewriting bodies:
-- `submit_instapay_payment`
-- `review_instapay_payment`
-- `subscription_expired`
-- `subscription_settings_get`
-- `super_admin_remove_branch_override`
-
-Evidence for PR #44:
-- PR Verify #854 Full Green ✅.
-- merged `main@bd4e7a81582db0799a01b20c2f5d63d38937d85e`.
-- Production migration `subscription_runtime_search_path` applied ✅.
-- Production Post-Check measured legacy count **71 -> 66** ✅.
-- merged-main Verify #855 Full Green ✅.
-- Deploy #575 build + Production parity + Pages ✅.
-
-### PR #45 — `produce_inventory_unit(...)` security boundary — CLOSED on Production ✅
-Closed defects:
-- missing active-user guard for authenticated callers.
-- missing `production.manage` Permission-First guard.
-- missing canonical `user_may_access_branch(p_branch_id)` scope guard.
-- missing active warehouse -> target branch integrity check.
-- legacy `search_path=public`.
-
-Preserved contracts:
-- existing manufactured-unit validation, FIFO component/raw consumption, costing, batches, entries, production history, and unit/product cost updates remain unchanged.
-- documented trusted `service_role` backend execution remains available.
-- authenticated application callers remain Permission-First and branch-scoped.
-- `anon`/PUBLIC execution remains denied.
-- no literal business-role authorization and no redundant `is_pos_admin()` guard.
+### Stage 6 — P0-B SECURITY DEFINER audit — CLOSED ✅
+Production authenticated-executable public SECURITY DEFINER legacy search-path count is **0**.
+Do not reopen without a new regression.
 
 Evidence:
-- PR #45 head `55fa1f9b64dfeb74e2584e87392add58d40af210`.
-- PR Verify #861 / run `34082101236`: frontend + Fresh DB + Schema + Integration/Security/RLS + Browser Smoke Full Green ✅.
-- merged `main@3f0d777202a3329e9af85fead0c3828647ed9e47`.
-- Production migration `produce_inventory_unit_security` applied to `azzdesuowpdcoflmyezn` ✅.
-- Production Post-Check: SECURITY DEFINER, `search_path=public, pg_temp`, authenticated/service_role execute true, anon execute false, Permission/branch/warehouse guards present ✅.
-- comparable Production legacy authenticated SECURITY DEFINER search-path count **66 -> 65** ✅.
-- merged-main Verify #862 / run `34082401371`: Full Green ✅.
-- Deploy #576 / run `34082401376`: build + Production parity + Pages Full Green ✅.
-- `development/final-handover` fast-forwarded to verified main with `force=false` before this documentation update ✅.
-
-Remaining search-path functions must still be reviewed in functional clusters; do not bulk-rewrite the 65.
-
-Root-fix rule:
-- use exact-signature `ALTER FUNCTION ... SET search_path TO public, pg_temp` only when authorization/body behavior is already proven correct and search_path is the sole defect.
-- when auth/branch/tenant behavior is wrong, use a dedicated Regression + narrow migration.
-- no dynamic migration over unreviewed functions.
+- PR #46 Verify #864 Full Green ✅.
+- merged `main@8b671fca36d60a200e743a2192581d83c3fa1f6e` ✅.
+- Production migration `security_definer_search_path_zero` applied ✅.
+- merged-main Verify #865 ✅.
+- Deploy #577 ✅.
 
 ### Stage 5 — P0-C Auth/password — 1 confirmed
-- Supabase Security Advisor: `Leaked Password Protection Disabled`.
-- Do not claim closed until enabled and Login/Create User/Password Update regressions pass, or an external platform limitation is documented.
+**AUTH-001 — Leaked Password Protection disabled**
+- Supabase Auth `Leaked Password Protection` remains disabled.
+- Current connected Supabase toolset does not expose the Auth setting write action.
+- Close only after the setting is enabled on the real project and login/create-user/password-update/reset behavior is revalidated, or the external platform limitation is explicitly documented.
 
-### Stage 4 — Published Runtime/UI — 0 confirmed yet
-- No static finding is counted as a runtime defect.
-- Must run the published end-to-end cycle before closing: login/bootstrap, shifts, POS, KDS, payment, inventory, approvals, reports, RTL/LTR, desktop/mobile.
+### Stage 4 — Published Runtime/UI — 2 confirmed root causes + active verification
+
+#### RUNTIME-001 — Shift cash-integrity / scope drift — ACTIVE in PR #47
+Confirmed defects already admitted into PR #47:
+- authenticated direct DML on `shift_operations` could bypass trusted cash-operation RPCs;
+- inconsistent expected-cash equations across get/close/force-close paths;
+- non-canonical branch lookup in selected shift-control paths could expose mismatch state after unrestricted lookup.
+
+Required closure:
+- keep shared branch shift contract;
+- preserve current close/approval permission contracts;
+- canonical branch scope + no cross-branch oracle;
+- Regression + Full Verify before Production.
+
+#### RUNTIME-002 — POS operator ownership is not centrally enforced — QUEUED after PR #47
+This is one root cause, not separate counts for each symptom.
+
+Confirmed evidence from current Production contract:
+- `orders.cashier_id` exists and is the natural owner/audit field.
+- `create_order(...)` accepts optional `p_cashier_id` and can currently attribute a new order to a user other than `auth.uid()` without an explicit delegation/transfer permission contract.
+- `update_order(...)` validates branch scope but does not require caller ownership (`orders.cashier_id = auth.uid()`) or a dedicated override/transfer permission.
+- current table/order transfer paths are primarily branch-scoped and do not yet enforce owner + dedicated transfer permission consistently.
+- `orders` and `dining_tables` RLS are currently branch-scoped for write access, so direct table DML/RPC bypass paths must be reviewed as part of the same root cause.
+
+Approved operating contract for the repair:
+1. Shift is shared per branch.
+2. Any active user with `shifts.open` + branch access may open/reuse the branch shift.
+3. POS access remains permission-driven.
+4. New orders belong to the authenticated operator by default; ordinary users cannot spoof another cashier.
+5. Only the operational owner may edit/continue/pay/cancel/move their order, subject to the fine-grained action permission itself.
+6. A Dine-in table derives operational ownership from its active open/held order.
+7. Other users in the same branch may see occupied state + owner display name but cannot work the table/order.
+8. Transfer to another user requires a dedicated transfer permission, never a role-name check.
+9. Source user, target user, order and table must all satisfy same-branch authorization.
+10. Transfer writes audit trail for previous owner, new owner, actor and timestamp.
+11. Server-side enforcement is mandatory; UI hiding alone is not closure.
+12. Super Admin remains the only implicit bypass.
+
+Required regression matrix:
+- A/B same branch, same shared shift, both POS-authorized.
+- A creates order/table; B can see occupied owner name but cannot modify/pay/cancel/transfer without transfer authority.
+- caller cannot spoof `cashier_id` at create time.
+- authorized transfer changes owner A -> B and B becomes the valid operator.
+- cross-branch transfer/target fails fail-closed.
+- KDS/inventory/payment attribution remains correct after ownership transfer.
 
 ### Stage 3 — Printing
-- `set_print_status(uuid,text)` remains legacy `search_path=public`, already included in the Stage 6 count and not double-counted.
-- Functional printing behavior still requires Stage 3 runtime validation.
+- `set_print_status(uuid,text)` search-path defect is already CLOSED by PR #46 and must not be double-counted.
+- Functional printing still requires Stage 3 runtime validation; count only defects reproduced there.
 
 ### Stage 2 — Release hardening — 1 confirmed
-- `main` is currently not protected with required checks.
+**RELEASE-001 — main branch is not protected**
+- `main` reports `protected=false` and no required checks are enforced at branch level.
 - This is release-governance drift, not an application runtime failure.
+- Close only after repository settings are changed and re-read as protected, or a hard connector/admin limitation is documented without claiming closure.
 
-### Stage 1 — Cleanup/handover — 0 confirmed documentation drift now
-- Previous stale `FINAL_REMAINING_STAGES.md` drift was corrected in PR #44.
-- Continue normal final cleanup only after functional/security stages close.
+### Stage 1 — Cleanup/handover
+- No extra defect count assigned merely because final cleanup remains.
+- Continue scoped cleanup only; no unrelated broad refactors.
 
 ## Closed / protected contracts — do not regress
 - Batch 1 Users/Roles/Permission-First.
+- PR #30 Shared Branch Shift.
+- PR #31 POS discount/payment/order completion controls.
 - PR #35 Warehouse transfer isolation.
 - PR #36 Controlled branch delete.
 - PR #37 Warehouse lifecycle.
@@ -106,20 +110,24 @@ Root-fix rule:
 - PR #43 Subscription branch-override tenant integrity.
 - PR #44 Subscription/payment runtime search-path hardening.
 - PR #45 Inventory unit production Permission-First/branch/warehouse hardening.
+- PR #46 SECURITY DEFINER search-path zero closure.
 
 ## Current execution order
-1. Continue Stage 6 by reviewed functional clusters, preserving bodies when search_path is the only defect.
-2. Escalate any deeper auth/branch/tenant defect into its own regression rather than hiding it inside a search-path batch.
-3. Re-run Production inventory after every batch; decrement counts only from actual comparable Production state.
-4. When Stage 6 reaches zero confirmed deviations, move countdown `6 -> 5`.
-5. Continue stages 5 -> 1 with the same evidence gates.
+1. Stage 4.1: finish PR #47 shift cash-integrity batch and require Full Green before merge/Production.
+2. Stage 4.2: implement POS Operator Ownership & Table Transfer as a separate root-cause batch.
+3. Stage 4.3: continue the published full operating cycle and count only reproduced deviations.
+4. Stage 5 Auth/password remains externally blocked on the project Auth setting unless a valid write path becomes available; do not falsely close it.
+5. Stage 3: validate printing end-to-end.
+6. Stage 2: enforce required protection/checks on `main` when repository-admin capability is available.
+7. Stage 1: final cleanup/handover and zero-drift proof.
 
 ## Mandatory safety rules
 - Before every write, re-fetch development/main HEAD and review concurrent commits.
 - No force push.
 - No unverified Production DDL.
 - Never weaken RLS/tests to make CI green.
-- Super Admin is the only implicit application bypass; other business role names are labels only.
-- Trusted `service_role` backend contracts must be explicit and never exposed in frontend code.
+- Super Admin is the only implicit application bypass; business role names are labels only.
+- Permission-First + canonical branch/RLS isolation.
+- Trusted `service_role` backend contracts must be explicit and frontend-inaccessible.
 - Clean/organize only within the touched repair scope.
-- Prefer root-cause fixes that eliminate repeated symptoms, but never hide unrelated defects under one broad change.
+- Final target: `Published Site = Verified Main = Production DB Contract = Zero Drift`.

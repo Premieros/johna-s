@@ -606,7 +606,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
         ins: () => ({ sql: `INSERT INTO public.bank_statement_lines (reconciliation_id, statement_date, amount) VALUES ($1, CURRENT_DATE, 10)`, paramsA: [ids.rows.bank_reconciliations.own], paramsB: [ids.rows.bank_reconciliations.other] }),
       },
       {
-        name: 'shift_operations', key: 'shift_operations', parent: 'shifts', fk: 'shift_id', mode: 'parentWrite', noDel: 'all', updSet: 'SET amount = 0',
+        name: 'shift_operations', key: 'shift_operations', parent: 'shifts', fk: 'shift_id', mode: 'shiftOps', noDel: 'all', updSet: 'SET amount = 0',
         ins: () => ({ sql: `INSERT INTO public.shift_operations (shift_id, operation_type, amount, payment_method) VALUES ($1, 'opening', 0, 'cash')`, paramsA: [ids.shiftA], paramsB: [ids.shiftB] }),
       },
       {
@@ -723,7 +723,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
           case 'shiftOps':
             await runProbe(client, `${ch.name} INSERT cashier own shift`, cashierId(), sql, 'denied', paramsA);
             await runProbe(client, `${ch.name} INSERT cashier other shift`, cashierId(), sql, 'denied', paramsB);
-            await runProbe(client, `${ch.name} INSERT admin own shift`, adminId(), sql, 'ok', paramsA);
+            await runProbe(client, `${ch.name} INSERT admin own shift`, adminId(), sql, 'denied', paramsA);
             await runProbe(client, `${ch.name} UPDATE admin own (no policy)`, adminId(), upd(own, `SET amount = 2`), 'denied');
             await runProbe(client, `${ch.name} DELETE admin other (no policy)`, adminId(), del(other), 'denied');
             break;
