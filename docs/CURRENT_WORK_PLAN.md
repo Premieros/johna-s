@@ -1,245 +1,174 @@
-# CURRENT WORK PLAN — john-s
+# CURRENT WORK PLAN — john-s — UNIFIED SOURCE OF TRUTH
 
-> **Source of Truth لأي نموذج أو مطور يكمل العمل. اقرأ هذا الملف أولًا.**
->
-> Repository الوحيد: `Premieros/johna-s`
->
-> Supabase Production الوحيد: `azzdesuowpdcoflmyezn`
->
-> Database Identity Lock غير قابل للتجاوز. يمنع استخدام أي مشروع Supabase آخر مع هذا المستودع.
+> **هذا هو السجل الحي الوحيد للمشروع.**
+> أي نموذج أو مطور يبدأ من هذا الملف فقط.
+> الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair أصبحت مراجع تاريخية فقط ولا تُستخدم لتحديد الحالة الحالية.
 
-آخر تحديث: **2026-09-06 — Africa/Cairo**
+آخر تحديث: **2026-09-07 — Africa/Cairo**
 
-## 1) الحالة الحالية
+## 1) الهوية الثابتة — غير قابلة للخلط
 
-- Production/Release branch: `main`.
-- فرع التطوير الدائم الوحيد: `development/final-handover`.
-- Production DB: `azzdesuowpdcoflmyezn` فقط.
-- Current Production code baseline: `main@dd3d374b48dd0e4a62506044145453eb859c57e1` بعد إغلاق POS Discount / Payment / Order Completion controls.
-- Permission-First Root Closure: **مغلق ✅**.
-- Super Admin فقط يملك implicit full-access.
-- `owner`, `manager`, وكل الأدوار الأخرى = Labels فقط؛ التفويض من canonical permissions + branch/RLS.
+- Repository الوحيد: `Premieros/johna-s`
+- Production Supabase الوحيد: `azzdesuowpdcoflmyezn`
+- Production branch: `main`
+- Permanent development branch: `development/final-handover`
+- ممنوع استخدام `pos.v2`
+- ممنوع استخدام Supabase `scpovyrqmsbiduanykod`
+- ممنوع Force Push
+- ممنوع تعديل `main` مباشرة
+- ممنوع Production DDL/Migration قبل Full Verify
+- ممنوع تخفيف RLS أو الاختبارات لتمرير CI
+- Super Admin فقط implicit bypass
+- كل الأدوار الأخرى Labels فقط؛ Authorization = Permission-First + canonical branch/RLS
 
-### P0-B المغلق على Production ✅
+## 2) الحالة الموثقة الآن
 
-1. Anonymous login SECURITY DEFINER boundary مغلق.
-2. Permission/scope hardening مغلق لـ`update_branch`, `deactivate_branch`, `get_cost_history`, `get_production_variance`.
-3. `next_document_number(text)` أصبح internal-only boundary ومطبق على Production.
-4. `cancel_sent_order_item(...)` wrapper مغلق بالكامل.
-5. `resolve_product_modifiers(uuid, uuid, jsonb)` أصبح branch-scoped ومغلق من cross-branch lookup.
+### Verified Production baseline
 
-## 2) آخر الحزم التشغيلية المغلقة ✅
+- Verified `main`: `85e6ce1df0f12b7eaca73ca283bef41a6703b828`
+- PR #48: `security: enforce POS operator ownership and transfer` ✅
+- Pre-merge Verify #887 / run `34156244462`: Full Green ✅
+- Merged-main Verify #888 / run `34156540119`: Full Green ✅ بما فيه Fresh DB + Schema + Integration/Security/RLS + Browser Smoke
+- Deploy #579 / run `34156540094`, attempt 2: Production parity ✅ + GitHub Pages deploy ✅
+- Production DB: `azzdesuowpdcoflmyezn` متطابقة مع عقد `main` الموثق ✅
+- Development branch آخر حالة موثقة قبل هذا التوحيد: `368634285aac8a5cb774b8b9d0c6427fa62a6b37`، وهي تحديثات Documentation بعد إغلاق PR #48.
 
-### Purchase + POS Stock Regression — PR #29 ✅
+### الحالة التشغيلية
 
-تم إغلاق الانحرافات التالية على `main` وProduction:
+لا يوجد حاليًا Runtime/POS defect مؤكد يحتاج تعديل كود.
 
-1. **فاتورة المشتريات:**
-   - لم يعد Frontend يستدعي generic `next_document_number('purchase')` غير المسموح مباشرة.
-   - `next_purchase_document_number(p_type)` هو الـwrapper المحمي بـ`purchases.manage`.
+تم إيقاف الفحص الواسع المفتوح الذي كان تحت اسم Stage 4.3. من الآن لا نعيد اختبار كل المشروع أو نفتح مرحلة طويلة بدون Regression مثبت.
 
-2. **رصيد POS / Availability:**
-   - `check_product_availability` أصبح duplicate-safe لكل مصادر recipe/unit UPSERT باستخدام `GROUP BY` + `SUM` قبل `ON CONFLICT`.
-   - خطأ PostgreSQL `21000` الذي كان يمسح stock map بالكامل لم يعد يحدث مع recipe duplicates مثل `Johnas Omelate`.
+**أسلوب العمل المعتمد الآن:**
 
-3. **ترقيم البيع:**
-   - `next_sale_document_number(p_type)` محمي بـ`pos.payment.take`.
-   - Online numbering fail-closed ولا يوجد fallback عشوائي للرقم المالي.
+`Bug فعلي / Regression مثبت → تحديد Root Cause → إصلاح صغير صحيح → Regression test → Full Verify → Merge → Production parity عند الحاجة → Deploy`
 
-### Shared Branch Shift — PR #30 ✅
+أي شيء أخضر أو مغلق لا يُعاد فتحه لمجرد الشك أو الرغبة في إعادة الفحص.
 
-طلب التشغيل النهائي: **كل كاشير في نفس الفرع يعمل على نفس الشفت المفتوح**.
+## 3) الانحرافات المؤكدة المتبقية فقط — عددها 2
 
-العقد المطبق:
+### AUTH-001 — Leaked Password Protection disabled
 
-1. الشفت المفتوح أصبح **Branch-Scoped** وليس Cashier-Scoped.
-2. `shifts.cashier_id` يبقى هو فاتح الشفت لأغراض Audit فقط، وليس مالكًا حصريًا للشفت.
-3. كل كاشير مخول لنفس الفرع يحصل من `get_active_shift(branch_id)` على نفس `shift_id`.
-4. استدعاء `open_shift` من كاشير ثانٍ في نفس الفرع يعيد نفس الشفت مع `shared=true` و`already_open=true` بدل إنشاء شفت آخر.
-5. البيع والمرتجع يسجلان على شفت الفرع بدون شرط `cashier_id = auth.uid()` على الشفت.
-6. نسبة العملية للكاشير لا تضيع:
-   - البيع يحتفظ بـ`sales.cashier_id`.
-   - حركة الشفت تحتفظ بـ`shift_operations.created_by`.
-7. قاعدة البيانات تمنع أكثر من شفت مفتوح لنفس الفرع بواسطة:
-   - generated guard `open_branch_guard`.
-   - constraint `uq_shifts_one_open_per_branch_deferred` = `UNIQUE(branch_id, open_branch_guard) DEFERRABLE INITIALLY DEFERRED`.
-   - `open_shift` يستخدم transaction advisory lock للفرع لمنع race بين كاشيرين يفتحان في اللحظة نفسها.
-8. أي legacy duplicate open shifts يتم reconciliation لها بدون حذف audit rows؛ العمليات تنتقل للشفت الأساسي مع بقاء `created_by`.
-9. وقت تطبيق PR #30 على Production لم يكن هناك أي شفت مفتوح، لذلك لم يحدث أي دمج لبيانات تشغيل حية أثناء النشر.
+- Supabase Auth `Leaked Password Protection` ما زالت Disabled.
+- هذه Account/Project Setting وليست Runtime code defect.
+- الأداة المتصلة حاليًا لا توفر Auth settings write action.
+- Supabase يضع الإعداد تحت Authentication/Auth settings؛ الميزة متاحة على Pro وما فوق.
 
-التحقق:
-- PR Verify #799: frontend ✅ / Fresh DB ✅ / Schema ✅ / Integration + Security/RLS ✅ / Browser Smoke ✅.
-- Merge: `main@9cbd09eedf1e210088f317ed88f2443ba3d5bdeb`.
-- Production migrations مطبقة على `azzdesuowpdcoflmyezn` ✅.
-- Production post-check: لا يوجد `cashier_id = auth.uid()` في shift lookup داخل sale/refund cores ✅.
-- Deploy GitHub Pages #561: ✅.
+الإغلاق يتطلب:
+1. تفعيل Prevent use of leaked passwords على مشروع `azzdesuowpdcoflmyezn`.
+2. Smoke سريع فقط لـLogin / Create User / Password Update / Reset حسب المسارات المستخدمة فعليًا.
+3. إعادة التحقق من Advisor/setting.
 
-### POS Discount / Payment / Order Completion — PR #31 ✅
+لا يتم ادعاء الإغلاق قبل تعديل الإعداد الحقيقي.
 
-تمت مراجعة ضوابط الخصم وإغلاق الطلب من الواجهة إلى RPC ثم Production، وثبتت طرق التفاف قديمة وتم إغلاقها دون توسيع الصلاحيات أو تخفيف RLS/tests.
+### RELEASE-001 — `main` غير محمي
 
-العقد النهائي المطبق:
+- `main` حاليًا `protected=false`.
+- لا توجد Required Checks مفروضة على مستوى الفرع.
+- هذه Release-governance issue وليست Runtime application bug.
+- اتصال GitHub الحالي لا يوفر Administration write لإعداد Branch Protection.
 
-1. **الدفع:**
-   - `process_sale(...)` و`process_sale_split(...)` يطلبان `pos.payment.take` داخل RPC نفسها، وليس اعتمادًا على الواجهة فقط.
-   - كلا المسارين يتحقق من `user_may_access_branch(p_branch_id)` قبل الكتابة المالية.
+الإغلاق يتطلب:
+1. تفعيل حماية `main` من Repository Settings/Rulesets.
+2. فرض checks مناسبة قبل الدمج، على الأقل Verify/DB/Browser Smoke أو الـworkflow المكافئ المعتمد.
+3. إعادة قراءة حالة الفرع والتأكد أن `protected=true`/ruleset فعال.
 
-2. **الخصم:**
-   - الخصم يتطلب `pos.discount`.
-   - عند غياب الصلاحية، خصم مستوى الفاتورة يحتاج Manager Approval صالح ومطابق للفرع والمستخدم ونوع الخصم وقيمته وServer Subtotal، ثم يتم استهلاكه وتسجيله في Audit.
-   - Split Tender أصبح يخضع لنفس ضوابط الخصم بدل وجود مسار أضعف.
+لا يتم ادعاء الإغلاق إذا لم تتوفر صلاحية Admin فعلية.
 
-3. **إغلاق الطلب:**
-   - الطلب المرتبط لا يمكن إغلاقه بدفع جزئي؛ `process_sale` يعيد `FULL_PAYMENT_REQUIRED_TO_CLOSE_ORDER` إذا كان المدفوع أقل من المستحق.
-   - Split Tender يطلب تطابق مجموع الدفعات تمامًا مع المستحق عبر `SPLIT_PAYMENT_TOTAL_MISMATCH`.
-   - `set_order_status(...,'completed')` لا يغلق الطلب ماليًا؛ يعيد `COMPLETION_REQUIRES_PAYMENT`.
-   - الحالة `completed` تصبح نتيجة لمسار Checkout المالي المضبوط فقط.
+## 4) العقود المغلقة — لا تُفتح بدون Regression مثبت
 
-4. **حالة الدفع:**
-   - `set_payment_status(uuid,text)` لم تعد executable لـ`PUBLIC`, `anon`, أو `authenticated`؛ بقيت `service_role` فقط.
+- Users / Roles / Permission-First ✅
+- Shared Branch Shift — PR #30 ✅
+- POS Discount / Payment / Order Completion — PR #31 ✅
+- Warehouse transfer isolation — PR #35 ✅
+- Controlled branch delete — PR #36 ✅
+- Warehouse lifecycle — PR #37 ✅
+- `close_shift` Permission-First — PR #38 ✅
+- Admin SECURITY DEFINER hardening — PR #39 ✅
+- Identity hardening — PR #40 ✅
+- Subscription admin/tenant/security batches — PR #41–#44 ✅
+- Inventory unit production Permission-First/branch/warehouse — PR #45 ✅
+- SECURITY DEFINER legacy search-path zero closure — PR #46 ✅
+- Shift cash integrity + branch scope — PR #47 ✅
+- POS operator ownership + controlled operator transfer — PR #48 ✅
 
-5. **Cancel / Hold:**
-   - الإلغاء يطلب `pos.cancel_order` صراحة.
-   - `open/held` يطلبان `pos.hold` صراحة.
-   - إلغاء طلب أرسل للمطبخ لا يتم بمجرد status flip؛ يعاد `SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID` حتى تتم معالجة sent items عبر المسار المراقب.
-   - الإلغاء العادي يتطلب سببًا صالحًا ويكتب Audit.
+### عقد PR #48 المحمي
 
-التحقق:
-- PR #31: `fix: harden POS discounts and order completion` ✅.
-- Verify #805: frontend ✅ / lint ✅ / typecheck ✅ / unit ✅ / build ✅ / Fresh DB ✅ / Schema ✅ / Integration + Security/RLS ✅ / Browser Smoke ✅.
-- Merge: `main@dd3d374b48dd0e4a62506044145453eb859c57e1` ✅.
-- Production migrations مطبقة على `azzdesuowpdcoflmyezn` ✅.
-- Production post-check:
-  - `process_sale`: `pos.payment.take` + `pos.discount` + full settlement guard ✅.
-  - `process_sale_split`: `pos.payment.take` + matching discount controls + exact tender total ✅.
-  - `set_order_status`: direct completion blocked + `pos.cancel_order` + `pos.hold` + sent-order cancellation guard ✅.
-  - `set_payment_status`: anon/authenticated EXECUTE = false؛ service_role = true ✅.
-- `development/final-handover` تم Fast-Forward بعد الدمج إلى `dd3d374b48dd0e4a62506044145453eb859c57e1` بدون Force وبدون تعارض ✅.
+1. Shared shift per branch.
+2. New Order ownership = `auth.uid()`.
+3. ordinary caller cannot spoof another cashier.
+4. owner-only normal order/table operation subject to exact permission.
+5. same-branch peer يرى occupied + narrow operator label فقط.
+6. operator transfer requires `pos.order.transfer`, never role name.
+7. same-branch validation fail-closed.
+8. transfer audit = old owner + new owner + actor + timestamp.
+9. direct DML/RPC fallback bypasses fail closed.
+10. KDS/payment attribution remains tied to actual executor.
+11. shared-shift sale attribution محفوظ بدون duplicate shift operation.
 
-قاعدة المتابعة: **لا يعاد فتح الخصم/الدفع/إغلاق الطلب إلا عند Regression مثبت جديد.**
+Production migrations الخاصة بالإغلاق:
+- `20260907194314_pos_operator_ownership`
+- `20260907194337_pos_kitchen_send_ownership`
+- `20260907194427_pos_operator_rpc_ownership_hardening`
+- `20260907194454_pos_sale_shift_attribution`
 
-## 3) هدف العمل النهائي — Zero Drift للموقع المنشور
+## 5) قواعد الإصلاح السريع من الآن
 
-لا نعتبر أي انحراف مغلقًا لمجرد إصلاحه على فرع تطوير. الانحراف يغلق فقط عندما يتحقق الآتي:
+1. لا Full-project audit متكرر.
+2. لا Bug جديد يدخل السجل إلا مع reproduction أو direct contract proof.
+3. نصلح Root Cause وليس الأعراض.
+4. Batch صغيرة لكل سبب.
+5. قبل كل WRITE: re-fetch `main` و`development/final-handover` ومراجعة أي عمل متوازٍ.
+6. لا Force Push.
+7. لا Production migration قبل Full Verify.
+8. لا تغيير صلاحيات أو RLS لتسهيل الاختبارات.
+9. لا role-name authorization خارج Super Admin implicit bypass.
+10. Published site لا يعتبر صحيحًا إلا إذا كان من Verified Main وبـProduction contract مطابق.
 
-1. Regression coverage واضح.
-2. Verify كامل أخضر: frontend + Fresh DB/schema + Integration/Security/RLS + Browser Smoke.
-3. Merge إلى `main`.
-4. أي migration مطلوبة تطبق على `azzdesuowpdcoflmyezn` فقط.
-5. Production read-only verification يثبت parity.
-6. الموقع المنشور يتم نشره من آخر `main` verified.
-7. Runtime smoke على النسخة المنشورة يثبت عدم وجود regression.
+## 6) Definition of Done لأي إصلاح كود/DB جديد
 
-الهدف النهائي: **Published Site = Verified Main = Production DB Contract = Zero Drift**.
+`Regression proof → frontend gates → Fresh DB → Schema → Integration/Security/RLS → Browser Smoke → Merge → Production migration/parity عند الحاجة → Production Post-Check → merged-main Verify → Deploy`
 
-## 4) الانحرافات المتبقية — ترتيب الإغلاق الإلزامي
+الهدف النهائي دائمًا:
 
-### P0-B — SECURITY DEFINER Remaining Audit 🔴
+**Published Site = Verified Main = Production DB Contract = Zero Drift**
 
-1. `seed_demo_data` / `delete_demo_data` — Production مثبت أنهما ما زالا يستخدمان `is_pos_admin()` / `is_branch_manager()` و`search_path=public`؛ يجب تحويلهما Permission-First واختيار capability canonical بعد مراجعة الاستخدام.
-2. Costing/detail/admin/Super Admin RPCs المتبقية — Function-by-Function فقط.
-3. أي `SECURITY DEFINER` يظهر أثناء العمل بـ`search_path=public` فقط يسجل كمرشح hardening ولا يعدل عشوائيًا بدون caller/regression review.
+## 7) التطويرات المستقبلية — مؤجلة وليست Bugs حالية
 
-Definition of Done:
-- كل external SECURITY DEFINER إما مقصود وموثق ومختبر أو مغلق/داخلي.
-- لا privileged helper exposed بلا حاجة.
-- لا cross-branch information oracle.
-- لا role-name authorization خارج Super Admin implicit bypass.
+لا تبدأ إلا بطلب صريح بعد استقرار التشغيل، ولا تعتبر “متبقي إصلاح”. الترتيب المرجعي:
 
-### P0-C — Auth Password Hardening 🔴
+1. POS Permission Matrix finalization.
+2. Table lifecycle.
+3. POS concurrency/idempotency.
+4. KDS final contract.
+5. Inventory + Cost end-to-end.
+6. Guided Routing.
+7. Operational Alerts.
+8. Printing professionalization.
+9. Offline/Reconciliation.
+10. Unified Audit Center.
+11. Reports finalization.
+12. UX/RTL/LTR/mobile polish.
+13. Security/Release completion.
 
-Security Advisor ما زال يسجل `Leaked Password Protection Disabled`.
+## 8) ما المطلوب الآن فعليًا
 
-المطلوب:
-1. تفعيل Leaked Password Protection من Supabase Auth إذا كانت الخطة الحالية تسمح.
-2. اختبار Login/Create User/Password Update.
-3. إعادة Advisor.
+لا يوجد Repair batch كودي نشط.
 
-إذا تعذر من أداة الاتصال الحالية، يوثق كقيد Dashboard/Admin خارجي ولا يتم الادعاء بأنه مكتمل.
+المتبقي المؤكد فقط:
+- `AUTH-001` — يحتاج Supabase Auth setting فعلي.
+- `RELEASE-001` — يحتاج GitHub repository-admin setting فعلي.
 
-### P1-A — Published Runtime / UI Zero-Drift Audit 🟠
+إذا ظهر Bug تشغيلي جديد من الاستخدام الحقيقي، يتم تسجيله هنا فقط بعد إثباته ثم إصلاحه مباشرة وفق القواعد أعلاه.
 
-بعد إغلاق P0-B:
-1. إعادة التحقق على الموقع المنشور الحالي من الدورة التشغيلية الفعلية.
-2. عدم إعادة فتح أي UI item قديم بدون Regression مثبت.
-3. الإصلاح فقط لما يظهر فعليًا على النسخة المنشورة.
+## 9) سياسة السجلات
 
-النطاق الإلزامي:
-- Login / bootstrap.
-- POS create/edit order.
-- Send to Kitchen / delta send.
-- KDS visibility/status.
-- Payment.
-- Inventory effect وعدم double deduction.
-- Sent-item void/approval.
-- Tables occupancy/transfer/split where applicable.
-- Shared branch shift / shift close.
-- Products/Recipes/Components/Costing runtime.
-- Dialog usability Desktop/Mobile.
-- RTL/LTR + navigation + stale dynamic import recovery.
+هذا الملف `docs/CURRENT_WORK_PLAN.md` هو **المرجع الحي الوحيد**.
 
-### P1-B — Protect main 🟠
+الملفات التالية أصبحت Legacy pointers فقط ويمنع تحديث حالة المشروع فيها بشكل مستقل:
+- `docs/FINAL_BUG_REGISTER.md`
+- `docs/FINAL_REMAINING_STAGES.md`
+- `docs/HANDOVER_CHECKPOINT_2026-09-06.md`
+- `docs/POST_REPAIR_DEVELOPMENT_PLAN.md`
 
-Protect `main` مع required checks إن سمحت صلاحيات GitHub Admin:
-- verify
-- db
-- browser-smoke
-- production parity/deploy gate عند الحاجة.
-
-إذا لم تسمح صلاحيات الأداة، يوثق القيد ولا ندعي أن `main` Protected.
-
-### P2 — Printing Finalization 🟡
-
-بعد إغلاق P0/P1:
-- تثبيت local printing contract.
-- stations القياسية: cashier / kitchen / barista.
-- fallback للصنف بلا station إلى kitchen مع Manager warning.
-- first print / reprint / kitchen print تخضع للصلاحيات.
-
-## 5) قواعد غير قابلة للتفاوض
-
-1. المشروع لا يتصل إلا بـ`azzdesuowpdcoflmyezn`.
-2. Super Admin فقط implicit bypass.
-3. Permission-first؛ الأدوار Labels.
-4. لا Legacy permission aliases جديدة.
-5. لا weakening لـRLS أو tests.
-6. لا Production DDL من branch غير مجتاز للـCI.
-7. لا Merge قبل Fresh DB + Integration/Security/RLS + Browser Smoke.
-8. Guided Routing يفضل على raw DB/RLS errors في خطوات الإعداد الإلزامية.
-9. أي mutation تشغيلي يجب أن يكون عبر RPC/event موثق وقابل للتدقيق.
-10. توثيق السجل إلزامي لكل دفعة عمل.
-11. لا يعتبر الموقع Zero-Drift حتى يطابق آخر `main` verified وقاعدة Production الفعلية.
-12. الشفت التشغيلي هو شفت فرع واحد مشترك؛ لا يعاد ربطه بمالك كاشير منفرد.
-13. إغلاق الطلب المالي لا يتم عبر تغيير status يدوي؛ يتم فقط عبر checkout مضبوط ومكتمل الدفع.
-14. الخصم والدفع يجب حمايتهما داخل RPC boundary، وليس في UI فقط.
-
-## 6) ترتيب التنفيذ من الآن
-
-1. عدم إعادة فتح Shared Branch Shift أو POS Discount/Payment/Order Completion بدون Regression مثبت.
-2. Audit/Fix `seed_demo_data` / `delete_demo_data` Permission-First + search_path.
-3. إغلاق بقية SECURITY DEFINER confirmed gaps Function-by-Function.
-4. P0-C Leaked Password Protection أو توثيق القيد الخارجي.
-5. Full Verify نهائي.
-6. Published Runtime/UI Zero-Drift audit وإصلاح regressions المثبتة فقط.
-7. Production parity + Deploy النهائي من verified `main`.
-8. Runtime operational smoke كامل، ويشمل كاشيرين على نفس branch shift + Discount/Payment/Order Completion.
-9. Protect `main` إن أمكن.
-10. `HANDOVER.md` + Final Zero-Drift report.
-11. تنظيف الفروع القصيرة/التاريخية وترك `main` + `development/final-handover` فقط كفروع دائمة.
-
-## 7) معيار إعلان "جاهز للتسليم"
-
-لا يعلن المشروع Production-handover-ready إلا بعد:
-
-- P0-A ✅
-- P0-B confirmed gaps مغلقة أو موثقة كمقصودة ومختبرة ✅
-- P0-C مغلق أو موثق كقيد منصة صريح ✅
-- Full Verify ✅
-- Fresh DB + Integration/Security/RLS ✅
-- Browser Smoke ✅
-- Production DB parity ✅
-- Published site على آخر verified `main` ✅
-- Runtime operational smoke ✅
-- Runtime/UI regressions المثبتة = 0 ✅
-- `main` protection أو توثيق عدم توفر صلاحية الإدارة ✅
-- Final Handover + Zero-Drift docs ✅
+أي تحديث مستقبلي للحالة أو Bug أو خطة تنفيذ يتم هنا فقط.
