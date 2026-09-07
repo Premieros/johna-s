@@ -19,10 +19,18 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
   const producerRole = `qa_prod_manage_${randomUUID().slice(0, 8)}`;
 
   async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+    const savepoint = `produce_inventory_unit_user_${randomUUID().replaceAll('-', '')}`;
     await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
     await client.query(`SET LOCAL ROLE authenticated`);
+    await client.query(`SAVEPOINT ${savepoint}`);
     try {
-      return await fn();
+      const result = await fn();
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      return result;
+    } catch (error) {
+      await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`).catch(() => {});
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`).catch(() => {});
+      throw error;
     } finally {
       await client.query('RESET ROLE').catch(() => {});
       await client.query('RESET app.user_id').catch(() => {});
@@ -83,14 +91,16 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
     await client.end().catch(() => {});
   });
 
-  it('hardens search_path and keeps execute authenticated-only', async () => {
+  it('hardens search_path and preserves only authenticated + trusted backend execute', async () => {
     const row = await client.query<{
       config: string[] | null;
       authenticated_execute: boolean;
+      service_role_execute: boolean;
       anon_execute: boolean;
     }>(`
       SELECT p.proconfig AS config,
              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_execute,
+             has_function_privilege('service_role', p.oid, 'EXECUTE') AS service_role_execute,
              has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_execute
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='public'
@@ -100,6 +110,7 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
     expect(row.rows).toHaveLength(1);
     expect(row.rows[0].config ?? []).toContain('search_path=public, pg_temp');
     expect(row.rows[0].authenticated_execute).toBe(true);
+    expect(row.rows[0].service_role_execute).toBe(true);
     expect(row.rows[0].anon_execute).toBe(false);
   });
 
@@ -110,10 +121,12 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
       )
     ).rows[0].definition;
 
+    expect(definition).toContain("current_setting('role'::text, true)");
     expect(definition).toContain("can_permission('production.manage')");
     expect(definition).toContain('user_may_access_branch(p_branch_id)');
     expect(definition).toContain('w.branch_id = p_branch_id');
     expect(definition).toContain('w.is_active = true');
+    expect(definition).not.toContain('is_pos_admin()');
     expect(definition).not.toMatch(/role\s*(?:=|IN)\s*['(]/i);
   });
 
