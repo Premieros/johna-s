@@ -84,6 +84,19 @@ Confirmed target defects:
 - inconsistent expected-cash equations across shift read/close paths;
 - non-canonical branch scoping in selected shift-control paths.
 
+Latest verification checkpoint — Verify #872 / run `34102420056`:
+- DB identity lock = `azzdesuowpdcoflmyezn` ✅.
+- canonical migrations including `20260907091500_shift_cash_integrity_and_scope.sql` apply on Fresh DB ✅.
+- schema verification ✅: tables 60/60, functions 65/65, contract RPCs 108/108, contract tables 58/58.
+- Integration/Security/RLS = **567 passed / 568 total**; exactly one stale test expectation remains.
+- `tests/integration/shift_cash_integrity_scope.test.ts` = 4/4 ✅.
+- `tests/integration/shift_drawer_manager_approval.test.ts` = 2/2 ✅.
+- sole blocker: `tests/integration/rls_branch_isolation.test.ts` still classifies `shift_operations` as `parentWrite` and expects authenticated direct INSERT success, while the new intended security contract correctly revokes direct authenticated DML.
+- exact minimal alignment required: change the `shift_operations` child mode `parentWrite -> shiftOps`, then change `shiftOps` admin-own INSERT expectation `ok -> denied`.
+- do **not** re-grant direct DML and do not weaken/skip RLS tests.
+- Browser Smoke did not run because the DB job gate failed on that one integration assertion.
+- Production remains unchanged; PR #47 is not eligible to merge until Full Verify is green.
+
 Do not merge/apply Production until current PR HEAD has Full Verify Green.
 
 ### Stage 4.2 — POS Operator Ownership & Table Transfer — APPROVED / QUEUED
