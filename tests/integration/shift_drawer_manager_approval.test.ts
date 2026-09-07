@@ -36,8 +36,8 @@ describe('shift and drawer manager approval', () => {
     expect(def).toContain("status = 'consumed'");
     expect(def).toContain('FORCE_CLOSE_APPROVAL_CONSUME_FAILED');
     expect(def).toContain("UPDATE public.shifts");
-    expect(def).toContain("operation_type IN ('sale', 'cash_in')");
-    expect(def).toContain("operation_type IN ('refund', 'expense', 'cash_out')");
+    expect(def).toContain("COALESCE(operation_type, '') IN ('sale', 'cash_in')");
+    expect(def).toContain("COALESCE(operation_type, '') IN ('refund', 'expense', 'cash_out')");
   });
 
   it('installs open-drawer authorization without forging a cash movement', async () => {
