@@ -9,12 +9,12 @@
 - Production Supabase: `azzdesuowpdcoflmyezn` فقط
 - Production branch: `main`
 - Development branch: `development/final-handover`
-- Verified Production baseline: `main@952c9954cbbebf760c44d75706ec569aac28a7bb` — PR #47.
-- Stage 4.1 Verify #875 ✅ / merged-main Verify #876 ✅ / Deploy #578 ✅.
+- Verified Production baseline: `main@85e6ce1df0f12b7eaca73ca283bef41a6703b828` — PR #48.
 - Production SECURITY DEFINER legacy search-path deviations: **0** ✅.
-- Stage 6 مغلقة بالكامل ولا تعاد إلا عند Regression مثبت.
+- Stage 6: **CLOSED ✅**.
 - Stage 4.1 Shift Cash Integrity + Branch Scope: **CLOSED ✅**.
-- Stage 4.2 POS Operator Ownership & Table Transfer: **PRE-MERGE FULL GREEN ✅ via PR #48 / Verify #885**.
+- Stage 4.2 POS Operator Ownership & Table Transfer: **CLOSED ✅**.
+- Stage 4.3 Remaining Published Operating Cycle: **ACTIVE 🟠**.
 
 # المتبقي: 5 مراحل
 
@@ -32,12 +32,6 @@
 لا يحسب أي Runtime defect قبل إثباته. العمل منقسم إلى batches صغيرة قابلة للتحقق، ولا يتم دمج مشاكل مختلفة في refactor واسع.
 
 ### 4.1 Shift Cash Integrity + Branch Scope — CLOSED ✅
-تم الإغلاق على Production:
-- منع direct authenticated DML على `shift_operations` خارج RPCs الموثوقة.
-- توحيد معادلة expected cash بين get/close/force-close.
-- canonical branch access ومنع cross-branch status oracle.
-- الحفاظ على shared branch shift contract وPermission-First.
-
 Evidence:
 - PR #47 ✅.
 - pre-merge Verify #875 Full Green ✅.
@@ -47,46 +41,35 @@ Evidence:
 - merged-main Verify #876 Full Green ✅.
 - Deploy #578 ✅.
 
-### 4.2 POS Operator Ownership & Table Transfer — PRE-MERGE FULL GREEN ✅
-العقد التشغيلي الرسمي:
-1. الوردية مفتوحة على مستوى الفرع ومشتركة بين المستخدمين المخولين، وليست Shift مستقلًا لكل كاشير.
-2. أي مستخدم نشط يملك `shifts.open` + branch access يستطيع فتح Shift الفرع؛ إذا كانت مفتوحة يعاد نفس shift.
-3. أي مستخدم يملك صلاحيات POS اللازمة يستطيع العمل على شاشة البيع داخل فرعه.
-4. كل Order جديد ينسب إلى `auth.uid()`؛ لا يسمح للمستخدم العادي بانتحال `cashier_id` لمستخدم آخر.
-5. صاحب الطلب فقط يستطيع تعديل/استكمال/دفع/إلغاء/تحريك طلبه وفق الصلاحيات التفصيلية اللازمة.
-6. طاولة Dine-in تستمد مالك التشغيل من الطلب المفتوح/المعلق المرتبط بها.
-7. باقي مستخدمي الفرع يمكنهم رؤية أن الطاولة مشغولة واسم الموظف المسؤول عنها، لكن لا يمكنهم العمل عليها.
-8. نقل الطلب/الطاولة من مستخدم إلى آخر يحتاج `pos.order.transfer`، وليس اسم دور.
-9. النقل يثبت أن source user / target user / order / table ضمن نفس الفرع المصرح، مع Audit للمالك القديم والجديد والمنفذ والوقت.
-10. Super Admin فقط يحتفظ بالـimplicit bypass؛ بقية الأدوار Labels فقط.
-11. Enforcement Server-Side/RPC/RLS-safe؛ إخفاء الأزرار وحده غير كافٍ.
-12. create/update/hold/payment/cancel/table-transfer/item-transfer التي تلمس Order مفتوح تخضع لنفس ownership contract.
+### 4.2 POS Operator Ownership & Table Transfer — CLOSED ✅
+العقد التشغيلي المحمي:
+1. الوردية مشتركة على مستوى الفرع.
+2. POS Permission-First، وSuper Admin فقط implicit bypass.
+3. الطلب الجديد ينسب إلى `auth.uid()` ولا يسمح بانتحال cashier عاديًا.
+4. صاحب الطلب فقط يعمل على الطلب المفتوح/المعلق وفق صلاحية الفعل المطلوبة.
+5. مالك تشغيل طاولة Dine-in مشتق من الطلب النشط.
+6. المستخدم الآخر يرى occupied + label الموظف فقط، ولا يستطيع تشغيل الطلب.
+7. نقل المالك يحتاج `pos.order.transfer` مع same-branch fail-closed وأثر Audit.
+8. KDS/item transfer/payment/status/direct DML fallbacks تخضع لنفس ownership contract.
+9. shared-shift sale attribution محفوظ بدون duplicate shift operation.
 
-المغلق في كود PR #48:
-- pinning ownership لإنشاء الطلب على authenticated operator.
-- owner-only mutation guards لمسارات الطلب وعناصره والتحريك التشغيلي للطاولة.
-- dedicated audited `transfer_order_operator` بصلاحية `pos.order.transfer` وsame-branch fail-closed.
-- منع kitchen delta/send من مستخدم غير المالك قبل النقل.
-- إزالة direct-DML fallbacks من floor-plan API؛ RPC هو authority ويفشل مغلقًا.
-- عرض narrow operator label للطاولة المشغولة.
-- ownership hardening لمسارات status/payment/item transfer.
-- shared-shift sale attribution للمستخدم الذي يملك `shifts.manage` بدون duplicate shift operation.
-- Browser Smoke mock محدث لعقد `get_pos_order_operator_labels` بدل تغيير runtime سليم.
+Closure evidence:
+- PR #48 ✅.
+- final pre-merge head `c981cde7e919613399e41016924952ac965cbc00`.
+- pre-merge Verify #887 / run `34156244462`: Full Green ✅ بما فيه Browser Smoke.
+- merged `main@85e6ce1df0f12b7eaca73ca283bef41a6703b828` ✅.
+- Production migrations applied on `azzdesuowpdcoflmyezn` ✅:
+  - `20260907194314_pos_operator_ownership`
+  - `20260907194337_pos_kitchen_send_ownership`
+  - `20260907194427_pos_operator_rpc_ownership_hardening`
+  - `20260907194454_pos_sale_shift_attribution`
+- Production post-check: triggers/RPC grants/search_path/Stage 4.1 shift_operations privilege non-regression ✅.
+- merged-main Verify #888 / run `34156540119`: Full Green ✅ including Fresh DB, Security/RLS and Browser Smoke.
+- Deploy #579 / run `34156540094`, attempt 2: Production parity ✅ + Pages deploy ✅.
+- `development/final-handover` fast-forwarded non-force to verified main before opening Stage 4.3 ✅.
 
-Pre-merge evidence:
-- PR #48 head verified: `bfc50500c1db23eefbc67967a402101555d51e1d`.
-- Verify #885 / run `34155863941`: **Full Green ✅**.
-- Frontend/API/lint/typecheck/unit/build ✅.
-- Fresh migrations + schema ✅.
-- Integration + Security/RLS ✅.
-- Browser Smoke / Playwright ✅.
-
-الإغلاق المتبقي فقط:
-`Merge -> Production migrations/parity -> Production Post-Check -> merged-main Verify + Browser Smoke -> Deploy`.
-
-لا تعتبر Stage 4.2 CLOSED قبل اكتمال هذه السلسلة.
-
-### 4.3 Remaining Published Operating Cycle — NEXT بعد إغلاق 4.2
+### 4.3 Remaining Published Operating Cycle — ACTIVE 🟠
+نختبر من الـcheckpoint ونحسب فقط الانحرافات المثبتة، بالترتيب:
 - Login/bootstrap.
 - opening balance / shared shift behavior.
 - POS order types: Dine-in / Take Away / Drive Thru / Delivery / Quick Order.
@@ -99,6 +82,11 @@ Pre-merge evidence:
 - reports.
 - guided routing للخطوات الإلزامية.
 - Desktop/Mobile + RTL/LTR + navigation.
+
+قاعدة Stage 4.3:
+- لا إعادة فتح 4.1/4.2 بدون Regression مثبت.
+- كل defect جديد يجب أن يكون reproduced أو مثبت بعقد مباشر قبل إضافته إلى Bug Register.
+- إصلاح root cause واحد في batch صغيرة، ثم Full Verify قبل الدمج/Production.
 
 ## 3 → P2 Printing Finalization 🟡
 `set_print_status(uuid,text)` search-path defect مغلق بالفعل بواسطة PR #46؛ المتبقي Functional Runtime فقط.
@@ -154,4 +142,4 @@ Pre-merge evidence:
 # الحالة التالية مباشرة
 **Remaining = 5**
 
-العمل النشط: **Stage 4.2 / PR #48 — POS Operator Ownership & Table Transfer** في بوابة الإغلاق بعد pre-merge Full Green. بعد اكتمال Merge + Production parity + merged-main Verify + Deploy يبدأ **Stage 4.3 — Remaining Published Operating Cycle**.
+العمل النشط: **Stage 4.3 — Remaining Published Operating Cycle**، بدءًا من Login/bootstrap ثم shared shift ثم دورة POS/KDS/inventory/payment الكاملة، مع تسجيل الانحرافات المثبتة فقط.
