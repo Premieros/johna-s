@@ -1,6 +1,8 @@
 -- P0-B: protect produce_inventory_unit before any inventory/cost mutation.
 -- The production/FIFO/costing body below is preserved; only security/integrity guards
 -- and the SECURITY DEFINER search_path are hardened.
+-- service_role keeps its documented backend execution contract; application callers
+-- remain Permission-First and branch-scoped.
 
 CREATE OR REPLACE FUNCTION public.produce_inventory_unit(
   p_unit_id uuid,
@@ -18,26 +20,33 @@ DECLARE
   v_production_id uuid; v_total_cost numeric:=0; v_recipe record; v_component record; v_rm_qty numeric;
   v_batch_number text; v_unit_cost numeric:=0; v_unit_name text; v_res jsonb; v_need numeric;
   v_available numeric; v_batch record; v_take numeric;
+  v_is_service_role boolean := COALESCE(current_setting('role', true), '') = 'service_role';
 BEGIN
-  IF auth.uid() IS NULL THEN
-    RAISE EXCEPTION 'UNAUTHENTICATED';
+  -- service_role is the explicit trusted backend contract restored by
+  -- 20260901225000_grant_produce_inventory_unit_service_role.sql.
+  -- Every application caller must pass the canonical Permission-First guards.
+  IF NOT v_is_service_role THEN
+    IF auth.uid() IS NULL THEN
+      RAISE EXCEPTION 'UNAUTHENTICATED';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE u.id = auth.uid() AND u.is_active = true
+    ) THEN
+      RAISE EXCEPTION 'USER_INACTIVE';
+    END IF;
+
+    IF NOT public.can_permission('production.manage') THEN
+      RAISE EXCEPTION 'PRODUCTION_NOT_ALLOWED';
+    END IF;
+
+    IF NOT public.user_may_access_branch(p_branch_id) THEN
+      RAISE EXCEPTION 'BRANCH_ACCESS_DENIED';
+    END IF;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM public.users u
-    WHERE u.id = auth.uid() AND u.is_active = true
-  ) THEN
-    RAISE EXCEPTION 'USER_INACTIVE';
-  END IF;
-
-  IF NOT public.is_pos_admin() AND NOT public.can_permission('production.manage') THEN
-    RAISE EXCEPTION 'PRODUCTION_NOT_ALLOWED';
-  END IF;
-
-  IF NOT public.is_pos_admin() AND NOT public.user_may_access_branch(p_branch_id) THEN
-    RAISE EXCEPTION 'BRANCH_ACCESS_DENIED';
-  END IF;
-
+  -- Integrity is enforced for both trusted backend and application callers.
   IF NOT EXISTS (
     SELECT 1
     FROM public.warehouses w
