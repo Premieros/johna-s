@@ -37,10 +37,14 @@ describe.skipIf(skip)('Unit hierarchy — production to inventory', () => {
   });
 
   it('manufacturing consumes raw material and creates finished unit stock', async () => {
+    // produce_inventory_unit explicitly supports service_role for trusted backend/admin
+    // execution. Do not rely on the raw database owner connection as an implicit bypass.
+    await client.query('SET LOCAL ROLE service_role');
     const result = await client.query(
       `SELECT public.produce_inventory_unit($1, 20, $2, $3, 'hierarchy integration test') AS production_id`,
       [unitId, warehouseId, branchId],
     );
+    await client.query('RESET ROLE');
     expect(result.rows[0].production_id).toBeTruthy();
 
     const raw = await client.query(
