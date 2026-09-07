@@ -9,17 +9,39 @@ export const EMPTY_POS_REALTIME: PosRealtimeData = {
   kitchenSends: [],
 };
 
+type PosOrderOperatorLabel = {
+  order_id: string;
+  cashier_id: string | null;
+  operator_name: string | null;
+};
+
 export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeData> {
-  const [tRes, oRes] = await Promise.all([
+  const [tRes, oRes, operatorRes] = await Promise.all([
     supabase.from('dining_tables').select('*').eq('branch_id', branchId).order('name'),
     supabase.from('orders')
-      .select('*, table:dining_tables(*), cashier:users!orders_cashier_id_fkey(id, full_name, email)')
+      .select('*, table:dining_tables(*)')
       .eq('branch_id', branchId)
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),
+    // Do not broaden public.users RLS just to show occupied-table ownership.
+    // The RPC exposes only a branch-scoped display label for active POS orders.
+    supabase.rpc('get_pos_order_operator_labels', { p_branch_id: branchId }),
   ]);
   const tables = (tRes.data as DiningTable[]) || [];
-  const orders = (oRes.data as Order[]) || [];
+  const operatorLabels = (operatorRes.data as PosOrderOperatorLabel[] | null) || [];
+  const operatorByOrder = new Map(operatorLabels.map((row) => [row.order_id, row]));
+  const orders = (((oRes.data as Order[]) || []).map((order) => {
+    const label = operatorByOrder.get(order.id);
+    if (!label?.cashier_id) return order;
+    return {
+      ...order,
+      cashier: {
+        id: label.cashier_id,
+        full_name: label.operator_name,
+        email: null,
+      },
+    } satisfies Order;
+  }));
   let orderItems: OrderItem[] = [];
   let kitchenSends: OrderKitchenSend[] = [];
   if (orders.length > 0) {

@@ -26,6 +26,14 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
     ids = await seedRlsFixture(client);
     imp = await canImpersonate(client);
 
+    // Make this test deterministic: cashier owns the source/target orders, but
+    // starts without the independent transfer capability.
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = COALESCE(permissions, '[]'::jsonb) - 'pos.order.transfer'
+       WHERE role = 'cashier'`,
+    );
+
     const product = await client.query<{ id: string }>(
       `INSERT INTO public.products(name, sale_price, cost_price, branch_id, product_type)
        VALUES ('Transfer Test Product', 25, 10, $1::uuid, 'ready') RETURNING id`,
@@ -90,13 +98,37 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
       await fn();
     });
 
+  guarded('requires pos.order.transfer even for the source-order owner', async () => {
+    const denied = await runAs(
+      client,
+      ids.users.cashier,
+      'SELECT public.transfer_order_item_to_table($1::uuid, $2::uuid, $3::uuid) AS result',
+      [sourceOrder, movableItem, targetTable],
+    );
+    expect(denied.error).toBeUndefined();
+    expect(denied.rows[0].result).toMatchObject({
+      success: false,
+      error: 'PERMISSION_DENIED',
+      permission: 'pos.order.transfer',
+    });
+
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = CASE
+         WHEN COALESCE(permissions, '[]'::jsonb) ? 'pos.order.transfer' THEN permissions
+         ELSE COALESCE(permissions, '[]'::jsonb) || '["pos.order.transfer"]'::jsonb
+       END
+       WHERE role = 'cashier'`,
+    );
+  });
+
   guarded('moves an exact unsent line into an existing target order without KDS or inventory effects', async () => {
     const beforeSends = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.order_kitchen_sends');
     const beforeLedger = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.inventory_ledger');
 
     const result = await runAsPersist(
       client,
-      ids.users.branch_manager,
+      ids.users.cashier,
       'SELECT public.transfer_order_item_to_table($1::uuid, $2::uuid, $3::uuid) AS result',
       [sourceOrder, movableItem, targetTable],
     );
@@ -116,6 +148,18 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
     expect(moved.rows).toHaveLength(1);
     expect(moved.rows[0].order_id).toBe(targetOrder);
 
+    const audit = await client.query<{ user_id: string; details: Record<string, unknown> }>(
+      `SELECT user_id, details
+       FROM public.audit_log
+       WHERE action = 'ORDER_ITEM_TABLE_TRANSFERRED'
+         AND entity_id = $1::uuid
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [movableItem],
+    );
+    expect(audit.rows[0].user_id).toBe(ids.users.cashier);
+    expect(audit.rows[0].details).toMatchObject({ source_order_id: sourceOrder, target_order_id: targetOrder });
+
     const afterSends = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.order_kitchen_sends');
     const afterLedger = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.inventory_ledger');
     expect(afterSends.rows[0].count).toBe(beforeSends.rows[0].count);
@@ -125,7 +169,7 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
   guarded('rejects a line that has already been sent to kitchen', async () => {
     const result = await runAs(
       client,
-      ids.users.branch_manager,
+      ids.users.cashier,
       'SELECT public.transfer_order_item_to_table($1::uuid, $2::uuid, $3::uuid) AS result',
       [sourceOrder, sentItem, targetTable],
     );
@@ -139,7 +183,7 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
   guarded('does not allow a target table from another branch', async () => {
     const result = await runAs(
       client,
-      ids.users.branch_manager,
+      ids.users.cashier,
       'SELECT public.transfer_order_item_to_table($1::uuid, $2::uuid, $3::uuid) AS result',
       [sourceOrder, crossItem, crossBranchTable],
     );

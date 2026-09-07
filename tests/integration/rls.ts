@@ -276,8 +276,8 @@ export async function seedRlsFixture(client: pg.Client): Promise<RlsIds> {
       `INSERT INTO public.dining_areas (name, branch_id) VALUES ('Area', '${ids.branchB}')`);
   await row('dining_tables', `INSERT INTO public.dining_tables (name, branch_id, capacity, status) VALUES ('T', '${ids.branchA}', 4, 'vacant')`,
       `INSERT INTO public.dining_tables (name, branch_id, capacity, status) VALUES ('T', '${ids.branchB}', 4, 'vacant')`);
-  await row('orders', `INSERT INTO public.orders (order_number, branch_id, order_type, status) VALUES ('${uniq('ORD')}', '${ids.branchA}', 'dine_in', 'open')`,
-      `INSERT INTO public.orders (order_number, branch_id, order_type, status) VALUES ('${uniq('ORD')}', '${ids.branchB}', 'dine_in', 'open')`);
+  await row('orders', `INSERT INTO public.orders (order_number, branch_id, order_type, status, cashier_id) VALUES ('${uniq('ORD')}', '${ids.branchA}', 'dine_in', 'open', '${ids.users.cashier}')`,
+      `INSERT INTO public.orders (order_number, branch_id, order_type, status, cashier_id) VALUES ('${uniq('ORD')}', '${ids.branchB}', 'dine_in', 'open', '${ids.users.cashier_b}')`);
 
   // branch_settings keys on branch_id (no surrogate id), so it cannot use the
   // RETURNING id helper above; insert it explicitly.

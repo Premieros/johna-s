@@ -7,7 +7,7 @@
 - Production Supabase: `azzdesuowpdcoflmyezn` ONLY
 - Production branch: `main`
 - Development branch: `development/final-handover`
-- Verified Production baseline: `main@8b671fca36d60a200e743a2192581d83c3fa1f6e` (PR #46)
+- Verified Production baseline: `main@952c9954cbbebf760c44d75706ec569aac28a7bb` (PR #47)
 
 ## Counting rules
 - Count only confirmed, unique root-cause deviations.
@@ -16,7 +16,7 @@
 - Runtime/UI items are counted only after reproduction or direct contract verification.
 - Every code/database fix must preserve closed contracts and pass Regression -> Full Verify -> Merge -> Production Post-Check -> merged-main Verify/Deploy.
 
-## Current confirmed unique deviations: 4
+## Current confirmed unique deviations: 3 + Stage 4.2 awaiting Production closure
 
 ### Stage 6 — P0-B SECURITY DEFINER audit — CLOSED ✅
 Production authenticated-executable public SECURITY DEFINER legacy search-path count is **0**.
@@ -35,51 +35,63 @@ Evidence:
 - Current connected Supabase toolset does not expose the Auth setting write action.
 - Close only after the setting is enabled on the real project and login/create-user/password-update/reset behavior is revalidated, or the external platform limitation is explicitly documented.
 
-### Stage 4 — Published Runtime/UI — 2 confirmed root causes + active verification
+### Stage 4 — Published Runtime/UI
 
-#### RUNTIME-001 — Shift cash-integrity / scope drift — ACTIVE in PR #47
-Confirmed defects already admitted into PR #47:
-- authenticated direct DML on `shift_operations` could bypass trusted cash-operation RPCs;
-- inconsistent expected-cash equations across get/close/force-close paths;
-- non-canonical branch lookup in selected shift-control paths could expose mismatch state after unrestricted lookup.
+#### RUNTIME-001 — Shift cash-integrity / scope drift — CLOSED ✅
+Closed on Production by PR #47.
 
-Required closure:
-- keep shared branch shift contract;
-- preserve current close/approval permission contracts;
-- canonical branch scope + no cross-branch oracle;
-- Regression + Full Verify before Production.
+Fixed:
+- authenticated direct DML on `shift_operations` no longer bypasses trusted cash-operation RPCs;
+- expected-cash equations are aligned across get/close/force-close paths;
+- branch checks use canonical authorization and do not expose cross-branch mismatch state;
+- shared branch shift and Permission-First contracts are preserved.
 
-#### RUNTIME-002 — POS operator ownership is not centrally enforced — QUEUED after PR #47
-This is one root cause, not separate counts for each symptom.
+Evidence:
+- pre-merge Verify #875 Full Green ✅.
+- merged `main@952c9954cbbebf760c44d75706ec569aac28a7bb` ✅.
+- Production migration `shift_cash_integrity_and_scope` applied ✅.
+- Production post-check ✅.
+- merged-main Verify #876 Full Green ✅.
+- Deploy #578 ✅.
 
-Confirmed evidence from current Production contract:
-- `orders.cashier_id` exists and is the natural owner/audit field.
-- `create_order(...)` accepts optional `p_cashier_id` and can currently attribute a new order to a user other than `auth.uid()` without an explicit delegation/transfer permission contract.
-- `update_order(...)` validates branch scope but does not require caller ownership (`orders.cashier_id = auth.uid()`) or a dedicated override/transfer permission.
-- current table/order transfer paths are primarily branch-scoped and do not yet enforce owner + dedicated transfer permission consistently.
-- `orders` and `dining_tables` RLS are currently branch-scoped for write access, so direct table DML/RPC bypass paths must be reviewed as part of the same root cause.
+#### RUNTIME-002 — POS operator ownership not centrally enforced — PRE-MERGE FIX VERIFIED ✅ / PRODUCTION CLOSURE PENDING
+This remains one root cause; it is not split into separate symptoms.
 
-Approved operating contract for the repair:
+Approved operating contract:
 1. Shift is shared per branch.
-2. Any active user with `shifts.open` + branch access may open/reuse the branch shift.
-3. POS access remains permission-driven.
-4. New orders belong to the authenticated operator by default; ordinary users cannot spoof another cashier.
-5. Only the operational owner may edit/continue/pay/cancel/move their order, subject to the fine-grained action permission itself.
-6. A Dine-in table derives operational ownership from its active open/held order.
-7. Other users in the same branch may see occupied state + owner display name but cannot work the table/order.
-8. Transfer to another user requires a dedicated transfer permission, never a role-name check.
-9. Source user, target user, order and table must all satisfy same-branch authorization.
-10. Transfer writes audit trail for previous owner, new owner, actor and timestamp.
-11. Server-side enforcement is mandatory; UI hiding alone is not closure.
-12. Super Admin remains the only implicit bypass.
+2. POS access remains permission-driven.
+3. New orders belong to `auth.uid()`; ordinary callers cannot spoof another cashier.
+4. Only operational owner may normally edit/continue/pay/cancel/move an open/held order, subject to the exact action permission.
+5. Dine-in table operational ownership derives from its active order.
+6. Same-branch peers may see occupied state + narrow owner display label but cannot work the order/table.
+7. Operator transfer requires `pos.order.transfer`, never a role-name check.
+8. Source/target/order/table must remain same-branch authorized.
+9. Transfer records old owner, new owner, actor and timestamp.
+10. Server-side enforcement is mandatory; direct-DML/RPC fallback bypasses fail closed.
+11. Super Admin remains the only implicit bypass.
 
-Required regression matrix:
-- A/B same branch, same shared shift, both POS-authorized.
-- A creates order/table; B can see occupied owner name but cannot modify/pay/cancel/transfer without transfer authority.
-- caller cannot spoof `cashier_id` at create time.
-- authorized transfer changes owner A -> B and B becomes the valid operator.
-- cross-branch transfer/target fails fail-closed.
-- KDS/inventory/payment attribution remains correct after ownership transfer.
+Verified fixes in PR #48:
+- order creation ownership pinned to authenticated operator;
+- owner enforcement added to open-order mutation/status/payment/KDS/item-transfer paths;
+- dedicated audited `transfer_order_operator` with same-branch fail-closed checks;
+- direct floor-plan order/table mutation fallbacks removed so RPC remains authoritative;
+- occupied tables expose narrow operator label without granting operation rights;
+- kitchen send/delta ownership guard added;
+- shared-shift sale attribution fixed for operators that also own `shifts.manage`, without duplicate sale shift-operations;
+- deterministic attribution regressions added;
+- Browser Smoke mock updated for `get_pos_order_operator_labels` rather than weakening runtime/tests.
+
+Pre-merge evidence:
+- PR #48 head `bfc50500c1db23eefbc67967a402101555d51e1d` passed Verify #885 / run `34155863941` Full Green ✅.
+- Frontend/API/lint/typecheck/unit/build ✅.
+- Fresh DB migrations + schema ✅.
+- Integration + Security/RLS ✅.
+- Browser Smoke / Playwright ✅.
+
+Required remaining closure:
+`Merge -> Production Stage 4.2 migrations/parity -> Production post-check -> merged-main Verify + Browser Smoke -> Deploy`.
+
+Do not mark RUNTIME-002 fully CLOSED until that chain is complete.
 
 ### Stage 3 — Printing
 - `set_print_status(uuid,text)` search-path defect is already CLOSED by PR #46 and must not be double-counted.
@@ -111,15 +123,15 @@ Required regression matrix:
 - PR #44 Subscription/payment runtime search-path hardening.
 - PR #45 Inventory unit production Permission-First/branch/warehouse hardening.
 - PR #46 SECURITY DEFINER search-path zero closure.
+- PR #47 Shift cash integrity + branch scope.
 
 ## Current execution order
-1. Stage 4.1: finish PR #47 shift cash-integrity batch and require Full Green before merge/Production.
-2. Stage 4.2: implement POS Operator Ownership & Table Transfer as a separate root-cause batch.
-3. Stage 4.3: continue the published full operating cycle and count only reproduced deviations.
-4. Stage 5 Auth/password remains externally blocked on the project Auth setting unless a valid write path becomes available; do not falsely close it.
-5. Stage 3: validate printing end-to-end.
-6. Stage 2: enforce required protection/checks on `main` when repository-admin capability is available.
-7. Stage 1: final cleanup/handover and zero-drift proof.
+1. Stage 4.2: close PR #48 through merge, Production parity/post-check, merged-main Verify and Deploy.
+2. Stage 4.3: continue the published full operating cycle and count only reproduced deviations.
+3. Stage 5 Auth/password remains externally blocked on the project Auth setting unless a valid write path becomes available; do not falsely close it.
+4. Stage 3: validate printing end-to-end.
+5. Stage 2: enforce required protection/checks on `main` when repository-admin capability is available.
+6. Stage 1: final cleanup/handover and zero-drift proof.
 
 ## Mandatory safety rules
 - Before every write, re-fetch development/main HEAD and review concurrent commits.

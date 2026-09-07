@@ -60,10 +60,10 @@ describe.skipIf(skip)('V2 POS kitchen permission contract', () => {
       [userId, `${randomUUID()}@test.local`, role, branchA],
     );
     await client.query(
-      `INSERT INTO public.orders (id, order_number, branch_id, status, kitchen_status, station)
-       VALUES ($1, 'V2-KITCHEN-A', $2, 'open', 'pending', 'main'),
-              ($3, 'V2-KITCHEN-B', $4, 'open', 'pending', 'main')`,
-      [orderA, branchA, orderB, branchB],
+      `INSERT INTO public.orders (id, order_number, branch_id, status, kitchen_status, station, cashier_id)
+       VALUES ($1, 'V2-KITCHEN-A', $2, 'open', 'pending', 'main', $5),
+              ($3, 'V2-KITCHEN-B', $4, 'open', 'pending', 'main', NULL)`,
+      [orderA, branchA, orderB, branchB, userId],
     );
   });
 

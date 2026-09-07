@@ -60,8 +60,8 @@ describe.skipIf(skip)('order-lifecycle guards (047 H1/H3/H4/M9/L2)', () => {
   it('process_sale stores guest_count on the sale (M9)', async () => { const t = await makeTable(); const res = await settle(`INV-${randomUUID()}`, { tableId: t, orderId: null, orderType: 'dine_in', guestCount: 6 }); expect(res.success).toBe(true); const sale = await client.query(`SELECT guest_count FROM public.sales WHERE id = $1`, [res.sale_id]); expect(sale.rows[0].guest_count).toBe(6); });
   it('process_sale does NOT free a table that still has another open order (H4)', async () => {
     const t = await makeTable();
-    const first = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, 100, 0, 0, 100) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t]);
-    await client.query(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, 100, 0, 0, 100)`, [`ORD-${randomUUID()}`, branchId, t]);
+    const first = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
+    await client.query(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100)`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
     await client.query(
       `INSERT INTO public.order_items
          (order_id, product_id, unit_name, quantity, unit_price, total)
