@@ -71,18 +71,37 @@ describe.skipIf(skip)('order cashier assignment + recipe delete controls', () =>
     });
   });
 
-  it('cashier reassignment is manager-capability scoped, branch checked, and audited', async () => {
+  it('cashier reassignment is transfer-permission scoped, branch checked, RPC-only, and audited', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public.guard_order_cashier_assignment()'::regprocedure) AS def
     `);
     const def = rows[0].def;
     expect(def).toContain("can_permission('pos.order.transfer')");
-    expect(def).toContain("can_permission('users.manage')");
-    expect(def).toContain("can_permission('pos.order.edit')");
+    expect(def).toContain('app.pos_operator_transfer_order_id');
+    expect(def).toContain('app.pos_operator_transfer_target_id');
+    expect(def).toContain('ORDER_TRANSFER_RPC_REQUIRED');
     expect(def).toContain('user_branch_access');
     expect(def).toContain('TARGET_USER_NOT_IN_BRANCH');
-    expect(def).toContain('ORDER_CASHIER_REASSIGNED');
+    expect(def).toContain('ORDER_OPERATOR_TRANSFERRED');
+    expect(def).toContain('transferred_by');
+    expect(def).toContain('transferred_at');
     expect(def.toLowerCase()).toContain("old.status not in ('open', 'held')");
+    expect(def).not.toContain("can_permission('users.manage')");
+    expect(def).not.toContain("can_permission('pos.order.edit')");
+  });
+
+  it('dedicated operator transfer validates permission, branch, table, and target user', async () => {
+    const { rows } = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('public.transfer_order_operator(uuid,uuid)'::regprocedure) AS def
+    `);
+    const def = rows[0].def;
+    expect(def).toContain("can_permission('pos.order.transfer')");
+    expect(def).toContain('user_may_access_branch(v_order.branch_id)');
+    expect(def).toContain('SOURCE_OPERATOR_NOT_IN_BRANCH');
+    expect(def).toContain('TARGET_USER_NOT_IN_BRANCH');
+    expect(def).toContain('TABLE_BRANCH_MISMATCH');
+    expect(def).toContain("set_config('app.pos_operator_transfer_order_id'");
+    expect(def).toContain('UPDATE public.orders');
   });
 
   it('guard trigger is installed only on cashier_id updates', async () => {

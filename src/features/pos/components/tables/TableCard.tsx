@@ -22,6 +22,7 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const activeOrder = orders[0] || null;
+  const operatorName = activeOrder?.cashier?.full_name || activeOrder?.cashier?.email || null;
 
   const statusInfo = useMemo(() => {
     if (!activeOrder || table.status === 'vacant') return { status: 'vacant' as TableOperationalStatus, label: isAr ? 'متاحة' : 'Available', tone: 'text-ui-success bg-ui-success-soft border-ui-success/20', elapsed: 0 };
@@ -55,7 +56,15 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
             <span className="font-bold text-ui-muted">{itemCount} {isAr ? 'صنف' : 'items'}</span>
             <span className="font-black text-ui-text">{formatCurrency(activeOrder.total, currency, lang)}</span>
           </div>
-          <div className="mt-1 flex items-center gap-1 text-[9px] text-ui-subtle"><Clock className="h-2.5 w-2.5" />{statusInfo.elapsed} {isAr ? 'د' : 'm'}</div>
+          <div className="mt-1 flex min-w-0 items-center justify-between gap-1 text-[9px] text-ui-subtle">
+            <span className="flex shrink-0 items-center gap-1"><Clock className="h-2.5 w-2.5" />{statusInfo.elapsed} {isAr ? 'د' : 'm'}</span>
+            {operatorName && (
+              <span className="flex min-w-0 items-center gap-1 font-bold text-ui-muted" title={operatorName}>
+                <Users className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{operatorName}</span>
+              </span>
+            )}
+          </div>
         </div>
       ) : <p className="mt-3 text-[9px] font-bold text-ui-subtle">{isAr ? 'اضغط لفتح طلب' : 'Tap to open order'}</p>}
       {activeOrder && onTransfer && <button type="button" onClick={(e) => { e.stopPropagation(); onTransfer(activeOrder, table); }} title={isAr ? 'نقل الطلب' : 'Transfer order'} className="absolute bottom-2 end-2 flex h-6 w-6 items-center justify-center rounded-md border border-ui-border bg-ui-page text-ui-muted opacity-0 transition hover:text-ui-primary group-hover:opacity-100"><ArrowRightLeft className="h-3 w-3" /></button>}
