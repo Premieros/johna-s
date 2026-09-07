@@ -121,7 +121,7 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
       )
     ).rows[0].definition;
 
-    expect(definition).toContain("current_setting('role'::text, true)");
+    expect(definition).toContain("current_setting('role', true)");
     expect(definition).toContain("can_permission('production.manage')");
     expect(definition).toContain('user_may_access_branch(p_branch_id)');
     expect(definition).toContain('w.branch_id = p_branch_id');
