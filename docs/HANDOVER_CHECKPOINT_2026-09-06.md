@@ -18,12 +18,14 @@
 - Production migration `security_definer_search_path_zero` applied to `azzdesuowpdcoflmyezn` ✅.
 - Production Post-Check measured authenticated-executable public SECURITY DEFINER legacy search-path deviations **65 -> 0** ✅.
 - Production migration ledger contains `security_definer_search_path_zero` ✅.
-- `development/final-handover` was fast-forwarded to verified main with `force=false`; documentation commits then advanced development only.
-- Remaining phase counter advances **6 -> 5** because P0-B is closed.
-- Current confirmed unique deviations: **2**; see `docs/FINAL_BUG_REGISTER.md`.
+- `development/final-handover` was fast-forwarded to verified main with `force=false`; documentation and active Stage 4 commits then advanced development only.
+- Remaining phase counter is **5** because Stage 6/P0-B is closed.
+- Exact current root-cause count and active plan live in `docs/FINAL_BUG_REGISTER.md` and `docs/FINAL_REMAINING_STAGES.md`.
 
 ## Closed Production work — do not reopen without regression
 - Batch 1 Users / Roles / Permission-First ✅
+- PR #30 Shared Branch Shift ✅
+- PR #31 POS Discount / Payment / Order Completion ✅
 - PR #35 Warehouse transfer branch isolation ✅
 - PR #36 Controlled branch delete ✅
 - PR #37 Warehouse lifecycle + safe delete ✅
@@ -63,25 +65,64 @@ Release evidence:
 - main Verify #865 Full Green ✅.
 - Deploy #577 build + Production parity + Pages Full Green ✅.
 
-## Active Stage 5 — Auth/password
+## Stage 5 — Auth/password
 One confirmed account-level deviation remains:
 - Supabase `Leaked Password Protection` is disabled.
-- Supabase documentation confirms it is an Auth project setting and requires Pro Plan or above.
+- It is an Auth project setting and may require plan/account capability.
 - The currently connected Supabase toolset exposes database/migration operations but no Auth configuration write action; do not claim this closed until the actual project setting is changed and revalidated.
 
-## Later stages
-### Stage 4 — Published Runtime/UI
-Run a real published end-to-end operating cycle: login/bootstrap, shifts, POS, KDS, payment, inventory, approvals, reports, RTL/LTR, desktop/mobile. Count only reproduced failures.
+## Active Stage 4 — Published Runtime/UI
 
-### Stage 3 — Printing
+### Stage 4.1 — Shift Cash Integrity + Branch Scope — ACTIVE via PR #47
+Current PR:
+- PR #47: `security: harden shift cash integrity and branch scope`.
+- Base remains verified `main@8b671fca36d60a200e743a2192581d83c3fa1f6e`.
+- Active development branch: `development/final-handover`.
+
+Confirmed target defects:
+- direct authenticated DML on `shift_operations` outside trusted RPCs;
+- inconsistent expected-cash equations across shift read/close paths;
+- non-canonical branch scoping in selected shift-control paths.
+
+Do not merge/apply Production until current PR HEAD has Full Verify Green.
+
+### Stage 4.2 — POS Operator Ownership & Table Transfer — APPROVED / QUEUED
+This operating contract is now official and must be implemented immediately after Stage 4.1 closes, before the rest of the published POS runtime cycle is accepted.
+
+Approved contract:
+- one shared open shift per branch; opener remains audit metadata, not exclusive shift owner;
+- any active user with `shifts.open` and branch access may open/reuse the branch shift;
+- POS access and actions remain fine-grained Permission-First;
+- each new order belongs operationally to the authenticated operator and ordinary callers cannot spoof `cashier_id`;
+- owner may work their own order/table subject to each action permission;
+- another user in the same branch can see occupied table + responsible user name but cannot modify/pay/cancel/move that order;
+- Dine-in table ownership derives from its active open/held order unless a future independent table-owner requirement is proven;
+- transferring an order/table to another operator requires a dedicated transfer permission, never role-name authorization;
+- source user, target user, order and table must be within canonical same-branch scope;
+- transfer must be audited with old owner/new owner/actor/time;
+- Server-Side enforcement is mandatory across RPC/RLS/direct-write boundaries; UI hiding is supplemental only;
+- Super Admin remains the only implicit bypass.
+
+Confirmed current gap behind this batch:
+- `create_order(...)` accepts an optional `p_cashier_id` without an explicit delegation contract;
+- `update_order(...)` currently enforces branch scope but not owner-or-transfer-authority;
+- table/order transfer paths are not yet consistently owner + permission scoped;
+- branch-scoped write RLS on `orders`/`dining_tables` must be reviewed so direct writes cannot bypass ownership.
+
+Required regression matrix is documented in `docs/FINAL_REMAINING_STAGES.md` and `docs/FINAL_BUG_REGISTER.md`.
+
+### Stage 4.3 — Remaining operating cycle
+After 4.1 and 4.2: login/bootstrap, all POS order types, send-to-kitchen once/delta, KDS, inventory effects, cash/card, discounts/voids/returns, hold/split/merge/transfer, shift close/day close/offline path, reports, guided routing, RTL/LTR, desktop/mobile.
+
+## Stage 3 — Printing
 `set_print_status(uuid,text)` search-path drift is already CLOSED by PR #46. Functional printing still needs runtime validation.
 
-### Stage 2 — Release hardening
+## Stage 2 — Release hardening
 One confirmed repository-level deviation remains:
 - `main` currently reports `protected=false` with required checks disabled.
-- Current connected GitHub toolset can read this state but does not expose a branch-protection/ruleset write action; do not claim closed until repository settings are actually changed and re-read as protected.
+- Current connected GitHub toolset can read this state but may not expose a branch-protection/ruleset write action; do not claim closed until repository settings are actually changed and re-read as protected.
 
-### Stage 1 — Cleanup/handover
+## Stage 1 — Cleanup/handover
 Final scoped cleanup and zero-drift proof only after functional stages are validated.
 
 ## Mandatory rules
