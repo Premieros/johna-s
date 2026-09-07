@@ -25,7 +25,7 @@
     {"name":"create_production_order","params":["batch_number","branch_id","notes","planned_at","product_id","quantity","warehouse_id"]},
     {"name":"create_purchase_order","params":["branch_id","items","notes","payment_method","quotation_id","supplier_id","warehouse_id"]},
     {"name":"create_purchase_request","params":["branch_id","expected_date","items","notes","priority","supplier_id"]},
-    {"name":"create_rfq","params":["due_date","items","notes","request_id"]},
+    {"name":"create_rfq","params":["branch_id","due_date","items","notes","request_id"]},
     {"name":"create_stock_count","params":["branch_id","count_type","items","notes","warehouse_id"]},
     {"name":"create_user","params":["branch_id","email","full_name","is_active","password","role","username"]},
     {"name":"create_warehouse_transfer","params":["branch_id","from_warehouse_id","items","notes","reason","to_warehouse_id"]},
