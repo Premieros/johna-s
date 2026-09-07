@@ -19,7 +19,7 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
   const producerRole = `qa_prod_manage_${randomUUID().slice(0, 8)}`;
 
   async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
-    const savepoint = `produce_inventory_unit_user_${randomUUID().replaceAll('-', '')}`;
+    const savepoint = `produce_inventory_unit_user_${randomUUID().replace(/-/g, '')}`;
     await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
     await client.query(`SET LOCAL ROLE authenticated`);
     await client.query(`SAVEPOINT ${savepoint}`);
