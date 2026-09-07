@@ -7,7 +7,7 @@
 - Production Supabase: `azzdesuowpdcoflmyezn` ONLY
 - Production branch: `main`
 - Development branch: `development/final-handover`
-- Verified Production baseline: `main@952c9954cbbebf760c44d75706ec569aac28a7bb` (PR #47)
+- Verified Production baseline: `main@85e6ce1df0f12b7eaca73ca283bef41a6703b828` (PR #48)
 
 ## Counting rules
 - Count only confirmed, unique root-cause deviations.
@@ -16,7 +16,7 @@
 - Runtime/UI items are counted only after reproduction or direct contract verification.
 - Every code/database fix must preserve closed contracts and pass Regression -> Full Verify -> Merge -> Production Post-Check -> merged-main Verify/Deploy.
 
-## Current confirmed unique deviations: 3 + Stage 4.2 awaiting Production closure
+## Current confirmed unique deviations: 2
 
 ### Stage 6 — P0-B SECURITY DEFINER audit — CLOSED ✅
 Production authenticated-executable public SECURITY DEFINER legacy search-path count is **0**.
@@ -38,15 +38,8 @@ Evidence:
 ### Stage 4 — Published Runtime/UI
 
 #### RUNTIME-001 — Shift cash-integrity / scope drift — CLOSED ✅
-Closed on Production by PR #47.
-
-Fixed:
-- authenticated direct DML on `shift_operations` no longer bypasses trusted cash-operation RPCs;
-- expected-cash equations are aligned across get/close/force-close paths;
-- branch checks use canonical authorization and do not expose cross-branch mismatch state;
-- shared branch shift and Permission-First contracts are preserved.
-
 Evidence:
+- PR #47 ✅.
 - pre-merge Verify #875 Full Green ✅.
 - merged `main@952c9954cbbebf760c44d75706ec569aac28a7bb` ✅.
 - Production migration `shift_cash_integrity_and_scope` applied ✅.
@@ -54,10 +47,8 @@ Evidence:
 - merged-main Verify #876 Full Green ✅.
 - Deploy #578 ✅.
 
-#### RUNTIME-002 — POS operator ownership not centrally enforced — PRE-MERGE FIX VERIFIED ✅ / PRODUCTION CLOSURE PENDING
-This remains one root cause; it is not split into separate symptoms.
-
-Approved operating contract:
+#### RUNTIME-002 — POS operator ownership not centrally enforced — CLOSED ✅
+Protected contract:
 1. Shift is shared per branch.
 2. POS access remains permission-driven.
 3. New orders belong to `auth.uid()`; ordinary callers cannot spoof another cashier.
@@ -65,33 +56,41 @@ Approved operating contract:
 5. Dine-in table operational ownership derives from its active order.
 6. Same-branch peers may see occupied state + narrow owner display label but cannot work the order/table.
 7. Operator transfer requires `pos.order.transfer`, never a role-name check.
-8. Source/target/order/table must remain same-branch authorized.
+8. Source/target/order/table remain same-branch authorized.
 9. Transfer records old owner, new owner, actor and timestamp.
 10. Server-side enforcement is mandatory; direct-DML/RPC fallback bypasses fail closed.
 11. Super Admin remains the only implicit bypass.
+12. Shared-shift sale attribution is preserved without duplicate shift operation.
 
-Verified fixes in PR #48:
-- order creation ownership pinned to authenticated operator;
-- owner enforcement added to open-order mutation/status/payment/KDS/item-transfer paths;
-- dedicated audited `transfer_order_operator` with same-branch fail-closed checks;
-- direct floor-plan order/table mutation fallbacks removed so RPC remains authoritative;
-- occupied tables expose narrow operator label without granting operation rights;
-- kitchen send/delta ownership guard added;
-- shared-shift sale attribution fixed for operators that also own `shifts.manage`, without duplicate sale shift-operations;
-- deterministic attribution regressions added;
-- Browser Smoke mock updated for `get_pos_order_operator_labels` rather than weakening runtime/tests.
+Closure evidence:
+- PR #48 ✅.
+- final pre-merge head `c981cde7e919613399e41016924952ac965cbc00`.
+- pre-merge Verify #887 / run `34156244462`: Full Green ✅.
+- merged `main@85e6ce1df0f12b7eaca73ca283bef41a6703b828` ✅.
+- Production migrations applied ✅:
+  - `20260907194314_pos_operator_ownership`
+  - `20260907194337_pos_kitchen_send_ownership`
+  - `20260907194427_pos_operator_rpc_ownership_hardening`
+  - `20260907194454_pos_sale_shift_attribution`
+- Production post-check verified ownership triggers, RPC grants, `search_path=public, pg_temp`, and Stage 4.1 `shift_operations` privilege non-regression ✅.
+- merged-main Verify #888 / run `34156540119`: Full Green ✅ including Browser Smoke.
+- Deploy #579 / run `34156540094`, attempt 2: Production parity ✅ and Pages deploy ✅.
 
-Pre-merge evidence:
-- PR #48 head `bfc50500c1db23eefbc67967a402101555d51e1d` passed Verify #885 / run `34155863941` Full Green ✅.
-- Frontend/API/lint/typecheck/unit/build ✅.
-- Fresh DB migrations + schema ✅.
-- Integration + Security/RLS ✅.
-- Browser Smoke / Playwright ✅.
+Do not reopen RUNTIME-002 without a reproduced regression.
 
-Required remaining closure:
-`Merge -> Production Stage 4.2 migrations/parity -> Production post-check -> merged-main Verify + Browser Smoke -> Deploy`.
-
-Do not mark RUNTIME-002 fully CLOSED until that chain is complete.
+#### Stage 4.3 — Remaining Published Operating Cycle — ACTIVE 🟠
+No new defect is counted merely because this audit is active.
+Count only reproduced/directly verified root causes while testing:
+- Login/bootstrap.
+- shared shift/opening balance.
+- all POS order types.
+- KDS/send-once/delta.
+- inventory deduction/no double consumption.
+- payments/discounts/voids/returns.
+- hold/resume/split/merge/transfer.
+- shift close/day close/offline paths.
+- products/components/recipes/costing.
+- reports/guided routing/RTL-LTR/navigation.
 
 ### Stage 3 — Printing
 - `set_print_status(uuid,text)` search-path defect is already CLOSED by PR #46 and must not be double-counted.
@@ -124,14 +123,14 @@ Do not mark RUNTIME-002 fully CLOSED until that chain is complete.
 - PR #45 Inventory unit production Permission-First/branch/warehouse hardening.
 - PR #46 SECURITY DEFINER search-path zero closure.
 - PR #47 Shift cash integrity + branch scope.
+- PR #48 POS operator ownership + controlled operator transfer.
 
 ## Current execution order
-1. Stage 4.2: close PR #48 through merge, Production parity/post-check, merged-main Verify and Deploy.
-2. Stage 4.3: continue the published full operating cycle and count only reproduced deviations.
-3. Stage 5 Auth/password remains externally blocked on the project Auth setting unless a valid write path becomes available; do not falsely close it.
-4. Stage 3: validate printing end-to-end.
-5. Stage 2: enforce required protection/checks on `main` when repository-admin capability is available.
-6. Stage 1: final cleanup/handover and zero-drift proof.
+1. Stage 4.3: continue the published full operating cycle and count only reproduced deviations.
+2. Stage 5 Auth/password remains externally blocked on the project Auth setting unless a valid write path becomes available; do not falsely close it.
+3. Stage 3: validate printing end-to-end.
+4. Stage 2: enforce required protection/checks on `main` when repository-admin capability is available.
+5. Stage 1: final cleanup/handover and zero-drift proof.
 
 ## Mandatory safety rules
 - Before every write, re-fetch development/main HEAD and review concurrent commits.
