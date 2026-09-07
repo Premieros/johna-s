@@ -365,9 +365,11 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
       `SELECT created_by
          FROM public.order_kitchen_inventory_events
         WHERE order_id = $1
-        ORDER BY created_at DESC LIMIT 1`,
-      [orderId],
+          AND created_by = $2
+        LIMIT 1`,
+      [orderId, ids.users.branch_manager],
     );
+    expect(kitchenAttribution.rows).toHaveLength(1);
     expect(kitchenAttribution.rows[0].created_by).toBe(ids.users.branch_manager);
 
     const invoice = `OWN-OK-${randomUUID()}`;
