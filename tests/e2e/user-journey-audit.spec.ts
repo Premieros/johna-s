@@ -100,6 +100,10 @@ async function login(page: Page) {
 }
 
 async function openRoute(page: Page, route: string) {
+  if (/#\/login$/.test(page.url())) {
+    await login(page);
+  }
+
   const resetRoute = route === '/dashboard' ? '/system-health' : '/dashboard';
 
   // Keep the authenticated SPA instance alive. A full page.goto() reload can
