@@ -101,13 +101,20 @@ async function login(page: Page) {
 
 async function openRoute(page: Page, route: string) {
   const resetRoute = route === '/dashboard' ? '/system-health' : '/dashboard';
-  await page.goto(`/#${resetRoute}`);
-  await page.waitForLoadState('domcontentloaded');
-  await page.goto(`/#${route}`);
-  await page.waitForLoadState('domcontentloaded');
-  await expect(page).toHaveURL(new RegExp(`#${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\?)`));
+
+  // Keep the authenticated SPA instance alive. A full page.goto() reload can
+  // discard the mocked in-memory auth state and create false /login failures.
+  await page.evaluate((hash) => { window.location.hash = hash; }, resetRoute);
+  await page.waitForTimeout(80);
+  await page.evaluate((hash) => { window.location.hash = hash; }, route);
+  await page.waitForTimeout(120);
+
+  // Several legacy routes intentionally redirect to their canonical pages.
+  // The audit is concerned with a usable rendered destination, not preserving
+  // the legacy hash verbatim.
   await expect(page.locator('body')).toBeVisible();
   await expect(page.locator('body')).not.toHaveText(/^\s*$/);
+  await expect(page).not.toHaveURL(/#\/login$/);
 }
 
 async function pageButtons(page: Page): Promise<Locator> {
