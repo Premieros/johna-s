@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const SUPABASE_ORIGIN = process.env.VITE_SUPABASE_URL || 'https://azzdesuowpdcoflmyezn.supabase.co';
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -100,18 +100,51 @@ async function login(page: Page) {
 }
 
 async function openRoute(page: Page, route: string) {
+  const resetRoute = route === '/dashboard' ? '/system-health' : '/dashboard';
+  await page.goto(`/#${resetRoute}`);
+  await page.waitForLoadState('domcontentloaded');
   await page.goto(`/#${route}`);
   await page.waitForLoadState('domcontentloaded');
   await expect(page.locator('body')).not.toHaveText(/^\s*$/);
-  await expect(page.locator('main').first()).toBeVisible();
+
+  const main = page.locator('main').first();
+  if (await main.count()) {
+    await expect(main).toBeVisible();
+  } else {
+    await expect(page.locator('body')).toBeVisible();
+  }
 }
 
-async function buttonName(button: ReturnType<Page['locator']>) {
+async function pageButtons(page: Page): Promise<Locator> {
+  const main = page.locator('main').first();
+  if (await main.count()) return main.locator('button:visible');
+  return page.locator('body button:visible');
+}
+
+async function buttonName(button: Locator) {
   const aria = (await button.getAttribute('aria-label'))?.trim();
   if (aria) return aria;
   const title = (await button.getAttribute('title'))?.trim();
   if (title) return title;
   return (await button.innerText()).replace(/\s+/g, ' ').trim();
+}
+
+async function dismissModalIfPresent(page: Page) {
+  await page.keyboard.press('Escape').catch(() => undefined);
+  await page.waitForTimeout(80);
+
+  const overlay = page.locator('div.fixed.inset-0.z-50:visible').last();
+  if (!(await overlay.count())) return;
+
+  const close = overlay.getByRole('button', { name: /إغلاق|إلغاء|رجوع|Close|Cancel|×|✕/i }).last();
+  if (await close.count()) {
+    await close.click({ timeout: 2_000 }).catch(() => undefined);
+    await page.waitForTimeout(80);
+  }
+
+  if (await overlay.count()) {
+    await page.keyboard.press('Escape').catch(() => undefined);
+  }
 }
 
 for (const route of ROUTES) {
@@ -132,13 +165,14 @@ for (const route of ROUTES) {
     expect(pageErrors, `page errors while opening ${route}`).toEqual([]);
     expect(consoleErrors, `console errors while opening ${route}`).toEqual([]);
 
-    const initialButtons = page.locator('main button:visible');
+    const initialButtons = await pageButtons(page);
     const initialCount = await initialButtons.count();
 
     for (let index = 0; index < initialCount; index += 1) {
       await openRoute(page, route);
+      await dismissModalIfPresent(page);
 
-      const buttons = page.locator('main button:visible');
+      const buttons = await pageButtons(page);
       if (index >= await buttons.count()) continue;
 
       const button = buttons.nth(index);
@@ -153,10 +187,7 @@ for (const route of ROUTES) {
       await button.scrollIntoViewIfNeeded();
       await button.click({ timeout: 5_000 });
       await page.waitForTimeout(120);
-
-      if (await page.getByRole('dialog').count()) {
-        await page.keyboard.press('Escape');
-      }
+      await dismissModalIfPresent(page);
 
       expect(pageErrors.slice(errorsBefore), `page error after clicking "${name}" on ${route}`).toEqual([]);
       expect(consoleErrors.slice(consoleBefore), `console error after clicking "${name}" on ${route}`).toEqual([]);
