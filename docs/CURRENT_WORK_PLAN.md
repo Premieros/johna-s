@@ -1,10 +1,10 @@
-# CURRENT WORK PLAN — john-s — UNIFIED SOURCE OF TRUTH
+# CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
 > **هذا هو السجل الحي الوحيد للمشروع.**
 > أي نموذج أو مطور يبدأ من هذا الملف فقط.
 > الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair أصبحت مراجع تاريخية فقط ولا تُستخدم لتحديد الحالة الحالية.
 
-آخر تحديث: **2026-09-07 — Africa/Cairo**
+آخر تحديث: **2026-09-08 — Africa/Cairo**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -12,6 +12,7 @@
 - Production Supabase الوحيد: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Permanent development branch: `development/final-handover`
+- Published site: `https://premieros.github.io/johna-s/`
 - ممنوع استخدام `pos.v2`
 - ممنوع استخدام Supabase `scpovyrqmsbiduanykod`
 - ممنوع Force Push
@@ -25,53 +26,64 @@
 
 ### Verified Production baseline
 
-- Verified `main`: `85e6ce1df0f12b7eaca73ca283bef41a6703b828`
-- PR #48: `security: enforce POS operator ownership and transfer` ✅
-- Pre-merge Verify #887 / run `34156244462`: Full Green ✅
-- Merged-main Verify #888 / run `34156540119`: Full Green ✅ بما فيه Fresh DB + Schema + Integration/Security/RLS + Browser Smoke
-- Deploy #579 / run `34156540094`, attempt 2: Production parity ✅ + GitHub Pages deploy ✅
+- Verified `main`: `11995374297af83af2b4e72b31ea47df5b40ebf2`
+- PR #49: `docs: consolidate project status into one source of truth` ✅
+- Verify main #890 / run `34158873521`: Full Green ✅
+  - Frontend/API contract ✅
+  - lint/typecheck/unit/build ✅
+  - Fresh DB migrations ✅
+  - Schema verification ✅
+  - Integration/Security/RLS ✅
+  - Browser Smoke ✅
+- Deploy #580 / run `34158873516`: Build ✅ + Production parity ✅ + GitHub Pages deploy ✅
 - Production DB: `azzdesuowpdcoflmyezn` متطابقة مع عقد `main` الموثق ✅
-- Development branch آخر حالة موثقة قبل هذا التوحيد: `368634285aac8a5cb774b8b9d0c6427fa62a6b37`، وهي تحديثات Documentation بعد إغلاق PR #48.
+- `main` و`development/final-handover` كانا identical عند baseline أعلاه قبل حزمة Documentation الخاصة بالتسليم.
+- Final handover package: `docs/FINAL_HANDOVER_2026-09-08.md` على فرع التطوير.
 
 ### الحالة التشغيلية
 
 لا يوجد حاليًا Runtime/POS defect مؤكد يحتاج تعديل كود.
 
-تم إيقاف الفحص الواسع المفتوح الذي كان تحت اسم Stage 4.3. من الآن لا نعيد اختبار كل المشروع أو نفتح مرحلة طويلة بدون Regression مثبت.
+**حالة التسليم:**
+- Application/runtime: **READY** ✅
+- Platform administration: **2 settings pending** ⚠️
 
-**أسلوب العمل المعتمد الآن:**
+لا يتم وصف الإصدار بأنه Final 100% قبل إغلاق `AUTH-001` و`RELEASE-001` فعليًا.
 
-`Bug فعلي / Regression مثبت → تحديد Root Cause → إصلاح صغير صحيح → Regression test → Full Verify → Merge → Production parity عند الحاجة → Deploy`
+تم إيقاف الفحص الواسع المفتوح. من الآن لا نعيد اختبار كل المشروع أو نفتح مرحلة طويلة بدون Regression مثبت.
 
-أي شيء أخضر أو مغلق لا يُعاد فتحه لمجرد الشك أو الرغبة في إعادة الفحص.
+**أسلوب العمل المعتمد:**
+
+`Bug فعلي / Regression مثبت → Root Cause → إصلاح صغير صحيح → Regression test → Full Verify → Merge → Production parity عند الحاجة → Deploy`
+
+أي شيء أخضر أو مغلق لا يُعاد فتحه لمجرد الشك.
 
 ## 3) الانحرافات المؤكدة المتبقية فقط — عددها 2
 
 ### AUTH-001 — Leaked Password Protection disabled
 
-- Supabase Auth `Leaked Password Protection` ما زالت Disabled.
-- هذه Account/Project Setting وليست Runtime code defect.
-- الأداة المتصلة حاليًا لا توفر Auth settings write action.
-- Supabase يضع الإعداد تحت Authentication/Auth settings؛ الميزة متاحة على Pro وما فوق.
+- Production Security Advisor أكد أن Supabase Auth `Leaked Password Protection` ما زالت Disabled.
+- هذه Project/Auth Setting وليست Runtime code defect.
+- الأداة المتصلة لا توفر Auth settings write action.
 
 الإغلاق يتطلب:
 1. تفعيل Prevent use of leaked passwords على مشروع `azzdesuowpdcoflmyezn`.
 2. Smoke سريع فقط لـLogin / Create User / Password Update / Reset حسب المسارات المستخدمة فعليًا.
-3. إعادة التحقق من Advisor/setting.
+3. إعادة Security Advisor والتأكد من اختفاء التحذير.
 
 لا يتم ادعاء الإغلاق قبل تعديل الإعداد الحقيقي.
 
 ### RELEASE-001 — `main` غير محمي
 
 - `main` حاليًا `protected=false`.
-- لا توجد Required Checks مفروضة على مستوى الفرع.
+- لا توجد Required Checks مفروضة على مستوى branch/ruleset.
 - هذه Release-governance issue وليست Runtime application bug.
 - اتصال GitHub الحالي لا يوفر Administration write لإعداد Branch Protection.
 
 الإغلاق يتطلب:
-1. تفعيل حماية `main` من Repository Settings/Rulesets.
-2. فرض checks مناسبة قبل الدمج، على الأقل Verify/DB/Browser Smoke أو الـworkflow المكافئ المعتمد.
-3. إعادة قراءة حالة الفرع والتأكد أن `protected=true`/ruleset فعال.
+1. تفعيل حماية `main` من Repository Settings / Rulesets.
+2. فرض checks المناسبة قبل الدمج، على الأقل Verify/DB/Browser Smoke أو الـworkflow المكافئ المعتمد.
+3. إعادة قراءة حالة الفرع/ruleset والتأكد أن الحماية فعالة.
 
 لا يتم ادعاء الإغلاق إذا لم تتوفر صلاحية Admin فعلية.
 
@@ -91,6 +103,7 @@
 - SECURITY DEFINER legacy search-path zero closure — PR #46 ✅
 - Shift cash integrity + branch scope — PR #47 ✅
 - POS operator ownership + controlled operator transfer — PR #48 ✅
+- Unified project status log — PR #49 ✅
 
 ### عقد PR #48 المحمي
 
@@ -112,7 +125,7 @@ Production migrations الخاصة بالإغلاق:
 - `20260907194427_pos_operator_rpc_ownership_hardening`
 - `20260907194454_pos_sale_shift_attribution`
 
-## 5) قواعد الإصلاح السريع من الآن
+## 5) قواعد الإصلاح بعد التسليم
 
 1. لا Full-project audit متكرر.
 2. لا Bug جديد يدخل السجل إلا مع reproduction أو direct contract proof.
@@ -135,7 +148,7 @@ Production migrations الخاصة بالإغلاق:
 
 ## 7) التطويرات المستقبلية — مؤجلة وليست Bugs حالية
 
-لا تبدأ إلا بطلب صريح بعد استقرار التشغيل، ولا تعتبر “متبقي إصلاح”. الترتيب المرجعي:
+لا تبدأ إلا بطلب صريح بعد استقرار التشغيل، ولا تعتبر “متبقي تسليم”. الترتيب المرجعي:
 
 1. POS Permission Matrix finalization.
 2. Table lifecycle.
@@ -151,7 +164,7 @@ Production migrations الخاصة بالإغلاق:
 12. UX/RTL/LTR/mobile polish.
 13. Security/Release completion.
 
-## 8) ما المطلوب الآن فعليًا
+## 8) ما المطلوب الآن فعليًا للتسليم النهائي
 
 لا يوجد Repair batch كودي نشط.
 
@@ -159,16 +172,36 @@ Production migrations الخاصة بالإغلاق:
 - `AUTH-001` — يحتاج Supabase Auth setting فعلي.
 - `RELEASE-001` — يحتاج GitHub repository-admin setting فعلي.
 
-إذا ظهر Bug تشغيلي جديد من الاستخدام الحقيقي، يتم تسجيله هنا فقط بعد إثباته ثم إصلاحه مباشرة وفق القواعد أعلاه.
+بعد إغلاقهما وإعادة التحقق يصبح المشروع صالحًا لوصف **Final 100% / Zero Drift release acceptance**.
 
-## 9) سياسة السجلات
+إذا ظهر Bug تشغيلي جديد من الاستخدام الحقيقي، يتم تسجيله هنا فقط بعد إثباته ثم إصلاحه مباشرة.
+
+## 9) حزمة التسليم
+
+الملف التنفيذي للتسليم:
+- `docs/FINAL_HANDOVER_2026-09-08.md`
+
+يحتوي:
+- الهوية الثابتة
+- verified baseline
+- closed contracts
+- المتبقي الإداري
+- أوامر التشغيل المحلية
+- procedure لأي تغيير Production لاحق
+- شروط قبول التسليم النهائي
+
+## 10) سياسة السجلات
 
 هذا الملف `docs/CURRENT_WORK_PLAN.md` هو **المرجع الحي الوحيد**.
 
-الملفات التالية أصبحت Legacy pointers فقط ويمنع تحديث حالة المشروع فيها بشكل مستقل:
+الملفات التالية Legacy pointers فقط ويمنع تحديث حالة المشروع فيها بشكل مستقل:
 - `docs/FINAL_BUG_REGISTER.md`
 - `docs/FINAL_REMAINING_STAGES.md`
 - `docs/HANDOVER_CHECKPOINT_2026-09-06.md`
 - `docs/POST_REPAIR_DEVELOPMENT_PLAN.md`
 
 أي تحديث مستقبلي للحالة أو Bug أو خطة تنفيذ يتم هنا فقط.
+
+## 11) ملاحظة تنظيف مستودع غير تشغيلية
+
+تم إنشاء branch مؤقت بالخطأ أثناء تجهيز التسليم باسم `handover/final-delivery-20260908`. لا يُستخدم نهائيًا ولا يحمل تغييرات. اتصال GitHub الحالي لا يوفر delete-ref action؛ احذفه عند توفر صلاحية/أداة مناسبة. الفرع المعتمد الوحيد للتطوير يبقى `development/final-handover`.
