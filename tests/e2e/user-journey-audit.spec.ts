@@ -105,18 +105,13 @@ async function openRoute(page: Page, route: string) {
   await page.waitForLoadState('domcontentloaded');
   await page.goto(`/#${route}`);
   await page.waitForLoadState('domcontentloaded');
+  await expect(page).toHaveURL(new RegExp(`#${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\?)`));
+  await expect(page.locator('body')).toBeVisible();
   await expect(page.locator('body')).not.toHaveText(/^\s*$/);
-
-  const main = page.locator('main').first();
-  if (await main.count()) {
-    await expect(main).toBeVisible();
-  } else {
-    await expect(page.locator('body')).toBeVisible();
-  }
 }
 
 async function pageButtons(page: Page): Promise<Locator> {
-  const main = page.locator('main').first();
+  const main = page.locator('main:visible').first();
   if (await main.count()) return main.locator('button:visible');
   return page.locator('body button:visible');
 }
