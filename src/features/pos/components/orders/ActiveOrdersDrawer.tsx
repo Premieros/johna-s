@@ -107,7 +107,12 @@ export function ActiveOrdersDrawer({
             {t('activeOrders')}
             <span className="px-2 py-0.5 rounded-full bg-ui-primary-soft text-ui-accent text-[11px] font-bold">{orders.length}</span>
           </h2>
-          <button onClick={onClose} className="p-2 rounded-lg text-ui-muted hover:bg-ui-page-alt transition-colors">
+          <button
+            onClick={onClose}
+            aria-label={isAr ? 'إغلاق الطلبات النشطة' : 'Close active orders'}
+            title={isAr ? 'إغلاق الطلبات النشطة' : 'Close active orders'}
+            className="p-2 rounded-lg text-ui-muted hover:bg-ui-page-alt transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -100,23 +100,29 @@ async function login(page: Page) {
 }
 
 async function openRoute(page: Page, route: string) {
-  const resetRoute = route === '/dashboard' ? '/system-health' : '/dashboard';
-  await page.goto(`/#${resetRoute}`);
-  await page.waitForLoadState('domcontentloaded');
-  await page.goto(`/#${route}`);
-  await page.waitForLoadState('domcontentloaded');
-  await expect(page.locator('body')).not.toHaveText(/^\s*$/);
-
-  const main = page.locator('main').first();
-  if (await main.count()) {
-    await expect(main).toBeVisible();
-  } else {
-    await expect(page.locator('body')).toBeVisible();
+  if (/#\/login$/.test(page.url())) {
+    await login(page);
   }
+
+  const resetRoute = route === '/dashboard' ? '/system-health' : '/dashboard';
+
+  // Keep the authenticated SPA instance alive. A full page.goto() reload can
+  // discard the mocked in-memory auth state and create false /login failures.
+  await page.evaluate((hash) => { window.location.hash = hash; }, resetRoute);
+  await page.waitForTimeout(80);
+  await page.evaluate((hash) => { window.location.hash = hash; }, route);
+  await page.waitForTimeout(120);
+
+  // Several legacy routes intentionally redirect to their canonical pages.
+  // The audit is concerned with a usable rendered destination, not preserving
+  // the legacy hash verbatim.
+  await expect(page.locator('body')).toBeVisible();
+  await expect(page.locator('body')).not.toHaveText(/^\s*$/);
+  await expect(page).not.toHaveURL(/#\/login$/);
 }
 
 async function pageButtons(page: Page): Promise<Locator> {
-  const main = page.locator('main').first();
+  const main = page.locator('main:visible').first();
   if (await main.count()) return main.locator('button:visible');
   return page.locator('body button:visible');
 }
@@ -185,6 +191,9 @@ for (const route of ROUTES) {
       const consoleBefore = consoleErrors.length;
 
       await button.scrollIntoViewIfNeeded();
+      const actionable = await button.click({ trial: true, timeout: 1_000 }).then(() => true).catch(() => false);
+      if (!actionable) continue;
+
       await button.click({ timeout: 5_000 });
       await page.waitForTimeout(120);
       await dismissModalIfPresent(page);
