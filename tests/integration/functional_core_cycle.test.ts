@@ -209,12 +209,11 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
     const sale = await client.query<{
       cashier_id: string;
       branch_id: string;
-      shift_id: string;
       payment_method: string;
       total: string;
       status: string;
     }>(
-      `SELECT cashier_id, branch_id, shift_id, payment_method, total::text, status
+      `SELECT cashier_id, branch_id, payment_method, total::text, status
          FROM public.sales
         WHERE invoice_number = $1`,
       [invoiceNumber],
@@ -223,12 +222,12 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
     expect(sale.rows[0]).toMatchObject({
       cashier_id: ids.users.cashier,
       branch_id: ids.branchA,
-      shift_id: ids.shiftA,
       payment_method: 'cash',
       total: '20.00',
       status: 'completed',
     });
 
+    // Shift attribution is represented by the cash movement, not a sales.shift_id column.
     const cashOperation = await client.query<{ created_by: string }>(
       `SELECT created_by
          FROM public.shift_operations
