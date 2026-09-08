@@ -122,7 +122,12 @@ export function KitchenPanel({ open, onClose, orders, itemsByOrder, kitchenSends
             {t('kitchen')}
             <span className="rounded-full bg-ui-warning/10 px-2 py-0.5 text-[11px] font-bold text-ui-warning">{kitchenOrders.length}</span>
           </h2>
-          <button onClick={onClose} className="rounded-lg p-2 text-ui-muted transition-colors hover:bg-ui-page-alt">
+          <button
+            onClick={onClose}
+            aria-label={isAr ? 'إغلاق لوحة المطبخ' : 'Close kitchen panel'}
+            title={isAr ? 'إغلاق لوحة المطبخ' : 'Close kitchen panel'}
+            className="rounded-lg p-2 text-ui-muted transition-colors hover:bg-ui-page-alt"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
