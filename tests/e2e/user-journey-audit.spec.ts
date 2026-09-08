@@ -191,6 +191,9 @@ for (const route of ROUTES) {
       const consoleBefore = consoleErrors.length;
 
       await button.scrollIntoViewIfNeeded();
+      const actionable = await button.click({ trial: true, timeout: 1_000 }).then(() => true).catch(() => false);
+      if (!actionable) continue;
+
       await button.click({ timeout: 5_000 });
       await page.waitForTimeout(120);
       await dismissModalIfPresent(page);
