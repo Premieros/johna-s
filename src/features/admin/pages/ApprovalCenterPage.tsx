@@ -9,7 +9,7 @@ import { useToast } from '@/components/Toast';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { ALL_PERMISSIONS, isAdminRole, useCan } from '@/lib/permissions';
+import { ALL_PERMISSIONS, useCan } from '@/lib/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { useV2Can } from '@/v2/core/useV2Can';
 
@@ -41,7 +41,8 @@ export function ApprovalCenterPage() {
   const { branches } = useBranches();
   const activeBranch = useBranchFilter();
   const { show } = useToast();
-  const admin = isAdminRole(user?.role);
+  const canReviewApprovals = can('approvals.review');
+  const canManagePolicies = can('approvals.policy.manage');
   const [branchId, setBranchId] = useState(activeBranch || user?.branch_id || '');
   const [rows, setRows] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,7 +60,9 @@ export function ApprovalCenterPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const mayDecide = (row: QueueItem) => admin || v2Can(row.required_permission);
+  // The server supplies the exact permission required for each queue item.
+  // Super Admin bypass, when applicable, is handled only by canonical useCan().
+  const mayDecide = (row: QueueItem) => canReviewApprovals && v2Can(row.required_permission);
 
   const decide = async (row: QueueItem, approve: boolean) => {
     let reason: string | null = null;
@@ -94,7 +97,7 @@ export function ApprovalCenterPage() {
             <ShieldCheck className="w-5 h-5 text-ui-primary" />
             <span className="font-semibold">{ar ? 'الفرع' : 'Branch'}</span>
             <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="max-w-xs">
-              {admin && <option value="">{ar ? 'كل الفروع المصرح بها' : 'All accessible branches'}</option>}
+              {canReviewApprovals && <option value="">{ar ? 'كل الفروع المصرح بها' : 'All accessible branches'}</option>}
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
             <span className="ms-auto text-sm text-ui-muted">{ar ? `معلق: ${rows.length}` : `Pending: ${rows.length}`}</span>
@@ -133,7 +136,7 @@ export function ApprovalCenterPage() {
             </div>
           )}
         </DesignPanel>
-        {can('approvals.policy.manage') && user && <ApprovalPoliciesPanel ar={ar} branches={branches} userId={user.id} allowGlobal={admin} />}
+        {canManagePolicies && user && <ApprovalPoliciesPanel ar={ar} branches={branches} userId={user.id} allowGlobal />}
       </div>
     </DesignSurface>
   );
