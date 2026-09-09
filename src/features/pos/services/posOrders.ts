@@ -15,6 +15,13 @@ type PosOrderOperatorLabel = {
   operator_name: string | null;
 };
 
+export type MyActiveTableOrderResolution = {
+  success?: boolean;
+  error?: string;
+  resumable?: boolean;
+  order_id?: string;
+};
+
 export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeData> {
   const [tRes, oRes, operatorRes] = await Promise.all([
     supabase.from('dining_tables').select('*').eq('branch_id', branchId).order('name'),
@@ -69,6 +76,12 @@ export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: 
     products = (prods as Product[]) || [];
   }
   return { order, items: itemRows, products };
+}
+
+export async function resolveMyActiveTableOrder(tableId: string): Promise<MyActiveTableOrderResolution> {
+  const { data, error } = await supabase.rpc('resolve_my_active_table_order', { p_table_id: tableId });
+  if (error) return { success: false, error: error.message, resumable: false };
+  return (data as MyActiveTableOrderResolution | null) || { success: false, error: 'TABLE_BUSY', resumable: false };
 }
 
 export async function fetchBranches(): Promise<Branch[]> {
