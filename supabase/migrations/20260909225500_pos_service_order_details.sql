@@ -202,7 +202,7 @@ CREATE OR REPLACE FUNCTION public.update_service_order(
   p_tax_amount numeric DEFAULT 0,
   p_total numeric DEFAULT 0,
   p_status text DEFAULT 'held'::text,
-  p_service_details jsonb DEFAULT '{}'::jsonb
+  p_service_details jsonb DEFAULT NULL::jsonb
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -212,6 +212,7 @@ AS $function$
 DECLARE
   v_validation jsonb;
   v_details jsonb;
+  v_existing_details jsonb;
   v_result jsonb;
   v_branch_id uuid;
 BEGIN
@@ -223,7 +224,7 @@ BEGIN
       RETURN jsonb_build_object('success', false, 'error', 'SERVICE_ORDER_CANNOT_HAVE_TABLE');
     END IF;
 
-    SELECT branch_id INTO v_branch_id
+    SELECT branch_id, service_details INTO v_branch_id, v_existing_details
     FROM public.orders
     WHERE id = p_order_id
     FOR UPDATE;
@@ -235,7 +236,10 @@ BEGIN
       RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
     END IF;
 
-    v_validation := public.normalize_order_service_details(p_order_type, p_service_details);
+    v_validation := public.normalize_order_service_details(
+      p_order_type,
+      COALESCE(p_service_details, v_existing_details, '{}'::jsonb)
+    );
     IF COALESCE((v_validation->>'success')::boolean, false) IS NOT TRUE THEN
       RETURN v_validation;
     END IF;
