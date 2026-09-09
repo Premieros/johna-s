@@ -28,7 +28,6 @@ export interface UsePosOrderInput {
   orderId: string | null;
   customers: Customer[];
   effSettings: Settings | null;
-  isCashier: boolean;
   activeShift: ActiveShiftInfo | null;
   products: Product[];
   stockMap: Record<string, number>;
@@ -46,7 +45,7 @@ const EMPTY_CART: CartItem[] = [];
 const VALID_PAYMENT_METHODS: PosPaymentMethod[] = ['cash', 'card', 'transfer', 'credit'];
 
 export function usePosOrder(input: UsePosOrderInput) {
-  const { branchId, branchName, orderId, customers, effSettings, isCashier, activeShift, stockMap, onInventoryChanged } = input;
+  const { branchId, branchName, orderId, customers, effSettings, activeShift, stockMap, onInventoryChanged } = input;
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { user } = useAuth();
@@ -720,7 +719,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const completeSale = useCallback(async (): Promise<boolean> => {
     if (cart.length === 0 || completing) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
-    if (isCashier && !activeShift) { show(t('shiftRequired'), 'error'); return false; }
+    if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }
     if (orderType === 'dine_in' && !tableId) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
       return false;
@@ -809,7 +808,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setCompleting(false);
     }
-  }, [cart, completing, branchId, branchName, isCashier, activeShift, orderType, tableId, getStock, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t]);
+  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t]);
 
   const printReceipt = useCallback(async () => {
     if (!lastReceipt || !effSettings) return;

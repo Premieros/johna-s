@@ -132,19 +132,30 @@ Run: `34306890481` / Verify #906 على PR #54 بعد Shared-Shift settlement ha
 - Fresh DB migrations / Schema / Integration / Security / RLS ✅.
 - Browser Smoke: `104/105`، فشل اختبار واحد فقط في `tests/e2e/pos-actions.spec.ts` ❌.
 - Root Cause: fixture الخاص بـ`get_active_shift` كان يعيد الشكل القديم المسطح `shift_id`، بينما Shared Branch Shift RPC الحقيقي يعيد `shift: { id, ... }`. بعد settlement hardening قرأت الخدمة العقد الصحيح، فلم تجد fixture shift صالحًا وأغلقت الدفع بـ`SHIFT_REQUIRED` قبل `process_sale`.
-- الإصلاح الجاري: تحديث fixture إلى عقد Shared Branch Shift الحقيقي، وإثبات أن `process_sale` يستلم `p_shift_id` الصحيح، ثم إعادة Full Verify كامل.
+- تم تحديث fixture إلى عقد Shared Branch Shift الحقيقي وإثبات أن `process_sale` يستلم `p_shift_id` الصحيح.
 
-## 5) الخطوة التالية بعد Green #906 replacement
+### Checkpoint Verify #909 — Full Green
 
-بعد أن يصبح PR #54 Full Green على head الجديد:
+- Head: `1d85946a74f61bbc5a339e06892f457d08884643`.
+- Run: `34316529658` / Verify #909.
+- Frontend/API contract/lint/typecheck/test typecheck/Unit/build ✅.
+- Fresh DB migrations/Schema/Integration/Security/RLS ✅.
+- Browser Smoke ✅.
+- النتيجة: Regression الخاص بـ#906 واختبار Browser التابع لـShared Branch Shift مغلقان بالكامل.
 
-1. أكمل إزالة `shift_exempt` من `src/features/pos/pages/PosWorkspacePage.tsx`.
-2. اجعل `reloadShift` يقرأ Shared Branch Shift الحقيقي لكل مستخدم POS المصرح له، لا role `cashier` فقط.
-3. اجعل `handlePay` يمرر `activeShift?.id || null` الحقيقي إلى `guardPos`.
-4. راجع deep-link/open-order pay flow (`initState.pay`) حتى لا يفتح checkout قبل تحقق shift prerequisite.
-5. لا تجعل عرض زر إدارة/فتح/إغلاق الشفت مبنيًا على role name؛ استخدم exact permissions، مع عدم توسيع صلاحيات المستخدم.
-6. أضف Regression tests صغيرة تثبت عدم وجود `shift_exempt` وعدم وجود cashier-only shared-shift lookup.
-7. Full Verify جديد.
+## 5) Shared Branch Shift UI closure — العمل الحالي
+
+تم تنفيذ الجزء التالي محليًا بعد Full Green #909، وما زال ينتظر Full Verify جديدًا قبل اعتباره مغلقًا:
+
+1. إزالة `shift_exempt` من `PosWorkspacePage` واستخدام `activeShift?.id || null` الحقيقي.
+2. `reloadShift` يقرأ Shared Branch Shift لكل مستخدم POS على الفرع، بلا cashier-role gate.
+3. direct/deep-link pay يمران عبر `handlePay` بعد اكتمال فحص الشفت.
+4. `usePosOrder.completeSale` يفشل قبل التسوية إذا لا يوجد شفت لأي role label.
+5. فتح/إغلاق/إدارة الشفت في POS و`ShiftsPage` تعتمد exact `shifts.open` / `shifts.close` بدل role name.
+6. Guided open-shift action يتطلب `shifts.open` بدل `shifts.manage`.
+7. Regression test: `tests/unit/posSharedShiftWorkspaceContract.test.ts`.
+8. Local gates: DB identity ✅، lint 0 errors ✅، typecheck + test typecheck ✅، Unit `410/410` ✅، build ✅.
+9. المتبقي لهذا الجزء: commit/push ثم Full Verify جديد.
 
 لا تفتح Batch 2 (Availability/Delivery/Modifiers/KDS/Offline) قبل إغلاق PR #54 Full Green.
 

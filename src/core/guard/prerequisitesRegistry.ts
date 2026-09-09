@@ -159,7 +159,7 @@ export const PREREQUISITE_STEPS: Record<PrerequisiteStepKey, PrerequisiteStep> =
     targetRoute: APP_ROUTES.shifts,
     actionLabelAr: 'فتح الوردية الآن',
     actionLabelEn: 'Open Shift Now',
-    requiredPermission: 'shifts.manage',
+    requiredPermission: 'shifts.open',
     iconName: 'timer',
   },
   need_permission: {
