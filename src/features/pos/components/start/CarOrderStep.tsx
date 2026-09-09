@@ -3,6 +3,7 @@ import { Car, User, Users } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useLanguage } from '@/context/LanguageContext';
 import type { OrderType } from '@/lib/types';
+import { setPendingServiceDetails } from '@/lib/posServiceDetails';
 import { buildCarNotes } from '../../utils/orderLabels';
 
 interface CarOrderStepProps {
@@ -18,6 +19,20 @@ export function CarOrderStep({ onStart }: CarOrderStepProps) {
 
   const canStart = plate.trim().length > 0;
 
+  const submit = () => {
+    const plateValue = plate.trim();
+    const customerValue = customer.trim();
+    setPendingServiceDetails({
+      vehicle_identifier: plateValue,
+      ...(customerValue ? { customer_name: customerValue } : {}),
+    });
+    onStart({
+      orderType: 'drive_thru',
+      guestCount: people > 0 ? people : null,
+      notes: buildCarNotes(plateValue, customerValue, people),
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-8">
       <div className="max-w-md mx-auto space-y-4">
@@ -28,7 +43,7 @@ export function CarOrderStep({ onStart }: CarOrderStepProps) {
         <label className="block"><span className="flex items-center gap-1.5 text-sm font-medium text-ui-muted mb-1.5"><Car className="w-4 h-4" /> {t('carPlate')} <span className="text-ui-danger">*</span></span><input data-testid="pos-drive-thru-plate" value={plate} onChange={(e) => setPlate(e.target.value)} placeholder={isAr ? 'مثال: 1234 أ ب ج' : 'e.g. ABC-1234'} className="w-full px-3.5 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm font-semibold text-ui-text placeholder:text-ui-subtle focus:ring-2 focus:ring-ui-ring focus:outline-none" /></label>
         <label className="block"><span className="flex items-center gap-1.5 text-sm font-medium text-ui-muted mb-1.5"><User className="w-4 h-4" /> {t('customerName')} <span className="text-xs text-ui-subtle">({isAr ? 'اختياري' : 'optional'})</span></span><input data-testid="pos-drive-thru-customer" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder={isAr ? 'اسم العميل' : 'Customer name'} className="w-full px-3.5 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm font-semibold text-ui-text placeholder:text-ui-subtle focus:ring-2 focus:ring-ui-ring focus:outline-none" /></label>
         <label className="block"><span className="flex items-center gap-1.5 text-sm font-medium text-ui-muted mb-1.5"><Users className="w-4 h-4" /> {t('peopleCount')} <span className="text-xs text-ui-subtle">({isAr ? 'اختياري' : 'optional'})</span></span><input data-testid="pos-drive-thru-people" type="number" min={0} value={people} onChange={(e) => setPeople(Math.max(0, parseInt(e.target.value) || 0))} className="w-full px-3.5 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm font-semibold text-ui-text focus:ring-2 focus:ring-ui-ring focus:outline-none" /></label>
-        <Button data-testid="pos-drive-thru-start" size="lg" className="w-full" disabled={!canStart} onClick={() => onStart({ orderType: 'drive_thru', guestCount: people > 0 ? people : null, notes: buildCarNotes(plate, customer, people) })}>{t('startOrder')}</Button>
+        <Button data-testid="pos-drive-thru-start" size="lg" className="w-full" disabled={!canStart} onClick={submit}>{t('startOrder')}</Button>
       </div>
     </div>
   );

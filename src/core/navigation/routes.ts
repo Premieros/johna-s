@@ -11,6 +11,8 @@ export const APP_ROUTES = {
   superAdmin: '/super-admin',
   frontendV2: '/v2',
   pos: '/pos',
+  delivery: '/delivery',
+  driveThru: '/drive-thru',
   operationsCenter: '/operations',
   inventoryCenter: '/inventory-center',
   procurementCenter: '/procurement-center',

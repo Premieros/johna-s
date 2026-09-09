@@ -4,6 +4,14 @@ export type OrderType = 'dine_in' | 'takeaway' | 'delivery' | 'drive_thru';
 export type DiningTableStatus = 'vacant' | 'occupied' | 'reserved' | 'closed';
 export type OrderStatus = 'open' | 'held' | 'completed' | 'cancelled';
 
+export interface OrderServiceDetails {
+  phone?: string;
+  address?: string;
+  note?: string;
+  vehicle_identifier?: string;
+  customer_name?: string;
+}
+
 export interface PosSummary {
   occupiedTables: number;
   heldOrders: number;
@@ -59,6 +67,7 @@ export interface Order {
   cashier_id: string | null;
   guest_count: number | null;
   notes: string | null;
+  service_details?: OrderServiceDetails | null;
   subtotal: number;
   discount_amount: number;
   discount_type: string;

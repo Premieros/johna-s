@@ -4,6 +4,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/lib/format';
 import type { DiningTable, Order, OrderItem } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
+import { orderOperatorName } from '../../utils/operatorName';
 
 export type TableOperationalStatus = 'vacant' | 'open' | 'sent' | 'new_additions' | 'needs_action';
 
@@ -22,7 +23,7 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const activeOrder = orders[0] || null;
-  const operatorName = activeOrder?.cashier?.full_name || activeOrder?.cashier?.email || null;
+  const operatorName = activeOrder ? orderOperatorName(activeOrder) : null;
 
   const statusInfo = useMemo(() => {
     if (!activeOrder || table.status === 'vacant') return { status: 'vacant' as TableOperationalStatus, label: isAr ? 'متاحة' : 'Available', tone: 'text-ui-success bg-ui-success-soft border-ui-success/20', elapsed: 0 };

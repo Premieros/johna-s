@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, ChefHat, CheckCircle2, UtensilsCrossed, Volume2, VolumeX } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useCan } from '@/lib/permissions';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Input';
@@ -46,6 +47,8 @@ export function KitchenDisplayPage() {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
   const branchFilter = useBranchFilter();
+  const can = useCan();
+  const canUpdateKds = can('pos.kds_update');
   const [station, setStation] = useState('');
   const [items, setItems] = useState<KitchenQueueItem[]>([]);
   const [stations, setStations] = useState<KitchenStation[]>([]);
@@ -123,6 +126,7 @@ export function KitchenDisplayPage() {
   }, [load]);
 
   const handleKitchenStatus = async (orderId: string, status: string) => {
+    if (!canUpdateKds) return;
     try {
       await catalog.setKitchenStatus(orderId, status);
       void load();
@@ -182,11 +186,11 @@ export function KitchenDisplayPage() {
               </ul>
               {item.notes && <div className="text-xs text-ui-muted italic border-t border-ui-border pt-2 mb-3 break-words">{item.notes}</div>}
 
-              <div className="flex gap-2 border-t border-ui-border pt-3">
+              {canUpdateKds && <div className="flex gap-2 border-t border-ui-border pt-3">
                 {item.kitchen_status === 'sent' && <button onClick={() => void handleKitchenStatus(item.order_id, 'cooking')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-warning text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><ChefHat className="h-5 w-5" /> {ar ? 'بدء التحضير' : 'Start Cooking'}</button>}
                 {item.kitchen_status === 'cooking' && <button onClick={() => void handleKitchenStatus(item.order_id, 'ready')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-success text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><CheckCircle2 className="h-5 w-5" /> {ar ? 'جاهز للتقديم' : 'Mark Ready'}</button>}
                 {item.kitchen_status === 'ready' && <button onClick={() => void handleKitchenStatus(item.order_id, 'served')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-info text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><UtensilsCrossed className="h-5 w-5" /> {ar ? 'تم التقديم' : 'Served'}</button>}
-              </div>
+              </div>}
             </div>
           ))}
         </div>

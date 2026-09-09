@@ -8,6 +8,7 @@ import {
   Pause,
   Printer,
   UserPlus,
+  User,
   ShoppingBag,
   Bike,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ interface PosOrderHeaderBarProps {
   completing: boolean;
   hasUnsentItems: boolean;
   customerName?: string | null;
+  operatorName?: string | null;
   onOpenTransferModal?: () => void;
   onOpenCustomer: () => void;
   onHoldOrder: () => void;
@@ -54,6 +56,7 @@ export function PosOrderHeaderBar({
   completing,
   hasUnsentItems,
   customerName,
+  operatorName,
   onOpenTransferModal,
   onOpenCustomer,
   onHoldOrder,
@@ -95,6 +98,7 @@ export function PosOrderHeaderBar({
         <span className="text-ui-muted">·</span>
         <span className="text-ui-text font-black tabular-nums">{formatCurrency(total, currency, lang)}</span>
         {elapsedText && <><span className="text-ui-muted">·</span><span className="flex items-center gap-1 text-ui-subtle font-semibold"><Clock className="h-3 w-3" />{elapsedText}</span></>}
+        {operatorName && <><span className="text-ui-muted">·</span><span className="flex min-w-0 items-center gap-1 font-bold text-ui-muted"><User className="h-3 w-3 shrink-0" /><span className="max-w-[140px] truncate">{operatorName}</span></span></>}
         {hasSent && (
           <span className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-black border ${hasUnsentItems ? 'bg-amber-500/15 text-amber-700 border-amber-500/30 animate-pulse' : 'bg-sky-500/10 text-sky-600 border-sky-500/20'}`}>
             <ChefHat className="h-3 w-3" />

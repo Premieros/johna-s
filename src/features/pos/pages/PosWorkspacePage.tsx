@@ -35,6 +35,7 @@ import { PaymentPanel } from '../components/checkout/PaymentPanel';
 import { PosTablesSidebar } from '../components/tables/PosTablesSidebar';
 import { PosOrderHeaderBar } from '../components/order/PosOrderHeaderBar';
 import { TransferOrderModal } from '../components/tables/TransferOrderModal';
+import { orderOperatorName } from '../utils/operatorName';
 import { VoidItemModal } from '../components/order/VoidItemModal';
 
 interface WorkspaceState {
@@ -42,6 +43,7 @@ interface WorkspaceState {
   branchId?: string | null;
   guestCount?: number | null;
   pay?: number | null;
+  startStep?: StartStep | null;
 }
 
 export function PosWorkspacePage() {
@@ -81,7 +83,7 @@ export function PosWorkspacePage() {
   const [panel, setPanel] = useState<PosPanelId>(null);
   const [ordersCategory, setOrdersCategory] = useState<ActiveCategory>('all');
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
-  const [startStep, setStartStep] = useState<StartStep | null>(null);
+  const [startStep, setStartStep] = useState<StartStep | null>(initState.startStep ?? null);
   const [preselectedTableId, setPreselectedTableId] = useState<string | null>(initState.tableId || null);
 
   // Quick Modals State
@@ -196,6 +198,11 @@ export function PosWorkspacePage() {
   const productNames = useMemo(() => Object.fromEntries(products.map((p) => [p.id, isAr ? p.name : p.name_en || p.name])), [products, isAr]);
   const kitchenOrders = useMemo(() => orders.filter((o) => (kitchenSendsByOrder[o.id]?.length || 0) > 0).length, [orders, kitchenSendsByOrder]);
   const activeOrderCreatedAt = useMemo(() => orders.find((o) => o.id === pos.activeOrderId)?.created_at || null, [orders, pos.activeOrderId]);
+  const activeOrderOperatorName = useMemo(() => {
+    if (!pos.activeOrderId) return user?.full_name || user?.username || user?.email || null;
+    const activeOrder = orders.find((order) => order.id === pos.activeOrderId);
+    return activeOrder ? orderOperatorName(activeOrder) : null;
+  }, [orders, pos.activeOrderId, user]);
   const orderItemsForActive = useMemo(() => (pos.activeOrderId ? itemsByOrder[pos.activeOrderId] || [] : []), [pos.activeOrderId, itemsByOrder]);
   const kitchenSendsForActive = useMemo(() => (pos.activeOrderId ? kitchenSendsByOrder[pos.activeOrderId] || [] : []), [pos.activeOrderId, kitchenSendsByOrder]);
 
@@ -224,7 +231,7 @@ export function PosWorkspacePage() {
       const send = kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id);
       return Number(send?.sent_quantity || 0) < cItem.quantity;
     });
-  }, [pos.cart, kitchenSendsForActive, orderItemsForActive]);
+  }, [pos.cart, kitchenSendsByOrder, orderItemsForActive]);
 
   const handlePay = useCallback(() => {
     if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
@@ -283,8 +290,11 @@ export function PosWorkspacePage() {
     if (initState.tableId) {
       setPreselectedTableId(initState.tableId);
       setStartStep('table');
+    } else if (initState.startStep) {
+      setPreselectedTableId(null);
+      setStartStep(initState.startStep);
     } else setStartStep(null);
-  }, [orderIdParam, initState.tableId]);
+  }, [orderIdParam, initState.tableId, initState.startStep]);
 
   useEffect(() => {
     payConsumed.current = false;
@@ -801,6 +811,7 @@ export function PosWorkspacePage() {
             completing={pos.completing}
             hasUnsentItems={hasUnsentItems}
             customerName={pos.customerId ? customerById[pos.customerId]?.name || null : null}
+            operatorName={activeOrderOperatorName}
             onOpenTransferModal={() => {
               if (pos.activeTable && pos.activeOrderId) {
                 const currentOrd =

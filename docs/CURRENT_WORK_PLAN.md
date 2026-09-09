@@ -2,9 +2,9 @@
 
 > **هذا هو السجل الحي الوحيد للمشروع.**
 > أي نموذج أو مطور يبدأ من هذا الملف فقط.
-> الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair أصبحت مراجع تاريخية فقط ولا تُستخدم لتحديد الحالة الحالية.
+> الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair مراجع تاريخية فقط ولا تحدد الحالة الحالية.
 
-آخر تحديث: **2026-09-09 — Africa/Cairo**
+آخر تحديث: **2026-09-09 23:25 — Africa/Cairo — Delivery/Drive-Thru Full Green; KDS permission hardening active**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -13,276 +13,205 @@
 - Production branch: `main`
 - Permanent development branch: `development/final-handover`
 - Published site: `https://premieros.github.io/johna-s/`
-- المستودعات المرجعية `55` / `pos.v2` / `v4` وأي ZIP خارجي = **READ-ONLY REFERENCES ONLY**.
-- ممنوع أي write / commit / push / merge / workflow edit على المستودعات المرجعية.
-- ممنوع لمس أو تشغيل migrations أو تعديل أي قاعدة بيانات تخص المستودعات المرجعية.
+- أي مستودع أو فرع مرجعي مثل `55` / `pos.v2` / `v4` / ZIP خارجي = **READ-ONLY REFERENCE ONLY**.
+- الميزة تُنقل بالفكرة والسلوك فقط ثم يعاد تنفيذها بما يناسب `johna-s`؛ ممنوع النقل الأعمى أو نسخ migrations/RLS/RPC أو Supabase config من مشروع آخر.
 - ممنوع استخدام Supabase `scpovyrqmsbiduanykod` لهذا المشروع.
-- ممنوع Force Push.
-- ممنوع تعديل `main` مباشرة.
-- ممنوع Production DDL/Migration قبل Full Verify.
-- ممنوع تخفيف RLS أو الاختبارات لتمرير CI.
+- ممنوع تعديل `main` مباشرة أو Force Push.
+- ممنوع Production DDL/Migration قبل Full Verify Green.
+- ممنوع تخفيف RLS أو الاختبارات لإجبار CI على النجاح.
 - Super Admin فقط implicit bypass.
 - كل الأدوار الأخرى Labels فقط؛ Authorization = Permission-First + canonical branch/RLS.
+- قبل أي تعديل: اجلب HEAD الحالي لـ`main` و`development/final-handover` وافهم أي commits أحدث حتى لا يتم عكس عمل نموذج آخر.
 
 ## 2) Verified Production baseline
 
-آخر Production baseline مغلق قبل حزمة Feature Parity الحالية:
+آخر Production baseline مغلق:
 
-- `main`: `0a6f773bc9dab7c05840ef91313665b271e55238`
-- PR #53: `test: add functional core cycle release gate` ✅
-- Core cycle المغلق: Open Shift → Create Order → Hold → Resume → Send Kitchen → Inventory deduction → Payment → Sale/Shift attribution → Close Shift.
-- آخر Verify كامل قبل الحزمة الحالية: Verify #904 / run `34280957799` على PR #54 head قبل Shared-Shift settlement follow-up: **Full Green** ✅
-  - Identity lock ✅
-  - API contract ✅
+- `main`: `afef2ad024f55b1ab1523ba1530e19f13581e56a`
+- PR #54: `fix: align POS scan and guided workflow contracts` مدمج ✅
+- Verify main #912 / run `34321160701`: **Full Green** ✅
+- Deploy #584 / run `34321160600`: ✅
+- Core cycle المحمي: Open Shift → Create Order → Hold → Resume → Send Kitchen → Inventory deduction → Payment → Sale/Shift attribution → Close Shift.
+
+لا يوصف أي commit أحدث من Production baseline بأنه Production Verified قبل الدمج وVerify main الجديد.
+
+## 3) Development baseline الحالي
+
+- Branch: `development/final-handover`
+- Last functional Full Green HEAD: `c1314c47f360e5afd28f1389c79252168fca4f9f`
+- PR #55: `feat(pos): operator attribution and safe table resume` — **Open / غير مدمج**.
+- Verify #945 / run `34400078544` على HEAD `c1314c47...`: **Full Green** ✅
+  - Locked Supabase identity ✅
+  - Frontend API contract ✅
   - lint ✅
-  - typecheck ✅
-  - test typecheck ✅
+  - app typecheck ✅
+  - tests typecheck ✅
   - unit ✅
   - build ✅
-  - Fresh DB migrations ✅
+  - Fresh DB canonical migrations ✅
   - Schema verification ✅
   - Integration/Security/RLS ✅
   - Browser Smoke ✅
 
-**لا يتم وصف أي commit أحدث من ذلك بأنه Verified Green حتى يمر Full Verify من جديد.**
+## 4) دفعة Operator attribution + TABLE_BUSY — مغلقة Full Green على التطوير
 
-## 3) الحالة التشغيلية الحالية — Feature Parity Batch نشطة
+تم تنفيذ وإثبات التالي:
 
-بناءً على مقارنة Read-Only مع `55` و`pos.v2/development` و`v4` وZIP مرجعي، تم منع النقل الأعمى أو نسخ migrations، وبدأ تنفيذ الناقص فقط داخل `johna-s`.
+1. **اسم المستخدم/المشغل على أسطح POS**
+   - إظهار الاسم الآمن للمستخدم المسؤول على الطاولة المشغولة والأسطح المرتبطة بالطلب حيث يوجد attribution.
+   - المصدر الأمني هو `get_pos_order_operator_labels` المحدود بالفرع والصلاحية، بدون توسيع `public.users` أو كشف UUID/بيانات أوسع.
+   - اسم منفذ الدفع يظهر على الإيصال حيث يلزم.
 
-### PR #54 — `fix: align POS scan and guided workflow contracts`
+2. **Safe TABLE_BUSY resolver**
+   - إضافة `resolve_my_active_table_order` كحد ضيق لمعالجة سباق إنشاء الطلب على طاولة مشغولة.
+   - يعيد `order_id` فقط إذا كان الطلب المفتوح/المعلق يخص المستخدم الحالي نفسه.
+   - المستخدم الآخر في نفس الفرع يرى `TABLE_BUSY` بدون تسريب order id.
+   - المستخدم خارج الفرع يفشل fail-closed.
+   - Super Admin لا يحصل عبر هذا helper الضيق على order id لمستخدم آخر؛ مسارات transfer/admin المنفصلة تبقى هي السلطة الصحيحة.
 
-- Base: `main`
-- Head branch: `development/final-handover`
-- PR مفتوح وغير مدمج.
-- لا DB migration / RLS / RPC changes في الدفعة الحالية.
+3. **Regression**
+   - `tests/integration/pos_table_busy_owner_resume.test.ts`.
+   - فشل Verify #923 كان Fixture غير صالح: الاختبار أنشأ طلبًا فارغًا عبر `create_order` بعد تشديد عقد الطلب/التسعير.
+   - تم إصلاح **Fixture الاختبار فقط** ليستخدم دورة طلب حقيقية متوافقة؛ لم يتم إضعاف `create_order` أو RLS أو Resolver.
+   - Verify #924 أغلق الدفعة Full Green.
 
-### ما تم تنفيذه في PR #54 حتى الآن
+4. **قاعدة واجهة الاستئناف**
+   - عند `TABLE_BUSY` لا يتم إنشاء طلب ثانٍ ولا نقل ملكية ضمني.
+   - إذا كان Resolver يثبت أن الطلب للمستخدم الحالي يمكن استئنافه بأمان.
+   - لا يتم دمج سلة جديدة تلقائيًا فوق الطلب الموجود ولا استبدال أصناف بصمت؛ تجنب تكرار أو فقد أصناف.
 
-1. **POS Exact Scan**
-   - Enter يقبل Exact `Barcode` أو Exact `SKU` بدل Barcode فقط.
-   - Regression test: `tests/unit/pos/productScanContract.test.ts`.
+هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
 
-2. **Guided Workflow Permission-First**
-   - إزالة `owner` من implicit bypass داخل `validateActionPrerequisites`.
-   - `super_admin` فقط هو implicit bypass.
-   - Regression test: `tests/unit/guidedWorkflowPermissionContract.test.ts`.
+## 5) Availability server contract hardening — مغلقة Full Green
 
-3. **POS Shift prerequisite**
-   - Guided `pos_checkout` لم يعد يقيد شرط الشفت باسم role `cashier` فقط.
-   - الشفت المفتوح هو prerequisite تشغيلي لمسار POS، بصرف النظر عن role label، مع بقاء الصلاحيات Permission-First.
+**الحالة: CLOSED ✅**
 
-4. **Shared Branch Shift settlement hardening — العمل الحالي**
-   - تم اكتشاف انحراف مثبت في `PosWorkspacePage`: تحميل `activeShift` كان يحصل فقط عندما `user.role === 'cashier'`، وكان `handlePay` يمرر لغير الكاشير قيمة وهمية `shift_exempt`.
-   - `usePosOrder.completeSale` كان يسمح لغير الكاشير بتمرير `p_shift_id = null` لأن `activeShift` لم يكن محملاً لهم.
-   - تم إضافة hardening داخل `src/features/pos/services/payment.ts`: قبل online normal/split settlement يتم حل Shared Branch Shift الحقيقي من `getActiveShift({p_branch_id})`; إذا لا يوجد شفت مفتوح يفشل بـ`SHIFT_REQUIRED` بدل تسوية مالية بلا shift attribution.
-   - Regression test الجديد `tests/unit/posSharedShiftSettlementContract.test.ts` يمر ✅.
-   - commit الحالي قبل تحديث هذا السجل: `8ab2ea43f7ffd1e01cad6b450390df57d0346402`.
+تم تنفيذ وإثبات التالي:
 
-## 4) Verify #906 — الحالة الدقيقة
+1. `get_pos_product_availability` أصبح Server/DB authoritative داخل `johna-s` مع الحفاظ على branch/warehouse scope.
+2. التحقق يرفض المستخدم غير النشط، ويرفض cross-branch access، ويرفض warehouse لا يتبع الفرع المطلوب.
+3. الصفر الحقيقي للمخزون يبقى **authoritative zero**، ولا يتحول Unknown/Error في مصدر المخزون أو الوصفة إلى `Out of Stock` كاذب.
+4. المنتج ذو مصدر تصنيع غير قابل للحسم (مثل manufactured unit بلا recipe) يُحذف من نتيجة Availability بدل اختلاق كمية صفر.
+5. shortage codes المعروفة تبقى صريحة في عقد الخادم، ومنها:
+   - `INSUFFICIENT_PRODUCT_STOCK`
+   - `INSUFFICIENT_UNIT_STOCK`
+   - `INSUFFICIENT_RAW_MATERIAL_STOCK`
+6. لا خصم للمخزون أثناء Availability؛ الخصم النهائي يبقى عند `send_to_kitchen` طبقًا للقرار التشغيلي الثابت.
+7. Regression: `tests/integration/pos_availability_unknown_source.test.ts` يغطي authoritative zero، unknown source، cross-branch deny، warehouse mismatch، shortage contract.
+8. فشل Verify #930/#931 كان في transaction fixture للاختبارات المتوقعة أن ترمي SQL error؛ تم إصلاح fixture فقط باستخدام savepoint/rollback scope بدون تخفيف RLS أو تغيير السلوك الأمني.
+9. Verify #932 / run `34396769013`: **Full Green ✅** بما فيه Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
 
-Run: `34306890481` / Verify #906 على PR #54 بعد Shared-Shift settlement hardening.
+هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
 
-النتيجة:
-- Database identity ✅
-- API contract ✅
-- lint ✅ (تحذيران legacy فقط، 0 errors)
-- app typecheck ✅
-- app+tests typecheck ✅
-- unit: **406 passed / 407, فشل اختبار واحد فقط** ❌
-- build: skipped بسبب unit failure
-- DB/Fresh DB/Integration/RLS: skipped
-- Browser Smoke: skipped
+## 6) Delivery / Drive-Thru operational parity — مغلقة Full Green
 
-### الفشل الوحيد
+**الحالة: CLOSED ✅**
 
-`tests/unit/saleFinancialAuthorityContract.test.ts`
+تم تنفيذ وإثبات التالي:
 
-الاختبار الفاشل:
-`does not convert authoritative server rejection or ambiguous online failure into offline success`
+1. لا يوجد POS ثانٍ أو دورة طلب موازية؛ كلا النوعين يعيدان استخدام نفس `OrderStartWizard` + `PosWorkspacePage` + order lifecycle الحالي.
+2. تمت إضافة direct entries مركزية:
+   - `/delivery` → نفس `/pos` مع بدء خطوة Delivery.
+   - `/drive-thru` → نفس `/pos` مع بدء خطوة السيارة.
+3. `orders.service_details` أصبح عقدًا منظمًا وآمنًا بدل الاعتماد على `notes` فقط.
+4. Delivery يحفظ `phone` و`address` و`note` بصورة منظمة؛ الهاتف والعنوان مطلوبان Server-side.
+5. Drive-Thru يحفظ `vehicle_identifier` مع `customer_name`/`note` الاختياريين بصورة منظمة.
+6. `create_service_order` و`update_service_order` wrappers ضيقة تستدعي العقود الأساسية `create_order`/`update_order` داخل نفس المعاملة؛ لا bypass لدورة الطلب أو branch/ownership guards.
+7. Resume/Update يحافظان على `service_details` ولا يمسحان بيانات الخدمة.
+8. البيانات المقروءة تظل متاحة في `notes` للتوافق مع الشاشات الحالية، مع `service_details` كمصدر منظم للتشغيل والتقارير المستقبلية.
+9. لم تتم إضافة Delivery fee أو driver assignment؛ لا يوجد حتى الآن contract محاسبي/صلاحيات موثق يسمح بإضافتهما بأمان، لذلك لم يتم إدخال Frontend-only charges أو role-name assignment.
+10. Regression DB: `tests/integration/pos_service_order_details.test.ts` يغطي create/update/resume وinvalid data وcross-branch وanon.
+11. Regression UI/route: `tests/unit/posDirectServiceEntryContract.test.ts` يثبت أن المدخلين يمران إلى نفس POS ويستهلكان `startStep` الصحيح.
+12. Verify #941 أثبت service-details contract Full Green، ثم Verify #945 / run `34400078544` على HEAD `c1314c47...` أغلق direct-entry parity **Full Green ✅** بما فيه Browser Smoke.
 
-### Root Cause المثبت
+هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
 
-هذا ليس دليلاً على أن Production logic حوّل server rejection إلى offline success.
+## 7) الدفعة النشطة الآن — Modifiers / KDS parity المتبقي فقط
 
-الاختبار الحالي brittle/source-text parser:
-- يعمل `payment.slice(payment.indexOf('try {'))`.
-- بعد إضافة helper `resolveSharedBranchShift` الذي يحتوي `try {` قبل `processSaleForOrder`, أصبح `onlinePath` يبدأ من helper ويشمل لاحقًا مسار الـexplicit offline outbox الشرعي:
-  `offlinePosManager.enqueueSale(p)`.
-- لذلك assertion النصي يفشل رغم أن enqueue ما زال فقط داخل الشرط الصريح `navigator.onLine === false`، بينما catch الخاص بالonline ambiguity لا يقوم enqueue.
+**الحالة: ACTIVE**
 
-### المطلوب الصحيح لإغلاق #906
+قاعدة العمل:
+- لا إعادة بناء Modifiers أو KDS الموجودين أصلًا بدون Regression مثبت.
+- Modifiers الحالية لديها min/max/required/default selections، single/multiple، price deltas، item notes وmodifier snapshots؛ تُعامل كمغلقة وظيفيًا ما لم يظهر خلل محدد.
+- KDS الحالية لديها branch/station queue، realtime/polling، modifiers/notes، وحالات sent → cooking → ready → served.
 
-- **لا تتراجع عن Shared Branch Shift settlement hardening بسبب هذا الفشل.**
-- أصلح test scope ليحدد جسم `processSaleForOrder`/online try-catch المقصود بدقة بدل `indexOf('try {')` العام.
-- لا تحذف assertion الأساسي ولا تضعف Financial Authority contract.
-- يجب أن يظل العقد محميًا:
-  1. Explicit offline state فقط يسمح `enqueueSale` للمسار العادي.
-  2. Server rejection لا يتحول offline success.
-  3. Ambiguous online exception لا يعمل enqueue بسبب duplicate-risk.
-  4. Split tender يبقى online-only حتى يوجد idempotent split offline contract.
-- بعد إصلاح الاختبار: أعد Full Verify؛ لا تكتفِ بالunit.
+الفجوة الأمنية المثبتة:
+- `get_kitchen_queue` و`get_my_kitchen_stations` يستخدمان `pos.kds_view` للقراءة، وهذا صحيح.
+- `set_kitchen_status` يستخدم أيضًا `pos.kds_view` لتغيير حالة المطبخ، وبذلك مستخدم View-Only يستطيع الكتابة.
+- لا توجد حاليًا صلاحية مستقلة لتغيير KDS ضمن Permission Definitions.
 
-### Checkpoint Verify #908 بعد إصلاح Unit
+الخطوات الإلزامية:
+1. إنشاء صلاحية كتابة KDS مستقلة باسم متوافق مع naming convention الحالي بعد مراجعة migration/permission seeding الحالية.
+2. إبقاء route/page visibility على `pos.kds_view` فقط.
+3. تقييد أزرار/Actions تغيير الحالة في الواجهة بصلاحية الكتابة الجديدة.
+4. تعديل `set_kitchen_status` ليطلب صلاحية الكتابة الجديدة Server-side بدل `pos.kds_view`.
+5. الحفاظ على branch isolation وSECURITY DEFINER hardened `search_path` وعدم إدخال role-name authorization.
+6. التحقق هل station assignment الحالي يمنع مستخدم محطة واحدة من تحديث طلب/سطور محطة أخرى؛ إذا ظهر bypass فعلي يُغلق بأضيق تغيير ممكن.
+7. Regression tests على الأقل:
+   - KDS View-Only يستطيع القراءة ولا يستطيع تغيير الحالة.
+   - مستخدم بصلاحية الكتابة يستطيع تغيير الحالة داخل فرعه/محطته المسموحة.
+   - cross-branch deny.
+   - station-scope deny إذا كان العقد الحالي محطة-محددًا.
+8. Full Verify إلزامي قبل إغلاق الدفعة.
 
-- Head: `dfe83ba0ca6dfc14a5d74b85ae16bc31ade50d39`.
-- commit: `test(pos): scope financial authority contract`.
-- Run: `34315737303` / Verify #908.
-- Database identity / API contract / lint / typecheck / test typecheck / Unit `407/407` / build ✅.
-- Fresh DB migrations / Schema / Integration / Security / RLS ✅.
-- Browser Smoke: `104/105`، فشل اختبار واحد فقط في `tests/e2e/pos-actions.spec.ts` ❌.
-- Root Cause: fixture الخاص بـ`get_active_shift` كان يعيد الشكل القديم المسطح `shift_id`، بينما Shared Branch Shift RPC الحقيقي يعيد `shift: { id, ... }`. بعد settlement hardening قرأت الخدمة العقد الصحيح، فلم تجد fixture shift صالحًا وأغلقت الدفع بـ`SHIFT_REQUIRED` قبل `process_sale`.
-- تم تحديث fixture إلى عقد Shared Branch Shift الحقيقي وإثبات أن `process_sale` يستلم `p_shift_id` الصحيح.
+## 8) ترتيب النقل بعد KDS
 
-### Checkpoint Verify #909 — Full Green
+1. Modifiers / KDS parity المتبقي فقط — **ACTIVE**.
+2. Offline / Reconciliation hardening، مع الحفاظ على Financial Authority وعدم تحويل online ambiguity إلى offline success.
+3. Final release audit: dependencies/security warnings + final E2E acceptance + production migration/merge decision.
 
-- Head: `1d85946a74f61bbc5a339e06892f457d08884643`.
-- Run: `34316529658` / Verify #909.
-- Frontend/API contract/lint/typecheck/test typecheck/Unit/build ✅.
-- Fresh DB migrations/Schema/Integration/Security/RLS ✅.
-- Browser Smoke ✅.
-- النتيجة: Regression الخاص بـ#906 واختبار Browser التابع لـShared Branch Shift مغلقان بالكامل.
-
-## 5) Shared Branch Shift UI closure — مغلق على PR #54
-
-تم تنفيذ الجزء التالي بعد Full Green #909:
-
-1. إزالة `shift_exempt` من `PosWorkspacePage` واستخدام `activeShift?.id || null` الحقيقي.
-2. `reloadShift` يقرأ Shared Branch Shift لكل مستخدم POS على الفرع، بلا cashier-role gate.
-3. direct/deep-link pay يمران عبر `handlePay` بعد اكتمال فحص الشفت.
-4. `usePosOrder.completeSale` يفشل قبل التسوية إذا لا يوجد شفت لأي role label.
-5. فتح/إغلاق/إدارة الشفت في POS و`ShiftsPage` تعتمد exact `shifts.open` / `shifts.close` بدل role name.
-6. Guided open-shift action يتطلب `shifts.open` بدل `shifts.manage`.
-7. Regression test: `tests/unit/posSharedShiftWorkspaceContract.test.ts`.
-8. Local gates: DB identity ✅، lint 0 errors ✅، typecheck + test typecheck ✅، Unit `410/410` ✅، build ✅.
-
-### Checkpoint Verify #910 — Full Green
-
-- Code Head: `4d55a54574861282fa5678f6292b0643ad16c1ea`.
-- commit: `fix(pos): enforce shared shift in workspace`.
-- Run: `34317708031` / Verify #910.
-- Frontend/API contract/lint/typecheck/test typecheck/Unit/build ✅.
-- Fresh DB migrations/Schema/Integration/Security/RLS ✅.
-- Browser Smoke ✅.
-- لا DB migration أو RLS أو RPC change في هذا الإغلاق، ولم يتم لمس Production DB.
-- النتيجة: Shared Branch Shift UI/settlement drift في نطاق PR #54 مغلق. هذا التحديث التوثيقي هو آخر تغيير غير تشغيلي؛ لا يعتبر PR جاهزًا للدمج إلا إذا Verify على الـHEAD الناتج منه Full Green أيضًا.
-
-لا تفتح Batch 2 (Availability/Delivery/Modifiers/KDS/Offline) قبل إغلاق PR #54 Full Green.
-
-## 6) العقود المغلقة — لا تُفتح بدون Regression مثبت
+## 9) العقود المحمية — لا تُفتح دون Regression مثبت
 
 - Users / Roles / Permission-First ✅
-- Shared Branch Shift — PR #30 ✅ (الحزمة الحالية تصلح UI/settlement drift فقط ولا تغير أصل العقد)
-- POS Discount / Payment / Order Completion — PR #31 ✅
-- Warehouse transfer isolation — PR #35 ✅
-- Controlled branch delete — PR #36 ✅
-- Warehouse lifecycle — PR #37 ✅
-- `close_shift` Permission-First — PR #38 ✅
-- Admin SECURITY DEFINER hardening — PR #39 ✅
-- Identity hardening — PR #40 ✅
-- Subscription admin/tenant/security batches — PR #41–#44 ✅
-- Inventory unit production Permission-First/branch/warehouse — PR #45 ✅
-- SECURITY DEFINER legacy search-path zero closure — PR #46 ✅
-- Shift cash integrity + branch scope — PR #47 ✅
-- POS operator ownership + controlled operator transfer — PR #48 ✅
-- Unified project status log — PR #49 ✅
-- Functional core cycle release gate — PR #53 ✅
+- Super Admin implicit bypass فقط ✅
+- Shared Branch Shift / settlement / UI ✅
+- POS Discount / Payment / Order Completion ✅
+- POS operator ownership + controlled operator transfer ✅
+- Operator label privacy / same-branch narrow visibility ✅
+- TABLE_BUSY safe owner resume ✅
+- POS Availability authoritative contract ✅
+- Delivery / Drive-Thru structured service contract + direct entries ✅
+- Send-to-kitchen delta semantics ✅
+- **Inventory deduction at `send_to_kitchen`** ✅ قرار ثابت
+- Warehouse transfer branch isolation ✅
+- Controlled branch delete ✅
+- Warehouse lifecycle ✅
+- `close_shift` Permission-First ✅
+- SECURITY DEFINER hardened search_path ✅
+- Identity/subscription hardening ✅
+- Inventory-unit production Permission-First/branch/warehouse ✅
+- Shift cash integrity + branch scope ✅
+- Functional core cycle release gate ✅
+- Exact scan SKU/Barcode ✅
+- Guided Workflow Permission-First ✅
+- Financial Authority: explicit offline only; server rejection/ambiguous online failure لا تتحول offline success ✅
 
-### عقد PR #48 المحمي
+## 10) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
 
-1. Shared shift per branch.
-2. New Order ownership = `auth.uid()`.
-3. ordinary caller cannot spoof another cashier.
-4. owner-only normal order/table operation subject to exact permission.
-5. same-branch peer يرى occupied + narrow operator label فقط.
-6. operator transfer requires `pos.order.transfer`, never role name.
-7. same-branch validation fail-closed.
-8. transfer audit = old owner + new owner + actor + timestamp.
-9. direct DML/RPC fallback bypasses fail closed.
-10. KDS/payment attribution remains tied to actual executor.
-11. shared-shift sale attribution محفوظ بدون duplicate shift operation.
+- Arabic-first RTL، Touch-friendly.
+- صلاحيات POS granular مثل `pos.view`, `pos.order.create`, `pos.order.edit`, `pos.payment.take`, `pos.order.split`, `pos.order.transfer`, `pos.receipt.print`, `pos.send_kitchen`, `pos.pay`؛ لا استخدام role names كAuthorization.
+- يجب دعم أنماط مثل View Only وPay Only متى كانت الصلاحيات المطلوبة متاحة.
+- Dine-in / Take Away / Drive Thru / Delivery / Quick Order.
+- الطاولة المشغولة تعرض اسم المشغل الآمن.
+- Send to kitchen مرة واحدة ثم التعديلات كDelta.
+- المخزون يخصم عند `send_to_kitchen` وليس عند إنشاء الطلب أو فحص Availability.
+- Hold/Resume، split bill، table/order transfer، print once/reprint permission.
+- Printer management لا يظهر إلا لمن يملك صلاحية الإعدادات المناسبة.
+- التقارير compact/tabular وليست crowded؛ filters/export حسب العقود المتاحة.
+- أي نقل UI لا يغيّر منطق الصلاحيات أو RLS أو financial authority ضمنيًا.
 
-Production migrations الخاصة بالإغلاق:
-- `20260907194314_pos_operator_ownership`
-- `20260907194337_pos_kitchen_send_ownership`
-- `20260907194427_pos_operator_rpc_ownership_hardening`
-- `20260907194454_pos_sale_shift_attribution`
+## 11) قاعدة الإغلاق والدمج
 
-## 7) الانحرافات الإدارية المتبقية
+أي دفعة لا تعتبر مغلقة إلا إذا:
 
-### AUTH-001 — Leaked Password Protection disabled
+1. تم تحديث هذا السجل بنتيجتها الدقيقة.
+2. lint/typecheck/unit/build خضراء.
+3. Fresh DB + schema خضراء عند وجود DB contract.
+4. Integration/Security/RLS خضراء.
+5. Browser Smoke أخضر للدفعات المؤثرة على الواجهة/التشغيل.
+6. لا Production migration غير Verified.
+7. لا merge إلى `main` إلا بعد تحقق الشروط السابقة وقرار الدمج المناسب.
 
-- Production Security Advisor سبق وأكد أن Supabase Auth `Leaked Password Protection` ما زالت Disabled.
-- Project/Auth Setting وليست Runtime code defect.
-- لا تدّعِ الإغلاق قبل تعديل الإعداد الحقيقي والتحقق.
+---
 
-### RELEASE-001 — `main` غير محمي
-
-- آخر قراءة موثقة: `main protected=false`.
-- Release-governance issue وليست Runtime application bug.
-- لا تدّعِ الإغلاق قبل تفعيل Ruleset/Branch Protection فعلي والتحقق.
-
-## 8) قواعد العمل الحالية
-
-1. لا Full-project audit متكرر.
-2. لا Bug جديد يدخل السجل إلا مع reproduction أو direct contract proof.
-3. نصلح Root Cause وليس الأعراض.
-4. Batch صغيرة لكل سبب.
-5. قبل كل WRITE: re-fetch `main` و`development/final-handover` وPR #54 بسبب احتمال عمل نموذج آخر بالتوازي.
-6. لا Force Push.
-7. لا Production migration قبل Full Verify.
-8. لا تغيير صلاحيات أو RLS لتسهيل الاختبارات.
-9. لا role-name authorization خارج Super Admin implicit bypass.
-10. المستودعات وقواعد البيانات المرجعية Read-Only فقط.
-11. لا نسخ migrations/RLS/RPCs من `55` أو `pos.v2` أو `v4`؛ أي فكرة مطلوبة يعاد تنفيذها ضد عقد `johna-s` الحالي.
-12. لا merge لـPR #54 قبل Full Green على آخر head.
-
-## 9) Definition of Done لأي إصلاح كود/DB جديد
-
-`Regression proof → frontend gates → Fresh DB → Schema → Integration/Security/RLS → Browser Smoke → Merge → Production migration/parity عند الحاجة → Production Post-Check → merged-main Verify → Deploy`
-
-الهدف النهائي دائمًا:
-
-**Published Site = Verified Main = Production DB Contract = Zero Drift**
-
-## 10) Feature Parity roadmap بعد إغلاق PR #54
-
-المرجع الآخر يُقرأ فقط ولا يُعدل.
-
-الترتيب الحالي:
-1. Guided Routing wiring + Shared Shift UI/settlement drift — **ACTIVE في PR #54**.
-2. Availability server contract hardening.
-3. Delivery/Drive-Thru server prerequisites.
-4. Modifier backend enforcement + KDS notes/modifier/delta parity verification.
-5. Offline Shift Close + Reconciliation/Idempotency.
-6. Printing finalization + Approvals.
-7. Reports + Operational Alerts + UX polish.
-
-الموجود بالفعل ولا يعاد بناؤه بدون Regression:
-- Product images.
-- Categories.
-- Barcode/SKU search foundation.
-- Modifiers UI.
-- Item notes/discount.
-- Customer quick modal.
-- Split payment + Cash/Card/Transfer/Credit.
-- Guided Workflow foundation.
-- Offline storage/sync foundation.
-- Local Print Agent foundation.
-- Permission-First / Branch isolation / Warehouse isolation.
-
-## 11) سياسة السجلات
-
-هذا الملف `docs/CURRENT_WORK_PLAN.md` هو **المرجع الحي الوحيد**.
-
-الملفات التالية Legacy pointers فقط ويمنع تحديث حالة المشروع فيها بشكل مستقل:
-- `docs/FINAL_BUG_REGISTER.md`
-- `docs/FINAL_REMAINING_STAGES.md`
-- `docs/HANDOVER_CHECKPOINT_2026-09-06.md`
-- `docs/POST_REPAIR_DEVELOPMENT_PLAN.md`
-
-أي تحديث مستقبلي للحالة أو Bug أو خطة تنفيذ يتم هنا فقط.
-
-## 12) ملاحظة تنظيف مستودع غير تشغيلية
-
-تم إنشاء branch مؤقت بالخطأ أثناء تجهيز التسليم باسم `handover/final-delivery-20260908`. لا يُستخدم نهائيًا ولا يحمل تغييرات. الفرع المعتمد الوحيد للتطوير يبقى `development/final-handover`.
+**NEXT ACTION:** أغلق فجوة KDS Permission-First بفصل View عن status mutation، ثم Full Verify وسجل النتيجة قبل الانتقال إلى Offline/Reconciliation.

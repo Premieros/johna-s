@@ -1,0 +1,35 @@
+{
+  "appId": "com.premieros.johnas",
+  "productName": "Premier POS",
+  "directories": {
+    "output": "electron/release"
+  },
+  "files": [
+    "electron/**/*",
+    "dist/**/*"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.cjs"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Premier POS"
+  },
+  "electronVersion": "38.1.0"
+}

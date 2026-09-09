@@ -19,6 +19,7 @@ export interface ReceiptData {
   tableName?: string;
   orderTypeLabel?: string;
   guestCount?: number | null;
+  operatorName?: string | null;
 }
 
 type PrintAuthorizationResult = {
@@ -190,6 +191,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
     ${receipt.tableName ? `<div class="row"><span>${isAr ? 'طاولة' : 'Table'}: ${escapeHtml(receipt.tableName)}</span></div>` : ''}
     ${receipt.guestCount ? `<div class="row"><span>${isAr ? 'الضيوف' : 'Guests'}: ${receipt.guestCount}</span></div>` : ''}
     ${receipt.customerName ? `<div class="row"><span>${isAr ? 'العميل' : 'Customer'}: ${escapeHtml(receipt.customerName)}</span></div>` : ''}
+    ${receipt.operatorName ? `<div class="row"><span>${isAr ? 'المستخدم' : 'User'}: ${escapeHtml(receipt.operatorName)}</span></div>` : ''}
     <div class="divider"></div>
     ${receipt.items.map((i) => `<div class="item-row"><div class="item-name">${escapeHtml(i.name)}</div><div class="row item-detail"><span>${i.qty} x ${formatCurrency(i.price, currency, lang)}</span><span>${formatCurrency(i.total, currency, lang)}</span></div></div>`).join('')}
     <div class="divider"></div>

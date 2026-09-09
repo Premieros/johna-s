@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, X, UtensilsCrossed, Banknote, Play, Trash2, ListOrdered, Car, Bike } from 'lucide-react';
+import { Search, X, UtensilsCrossed, Banknote, Play, Trash2, ListOrdered, Car, Bike, User } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/lib/format';
 import type { Customer, DiningTable, Order, OrderItem } from '@/lib/types';
@@ -9,6 +9,7 @@ import { orderContextText } from '../../utils/orderLabels';
 import { timeAgo } from '../../utils/timeAgo';
 import { OrderTypePill } from '../order/OrderTypePill';
 import { OrderStageBadge } from '../order/OrderStageBadge';
+import { orderOperatorName } from '../../utils/operatorName';
 
 interface ActiveOrdersDrawerProps {
   open: boolean;
@@ -63,7 +64,8 @@ export function ActiveOrdersDrawer({
       }
       if (!q) return true;
       const ctx = orderContextText(o, tableById, customerById).toLowerCase();
-      return o.order_number.toLowerCase().includes(q) || ctx.includes(q);
+      const operator = orderOperatorName(o)?.toLowerCase() || '';
+      return o.order_number.toLowerCase().includes(q) || ctx.includes(q) || operator.includes(q);
     });
   }, [orders, category, query, stageMap, tableById, customerById]);
 
@@ -161,6 +163,7 @@ export function ActiveOrdersDrawer({
               const ago = timeAgo(order.created_at);
               const ctx = orderContextText(order, tableById, customerById);
               const ready = stage === 'ready';
+              const operatorName = orderOperatorName(order);
               return (
                 <div key={order.id} className="p-3 rounded-xl border border-ui-border bg-ui-page-alt hover:border-ui-accent transition-colors">
                   <div className="flex items-center justify-between gap-2">
@@ -186,6 +189,8 @@ export function ActiveOrdersDrawer({
                         : `${itemCount} items · ${ago.n != null ? `${ago.n} ${t(ago.key)}` : t(ago.key)}`}
                     </span>
                   </div>
+
+                  {operatorName && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-ui-muted"><User className="h-3.5 w-3.5" /><span>{isAr ? 'المستخدم:' : 'User:'} {operatorName}</span></div>}
 
                   <div className="flex items-center gap-1.5 mt-2">
                     <button

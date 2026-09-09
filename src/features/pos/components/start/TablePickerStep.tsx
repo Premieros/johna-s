@@ -8,6 +8,7 @@ import { STATUS_STYLES } from '../../utils/orderTypes';
 import { stageOfOrder } from '../../utils/orderStage';
 import { OrderStageBadge } from '../order/OrderStageBadge';
 import { TableActionModal } from './TableActionModal';
+import { orderOperatorName } from '../../utils/operatorName';
 
 interface TablePickerStepProps {
   tables: DiningTable[];
@@ -56,9 +57,12 @@ export function TablePickerStep({
     return tables.filter((table) => {
       if (statusFilter !== 'all' && table.status !== statusFilter) return false;
       if (!q) return true;
-      return table.name.toLowerCase().includes(q);
+      const orders = ordersByTable[table.id] || [];
+      return table.name.toLowerCase().includes(q) || orders.some((order) => (
+        order.order_number.toLowerCase().includes(q) || orderOperatorName(order)?.toLowerCase().includes(q)
+      ));
     });
-  }, [tables, statusFilter, query]);
+  }, [tables, ordersByTable, statusFilter, query]);
 
   const chips: Array<{ id: StatusFilter; label: string }> = [
     { id: 'all', label: isAr ? 'الكل' : 'All' },
@@ -116,6 +120,7 @@ export function TablePickerStep({
                 const style = STATUS_STYLES[table.status] || STATUS_STYLES.vacant;
                 const tableOrders = ordersByTable[table.id] || [];
                 const order = tableOrders[0];
+                const operatorName = order ? orderOperatorName(order) : null;
                 const stage = order ? stageOfOrder(order, itemsByOrder, kitchenSendsByOrder) : null;
                 return (
                   <button
@@ -138,6 +143,7 @@ export function TablePickerStep({
                           <span className="text-[11px] font-bold text-ui-accent">{formatCurrency(order.total, currency, lang)}</span>
                         </div>
                         {stage && <OrderStageBadge stage={stage} className="origin-start scale-90" />}
+                        {operatorName && <p className="flex items-center gap-1 truncate text-[10px] font-bold text-ui-muted"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></p>}
                       </div>
                     ) : (
                       <p className="mt-3 text-[10px] font-black text-ui-success">{isAr ? 'اضغط لفتح المنتجات' : 'Tap to open products'}</p>

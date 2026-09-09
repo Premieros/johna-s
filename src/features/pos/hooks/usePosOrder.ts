@@ -780,6 +780,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         tableName: activeTable?.name || undefined,
         orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
         guestCount: guestCount || undefined,
+        operatorName: user?.full_name || user?.username || user?.email || null,
       };
       setLastReceipt(receiptPayload);
       setReceiptSaleId(saleId);
@@ -808,7 +809,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setCompleting(false);
     }
-  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t]);
+  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
 
   const printReceipt = useCallback(async () => {
     if (!lastReceipt || !effSettings) return;

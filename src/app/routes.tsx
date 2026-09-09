@@ -138,6 +138,8 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.recipes} replace />} />
         <Route path={APP_ROUTES.pos} element={<ProtectedRoute permission="pos.view" fullscreen><PosWorkspacePage /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.pos}/:orderId`} element={<ProtectedRoute permission="pos.view" fullscreen><PosWorkspacePage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.delivery} element={<ProtectedRoute permission="pos.view" fullscreen><Navigate to={APP_ROUTES.pos} replace state={{ startStep: 'delivery' }} /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.driveThru} element={<ProtectedRoute permission="pos.view" fullscreen><Navigate to={APP_ROUTES.pos} replace state={{ startStep: 'car' }} /></ProtectedRoute>} />
         <Route path={APP_ROUTES.floorPlan} element={<ProtectedRoute permission="floor_plan.view"><ActiveOrdersPage /></ProtectedRoute>} />
         <Route path="/kitchen" element={<ProtectedRoute permission="pos.kds_view"><Navigate to={APP_ROUTES.kitchenDisplay} replace /></ProtectedRoute>} />
         <Route path="/tables" element={<ProtectedRoute permission="floor_plan.view"><Navigate to={APP_ROUTES.floorPlan} replace /></ProtectedRoute>} />
