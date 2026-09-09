@@ -1,6 +1,10 @@
 import type { ApiResult } from '../types';
-import type { RpcResult, OrderType } from '@/lib/types';
+import type { RpcResult, OrderType, OrderServiceDetails } from '@/lib/types';
+import { clearPendingServiceDetails, getPendingServiceDetails } from '@/lib/posServiceDetails';
 import { rpc } from '../rpc';
+
+const isServiceOrderType = (orderType?: OrderType): orderType is 'delivery' | 'drive_thru' =>
+  orderType === 'delivery' || orderType === 'drive_thru';
 
 export const floorPlan = {
   async createOrder(p: {
@@ -27,8 +31,19 @@ export const floorPlan = {
     p_total?: number;
     p_cashier_id?: string | null;
   }): ApiResult<RpcResult & { order_id?: string; order_number?: string }> {
-    // Fail closed: create_order is the authoritative pricing/branch/ownership
-    // boundary. Never fall back to direct writes on an RPC error.
+    // Keep the canonical create_order boundary for normal POS flows. Service
+    // orders use a narrow wrapper that delegates to create_order and persists
+    // their structured metadata atomically in the same database transaction.
+    if (isServiceOrderType(p.p_order_type)) {
+      const serviceDetails: OrderServiceDetails = getPendingServiceDetails() || {};
+      return rpc<RpcResult & { order_id?: string; order_number?: string }>('create_service_order', {
+        ...p,
+        p_service_details: serviceDetails,
+      }).then((result) => {
+        if (!result.error && (result.data as RpcResult | null)?.success) clearPendingServiceDetails();
+        return result;
+      });
+    }
     return rpc<RpcResult & { order_id?: string; order_number?: string }>('create_order', p);
   },
 
@@ -60,6 +75,15 @@ export const floorPlan = {
     p_total?: number;
     p_status?: 'open' | 'held';
   }): ApiResult<RpcResult> {
+    if (isServiceOrderType(p.p_order_type)) {
+      // A resumed order normally has no in-memory draft. Passing NULL tells the
+      // server wrapper to preserve and revalidate the service_details already
+      // stored on that order instead of replacing them with an empty object.
+      return rpc<RpcResult>('update_service_order', {
+        ...p,
+        p_service_details: getPendingServiceDetails(),
+      });
+    }
     return rpc<RpcResult>('update_order', p);
   },
 
