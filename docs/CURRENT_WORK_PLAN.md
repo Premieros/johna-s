@@ -4,7 +4,7 @@
 > أي نموذج أو مطور يبدأ من هذا الملف فقط.
 > الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair مراجع تاريخية فقط ولا تحدد الحالة الحالية.
 
-آخر تحديث: **2026-09-09 16:43 — Africa/Cairo — Availability active after TABLE_BUSY Full Green**
+آخر تحديث: **2026-09-09 22:51 — Africa/Cairo — Availability Full Green; Delivery/Drive-Thru active**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -38,9 +38,9 @@
 ## 3) Development baseline الحالي
 
 - Branch: `development/final-handover`
-- HEAD قبل هذا التحديث: `50ed608f1290dfff7de17bc3d1a60899001f1e33`
+- Availability functional HEAD: `f0693915e27b7accdead26197a90a74cc9804e38`
 - PR #55: `feat(pos): operator attribution and safe table resume` — **Open / غير مدمج**.
-- Verify #924 / run `34353897055` على HEAD `50ed608f...`: **Full Green** ✅
+- Verify #932 / run `34396769013` على HEAD `f0693915...`: **Full Green** ✅
   - Locked Supabase identity ✅
   - Frontend API contract ✅
   - lint ✅
@@ -82,46 +82,63 @@
 
 هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
 
-## 5) الدفعة النشطة الآن — Availability server contract hardening
+## 5) Availability server contract hardening — مغلقة Full Green
+
+**الحالة: CLOSED ✅**
+
+تم تنفيذ وإثبات التالي:
+
+1. `get_pos_product_availability` أصبح Server/DB authoritative داخل `johna-s` مع الحفاظ على branch/warehouse scope.
+2. التحقق يرفض المستخدم غير النشط، ويرفض cross-branch access، ويرفض warehouse لا يتبع الفرع المطلوب.
+3. الصفر الحقيقي للمخزون يبقى **authoritative zero**، ولا يتحول Unknown/Error في مصدر المخزون أو الوصفة إلى `Out of Stock` كاذب.
+4. المنتج ذو مصدر تصنيع غير قابل للحسم (مثل manufactured unit بلا recipe) يُحذف من نتيجة Availability بدل اختلاق كمية صفر.
+5. shortage codes المعروفة تبقى صريحة في عقد الخادم، ومنها:
+   - `INSUFFICIENT_PRODUCT_STOCK`
+   - `INSUFFICIENT_UNIT_STOCK`
+   - `INSUFFICIENT_RAW_MATERIAL_STOCK`
+6. لا خصم للمخزون أثناء Availability؛ الخصم النهائي يبقى عند `send_to_kitchen` طبقًا للقرار التشغيلي الثابت.
+7. Regression: `tests/integration/pos_availability_unknown_source.test.ts` يغطي authoritative zero، unknown source، cross-branch deny، warehouse mismatch، shortage contract.
+8. فشل Verify #930/#931 كان في transaction fixture للاختبارات المتوقعة أن ترمي SQL error؛ تم إصلاح fixture فقط باستخدام savepoint/rollback scope بدون تخفيف RLS أو تغيير السلوك الأمني.
+9. Verify #932 / run `34396769013`: **Full Green ✅** بما فيه Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
+
+هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
+
+## 6) الدفعة النشطة الآن — Delivery / Drive-Thru operational parity
 
 **الحالة: ACTIVE**
 
-الهدف:
-- جعل Availability في POS تعتمد على عقد Server/DB authoritative متوافق مع بنية `johna-s` بدل الاعتماد على استنتاج Frontend قابل للانحراف.
-- المحافظة على branch isolation وwarehouse scope وBOM/inventory-unit semantics الحالية.
-- عدم نقل migration/RLS/RPC من أي مرجع كما هي؛ المرجع يستخدم فقط لفهم السلوك المطلوب.
+القاعدة:
+- لا إنشاء POS ثانٍ أو دورة طلب موازية.
+- إعادة استخدام نفس `OrderStartWizard` + `PosWorkspacePage` + order lifecycle الحالي.
+- `delivery` و`drive_thru` موجودان بالفعل كـorder types؛ المطلوب إغلاق الفجوات التشغيلية فقط.
+- أي مرجع خارجي، بما فيه ElitaleRestro، Read-Only للفكرة والسلوك فقط؛ لا نسخ كود أو migrations/RLS/RPC.
+
+الفجوات المثبتة قبل التنفيذ:
+- Delivery الحالي يجمع العميل/الهاتف/العنوان/الملاحظات لكنه يحول الهاتف والعنوان إلى نص داخل `notes`؛ لا يوجد service contract مستقل للرسوم/المندوب/بيانات التوصيل.
+- Drive-Thru الحالي يجمع رقم السيارة/العميل/الملاحظات ويحولها إلى `notes`؛ لا توجد حقول تشغيلية مستقلة للسيارة/الطابور.
+- نموذج `orders` الحالي لا يملك حقول Delivery/Drive-Thru تشغيلية مستقلة؛ الموجود أساسًا `customer_id`, `guest_count`, `notes` مع `order_type`.
 
 خطوات التنفيذ الإلزامية:
+1. إضافة direct entry parity لـ`/delivery` و`/drive-thru` فوق نفس POS، بدون نسخ شاشة البيع.
+2. جعل OrderStartWizard يقبل نوع طلب ابتدائي من route مع إمكانية الرجوع/التغيير وفق الصلاحيات الحالية.
+3. Delivery: حفظ البيانات المطلوبة بشكل منظم وآمن: customer/phone/address/notes، مع fee/driver فقط إذا ثبت مصدر إعداداتهما وعقدهما المحاسبي.
+4. Drive-Thru: حفظ car/vehicle identifier بصورة منظمة وآمنة، مع أي queue/sequence فقط إذا كان له عقد فعلي مطلوب.
+5. أي `extra_charge` يجب أن يكون non-negative، server-authoritative، يدخل total/receipt/accounting/reporting ولا يكون Frontend-only.
+6. أي `staff_required`/driver assignment يجب أن يتحقق Server-side من user active + branch scope + الصلاحية المطلوبة؛ لا role-name authorization.
+7. تحديث order read/update contracts بحيث تظهر البيانات عند Hold/Resume/Orders/Receipt ولا تضيع بعد الاستئناف.
+8. المحافظة على operator attribution وTABLE_BUSY ownership وعدم السماح لمسار Delivery/Drive-Thru بتجاوز shift/branch/permission guards.
+9. Regression tests: create/resume/update لكل نوع، branch isolation، invalid driver/staff، negative charge، accounting/receipt total إن أضيفت رسوم.
+10. E2E/Browser: بدء Delivery وDrive-Thru من المدخل المباشر ومن الـwizard، ثم order → kitchen → payment بدون كسر المسار الأساسي.
+11. Full Verify إلزامي قبل إغلاق الدفعة.
 
-1. تحديد مصدر `stockMap` الحالي وكل مسارات إظهار/منع المنتج في POS.
-2. تحديد معنى Availability الحالي للمنتج:
-   - ready inventory unit.
-   - product-unit links.
-   - BOM/component availability إن كانت مستخدمة في العقد الحالي.
-   - warehouse الافتراضي/المحدد للفرع.
-3. مقارنة Read-Only مع المرجع الأنسب فقط لتحديد الفجوة الوظيفية، بدون أي write على المرجع.
-4. إنشاء/تقوية Server contract داخل `johna-s` بأضيق تغيير ممكن.
-5. Fail closed عند غياب branch/warehouse أو عند بيانات غير مكتملة؛ Guided Routing يوجه المستخدم للإعداد المطلوب بدل raw error متى كان ذلك ضمن UX الحالي.
-6. عدم خصم المخزون عند مجرد فحص Availability؛ الخصم النهائي يبقى عند `send_to_kitchen` طبقًا للقرار التشغيلي الثابت.
-7. Regression tests يجب أن تشمل على الأقل:
-   - نفس الفرع/المخزن الصحيح.
-   - منع cross-branch leakage.
-   - منتج متاح وغير متاح.
-   - نفاد ready unit.
-   - BOM/component shortage إذا كان العقد الحالي يدعم BOM.
-   - عدم تحويل Unknown/Error إلى Available.
-8. Full Verify إلزامي قبل إغلاق الدفعة أو الانتقال للدفعة التالية.
+## 7) ترتيب النقل بعد Delivery/Drive-Thru
 
-## 6) ترتيب النقل بعد Availability
+1. Delivery / Drive-Thru operational parity — **ACTIVE**.
+2. Modifiers / KDS parity المتبقي فقط؛ لا إعادة بناء ما هو مغلق بالفعل.
+3. Offline / Reconciliation hardening، مع الحفاظ على Financial Authority وعدم تحويل online ambiguity إلى offline success.
+4. Final release audit: dependencies/security warnings + final E2E acceptance + production migration/merge decision.
 
-لا يبدأ التالي قبل Full Verify Green للدفعة الحالية:
-
-1. Availability server contract hardening — **ACTIVE**.
-2. Delivery / Drive-Thru operational parity.
-3. Modifiers / KDS parity المتبقي فقط؛ لا إعادة بناء ما هو مغلق بالفعل.
-4. Offline / Reconciliation hardening، مع الحفاظ على Financial Authority وعدم تحويل online ambiguity إلى offline success.
-
-## 7) العقود المحمية — لا تُفتح دون Regression مثبت
+## 8) العقود المحمية — لا تُفتح دون Regression مثبت
 
 - Users / Roles / Permission-First ✅
 - Super Admin implicit bypass فقط ✅
@@ -130,6 +147,7 @@
 - POS operator ownership + controlled operator transfer ✅
 - Operator label privacy / same-branch narrow visibility ✅
 - TABLE_BUSY safe owner resume ✅
+- POS Availability authoritative contract ✅
 - Send-to-kitchen delta semantics ✅
 - **Inventory deduction at `send_to_kitchen`** ✅ قرار ثابت
 - Warehouse transfer branch isolation ✅
@@ -145,7 +163,7 @@
 - Guided Workflow Permission-First ✅
 - Financial Authority: explicit offline only; server rejection/ambiguous online failure لا تتحول offline success ✅
 
-## 8) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
+## 9) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
 
 - Arabic-first RTL، Touch-friendly.
 - صلاحيات POS granular مثل `pos.view`, `pos.order.create`, `pos.order.edit`, `pos.payment.take`, `pos.order.split`, `pos.order.transfer`, `pos.receipt.print`, `pos.send_kitchen`, `pos.pay`؛ لا استخدام role names كAuthorization.
@@ -159,7 +177,7 @@
 - التقارير compact/tabular وليست crowded؛ filters/export حسب العقود المتاحة.
 - أي نقل UI لا يغيّر منطق الصلاحيات أو RLS أو financial authority ضمنيًا.
 
-## 9) قاعدة الإغلاق والدمج
+## 10) قاعدة الإغلاق والدمج
 
 أي دفعة لا تعتبر مغلقة إلا إذا:
 
@@ -173,4 +191,4 @@
 
 ---
 
-**NEXT ACTION:** أكمل `Availability server contract hardening` من HEAD الحالي، ثم شغّل Full Verify وسجل النتيجة هنا قبل الانتقال إلى Delivery/Drive-Thru.
+**NEXT ACTION:** أكمل `Delivery / Drive-Thru operational parity` من HEAD الحالي فوق نفس POS، ثم شغّل Full Verify وسجل النتيجة قبل الانتقال إلى Modifiers/KDS.
