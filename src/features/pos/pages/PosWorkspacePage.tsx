@@ -43,6 +43,7 @@ interface WorkspaceState {
   branchId?: string | null;
   guestCount?: number | null;
   pay?: number | null;
+  startStep?: StartStep | null;
 }
 
 export function PosWorkspacePage() {
@@ -82,7 +83,7 @@ export function PosWorkspacePage() {
   const [panel, setPanel] = useState<PosPanelId>(null);
   const [ordersCategory, setOrdersCategory] = useState<ActiveCategory>('all');
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
-  const [startStep, setStartStep] = useState<StartStep | null>(null);
+  const [startStep, setStartStep] = useState<StartStep | null>(initState.startStep ?? null);
   const [preselectedTableId, setPreselectedTableId] = useState<string | null>(initState.tableId || null);
 
   // Quick Modals State
@@ -230,7 +231,7 @@ export function PosWorkspacePage() {
       const send = kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id);
       return Number(send?.sent_quantity || 0) < cItem.quantity;
     });
-  }, [pos.cart, kitchenSendsForActive, orderItemsForActive]);
+  }, [pos.cart, kitchenSendsByOrder, orderItemsForActive]);
 
   const handlePay = useCallback(() => {
     if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
@@ -289,8 +290,11 @@ export function PosWorkspacePage() {
     if (initState.tableId) {
       setPreselectedTableId(initState.tableId);
       setStartStep('table');
+    } else if (initState.startStep) {
+      setPreselectedTableId(null);
+      setStartStep(initState.startStep);
     } else setStartStep(null);
-  }, [orderIdParam, initState.tableId]);
+  }, [orderIdParam, initState.tableId, initState.startStep]);
 
   useEffect(() => {
     payConsumed.current = false;
