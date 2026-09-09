@@ -10,6 +10,8 @@ import {
   updateOfflineSaleStatus,
   removeOfflineSale,
   getPendingSalesCount,
+  subscribeToQueueChanges,
+  type OfflineSaleQueueItem,
 } from './offlineStorage';
 
 export interface SyncStatus {
@@ -22,6 +24,14 @@ export interface SyncStatus {
 }
 
 type SyncSubscriber = (status: SyncStatus) => void;
+
+type SaleSyncResponse = {
+  success?: boolean;
+  sale_id?: string;
+  error?: string;
+  detail?: string;
+  reconciled?: boolean;
+};
 
 class OfflineSyncEngine {
   private isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -38,10 +48,14 @@ class OfflineSyncEngine {
       window.addEventListener('online', () => this.handleOnlineChange(true));
       window.addEventListener('offline', () => this.handleOnlineChange(false));
     }
+    subscribeToQueueChanges((pendingCount) => {
+      this.pendingCount = pendingCount;
+      this.emit();
+    });
   }
 
   public init() {
-    this.refreshPendingCount();
+    void this.refreshPendingCount();
     // Auto-sync every 30 seconds if online
     if (typeof window !== 'undefined') {
       this.timer = window.setInterval(() => {
@@ -102,13 +116,40 @@ class OfflineSyncEngine {
     this.emit();
   }
 
+  private async reconcileCommittedSale(item: OfflineSaleQueueItem): Promise<SaleSyncResponse | null> {
+    const branchId = String(item.payload.p_branch_id || '');
+    const paidAmount = Number(item.payload.p_paid_amount);
+    const paymentMethod = String(item.payload.p_payment_method || '');
+    const invoiceNumber = String(item.payload.p_invoice_number || item.invoice_number || '');
+
+    if (!branchId || !invoiceNumber.startsWith('INV-OFF-') || !Number.isFinite(paidAmount) || !paymentMethod) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await posApi.reconcileOfflineSale({
+        p_invoice_number: invoiceNumber,
+        p_branch_id: branchId,
+        p_paid_amount: paidAmount,
+        p_payment_method: paymentMethod,
+      });
+      if (error) return null;
+      const result = data as SaleSyncResponse | null;
+      return result?.success === true && Boolean(result.sale_id) ? result : null;
+    } catch {
+      return null;
+    }
+  }
+
   public async syncAll(): Promise<{ successCount: number; failedCount: number }> {
     if (!this.isOnline || this.isSyncing) {
       return { successCount: 0, failedCount: 0 };
     }
 
     const items = await getAllOfflineSales();
-    const pendingItems = items.filter((i) => i.status === 'pending' || i.status === 'failed');
+    // A row can remain persisted as `syncing` if the tab/process dies after the
+    // server commit. It must be retried/reconciled on the next startup.
+    const pendingItems = items.filter((i) => i.status !== 'synced');
 
     if (pendingItems.length === 0) {
       this.pendingCount = 0;
@@ -127,21 +168,28 @@ class OfflineSyncEngine {
       try {
         await updateOfflineSaleStatus(item.id, 'syncing');
 
-        // Call the server RPC
+        // Call the authoritative sale RPC. A sync is confirmed only by an
+        // explicit success=true plus a durable sale_id; null/undefined data is
+        // never treated as success.
         const { data, error } = await posApi.processSale(
           item.payload as unknown as Parameters<typeof posApi.processSale>[0]
         );
+        const res = data as SaleSyncResponse | null;
 
-        if (error) {
-          throw new Error(error.message || 'Network sync error');
+        let confirmed = !error && res?.success === true && Boolean(res.sale_id);
+        if (!confirmed) {
+          // If the response was lost after COMMIT (or a retry hit the unique
+          // invoice guard), reconcile by the offline invoice key before retrying.
+          const reconciled = await this.reconcileCommittedSale(item);
+          confirmed = Boolean(reconciled?.success && reconciled.sale_id);
         }
 
-        const res = data as { success?: boolean; error?: string; detail?: string } | null;
-        if (res && res.success === false) {
-          throw new Error(res.detail || res.error || 'Server rejected offline transaction');
+        if (!confirmed) {
+          const message = error?.message || res?.detail || res?.error || 'Offline sale was not confirmed by the server';
+          throw new Error(message);
         }
 
-        // Successfully synced -> delete from queue
+        // Successfully synced/reconciled -> delete from queue.
         await removeOfflineSale(item.id);
         successCount++;
         this.syncedRecentlyCount++;
