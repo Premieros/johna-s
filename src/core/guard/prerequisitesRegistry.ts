@@ -159,7 +159,7 @@ export const PREREQUISITE_STEPS: Record<PrerequisiteStepKey, PrerequisiteStep> =
     targetRoute: APP_ROUTES.shifts,
     actionLabelAr: 'فتح الوردية الآن',
     actionLabelEn: 'Open Shift Now',
-    requiredPermission: 'shifts.manage',
+    requiredPermission: 'shifts.open',
     iconName: 'timer',
   },
   need_permission: {
@@ -203,7 +203,7 @@ export function validateActionPrerequisites(
   action: OperationalActionKey,
   ctx: OperationalValidationContext
 ): PrerequisiteValidationResult {
-  const isSuper = ctx.userRole === 'super_admin' || ctx.userRole === 'owner';
+  const isSuper = ctx.userRole === 'super_admin';
 
   // 1. Permission check
   if (ctx.hasPermission === false && !isSuper) {
@@ -283,12 +283,12 @@ export function validateActionPrerequisites(
           reasonEn: 'No products registered in the POS catalog.',
         };
       }
-      if (ctx.activeShiftId === null && ctx.userRole === 'cashier') {
+      if (ctx.activeShiftId === null) {
         return {
           allowed: false,
           missingStep: PREREQUISITE_STEPS.open_shift,
           reasonAr: 'يجب فتح وردية كاشير وإدخال رصيد الافتتاح قبل إتمام أي عملية بيع.',
-          reasonEn: 'A cashier shift must be opened before processing sales.',
+          reasonEn: 'An active shift must be opened before processing sales.',
         };
       }
       break;

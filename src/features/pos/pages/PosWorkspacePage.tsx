@@ -102,21 +102,22 @@ export function PosWorkspacePage() {
   const payConsumed = useRef(false);
   const effectiveBranch = selectedBranch || branchFilter || user?.branch_id || '';
   const effSettings: Settings | null = settings ? mergeEffectiveSettings(settings, effectiveBranch ? branchSettingsMap[effectiveBranch] : null) : null;
-  const isCashier = user?.role === 'cashier';
 
   const reloadShift = useCallback(() => {
-    if (!isCashier || !effectiveBranch) {
+    if (!effectiveBranch) {
       setShiftChecked(true);
       setActiveShift(null);
       return;
     }
     setShiftChecked(false);
-    api.pos.getActiveShift({ p_branch_id: effectiveBranch }).then(({ data }) => {
-      const res = data as unknown as { open?: boolean; shift?: { id: string; expected: number; opened_at: string; opening_amount: number } } | null;
-      setActiveShift(res?.open ? (res.shift ?? null) : null);
-      setShiftChecked(true);
-    });
-  }, [isCashier, effectiveBranch]);
+    void api.pos.getActiveShift({ p_branch_id: effectiveBranch })
+      .then(({ data }) => {
+        const res = data as unknown as { open?: boolean; shift?: { id: string; expected: number; opened_at: string; opening_amount: number } } | null;
+        setActiveShift(res?.open ? (res.shift ?? null) : null);
+      })
+      .catch(() => setActiveShift(null))
+      .finally(() => setShiftChecked(true));
+  }, [effectiveBranch]);
 
   useEffect(() => {
     reloadShift();
@@ -168,7 +169,6 @@ export function PosWorkspacePage() {
     orderId: orderIdParam || null,
     customers,
     effSettings,
-    isCashier,
     activeShift,
     products,
     stockMap,
@@ -227,10 +227,10 @@ export function PosWorkspacePage() {
   }, [pos.cart, kitchenSendsForActive, orderItemsForActive]);
 
   const handlePay = useCallback(() => {
-    if (!perms.canPay || pos.cart.length === 0) return;
+    if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
     const allowed = guardPos({
       productsCount: products.length,
-      activeShiftId: isCashier ? activeShift?.id || null : 'shift_exempt',
+      activeShiftId: activeShift?.id || null,
       formData: { cart: pos.cart, orderType: pos.orderType },
     });
     if (!allowed) return;
@@ -238,7 +238,7 @@ export function PosWorkspacePage() {
     pos.setPaidAmount(pos.total);
     pos.setCheckoutOpen(true);
     setMobileOrderOpen(false);
-  }, [perms.canPay, pos, guardPos, products.length, isCashier, activeShift?.id]);
+  }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id]);
 
   // Keyboard Shortcuts Hook
   usePosKeyboard({
@@ -273,10 +273,6 @@ export function PosWorkspacePage() {
     orderLoading,
     activeOrderId,
     cart,
-    total,
-    setPaymentMethod,
-    setPaidAmount,
-    setCheckoutOpen,
   } = pos;
 
   useEffect(() => {
@@ -291,12 +287,14 @@ export function PosWorkspacePage() {
   }, [orderIdParam, initState.tableId]);
 
   useEffect(() => {
-    if (!perms.canPay || payConsumed.current || !initState.pay || checkoutOpen || orderLoading || !activeOrderId || cart.length === 0) return;
+    payConsumed.current = false;
+  }, [orderIdParam, initState.pay]);
+
+  useEffect(() => {
+    if (!perms.canPay || payConsumed.current || !initState.pay || !shiftChecked || checkoutOpen || orderLoading || !activeOrderId || cart.length === 0) return;
     payConsumed.current = true;
-    setPaymentMethod('cash');
-    setPaidAmount(total);
-    setCheckoutOpen(true);
-  }, [perms.canPay, initState.pay, checkoutOpen, orderLoading, activeOrderId, cart.length, total, setPaymentMethod, setPaidAmount, setCheckoutOpen]);
+    handlePay();
+  }, [perms.canPay, initState.pay, shiftChecked, checkoutOpen, orderLoading, activeOrderId, cart.length, handlePay]);
 
   useEffect(() => {
     let cancelled = false;
@@ -479,11 +477,7 @@ export function PosWorkspacePage() {
 
   const openOrderWorkspace = (orderId: string, opts: { pay?: boolean } = {}) => {
     if (pos.activeOrderId === orderId) {
-      if (opts.pay && perms.canPay) {
-        pos.setPaymentMethod('cash');
-        pos.setPaidAmount(pos.total);
-        pos.setCheckoutOpen(true);
-      }
+      if (opts.pay && perms.canPay) handlePay();
       setPanel(null);
       setMobileOrderOpen(false);
       return;
@@ -714,7 +708,6 @@ export function PosWorkspacePage() {
         branches={branches}
         canChangeBranch={perms.canChangeBranch}
         onBranchChange={handleBranchChange}
-        isCashier={isCashier}
         shiftChecked={shiftChecked}
         activeShift={activeShift}
         onOpenShiftModal={() => setShiftModalOpen(true)}

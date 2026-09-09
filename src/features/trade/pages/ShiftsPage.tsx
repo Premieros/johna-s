@@ -52,8 +52,6 @@ export function ShiftsPage() {
   const [closeForm, setCloseForm] = useState({ actual_amount: 0, notes: '' });
   const [printingId, setPrintingId] = useState<string | null>(null);
 
-  const isCashier = user?.role === 'cashier';
-
   async function loadMeta() {
     const { data } = await supabase.from('users').select('id, full_name, email');
     setUsers((data as ShiftUserRow[]) || []);
@@ -70,9 +68,11 @@ export function ShiftsPage() {
   }, [items, users, branches]);
 
   const openShift = async () => {
-    if (!user?.branch_id) { show(t('selectBranchFirst'), 'error'); return; }
+    if (!can('shifts.open')) return;
+    const targetBranchId = branchSel || branchFilter || user?.branch_id || '';
+    if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
     const { data, error } = await api.shifts.open({
-      p_branch_id: user.branch_id,
+      p_branch_id: targetBranchId,
       p_opening_amount: openForm.opening_amount || 0,
       p_notes: openForm.notes || null,
     });
@@ -202,7 +202,7 @@ export function ShiftsPage() {
                 <CalendarCheck className="w-4 h-4" /> {isAr ? 'تقرير اليومية المباشر' : 'Live Daily Report'}
               </Button>
             )}
-            {isCashier && can('shifts.open') && (
+            {can('shifts.open') && (
               <Button onClick={() => setOpenModal(true)}>
                 <Play className="w-4 h-4" /> {t('openShift')}
               </Button>
@@ -211,7 +211,7 @@ export function ShiftsPage() {
         }
       />
 
-      {isCashier && openShifts.length > 0 && (
+      {openShifts.length > 0 && (
         <DesignPanel className="border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-900/10" testId="shifts-open-banner">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -310,4 +310,3 @@ export function ShiftsPage() {
     </DesignSurface>
   );
 }
-

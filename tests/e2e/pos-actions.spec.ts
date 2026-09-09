@@ -6,6 +6,7 @@ const BRANCH_ID = '00000000-0000-0000-0000-000000000010';
 const PRODUCT_ID = '00000000-0000-0000-0000-000000000020';
 const WAREHOUSE_ID = '00000000-0000-0000-0000-000000000030';
 const TABLE_ID = '00000000-0000-0000-0000-000000000040';
+const SHIFT_ID = '00000000-0000-0000-0000-000000000050';
 
 const fakeUser = { id: TEST_USER_ID, email: 'e2e@example.test', full_name: 'E2E Admin', role: 'super_admin', is_active: true, branch_id: BRANCH_ID, created_at: new Date().toISOString() };
 const product = { id: PRODUCT_ID, branch_id: BRANCH_ID, name: 'E2E Burger', name_en: 'E2E Burger', sku: 'E2E-001', barcode: '628000000020', sale_price: 100, product_type: 'simple', category_id: null, is_active: true, low_stock_threshold: 5 };
@@ -51,7 +52,23 @@ async function mockPosBackend(page: Page) {
     try { rpcPayloads[name] = [...(rpcPayloads[name] || []), JSON.parse(r.request().postData() || '{}')]; } catch { rpcPayloads[name] = [...(rpcPayloads[name] || []), {}]; }
     if (name === 'get_login_email') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, email: fakeUser.email }) });
     if (name === 'record_login_success' || name === 'record_login_failure') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
-    if (name === 'get_active_shift') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, open: true, shift_id: '00000000-0000-0000-0000-000000000050', branch_id: BRANCH_ID, user_id: TEST_USER_ID }) });
+    if (name === 'get_active_shift') return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        open: true,
+        shared: true,
+        shift: {
+          id: SHIFT_ID,
+          branch_id: BRANCH_ID,
+          cashier_id: TEST_USER_ID,
+          opened_at: new Date().toISOString(),
+          opening_amount: 0,
+          expected: 0,
+        },
+      }),
+    });
     if (name === 'get_pos_product_availability') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, available_quantity: 20, is_available: true }]) });
     if (name === 'get_pos_order_operator_labels') return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     if (name === 'next_sale_document_number') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, number: 'E2E-INV-001' }) });
@@ -172,10 +189,11 @@ test.describe('POS action-level', () => {
     await page.getByTestId('pos-payment-confirm').click();
     await expect.poll(() => rpcCalls.includes('next_sale_document_number'), { timeout: 10000 }).toBe(true);
     await expect.poll(() => rpcCalls.includes('process_sale'), { timeout: 10000 }).toBe(true);
-    const payload = (rpcPayloads.process_sale?.[0] || {}) as { p_status?: string; p_payment_method?: string; p_order_type?: string };
+    const payload = (rpcPayloads.process_sale?.[0] || {}) as { p_status?: string; p_payment_method?: string; p_order_type?: string; p_shift_id?: string };
     expect(payload.p_status).toBe('completed');
     expect(payload.p_payment_method).toBe('cash');
     expect(payload.p_order_type).toBe('takeaway');
+    expect(payload.p_shift_id).toBe(SHIFT_ID);
   });
 
   test('landing actions expose tables-first direct flows and back navigation', async ({ page }) => {

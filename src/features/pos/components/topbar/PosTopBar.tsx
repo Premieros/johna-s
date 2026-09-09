@@ -27,7 +27,6 @@ interface PosTopBarProps {
   branches: Branch[];
   canChangeBranch: boolean;
   onBranchChange: (id: string) => void;
-  isCashier: boolean;
   shiftChecked: boolean;
   activeShift: ActiveShiftInfo | null;
   onNewOrder: () => void;
@@ -42,7 +41,6 @@ export function PosTopBar({
   branches,
   canChangeBranch,
   onBranchChange,
-  isCashier,
   shiftChecked,
   activeShift,
   onNewOrder,
@@ -109,7 +107,7 @@ export function PosTopBar({
     };
   }, [refreshPending, triggerSync]);
 
-  const canManageCurrentShift = activeShift ? perms.canCloseShift : perms.canOpenShift;
+  const canManageCurrentShift = shiftChecked && (activeShift ? perms.canCloseShift : perms.canOpenShift);
 
   const openShiftManagement = () => {
     if (!canManageCurrentShift) return;
@@ -196,7 +194,7 @@ export function PosTopBar({
         {now.toLocaleTimeString(isAr ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
       </div>
 
-      {canManageCurrentShift && isCashier && shiftChecked && (
+      {canManageCurrentShift && (
         <button
           data-testid="pos-shift-button"
           onClick={openShiftManagement}

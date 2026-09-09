@@ -56,6 +56,23 @@ function consumeArmedSplitTender(): SplitTenderInput[] | null {
   return payments;
 }
 
+async function resolveSharedBranchShift(p: ProcessSalePayload): Promise<{ payload: ProcessSalePayload | null; error: string | null }> {
+  if (p.p_shift_id) return { payload: p, error: null };
+
+  try {
+    const { data, error } = await posApi.getActiveShift({ p_branch_id: p.p_branch_id });
+    if (error) return { payload: null, error: error.message || 'Could not verify active shift' };
+
+    const result = data as unknown as { open?: boolean; shift?: { id?: string | null } | null } | null;
+    const shiftId = result?.open ? result.shift?.id || null : null;
+    if (!shiftId) return { payload: null, error: 'SHIFT_REQUIRED' };
+
+    return { payload: { ...p, p_shift_id: shiftId }, error: null };
+  } catch (err) {
+    return { payload: null, error: err instanceof Error ? err.message : 'Could not verify active shift' };
+  }
+}
+
 export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ result: (RpcResult & { offline?: boolean }) | null; error: string | null }> {
   const splitPayments = consumeArmedSplitTender();
 
@@ -79,15 +96,22 @@ export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ resu
     };
   }
 
+  // Shared shifts are branch-level operational state, not cashier-only state.
+  // Older callers may omit p_shift_id for non-cashier users, so resolve the
+  // authoritative open branch shift before either normal or split settlement.
+  const resolvedShift = await resolveSharedBranchShift(p);
+  if (!resolvedShift.payload) return { result: null, error: resolvedShift.error || 'SHIFT_REQUIRED' };
+  const settlementPayload = resolvedShift.payload;
+
   if (splitPayments) {
-    const { p_paid_amount: _paidAmount, p_payment_method: _paymentMethod, ...splitBase } = p;
+    const { p_paid_amount: _paidAmount, p_payment_method: _paymentMethod, ...splitBase } = settlementPayload;
     void _paidAmount;
     void _paymentMethod;
     return processSplitSaleForOrder({ ...splitBase, p_payments: splitPayments });
   }
 
   try {
-    const { data, error } = await posApi.processSale(p);
+    const { data, error } = await posApi.processSale(settlementPayload);
     if (!error && (data as { success?: boolean })?.success) {
       return { result: data as RpcResult, error: null };
     }
