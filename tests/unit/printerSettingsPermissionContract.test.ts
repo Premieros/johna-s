@@ -16,6 +16,8 @@ describe('permission-first desktop printer routing contract', () => {
     expect(launcher).toContain("can('settings.manage')");
     expect(launcher).toContain('pathname.startsWith(APP_ROUTES.settings)');
     expect(app).toContain('<PrinterSettingsLauncher />');
+    expect(panel).toContain("main: ['main', 'kitchen', 'grill', 'salad', 'dessert', 'fryer']");
+    expect(panel).toContain("drinks: ['drinks', 'barista', 'bar']");
   });
 
   it('preserves strict kitchen routing and does not introduce a DB print queue', () => {
@@ -24,6 +26,8 @@ describe('permission-first desktop printer routing contract', () => {
     expect(printAgent).toContain('items.some((item) => !safeText(item.station_code))');
     expect(printAgent).toContain('`${PRINT_AGENT_URL}/config`');
     expect(printAgent).toContain('isRunningInElectron()');
+    expect(printAgent).toContain('if (!isSilentPrintEnabled()) return false');
+    expect(printAgent).toContain("method: 'POST'");
     expect(printAgent).not.toContain("from('print_jobs')");
     expect(printAgent).not.toContain('scpovyrqmsbiduanykod');
   });

@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useLanguage } from '@/context/LanguageContext';
 import { useCan } from '@/lib/permissions';
 import {
+  applyLocalPrinterRoutes,
   executeCashDrawerKick,
   executeSilentPrint,
   getAvailablePrinters,
@@ -25,6 +26,12 @@ interface PrinterSettingsPanelProps {
   branchName?: string;
   isStandalonePage?: boolean;
 }
+
+const STATION_ROUTE_ALIASES: Record<string, string[]> = {
+  cashier: ['cashier', 'receipt'],
+  main: ['main', 'kitchen', 'grill', 'salad', 'dessert', 'fryer'],
+  drinks: ['drinks', 'barista', 'bar'],
+};
 
 const STATIONS = [
   { code: 'cashier', labelAr: 'الكاشير / إيصال العميل', labelEn: 'Cashier / Receipt', icon: Receipt },
@@ -81,18 +88,27 @@ export function PrinterSettingsPanel({ branchName }: PrinterSettingsPanelProps) 
     }
   };
 
-  const save = () => {
-    saveLocalPrinterRoutes(routes);
+  const save = async () => {
     setSilentPrintEnabled(silentPrint);
     setAutoDrawerKick(autoDrawer);
-    show(isAr ? 'تم حفظ إعدادات الطابعات على هذا الجهاز' : 'Printer settings saved on this device', 'success');
+    saveLocalPrinterRoutes(routes);
+    const agentSynced = await applyLocalPrinterRoutes(routes);
+    show(
+      agentSynced
+        ? (isAr ? 'تم حفظ مسارات الطابعات وتفعيلها على هذا الجهاز' : 'Printer routes saved and activated on this device')
+        : (isAr ? 'تم الحفظ محلياً، لكن Local Print Agent غير متصل حالياً' : 'Saved locally, but the Local Print Agent is not currently connected'),
+      agentSynced ? 'success' : 'warning',
+    );
   };
 
   const setRoute = (station: string, printerName: string) => {
     setRoutes((previous) => {
       const next = { ...previous };
-      if (printerName) next[station] = printerName;
-      else delete next[station];
+      const routeCodes = STATION_ROUTE_ALIASES[station] || [station];
+      for (const routeCode of routeCodes) {
+        if (printerName) next[routeCode] = printerName;
+        else delete next[routeCode];
+      }
       return next;
     });
   };
@@ -147,7 +163,7 @@ export function PrinterSettingsPanel({ branchName }: PrinterSettingsPanelProps) 
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-ui-border bg-ui-card p-4">
+      <div className="rounded-2xl border border-ui-border bg-ui-surface p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 text-ui-text">
@@ -165,7 +181,7 @@ export function PrinterSettingsPanel({ branchName }: PrinterSettingsPanelProps) 
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               <span>{isAr ? 'تحديث الطابعات' : 'Refresh Printers'}</span>
             </Button>
-            <Button size="sm" onClick={save}>
+            <Button size="sm" onClick={() => void save()}>
               <Save className="h-4 w-4" />
               <span>{isAr ? 'حفظ' : 'Save'}</span>
             </Button>
@@ -183,14 +199,14 @@ export function PrinterSettingsPanel({ branchName }: PrinterSettingsPanelProps) 
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-ui-border bg-ui-card p-10 text-sm text-ui-muted">
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-ui-border bg-ui-surface p-10 text-sm text-ui-muted">
           <RefreshCw className="h-4 w-4 animate-spin" />
           <span>{isAr ? 'جاري فحص الطابعات...' : 'Detecting printers...'}</span>
         </div>
       ) : (
         <div className="grid gap-3">
           {STATIONS.map(({ code, labelAr, labelEn, icon: Icon }) => (
-            <div key={code} className="rounded-2xl border border-ui-border bg-ui-card p-4">
+            <div key={code} className="rounded-2xl border border-ui-border bg-ui-surface p-4">
               <div className="grid gap-3 lg:grid-cols-[minmax(180px,0.8fr)_minmax(260px,1.4fr)_auto] lg:items-end">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600">
@@ -227,7 +243,7 @@ export function PrinterSettingsPanel({ branchName }: PrinterSettingsPanelProps) 
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ui-border bg-ui-card p-4">
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ui-border bg-ui-surface p-4">
           <input
             type="checkbox"
             className="mt-1 h-4 w-4"
@@ -242,7 +258,7 @@ export function PrinterSettingsPanel({ branchName }: PrinterSettingsPanelProps) 
           </div>
         </label>
 
-        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ui-border bg-ui-card p-4">
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ui-border bg-ui-surface p-4">
           <input
             type="checkbox"
             className="mt-1 h-4 w-4"

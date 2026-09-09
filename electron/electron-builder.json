@@ -2,7 +2,7 @@
   "appId": "com.premieros.johnas",
   "productName": "Premier POS",
   "directories": {
-    "output": "release"
+    "output": "electron/release"
   },
   "files": [
     "electron/**/*",
@@ -30,5 +30,6 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "Premier POS"
-  }
+  },
+  "electronVersion": "38.1.0"
 }

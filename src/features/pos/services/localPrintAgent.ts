@@ -89,6 +89,30 @@ export function saveLocalPrinterRoutes(routes: PrinterRouteConfig): void {
   window.localStorage.setItem(STORAGE_ROUTING_KEY, JSON.stringify(normalized));
 }
 
+
+/** Save device routing and, when running in a browser, synchronize it to the
+ * proven local Windows agent so kitchen printing uses the same configuration.
+ * Electron consumes the device-local routes directly and never needs a DB row.
+ */
+export async function applyLocalPrinterRoutes(routes: PrinterRouteConfig): Promise<boolean> {
+  saveLocalPrinterRoutes(routes);
+  if (typeof window === 'undefined') return false;
+  if (isRunningInElectron()) return true;
+
+  try {
+    const health = await fetchWithTimeout(`${PRINT_AGENT_URL}/health`);
+    if (!health.ok) return false;
+    const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ routes }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function isAutoDrawerKickEnabled(): boolean {
   return readBoolean(STORAGE_DRAWER_KICK_KEY, true);
 }
@@ -285,6 +309,7 @@ export async function printKitchenStationsLocally(
   ctx: LocalKitchenPrintContext,
 ): Promise<boolean> {
   if (typeof window === 'undefined' || items.length === 0) return false;
+  if (!isSilentPrintEnabled()) return false;
 
   // Never guess a station while frontend and Production migrations are out of
   // sync. Missing station data keeps the proven browser-print fallback active.

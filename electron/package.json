@@ -5,7 +5,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --config electron-builder.json --win"
+    "build:win": "electron-builder --projectDir .. --config electron/electron-builder.json --win"
   },
   "devDependencies": {
     "electron": "^38.1.0",
