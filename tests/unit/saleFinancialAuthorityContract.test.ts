@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import ts from 'typescript';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+
+const extractBalancedBlock = (source: string, openingBrace: number): string => {
+  expect(source[openingBrace]).toBe('{');
+  let depth = 0;
+
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(openingBrace, index + 1);
+  }
+
+  throw new Error('Unbalanced source block');
+};
+
+const extractFunctionBody = (source: string, functionName: string): string => {
+  const sourceFile = ts.createSourceFile('payment.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const declaration = sourceFile.statements.find(
+    (statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === functionName,
+  );
+  if (!declaration?.body) throw new Error(`Function ${functionName} was not found`);
+  return declaration.body.getText(sourceFile);
+};
 
 describe('sale financial authority contract', () => {
   it('uses process_sale as the only online sale write path', () => {
@@ -15,10 +39,30 @@ describe('sale financial authority contract', () => {
 
   it('does not convert authoritative server rejection or ambiguous online failure into offline success', () => {
     const payment = read('src/features/pos/services/payment.ts');
-    const onlinePath = payment.slice(payment.indexOf('try {'));
-    expect(onlinePath).not.toContain('offlinePosManager.enqueueSale(p)');
-    expect(payment).toContain('A server rejection');
-    expect(payment).toContain('the server may have');
+    const processSale = extractFunctionBody(payment, 'processSaleForOrder');
+
+    const explicitOfflineCondition = "if (!splitPayments && typeof navigator !== 'undefined' && !navigator.onLine)";
+    const explicitOfflineStart = processSale.indexOf(explicitOfflineCondition);
+    expect(explicitOfflineStart).toBeGreaterThanOrEqual(0);
+    const explicitOffline = extractBalancedBlock(processSale, processSale.indexOf('{', explicitOfflineStart));
+    expect(explicitOffline).toContain('offlinePosManager.enqueueSale(p)');
+    expect(processSale.match(/offlinePosManager\.enqueueSale\(p\)/g)).toHaveLength(1);
+
+    const onlineMarker = 'const settlementPayload = resolvedShift.payload;';
+    const onlineMarkerStart = processSale.indexOf(onlineMarker);
+    expect(onlineMarkerStart).toBeGreaterThanOrEqual(0);
+    const onlineTryStart = processSale.indexOf('try {', onlineMarkerStart + onlineMarker.length);
+    expect(onlineTryStart).toBeGreaterThanOrEqual(0);
+    const onlineTryCatch = processSale.slice(onlineTryStart);
+    expect(onlineTryCatch).not.toContain('offlinePosManager.enqueueSale(p)');
+    expect(onlineTryCatch).toContain('A server rejection');
+    expect(onlineTryCatch).toContain('the server may have');
+
+    const splitTenderBranchStart = processSale.indexOf('if (splitPayments)');
+    expect(splitTenderBranchStart).toBeGreaterThanOrEqual(0);
+    const splitTenderBranch = extractBalancedBlock(processSale, processSale.indexOf('{', splitTenderBranchStart));
+    expect(splitTenderBranch).toContain('processSplitSaleForOrder');
+    expect(splitTenderBranch).not.toContain('offlinePosManager.enqueueSale');
   });
 
   it('blocks raw authenticated inserts and clamps applied payment server-side', () => {
