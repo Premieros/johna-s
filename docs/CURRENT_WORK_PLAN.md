@@ -4,7 +4,7 @@
 > أي نموذج أو مطور يبدأ من هذا الملف فقط.
 > الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair مراجع تاريخية فقط ولا تحدد الحالة الحالية.
 
-آخر تحديث: **2026-09-09 22:51 — Africa/Cairo — Availability Full Green; Delivery/Drive-Thru active**
+آخر تحديث: **2026-09-09 23:25 — Africa/Cairo — Delivery/Drive-Thru Full Green; KDS permission hardening active**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -38,9 +38,9 @@
 ## 3) Development baseline الحالي
 
 - Branch: `development/final-handover`
-- Availability functional HEAD: `f0693915e27b7accdead26197a90a74cc9804e38`
+- Last functional Full Green HEAD: `c1314c47f360e5afd28f1389c79252168fca4f9f`
 - PR #55: `feat(pos): operator attribution and safe table resume` — **Open / غير مدمج**.
-- Verify #932 / run `34396769013` على HEAD `f0693915...`: **Full Green** ✅
+- Verify #945 / run `34400078544` على HEAD `c1314c47...`: **Full Green** ✅
   - Locked Supabase identity ✅
   - Frontend API contract ✅
   - lint ✅
@@ -103,42 +103,64 @@
 
 هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
 
-## 6) الدفعة النشطة الآن — Delivery / Drive-Thru operational parity
+## 6) Delivery / Drive-Thru operational parity — مغلقة Full Green
+
+**الحالة: CLOSED ✅**
+
+تم تنفيذ وإثبات التالي:
+
+1. لا يوجد POS ثانٍ أو دورة طلب موازية؛ كلا النوعين يعيدان استخدام نفس `OrderStartWizard` + `PosWorkspacePage` + order lifecycle الحالي.
+2. تمت إضافة direct entries مركزية:
+   - `/delivery` → نفس `/pos` مع بدء خطوة Delivery.
+   - `/drive-thru` → نفس `/pos` مع بدء خطوة السيارة.
+3. `orders.service_details` أصبح عقدًا منظمًا وآمنًا بدل الاعتماد على `notes` فقط.
+4. Delivery يحفظ `phone` و`address` و`note` بصورة منظمة؛ الهاتف والعنوان مطلوبان Server-side.
+5. Drive-Thru يحفظ `vehicle_identifier` مع `customer_name`/`note` الاختياريين بصورة منظمة.
+6. `create_service_order` و`update_service_order` wrappers ضيقة تستدعي العقود الأساسية `create_order`/`update_order` داخل نفس المعاملة؛ لا bypass لدورة الطلب أو branch/ownership guards.
+7. Resume/Update يحافظان على `service_details` ولا يمسحان بيانات الخدمة.
+8. البيانات المقروءة تظل متاحة في `notes` للتوافق مع الشاشات الحالية، مع `service_details` كمصدر منظم للتشغيل والتقارير المستقبلية.
+9. لم تتم إضافة Delivery fee أو driver assignment؛ لا يوجد حتى الآن contract محاسبي/صلاحيات موثق يسمح بإضافتهما بأمان، لذلك لم يتم إدخال Frontend-only charges أو role-name assignment.
+10. Regression DB: `tests/integration/pos_service_order_details.test.ts` يغطي create/update/resume وinvalid data وcross-branch وanon.
+11. Regression UI/route: `tests/unit/posDirectServiceEntryContract.test.ts` يثبت أن المدخلين يمران إلى نفس POS ويستهلكان `startStep` الصحيح.
+12. Verify #941 أثبت service-details contract Full Green، ثم Verify #945 / run `34400078544` على HEAD `c1314c47...` أغلق direct-entry parity **Full Green ✅** بما فيه Browser Smoke.
+
+هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
+
+## 7) الدفعة النشطة الآن — Modifiers / KDS parity المتبقي فقط
 
 **الحالة: ACTIVE**
 
-القاعدة:
-- لا إنشاء POS ثانٍ أو دورة طلب موازية.
-- إعادة استخدام نفس `OrderStartWizard` + `PosWorkspacePage` + order lifecycle الحالي.
-- `delivery` و`drive_thru` موجودان بالفعل كـorder types؛ المطلوب إغلاق الفجوات التشغيلية فقط.
-- أي مرجع خارجي، بما فيه ElitaleRestro، Read-Only للفكرة والسلوك فقط؛ لا نسخ كود أو migrations/RLS/RPC.
+قاعدة العمل:
+- لا إعادة بناء Modifiers أو KDS الموجودين أصلًا بدون Regression مثبت.
+- Modifiers الحالية لديها min/max/required/default selections، single/multiple، price deltas، item notes وmodifier snapshots؛ تُعامل كمغلقة وظيفيًا ما لم يظهر خلل محدد.
+- KDS الحالية لديها branch/station queue، realtime/polling، modifiers/notes، وحالات sent → cooking → ready → served.
 
-الفجوات المثبتة قبل التنفيذ:
-- Delivery الحالي يجمع العميل/الهاتف/العنوان/الملاحظات لكنه يحول الهاتف والعنوان إلى نص داخل `notes`؛ لا يوجد service contract مستقل للرسوم/المندوب/بيانات التوصيل.
-- Drive-Thru الحالي يجمع رقم السيارة/العميل/الملاحظات ويحولها إلى `notes`؛ لا توجد حقول تشغيلية مستقلة للسيارة/الطابور.
-- نموذج `orders` الحالي لا يملك حقول Delivery/Drive-Thru تشغيلية مستقلة؛ الموجود أساسًا `customer_id`, `guest_count`, `notes` مع `order_type`.
+الفجوة الأمنية المثبتة:
+- `get_kitchen_queue` و`get_my_kitchen_stations` يستخدمان `pos.kds_view` للقراءة، وهذا صحيح.
+- `set_kitchen_status` يستخدم أيضًا `pos.kds_view` لتغيير حالة المطبخ، وبذلك مستخدم View-Only يستطيع الكتابة.
+- لا توجد حاليًا صلاحية مستقلة لتغيير KDS ضمن Permission Definitions.
 
-خطوات التنفيذ الإلزامية:
-1. إضافة direct entry parity لـ`/delivery` و`/drive-thru` فوق نفس POS، بدون نسخ شاشة البيع.
-2. جعل OrderStartWizard يقبل نوع طلب ابتدائي من route مع إمكانية الرجوع/التغيير وفق الصلاحيات الحالية.
-3. Delivery: حفظ البيانات المطلوبة بشكل منظم وآمن: customer/phone/address/notes، مع fee/driver فقط إذا ثبت مصدر إعداداتهما وعقدهما المحاسبي.
-4. Drive-Thru: حفظ car/vehicle identifier بصورة منظمة وآمنة، مع أي queue/sequence فقط إذا كان له عقد فعلي مطلوب.
-5. أي `extra_charge` يجب أن يكون non-negative، server-authoritative، يدخل total/receipt/accounting/reporting ولا يكون Frontend-only.
-6. أي `staff_required`/driver assignment يجب أن يتحقق Server-side من user active + branch scope + الصلاحية المطلوبة؛ لا role-name authorization.
-7. تحديث order read/update contracts بحيث تظهر البيانات عند Hold/Resume/Orders/Receipt ولا تضيع بعد الاستئناف.
-8. المحافظة على operator attribution وTABLE_BUSY ownership وعدم السماح لمسار Delivery/Drive-Thru بتجاوز shift/branch/permission guards.
-9. Regression tests: create/resume/update لكل نوع، branch isolation، invalid driver/staff، negative charge، accounting/receipt total إن أضيفت رسوم.
-10. E2E/Browser: بدء Delivery وDrive-Thru من المدخل المباشر ومن الـwizard، ثم order → kitchen → payment بدون كسر المسار الأساسي.
-11. Full Verify إلزامي قبل إغلاق الدفعة.
+الخطوات الإلزامية:
+1. إنشاء صلاحية كتابة KDS مستقلة باسم متوافق مع naming convention الحالي بعد مراجعة migration/permission seeding الحالية.
+2. إبقاء route/page visibility على `pos.kds_view` فقط.
+3. تقييد أزرار/Actions تغيير الحالة في الواجهة بصلاحية الكتابة الجديدة.
+4. تعديل `set_kitchen_status` ليطلب صلاحية الكتابة الجديدة Server-side بدل `pos.kds_view`.
+5. الحفاظ على branch isolation وSECURITY DEFINER hardened `search_path` وعدم إدخال role-name authorization.
+6. التحقق هل station assignment الحالي يمنع مستخدم محطة واحدة من تحديث طلب/سطور محطة أخرى؛ إذا ظهر bypass فعلي يُغلق بأضيق تغيير ممكن.
+7. Regression tests على الأقل:
+   - KDS View-Only يستطيع القراءة ولا يستطيع تغيير الحالة.
+   - مستخدم بصلاحية الكتابة يستطيع تغيير الحالة داخل فرعه/محطته المسموحة.
+   - cross-branch deny.
+   - station-scope deny إذا كان العقد الحالي محطة-محددًا.
+8. Full Verify إلزامي قبل إغلاق الدفعة.
 
-## 7) ترتيب النقل بعد Delivery/Drive-Thru
+## 8) ترتيب النقل بعد KDS
 
-1. Delivery / Drive-Thru operational parity — **ACTIVE**.
-2. Modifiers / KDS parity المتبقي فقط؛ لا إعادة بناء ما هو مغلق بالفعل.
-3. Offline / Reconciliation hardening، مع الحفاظ على Financial Authority وعدم تحويل online ambiguity إلى offline success.
-4. Final release audit: dependencies/security warnings + final E2E acceptance + production migration/merge decision.
+1. Modifiers / KDS parity المتبقي فقط — **ACTIVE**.
+2. Offline / Reconciliation hardening، مع الحفاظ على Financial Authority وعدم تحويل online ambiguity إلى offline success.
+3. Final release audit: dependencies/security warnings + final E2E acceptance + production migration/merge decision.
 
-## 8) العقود المحمية — لا تُفتح دون Regression مثبت
+## 9) العقود المحمية — لا تُفتح دون Regression مثبت
 
 - Users / Roles / Permission-First ✅
 - Super Admin implicit bypass فقط ✅
@@ -148,6 +170,7 @@
 - Operator label privacy / same-branch narrow visibility ✅
 - TABLE_BUSY safe owner resume ✅
 - POS Availability authoritative contract ✅
+- Delivery / Drive-Thru structured service contract + direct entries ✅
 - Send-to-kitchen delta semantics ✅
 - **Inventory deduction at `send_to_kitchen`** ✅ قرار ثابت
 - Warehouse transfer branch isolation ✅
@@ -163,7 +186,7 @@
 - Guided Workflow Permission-First ✅
 - Financial Authority: explicit offline only; server rejection/ambiguous online failure لا تتحول offline success ✅
 
-## 9) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
+## 10) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
 
 - Arabic-first RTL، Touch-friendly.
 - صلاحيات POS granular مثل `pos.view`, `pos.order.create`, `pos.order.edit`, `pos.payment.take`, `pos.order.split`, `pos.order.transfer`, `pos.receipt.print`, `pos.send_kitchen`, `pos.pay`؛ لا استخدام role names كAuthorization.
@@ -177,7 +200,7 @@
 - التقارير compact/tabular وليست crowded؛ filters/export حسب العقود المتاحة.
 - أي نقل UI لا يغيّر منطق الصلاحيات أو RLS أو financial authority ضمنيًا.
 
-## 10) قاعدة الإغلاق والدمج
+## 11) قاعدة الإغلاق والدمج
 
 أي دفعة لا تعتبر مغلقة إلا إذا:
 
@@ -191,4 +214,4 @@
 
 ---
 
-**NEXT ACTION:** أكمل `Delivery / Drive-Thru operational parity` من HEAD الحالي فوق نفس POS، ثم شغّل Full Verify وسجل النتيجة قبل الانتقال إلى Modifiers/KDS.
+**NEXT ACTION:** أغلق فجوة KDS Permission-First بفصل View عن status mutation، ثم Full Verify وسجل النتيجة قبل الانتقال إلى Offline/Reconciliation.
