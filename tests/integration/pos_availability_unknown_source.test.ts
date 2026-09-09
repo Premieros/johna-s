@@ -154,25 +154,25 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
   });
 
   it('rejects cross-branch availability reads for a normal authenticated user', async () => {
-    await asUser(branchUserId, async () => {
-      await expect(
+    await expect(
+      asUser(branchUserId, () =>
         client.query(
           `SELECT * FROM public.get_pos_product_availability($1,$2,100)`,
           [otherBranchId, otherWarehouseId],
         ),
-      ).rejects.toThrow(/BRANCH_ACCESS_DENIED/);
-    });
+      ),
+    ).rejects.toThrow(/BRANCH_ACCESS_DENIED/);
   });
 
   it('rejects a warehouse that does not belong to the requested branch', async () => {
-    await asUser(branchUserId, async () => {
-      await expect(
+    await expect(
+      asUser(branchUserId, () =>
         client.query(
           `SELECT * FROM public.get_pos_product_availability($1,$2,100)`,
           [branchId, otherWarehouseId],
         ),
-      ).rejects.toThrow(/WAREHOUSE_NOT_IN_BRANCH/);
-    });
+      ),
+    ).rejects.toThrow(/WAREHOUSE_NOT_IN_BRANCH/);
   });
 
   it('keeps known stock shortage codes explicit in the server contract', async () => {
