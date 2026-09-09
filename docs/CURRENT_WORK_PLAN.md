@@ -123,6 +123,17 @@ Run: `34306890481` / Verify #906 على PR #54 بعد Shared-Shift settlement ha
   4. Split tender يبقى online-only حتى يوجد idempotent split offline contract.
 - بعد إصلاح الاختبار: أعد Full Verify؛ لا تكتفِ بالunit.
 
+### Checkpoint Verify #908 بعد إصلاح Unit
+
+- Head: `dfe83ba0ca6dfc14a5d74b85ae16bc31ade50d39`.
+- commit: `test(pos): scope financial authority contract`.
+- Run: `34315737303` / Verify #908.
+- Database identity / API contract / lint / typecheck / test typecheck / Unit `407/407` / build ✅.
+- Fresh DB migrations / Schema / Integration / Security / RLS ✅.
+- Browser Smoke: `104/105`، فشل اختبار واحد فقط في `tests/e2e/pos-actions.spec.ts` ❌.
+- Root Cause: fixture الخاص بـ`get_active_shift` كان يعيد الشكل القديم المسطح `shift_id`، بينما Shared Branch Shift RPC الحقيقي يعيد `shift: { id, ... }`. بعد settlement hardening قرأت الخدمة العقد الصحيح، فلم تجد fixture shift صالحًا وأغلقت الدفع بـ`SHIFT_REQUIRED` قبل `process_sale`.
+- الإصلاح الجاري: تحديث fixture إلى عقد Shared Branch Shift الحقيقي، وإثبات أن `process_sale` يستلم `p_shift_id` الصحيح، ثم إعادة Full Verify كامل.
+
 ## 5) الخطوة التالية بعد Green #906 replacement
 
 بعد أن يصبح PR #54 Full Green على head الجديد:
