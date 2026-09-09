@@ -9,8 +9,11 @@ const skip = !dbUrl;
 describe.skipIf(skip)('POS availability authoritative zero vs unknown source', () => {
   let client: pg.Client;
   const branchId = randomUUID();
+  const otherBranchId = randomUUID();
   const warehouseId = randomUUID();
-  const userId = randomUUID();
+  const otherWarehouseId = randomUUID();
+  const adminUserId = randomUUID();
+  const branchUserId = randomUUID();
   const readyProductId = randomUUID();
   const unresolvedProductId = randomUUID();
   const unresolvedUnitId = randomUUID();
@@ -18,7 +21,7 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
   const q = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> =>
     (await client.query(sql, params)).rows as T[];
 
-  async function asAdmin<T>(fn: () => Promise<T>): Promise<T> {
+  async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
     await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
     await client.query(`SET LOCAL ROLE service_role`);
     try {
@@ -36,23 +39,42 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
     await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
 
     await client.query(
-      `INSERT INTO public.branches (id, name) VALUES ($1, 'Availability Contract Branch')`,
-      [branchId],
+      `INSERT INTO public.branches (id, name)
+       VALUES ($1, 'Availability Contract Branch'), ($2, 'Other Availability Branch')`,
+      [branchId, otherBranchId],
     );
-    await client.query(
-      `INSERT INTO auth.users (id,email,role,aud,instance_id,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
-       VALUES ($1,$2,'authenticated','authenticated',gen_random_uuid(),'{}'::jsonb,'{}'::jsonb,now(),now())`,
-      [userId, `availability-${userId}@example.test`],
-    );
+
+    for (const [id, email] of [
+      [adminUserId, `availability-admin-${adminUserId}@example.test`],
+      [branchUserId, `availability-user-${branchUserId}@example.test`],
+    ] as const) {
+      await client.query(
+        `INSERT INTO auth.users (id,email,role,aud,instance_id,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
+         VALUES ($1,$2,'authenticated','authenticated',gen_random_uuid(),'{}'::jsonb,'{}'::jsonb,now(),now())`,
+        [id, email],
+      );
+    }
+
     await client.query(
       `INSERT INTO public.users (id,email,full_name,role,branch_id,is_active)
-       VALUES ($1,$2,'Availability Super Admin','super_admin',$3,true)`,
-      [userId, `availability-${userId}@example.test`, branchId],
+       VALUES
+         ($1,$2,'Availability Super Admin','super_admin',$3,true),
+         ($4,$5,'Availability Branch User','cashier',$3,true)`,
+      [
+        adminUserId,
+        `availability-admin-${adminUserId}@example.test`,
+        branchId,
+        branchUserId,
+        `availability-user-${branchUserId}@example.test`,
+      ],
     );
+
     await client.query(
       `INSERT INTO public.warehouses (id,name,branch_id,is_active)
-       VALUES ($1,'Availability WH',$2,true)`,
-      [warehouseId, branchId],
+       VALUES
+         ($1,'Availability WH',$2,true),
+         ($3,'Other Availability WH',$4,true)`,
+      [warehouseId, branchId, otherWarehouseId, otherBranchId],
     );
 
     // A ready product with no batches has an authoritative quantity of zero.
@@ -89,7 +111,7 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
   });
 
   it('returns a known empty ready product as an authoritative zero row', async () => {
-    await asAdmin(async () => {
+    await asUser(adminUserId, async () => {
       const rows = await q<{ available_quantity: string; is_available: boolean }>(
         `SELECT available_quantity::text, is_available
          FROM public.get_pos_product_availability($1,$2,100)
@@ -104,7 +126,7 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
   });
 
   it('omits a product whose inventory source cannot be resolved', async () => {
-    await asAdmin(async () => {
+    await asUser(adminUserId, async () => {
       const direct = await q<{ result: { success: boolean; error?: string } }>(
         `SELECT public.check_product_availability($1,$2,$3,1) AS result`,
         [unresolvedProductId, branchId, warehouseId],
@@ -122,12 +144,32 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
     });
   });
 
-  it('keeps branch scope and warehouse scope in the server contract', async () => {
+  it('rejects cross-branch availability reads for a normal authenticated user', async () => {
+    await asUser(branchUserId, async () => {
+      await expect(
+        client.query(
+          `SELECT * FROM public.get_pos_product_availability($1,$2,100)`,
+          [otherBranchId, otherWarehouseId],
+        ),
+      ).rejects.toThrow(/BRANCH_ACCESS_DENIED/);
+    });
+  });
+
+  it('rejects a warehouse that does not belong to the requested branch', async () => {
+    await asUser(branchUserId, async () => {
+      await expect(
+        client.query(
+          `SELECT * FROM public.get_pos_product_availability($1,$2,100)`,
+          [branchId, otherWarehouseId],
+        ),
+      ).rejects.toThrow(/WAREHOUSE_NOT_IN_BRANCH/);
+    });
+  });
+
+  it('keeps known stock shortage codes explicit in the server contract', async () => {
     const fn = await q<{ definition: string }>(
       `SELECT pg_get_functiondef('public.get_pos_product_availability(uuid,uuid,integer)'::regprocedure) AS definition`,
     );
-    expect(fn[0].definition).toContain('user_may_access_branch');
-    expect(fn[0].definition).toContain('WAREHOUSE_NOT_IN_BRANCH');
     expect(fn[0].definition).toContain('INSUFFICIENT_PRODUCT_STOCK');
     expect(fn[0].definition).toContain('INSUFFICIENT_UNIT_STOCK');
     expect(fn[0].definition).toContain('INSUFFICIENT_RAW_MATERIAL_STOCK');
