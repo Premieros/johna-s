@@ -143,9 +143,9 @@ Run: `34306890481` / Verify #906 على PR #54 بعد Shared-Shift settlement ha
 - Browser Smoke ✅.
 - النتيجة: Regression الخاص بـ#906 واختبار Browser التابع لـShared Branch Shift مغلقان بالكامل.
 
-## 5) Shared Branch Shift UI closure — العمل الحالي
+## 5) Shared Branch Shift UI closure — مغلق على PR #54
 
-تم تنفيذ الجزء التالي محليًا بعد Full Green #909، وما زال ينتظر Full Verify جديدًا قبل اعتباره مغلقًا:
+تم تنفيذ الجزء التالي بعد Full Green #909:
 
 1. إزالة `shift_exempt` من `PosWorkspacePage` واستخدام `activeShift?.id || null` الحقيقي.
 2. `reloadShift` يقرأ Shared Branch Shift لكل مستخدم POS على الفرع، بلا cashier-role gate.
@@ -155,7 +155,17 @@ Run: `34306890481` / Verify #906 على PR #54 بعد Shared-Shift settlement ha
 6. Guided open-shift action يتطلب `shifts.open` بدل `shifts.manage`.
 7. Regression test: `tests/unit/posSharedShiftWorkspaceContract.test.ts`.
 8. Local gates: DB identity ✅، lint 0 errors ✅، typecheck + test typecheck ✅، Unit `410/410` ✅، build ✅.
-9. المتبقي لهذا الجزء: commit/push ثم Full Verify جديد.
+
+### Checkpoint Verify #910 — Full Green
+
+- Code Head: `4d55a54574861282fa5678f6292b0643ad16c1ea`.
+- commit: `fix(pos): enforce shared shift in workspace`.
+- Run: `34317708031` / Verify #910.
+- Frontend/API contract/lint/typecheck/test typecheck/Unit/build ✅.
+- Fresh DB migrations/Schema/Integration/Security/RLS ✅.
+- Browser Smoke ✅.
+- لا DB migration أو RLS أو RPC change في هذا الإغلاق، ولم يتم لمس Production DB.
+- النتيجة: Shared Branch Shift UI/settlement drift في نطاق PR #54 مغلق. هذا التحديث التوثيقي هو آخر تغيير غير تشغيلي؛ لا يعتبر PR جاهزًا للدمج إلا إذا Verify على الـHEAD الناتج منه Full Green أيضًا.
 
 لا تفتح Batch 2 (Availability/Delivery/Modifiers/KDS/Offline) قبل إغلاق PR #54 Full Green.
 
