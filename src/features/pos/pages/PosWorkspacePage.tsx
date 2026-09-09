@@ -35,6 +35,7 @@ import { PaymentPanel } from '../components/checkout/PaymentPanel';
 import { PosTablesSidebar } from '../components/tables/PosTablesSidebar';
 import { PosOrderHeaderBar } from '../components/order/PosOrderHeaderBar';
 import { TransferOrderModal } from '../components/tables/TransferOrderModal';
+import { orderOperatorName } from '../utils/operatorName';
 import { VoidItemModal } from '../components/order/VoidItemModal';
 
 interface WorkspaceState {
@@ -196,6 +197,11 @@ export function PosWorkspacePage() {
   const productNames = useMemo(() => Object.fromEntries(products.map((p) => [p.id, isAr ? p.name : p.name_en || p.name])), [products, isAr]);
   const kitchenOrders = useMemo(() => orders.filter((o) => (kitchenSendsByOrder[o.id]?.length || 0) > 0).length, [orders, kitchenSendsByOrder]);
   const activeOrderCreatedAt = useMemo(() => orders.find((o) => o.id === pos.activeOrderId)?.created_at || null, [orders, pos.activeOrderId]);
+  const activeOrderOperatorName = useMemo(() => {
+    if (!pos.activeOrderId) return user?.full_name || user?.username || user?.email || null;
+    const activeOrder = orders.find((order) => order.id === pos.activeOrderId);
+    return activeOrder ? orderOperatorName(activeOrder) : null;
+  }, [orders, pos.activeOrderId, user]);
   const orderItemsForActive = useMemo(() => (pos.activeOrderId ? itemsByOrder[pos.activeOrderId] || [] : []), [pos.activeOrderId, itemsByOrder]);
   const kitchenSendsForActive = useMemo(() => (pos.activeOrderId ? kitchenSendsByOrder[pos.activeOrderId] || [] : []), [pos.activeOrderId, kitchenSendsByOrder]);
 
@@ -801,6 +807,7 @@ export function PosWorkspacePage() {
             completing={pos.completing}
             hasUnsentItems={hasUnsentItems}
             customerName={pos.customerId ? customerById[pos.customerId]?.name || null : null}
+            operatorName={activeOrderOperatorName}
             onOpenTransferModal={() => {
               if (pos.activeTable && pos.activeOrderId) {
                 const currentOrd =

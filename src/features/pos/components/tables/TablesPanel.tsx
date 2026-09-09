@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import { formatCurrency } from '@/lib/format';
 import type { DiningTable, Order } from '@/lib/types';
+import { orderOperatorName } from '../../utils/operatorName';
 
 type TableFilter = 'all' | 'available' | 'occupied';
 
@@ -41,7 +42,9 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
       if (filter === 'available' && occupied) return false;
       if (filter === 'occupied' && !occupied) return false;
       if (!q) return true;
-      return table.name.toLowerCase().includes(q) || orders.some((order) => order.order_number?.toLowerCase().includes(q));
+      return table.name.toLowerCase().includes(q) || orders.some((order) => (
+        order.order_number?.toLowerCase().includes(q) || orderOperatorName(order)?.toLowerCase().includes(q)
+      ));
     });
   }, [tables, ordersByTable, search, filter]);
 
@@ -95,6 +98,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
               {visibleTables.map((table) => {
                 const order = (ordersByTable[table.id] || [])[0];
                 const occupied = !!order || table.status === 'occupied';
+                const operatorName = order ? orderOperatorName(order) : null;
                 return (
                   <button
                     key={table.id}
@@ -112,6 +116,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
                       <div className="mt-2 space-y-0.5">
                         <p className="truncate text-[10px] font-black text-ui-text">#{order.order_number}</p>
                         <p className="truncate text-[10px] font-black text-ui-accent">{formatCurrency(order.total, currency, lang)}</p>
+                        {operatorName && <p className="flex items-center gap-1 truncate text-[10px] font-bold text-ui-muted"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></p>}
                       </div>
                     ) : (
                       <p className="mt-2 text-[10px] font-black text-ui-success">{isAr ? 'متاحة' : 'Available'}</p>
@@ -130,6 +135,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
         {selected && (() => {
           const tableOrders = ordersByTable[selected.id] || [];
           const order = tableOrders[0];
+          const operatorName = order ? orderOperatorName(order) : null;
           if (order) {
             return (
               <div className="space-y-3">
@@ -138,6 +144,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
                     <span className="text-sm font-black text-ui-text">#{order.order_number}</span>
                     <span className="text-sm font-black text-ui-accent">{formatCurrency(order.total, currency, lang)}</span>
                   </div>
+                  {operatorName && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-ui-muted"><Users className="h-3.5 w-3.5" />{isAr ? 'المستخدم:' : 'User:'} {operatorName}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" onClick={() => { setSelected(null); onClose(); onResume(order); }}>

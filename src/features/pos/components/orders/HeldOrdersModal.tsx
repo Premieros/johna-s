@@ -1,9 +1,10 @@
-import { Pause, Play, Trash2, X, UtensilsCrossed, Car, Bike, ShoppingBag } from 'lucide-react';
+import { Pause, Play, Trash2, X, UtensilsCrossed, Car, Bike, ShoppingBag, User } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/lib/format';
 import type { Customer, DiningTable, Order, OrderItem } from '@/lib/types';
 import { timeAgo } from '../../utils/timeAgo';
 import { orderTypeLabel } from '../../utils/format';
+import { orderOperatorName } from '../../utils/operatorName';
 
 interface HeldOrdersModalProps {
   isOpen: boolean;
@@ -69,6 +70,7 @@ export function HeldOrdersModal({
                 const table = order.table_id ? tableById[order.table_id] : null;
                 const customer = order.customer_id ? customerById[order.customer_id] : null;
                 const ago = order.created_at ? timeAgo(order.created_at) : null;
+                const operatorName = orderOperatorName(order);
 
                 return (
                   <div
@@ -99,6 +101,7 @@ export function HeldOrdersModal({
                         {customer && (
                           <p className="font-bold text-ui-text">{customer.name}</p>
                         )}
+                        {operatorName && <p className="flex items-center gap-1 font-bold text-ui-text"><User className="h-3.5 w-3.5" />{isAr ? 'المستخدم:' : 'User:'} {operatorName}</p>}
                         <p className="text-[11px] text-ui-subtle">
                           {items.length} {isAr ? 'أصناف' : 'items'} ·{' '}
                           {ago ? (ago.n != null ? `${ago.n} ${t(ago.key)}` : t(ago.key)) : ''}

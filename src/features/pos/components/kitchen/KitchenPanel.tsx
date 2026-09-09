@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ChefHat, X, Clock, Send } from 'lucide-react';
+import { ChefHat, X, Clock, Send, User } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import type { DiningTable, Order, OrderItem } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
@@ -7,6 +7,7 @@ import { orderTypeLabel } from '../../utils/format';
 import { deriveOrderState } from '../../utils/orderState';
 import { formatClockTime, timeAgo } from '../../utils/timeAgo';
 import { OrderStatusBadge } from '../order/OrderStatusBadge';
+import { orderOperatorName } from '../../utils/operatorName';
 
 interface KitchenPanelProps {
   open: boolean;
@@ -41,6 +42,7 @@ export function KitchenPanel({ open, onClose, orders, itemsByOrder, kitchenSends
     const sends = kitchenSendsByOrder[order.id] || [];
     const firstSent = sends.length > 0 ? sends.map((send) => send.sent_at).sort()[0] : null;
     const ago = firstSent ? timeAgo(firstSent) : null;
+    const operatorName = orderOperatorName(order);
 
     return (
       <div key={order.id} className="space-y-2 rounded-xl border border-ui-border bg-ui-page-alt p-3">
@@ -67,6 +69,8 @@ export function KitchenPanel({ open, onClose, orders, itemsByOrder, kitchenSends
               : `Sent ${ago.n != null ? `${ago.n} ${t(ago.key)}` : t(ago.key)}`}
           </div>
         )}
+
+        {operatorName && <div className="flex items-center gap-1.5 text-[11px] font-bold text-ui-muted"><User className="h-3 w-3" /><span>{isAr ? 'المستخدم:' : 'User:'} {operatorName}</span></div>}
 
         <div className="space-y-1.5">
           {sends.map((send) => {

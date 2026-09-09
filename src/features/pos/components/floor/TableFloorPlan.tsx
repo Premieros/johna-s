@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { formatCurrency } from '@/lib/format';
 import type { DiningArea, DiningTable, Order } from '@/lib/types';
 import { STATUS_STYLES } from '../../utils/orderTypes';
+import { orderOperatorName } from '../../utils/operatorName';
 
 interface TablePos { table: DiningTable; left: number; top: number; width: number; height: number; }
 
@@ -54,6 +55,7 @@ export function TableFloorPlan({ areas, tables, ordersByTable, canManage, curren
             const st = STATUS_STYLES[table.status] || STATUS_STYLES.vacant;
             const tableOrders = ordersByTable[table.id] || [];
             const order = tableOrders[0];
+            const operatorName = order ? orderOperatorName(order) : null;
             return (
               <button
                 key={table.id}
@@ -66,9 +68,12 @@ export function TableFloorPlan({ areas, tables, ordersByTable, canManage, curren
                   <Users className="w-3 h-3" /> {table.capacity}
                 </span>
                 {order && (
-                  <span className={`mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold truncate max-w-full ${st.badge}`}>
-                    {order.order_number} · {formatCurrency(order.total, currency, lang)}{tableOrders.length > 1 ? ` +${tableOrders.length - 1}` : ''}
-                  </span>
+                  <>
+                    <span className={`mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold truncate max-w-full ${st.badge}`}>
+                      {order.order_number} · {formatCurrency(order.total, currency, lang)}{tableOrders.length > 1 ? ` +${tableOrders.length - 1}` : ''}
+                    </span>
+                    {operatorName && <span className="mt-1 flex max-w-full items-center gap-1 truncate text-[10px] font-bold text-ui-muted"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></span>}
+                  </>
                 )}
               </button>
             );

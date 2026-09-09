@@ -4,7 +4,7 @@
 > أي نموذج أو مطور يبدأ من هذا الملف فقط.
 > الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair أصبحت مراجع تاريخية فقط ولا تُستخدم لتحديد الحالة الحالية.
 
-آخر تحديث: **2026-09-09 — Africa/Cairo**
+آخر تحديث: **2026-09-09 — Africa/Cairo — POS operator display active**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -26,12 +26,14 @@
 
 ## 2) Verified Production baseline
 
-آخر Production baseline مغلق قبل حزمة Feature Parity الحالية:
+آخر Production baseline مغلق:
 
-- `main`: `0a6f773bc9dab7c05840ef91313665b271e55238`
-- PR #53: `test: add functional core cycle release gate` ✅
+- `main`: `afef2ad024f55b1ab1523ba1530e19f13581e56a`
+- PR #54: `fix: align POS scan and guided workflow contracts` مدمج ✅
+- merged-main Verify #912 / run `34321160701`: **Full Green** ✅
+- Deploy #584 / run `34321160600`: ✅
 - Core cycle المغلق: Open Shift → Create Order → Hold → Resume → Send Kitchen → Inventory deduction → Payment → Sale/Shift attribution → Close Shift.
-- آخر Verify كامل قبل الحزمة الحالية: Verify #904 / run `34280957799` على PR #54 head قبل Shared-Shift settlement follow-up: **Full Green** ✅
+- آخر Verify كامل على Production main: Verify #912 / run `34321160701`: **Full Green** ✅
   - Identity lock ✅
   - API contract ✅
   - lint ✅
@@ -44,18 +46,29 @@
   - Integration/Security/RLS ✅
   - Browser Smoke ✅
 
-**لا يتم وصف أي commit أحدث من ذلك بأنه Verified Green حتى يمر Full Verify من جديد.**
+**لا يتم وصف أي commit أحدث من `afef2ad` بأنه Verified Green حتى يمر Full Verify من جديد.**
 
-## 3) الحالة التشغيلية الحالية — Feature Parity Batch نشطة
+## 3) الحالة التشغيلية الحالية — POS operator display نشطة
 
 بناءً على مقارنة Read-Only مع `55` و`pos.v2/development` و`v4` وZIP مرجعي، تم منع النقل الأعمى أو نسخ migrations، وبدأ تنفيذ الناقص فقط داخل `johna-s`.
 
-### PR #54 — `fix: align POS scan and guided workflow contracts`
+### PR #54 — مغلق ومدمج
 
 - Base: `main`
 - Head branch: `development/final-handover`
-- PR مفتوح وغير مدمج.
+- PR مدمج في `main` عند `afef2ad024f55b1ab1523ba1530e19f13581e56a`.
 - لا DB migration / RLS / RPC changes في الدفعة الحالية.
+
+### الدفعة الحالية — إظهار اسم المستخدم على كل سطح POS مرتبط به
+
+- بدأ الفرع `development/final-handover` من merged main `afef2ad` بعملية fast-forward فقط.
+- Root Cause المثبت: `fetchActiveOrders` يجلب الاسم الآمن المحدود بالفرع من `get_pos_order_operator_labels`، لكن عدة واجهات للطاولات والطلبات كانت تتجاهل `order.cashier` رغم توفره.
+- النطاق: الطاولة المشغولة، درج/اختيار الطاولات، مخطط الصالة، نافذة الطاولة، الطلبات النشطة والمعلقة، KDS، شريط الطلب الحالي، وإيصال منفذ الدفع.
+- لا توسيع لـ`public.users` ولا تغيير RLS؛ المصدر يبقى RPC الحالي المحمي بـ`user_may_access_branch` و`pos.view`.
+- Regression test: `tests/unit/posOperatorDisplayContract.test.ts`.
+- checkpoint محلي: DB identity `azzdesuowpdcoflmyezn` ✅، app+tests typecheck ✅، lint 0 errors ✅، build ✅، Unit `414/414` ✅، Integration المتاحة محليًا `51/51` ✅.
+- Browser Smoke المحلي لم يبدأ بسبب قيد بيئة التشغيل `uv_interface_addresses` عند تشغيل Vite preview؛ لا توجد نتيجة Browser وظيفية بعد، والحسم عبر Full Verify في GitHub Actions.
+- Full Verify لم يكتمل بعد؛ الدفعة غير جاهزة للدمج.
 
 ### ما تم تنفيذه في PR #54 حتى الآن
 
@@ -167,7 +180,7 @@ Run: `34306890481` / Verify #906 على PR #54 بعد Shared-Shift settlement ha
 - لا DB migration أو RLS أو RPC change في هذا الإغلاق، ولم يتم لمس Production DB.
 - النتيجة: Shared Branch Shift UI/settlement drift في نطاق PR #54 مغلق. هذا التحديث التوثيقي هو آخر تغيير غير تشغيلي؛ لا يعتبر PR جاهزًا للدمج إلا إذا Verify على الـHEAD الناتج منه Full Green أيضًا.
 
-لا تفتح Batch 2 (Availability/Delivery/Modifiers/KDS/Offline) قبل إغلاق PR #54 Full Green.
+PR #54 مغلق Full Green. لا تدخل Batch 2 ضمن دفعة عرض اسم المستخدم الحالية.
 
 ## 6) العقود المغلقة — لا تُفتح بدون Regression مثبت
 
@@ -250,7 +263,7 @@ Production migrations الخاصة بالإغلاق:
 المرجع الآخر يُقرأ فقط ولا يُعدل.
 
 الترتيب الحالي:
-1. Guided Routing wiring + Shared Shift UI/settlement drift — **ACTIVE في PR #54**.
+1. Guided Routing wiring + Shared Shift UI/settlement drift — **CLOSED في PR #54**.
 2. Availability server contract hardening.
 3. Delivery/Drive-Thru server prerequisites.
 4. Modifier backend enforcement + KDS notes/modifier/delta parity verification.
