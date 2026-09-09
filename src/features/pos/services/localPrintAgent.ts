@@ -1,7 +1,14 @@
 import type { KitchenSendItem } from '../types';
 
-const PRINT_AGENT_URL = 'http://127.0.0.1:17654';
+export const PRINT_AGENT_URL = 'http://127.0.0.1:17654';
 const PRINT_TIMEOUT_MS = 1800;
+const STORAGE_ROUTING_KEY = 'johns_pos_printer_routes';
+const STORAGE_DRAWER_KICK_KEY = 'johns_pos_auto_drawer_kick';
+const STORAGE_SILENT_PRINT_KEY = 'johns_pos_silent_print_enabled';
+
+export interface PrinterRouteConfig {
+  [stationCode: string]: string;
+}
 
 export interface LocalKitchenPrintContext {
   orderNumber?: string | null;
@@ -9,6 +16,25 @@ export interface LocalKitchenPrintContext {
   orderType?: string | null;
   guestCount?: number | null;
   isAr: boolean;
+}
+
+export interface DetectedPrinter {
+  name: string;
+  displayName?: string;
+  isDefault?: boolean;
+  status?: number;
+}
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      isElectron: boolean;
+      getPrinters: () => Promise<Array<{ name: string; displayName?: string; isDefault?: boolean; status?: number }>>;
+      printSilent: (options: { html?: string; text?: string; printerName: string; copies?: number }) => Promise<{ success: boolean; error?: string }>;
+      kickDrawer: (printerName?: string) => Promise<{ success: boolean; error?: string }>;
+      getSystemInfo: () => Promise<{ isElectron: boolean; platform: string; hostname: string }>;
+    };
+  }
 }
 
 function safeText(value: unknown): string {
@@ -22,6 +48,65 @@ function modifierNames(item: KitchenSendItem): string[] {
   return (item.modifiers || [])
     .map((m) => safeText(m.option_name || m.option_name_en))
     .filter(Boolean);
+}
+
+function readBoolean(key: string, defaultValue: boolean): boolean {
+  if (typeof window === 'undefined') return defaultValue;
+  const value = window.localStorage.getItem(key);
+  if (value == null) return defaultValue;
+  return value === 'true';
+}
+
+function writeBoolean(key: string, enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, enabled ? 'true' : 'false');
+}
+
+export function getLocalPrinterRoutes(): PrinterRouteConfig {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_ROUTING_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .map(([station, printer]) => [safeText(station), safeText(printer)] as const)
+        .filter(([station, printer]) => Boolean(station && printer)),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function saveLocalPrinterRoutes(routes: PrinterRouteConfig): void {
+  if (typeof window === 'undefined') return;
+  const normalized = Object.fromEntries(
+    Object.entries(routes)
+      .map(([station, printer]) => [safeText(station), safeText(printer)] as const)
+      .filter(([station, printer]) => Boolean(station && printer)),
+  );
+  window.localStorage.setItem(STORAGE_ROUTING_KEY, JSON.stringify(normalized));
+}
+
+export function isAutoDrawerKickEnabled(): boolean {
+  return readBoolean(STORAGE_DRAWER_KICK_KEY, true);
+}
+
+export function setAutoDrawerKick(enabled: boolean): void {
+  writeBoolean(STORAGE_DRAWER_KICK_KEY, enabled);
+}
+
+export function isSilentPrintEnabled(): boolean {
+  return readBoolean(STORAGE_SILENT_PRINT_KEY, true);
+}
+
+export function setSilentPrintEnabled(enabled: boolean): void {
+  writeBoolean(STORAGE_SILENT_PRINT_KEY, enabled);
+}
+
+export function isRunningInElectron(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
 }
 
 export function groupKitchenItemsByStation(items: KitchenSendItem[]): Record<string, KitchenSendItem[]> {
@@ -74,10 +159,126 @@ async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Resp
   }
 }
 
+export async function getAvailablePrinters(): Promise<DetectedPrinter[]> {
+  if (typeof window === 'undefined') return [];
+
+  if (isRunningInElectron() && window.electronAPI) {
+    try {
+      const printers = await window.electronAPI.getPrinters();
+      if (Array.isArray(printers)) {
+        return printers
+          .filter((printer) => safeText(printer.name))
+          .map((printer) => ({
+            name: safeText(printer.name),
+            displayName: safeText(printer.displayName || printer.name),
+            isDefault: Boolean(printer.isDefault),
+            status: printer.status,
+          }));
+      }
+    } catch {
+      // Fall through to the existing Windows local agent.
+    }
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/printers`);
+    if (!response.ok) return [];
+    const data = await response.json() as { printers?: Array<string | { name?: string; displayName?: string; isDefault?: boolean; status?: number }> };
+    const detected: DetectedPrinter[] = [];
+    for (const [index, printer] of (data.printers || []).entries()) {
+      if (typeof printer === 'string') {
+        const name = safeText(printer);
+        if (name) detected.push({ name, displayName: name, isDefault: index === 0 });
+        continue;
+      }
+      const name = safeText(printer?.name);
+      if (!name) continue;
+      detected.push({
+        name,
+        displayName: safeText(printer.displayName || name),
+        isDefault: Boolean(printer.isDefault),
+        status: printer.status,
+      });
+    }
+    return detected;
+  } catch {
+    return [];
+  }
+}
+
+export async function executeSilentPrint(options: {
+  printerName: string;
+  text?: string;
+  html?: string;
+  copies?: number;
+}): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const printerName = safeText(options.printerName);
+  if (!printerName) return false;
+
+  if (isRunningInElectron() && window.electronAPI) {
+    try {
+      const result = await window.electronAPI.printSilent({
+        printerName,
+        text: options.text,
+        html: options.html,
+        copies: Math.max(1, Math.min(5, Number(options.copies || 1))),
+      });
+      return Boolean(result?.success);
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        station: 'custom',
+        printer: printerName,
+        text: options.text || options.html || '',
+      }),
+    });
+    if (!response.ok) return false;
+    const result = await response.json() as { success?: boolean };
+    return Boolean(result.success);
+  } catch {
+    return false;
+  }
+}
+
+export async function executeCashDrawerKick(printerName?: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const routes = getLocalPrinterRoutes();
+  const targetPrinter = safeText(printerName || routes.cashier || routes.receipt || routes.main);
+  if (!targetPrinter) return false;
+
+  if (isRunningInElectron() && window.electronAPI) {
+    try {
+      const result = await window.electronAPI.kickDrawer(targetPrinter);
+      return Boolean(result?.success);
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/drawer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ printer: targetPrinter }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Print each authoritative kitchen station group through the local Windows agent.
- * Returns true only when every station was routed and accepted. A false result
- * tells the POS to preserve its existing browser-print fallback.
+ * Print each authoritative kitchen station group through Electron or the proven
+ * local Windows agent. Returns true only when every station is configured and
+ * accepted. A false result preserves the existing browser-print fallback.
  */
 export async function printKitchenStationsLocally(
   items: KitchenSendItem[],
@@ -89,22 +290,37 @@ export async function printKitchenStationsLocally(
   // sync. Missing station data keeps the proven browser-print fallback active.
   if (items.some((item) => !safeText(item.station_code))) return false;
 
+  const groups = groupKitchenItemsByStation(items);
+  const stations = Object.keys(groups);
+  if (stations.length === 0) return false;
+
+  // Electron uses only explicitly saved device-local routing. We preflight all
+  // stations before the first print so browser fallback cannot duplicate only a
+  // subset of a multi-station order.
+  if (isRunningInElectron()) {
+    const routes = getLocalPrinterRoutes();
+    if (stations.some((station) => !safeText(routes[station]))) return false;
+    for (const [station, stationItems] of Object.entries(groups)) {
+      const accepted = await executeSilentPrint({
+        printerName: routes[station],
+        text: buildStationTicketText(station, stationItems, ctx),
+      });
+      if (!accepted) return false;
+    }
+    return true;
+  }
+
   try {
     const health = await fetchWithTimeout(`${PRINT_AGENT_URL}/health`);
     if (!health.ok) return false;
 
-    const groups = groupKitchenItemsByStation(items);
-    const stations = Object.keys(groups);
-    if (stations.length === 0) return false;
-
-    // Preflight every station before printing the first ticket. This prevents a
-    // configured kitchen printer from printing and then being duplicated by the
-    // browser fallback merely because the drinks printer was not configured.
+    // Preserve the current agent-side authoritative routes. Local UI routes are
+    // intentionally not allowed to override the agent unless running Electron.
     const configResponse = await fetchWithTimeout(`${PRINT_AGENT_URL}/config`);
     if (!configResponse.ok) return false;
     const config = await configResponse.json() as { routes?: Record<string, string> };
     const routes = config.routes || {};
-    if (stations.some((station) => !routes[station])) return false;
+    if (stations.some((station) => !safeText(routes[station]))) return false;
 
     for (const [station, stationItems] of Object.entries(groups)) {
       const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/print`, {
