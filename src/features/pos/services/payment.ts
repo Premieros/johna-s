@@ -1,7 +1,7 @@
 import { pos as posApi, supabase, type SplitTenderInput } from '@/api';
+import { enqueueOfflineSale } from '@/core/offline/offlineStorage';
 import type { RpcResult, OrderType } from '@/lib/types';
 import type { ItemPayload } from '../utils/cart';
-import { offlinePosManager } from './offlinePos';
 
 export interface ProcessSalePayload {
   p_invoice_number: string;
@@ -30,6 +30,11 @@ export interface ProcessSplitSalePayload extends Omit<ProcessSalePayload, 'p_pai
   p_payments: SplitTenderInput[];
 }
 
+export type ProcessSaleResult = RpcResult & {
+  offline?: boolean;
+  pending_sync?: boolean;
+};
+
 let armedSplitTender: SplitTenderInput[] | null = null;
 let armedSplitTenderAt = 0;
 const SPLIT_TENDER_ARM_TTL_MS = 15_000;
@@ -56,6 +61,25 @@ function consumeArmedSplitTender(): SplitTenderInput[] | null {
   return payments;
 }
 
+function createOfflineToken(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return randomUuid;
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+async function queueOfflineSale(p: ProcessSalePayload): Promise<string> {
+  if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE');
+  const id = `offline_sale_${createOfflineToken()}`;
+  await enqueueOfflineSale({
+    id,
+    client_id: id,
+    invoice_number: p.p_invoice_number,
+    created_at: new Date().toISOString(),
+    payload: p as unknown as Record<string, unknown>,
+  });
+  return id;
+}
+
 async function resolveSharedBranchShift(p: ProcessSalePayload): Promise<{ payload: ProcessSalePayload | null; error: string | null }> {
   if (p.p_shift_id) return { payload: p, error: null };
 
@@ -73,27 +97,38 @@ async function resolveSharedBranchShift(p: ProcessSalePayload): Promise<{ payloa
   }
 }
 
-export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ result: (RpcResult & { offline?: boolean }) | null; error: string | null }> {
+export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ result: ProcessSaleResult | null; error: string | null }> {
   const splitPayments = consumeArmedSplitTender();
 
-  // Split tender is intentionally online-only. It must never degrade into the
-  // normal offline sale queue because that could produce partial financial truth.
+  // Split tender is intentionally online-only. It must never degrade into an
+  // offline queue because that could produce partial financial truth.
   if (splitPayments && typeof navigator !== 'undefined' && !navigator.onLine) {
     return { result: null, error: 'Split payment requires an online connection.' };
   }
 
-  // The normal sale path is still allowed to enter the explicit offline outbox.
+  // Explicit offline sales are accepted only into the authoritative IndexedDB
+  // outbox. They are pending reconciliation, not a server-confirmed payment.
   if (!splitPayments && typeof navigator !== 'undefined' && !navigator.onLine) {
-    const queued = offlinePosManager.enqueueSale(p);
-    return {
-      result: {
-        success: true,
-        offline: true,
-        sale_id: queued.localId,
-        order_id: p.p_order_id || undefined,
-      },
-      error: null,
-    };
+    try {
+      const queuedId = await queueOfflineSale(p);
+      return {
+        result: {
+          success: true,
+          offline: true,
+          pending_sync: true,
+          sale_id: queuedId,
+          order_id: p.p_order_id || undefined,
+        },
+        error: null,
+      };
+    } catch (err) {
+      // If the durable local outbox cannot persist the sale, fail closed. A
+      // volatile/in-memory success would be indistinguishable from data loss.
+      return {
+        result: null,
+        error: err instanceof Error ? err.message : 'Could not save the offline sale safely.',
+      };
+    }
   }
 
   // Shared shifts are branch-level operational state, not cashier-only state.
@@ -151,8 +186,7 @@ export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Prom
 export async function nextInvoiceNumber(): Promise<string> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    return `INV-OFF-${dateStr}-${rand}`;
+    return `INV-OFF-${dateStr}-${createOfflineToken()}`;
   }
 
   try {
