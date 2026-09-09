@@ -22,13 +22,22 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
     (await client.query(sql, params)).rows as T[];
 
   async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
-    await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
-    await client.query(`SET LOCAL ROLE service_role`);
+    await client.query('SAVEPOINT availability_user_scope');
     try {
-      return await fn();
-    } finally {
-      await client.query('RESET ROLE').catch(() => {});
-      await client.query('RESET app.user_id').catch(() => {});
+      await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
+      await client.query(`SET LOCAL ROLE service_role`);
+      const result = await fn();
+      await client.query('RESET ROLE');
+      await client.query('RESET app.user_id');
+      await client.query('RELEASE SAVEPOINT availability_user_scope');
+      return result;
+    } catch (error) {
+      // Expected SQL rejections (branch/warehouse denial) abort PostgreSQL's
+      // current transaction. Roll back only this user scope so subsequent
+      // assertions can continue inside the suite's outer fixture transaction.
+      await client.query('ROLLBACK TO SAVEPOINT availability_user_scope').catch(() => {});
+      await client.query('RELEASE SAVEPOINT availability_user_scope').catch(() => {});
+      throw error;
     }
   }
 
