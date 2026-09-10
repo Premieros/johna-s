@@ -13,7 +13,9 @@ describe('offline financial truth contract', () => {
     expect(payment).toContain('const queuedId = await queueOfflineSale(p)');
     expect(payment).toContain('offline: true');
     expect(payment).toContain('pending_sync: true');
-    expect(payment).toContain('await enqueueOfflineSale({');
+    expect(payment).toContain('const queuedSale: OwnedOfflineSaleQueueItem = {');
+    expect(payment).toContain('created_by_user_id: originatingUserId');
+    expect(payment).toContain('await enqueueOfflineSale(queuedSale)');
 
     expect(hook).toContain("const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine");
     expect(hook).toContain('if (!explicitlyOffline) return base.completeSale()');
