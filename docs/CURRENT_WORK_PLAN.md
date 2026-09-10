@@ -38,13 +38,14 @@
 ## 3) Development baseline الحالي
 
 - Branch: `development/final-handover`
-- Current HEAD وقت آخر مزامنة للسجل: `bbd9e4e78ba95b2b5f0ff00c7d256930c3bc912f`
-- Functional fix مباشرة قبل تحديث السجل: `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
+- **Current functional/code baseline:** `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
 - Parent before print-status constraint fix: `a417301fb3b61786dec1d13a95d3974a45610b15`
+- أي commits لاحقة مخصصة لتحديث `docs/CURRENT_WORK_PLAN.md` فقط = **Docs-only** ولا تغيّر الـfunctional/code baseline.
 - PR #56: `fix: final offline reconciliation and print truth hardening`
 - PR #56: **Open / Draft / غير مدمج**.
 - Base: `main@de0aed9e3f2ed58958b3b2b1c9b0fd44c0b1f3b1`
-- Verify #986 / run `34452227662` على HEAD `bbd9e4e...`: **IN PROGRESS وقت آخر مزامنة للسجل**.
+- Verify #985 بدأ على `d942bbc...`، ثم أدت تحديثات السجل Docs-only إلى Runs أحدث على HEAD الفرع.
+- **قاعدة الاعتماد:** عند الإغلاق اعتمد أحدث Verify كامل على HEAD الفعلي للفرع، ولا تعتمد نجاح Run على SHA أقدم.
 
 ممنوع دمج PR #56 قبل Full Verify Green وإغلاق Production E2E المطلوب داخل Transaction مع ROLLBACK.
 
@@ -164,7 +165,7 @@ Verify #984 على HEAD `a417301fb3b61786dec1d13a95d3974a45610b15` لم يغلق
 - لا تعديل على permission model ✅
 - لا Migration على Production ✅
 
-تحديث السجل بعد هذا الإصلاح أنشأ HEAD docs-only جديدًا `bbd9e4e...`؛ لذلك Verify #986 هو الـrun الحالي الواجب اعتماده للإغلاق، وليس نجاح run أقدم على HEAD مختلف.
+أي Verify بعد `d942bbc...` يحتوي تغييرات Docs-only فقط لا يغير هذا الـfunctional fix؛ لكنه يظل الـVerify الواجب اعتماده إذا كان هو HEAD الفعلي لحظة الإغلاق.
 
 ## 9) بوابات التسليم المتبقية
 
@@ -225,8 +226,8 @@ Verify #984 على HEAD `a417301fb3b61786dec1d13a95d3974a45610b15` لم يغلق
 5. Browser Smoke أخضر للدفعات المؤثرة على الواجهة/التشغيل.
 6. لا Production migration غير Verified.
 7. لا merge إلى `main` إلا بعد تحقق الشروط السابقة وقرار الدمج المناسب.
-8. لا يعتمد الإغلاق على اسم workflow أو نجاح جزئي؛ يجب مطابقة نتيجة الـrun مع HEAD المقصود.
+8. لا يعتمد الإغلاق على اسم workflow أو نجاح جزئي؛ يجب مطابقة نتيجة الـrun مع HEAD الفعلي للفرع.
 
 ---
 
-**NEXT ACTION:** افحص نتيجة Verify #986 على `bbd9e4e78ba95b2b5f0ff00c7d256930c3bc912f`. إذا Full Green، أغلق Offline/Print regression gate ثم اختبر Captain/mobile printer routing، وبعدها نفذ Real Production E2E داخل Transaction مع ROLLBACK. لا تدمج PR #56 قبل إغلاق هذه البوابات وتحديث هذا السجل مرة أخرى.
+**NEXT ACTION:** افحص أحدث Verify كامل على HEAD الفعلي لـ`development/final-handover`. إذا Full Green، أغلق Offline/Print regression gate ثم اختبر Captain/mobile printer routing، وبعدها نفذ Real Production E2E داخل Transaction مع ROLLBACK. لا تدمج PR #56 قبل إغلاق هذه البوابات وتحديث هذا السجل بنتيجة الإغلاق.
