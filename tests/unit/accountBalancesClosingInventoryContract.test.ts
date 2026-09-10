@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('account balances, closing and inventory safety contracts', () => {
   it('derives shift sales from shift_operations and never sales.shift_id', () => {
