@@ -33,7 +33,14 @@ interface UnitForm {
   description: string;
 }
 interface RecipeRow { id?: string; raw_material_id: string; quantity: number; wastage_percent: number; }
-interface RawMaterialOption { id: string; name: string; }
+interface MeasurementUnitOption { id: string; name: string; symbol?: string | null; code?: string | null; }
+interface RawMaterialOption {
+  id: string;
+  name: string;
+  branch_id: string | null;
+  unit_id: string | null;
+  measurement_unit?: MeasurementUnitOption | null;
+}
 
 const EMPTY_FORM: UnitForm = {
   code: '', name: '', name_en: '', unit_type: 'manufactured', cost_price: 0, sale_price: 0,
@@ -66,6 +73,14 @@ export function InventoryUnitsPage() {
   const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterialOption[]>([]);
   const [recipeLoading, setRecipeLoading] = useState(false);
+
+  const unitLabel = (material?: RawMaterialOption) => {
+    const unit = material?.measurement_unit;
+    if (!unit) return isAr ? 'وحدة غير محددة' : 'Unit not set';
+    const short = unit.symbol || unit.code;
+    return short && short !== unit.name ? `${unit.name} (${short})` : unit.name;
+  };
+  const materialLabel = (material: RawMaterialOption) => `${material.name} — ${unitLabel(material)}`;
 
   const openAdd = () => { setEditing(null); setForm({ ...EMPTY_FORM }); setModalOpen(true); };
   const openEdit = (unit: InventoryUnit) => {
@@ -110,15 +125,18 @@ export function InventoryUnitsPage() {
     setRecipeUnit(unit);
     setRecipeModalOpen(true);
     setRecipeLoading(true);
-    let rawMaterialQuery = supabase.from('raw_materials').select('id,name').eq('is_active', true);
-    if (branchFilter) rawMaterialQuery = rawMaterialQuery.eq('branch_id', branchFilter);
+    const recipeBranchId = unit.branch_id || branchFilter || '';
+    let rawMaterialQuery = supabase.from('raw_materials')
+      .select('id,name,branch_id,unit_id,measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)')
+      .eq('is_active', true);
+    if (recipeBranchId) rawMaterialQuery = rawMaterialQuery.eq('branch_id', recipeBranchId);
     const [{ data: rawData, error: rawError }, { data: recipeData, error: recipeError }] = await Promise.all([
       rawMaterialQuery.order('name'),
       supabase.from('inventory_unit_recipes').select('id,raw_material_id,quantity,wastage_percent').eq('unit_id', unit.id).order('created_at'),
     ]);
     if (rawError) show(rawError.message, 'error');
     if (recipeError) show(recipeError.message, 'error');
-    setRawMaterials((rawData as RawMaterialOption[]) || []);
+    setRawMaterials((rawData as unknown as RawMaterialOption[]) || []);
     setRecipeRows((recipeData as RecipeRow[]) || []);
     setRecipeLoading(false);
   };
@@ -127,6 +145,11 @@ export function InventoryUnitsPage() {
     if (!recipeUnit || recipeUnit.unit_type !== 'manufactured') return;
     const valid = recipeRows.every((row) => row.raw_material_id && Number(row.quantity) > 0 && Number(row.wastage_percent) >= 0);
     if (!valid) { show(isAr ? 'أكمل بيانات الوصفة' : 'Complete the recipe rows', 'error'); return; }
+    const allHaveUnits = recipeRows.every((row) => rawMaterials.find((material) => material.id === row.raw_material_id)?.measurement_unit);
+    if (!allHaveUnits) {
+      show(isAr ? 'لا يمكن استخدام خامة بدون وحدة قياس. حدد وحدة الخامة أولًا.' : 'A raw material without a measurement unit cannot be used. Set its unit first.', 'error');
+      return;
+    }
     setRecipeLoading(true);
     const { error: deleteError } = await supabase.from('inventory_unit_recipes').delete().eq('unit_id', recipeUnit.id);
     if (deleteError) { show(deleteError.message, 'error'); setRecipeLoading(false); return; }
@@ -193,12 +216,16 @@ export function InventoryUnitsPage() {
       <Modal open={recipeModalOpen} onClose={() => setRecipeModalOpen(false)} title={recipeUnit ? `${isAr ? 'وصفة المصنع' : 'Manufactured item recipe'} — ${recipeUnit.name}` : (isAr ? 'وصفة المصنع' : 'Manufactured item recipe')} size="lg">
         <div className="space-y-4">
           <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-sm text-purple-800">{isAr ? 'الخامات هنا تخص تصنيع هذا المصنع فقط. البيع لا يخصم خاماته مباشرة.' : 'These raw materials are consumed only when manufacturing this item. Sales do not deduct them directly.'}</div>
-          {recipeRows.map((row, index) => <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_140px_140px_auto] gap-2 items-end p-3 rounded-lg border border-ui-border">
-            <select aria-label={isAr ? 'الخامة' : 'Raw material'} value={row.raw_material_id} onChange={(e) => setRecipeRows((rows) => rows.map((item, i) => i === index ? { ...item, raw_material_id: e.target.value } : item))} className="min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3 text-sm"><option value="" disabled>--</option>{rawMaterials.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}</select>
-            <Input label={isAr ? 'الكمية' : 'Quantity'} type="number" min="0.0001" step="0.0001" value={row.quantity} onChange={(e) => setRecipeRows((rows) => rows.map((item, i) => i === index ? { ...item, quantity: Number(e.target.value) || 0 } : item))} />
-            <Input label={isAr ? 'الهالك %' : 'Wastage %'} type="number" min="0" step="0.01" value={row.wastage_percent} onChange={(e) => setRecipeRows((rows) => rows.map((item, i) => i === index ? { ...item, wastage_percent: Number(e.target.value) || 0 } : item))} />
-            <Button variant="outline" size="sm" onClick={() => setRecipeRows((rows) => rows.filter((_, i) => i !== index))}><Trash2 className="w-4 h-4" /></Button>
-          </div>)}
+          {recipeRows.map((row, index) => {
+            const selectedMaterial = rawMaterials.find((material) => material.id === row.raw_material_id);
+            const selectedUnit = selectedMaterial ? unitLabel(selectedMaterial) : '';
+            return <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_170px_140px_auto] gap-2 items-end p-3 rounded-lg border border-ui-border">
+              <select aria-label={isAr ? 'الخامة' : 'Raw material'} value={row.raw_material_id} onChange={(e) => setRecipeRows((rows) => rows.map((item, i) => i === index ? { ...item, raw_material_id: e.target.value } : item))} className="min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3 text-sm"><option value="" disabled>--</option>{rawMaterials.map((material) => <option key={material.id} value={material.id} disabled={!material.measurement_unit}>{materialLabel(material)}</option>)}</select>
+              <Input label={selectedUnit ? `${isAr ? 'الكمية' : 'Quantity'} (${selectedUnit})` : (isAr ? 'الكمية' : 'Quantity')} type="number" min="0.0001" step="0.0001" value={row.quantity} onChange={(e) => setRecipeRows((rows) => rows.map((item, i) => i === index ? { ...item, quantity: Number(e.target.value) || 0 } : item))} />
+              <Input label={isAr ? 'الهالك %' : 'Wastage %'} type="number" min="0" step="0.01" value={row.wastage_percent} onChange={(e) => setRecipeRows((rows) => rows.map((item, i) => i === index ? { ...item, wastage_percent: Number(e.target.value) || 0 } : item))} />
+              <Button variant="outline" size="sm" onClick={() => setRecipeRows((rows) => rows.filter((_, i) => i !== index))}><Trash2 className="w-4 h-4" /></Button>
+            </div>;
+          })}
           <Button variant="outline" onClick={() => setRecipeRows((rows) => [...rows, EMPTY_RECIPE_ROW()])}><Plus className="w-4 h-4" />{isAr ? 'إضافة خامة' : 'Add material'}</Button>
           <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-ui-surface/95 backdrop-blur border-t border-ui-border flex justify-end gap-2"><Button variant="secondary" onClick={() => setRecipeModalOpen(false)}>{t('cancel')}</Button><Button disabled={recipeLoading} onClick={saveRecipe}>{t('save')}</Button></div>
         </div>
