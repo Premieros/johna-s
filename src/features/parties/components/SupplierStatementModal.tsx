@@ -21,7 +21,7 @@ type SupplierStatementSummary = {
 
 type SupplierStatementEntry = {
   event_at: string;
-  entry_type: 'purchase' | 'payment' | string;
+  entry_type: 'purchase' | 'payment' | 'invoice_time_payment' | string;
   source_id: string;
   reference_number: string | null;
   debit: number;
@@ -53,9 +53,16 @@ const paymentLabel = (method: string | null, ar: boolean) => {
     card: ['بطاقة', 'Card'],
     transfer: ['تحويل', 'Transfer'],
     bank_transfer: ['تحويل بنكي', 'Bank transfer'],
+    invoice_time: ['عند إنشاء الفاتورة', 'At invoice creation'],
   };
   const label = labels[method];
   return label ? label[ar ? 0 : 1] : method;
+};
+
+const entryLabel = (entryType: string, ar: boolean) => {
+  if (entryType === 'purchase') return ar ? 'فاتورة شراء' : 'Purchase';
+  if (entryType === 'invoice_time_payment') return ar ? 'مدفوع عند إنشاء الفاتورة (تجميعي)' : 'Invoice-time payment (aggregate)';
+  return ar ? 'دفعة' : 'Payment';
 };
 
 export function SupplierStatementModal({ open, supplierId, branchId, currency, onClose }: Props) {
@@ -128,8 +135,8 @@ export function SupplierStatementModal({ open, supplierId, branchId, currency, o
             {s.invoice_time_paid > 0.009 && (
               <p className="mt-3 rounded-xl bg-ui-warning-soft p-3 text-xs text-ui-warning">
                 {ar
-                  ? `مدفوع عند إنشاء فواتير الشراء دون سجل دفع منفصل: ${formatCurrency(s.invoice_time_paid, currency, lang)}. لا ينسب النظام له طريقة دفع تاريخية غير محفوظة.`
-                  : `Paid at purchase creation without a separate payment record: ${formatCurrency(s.invoice_time_paid, currency, lang)}. The system does not invent a historical payment method.`}
+                  ? `مدفوع عند إنشاء فواتير الشراء دون سجل دفع منفصل: ${formatCurrency(s.invoice_time_paid, currency, lang)}. يظهر كسطر تجميعي للمصالحة ولا ينسب له النظام طريقة دفع تاريخية غير محفوظة.`
+                  : `Paid at purchase creation without a separate payment record: ${formatCurrency(s.invoice_time_paid, currency, lang)}. It is shown as an aggregate reconciliation line; no historical payment method is invented.`}
               </p>
             )}
           </div>
@@ -148,7 +155,7 @@ export function SupplierStatementModal({ open, supplierId, branchId, currency, o
                 {(data.entries || []).map((entry) => (
                   <tr key={`${entry.entry_type}-${entry.source_id}`}>
                     <td className="whitespace-nowrap px-3 py-2">{formatDateTime(entry.event_at, lang)}</td>
-                    <td className="px-3 py-2">{entry.entry_type === 'purchase' ? (ar ? 'فاتورة شراء' : 'Purchase') : (ar ? 'دفعة' : 'Payment')}</td>
+                    <td className="px-3 py-2">{entryLabel(entry.entry_type, ar)}</td>
                     <td className="px-3 py-2 font-mono text-xs">{entry.reference_number || '-'}</td>
                     <td className="px-3 py-2 text-end">{formatCurrency(Number(entry.debit || 0), currency, lang)}</td>
                     <td className="px-3 py-2 text-end">{formatCurrency(Number(entry.credit || 0), currency, lang)}</td>
