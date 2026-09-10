@@ -25,8 +25,10 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(posMath).not.toContain('employee_credit');
   });
 
-  it('does not double-count supplier payments in the authoritative balance', () => {
+  it('does not double-count supplier payments and reconciles purchase-time payments', () => {
     const migration = read('supabase/migrations/20260910211500_account_balances_closing_employee_credit.sql');
+    const reconciliation = read('supabase/migrations/20260910213000_reconcile_supplier_statement_initial_payments.sql');
+    const modal = read('src/features/parties/components/SupplierStatementModal.tsx');
     expect(migration).toContain("COALESCE(sum(p.paid_amount), 0) AS total_paid");
     expect(migration).toContain('recorded_payments_total');
     expect(migration).toContain('invoice_time_paid');
@@ -35,6 +37,10 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(migration).toContain("public.can_permission('accounts.view')");
     expect(migration).toContain("public.can_permission('sales.payment.receive')");
     expect(migration).toContain('RETURN public.receive_payment(');
+    expect(reconciliation).toContain("'invoice_time_payment'::text");
+    expect(reconciliation).toContain("'invoice_time'::text");
+    expect(reconciliation).toContain('v_invoice_time_paid > 0');
+    expect(modal).toContain("invoice_time: ['عند إنشاء الفاتورة', 'At invoice creation']");
   });
 
   it('shows raw-material stock only for an explicitly selected branch using the canonical measurement unit relation', () => {
