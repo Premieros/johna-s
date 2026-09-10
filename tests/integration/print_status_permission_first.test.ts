@@ -129,14 +129,13 @@ describe.skipIf(skip)('print status permission-first boundary', () => {
     });
   });
 
-  it('records printed_at only after an authorized printed transition', async () => {
+  it('records printed_at only after an authorized printed transition while preserving RETURNS void', async () => {
     await asUser(printerUser, async () => {
-      const result = await client.query<{ value: { success?: boolean; print_status?: string } }>(
+      const call = await client.query<{ value: null }>(
         `SELECT public.set_print_status($1, 'printed') AS value`,
         [orderA],
       );
-      expect(result.rows[0]?.value?.success).toBe(true);
-      expect(result.rows[0]?.value?.print_status).toBe('printed');
+      expect(call.rows[0]?.value ?? null).toBeNull();
 
       const printed = await client.query<{ print_status: string; printed_at: Date | null }>(
         `SELECT print_status, printed_at FROM public.orders WHERE id = $1`,
