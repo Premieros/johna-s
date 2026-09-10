@@ -44,10 +44,10 @@ describe('POS operator display contract', () => {
   });
 
   it('prints the actual payment operator name on the receipt', () => {
-    const orderHook = source('src/features/pos/hooks/usePosOrder.ts');
+    const orderHookBase = source('src/features/pos/hooks/usePosOrderBase.ts');
     const printing = source('src/features/pos/utils/printing.ts');
 
-    expect(orderHook).toContain('operatorName: user?.full_name || user?.username || user?.email || null');
+    expect(orderHookBase).toContain('operatorName: user?.full_name || user?.username || user?.email || null');
     expect(printing).toContain('receipt.operatorName');
     expect(printing).toContain("isAr ? 'المستخدم' : 'User'");
   });

@@ -37,16 +37,32 @@ describe('sale financial authority contract', () => {
     expect(posApi).not.toContain('Direct Sale Processing Fallback');
   });
 
-  it('does not convert authoritative server rejection or ambiguous online failure into offline success', () => {
+  it('queues only an explicit offline sale into the durable central outbox', () => {
     const payment = read('src/features/pos/services/payment.ts');
     const processSale = extractFunctionBody(payment, 'processSaleForOrder');
+    const queueSale = extractFunctionBody(payment, 'queueOfflineSale');
+
+    expect(queueSale).toContain('const queuedSale: OwnedOfflineSaleQueueItem = {');
+    expect(queueSale).toContain('client_id: id');
+    expect(queueSale).toContain('created_by_user_id: originatingUserId');
+    expect(queueSale).toContain('payload: p as unknown as Record<string, unknown>');
+    expect(queueSale).toContain('await enqueueOfflineSale(queuedSale)');
+    expect(queueSale).toContain("if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE')");
+    expect(queueSale).toContain("throw new Error('AUTH_REQUIRED_OFFLINE')");
 
     const explicitOfflineCondition = "if (!splitPayments && typeof navigator !== 'undefined' && !navigator.onLine)";
     const explicitOfflineStart = processSale.indexOf(explicitOfflineCondition);
     expect(explicitOfflineStart).toBeGreaterThanOrEqual(0);
     const explicitOffline = extractBalancedBlock(processSale, processSale.indexOf('{', explicitOfflineStart));
-    expect(explicitOffline).toContain('offlinePosManager.enqueueSale(p)');
-    expect(processSale.match(/offlinePosManager\.enqueueSale\(p\)/g)).toHaveLength(1);
+    expect(explicitOffline).toContain('await queueOfflineSale(p)');
+    expect(explicitOffline).toContain('pending_sync: true');
+    expect(explicitOffline).toContain('offline: true');
+    expect(processSale.match(/queueOfflineSale\(p\)/g)).toHaveLength(1);
+  });
+
+  it('does not convert authoritative server rejection or ambiguous online failure into offline success', () => {
+    const payment = read('src/features/pos/services/payment.ts');
+    const processSale = extractFunctionBody(payment, 'processSaleForOrder');
 
     const onlineMarker = 'const settlementPayload = resolvedShift.payload;';
     const onlineMarkerStart = processSale.indexOf(onlineMarker);
@@ -54,7 +70,7 @@ describe('sale financial authority contract', () => {
     const onlineTryStart = processSale.indexOf('try {', onlineMarkerStart + onlineMarker.length);
     expect(onlineTryStart).toBeGreaterThanOrEqual(0);
     const onlineTryCatch = processSale.slice(onlineTryStart);
-    expect(onlineTryCatch).not.toContain('offlinePosManager.enqueueSale(p)');
+    expect(onlineTryCatch).not.toContain('queueOfflineSale(p)');
     expect(onlineTryCatch).toContain('A server rejection');
     expect(onlineTryCatch).toContain('the server may have');
 
@@ -62,7 +78,12 @@ describe('sale financial authority contract', () => {
     expect(splitTenderBranchStart).toBeGreaterThanOrEqual(0);
     const splitTenderBranch = extractBalancedBlock(processSale, processSale.indexOf('{', splitTenderBranchStart));
     expect(splitTenderBranch).toContain('processSplitSaleForOrder');
-    expect(splitTenderBranch).not.toContain('offlinePosManager.enqueueSale');
+    expect(splitTenderBranch).not.toContain('queueOfflineSale');
+
+    const splitSale = extractFunctionBody(payment, 'processSplitSaleForOrder');
+    expect(splitSale).not.toContain('queueOfflineSale');
+    expect(splitSale).not.toContain('enqueueOfflineSale');
+    expect(splitSale).toContain('Split payment requires an online connection.');
   });
 
   it('blocks raw authenticated inserts and clamps applied payment server-side', () => {

@@ -24,10 +24,9 @@ export interface OfflineHoldOrderQueueItem {
 }
 
 const DB_NAME = 'premier_pos_offline_db';
-// Version 2 guarantees every currently required store exists for users who
-// already have an older v1 database. Keeping the version at 1 left those
-// clients permanently unable to create newly-added stores.
-const DB_VERSION = 2;
+// Version 3 adds the branch cache store that OfflineContext already reads/writes.
+// The upgrade is additive and preserves all existing queues/caches.
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -60,6 +59,9 @@ export function openOfflineDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains('dining_areas')) {
         db.createObjectStore('dining_areas', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('branches')) {
+        db.createObjectStore('branches', { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains('stock_map')) {
         db.createObjectStore('stock_map', { keyPath: 'productId' });
@@ -204,6 +206,7 @@ export async function enqueueOfflineSale(sale: Omit<OfflineSaleQueueItem, 'statu
       res();
     };
     tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error || new Error('Offline sale queue transaction aborted'));
   });
 }
 
@@ -221,7 +224,9 @@ export async function getPendingSalesCount(): Promise<number> {
       const req = tx.objectStore('sales_queue').getAll();
       req.onsuccess = () => {
         const items = (req.result as OfflineSaleQueueItem[]) || [];
-        resolve(items.filter((i) => i.status === 'pending' || i.status === 'failed').length);
+        // A persisted "syncing" row is still pending financial confirmation.
+        // Counting it also prevents a crash/reload from making the queue appear empty.
+        resolve(items.filter((i) => i.status !== 'synced').length);
       };
       req.onerror = () => resolve(0);
       tx.onabort = () => resolve(0);
@@ -267,6 +272,7 @@ export async function updateOfflineSaleStatus(
       if (item) {
         item.status = status;
         if (error) item.error = error;
+        else if (status !== 'failed') delete item.error;
         if (status === 'failed') item.retry_count = (item.retry_count || 0) + 1;
         store.put(item);
       }

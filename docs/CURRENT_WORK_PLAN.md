@@ -4,7 +4,7 @@
 > أي نموذج أو مطور يبدأ من هذا الملف فقط.
 > الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair مراجع تاريخية فقط ولا تحدد الحالة الحالية.
 
-آخر تحديث: **2026-09-09 23:25 — Africa/Cairo — Delivery/Drive-Thru Full Green; KDS permission hardening active**
+آخر تحديث: **2026-09-10 — Africa/Cairo — Final Offline/Reconciliation + Print Truth hardening active**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -23,144 +23,35 @@
 - كل الأدوار الأخرى Labels فقط؛ Authorization = Permission-First + canonical branch/RLS.
 - قبل أي تعديل: اجلب HEAD الحالي لـ`main` و`development/final-handover` وافهم أي commits أحدث حتى لا يتم عكس عمل نموذج آخر.
 
-## 2) Verified Production baseline
+## 2) Verified Production baseline — محدث
 
-آخر Production baseline مغلق:
+آخر Production baseline مغلق ومثبت:
 
-- `main`: `afef2ad024f55b1ab1523ba1530e19f13581e56a`
-- PR #54: `fix: align POS scan and guided workflow contracts` مدمج ✅
-- Verify main #912 / run `34321160701`: **Full Green** ✅
-- Deploy #584 / run `34321160600`: ✅
+- `main`: `de0aed9e3f2ed58958b3b2b1c9b0fd44c0b1f3b1`
+- PR #55: `feat(pos): operator attribution and safe table resume` — **Merged ✅**
+- Verify main #955 / run `34408216822`: **Full Green ✅**
+- Deploy #585 / run `34408216824`: **Success ✅**
 - Core cycle المحمي: Open Shift → Create Order → Hold → Resume → Send Kitchen → Inventory deduction → Payment → Sale/Shift attribution → Close Shift.
 
-لا يوصف أي commit أحدث من Production baseline بأنه Production Verified قبل الدمج وVerify main الجديد.
+لا يوصف أي commit أحدث من هذا الـbaseline بأنه Production Verified قبل الدمج وVerify main جديد ناجح.
 
 ## 3) Development baseline الحالي
 
 - Branch: `development/final-handover`
-- Last functional Full Green HEAD: `c1314c47f360e5afd28f1389c79252168fca4f9f`
-- PR #55: `feat(pos): operator attribution and safe table resume` — **Open / غير مدمج**.
-- Verify #945 / run `34400078544` على HEAD `c1314c47...`: **Full Green** ✅
-  - Locked Supabase identity ✅
-  - Frontend API contract ✅
-  - lint ✅
-  - app typecheck ✅
-  - tests typecheck ✅
-  - unit ✅
-  - build ✅
-  - Fresh DB canonical migrations ✅
-  - Schema verification ✅
-  - Integration/Security/RLS ✅
-  - Browser Smoke ✅
+- **Current functional/code baseline:** `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
+- Parent before print-status constraint fix: `a417301fb3b61786dec1d13a95d3974a45610b15`
+- أي commits لاحقة مخصصة لتحديث `docs/CURRENT_WORK_PLAN.md` فقط = **Docs-only** ولا تغيّر الـfunctional/code baseline.
+- PR #56: `fix: final offline reconciliation and print truth hardening`
+- PR #56: **Open / Draft / غير مدمج**.
+- Base: `main@de0aed9e3f2ed58958b3b2b1c9b0fd44c0b1f3b1`
+- Verify #985 بدأ على `d942bbc...`، ثم أدت تحديثات السجل Docs-only إلى Runs أحدث على HEAD الفرع.
+- **قاعدة الاعتماد:** عند الإغلاق اعتمد أحدث Verify كامل على HEAD الفعلي للفرع، ولا تعتمد نجاح Run على SHA أقدم.
 
-## 4) دفعة Operator attribution + TABLE_BUSY — مغلقة Full Green على التطوير
+ممنوع دمج PR #56 قبل Full Verify Green وإغلاق Production E2E المطلوب داخل Transaction مع ROLLBACK.
 
-تم تنفيذ وإثبات التالي:
+## 4) الدفعات المغلقة — لا تُفتح دون Regression مثبت
 
-1. **اسم المستخدم/المشغل على أسطح POS**
-   - إظهار الاسم الآمن للمستخدم المسؤول على الطاولة المشغولة والأسطح المرتبطة بالطلب حيث يوجد attribution.
-   - المصدر الأمني هو `get_pos_order_operator_labels` المحدود بالفرع والصلاحية، بدون توسيع `public.users` أو كشف UUID/بيانات أوسع.
-   - اسم منفذ الدفع يظهر على الإيصال حيث يلزم.
-
-2. **Safe TABLE_BUSY resolver**
-   - إضافة `resolve_my_active_table_order` كحد ضيق لمعالجة سباق إنشاء الطلب على طاولة مشغولة.
-   - يعيد `order_id` فقط إذا كان الطلب المفتوح/المعلق يخص المستخدم الحالي نفسه.
-   - المستخدم الآخر في نفس الفرع يرى `TABLE_BUSY` بدون تسريب order id.
-   - المستخدم خارج الفرع يفشل fail-closed.
-   - Super Admin لا يحصل عبر هذا helper الضيق على order id لمستخدم آخر؛ مسارات transfer/admin المنفصلة تبقى هي السلطة الصحيحة.
-
-3. **Regression**
-   - `tests/integration/pos_table_busy_owner_resume.test.ts`.
-   - فشل Verify #923 كان Fixture غير صالح: الاختبار أنشأ طلبًا فارغًا عبر `create_order` بعد تشديد عقد الطلب/التسعير.
-   - تم إصلاح **Fixture الاختبار فقط** ليستخدم دورة طلب حقيقية متوافقة؛ لم يتم إضعاف `create_order` أو RLS أو Resolver.
-   - Verify #924 أغلق الدفعة Full Green.
-
-4. **قاعدة واجهة الاستئناف**
-   - عند `TABLE_BUSY` لا يتم إنشاء طلب ثانٍ ولا نقل ملكية ضمني.
-   - إذا كان Resolver يثبت أن الطلب للمستخدم الحالي يمكن استئنافه بأمان.
-   - لا يتم دمج سلة جديدة تلقائيًا فوق الطلب الموجود ولا استبدال أصناف بصمت؛ تجنب تكرار أو فقد أصناف.
-
-هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
-
-## 5) Availability server contract hardening — مغلقة Full Green
-
-**الحالة: CLOSED ✅**
-
-تم تنفيذ وإثبات التالي:
-
-1. `get_pos_product_availability` أصبح Server/DB authoritative داخل `johna-s` مع الحفاظ على branch/warehouse scope.
-2. التحقق يرفض المستخدم غير النشط، ويرفض cross-branch access، ويرفض warehouse لا يتبع الفرع المطلوب.
-3. الصفر الحقيقي للمخزون يبقى **authoritative zero**، ولا يتحول Unknown/Error في مصدر المخزون أو الوصفة إلى `Out of Stock` كاذب.
-4. المنتج ذو مصدر تصنيع غير قابل للحسم (مثل manufactured unit بلا recipe) يُحذف من نتيجة Availability بدل اختلاق كمية صفر.
-5. shortage codes المعروفة تبقى صريحة في عقد الخادم، ومنها:
-   - `INSUFFICIENT_PRODUCT_STOCK`
-   - `INSUFFICIENT_UNIT_STOCK`
-   - `INSUFFICIENT_RAW_MATERIAL_STOCK`
-6. لا خصم للمخزون أثناء Availability؛ الخصم النهائي يبقى عند `send_to_kitchen` طبقًا للقرار التشغيلي الثابت.
-7. Regression: `tests/integration/pos_availability_unknown_source.test.ts` يغطي authoritative zero، unknown source، cross-branch deny، warehouse mismatch، shortage contract.
-8. فشل Verify #930/#931 كان في transaction fixture للاختبارات المتوقعة أن ترمي SQL error؛ تم إصلاح fixture فقط باستخدام savepoint/rollback scope بدون تخفيف RLS أو تغيير السلوك الأمني.
-9. Verify #932 / run `34396769013`: **Full Green ✅** بما فيه Fresh DB + Schema + Integration/Security/RLS + Browser Smoke.
-
-هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
-
-## 6) Delivery / Drive-Thru operational parity — مغلقة Full Green
-
-**الحالة: CLOSED ✅**
-
-تم تنفيذ وإثبات التالي:
-
-1. لا يوجد POS ثانٍ أو دورة طلب موازية؛ كلا النوعين يعيدان استخدام نفس `OrderStartWizard` + `PosWorkspacePage` + order lifecycle الحالي.
-2. تمت إضافة direct entries مركزية:
-   - `/delivery` → نفس `/pos` مع بدء خطوة Delivery.
-   - `/drive-thru` → نفس `/pos` مع بدء خطوة السيارة.
-3. `orders.service_details` أصبح عقدًا منظمًا وآمنًا بدل الاعتماد على `notes` فقط.
-4. Delivery يحفظ `phone` و`address` و`note` بصورة منظمة؛ الهاتف والعنوان مطلوبان Server-side.
-5. Drive-Thru يحفظ `vehicle_identifier` مع `customer_name`/`note` الاختياريين بصورة منظمة.
-6. `create_service_order` و`update_service_order` wrappers ضيقة تستدعي العقود الأساسية `create_order`/`update_order` داخل نفس المعاملة؛ لا bypass لدورة الطلب أو branch/ownership guards.
-7. Resume/Update يحافظان على `service_details` ولا يمسحان بيانات الخدمة.
-8. البيانات المقروءة تظل متاحة في `notes` للتوافق مع الشاشات الحالية، مع `service_details` كمصدر منظم للتشغيل والتقارير المستقبلية.
-9. لم تتم إضافة Delivery fee أو driver assignment؛ لا يوجد حتى الآن contract محاسبي/صلاحيات موثق يسمح بإضافتهما بأمان، لذلك لم يتم إدخال Frontend-only charges أو role-name assignment.
-10. Regression DB: `tests/integration/pos_service_order_details.test.ts` يغطي create/update/resume وinvalid data وcross-branch وanon.
-11. Regression UI/route: `tests/unit/posDirectServiceEntryContract.test.ts` يثبت أن المدخلين يمران إلى نفس POS ويستهلكان `startStep` الصحيح.
-12. Verify #941 أثبت service-details contract Full Green، ثم Verify #945 / run `34400078544` على HEAD `c1314c47...` أغلق direct-entry parity **Full Green ✅** بما فيه Browser Smoke.
-
-هذه الدفعة لا تُفتح مجددًا إلا بRegression مثبت.
-
-## 7) الدفعة النشطة الآن — Modifiers / KDS parity المتبقي فقط
-
-**الحالة: ACTIVE**
-
-قاعدة العمل:
-- لا إعادة بناء Modifiers أو KDS الموجودين أصلًا بدون Regression مثبت.
-- Modifiers الحالية لديها min/max/required/default selections، single/multiple، price deltas، item notes وmodifier snapshots؛ تُعامل كمغلقة وظيفيًا ما لم يظهر خلل محدد.
-- KDS الحالية لديها branch/station queue، realtime/polling، modifiers/notes، وحالات sent → cooking → ready → served.
-
-الفجوة الأمنية المثبتة:
-- `get_kitchen_queue` و`get_my_kitchen_stations` يستخدمان `pos.kds_view` للقراءة، وهذا صحيح.
-- `set_kitchen_status` يستخدم أيضًا `pos.kds_view` لتغيير حالة المطبخ، وبذلك مستخدم View-Only يستطيع الكتابة.
-- لا توجد حاليًا صلاحية مستقلة لتغيير KDS ضمن Permission Definitions.
-
-الخطوات الإلزامية:
-1. إنشاء صلاحية كتابة KDS مستقلة باسم متوافق مع naming convention الحالي بعد مراجعة migration/permission seeding الحالية.
-2. إبقاء route/page visibility على `pos.kds_view` فقط.
-3. تقييد أزرار/Actions تغيير الحالة في الواجهة بصلاحية الكتابة الجديدة.
-4. تعديل `set_kitchen_status` ليطلب صلاحية الكتابة الجديدة Server-side بدل `pos.kds_view`.
-5. الحفاظ على branch isolation وSECURITY DEFINER hardened `search_path` وعدم إدخال role-name authorization.
-6. التحقق هل station assignment الحالي يمنع مستخدم محطة واحدة من تحديث طلب/سطور محطة أخرى؛ إذا ظهر bypass فعلي يُغلق بأضيق تغيير ممكن.
-7. Regression tests على الأقل:
-   - KDS View-Only يستطيع القراءة ولا يستطيع تغيير الحالة.
-   - مستخدم بصلاحية الكتابة يستطيع تغيير الحالة داخل فرعه/محطته المسموحة.
-   - cross-branch deny.
-   - station-scope deny إذا كان العقد الحالي محطة-محددًا.
-8. Full Verify إلزامي قبل إغلاق الدفعة.
-
-## 8) ترتيب النقل بعد KDS
-
-1. Modifiers / KDS parity المتبقي فقط — **ACTIVE**.
-2. Offline / Reconciliation hardening، مع الحفاظ على Financial Authority وعدم تحويل online ambiguity إلى offline success.
-3. Final release audit: dependencies/security warnings + final E2E acceptance + production migration/merge decision.
-
-## 9) العقود المحمية — لا تُفتح دون Regression مثبت
+الآتي مغلق وظيفيًا/أمنيًا ضمن الـbaseline الحالي ما لم يظهر Regression محدد:
 
 - Users / Roles / Permission-First ✅
 - Super Admin implicit bypass فقط ✅
@@ -171,6 +62,8 @@
 - TABLE_BUSY safe owner resume ✅
 - POS Availability authoritative contract ✅
 - Delivery / Drive-Thru structured service contract + direct entries ✅
+- Modifiers الحالية وعقود min/max/required/default/price delta/snapshots ✅ ما لم يظهر Regression محدد
+- KDS Permission-First + branch/station boundaries ✅
 - Send-to-kitchen delta semantics ✅
 - **Inventory deduction at `send_to_kitchen`** ✅ قرار ثابت
 - Warehouse transfer branch isolation ✅
@@ -184,7 +77,129 @@
 - Functional core cycle release gate ✅
 - Exact scan SKU/Barcode ✅
 - Guided Workflow Permission-First ✅
-- Financial Authority: explicit offline only; server rejection/ambiguous online failure لا تتحول offline success ✅
+- Financial Authority: server rejection أو ambiguous online failure لا تتحول تلقائيًا إلى offline success ✅
+
+## 5) الدفعة النشطة — Offline / Reconciliation hardening
+
+**الحالة: ACTIVE — FINAL DELIVERY GATE**
+
+هدف الدفعة: لا تظهر أي عملية مالية كبيع/دفع ناجح قبل وجود حقيقة مالية مؤكدة، مع منع التكرار عند replay أو فقد الرد بعد COMMIT.
+
+العقود الجاري تثبيتها في PR #56:
+
+1. **Durable offline sale outbox**
+   - البيع المقصود Offline يحفظ كعملية `pending sync` وليس كحقيقة مالية نهائية.
+   - الصفوف `pending` / `failed` / `syncing` تبقى محسوبة Pending حتى التأكيد النهائي.
+   - crash/reload أثناء `syncing` لا يجعل الطابور يبدو فارغًا.
+
+2. **Financial truth**
+   - server rejection لا يتحول إلى offline success.
+   - ambiguous online exception لا يتم enqueue تلقائيًا لأن الخادم قد يكون عمل COMMIT قبل فقد الرد.
+   - التأكيد النهائي يتطلب server-authoritative success مع `sale_id` صالح.
+
+3. **Replay ownership**
+   - نفس المستخدم الذي أنشأ العملية المالية Offline هو الذي يعيد replay/reconciliation لها.
+   - لا يسمح بتغيير cashier/operator attribution بسبب تسجيل مستخدم آخر على نفس الجهاز لاحقًا.
+
+4. **Warehouse reconciliation**
+   - Offline capture لا يخترع warehouse.
+   - عند العودة Online يتم حل warehouse الحقيقي المرتبط بالطلب أو فرع العملية قبل أي كتابة مالية.
+   - إذا لم يمكن تحديد warehouse بأمان يفشل sync ويظل Pending.
+
+5. **Idempotency / reconciliation**
+   - Offline invoice key تستخدم لمنع/اكتشاف replay المكرر.
+   - عند احتمال فقد الرد بعد COMMIT يتم reconciliation مع الخادم بدل افتراض الفشل أو إنشاء بيع ثانٍ.
+
+## 6) الدفعة النشطة — Printing truth + Permission-First
+
+**الحالة: ACTIVE — FINAL DELIVERY GATE**
+
+العقود الجاري تثبيتها في PR #56:
+
+1. فصل صلاحية طلب الطباعة/إعادة الطباعة عن تسجيل تنفيذ الطباعة الفعلي.
+2. Printer management يظل محميًا بصلاحية الإعدادات المناسبة فقط.
+3. عدم تسجيل `printed` لمجرد أن المستخدم ضغط زر الطباعة.
+4. Local Print Agent يجب أن يعيد نجاحًا فعليًا قبل تسجيل نجاح التنفيذ.
+5. Agent absent / station missing / printer missing / print failure = fail-closed ولا يسجل نجاحًا كاذبًا.
+6. دعم مسار Cash Drawer في Local Print Agent مع فشل واضح عند عدم وجود Printer route مناسب.
+7. Branch/station routing يجب أن يظل معزولًا ولا يسمح بطباعة محطة/فرع غير مخول.
+8. طباعة الكابتن من الهاتف إلى طابعات الفرع الثابتة تبقى Gate تشغيلية نهائية يجب إثبات مسارها بعد Full Green الحالي.
+
+## 7) Verify #984 — الفشل المحدد والجذر
+
+Verify #984 على HEAD `a417301fb3b61786dec1d13a95d3974a45610b15` لم يغلق الدفعة.
+
+النتيجة التشغيلية المهمة:
+
+- Frontend checks ✅
+- Fresh DB ✅
+- Schema ✅
+- Integration/Security/RLS: **605 passed / 4 failed** ❌
+
+الجذر واحد:
+
+- مسار `set_print_status(..., 'failed')` احتاج حفظ حالة `failed`.
+- قاعدة `orders_print_status_check` كانت تسمح فقط بـ:
+  - `pending`
+  - `printed`
+  - `cancelled`
+- أول failure كسر الـtransaction، والثلاث failures الأخرى كانت نتائج لاحقة لـtransaction aborted.
+
+لم يتم تخفيف الاختبار أو RLS.
+
+## 8) إصلاح #984
+
+تمت إضافة إصلاح DB contract منفصل على فرع التطوير:
+
+- Commit: `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
+- Message: `fix(printing): allow failed print status`
+
+الإصلاح محدود إلى `orders.print_status`:
+
+- الحفاظ على `pending` ✅
+- الحفاظ على `printed` ✅
+- الحفاظ على `cancelled` ✅
+- إضافة `failed` ✅
+- الحفاظ على Default = `pending` ✅
+- لا تعديل على RLS ✅
+- لا تعديل على permission model ✅
+- لا Migration على Production ✅
+
+أي Verify بعد `d942bbc...` يحتوي تغييرات Docs-only فقط لا يغير هذا الـfunctional fix؛ لكنه يظل الـVerify الواجب اعتماده إذا كان هو HEAD الفعلي لحظة الإغلاق.
+
+## 9) بوابات التسليم المتبقية
+
+لا يقال Final 100% قبل إغلاق الثلاثة التالية بالأدلة:
+
+### Gate A — Offline / Reconciliation
+
+- intentional offline sale يظهر `Pending Sync` وليس نجاحًا ماليًا نهائيًا.
+- server rejection لا يدخل outbox كنجاح.
+- ambiguous online failure لا يتحول تلقائيًا إلى Offline.
+- lost-response-after-COMMIT لا يسبب duplicate sale.
+- replay/reconciliation idempotent.
+- failed sync يظل Pending وقابلًا للمراجعة.
+- successful reconciliation وحده ينهي Pending state.
+- operator/cashier attribution لا يتغير أثناء replay.
+
+### Gate B — Printing / Permission Matrix
+
+- `pos.receipt.print` / reprint rules تطبق حسب الصلاحيات الفعلية لا role names.
+- Printer management لا يظهر إلا بصلاحية الإعدادات المناسبة.
+- Print Agent absent لا يسجل print success.
+- فشل printer/station لا يسجل success.
+- branch/station isolation مثبت.
+- Captain/mobile printing → branch cashier/kitchen/barista routing يتم إثباته عمليًا.
+
+### Gate C — Real Production E2E with ROLLBACK
+
+على Production الوحيد `azzdesuowpdcoflmyezn`:
+
+- الاختبار يكون داخل Transaction واحدة قدر الإمكان.
+- كل writes التجريبية يتم ROLLBACK لها.
+- ممنوع ترك بيانات اختبار دائمة.
+- يغطي على الأقل: branch scope → active shift → order → send_to_kitchen → stock deduction contract → payment/settlement → attribution → permission/RLS boundaries.
+- Physical/local printing negative-path والـPrint Agent يختبران خارج DB transaction؛ لا يتم ادعاء طباعة فعلية من اختبار SQL.
 
 ## 10) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
 
@@ -211,7 +226,8 @@
 5. Browser Smoke أخضر للدفعات المؤثرة على الواجهة/التشغيل.
 6. لا Production migration غير Verified.
 7. لا merge إلى `main` إلا بعد تحقق الشروط السابقة وقرار الدمج المناسب.
+8. لا يعتمد الإغلاق على اسم workflow أو نجاح جزئي؛ يجب مطابقة نتيجة الـrun مع HEAD الفعلي للفرع.
 
 ---
 
-**NEXT ACTION:** أغلق فجوة KDS Permission-First بفصل View عن status mutation، ثم Full Verify وسجل النتيجة قبل الانتقال إلى Offline/Reconciliation.
+**NEXT ACTION:** افحص أحدث Verify كامل على HEAD الفعلي لـ`development/final-handover`. إذا Full Green، أغلق Offline/Print regression gate ثم اختبر Captain/mobile printer routing، وبعدها نفذ Real Production E2E داخل Transaction مع ROLLBACK. لا تدمج PR #56 قبل إغلاق هذه البوابات وتحديث هذا السجل بنتيجة الإغلاق.

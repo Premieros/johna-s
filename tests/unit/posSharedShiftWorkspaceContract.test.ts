@@ -21,9 +21,12 @@ describe('POS shared shift workspace contract', () => {
     expect(workspace).toContain('payConsumed.current = false;');
     expect(workspace).toContain('payConsumed.current = true;\n    handlePay();');
 
-    const orderHook = read('src/features/pos/hooks/usePosOrder.ts');
-    expect(orderHook).toContain("if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }");
-    expect(orderHook).not.toContain('isCashier && !activeShift');
+    const orderHookBase = read('src/features/pos/hooks/usePosOrderBase.ts');
+    expect(orderHookBase).toContain("if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }");
+    expect(orderHookBase).not.toContain('isCashier && !activeShift');
+
+    const offlineWrapper = read('src/features/pos/hooks/usePosOrder.ts');
+    expect(offlineWrapper).toContain('if (!input.activeShift?.id) {');
   });
 
   it('exposes shift actions by exact permissions instead of role names', () => {

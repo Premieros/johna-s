@@ -82,6 +82,19 @@ async function printText(printerName, text) {
   }
 }
 
+async function kickDrawer(printerName) {
+  const printers = await listPrinters();
+  if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
+  const tmp = path.join(os.tmpdir(), `johns-drawer-${Date.now()}-${Math.random().toString(16).slice(2)}.bin`);
+  fs.writeFileSync(tmp, Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]));
+  try {
+    const script = '$p=$args[0];$f=$args[1];Get-Content -LiteralPath $f -Encoding Byte -Raw | Out-Printer -Name $p';
+    await ps(script, [printerName, tmp]);
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -166,6 +179,14 @@ const server = http.createServer(async (req, res) => {
       if (!printer) return json(res, 409, { success: false, error: 'STATION_NOT_CONFIGURED', station });
       await printText(printer, text);
       return json(res, 200, { success: true, station, printer });
+    }
+    if (req.method === 'POST' && url.pathname === '/drawer') {
+      const body = await readBody(req);
+      const config = readConfig();
+      const printer = body.printer ? String(body.printer).trim() : String(config.routes.cashier || config.routes.receipt || config.routes.main || '').trim();
+      if (!printer) return json(res, 409, { success: false, error: 'DRAWER_PRINTER_NOT_CONFIGURED' });
+      await kickDrawer(printer);
+      return json(res, 200, { success: true, printer });
     }
     return json(res, 404, { error: 'NOT_FOUND' });
   } catch (err) {

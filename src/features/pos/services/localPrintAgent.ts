@@ -89,7 +89,6 @@ export function saveLocalPrinterRoutes(routes: PrinterRouteConfig): void {
   window.localStorage.setItem(STORAGE_ROUTING_KEY, JSON.stringify(normalized));
 }
 
-
 /** Save device routing and, when running in a browser, synchronize it to the
  * proven local Windows agent so kitchen printing uses the same configuration.
  * Electron consumes the device-local routes directly and never needs a DB row.
@@ -293,7 +292,9 @@ export async function executeCashDrawerKick(printerName?: string): Promise<boole
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ printer: targetPrinter }),
     });
-    return response.ok;
+    if (!response.ok) return false;
+    const result = await response.json() as { success?: boolean };
+    return Boolean(result.success);
   } catch {
     return false;
   }

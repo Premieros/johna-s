@@ -94,6 +94,15 @@ export const pos = {
     return rpc<RpcResult>('process_sale', p);
   },
 
+  reconcileOfflineSale(p: {
+    p_invoice_number: string;
+    p_branch_id: string;
+    p_paid_amount: number;
+    p_payment_method: string;
+  }): ApiResult<RpcResult & { reconciled?: boolean; invoice_number?: string }> {
+    return rpc('reconcile_offline_sale', p);
+  },
+
   async processSaleSplit(p: {
     p_invoice_number: string;
     p_branch_id: string;
