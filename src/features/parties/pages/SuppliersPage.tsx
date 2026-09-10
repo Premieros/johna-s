@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Download, Trophy } from 'lucide-react';
+import { Plus, Edit2, Trash2, Download, Trophy, FileText } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -23,6 +23,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useGuidedWorkflow } from '@/core/guard';
+import { SupplierStatementModal } from '../components/SupplierStatementModal';
 import type { Supplier, SupplierEvaluationRow } from '@/lib/types';
 
 export function SuppliersPage() {
@@ -42,6 +43,7 @@ export function SuppliersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [statementSupplier, setStatementSupplier] = useState<Supplier | null>(null);
   const [showEvaluation, setShowEvaluation] = useState(false);
   const [evaluation, setEvaluation] = useState<SupplierEvaluationRow[]>([]);
   const [evLoading, setEvLoading] = useState(false);
@@ -71,9 +73,7 @@ export function SuppliersPage() {
     reloadSuppliers();
 
     if (!editing && guidedContext?.missingStep.key.includes('supplier')) {
-      setTimeout(() => {
-        completePrerequisiteAndReturn();
-      }, 500);
+      setTimeout(() => { completePrerequisiteAndReturn(); }, 500);
     }
   };
 
@@ -110,6 +110,12 @@ export function SuppliersPage() {
     { key: 'balance', header: t('amount'), render: (s) => <span className={s.balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(s.balance, currency, lang)}</span> },
     { key: 'actions', header: t('actions'), render: (s) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={() => setStatementSupplier(s)}
+          className="p-1.5 rounded-md hover:bg-ui-primary-soft text-ui-primary"
+          title={lang === 'ar' ? 'كشف حساب المورد' : 'Supplier statement'}
+          data-testid={`supplier-statement-${s.id}`}
+        ><FileText className="w-4 h-4" /></button>
         {can('suppliers.manage') && (
           <button onClick={() => openEdit(s)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
         )}
@@ -184,6 +190,13 @@ export function SuppliersPage() {
           </div>
         </div>
       </Modal>
+      <SupplierStatementModal
+        open={!!statementSupplier}
+        supplierId={statementSupplier?.id || null}
+        branchId={statementSupplier?.branch_id || null}
+        currency={currency}
+        onClose={() => setStatementSupplier(null)}
+      />
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
     </DesignSurface>
   );

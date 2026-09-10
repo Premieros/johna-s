@@ -16,6 +16,7 @@ import { exportToExcel } from '@/lib/excel';
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
+import { RawMaterialBranchStockPanel } from '../components/RawMaterialBranchStockPanel';
 import type { Inventory, Warehouse } from '@/lib/types';
 
 export function InventoryPage() {
@@ -142,6 +143,8 @@ export function InventoryPage() {
         <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={can('inventory.adjust') ? openAdjust : undefined} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
+
+      <RawMaterialBranchStockPanel />
 
       <Modal open={!!adjustModal} onClose={() => setAdjustModal(null)} title={t('adjustStock')} size="sm">
         {adjustModal && <div className="space-y-4">

@@ -21,6 +21,7 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
+import { EmployeeCreditPanel } from '@/features/accounting/components/EmployeeCreditPanel';
 import type { Customer } from '@/lib/types';
 
 export function CustomersPage() {
@@ -133,6 +134,7 @@ export function CustomersPage() {
         <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} onRowClick={openEdit} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
+      <EmployeeCreditPanel branchId={branchFilter} currency={currency} />
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('edit') : t('add')}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

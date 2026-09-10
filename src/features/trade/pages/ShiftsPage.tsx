@@ -19,7 +19,8 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import type { Shift, RpcResult } from '@/lib/types';
-import { fetchShiftClosingDetails, buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
+import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
+import { fetchShiftClosingDetailsSafe } from '../services/shiftClosingFinancials';
 
 interface ShiftUserRow { id: string; full_name: string | null; email: string | null; }
 
@@ -110,7 +111,7 @@ export function ShiftsPage() {
   const handlePrintZReport = async (shift: Shift, format: 'thermal' | 'a4') => {
     setPrintingId(shift.id);
     try {
-      const summary = await fetchShiftClosingDetails(shift.id, shift.branch_id);
+      const summary = await fetchShiftClosingDetailsSafe(shift.id, shift.branch_id);
       const html = format === 'thermal'
         ? buildThermalZReportHtml(summary, currency, lang)
         : buildA4ZReportHtml(summary, currency, lang);
@@ -138,10 +139,7 @@ export function ShiftsPage() {
     { key: 'branch', header: t('branch'), render: (r) => <BranchBadge name={r.branch?.name || '-'} /> },
     { key: 'cashier', header: t('cashier'), render: (r) => r.cashier?.full_name || r.cashier?.email || '-' },
     { key: 'status', header: t('shiftStatus'), render: (r) => (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-        r.status === 'open' ? 'bg-ui-success-soft text-ui-success' :
-        'bg-ui-page-alt text-ui-muted'
-      }`}>
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.status === 'open' ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-muted'}`}>
         {t(r.status === 'open' ? 'open' : 'closed')}
       </span>
     )},
@@ -156,28 +154,14 @@ export function ShiftsPage() {
     { key: 'closed_at', header: t('closedAt'), render: (r) => r.closed_at ? <span className="text-sm text-ui-subtle">{formatDateTime(r.closed_at, lang)}</span> : '-' },
     { key: 'actions', header: t('actions'), render: (r) => (
       <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={() => handlePrintZReport(r, 'thermal')}
-          disabled={printingId === r.id}
-          className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info transition"
-          title={isAr ? 'طباعة إيصال Z-Report حراري' : 'Print Thermal Z-Report'}
-        >
+        <button onClick={() => handlePrintZReport(r, 'thermal')} disabled={printingId === r.id} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info transition" title={isAr ? 'طباعة إيصال Z-Report حراري' : 'Print Thermal Z-Report'}>
           <Printer className="w-4 h-4" />
         </button>
-        <button
-          onClick={() => handlePrintZReport(r, 'a4')}
-          disabled={printingId === r.id}
-          className="p-1.5 rounded-md hover:bg-ui-primary-soft text-ui-primary transition"
-          title={isAr ? 'طباعة تقرير إغلاق A4 تفصيلي (المبيعات والمكونات)' : 'Print A4 Full Closing Report'}
-        >
+        <button onClick={() => handlePrintZReport(r, 'a4')} disabled={printingId === r.id} className="p-1.5 rounded-md hover:bg-ui-primary-soft text-ui-primary transition" title={isAr ? 'طباعة تقرير إغلاق A4 تفصيلي (المبيعات والمكونات)' : 'Print A4 Full Closing Report'}>
           <FileText className="w-4 h-4" />
         </button>
         {r.status === 'open' && can('shifts.close') && (
-          <button
-            onClick={() => { setCloseTarget(r); setCloseForm({ actual_amount: r.expected_amount, notes: '' }); }}
-            className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger transition"
-            title={isAr ? 'إغلاق اليوم والوردية' : t('closeShift')}
-          >
+          <button onClick={() => { setCloseTarget(r); setCloseForm({ actual_amount: r.expected_amount, notes: '' }); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger transition" title={isAr ? 'إغلاق اليوم والوردية' : t('closeShift')}>
             <Square className="w-4 h-4" />
           </button>
         )}
@@ -195,10 +179,7 @@ export function ShiftsPage() {
         actions={
           <div className="flex gap-2">
             {openShifts.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => handlePrintZReport(openShifts[0], 'a4')}
-              >
+              <Button variant="outline" onClick={() => handlePrintZReport(openShifts[0], 'a4')}>
                 <CalendarCheck className="w-4 h-4" /> {isAr ? 'تقرير اليومية المباشر' : 'Live Daily Report'}
               </Button>
             )}
@@ -237,8 +218,7 @@ export function ShiftsPage() {
 
       <DesignPanel testId="shifts-search-panel">
         <div className="flex flex-col sm:flex-row gap-3">
-          <DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')}
-            placeholder={isAr ? 'بحث بالفرع أو الكاشير...' : 'Search by branch or cashier...'} testId="shifts-search" />
+          <DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={isAr ? 'بحث بالفرع أو الكاشير...' : 'Search by branch or cashier...'} testId="shifts-search" />
           {!branchFilter && (
             <Select label={t('filterByBranch')} value={branchSel} onChange={(e) => setBranchSel(e.target.value)} className="sm:w-64">
               <option value="">{t('allBranches')}</option>
@@ -260,8 +240,7 @@ export function ShiftsPage() {
               ? `الفرع: ${branches.find((b) => b.id === user?.branch_id)?.name || '-'}`
               : `Branch: ${branches.find((b) => b.id === user?.branch_id)?.name || '-'}`}
           </div>
-          <Input type="number" min={0} step="0.01" label={t('openingAmount')} value={String(openForm.opening_amount)}
-            onChange={(e) => setOpenForm({ ...openForm, opening_amount: Number(e.target.value) })} />
+          <Input type="number" min={0} step="0.01" label={t('openingAmount')} value={String(openForm.opening_amount)} onChange={(e) => setOpenForm({ ...openForm, opening_amount: Number(e.target.value) })} />
           <Textarea label={t('notes')} value={openForm.notes} onChange={(e) => setOpenForm({ ...openForm, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setOpenModal(false)}>{t('cancel')}</Button>
@@ -297,8 +276,7 @@ export function ShiftsPage() {
               </Button>
             </div>
 
-            <Input type="number" min={0} step="0.01" label={isAr ? 'المبلغ الفعلي بالدرج (العد الفعلي) *' : t('actualAmount')} value={String(closeForm.actual_amount)}
-              onChange={(e) => setCloseForm({ ...closeForm, actual_amount: Number(e.target.value) })} />
+            <Input type="number" min={0} step="0.01" label={isAr ? 'المبلغ الفعلي بالدرج (العد الفعلي) *' : t('actualAmount')} value={String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: Number(e.target.value) })} />
             <Textarea label={isAr ? 'ملاحظات إغلاق اليوم والوردية' : t('notes')} value={closeForm.notes} onChange={(e) => setCloseForm({ ...closeForm, notes: e.target.value })} rows={2} />
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={() => setCloseTarget(null)}>{t('cancel')}</Button>
