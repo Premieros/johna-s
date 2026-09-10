@@ -25,9 +25,6 @@ CREATE INDEX IF NOT EXISTS customers_employee_credit_lookup_idx
   ON public.customers(employee_user_id, branch_id)
   WHERE employee_user_id IS NOT NULL;
 
--- Supplier statement is derived from posted purchase invoices and supplier payments.
--- Purchase returns are already represented by purchases.returned_amount, so the invoice
--- debit is net of returns. This avoids inventing a return date that does not exist.
 CREATE OR REPLACE FUNCTION public.get_supplier_statement(
   p_supplier_id uuid,
   p_branch_id uuid
@@ -151,9 +148,6 @@ BEGIN
 END;
 $$;
 
--- Employee credit uses the existing AR machinery through a branch-scoped internal
--- customer linked to the employee. This keeps one receivables ledger and avoids a
--- second balance source of truth.
 CREATE OR REPLACE FUNCTION public.process_employee_credit_sale(
   p_invoice_number text,
   p_branch_id uuid,
@@ -234,10 +228,8 @@ BEGIN
     RETURNING id INTO v_customer_id;
   END IF;
 
-  -- Reuse the proven sale transaction for authorization, totals, discounts,
-  -- kitchen settlement, inventory, order completion and audit boundaries.
-  -- It is temporarily collected as cash only inside this outer subtransaction;
-  -- immediately below we atomically reclassify the collection to AR.
+  -- Reuse the canonical sale transaction for totals, stock, approvals and order settlement.
+  -- The temporary collection is atomically reclassified to AR before this function returns.
   v_core := public.process_sale(
     p_invoice_number,
     p_branch_id,
@@ -275,21 +267,28 @@ BEGIN
     RAISE EXCEPTION 'EMPLOYEE_CREDIT_SALE_NOT_FOUND_AFTER_CORE';
   END IF;
 
-  -- The sale is a receivable, not cash received.
   UPDATE public.sales
   SET customer_id = v_customer_id,
       paid_amount = 0,
       payment_method = 'employee_credit'
   WHERE id = v_sale_id AND branch_id = p_branch_id;
 
-  -- Remove the temporary cash collection from the shift. Credit must never
-  -- inflate expected drawer cash. The shift report derives credit from sales.
+  -- Preserve shift attribution with a zero-value receivable marker. close_shift only
+  -- counts cash movements, so employee credit can never inflate expected drawer cash.
   DELETE FROM public.shift_operations
   WHERE reference_type = 'sale'
     AND reference_id = v_sale_id
     AND operation_type = 'sale';
 
-  -- Reclassify only the collection debit in the existing sale journal.
+  IF p_shift_id IS NOT NULL THEN
+    INSERT INTO public.shift_operations(
+      shift_id, operation_type, amount, payment_method, reference_type, reference_id, created_by
+    )
+    VALUES (
+      p_shift_id, 'sale', 0, 'employee_credit', 'sale', v_sale_id, auth.uid()
+    );
+  END IF;
+
   SELECT je.id INTO v_entry_id
   FROM public.journal_entries je
   WHERE je.branch_id = p_branch_id
@@ -412,8 +411,6 @@ BEGIN
   IF NOT public.can_permission('employees.credit.settle') THEN
     RETURN jsonb_build_object('success', false, 'error', 'PERMISSION_DENIED', 'permission', 'employees.credit.settle');
   END IF;
-  -- Keep the canonical customer-payment permission too; the new permission is
-  -- an additional scope, never a bypass around the existing accounting control.
   IF NOT public.can_permission('sales.payment.receive') THEN
     RETURN jsonb_build_object('success', false, 'error', 'PERMISSION_DENIED', 'permission', 'sales.payment.receive');
   END IF;
