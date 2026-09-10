@@ -11,6 +11,8 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(source).not.toContain(".eq('shift_id', shiftId);\n\n  const salesList");
     expect(source).toContain("customer:customers(employee_user_id)");
     expect(source).toContain("sale.customer?.employee_user_id ? 'employee_credit' : 'credit'");
+    expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)');
+    expect(source).not.toContain('unit:units(name,symbol)');
   });
 
   it('keeps employee credit on the existing POS credit flow', () => {
