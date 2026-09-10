@@ -19,6 +19,7 @@ type SaleRow = {
   refunded_amount: number | null;
   payment_method: string;
   order_type: string;
+  customer?: { employee_user_id?: string | null } | null;
   sale_items?: Array<{
     product_id: string;
     unit_name?: string;
@@ -48,12 +49,11 @@ const ORDER_LABELS: Record<string, string> = {
 
 /**
  * Authoritative shift closing reader.
- *
  * A shift is linked to sales through shift_operations.reference_id; `sales`
- * deliberately has no shift_id column. Cash/card/transfer totals are therefore
- * derived from the recorded shift movements, including one row per split tender.
- * Receivables are derived from the linked sale's open amount and never counted as
- * drawer cash.
+ * deliberately has no shift_id column. Physical tenders are derived from the
+ * recorded shift movements. Receivables are derived from the linked sale open
+ * amount and never counted as drawer cash. Employee credit remains the standard
+ * customer-credit flow and is classified only by customers.employee_user_id.
  */
 export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: string): Promise<ShiftClosingSummary> {
   const { data: shift, error: shiftErr } = await supabase
@@ -89,11 +89,11 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   if (saleIds.length > 0) {
     const { data: sales, error: salesErr } = await supabase
       .from('sales')
-      .select('id,subtotal,discount_amount,tax_amount,total,paid_amount,refunded_amount,payment_method,order_type,sale_items(product_id,unit_name,quantity,unit_price,total,product:products(name,name_en))')
+      .select('id,subtotal,discount_amount,tax_amount,total,paid_amount,refunded_amount,payment_method,order_type,customer:customers(employee_user_id),sale_items(product_id,unit_name,quantity,unit_price,total,product:products(name,name_en))')
       .eq('branch_id', effectiveBranchId)
       .in('id', saleIds);
     if (salesErr) throw new Error(salesErr.message);
-    salesList = (sales || []) as SaleRow[];
+    salesList = (sales || []) as unknown as SaleRow[];
   }
 
   let grossSales = 0;
@@ -104,12 +104,10 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   const orderTypeMap = new Map<string, { count: number; total: number }>();
   const productMap = new Map<string, { name: string; quantity: number; unitName: string; total: number }>();
 
-  // Physical/settled tenders come from shift operations. Split payment already
-  // records one operation per tender, so no invoice total is duplicated here.
   for (const op of operations) {
     if (!op.payment_method) continue;
     if (op.operation_type !== 'sale' && op.operation_type !== 'refund') continue;
-    if (op.payment_method === 'employee_credit' || op.payment_method === 'credit') continue;
+    if (op.payment_method === 'credit') continue;
     const signed = op.operation_type === 'refund' ? -Number(op.amount || 0) : Number(op.amount || 0);
     const current = paymentMap.get(op.payment_method) || { count: 0, total: 0 };
     current.count += 1;
@@ -128,7 +126,7 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
       Number(sale.total || 0) - Number(sale.paid_amount || 0) - Number(sale.refunded_amount || 0),
     );
     if (openAmount > 0.009) {
-      const method = sale.payment_method === 'employee_credit' ? 'employee_credit' : 'credit';
+      const method = sale.customer?.employee_user_id ? 'employee_credit' : 'credit';
       const current = paymentMap.get(method) || { count: 0, total: 0 };
       current.count += 1;
       current.total += openAmount;
