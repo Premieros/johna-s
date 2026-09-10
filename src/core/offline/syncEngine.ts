@@ -120,6 +120,46 @@ class OfflineSyncEngine {
     this.emit();
   }
 
+  private async resolveReplayWarehouse(item: OfflineSaleQueueItem): Promise<string | null> {
+    const existingWarehouseId = String(item.payload.p_warehouse_id || '').trim();
+    if (existingWarehouseId) return existingWarehouseId;
+
+    const branchId = String(item.payload.p_branch_id || '').trim();
+    if (!branchId) return null;
+
+    const orderId = String(item.payload.p_order_id || '').trim();
+    if (orderId) {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('inventory_warehouse_id')
+          .eq('id', orderId)
+          .eq('branch_id', branchId)
+          .maybeSingle();
+        if (error) return null;
+        return String((data as { inventory_warehouse_id?: string | null } | null)?.inventory_warehouse_id || '').trim() || null;
+      } catch {
+        return null;
+      }
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('warehouses')
+        .select('id,is_default,created_at')
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+      if (error) return null;
+      const rows = (data as { id: string }[] | null) || [];
+      return rows[0]?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
   private async reconcileCommittedSale(item: OfflineSaleQueueItem): Promise<SaleSyncResponse | null> {
     const branchId = String(item.payload.p_branch_id || '');
     const paidAmount = Number(item.payload.p_paid_amount);
@@ -200,12 +240,21 @@ class OfflineSyncEngine {
       try {
         await updateOfflineSaleStatus(item.id, 'syncing');
 
+        // Offline capture intentionally does not invent a warehouse. Once back
+        // online, resolve the linked order's pinned inventory warehouse, or the
+        // branch's deterministic active default for a direct sale, before any
+        // financial write. Missing warehouse stays fail-closed in the outbox.
+        const warehouseId = await this.resolveReplayWarehouse(item);
+        if (!warehouseId) throw new Error('WAREHOUSE_REQUIRED_OFFLINE_SYNC');
+        const replayPayload = {
+          ...item.payload,
+          p_warehouse_id: warehouseId,
+        } as unknown as Parameters<typeof posApi.processSale>[0];
+
         // Call the authoritative sale RPC. A sync is confirmed only by an
         // explicit success=true plus a durable sale_id; null/undefined data is
         // never treated as success.
-        const { data, error } = await posApi.processSale(
-          item.payload as unknown as Parameters<typeof posApi.processSale>[0]
-        );
+        const { data, error } = await posApi.processSale(replayPayload);
         const res = data as SaleSyncResponse | null;
 
         let confirmed = !error && res?.success === true && Boolean(res.sale_id);
