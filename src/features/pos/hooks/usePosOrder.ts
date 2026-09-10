@@ -102,7 +102,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         isAr
           ? 'تم حفظ العملية محليًا كمعلّقة للمزامنة. لم يتم تسجيل البيع أو الدفع نهائيًا بعد.'
           : 'Saved locally as pending sync. The sale/payment is not final until the server confirms it.',
-        'success',
+        'warning',
       );
       return true;
     } catch (error) {
