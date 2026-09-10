@@ -35,7 +35,7 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(migration).toContain('RETURN public.receive_payment(');
   });
 
-  it('shows raw-material stock only for an explicitly selected branch', () => {
+  it('shows raw-material stock only for an explicitly selected branch using the canonical measurement unit relation', () => {
     const panel = read('src/features/inventory/components/RawMaterialBranchStockPanel.tsx');
     const inventoryPage = read('src/features/inventory/pages/InventoryPage.tsx');
     expect(inventoryPage).toContain('<RawMaterialBranchStockPanel />');
@@ -45,5 +45,7 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(panel).not.toContain('branches[0]');
     expect(panel).not.toMatch(/selectedBranchId\s*\|\|\s*branches/);
     expect(panel).toContain("row.branch_id === selectedBranchId");
+    expect(panel).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)');
+    expect(panel).not.toContain('unit:units(name,symbol)');
   });
 });
