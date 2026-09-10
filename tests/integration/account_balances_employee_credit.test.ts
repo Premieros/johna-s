@@ -100,26 +100,31 @@ describe.skipIf(!dbUrl)('supplier statements and employee receivables', () => {
   });
 
   guarded('reconciles supplier total paid without double-counting recorded payments', async () => {
+    const supplierId = randomUUID();
     const purchaseId = randomUUID();
     const paymentId = randomUUID();
+    await client.query(
+      `INSERT INTO public.suppliers (id, name, branch_id) VALUES ($1,'Statement Fixture Supplier',$2)`,
+      [supplierId, ids.branchA],
+    );
     await client.query(
       `INSERT INTO public.purchases
         (id, invoice_number, supplier_id, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status, created_at)
        VALUES ($1,$2,$3,$4,$5,100,0,0,100,50,'cash','completed',now() - interval '1 hour')`,
-      [purchaseId, `SUP-ST-${purchaseId.slice(0, 8)}`, ids.suppA, ids.branchA, ids.whA],
+      [purchaseId, `SUP-ST-${purchaseId.slice(0, 8)}`, supplierId, ids.branchA, ids.whA],
     );
     await client.query(
       `INSERT INTO public.supplier_payments
         (id, supplier_id, branch_id, amount, payment_method, purchase_id, reference_number, created_at)
        VALUES ($1,$2,$3,20,'cash',$4,$5,now())`,
-      [paymentId, ids.suppA, ids.branchA, purchaseId, `SUP-PAY-${paymentId.slice(0, 8)}`],
+      [paymentId, supplierId, ids.branchA, purchaseId, `SUP-PAY-${paymentId.slice(0, 8)}`],
     );
 
     const statement = await runAs(
       client,
       ids.users.branch_manager,
       'SELECT public.get_supplier_statement($1,$2) AS result',
-      [ids.suppA, ids.branchA],
+      [supplierId, ids.branchA],
     );
     expect(statement.error).toBeUndefined();
     const payload = rpcResult(statement.rows[0]);
