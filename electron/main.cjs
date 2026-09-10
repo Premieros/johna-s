@@ -9,6 +9,10 @@ const { execFile } = require('child_process');
 
 const DEFAULT_URL = 'https://premieros.github.io/johna-s/';
 const TRUSTED_ORIGIN = 'https://premieros.github.io';
+const DEFAULT_THERMAL_WIDTH_MM = 80;
+const THERMAL_BOTTOM_FEED_MM = 5;
+const PX_PER_INCH = 96;
+const MICRONS_PER_INCH = 25400;
 let mainWindow = null;
 let printWorkerWindow = null;
 
@@ -48,17 +52,54 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function textToPrintableHtml(text) {
+function normalizeThermalWidthMm(value) {
+  const width = Number(value);
+  return width === 58 ? 58 : DEFAULT_THERMAL_WIDTH_MM;
+}
+
+function thermalCss(widthMm) {
+  return `
+<style id="premier-thermal-page">
+  @page { size: ${widthMm}mm auto; margin: 0; }
+  html, body {
+    width: ${widthMm}mm !important;
+    min-width: ${widthMm}mm !important;
+    max-width: ${widthMm}mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    overflow: visible !important;
+  }
+  body { box-sizing: border-box !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>`;
+}
+
+function applyThermalLayout(html, widthMm) {
+  const css = thermalCss(widthMm);
+  const title = '<title>Premier POS Thermal</title>';
+  let normalized = String(html || '');
+  if (/<head[\s>]/i.test(normalized)) {
+    normalized = normalized.replace(/<head([^>]*)>/i, `<head$1>${title}${css}`);
+  } else if (/<html[\s>]/i.test(normalized)) {
+    normalized = normalized.replace(/<html([^>]*)>/i, `<html$1><head>${title}${css}</head>`);
+  } else {
+    normalized = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">${title}${css}</head><body>${normalized}</body></html>`;
+  }
+  return normalized;
+}
+
+function textToPrintableHtml(text, widthMm) {
   const safe = escapeHtml(text);
-  return `<!doctype html>
+  return applyThermalLayout(`<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <style>
-  @page { margin: 0; }
-  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
   body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
   pre {
+    width: 100%;
     margin: 0;
     padding: 2mm;
     white-space: pre-wrap;
@@ -66,13 +107,32 @@ function textToPrintableHtml(text) {
     direction: rtl;
     text-align: right;
     font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: 13px;
+    line-height: 1.3;
   }
 </style>
 </head>
 <body><pre>${safe}</pre></body>
-</html>`;
+</html>`, widthMm);
+}
+
+async function measureThermalPageSize(worker, widthMm) {
+  const heightPx = await worker.webContents.executeJavaScript(`(() => {
+    const body = document.body;
+    const root = document.documentElement;
+    return Math.ceil(Math.max(
+      body ? body.scrollHeight : 0,
+      body ? body.offsetHeight : 0,
+      root ? root.scrollHeight : 0,
+      root ? root.offsetHeight : 0
+    ));
+  })()`);
+  if (!Number.isFinite(heightPx) || heightPx <= 0) throw new Error('THERMAL_PAGE_SIZE_FAILED');
+  const contentMicrons = Math.ceil((heightPx * MICRONS_PER_INCH) / PX_PER_INCH);
+  const minHeightMicrons = 30000;
+  const maxHeightMicrons = 3000000;
+  const height = Math.min(maxHeightMicrons, Math.max(minHeightMicrons, contentMicrons + (THERMAL_BOTTOM_FEED_MM * 1000)));
+  return { width: widthMm * 1000, height };
 }
 
 function createWindow() {
@@ -146,14 +206,18 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
   const html = typeof options.html === 'string' ? options.html : '';
   const text = typeof options.text === 'string' ? options.text : '';
   const copies = Math.max(1, Math.min(5, Number(options.copies || 1)));
+  const paperWidthMm = normalizeThermalWidthMm(options.paperWidthMm);
 
   if (!printerName) return { success: false, error: 'PRINTER_NAME_REQUIRED' };
   if (!html && !text) return { success: false, error: 'NO_CONTENT_TO_PRINT' };
 
   try {
     const worker = createPrintWorker();
-    const printableHtml = html || textToPrintableHtml(text);
+    const printableHtml = html
+      ? applyThermalLayout(html, paperWidthMm)
+      : textToPrintableHtml(text, paperWidthMm);
     await worker.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printableHtml)}`);
+    const pageSize = await measureThermalPageSize(worker, paperWidthMm);
 
     return await new Promise((resolve) => {
       worker.webContents.print(
@@ -162,6 +226,7 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
           printBackground: true,
           deviceName: printerName,
           copies,
+          pageSize,
           margins: { marginType: 'none' },
         },
         (success, failureReason) => {
