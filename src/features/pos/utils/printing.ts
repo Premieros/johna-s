@@ -2,6 +2,12 @@ import type { Language, Settings } from '@/lib/types';
 import { formatCurrency, escapeHtml } from '@/lib/format';
 import { generateQRCodeDataURL } from '@/lib/barcode';
 import { supabase } from '@/api';
+import {
+  executeSilentPrint,
+  getLocalPrinterRoutes,
+  isRunningInElectron,
+  isSilentPrintEnabled,
+} from '../services/localPrintAgent';
 
 export interface ReceiptData {
   invoice: string;
@@ -35,13 +41,18 @@ type ReceiptPrintAuthorization = {
   approvalRequestId: string | null;
 };
 
+type PendingReceiptPrint = {
+  authorization: ReceiptPrintAuthorization;
+  plainText: string;
+};
+
 type ApprovalRow = {
   id: string;
   status: 'pending' | 'approved' | 'rejected' | 'expired' | 'consumed';
   expires_at: string;
 };
 
-const pendingReceiptPrints = new Map<string, ReceiptPrintAuthorization>();
+const pendingReceiptPrints = new Map<string, PendingReceiptPrint>();
 
 export class ReceiptPrintApprovalError extends Error {
   code: string;
@@ -55,8 +66,7 @@ export class ReceiptPrintApprovalError extends Error {
 
 /**
  * Check whether the current user may print. This function is intentionally
- * non-mutating: the database must not count a print until the print path has
- * actually opened and the browser print dialog has run.
+ * non-mutating: authorization alone must never create a successful print event.
  */
 async function authorizeReceiptPrint(receipt: ReceiptData): Promise<ReceiptPrintAuthorization> {
   const invoice = receipt.invoice?.trim();
@@ -168,37 +178,94 @@ function receiptPrintToken(html: string): string | null {
   return html.match(/<meta name="johns-print-auth" content="([^"]+)">/)?.[1] || null;
 }
 
+function buildReceiptPlainText(receipt: ReceiptData, s: Settings, lang: Language, isAr: boolean): string {
+  const currency = s.currency || 'EGP';
+  const lines: string[] = [];
+  const row = (label: string, value: string) => lines.push(`${label}: ${value}`);
+  lines.push(String(s.store_name || '').trim());
+  if (s.store_address) lines.push(String(s.store_address).trim());
+  if (s.store_phone) row(isAr ? 'هاتف' : 'Tel', String(s.store_phone));
+  if (s.receipt_header) lines.push(String(s.receipt_header));
+  row(isAr ? 'الفرع' : 'Branch', receipt.branchName);
+  lines.push('--------------------------------');
+  row(isAr ? 'الفاتورة' : 'Invoice', receipt.invoice);
+  row(isAr ? 'التاريخ' : 'Date', new Date(receipt.date).toLocaleString(isAr ? 'ar-EG' : 'en-US'));
+  if (receipt.orderTypeLabel) row(isAr ? 'النوع' : 'Type', receipt.orderTypeLabel);
+  if (receipt.orderNumber) row(isAr ? 'الطلب' : 'Order', receipt.orderNumber);
+  if (receipt.tableName) row(isAr ? 'طاولة' : 'Table', receipt.tableName);
+  if (receipt.guestCount) row(isAr ? 'الضيوف' : 'Guests', String(receipt.guestCount));
+  if (receipt.customerName) row(isAr ? 'العميل' : 'Customer', receipt.customerName);
+  if (receipt.operatorName) row(isAr ? 'المستخدم' : 'User', receipt.operatorName);
+  lines.push('--------------------------------');
+  for (const item of receipt.items) {
+    lines.push(item.name);
+    lines.push(`${item.qty} x ${formatCurrency(item.price, currency, lang)}    ${formatCurrency(item.total, currency, lang)}`);
+  }
+  lines.push('--------------------------------');
+  row(isAr ? 'المجموع الفرعي' : 'Subtotal', formatCurrency(receipt.subtotal, currency, lang));
+  if (receipt.discount > 0) row(isAr ? 'الخصم' : 'Discount', `-${formatCurrency(receipt.discount, currency, lang)}`);
+  if (s.receipt_show_tax !== false && receipt.tax > 0) row(isAr ? 'الضريبة' : 'Tax', formatCurrency(receipt.tax, currency, lang));
+  row(isAr ? 'الإجمالي' : 'Total', formatCurrency(receipt.total, currency, lang));
+  row(isAr ? 'المدفوع' : 'Paid', formatCurrency(receipt.paid, currency, lang));
+  if (receipt.change > 0) row(isAr ? 'الباقي' : 'Change', formatCurrency(receipt.change, currency, lang));
+  lines.push('--------------------------------');
+  if (s.receipt_footer) lines.push(String(s.receipt_footer));
+  lines.push(isAr ? 'شكراً لزيارتكم' : 'Thank you!');
+  const one = `${lines.join('\r\n')}\r\n\r\n`;
+  const copies = Math.max(1, Math.min(5, s.receipt_copies || 1));
+  return Array.from({ length: copies }, () => one).join('\r\n\f\r\n');
+}
+
 export function openPrintWindow(html: string, widthMm: number): boolean {
   const win = window.open('', '_blank', `width=${Math.min(500, widthMm + 140)},height=600`);
   if (!win) return false;
 
   const token = receiptPrintToken(html);
-  const authorization = token ? pendingReceiptPrints.get(token) ?? null : null;
+  const pending = token ? pendingReceiptPrints.get(token) ?? null : null;
   if (token) pendingReceiptPrints.delete(token);
 
   win.document.write(html);
   win.document.close();
 
-  // Kitchen/browser fallback tickets keep their embedded print script. Official
-  // receipts carry an authorization token and are printed here so authorization
-  // never mutates the database before the print path exists.
-  if (!authorization) return true;
+  // Kitchen/browser fallback tickets keep their embedded print script.
+  if (!pending) return true;
 
   const runReceiptPrint = async () => {
     if (win.closed) return;
     try {
+      const routes = getLocalPrinterRoutes();
+      const printerName = routes.cashier || routes.receipt || routes.main || '';
+      let accepted = false;
+      if (printerName && isSilentPrintEnabled()) {
+        accepted = await executeSilentPrint({
+          printerName,
+          ...(isRunningInElectron() ? { html } : { text: pending.plainText }),
+        });
+      }
+
+      if (accepted) {
+        // sale_print_events and the SALE_PRINTED audit entry are created only
+        // after Electron/Print Agent explicitly confirms that it accepted the
+        // physical print command. Missing/rejecting agents can never be logged
+        // as a successful official print.
+        await recordReceiptPrint(pending.authorization);
+        if (!win.closed) win.close();
+        return;
+      }
+
+      // Browser print dialogs cannot report whether the user actually printed or
+      // cancelled. Keep this as an unconfirmed fallback: allow the operator to
+      // print, but deliberately do not create a successful print event.
+      console.warn('[receipt-print] local print not confirmed; browser fallback is not recorded as printed');
       win.focus();
       win.print();
-      // window.print() returns only after the print dialog closes. Persist the
-      // print event afterwards; a blocked/missing window can never be recorded.
-      await recordReceiptPrint(authorization);
       window.setTimeout(() => {
         if (!win.closed) win.close();
       }, 300);
     } catch (error) {
-      console.error('[receipt-print] print record failed', error);
+      console.error('[receipt-print] confirmed print record failed', error);
       if (!win.closed) {
-        const message = error instanceof Error ? error.message : 'Receipt print could not be recorded';
+        const message = error instanceof Error ? error.message : 'Receipt print could not be confirmed';
         win.document.body.innerHTML = `<pre style="white-space:pre-wrap;padding:20px;font-family:sans-serif">${escapeHtml(message)}</pre>`;
       }
     }
@@ -215,7 +282,10 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
 export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: Language, isAr: boolean): Promise<string> {
   const authorization = await authorizeReceiptPrint(receipt);
   const printToken = newPrintToken();
-  pendingReceiptPrints.set(printToken, authorization);
+  pendingReceiptPrints.set(printToken, {
+    authorization,
+    plainText: buildReceiptPlainText(receipt, s, lang, isAr),
+  });
   window.setTimeout(() => pendingReceiptPrints.delete(printToken), 60_000);
 
   const width = Math.max(50, Math.min(100, s.receipt_width_mm || 80));
