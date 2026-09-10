@@ -51,7 +51,7 @@ describe('offline sale originating-user contract', () => {
   });
 
   it('enforces the same owner identity at the database reconciliation boundary', () => {
-    const migration = read('supabase/migrations/20260910008000_offline_sale_owner_reconciliation.sql');
+    const migration = read('supabase/migrations/20260910094025_offline_sale_owner_reconciliation.sql');
 
     expect(migration).toContain('v_sale.cashier_id IS DISTINCT FROM auth.uid()');
     expect(migration).toContain("'OFFLINE_SALE_OWNER_MISMATCH'");
