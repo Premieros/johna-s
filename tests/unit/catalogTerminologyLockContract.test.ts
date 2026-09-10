@@ -26,6 +26,15 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(menu).toContain("label: { ar: 'المصنعات', en: 'Manufactured Items' }");
   });
 
+  it('shows immutable raw measurement units when composing manufactured-item recipes', () => {
+    const source = read('src/features/catalog/pages/InventoryUnitsPage.tsx');
+
+    expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
+    expect(source).toContain('materialLabel(material)');
+    expect(source).toContain("'لا يمكن استخدام خامة بدون وحدة قياس. حدد وحدة الخامة أولًا.'");
+    expect(source).toContain("const recipeBranchId = unit.branch_id || branchFilter || ''");
+  });
+
   it('keeps product creation free of product measurement units and links only manufactured inventory items', () => {
     const source = read('src/features/catalog/pages/ProductSetupWizardPage.tsx');
 
@@ -34,5 +43,14 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(source).toContain('Products do not have measurement units.');
     expect(source).not.toContain("'وحدات المنتج'");
     expect(source).not.toContain("'Product units'");
+  });
+
+  it('shows each raw-material unit in product selection, quantity entry, and review', () => {
+    const source = read('src/features/catalog/pages/ProductSetupWizardPage.tsx');
+
+    expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
+    expect(source).toContain('rawMaterialLabel(material)');
+    expect(source).toContain('rawUnitLabel(material)');
+    expect(source).toContain("'لا يمكن استخدام خامة بدون وحدة قياس. افتح الخامة وحدد وحدتها أولًا.'");
   });
 });
