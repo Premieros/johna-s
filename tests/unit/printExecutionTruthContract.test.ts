@@ -57,6 +57,7 @@ describe('print execution truth contract', () => {
   it('treats missing or rejecting local Print Agent as failure, never success', () => {
     const localAgent = read('src/features/pos/services/localPrintAgent.ts');
     const executeSilent = between(localAgent, 'export async function executeSilentPrint', 'export async function executeCashDrawerKick');
+    const drawer = between(localAgent, 'export async function executeCashDrawerKick', '/**\n * Print each authoritative kitchen station group');
     const kitchen = between(localAgent, 'export async function printKitchenStationsLocally', 'export function suppressNextKitchenBrowserPopup');
     const agent = read('local-print-agent/agent.cjs');
 
@@ -64,6 +65,11 @@ describe('print execution truth contract', () => {
     expect(executeSilent).toContain('if (!response.ok) return false');
     expect(executeSilent).toContain('return Boolean(result.success)');
     expect(executeSilent).toContain('catch {\n    return false;');
+
+    expect(drawer).toContain("fetchWithTimeout(`${PRINT_AGENT_URL}/drawer`");
+    expect(drawer).toContain('if (!response.ok) return false');
+    expect(drawer).toContain('return Boolean(result.success)');
+    expect(drawer).toContain('catch {\n    return false;');
 
     expect(kitchen).toContain("fetchWithTimeout(`${PRINT_AGENT_URL}/health`)");
     expect(kitchen).toContain('if (!health.ok) return false');
@@ -75,6 +81,10 @@ describe('print execution truth contract', () => {
     expect(agent).toContain("if (req.method === 'POST' && url.pathname === '/print')");
     expect(agent).toContain('await printText(printer, text);');
     expect(agent.indexOf('await printText(printer, text);')).toBeLessThan(agent.indexOf("return json(res, 200, { success: true, station, printer });"));
+    expect(agent).toContain("if (req.method === 'POST' && url.pathname === '/drawer')");
+    expect(agent).toContain('Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])');
+    expect(agent).toContain('await kickDrawer(printer);');
+    expect(agent.indexOf('await kickDrawer(printer);')).toBeLessThan(agent.indexOf("return json(res, 200, { success: true, printer });"));
     expect(agent).toContain("return json(res, 500, { success: false");
   });
 
