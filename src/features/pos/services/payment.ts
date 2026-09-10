@@ -1,5 +1,5 @@
 import { pos as posApi, supabase, type SplitTenderInput } from '@/api';
-import { enqueueOfflineSale } from '@/core/offline/offlineStorage';
+import { enqueueOfflineSale, type OfflineSaleQueueItem } from '@/core/offline/offlineStorage';
 import type { RpcResult, OrderType } from '@/lib/types';
 import type { ItemPayload } from '../utils/cart';
 
@@ -33,6 +33,10 @@ export interface ProcessSplitSalePayload extends Omit<ProcessSalePayload, 'p_pai
 export type ProcessSaleResult = RpcResult & {
   offline?: boolean;
   pending_sync?: boolean;
+};
+
+type OwnedOfflineSaleQueueItem = Omit<OfflineSaleQueueItem, 'status' | 'retry_count'> & {
+  created_by_user_id: string;
 };
 
 let armedSplitTender: SplitTenderInput[] | null = null;
@@ -69,14 +73,25 @@ function createOfflineToken(): string {
 
 async function queueOfflineSale(p: ProcessSalePayload): Promise<string> {
   if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE');
+
+  // getSession() reads the persisted local Supabase session and therefore works
+  // while offline. Never accept a financially relevant outbox row without a
+  // durable originating user identity: a later login on the same device must not
+  // be able to sync this sale under a different cashier.
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const originatingUserId = sessionData.session?.user?.id || null;
+  if (sessionError || !originatingUserId) throw new Error('AUTH_REQUIRED_OFFLINE');
+
   const id = `offline_sale_${createOfflineToken()}`;
-  await enqueueOfflineSale({
+  const queuedSale: OwnedOfflineSaleQueueItem = {
     id,
     client_id: id,
+    created_by_user_id: originatingUserId,
     invoice_number: p.p_invoice_number,
     created_at: new Date().toISOString(),
     payload: p as unknown as Record<string, unknown>,
-  });
+  };
+  await enqueueOfflineSale(queuedSale);
   return id;
 }
 
