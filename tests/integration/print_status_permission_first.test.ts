@@ -183,10 +183,14 @@ describe.skipIf(skip)('print status permission-first boundary', () => {
 
   it('blocks direct print-only mutation without pos.receipt.print', async () => {
     await asUser(noPrintUser, async () => {
+      // Force a real print-state transition. The prior test leaves this order as
+      // `printed`, and PostgreSQL now() is transaction-stable; repeating
+      // printed -> printed would be a no-op and would not exercise the dedicated
+      // print-only permission branch at all.
       await expectDbError(
         () => client.query(
           `UPDATE public.orders
-           SET print_status = 'printed', printed_at = now(), updated_at = now()
+           SET print_status = 'failed', printed_at = NULL, updated_at = clock_timestamp()
            WHERE id = $1`,
           [orderA],
         ),
