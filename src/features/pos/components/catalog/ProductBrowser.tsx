@@ -33,7 +33,7 @@ interface ProductBrowserProps {
 
 const hasStockValue = (map: Record<string, number>, productId: string) => Object.prototype.hasOwnProperty.call(map, productId);
 
-export function ProductBrowser({ products, categories, stockMap, sellableStock, recipeMap, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export function ProductBrowser({ products, categories, stockMap, sellableStock, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -56,12 +56,12 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
       const bKnown = hasStockValue(bSource, b.id);
       const aStock = aKnown ? aSource[a.id] : 0;
       const bStock = bKnown ? bSource[b.id] : 0;
-      const aAvailable = aKnown && aStock > 0 && !(aManufactured && !recipeMap[a.id]?.length);
-      const bAvailable = bKnown && bStock > 0 && !(bManufactured && !recipeMap[b.id]?.length);
+      const aAvailable = aKnown && aStock > 0;
+      const bAvailable = bKnown && bStock > 0;
       if (aAvailable !== bAvailable) return Number(bAvailable) - Number(aAvailable);
       if (aKnown !== bKnown) return Number(bKnown) - Number(aKnown);
       return 0;
-    }), [products, recipeMap, search, selectedCategory, sellableStock, stockMap]);
+    }), [products, search, selectedCategory, sellableStock, stockMap]);
   const counts = useMemo(() => products.reduce<Record<string, number>>((accumulator, product) => {
     const key = product.category_id || '_none';
     accumulator[key] = (accumulator[key] || 0) + 1;
@@ -92,23 +92,25 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
   }, [branchId, hasBranch]);
 
   const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;
-  const selectProduct = (product: Product) => {
-    if (!canAddToCart) return;
+  const ensureSellable = (product: Product) => {
     const source = product.product_type === 'manufactured' ? sellableStock : stockMap;
     if (!hasStockValue(source, product.id)) {
       show(isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.', 'error');
-      return;
+      return false;
     }
+    if ((source[product.id] || 0) <= 0) {
+      show(isAr ? 'المنتج غير متوفر بالمخزون.' : 'Product is out of stock.', 'error');
+      return false;
+    }
+    return true;
+  };
+  const selectProduct = (product: Product) => {
+    if (!canAddToCart || !ensureSellable(product)) return;
     if (onConfigureProduct) onConfigureProduct(product);
     else onAddToCart(product);
   };
   const addProductDirectly = (product: Product) => {
-    if (!canAddToCart) return;
-    const source = product.product_type === 'manufactured' ? sellableStock : stockMap;
-    if (!hasStockValue(source, product.id)) {
-      show(isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.', 'error');
-      return;
-    }
+    if (!canAddToCart || !ensureSellable(product)) return;
     onAddToCart(product);
   };
 
@@ -158,13 +160,12 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
           <div className="grid grid-cols-[repeat(auto-fill,minmax(138px,1fr))] gap-3" data-testid="pos-product-grid">
             {filteredProducts.map((product) => {
               const manufactured = product.product_type === 'manufactured';
-              const noRecipe = manufactured && !recipeMap[product.id]?.length;
               const source = manufactured ? sellableStock : stockMap;
               const stockKnown = hasStockValue(source, product.id);
               const stock = stockKnown ? source[product.id] : 0;
               const unavailable = stockKnown && stock <= 0;
-              const unknownAvailability = !stockKnown && !noRecipe;
-              const blocked = unavailable || unknownAvailability || noRecipe || !canAddToCart;
+              const unknownAvailability = !stockKnown;
+              const blocked = unavailable || unknownAvailability || !canAddToCart;
               const productLabel = isAr ? product.name : product.name_en || product.name;
               const categoryLabel = product.category_id ? categoryById[product.category_id] : '';
               const imageUrl = imageOverrides[product.id] || product.image_url;
@@ -173,7 +174,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${blocked ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={blocked} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${blocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${noRecipe || unavailable ? 'bg-ui-danger/90' : unknownAvailability ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{noRecipe ? t('noRecipe') : unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
+                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${unavailable ? 'bg-ui-danger/90' : unknownAvailability ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
                   </button>
                   {can('products.edit') && (
                     <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>

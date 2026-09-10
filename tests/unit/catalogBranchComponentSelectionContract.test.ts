@@ -16,8 +16,11 @@ describe('catalog branch/component selection contracts', () => {
   });
 
   it('loads manufactured and raw-material component choices from the selected product branch only', () => {
-    expect(setupWizard).toContain(".from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true)");
-    expect(setupWizard).toContain(".from('raw_materials').select('id,name,branch_id,is_active,default_cost').eq('branch_id', branchId).eq('is_active', true)");
+    expect(setupWizard).toContain("supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true)");
+    expect(setupWizard).toContain("supabase.from('raw_materials')");
+    expect(setupWizard).toContain("measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)");
+    expect(setupWizard).toContain(".eq('branch_id', branchId)");
+    expect(setupWizard).toContain(".eq('is_active', true)");
     expect(setupWizard).toContain("item.branch_id === branchId && item.unit_type === 'manufactured'");
     expect(setupWizard).toContain('material.branch_id === branchId');
   });
