@@ -4,10 +4,6 @@ export type { Role };
 
 /**
  * Canonical permission model.
- *
- * Only one permission name exists for each operational capability. Historical
- * aliases may still exist inside old migrations, but they are intentionally not
- * exposed to UI, role templates, policy selectors, or new application code.
  * Super Admin remains the only implicit platform-wide bypass.
  */
 export type Permission =
@@ -41,6 +37,7 @@ export type Permission =
   | 'suppliers.view' | 'suppliers.manage'
   | 'expenses.view' | 'expenses.manage'
   | 'sales.view' | 'sales.refund.create' | 'sales.payment.receive'
+  | 'employees.credit.view' | 'employees.credit.create' | 'employees.credit.settle'
   | 'refunds.approve'
   | 'reports.view' | 'reports.financial' | 'reports.costing'
   | 'accounts.view' | 'accounts.manage'
@@ -81,6 +78,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'suppliers.view', 'suppliers.manage', 'suppliers.print',
   'expenses.view', 'expenses.manage', 'expenses.print',
   'sales.view', 'sales.refund.create', 'sales.payment.receive', 'refunds.approve',
+  'employees.credit.view', 'employees.credit.create', 'employees.credit.settle',
   'reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export',
   'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage',
   'shifts.view', 'shifts.open', 'shifts.close', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close',
@@ -173,6 +171,9 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'sales.view': { ar: 'عرض فواتير المبيعات', en: 'View Sales Invoices' },
   'sales.refund.create': { ar: 'إنشاء مرتجع مبيعات', en: 'Create Sales Refunds' },
   'sales.payment.receive': { ar: 'تحصيل دفعة عميل', en: 'Receive Customer Payments' },
+  'employees.credit.view': { ar: 'عرض ذمم الموظفين', en: 'View Employee Credit' },
+  'employees.credit.create': { ar: 'البيع الآجل للموظفين', en: 'Create Employee Credit Sales' },
+  'employees.credit.settle': { ar: 'تسوية ذمم الموظفين', en: 'Settle Employee Credit' },
   'refunds.approve': { ar: 'الموافقة على المرتجعات', en: 'Approve Refunds' },
   'reports.view': { ar: 'عرض التقارير', en: 'View Reports' },
   'reports.financial': { ar: 'التقارير المالية', en: 'Financial Reports' },
@@ -223,6 +224,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'warehouses', ar: 'المخازن', en: 'Warehouses', permissions: ['warehouses.view', 'warehouses.manage'] },
   { key: 'customers', ar: 'العملاء', en: 'Customers', permissions: ['customers.view', 'customers.manage', 'customers.print', 'customers.export'] },
   { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.print'] },
+  { key: 'employees_credit', ar: 'ذمم الموظفين', en: 'Employee Credit', permissions: ['employees.credit.view', 'employees.credit.create', 'employees.credit.settle'] },
   { key: 'sales', ar: 'المبيعات', en: 'Sales', permissions: ['sales.view', 'sales.refund.create', 'sales.payment.receive', 'sales.export', 'refunds.approve', 'sales.print'] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', permissions: ['expenses.view', 'expenses.manage', 'expenses.print'] },
   { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage'] },
