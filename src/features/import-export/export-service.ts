@@ -1,7 +1,7 @@
 import { supabase } from '@/api';
 import { ImportExportEntity, ExportFilters, ExportFormat } from './types';
-import { ExcelService } from './excel-service';
 import { ENTITY_CONFIGS } from './entity-configs';
+import { exportRoundTripWorkbook } from './roundtrip-export';
 
 interface ProductExportRow {
   sku?: string;
@@ -235,7 +235,7 @@ export class ExportService {
 
     const config = ENTITY_CONFIGS[entity];
     const fileName = `${config?.id || entity}_export_${new Date().toISOString().slice(0, 10)}`;
-    await ExcelService.exportData(rows, fileName, format, config?.titleAr || 'Export');
+    await exportRoundTripWorkbook(entity, rows, fileName, format, lang);
 
     return {
       recordCount: rows.length,
