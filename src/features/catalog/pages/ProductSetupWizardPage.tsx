@@ -18,7 +18,16 @@ import type { Category, Product, InventoryUnit } from '@/lib/types';
 
 type ManufacturedComponent = { unit_id: string; quantity: number };
 type RawComponent = { raw_material_id: string; quantity: number; wastage_percent: number };
-type RawMaterial = { id: string; name: string; branch_id: string | null; is_active: boolean; default_cost?: number };
+type MeasurementUnit = { id: string; name: string; symbol?: string | null; code?: string | null };
+type RawMaterial = {
+  id: string;
+  name: string;
+  branch_id: string | null;
+  is_active: boolean;
+  default_cost?: number;
+  unit_id: string | null;
+  measurement_unit?: MeasurementUnit | null;
+};
 
 export function ProductSetupWizardPage() {
   const navigate = useNavigate();
@@ -56,6 +65,14 @@ export function ProductSetupWizardPage() {
   const selectedRawIds = useMemo(() => new Set(rawComponents.map((row) => row.raw_material_id).filter(Boolean)), [rawComponents]);
   const totalComponentCount = manufacturedComponents.length + rawComponents.length;
 
+  const rawUnitLabel = (material?: RawMaterial) => {
+    const unit = material?.measurement_unit;
+    if (!unit) return isAr ? 'وحدة غير محددة' : 'Unit not set';
+    const short = unit.symbol || unit.code;
+    return short && short !== unit.name ? `${unit.name} (${short})` : unit.name;
+  };
+  const rawMaterialLabel = (material: RawMaterial) => `${material.name} — ${rawUnitLabel(material)}`;
+
   useEffect(() => {
     if (branchFilter && form.branch_id !== branchFilter) {
       setForm((prev) => ({ ...prev, branch_id: branchFilter, category_id: '' }));
@@ -77,7 +94,11 @@ export function ProductSetupWizardPage() {
       const [cats, manufactured, raws] = await Promise.all([
         supabase.from('categories').select('*').eq('branch_id', branchId).order('name'),
         supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
-        supabase.from('raw_materials').select('id,name,branch_id,is_active,default_cost').eq('branch_id', branchId).eq('is_active', true).order('name'),
+        supabase.from('raw_materials')
+          .select('id,name,branch_id,is_active,default_cost,unit_id,measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)')
+          .eq('branch_id', branchId)
+          .eq('is_active', true)
+          .order('name'),
       ]);
       if (cancelled) return;
       if (cats.error) show(cats.error.message, 'error');
@@ -85,7 +106,7 @@ export function ProductSetupWizardPage() {
       if (raws.error) show(raws.error.message, 'error');
       setCategories((cats.data as Category[]) || []);
       setManufacturedItems((manufactured.data as InventoryUnit[]) || []);
-      setRawMaterials((raws.data as RawMaterial[]) || []);
+      setRawMaterials((raws.data as unknown as RawMaterial[]) || []);
       setLoadingComponents(false);
     })().catch((error) => {
       if (!cancelled) {
@@ -139,6 +160,10 @@ export function ProductSetupWizardPage() {
       }
       if (rawComponents.some((row) => !rawMaterials.some((material) => material.id === row.raw_material_id && material.branch_id === branchId))) {
         show(isAr ? 'إحدى الخامات لا تنتمي للفرع الحالي' : 'A selected raw material does not belong to the current branch', 'error');
+        return false;
+      }
+      if (rawComponents.some((row) => !rawMaterials.find((material) => material.id === row.raw_material_id)?.measurement_unit)) {
+        show(isAr ? 'لا يمكن استخدام خامة بدون وحدة قياس. افتح الخامة وحدد وحدتها أولًا.' : 'A raw material without a measurement unit cannot be used. Set its unit first.', 'error');
         return false;
       }
     }
@@ -318,17 +343,21 @@ export function ProductSetupWizardPage() {
                 {isAr ? 'لا توجد خامات في هذا الفرع. أنشئ الخامة أولًا من شاشة الخامات ثم ارجع لاختيارها هنا.' : 'No raw materials exist in this branch. Create them first from the raw-material screen, then return here.'}
               </div>
             )}
-            {rawComponents.map((row, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_150px_130px_auto] gap-3 items-end rounded-xl border border-ui-border p-3">
-                <Select label={isAr ? 'اختر الخامة' : 'Select raw material'} value={row.raw_material_id} onChange={(event) => updateRawComponent(index, { raw_material_id: event.target.value })}>
-                  <option value="">{isAr ? 'اختر من الخامات الموجودة' : 'Choose an existing raw material'}</option>
-                  {rawMaterials.map((material) => <option key={material.id} value={material.id} disabled={selectedRawIds.has(material.id) && row.raw_material_id !== material.id}>{material.name}</option>)}
-                </Select>
-                <Input label={isAr ? 'الكمية' : 'Quantity'} type="number" min="0.0001" step="0.0001" value={row.quantity} onChange={(event) => updateRawComponent(index, { quantity: Number(event.target.value) || 0 })} />
-                <Input label={isAr ? 'هالك %' : 'Waste %'} type="number" min="0" step="0.01" value={row.wastage_percent} onChange={(event) => updateRawComponent(index, { wastage_percent: Number(event.target.value) || 0 })} />
-                <Button variant="outline" size="sm" onClick={() => removeRawComponent(index)}><Trash2 className="w-4 h-4" />{isAr ? 'حذف' : 'Remove'}</Button>
-              </div>
-            ))}
+            {rawComponents.map((row, index) => {
+              const selectedMaterial = rawMaterials.find((material) => material.id === row.raw_material_id);
+              const unitLabel = selectedMaterial ? rawUnitLabel(selectedMaterial) : '';
+              return (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_170px_130px_auto] gap-3 items-end rounded-xl border border-ui-border p-3">
+                  <Select label={isAr ? 'اختر الخامة' : 'Select raw material'} value={row.raw_material_id} onChange={(event) => updateRawComponent(index, { raw_material_id: event.target.value })}>
+                    <option value="">{isAr ? 'اختر من الخامات الموجودة' : 'Choose an existing raw material'}</option>
+                    {rawMaterials.map((material) => <option key={material.id} value={material.id} disabled={!material.measurement_unit || (selectedRawIds.has(material.id) && row.raw_material_id !== material.id)}>{rawMaterialLabel(material)}</option>)}
+                  </Select>
+                  <Input label={unitLabel ? `${isAr ? 'الكمية' : 'Quantity'} (${unitLabel})` : (isAr ? 'الكمية' : 'Quantity')} type="number" min="0.0001" step="0.0001" value={row.quantity} onChange={(event) => updateRawComponent(index, { quantity: Number(event.target.value) || 0 })} />
+                  <Input label={isAr ? 'هالك %' : 'Waste %'} type="number" min="0" step="0.01" value={row.wastage_percent} onChange={(event) => updateRawComponent(index, { wastage_percent: Number(event.target.value) || 0 })} />
+                  <Button variant="outline" size="sm" onClick={() => removeRawComponent(index)}><Trash2 className="w-4 h-4" />{isAr ? 'حذف' : 'Remove'}</Button>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -344,7 +373,10 @@ export function ProductSetupWizardPage() {
                 </div>
                 <div>
                   <p className="font-semibold mb-2">{isAr ? 'الخامات المختارة' : 'Selected raw materials'}</p>
-                  {rawComponents.length === 0 ? <p className="text-sm text-ui-subtle">—</p> : rawComponents.map((row, index) => <div key={index} className="text-sm flex justify-between gap-3 py-1"><span>{rawMaterials.find((material) => material.id === row.raw_material_id)?.name || row.raw_material_id}</span><span>{row.quantity} · {row.wastage_percent}%</span></div>)}
+                  {rawComponents.length === 0 ? <p className="text-sm text-ui-subtle">—</p> : rawComponents.map((row, index) => {
+                    const material = rawMaterials.find((item) => item.id === row.raw_material_id);
+                    return <div key={index} className="text-sm flex justify-between gap-3 py-1"><span>{material?.name || row.raw_material_id}</span><span>{row.quantity} {rawUnitLabel(material)} · {row.wastage_percent}%</span></div>;
+                  })}
                 </div>
               </div>
             </div>
