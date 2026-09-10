@@ -83,6 +83,7 @@
     {"name":"process_treasury_withdrawal","params":["account_id","amount","branch_id","notes"]},
     {"name":"receive_payment","params":["amount","branch_id","customer_id","notes","payment_method","sale_id"]},
     {"name":"receive_purchase_order","params":["purchase_id","receipt_items"]},
+    {"name":"reconcile_offline_sale","params":["branch_id","invoice_number","paid_amount","payment_method"]},
     {"name":"record_login_failure","params":["username"]},
     {"name":"record_login_success","params":["user_id"]},
     {"name":"record_supplier_quotation","params":["delivery_days","items","notes","rfq_id","supplier_id","valid_until"]},
