@@ -39,6 +39,42 @@ function createPrintWorker() {
   return printWorkerWindow;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function textToPrintableHtml(text) {
+  const safe = escapeHtml(text);
+  return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { margin: 0; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
+  pre {
+    margin: 0;
+    padding: 2mm;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    direction: rtl;
+    text-align: right;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+</style>
+</head>
+<body><pre>${safe}</pre></body>
+</html>`;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -115,36 +151,23 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
   if (!html && !text) return { success: false, error: 'NO_CONTENT_TO_PRINT' };
 
   try {
-    if (html) {
-      const worker = createPrintWorker();
-      await worker.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-      return await new Promise((resolve) => {
-        worker.webContents.print(
-          {
-            silent: true,
-            printBackground: true,
-            deviceName: printerName,
-            copies,
-            margins: { marginType: 'none' },
-          },
-          (success, failureReason) => {
-            resolve(success ? { success: true, printerName } : { success: false, error: failureReason || 'PRINT_FAILED' });
-          },
-        );
-      });
-    }
+    const worker = createPrintWorker();
+    const printableHtml = html || textToPrintableHtml(text);
+    await worker.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printableHtml)}`);
 
-    const tempFile = path.join(os.tmpdir(), `premier-ticket-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
-    fs.writeFileSync(tempFile, text, 'utf8');
     return await new Promise((resolve) => {
-      const script = '$p=$args[0];$f=$args[1];Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p';
-      execFile(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script, printerName, tempFile],
-        { windowsHide: true },
-        (error, _stdout, stderr) => {
-          try { fs.unlinkSync(tempFile); } catch { /* best effort cleanup */ }
-          resolve(error ? { success: false, error: String(stderr || error.message || '').trim() } : { success: true, printerName });
+      worker.webContents.print(
+        {
+          silent: true,
+          printBackground: true,
+          deviceName: printerName,
+          copies,
+          margins: { marginType: 'none' },
+        },
+        (success, failureReason) => {
+          resolve(success
+            ? { success: true, printerName }
+            : { success: false, error: failureReason || 'PRINT_FAILED' });
         },
       );
     });
