@@ -53,7 +53,8 @@ export function InventoryUnitsPage() {
   const branchFilter = useBranchFilter();
   const isAr = lang === 'ar';
   const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadItems } = usePaginatedRows<InventoryUnit>({
-    table: 'inventory_units', select: '*', order: { column: 'name', ascending: true }, branch_id: branchFilter, pageSize: 100,
+    table: 'inventory_units', select: '*', order: { column: 'name', ascending: true }, branch_id: branchFilter,
+    filters: [{ column: 'unit_type', value: 'manufactured' }], pageSize: 100,
   });
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -70,7 +71,7 @@ export function InventoryUnitsPage() {
   const openEdit = (unit: InventoryUnit) => {
     setEditing(unit);
     setForm({
-      code: unit.code, name: unit.name, name_en: unit.name_en || '', unit_type: 'manufactured',
+      code: unit.code, name: unit.name, name_en: unit.name_en || '', unit_type: unit.unit_type,
       cost_price: unit.cost_price, sale_price: unit.sale_price, min_stock: unit.min_stock,
       max_stock: unit.max_stock, reorder_point: unit.reorder_point,
       low_stock_threshold: unit.low_stock_threshold, barcode: unit.barcode || '', sku: unit.sku || '',
@@ -82,19 +83,20 @@ export function InventoryUnitsPage() {
   const save = async () => {
     if (!form.code || !form.name) { show(t('required'), 'error'); return; }
     const payload = {
-      ...form,
-      unit_type: 'manufactured' as const,
+      code: form.code,
+      name: form.name,
+      name_en: form.name_en || null,
       cost_price: Number(form.cost_price), sale_price: Number(form.sale_price), min_stock: Number(form.min_stock),
       max_stock: Number(form.max_stock), reorder_point: Number(form.reorder_point), low_stock_threshold: Number(form.low_stock_threshold),
       barcode: form.barcode || null, sku: form.sku || null, description: form.description.trim() || null,
-      name_en: form.name_en || null, branch_id: branchFilter || null,
+      branch_id: branchFilter || null,
     };
     if (editing) {
       const { error } = await supabase.from('inventory_units').update(payload).eq('id', editing.id);
       if (error) { show(error.message, 'error'); return; }
       await logAudit('update', 'inventory_units', editing.id);
     } else {
-      const { error } = await supabase.from('inventory_units').insert(payload);
+      const { error } = await supabase.from('inventory_units').insert({ ...payload, unit_type: 'manufactured' as const });
       if (error) { show(error.message, 'error'); return; }
       await logAudit('create', 'inventory_units');
     }
