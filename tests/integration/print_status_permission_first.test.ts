@@ -66,13 +66,13 @@ describe.skipIf(skip)('print status permission-first boundary', () => {
       ],
     );
 
-    // Make the permission matrix explicit inside this rollback-only fixture.
+    // Explicitly prove that receipt printing is independent from order editing.
     await client.query(
       `UPDATE public.roles
        SET permissions = CASE
          WHEN jsonb_typeof(COALESCE(permissions, '[]'::jsonb)) = 'array'
-           THEN (COALESCE(permissions, '[]'::jsonb) - 'pos.receipt.print') || '["pos.receipt.print"]'::jsonb
-         ELSE jsonb_set(COALESCE(permissions, '{}'::jsonb), '{pos.receipt.print}', 'true'::jsonb, true)
+           THEN ((COALESCE(permissions, '[]'::jsonb) - 'pos.receipt.print') - 'pos.order.edit') || '["pos.receipt.print"]'::jsonb
+         ELSE jsonb_set(COALESCE(permissions, '{}'::jsonb) - 'pos.order.edit', '{pos.receipt.print}', 'true'::jsonb, true)
        END,
        updated_at = now()
        WHERE role = 'cashier'`,
@@ -151,6 +151,41 @@ describe.skipIf(skip)('print status permission-first boundary', () => {
       );
       expect(failed.rows[0]?.print_status).toBe('failed');
       expect(failed.rows[0]?.printed_at).toBeNull();
+    });
+  });
+
+  it('allows exact print-only mutation without pos.order.edit but blocks general order editing', async () => {
+    await asUser(printerUser, async () => {
+      await client.query(
+        `UPDATE public.orders
+         SET print_status = 'printed', printed_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [orderA],
+      );
+      const printed = await client.query<{ print_status: string }>(
+        `SELECT print_status FROM public.orders WHERE id = $1`,
+        [orderA],
+      );
+      expect(printed.rows[0]?.print_status).toBe('printed');
+
+      await expectDbError(
+        () => client.query(`UPDATE public.orders SET notes = 'forbidden edit' WHERE id = $1`, [orderA]),
+        'ORDER_OPERATOR_REQUIRED',
+      );
+    });
+  });
+
+  it('blocks direct print-only mutation without pos.receipt.print', async () => {
+    await asUser(noPrintUser, async () => {
+      await expectDbError(
+        () => client.query(
+          `UPDATE public.orders
+           SET print_status = 'printed', printed_at = now(), updated_at = now()
+           WHERE id = $1`,
+          [orderA],
+        ),
+        'PERMISSION_DENIED:pos.receipt.print',
+      );
     });
   });
 
