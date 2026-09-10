@@ -53,7 +53,7 @@ describe('offline financial truth contract', () => {
   });
 
   it('enforces branch/invoice idempotency and permission-first reconciliation in the database contract', () => {
-    const migration = read('supabase/migrations/20260910004000_offline_sale_reconciliation.sql');
+    const migration = read('supabase/migrations/20260910093830_offline_sale_reconciliation.sql');
 
     expect(migration).toContain('CREATE UNIQUE INDEX IF NOT EXISTS sales_branch_invoice_unique');
     expect(migration).toContain('ON public.sales (branch_id, invoice_number)');
