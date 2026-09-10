@@ -17,7 +17,7 @@ type RawStockRow = {
   min_stock: number;
   raw_material?: {
     name?: string | null;
-    unit?: { name?: string | null; symbol?: string | null } | null;
+    measurement_unit?: { name?: string | null; symbol?: string | null; code?: string | null } | null;
   } | null;
 };
 
@@ -48,7 +48,7 @@ export function RawMaterialBranchStockPanel() {
     setError('');
     void supabase
       .from('raw_material_inventory')
-      .select('id,raw_material_id,branch_id,quantity,avg_cost,min_stock,raw_material:raw_materials(name,unit:units(name,symbol))')
+      .select('id,raw_material_id,branch_id,quantity,avg_cost,min_stock,raw_material:raw_materials(name,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code))')
       .eq('branch_id', selectedBranchId)
       .order('updated_at', { ascending: false })
       .then(({ data, error: queryError }) => {
@@ -121,7 +121,8 @@ export function RawMaterialBranchStockPanel() {
                   const quantity = Number(row.quantity || 0);
                   const minimum = Number(row.min_stock || 0);
                   const low = quantity <= minimum;
-                  const unit = row.raw_material?.unit?.symbol || row.raw_material?.unit?.name || '-';
+                  const measurementUnit = row.raw_material?.measurement_unit;
+                  const unit = measurementUnit?.symbol || measurementUnit?.code || measurementUnit?.name || '-';
                   return (
                     <tr key={row.id} data-testid={`raw-stock-row-${row.raw_material_id}`}>
                       <td className="px-3 py-2 font-semibold text-ui-text">{row.raw_material?.name || '-'}</td>
