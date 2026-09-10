@@ -16,7 +16,7 @@ import { useGuidedWorkflow } from '@/core/guard';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
 import type { Category, Product, InventoryUnit } from '@/lib/types';
 
-type UnitComponent = { unit_id: string; quantity: number };
+type ManufacturedComponent = { unit_id: string; quantity: number };
 type RawComponent = { raw_material_id: string; quantity: number; wastage_percent: number };
 type RawMaterial = { id: string; name: string; branch_id: string | null; is_active: boolean; default_cost?: number };
 
@@ -34,7 +34,7 @@ export function ProductSetupWizardPage() {
   const [saving, setSaving] = useState(false);
   const [loadingComponents, setLoadingComponents] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [existingUnits, setExistingUnits] = useState<InventoryUnit[]>([]);
+  const [manufacturedItems, setManufacturedItems] = useState<InventoryUnit[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [form, setForm] = useState({
     name: '',
@@ -48,13 +48,13 @@ export function ProductSetupWizardPage() {
     wholesale_price: 0,
     is_active: true,
   });
-  const [unitComponents, setUnitComponents] = useState<UnitComponent[]>([]);
+  const [manufacturedComponents, setManufacturedComponents] = useState<ManufacturedComponent[]>([]);
   const [rawComponents, setRawComponents] = useState<RawComponent[]>([]);
 
   const branchId = branchFilter || form.branch_id || '';
-  const selectedUnitIds = useMemo(() => new Set(unitComponents.map((row) => row.unit_id).filter(Boolean)), [unitComponents]);
+  const selectedManufacturedIds = useMemo(() => new Set(manufacturedComponents.map((row) => row.unit_id).filter(Boolean)), [manufacturedComponents]);
   const selectedRawIds = useMemo(() => new Set(rawComponents.map((row) => row.raw_material_id).filter(Boolean)), [rawComponents]);
-  const totalComponentCount = unitComponents.length + rawComponents.length;
+  const totalComponentCount = manufacturedComponents.length + rawComponents.length;
 
   useEffect(() => {
     if (branchFilter && form.branch_id !== branchFilter) {
@@ -64,27 +64,27 @@ export function ProductSetupWizardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setUnitComponents([]);
+    setManufacturedComponents([]);
     setRawComponents([]);
     setCategories([]);
-    setExistingUnits([]);
+    setManufacturedItems([]);
     setRawMaterials([]);
 
     if (!branchId) return () => { cancelled = true; };
 
     void (async () => {
       setLoadingComponents(true);
-      const [cats, units, raws] = await Promise.all([
+      const [cats, manufactured, raws] = await Promise.all([
         supabase.from('categories').select('*').eq('branch_id', branchId).order('name'),
-        supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
+        supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
         supabase.from('raw_materials').select('id,name,branch_id,is_active,default_cost').eq('branch_id', branchId).eq('is_active', true).order('name'),
       ]);
       if (cancelled) return;
       if (cats.error) show(cats.error.message, 'error');
-      if (units.error) show(units.error.message, 'error');
+      if (manufactured.error) show(manufactured.error.message, 'error');
       if (raws.error) show(raws.error.message, 'error');
       setCategories((cats.data as Category[]) || []);
-      setExistingUnits((units.data as InventoryUnit[]) || []);
+      setManufacturedItems((manufactured.data as InventoryUnit[]) || []);
       setRawMaterials((raws.data as RawMaterial[]) || []);
       setLoadingComponents(false);
     })().catch((error) => {
@@ -97,11 +97,11 @@ export function ProductSetupWizardPage() {
     return () => { cancelled = true; };
   }, [branchId, show]);
 
-  const addUnitComponent = () => setUnitComponents((prev) => [...prev, { unit_id: '', quantity: 1 }]);
-  const updateUnitComponent = (index: number, patch: Partial<UnitComponent>) => {
-    setUnitComponents((prev) => prev.map((row, i) => i === index ? { ...row, ...patch } : row));
+  const addManufacturedComponent = () => setManufacturedComponents((prev) => [...prev, { unit_id: '', quantity: 1 }]);
+  const updateManufacturedComponent = (index: number, patch: Partial<ManufacturedComponent>) => {
+    setManufacturedComponents((prev) => prev.map((row, i) => i === index ? { ...row, ...patch } : row));
   };
-  const removeUnitComponent = (index: number) => setUnitComponents((prev) => prev.filter((_, i) => i !== index));
+  const removeManufacturedComponent = (index: number) => setManufacturedComponents((prev) => prev.filter((_, i) => i !== index));
 
   const addRawComponent = () => setRawComponents((prev) => [...prev, { raw_material_id: '', quantity: 1, wastage_percent: 0 }]);
   const updateRawComponent = (index: number, patch: Partial<RawComponent>) => {
@@ -115,16 +115,16 @@ export function ProductSetupWizardPage() {
       return false;
     }
     if (step === 2) {
-      if (unitComponents.some((row) => !row.unit_id || row.quantity <= 0)) {
-        show(isAr ? 'اختر الوحدة وحدد كمية صحيحة' : 'Select each unit and enter a valid quantity', 'error');
+      if (manufacturedComponents.some((row) => !row.unit_id || row.quantity <= 0)) {
+        show(isAr ? 'اختر المصنع وحدد كمية صحيحة' : 'Select each manufactured item and enter a valid quantity', 'error');
         return false;
       }
-      if (selectedUnitIds.size !== unitComponents.length) {
-        show(isAr ? 'لا يمكن إضافة نفس الوحدة أكثر من مرة' : 'The same unit cannot be selected more than once', 'error');
+      if (selectedManufacturedIds.size !== manufacturedComponents.length) {
+        show(isAr ? 'لا يمكن إضافة نفس المصنع أكثر من مرة' : 'The same manufactured item cannot be selected more than once', 'error');
         return false;
       }
-      if (unitComponents.some((row) => !existingUnits.some((unit) => unit.id === row.unit_id && unit.branch_id === branchId))) {
-        show(isAr ? 'إحدى الوحدات لا تنتمي للفرع الحالي' : 'A selected unit does not belong to the current branch', 'error');
+      if (manufacturedComponents.some((row) => !manufacturedItems.some((item) => item.id === row.unit_id && item.branch_id === branchId && item.unit_type === 'manufactured'))) {
+        show(isAr ? 'أحد المصنعات لا ينتمي للفرع الحالي' : 'A manufactured item does not belong to the current branch', 'error');
         return false;
       }
     }
@@ -152,8 +152,7 @@ export function ProductSetupWizardPage() {
     setSaving(true);
     let createdProductId: string | null = null;
     try {
-      const hasManufacturedUnit = unitComponents.some((row) => existingUnits.find((unit) => unit.id === row.unit_id)?.unit_type === 'manufactured');
-      const derivedProductType: 'ready' | 'manufactured' = rawComponents.length > 0 || hasManufacturedUnit ? 'manufactured' : 'ready';
+      const derivedProductType: 'ready' | 'manufactured' = rawComponents.length > 0 || manufacturedComponents.length > 0 ? 'manufactured' : 'ready';
       const { data: product, error: productError } = await supabase.from('products').insert({
         name: form.name.trim(),
         name_en: form.name_en.trim() || null,
@@ -171,8 +170,8 @@ export function ProductSetupWizardPage() {
 
       createdProductId = (product as Product).id;
 
-      if (unitComponents.length > 0) {
-        const { error: linkError } = await supabase.from('product_unit_links').insert(unitComponents.map((row) => ({
+      if (manufacturedComponents.length > 0) {
+        const { error: linkError } = await supabase.from('product_unit_links').insert(manufacturedComponents.map((row) => ({
           product_id: createdProductId,
           unit_id: row.unit_id,
           quantity: Number(row.quantity),
@@ -203,7 +202,7 @@ export function ProductSetupWizardPage() {
       await logAudit('create', 'products', createdProductId, {
         name: form.name,
         branch_id: branchId,
-        unit_components: unitComponents.length,
+        manufactured_components: manufacturedComponents.length,
         raw_components: rawComponents.length,
         product_type: derivedProductType,
       });
@@ -229,15 +228,15 @@ export function ProductSetupWizardPage() {
   return (
     <DesignSurface testId="product-setup-wizard-page">
       <DesignPageHeader
-        title={isAr ? 'إضافة منتج متكامل' : 'Complete Product Setup'}
-        subtitle={isAr ? 'اختر الوحدات والخامات الموجودة مسبقًا — لا يتم إنشاء مكونات من داخل المنتج.' : 'Select existing units and raw materials only — components are not created inside the product form.'}
+        title={isAr ? 'إضافة منتج' : 'Add Product'}
+        subtitle={isAr ? 'أنشئ المنتج ثم اربطه بالمصنعات والخامات الموجودة مسبقًا. المنتج نفسه لا يملك وحدة قياس.' : 'Create the product, then link existing manufactured items and raw materials. Products do not have measurement units.'}
         actions={<Button variant="outline" size="sm" onClick={() => navigate('/products')}><ChevronLeft className="w-4 h-4" />{isAr ? 'العودة للمنتجات' : 'Back to products'}</Button>}
       />
       <DesignPanel>
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
           {[
-            ['1', isAr ? 'المنتج' : 'Product'],
-            ['2', isAr ? 'الوحدات' : 'Units'],
+            ['1', isAr ? 'بيانات المنتج' : 'Product'],
+            ['2', isAr ? 'المصنعات' : 'Manufactured items'],
             ['3', isAr ? 'الخامات' : 'Raw materials'],
             ['4', isAr ? 'مراجعة' : 'Review'],
           ].map(([number, label]) => {
@@ -263,11 +262,7 @@ export function ProductSetupWizardPage() {
               {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </Select>
             {!branchFilter && (
-              <Select
-                label={t('branch')}
-                value={form.branch_id}
-                onChange={(event) => setForm((prev) => ({ ...prev, branch_id: event.target.value, category_id: '' }))}
-              >
+              <Select label={t('branch')} value={form.branch_id} onChange={(event) => setForm((prev) => ({ ...prev, branch_id: event.target.value, category_id: '' }))}>
                 <option value="">{isAr ? 'اختر الفرع' : 'Select branch'}</option>
                 {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
               </Select>
@@ -282,26 +277,26 @@ export function ProductSetupWizardPage() {
           <div className="space-y-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
-                <h3 className="font-bold">{isAr ? 'وحدات المنتج' : 'Product units'}</h3>
-                <p className="text-sm text-ui-subtle">{isAr ? `اختيار فقط من وحدات ${branchName || 'الفرع الحالي'}.` : `Select only from existing units in ${branchName || 'the current branch'}.`}</p>
+                <h3 className="font-bold">{isAr ? 'المصنعات المستخدمة في المنتج' : 'Manufactured items used by the product'}</h3>
+                <p className="text-sm text-ui-subtle">{isAr ? `اختيار فقط من مصنعات ${branchName || 'الفرع الحالي'}؛ لا يتم إنشاء مصنع من داخل المنتج.` : `Select only existing manufactured items in ${branchName || 'the current branch'}; no inline creation.`}</p>
               </div>
-              <Button variant="outline" onClick={addUnitComponent} disabled={!branchId || loadingComponents || existingUnits.length === 0}>
-                <Plus className="w-4 h-4" />{isAr ? 'إضافة وحدة' : 'Add unit'}
+              <Button variant="outline" onClick={addManufacturedComponent} disabled={!branchId || loadingComponents || manufacturedItems.length === 0}>
+                <Plus className="w-4 h-4" />{isAr ? 'إضافة مصنع' : 'Add manufactured item'}
               </Button>
             </div>
-            {existingUnits.length === 0 && !loadingComponents && (
+            {manufacturedItems.length === 0 && !loadingComponents && (
               <div className="rounded-xl border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-subtle">
-                {isAr ? 'لا توجد وحدات في هذا الفرع. أنشئ الوحدة أولًا من شاشة وحدات المخزون ثم ارجع لاختيارها هنا.' : 'No units exist in this branch. Create the unit first from Inventory Units, then return here to select it.'}
+                {isAr ? 'لا توجد مصنعات في هذا الفرع. أنشئ المصنع أولًا من شاشة المصنعات ثم ارجع لاختياره هنا.' : 'No manufactured items exist in this branch. Create one first from Manufactured Items, then return here.'}
               </div>
             )}
-            {unitComponents.map((row, index) => (
+            {manufacturedComponents.map((row, index) => (
               <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_160px_auto] gap-3 items-end rounded-xl border border-ui-border p-3">
-                <Select label={isAr ? 'اختر الوحدة' : 'Select unit'} value={row.unit_id} onChange={(event) => updateUnitComponent(index, { unit_id: event.target.value })}>
-                  <option value="">{isAr ? 'اختر من الوحدات الموجودة' : 'Choose an existing unit'}</option>
-                  {existingUnits.map((unit) => <option key={unit.id} value={unit.id} disabled={selectedUnitIds.has(unit.id) && row.unit_id !== unit.id}>{unit.name} · {unit.unit_type}</option>)}
+                <Select label={isAr ? 'اختر المصنع' : 'Select manufactured item'} value={row.unit_id} onChange={(event) => updateManufacturedComponent(index, { unit_id: event.target.value })}>
+                  <option value="">{isAr ? 'اختر من المصنعات الموجودة' : 'Choose an existing manufactured item'}</option>
+                  {manufacturedItems.map((item) => <option key={item.id} value={item.id} disabled={selectedManufacturedIds.has(item.id) && row.unit_id !== item.id}>{item.name}</option>)}
                 </Select>
-                <Input label={isAr ? 'الكمية' : 'Quantity'} type="number" min="0.0001" step="0.0001" value={row.quantity} onChange={(event) => updateUnitComponent(index, { quantity: Number(event.target.value) || 0 })} />
-                <Button variant="outline" size="sm" onClick={() => removeUnitComponent(index)}><Trash2 className="w-4 h-4" />{isAr ? 'حذف' : 'Remove'}</Button>
+                <Input label={isAr ? 'الكمية المستخدمة' : 'Quantity used'} type="number" min="0.0001" step="0.0001" value={row.quantity} onChange={(event) => updateManufacturedComponent(index, { quantity: Number(event.target.value) || 0 })} />
+                <Button variant="outline" size="sm" onClick={() => removeManufacturedComponent(index)}><Trash2 className="w-4 h-4" />{isAr ? 'حذف' : 'Remove'}</Button>
               </div>
             ))}
           </div>
@@ -312,7 +307,7 @@ export function ProductSetupWizardPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
                 <h3 className="font-bold">{isAr ? 'الخامات المكوّنة للمنتج' : 'Product raw materials'}</h3>
-                <p className="text-sm text-ui-subtle">{isAr ? `اختيار فقط من خامات ${branchName || 'الفرع الحالي'} بدون كتابة أو إنشاء خامة هنا.` : `Select only existing raw materials in ${branchName || 'the current branch'}; no inline creation.`}</p>
+                <p className="text-sm text-ui-subtle">{isAr ? `اختيار فقط من خامات ${branchName || 'الفرع الحالي'} بدون كتابة أو إنشاء خامة هنا. وحدة القياس تأتي من الخامة نفسها وتبقى ثابتة.` : `Select only existing raw materials in ${branchName || 'the current branch'}. Measurement units come from the raw material and remain fixed.`}</p>
               </div>
               <Button variant="outline" onClick={addRawComponent} disabled={!branchId || loadingComponents || rawMaterials.length === 0}>
                 <Plus className="w-4 h-4" />{isAr ? 'إضافة خامة' : 'Add raw material'}
@@ -320,7 +315,7 @@ export function ProductSetupWizardPage() {
             </div>
             {rawMaterials.length === 0 && !loadingComponents && (
               <div className="rounded-xl border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-subtle">
-                {isAr ? 'لا توجد خامات في هذا الفرع. أنشئ الخامة أولًا من شاشة الخامات ثم ارجع لاختيارها هنا.' : 'No raw materials exist in this branch. Create them first from the raw-material screen, then return here to select them.'}
+                {isAr ? 'لا توجد خامات في هذا الفرع. أنشئ الخامة أولًا من شاشة الخامات ثم ارجع لاختيارها هنا.' : 'No raw materials exist in this branch. Create them first from the raw-material screen, then return here.'}
               </div>
             )}
             {rawComponents.map((row, index) => (
@@ -344,8 +339,8 @@ export function ProductSetupWizardPage() {
               <p className="text-sm text-ui-subtle mt-1">{branchName}</p>
               <div className="grid md:grid-cols-2 gap-4 mt-4">
                 <div>
-                  <p className="font-semibold mb-2">{isAr ? 'الوحدات المختارة' : 'Selected units'}</p>
-                  {unitComponents.length === 0 ? <p className="text-sm text-ui-subtle">—</p> : unitComponents.map((row, index) => <div key={index} className="text-sm flex justify-between gap-3 py-1"><span>{existingUnits.find((unit) => unit.id === row.unit_id)?.name || row.unit_id}</span><span>× {row.quantity}</span></div>)}
+                  <p className="font-semibold mb-2">{isAr ? 'المصنعات المختارة' : 'Selected manufactured items'}</p>
+                  {manufacturedComponents.length === 0 ? <p className="text-sm text-ui-subtle">—</p> : manufacturedComponents.map((row, index) => <div key={index} className="text-sm flex justify-between gap-3 py-1"><span>{manufacturedItems.find((item) => item.id === row.unit_id)?.name || row.unit_id}</span><span>× {row.quantity}</span></div>)}
                 </div>
                 <div>
                   <p className="font-semibold mb-2">{isAr ? 'الخامات المختارة' : 'Selected raw materials'}</p>
@@ -353,7 +348,7 @@ export function ProductSetupWizardPage() {
                 </div>
               </div>
             </div>
-            <p className="text-sm text-ui-subtle">{isAr ? `سيتم ربط ${totalComponentCount} مكوّن موجود بالمنتج. لن يتم إنشاء أي خامة أو وحدة جديدة.` : `${totalComponentCount} existing components will be linked. No raw material or inventory unit will be created.`}</p>
+            <p className="text-sm text-ui-subtle">{isAr ? `سيتم ربط ${totalComponentCount} مكوّن موجود بالمنتج. لن يتم إنشاء خامة أو مصنع من داخل شاشة المنتج.` : `${totalComponentCount} existing components will be linked. No raw material or manufactured item will be created from the product screen.`}</p>
           </div>
         )}
 
