@@ -21,6 +21,7 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
+import { EmployeeCreditPanel } from '@/features/accounting/components/EmployeeCreditPanel';
 import type { Customer } from '@/lib/types';
 
 export function CustomersPage() {
@@ -96,67 +97,15 @@ export function CustomersPage() {
     { key: 'email', header: t('emailField'), render: (c) => c.email || '-' },
     { key: 'address', header: t('address'), render: (c) => c.address || '-' },
     { key: 'balance', header: t('amount'), render: (c) => <span className={c.balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(c.balance, currency, lang)}</span> },
-    { key: 'actions', header: t('actions'), render: (c) => (
-      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-        {can('customers.manage') && (
-          <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
-        )}
-        {can('customers.manage') && (
-          <button onClick={() => setDeleteId(c.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
-        )}
-      </div>
-    )},
+    { key: 'actions', header: t('actions'), render: (c) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('customers.manage') && <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>}{can('customers.manage') && <button onClick={() => setDeleteId(c.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>}</div> },
   ];
 
-  return (
-    <DesignSurface testId="customers-page">
-      <DesignPageHeader title={t('customers')} actions={
-        <>
-          {can('customers.manage') && (
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} data-testid="customers-import" />
-          )}
-          {can('customers.manage') && (
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} data-testid="customers-import-button"><Upload className="w-4 h-4" /> {t('importExcel')}</Button>
-          )}
-          {can('customers.manage') && (
-            <Button variant="outline" size="sm" onClick={handleExport} data-testid="customers-export"><Download className="w-4 h-4" /> {t('exportExcel')}</Button>
-          )}
-          {can('customers.manage') && (
-            <Button size="sm" onClick={openAdd} data-testid="customers-add"><Plus className="w-4 h-4" /> {t('add')}</Button>
-          )}
-        </>
-      } />
-      <DesignPanel testId="customers-search-panel">
-        <DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="customers-search" />
-      </DesignPanel>
-      <DesignPanel testId="customers-table-panel">
-        <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} onRowClick={openEdit} />
-        <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
-      </DesignPanel>
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('edit') : t('add')}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label={t('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            <Input label={t('nameEn')} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
-            <Input label={t('phone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <Input label={t('emailField')} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <Input label={t('address')} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-            <Input label="Tax Number" value={form.tax_number} onChange={(e) => setForm({ ...form, tax_number: e.target.value })} />
-          </div>
-          {!branchFilter && (
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}>
-              <option value="">--</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
-          )}
-          <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t('cancel')}</Button>
-            <Button onClick={save}>{t('save')}</Button>
-          </div>
-        </div>
-      </Modal>
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
-    </DesignSurface>
-  );
+  return <DesignSurface testId="customers-page">
+    <DesignPageHeader title={t('customers')} actions={<>{can('customers.manage') && <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} data-testid="customers-import" />}{can('customers.manage') && <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} data-testid="customers-import-button"><Upload className="w-4 h-4" /> {t('importExcel')}</Button>}{can('customers.manage') && <Button variant="outline" size="sm" onClick={handleExport} data-testid="customers-export"><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}{can('customers.manage') && <Button size="sm" onClick={openAdd} data-testid="customers-add"><Plus className="w-4 h-4" /> {t('add')}</Button>}</>} />
+    <DesignPanel testId="customers-search-panel"><DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="customers-search" /></DesignPanel>
+    <DesignPanel testId="customers-table-panel"><DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} onRowClick={openEdit} /><DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
+    <EmployeeCreditPanel branchId={branchFilter} currency={currency} />
+    <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('edit') : t('add')}><div className="space-y-4"><div className="grid grid-cols-2 gap-4"><Input label={t('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /><Input label={t('nameEn')} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} /><Input label={t('phone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /><Input label={t('emailField')} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /><Input label={t('address')} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /><Input label="Tax Number" value={form.tax_number} onChange={(e) => setForm({ ...form, tax_number: e.target.value })} /></div>{!branchFilter && <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}><option value="">--</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>}<Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setModalOpen(false)}>{t('cancel')}</Button><Button onClick={save}>{t('save')}</Button></div></div></Modal>
+    <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
+  </DesignSurface>;
 }
