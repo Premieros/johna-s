@@ -152,24 +152,25 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   const ingredientsMap = new Map<string, { name: string; quantity: number; unit: string; estimatedCost: number }>();
   const productIds = Array.from(productMap.keys()).filter((id) => id !== 'unknown');
   if (effectiveBranchId && productIds.length > 0) {
-    const { data: recipes } = await supabase
+    const { data: recipes, error: recipesError } = await supabase
       .from('recipes')
-      .select('product_id,yield_quantity,recipe_items(raw_material_id,quantity,wastage_percent,raw_material:raw_materials(name,default_cost,unit:units(name,symbol)))')
+      .select('product_id,yield_quantity,recipe_items(raw_material_id,quantity,wastage_percent,raw_material:raw_materials(name,default_cost,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)))')
       .eq('branch_id', effectiveBranchId)
       .in('product_id', productIds);
+    if (recipesError) throw new Error(recipesError.message);
 
     for (const recipe of recipes || []) {
       const sold = productMap.get(recipe.product_id);
       if (!sold) continue;
       const multiplier = sold.quantity / (Number(recipe.yield_quantity) || 1);
       for (const recipeItem of recipe.recipe_items || []) {
-        const raw = recipeItem.raw_material as { name?: string; default_cost?: number; unit?: { name?: string; symbol?: string } } | null;
+        const raw = recipeItem.raw_material as { name?: string; default_cost?: number; measurement_unit?: { name?: string; symbol?: string; code?: string } } | null;
         const id = recipeItem.raw_material_id;
         const consumed = Number(recipeItem.quantity || 0) * multiplier * (1 + Number(recipeItem.wastage_percent || 0) / 100);
         const current = ingredientsMap.get(id) || {
           name: raw?.name || 'مادة خام',
           quantity: 0,
-          unit: raw?.unit?.symbol || raw?.unit?.name || '',
+          unit: raw?.measurement_unit?.symbol || raw?.measurement_unit?.code || raw?.measurement_unit?.name || '',
           estimatedCost: 0,
         };
         current.quantity += consumed;
