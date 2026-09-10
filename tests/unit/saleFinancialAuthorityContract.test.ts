@@ -42,10 +42,13 @@ describe('sale financial authority contract', () => {
     const processSale = extractFunctionBody(payment, 'processSaleForOrder');
     const queueSale = extractFunctionBody(payment, 'queueOfflineSale');
 
-    expect(queueSale).toContain('await enqueueOfflineSale({');
+    expect(queueSale).toContain('const queuedSale: OwnedOfflineSaleQueueItem = {');
     expect(queueSale).toContain('client_id: id');
+    expect(queueSale).toContain('created_by_user_id: originatingUserId');
     expect(queueSale).toContain('payload: p as unknown as Record<string, unknown>');
+    expect(queueSale).toContain('await enqueueOfflineSale(queuedSale)');
     expect(queueSale).toContain("if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE')");
+    expect(queueSale).toContain("throw new Error('AUTH_REQUIRED_OFFLINE')");
 
     const explicitOfflineCondition = "if (!splitPayments && typeof navigator !== 'undefined' && !navigator.onLine)";
     const explicitOfflineStart = processSale.indexOf(explicitOfflineCondition);
