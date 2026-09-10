@@ -30,11 +30,18 @@ type PrintAuthorizationResult = {
   is_reprint?: boolean;
 };
 
+type ReceiptPrintAuthorization = {
+  saleId: string;
+  approvalRequestId: string | null;
+};
+
 type ApprovalRow = {
   id: string;
   status: 'pending' | 'approved' | 'rejected' | 'expired' | 'consumed';
   expires_at: string;
 };
+
+const pendingReceiptPrints = new Map<string, ReceiptPrintAuthorization>();
 
 export class ReceiptPrintApprovalError extends Error {
   code: string;
@@ -47,19 +54,11 @@ export class ReceiptPrintApprovalError extends Error {
 }
 
 /**
- * Authorize every official receipt print before the browser print dialog opens.
- *
- * Behaviour:
- * - First print is recorded by authorize_sale_print and proceeds immediately.
- * - Users with pos.reprint can reprint immediately.
- * - Cashiers without pos.reprint automatically reuse an already-approved,
- *   unexpired reprint request if one exists.
- * - If approval is still pending, printing stays blocked.
- * - If there is no live request, a manager approval request is created and the
- *   caller receives REPRINT_APPROVAL_PENDING. The cashier can press Print again
- *   after the manager approves; the approved request is then consumed once.
+ * Check whether the current user may print. This function is intentionally
+ * non-mutating: the database must not count a print until the print path has
+ * actually opened and the browser print dialog has run.
  */
-async function authorizeReceiptPrint(receipt: ReceiptData): Promise<void> {
+async function authorizeReceiptPrint(receipt: ReceiptData): Promise<ReceiptPrintAuthorization> {
   const invoice = receipt.invoice?.trim();
   if (!invoice) {
     throw new ReceiptPrintApprovalError('INVALID_INVOICE', 'Receipt invoice number is required');
@@ -86,7 +85,7 @@ async function authorizeReceiptPrint(receipt: ReceiptData): Promise<void> {
   };
 
   const initial = await tryAuthorize(null);
-  if (initial.success) return;
+  if (initial.success) return { saleId: sale.id, approvalRequestId: null };
   if (initial.error !== 'MANAGER_APPROVAL_REQUIRED') {
     throw new ReceiptPrintApprovalError(initial.error || 'PRINT_NOT_AUTHORIZED', initial.error || 'Receipt print is not authorized');
   }
@@ -109,7 +108,7 @@ async function authorizeReceiptPrint(receipt: ReceiptData): Promise<void> {
 
   if (request?.status === 'approved') {
     const authorized = await tryAuthorize(request.id);
-    if (authorized.success) return;
+    if (authorized.success) return { saleId: sale.id, approvalRequestId: request.id };
     throw new ReceiptPrintApprovalError(authorized.error || 'INVALID_APPROVAL', authorized.error || 'Reprint approval is invalid');
   }
 
@@ -146,18 +145,78 @@ async function authorizeReceiptPrint(receipt: ReceiptData): Promise<void> {
   );
 }
 
+async function recordReceiptPrint(authorization: ReceiptPrintAuthorization): Promise<void> {
+  const { data, error } = await supabase.rpc('record_sale_print', {
+    p_sale_id: authorization.saleId,
+    p_approval_request_id: authorization.approvalRequestId,
+  });
+  if (error) throw error;
+  const result = (data ?? {}) as PrintAuthorizationResult;
+  if (!result.success) {
+    throw new ReceiptPrintApprovalError(
+      result.error || 'PRINT_RECORD_FAILED',
+      result.error || 'Receipt print could not be recorded',
+    );
+  }
+}
+
+function newPrintToken(): string {
+  return globalThis.crypto?.randomUUID?.() || `print_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function receiptPrintToken(html: string): string | null {
+  return html.match(/<meta name="johns-print-auth" content="([^"]+)">/)?.[1] || null;
+}
+
 export function openPrintWindow(html: string, widthMm: number): boolean {
   const win = window.open('', '_blank', `width=${Math.min(500, widthMm + 140)},height=600`);
   if (!win) return false;
+
+  const token = receiptPrintToken(html);
+  const authorization = token ? pendingReceiptPrints.get(token) ?? null : null;
+  if (token) pendingReceiptPrints.delete(token);
+
   win.document.write(html);
   win.document.close();
+
+  // Kitchen/browser fallback tickets keep their embedded print script. Official
+  // receipts carry an authorization token and are printed here so authorization
+  // never mutates the database before the print path exists.
+  if (!authorization) return true;
+
+  const runReceiptPrint = async () => {
+    if (win.closed) return;
+    try {
+      win.focus();
+      win.print();
+      // window.print() returns only after the print dialog closes. Persist the
+      // print event afterwards; a blocked/missing window can never be recorded.
+      await recordReceiptPrint(authorization);
+      window.setTimeout(() => {
+        if (!win.closed) win.close();
+      }, 300);
+    } catch (error) {
+      console.error('[receipt-print] print record failed', error);
+      if (!win.closed) {
+        const message = error instanceof Error ? error.message : 'Receipt print could not be recorded';
+        win.document.body.innerHTML = `<pre style="white-space:pre-wrap;padding:20px;font-family:sans-serif">${escapeHtml(message)}</pre>`;
+      }
+    }
+  };
+
+  if (win.document.readyState === 'complete') {
+    window.setTimeout(() => void runReceiptPrint(), 0);
+  } else {
+    win.addEventListener('load', () => void runReceiptPrint(), { once: true });
+  }
   return true;
 }
 
 export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: Language, isAr: boolean): Promise<string> {
-  // The receipt HTML is only produced after the server records/authorizes the
-  // print attempt. This keeps auto-print and manual printing on the same gate.
-  await authorizeReceiptPrint(receipt);
+  const authorization = await authorizeReceiptPrint(receipt);
+  const printToken = newPrintToken();
+  pendingReceiptPrints.set(printToken, authorization);
+  window.setTimeout(() => pendingReceiptPrints.delete(printToken), 60_000);
 
   const width = Math.max(50, Math.min(100, s.receipt_width_mm || 80));
   const copies = Math.max(1, Math.min(5, s.receipt_copies || 1));
@@ -201,7 +260,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
     <div class="divider"></div>
     <div class="row total-row"><span>${isAr ? 'الإجمالي' : 'Total'}</span><span>${formatCurrency(receipt.total, currency, lang)}</span></div>
     <div class="row"><span>${isAr ? 'المدفوع' : 'Paid'}</span><span>${formatCurrency(receipt.paid, currency, lang)}</span></div>
-    ${receipt.change > 0 ? `<div class="row"><span>${isAr ? 'الباقي' : 'Change'}</span><span>${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
+    ${receipt.change > 0 ? `<div class="row"><span>${isAr ? 'الباقي' : 'Change'}:</span><span>${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
     ${qrImg ? `<div class="center" style="margin-top:6px"><img src="${qrImg}" width="${Math.round(width / 2.2)}" style="display:block;margin:0 auto" /></div>` : ''}
     <div class="divider"></div>
     ${s.receipt_footer ? `<div class="footer">${escapeHtml(s.receipt_footer)}</div>` : ''}
@@ -211,6 +270,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
   return `<!DOCTYPE html>
     <html dir="${isAr ? 'rtl' : 'ltr'}">
     <head><title>${escapeHtml(receipt.invoice)}</title>
+    <meta name="johns-print-auth" content="${escapeHtml(printToken)}">
     <style>
       * { font-family: 'Courier New', monospace; margin: 0; padding: 0; box-sizing: border-box; }
       body { width: ${width}mm; padding: 4mm; font-size: 12px; color: #000; }
@@ -229,7 +289,6 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
       .footer { margin-top: 10px; text-align: center; font-size: 10px; }
     </style></head>
     <body>${pages}</body>
-    <script>window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); }</script>
     </html>`;
 }
 
