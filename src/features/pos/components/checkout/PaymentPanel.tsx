@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Banknote, CreditCard, Smartphone, FileText, Tag, UtensilsCrossed, Users, CheckCircle2, Car, Bike, SplitSquareHorizontal } from 'lucide-react';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/Button';
 import { formatCurrency } from '@/lib/format';
-import { useCan } from '@/lib/permissions';
 import type { PosPaymentMethod } from '@/lib/posMath';
 import type { CartItem, Customer, DiningTable, OrderType } from '@/lib/types';
 import type { SplitTenderInput } from '@/api';
-import { armEmployeeCredit, armSplitTender, clearArmedEmployeeCredit, clearArmedSplitTender } from '../../services/payment';
+import { armSplitTender, clearArmedSplitTender } from '../../services/payment';
 import { orderTypeLabel } from '../../utils/format';
 import { parseCarNotes, parseDeliveryNotes } from '../../utils/orderLabels';
 import { CashierDiscountApprovalCard } from './CashierDiscountApprovalCard';
@@ -46,33 +44,18 @@ interface PaymentPanelProps {
   orderNotes: string;
 }
 
-type EmployeeOption = {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  branch_id: string | null;
-  branch?: { name?: string | null } | null;
-};
-
-const BASE_METHODS: PosPaymentMethod[] = ['cash', 'card', 'transfer', 'credit'];
+const METHODS: PosPaymentMethod[] = ['cash', 'card', 'transfer', 'credit'];
 const SPLIT_METHODS: SplitTenderInput['payment_method'][] = ['cash', 'card', 'transfer'];
 const ICONS: Record<PosPaymentMethod, React.ReactNode> = {
   cash: <Banknote className="h-6 w-6" />,
   card: <CreditCard className="h-6 w-6" />,
   transfer: <Smartphone className="h-6 w-6" />,
   credit: <FileText className="h-6 w-6" />,
-  employee_credit: <Users className="h-6 w-6" />,
 };
 
 export function PaymentPanel(p: PaymentPanelProps) {
   const { t, lang } = useLanguage();
-  const can = useCan();
   const isAr = lang === 'ar';
-  const canEmployeeCredit = can('employees.credit.create');
-  const methods = useMemo<PosPaymentMethod[]>(
-    () => canEmployeeCredit ? [...BASE_METHODS, 'employee_credit'] : BASE_METHODS,
-    [canEmployeeCredit],
-  );
   const round = Math.ceil((p.total || 0) / 50) * 50;
   const quick = [50, 100, 200, 500];
   const customerName = p.customerId ? p.customers.find((c) => c.id === p.customerId)?.name || '' : '';
@@ -80,9 +63,6 @@ export function PaymentPanel(p: PaymentPanelProps) {
   const deliveryPhone = p.orderType === 'delivery' && !customerName ? parseDeliveryNotes(p.orderNotes).phone : '';
   const [splitMode, setSplitMode] = useState(false);
   const [splitAmounts, setSplitAmounts] = useState<Record<SplitTenderInput['payment_method'], number>>({ cash: 0, card: 0, transfer: 0 });
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [employeeId, setEmployeeId] = useState('');
-  const [employeeLoading, setEmployeeLoading] = useState(false);
   const armedRef = useRef(false);
   const sawCompletingRef = useRef(false);
 
@@ -95,47 +75,18 @@ export function PaymentPanel(p: PaymentPanelProps) {
   const splitValid = splitPayments.length >= 2 && Math.abs(splitPaid - p.total) <= 0.01;
 
   useEffect(() => {
-    if (!canEmployeeCredit || p.paymentMethod !== 'employee_credit') return;
-    let cancelled = false;
-    setEmployeeLoading(true);
-    void supabase
-      .from('users')
-      .select('id,full_name,email,branch_id,branch:branches(name)')
-      .eq('is_active', true)
-      .order('full_name', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        setEmployees(error ? [] : ((data || []) as unknown as EmployeeOption[]));
-        setEmployeeLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [canEmployeeCredit, p.paymentMethod]);
-
-  useEffect(() => {
-    if (p.paymentMethod !== 'employee_credit') {
-      setEmployeeId('');
-      clearArmedEmployeeCredit();
-    }
-  }, [p.paymentMethod]);
-
-  useEffect(() => {
     if (p.completing) sawCompletingRef.current = true;
     if (!p.completing && sawCompletingRef.current && armedRef.current) {
       clearArmedSplitTender();
-      clearArmedEmployeeCredit();
       armedRef.current = false;
       sawCompletingRef.current = false;
     }
   }, [p.completing]);
 
-  useEffect(() => () => {
-    clearArmedSplitTender();
-    clearArmedEmployeeCredit();
-  }, []);
+  useEffect(() => () => clearArmedSplitTender(), []);
 
   const toggleSplit = () => {
     clearArmedSplitTender();
-    clearArmedEmployeeCredit();
     armedRef.current = false;
     sawCompletingRef.current = false;
     const next = !splitMode;
@@ -143,7 +94,6 @@ export function PaymentPanel(p: PaymentPanelProps) {
     if (next) {
       p.onPaymentMethodChange('cash');
       p.onPaidAmountChange(p.total);
-      setEmployeeId('');
       setSplitAmounts({ cash: 0, card: 0, transfer: 0 });
     }
   };
@@ -160,40 +110,26 @@ export function PaymentPanel(p: PaymentPanelProps) {
   };
 
   const complete = () => {
-    clearArmedSplitTender();
-    clearArmedEmployeeCredit();
     if (splitMode) {
       if (!splitValid) return;
       armSplitTender(splitPayments);
       armedRef.current = true;
-    } else if (p.paymentMethod === 'employee_credit') {
-      if (!employeeId) return;
-      armEmployeeCredit(employeeId);
-      armedRef.current = true;
-    }
-    if (armedRef.current) {
       window.setTimeout(() => {
         if (armedRef.current && !sawCompletingRef.current) {
           clearArmedSplitTender();
-          clearArmedEmployeeCredit();
           armedRef.current = false;
         }
       }, 15_500);
+    } else {
+      clearArmedSplitTender();
     }
     p.onComplete();
   };
 
   const back = () => {
     clearArmedSplitTender();
-    clearArmedEmployeeCredit();
     armedRef.current = false;
     p.onBack();
-  };
-
-  const methodLabel = (method: PosPaymentMethod) => {
-    if (method === 'employee_credit') return isAr ? 'آجل موظف' : 'Employee Credit';
-    if (method === 'card' && isAr) return 'فيزا / بطاقة';
-    return t(method);
   };
 
   return (
@@ -217,23 +153,51 @@ export function PaymentPanel(p: PaymentPanelProps) {
               {p.currentBranchName}
               <span className="rounded-xl bg-ui-page-alt px-3 py-1.5">{orderTypeLabel(t, p.orderType)}</span>
               {p.activeTable && (
-                <span className="flex items-center gap-1 rounded-xl bg-ui-success/10 px-3 py-1.5 text-ui-success"><UtensilsCrossed className="h-4 w-4" />{p.activeTable.name}</span>
+                <span className="flex items-center gap-1 rounded-xl bg-ui-success/10 px-3 py-1.5 text-ui-success">
+                  <UtensilsCrossed className="h-4 w-4" />
+                  {p.activeTable.name}
+                </span>
               )}
-              {plate && <span className="flex items-center gap-1 rounded-xl bg-ui-info/10 px-3 py-1.5 text-ui-info"><Car className="h-4 w-4" />{plate}</span>}
-              {deliveryPhone && <span className="flex items-center gap-1 rounded-xl bg-ui-info/10 px-3 py-1.5 text-ui-info"><Bike className="h-4 w-4" />{deliveryPhone}</span>}
-              {customerName && <span className="flex items-center gap-1 rounded-xl bg-ui-page-alt px-3 py-1.5 text-ui-accent"><Users className="h-4 w-4" />{customerName}</span>}
+              {plate && (
+                <span className="flex items-center gap-1 rounded-xl bg-ui-info/10 px-3 py-1.5 text-ui-info">
+                  <Car className="h-4 w-4" />
+                  {plate}
+                </span>
+              )}
+              {deliveryPhone && (
+                <span className="flex items-center gap-1 rounded-xl bg-ui-info/10 px-3 py-1.5 text-ui-info">
+                  <Bike className="h-4 w-4" />
+                  {deliveryPhone}
+                </span>
+              )}
+              {customerName && (
+                <span className="flex items-center gap-1 rounded-xl bg-ui-page-alt px-3 py-1.5 text-ui-accent">
+                  <Users className="h-4 w-4" />
+                  {customerName}
+                </span>
+              )}
             </div>
             {p.orderType === 'dine_in' && (
               <label className="mt-4 flex items-center gap-2 text-xs font-bold text-ui-muted">
-                <Users className="h-4 w-4" />{isAr ? 'عدد الأشخاص' : 'Guests'}
-                <input type="number" min={1} disabled={p.canEditOrder === false} value={p.guestCount || ''} onChange={(e) => p.onGuestCountChange(parseInt(e.target.value) || null)} className="w-20 rounded-xl border border-ui-border bg-ui-surface-raised px-3 py-2 text-center text-ui-text" />
+                <Users className="h-4 w-4" />
+                {isAr ? 'عدد الأشخاص' : 'Guests'}
+                <input
+                  type="number"
+                  min={1}
+                  disabled={p.canEditOrder === false}
+                  value={p.guestCount || ''}
+                  onChange={(e) => p.onGuestCountChange(parseInt(e.target.value) || null)}
+                  className="w-20 rounded-xl border border-ui-border bg-ui-surface-raised px-3 py-2 text-center text-ui-text"
+                />
               </label>
             )}
           </div>
 
           <div data-testid="pos-payment-receipt" className="rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui-sm">
             <p className="mb-1 text-xs font-black text-ui-muted">{isAr ? 'الفاتورة' : 'Receipt'}</p>
-            {p.cart.length === 0 ? <p className="py-6 text-center text-sm text-ui-muted">{t('emptyCart')}</p> : (
+            {p.cart.length === 0 ? (
+              <p className="py-6 text-center text-sm text-ui-muted">{t('emptyCart')}</p>
+            ) : (
               <ul className="divide-y divide-ui-border/60">
                 {p.cart.map((it) => {
                   const lineTotal = it.quantity * it.unit_price - (it.discount_amount || 0);
@@ -242,7 +206,10 @@ export function PaymentPanel(p: PaymentPanelProps) {
                       <span className="pt-0.5 text-xs font-black text-ui-subtle">{it.quantity}×</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-bold text-ui-text">{it.product.name}</p>
-                        <p className="text-[10px] text-ui-subtle">{formatCurrency(it.unit_price, p.currency, lang)}{it.discount_amount > 0 && <span className="text-ui-danger"> {' '}−{formatCurrency(it.discount_amount, p.currency, lang)}</span>}</p>
+                        <p className="text-[10px] text-ui-subtle">
+                          {formatCurrency(it.unit_price, p.currency, lang)}
+                          {it.discount_amount > 0 && <span className="text-ui-danger"> {' '}−{formatCurrency(it.discount_amount, p.currency, lang)}</span>}
+                        </p>
                       </div>
                       <span className="pt-0.5 text-xs font-black">{formatCurrency(lineTotal, p.currency, lang)}</span>
                     </li>
@@ -261,54 +228,102 @@ export function PaymentPanel(p: PaymentPanelProps) {
             </div>
           </div>
 
-          {p.canEditOrder !== false && <CashierDiscountApprovalCard subtotal={p.subtotal} currentType={p.discountType} ar={isAr} onApproved={(type, amount) => { p.onDiscountTypeChange(type); p.onDiscountAmountChange(amount); }} />}
+          {p.canEditOrder !== false && <CashierDiscountApprovalCard
+            subtotal={p.subtotal}
+            currentType={p.discountType}
+            ar={isAr}
+            onApproved={(type, amount) => {
+              p.onDiscountTypeChange(type);
+              p.onDiscountAmountChange(amount);
+            }}
+          />}
 
-          <button type="button" data-testid="pos-payment-split-toggle" onClick={toggleSplit} className={`flex w-full items-center justify-between rounded-2xl border-2 p-4 text-start transition ${splitMode ? 'border-ui-primary bg-ui-primary-soft' : 'border-ui-border bg-ui-surface'}`}>
+          <button
+            type="button"
+            data-testid="pos-payment-split-toggle"
+            onClick={toggleSplit}
+            className={`flex w-full items-center justify-between rounded-2xl border-2 p-4 text-start transition ${splitMode ? 'border-ui-primary bg-ui-primary-soft' : 'border-ui-border bg-ui-surface'}`}
+          >
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-ui-page-alt text-ui-accent"><SplitSquareHorizontal className="h-5 w-5" /></div>
-              <div><p className="text-sm font-black text-ui-text">{isAr ? 'تقسيم الدفع' : 'Split payment'}</p><p className="mt-0.5 text-[10px] font-bold text-ui-subtle">{isAr ? 'مثال: جزء كاش + جزء فيزا' : 'Example: part cash + part card'}</p></div>
+              <div>
+                <p className="text-sm font-black text-ui-text">{isAr ? 'تقسيم الدفع' : 'Split payment'}</p>
+                <p className="mt-0.5 text-[10px] font-bold text-ui-subtle">{isAr ? 'مثال: جزء كاش + جزء فيزا' : 'Example: part cash + part card'}</p>
+              </div>
             </div>
             <span className={`rounded-full px-3 py-1 text-[10px] font-black ${splitMode ? 'bg-ui-primary text-ui-primary-fg' : 'bg-ui-page-alt text-ui-muted'}`}>{splitMode ? (isAr ? 'مفعّل' : 'ON') : (isAr ? 'اختيار' : 'Choose')}</span>
           </button>
 
           {splitMode ? (
             <div data-testid="pos-split-payment-editor" className="space-y-3 rounded-3xl border border-ui-primary/30 bg-ui-surface p-5 shadow-ui-sm">
-              <div className="flex items-center justify-between"><div><p className="text-sm font-black text-ui-text">{isAr ? 'وزّع قيمة الفاتورة' : 'Allocate invoice total'}</p><p className="text-[10px] font-bold text-ui-subtle">{isAr ? 'يجب استخدام طريقتين دفع على الأقل' : 'Use at least two payment methods'}</p></div><span className="text-lg font-black text-ui-accent">{formatCurrency(p.total, p.currency, lang)}</span></div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-ui-text">{isAr ? 'وزّع قيمة الفاتورة' : 'Allocate invoice total'}</p>
+                  <p className="text-[10px] font-bold text-ui-subtle">{isAr ? 'يجب استخدام طريقتين دفع على الأقل' : 'Use at least two payment methods'}</p>
+                </div>
+                <span className="text-lg font-black text-ui-accent">{formatCurrency(p.total, p.currency, lang)}</span>
+              </div>
+
               {SPLIT_METHODS.map((method) => (
                 <div key={method} className="grid grid-cols-[minmax(0,1fr)_130px_auto] items-center gap-2 rounded-2xl bg-ui-page-alt p-2.5">
-                  <div className="flex min-w-0 items-center gap-2 text-xs font-black text-ui-text">{method === 'cash' ? <Banknote className="h-5 w-5 text-ui-success" /> : method === 'card' ? <CreditCard className="h-5 w-5 text-ui-accent" /> : <Smartphone className="h-5 w-5 text-ui-info" />}<span>{method === 'card' && isAr ? 'فيزا / بطاقة' : t(method)}</span></div>
-                  <input data-testid={`pos-split-payment-${method}`} type="number" min={0} step="0.01" value={splitAmounts[method] || ''} onChange={(event) => setSplitAmount(method, parseFloat(event.target.value) || 0)} className="h-11 rounded-xl border border-ui-border bg-ui-surface px-3 text-end text-sm font-black text-ui-text outline-none focus:border-ui-primary" />
-                  <button type="button" onClick={() => fillRemaining(method)} className="rounded-xl bg-ui-surface px-2.5 py-2 text-[10px] font-black text-ui-accent">{isAr ? 'الباقي' : 'Rest'}</button>
+                  <div className="flex min-w-0 items-center gap-2 text-xs font-black text-ui-text">
+                    {method === 'cash' ? <Banknote className="h-5 w-5 text-ui-success" /> : method === 'card' ? <CreditCard className="h-5 w-5 text-ui-accent" /> : <Smartphone className="h-5 w-5 text-ui-info" />}
+                    <span>{method === 'card' && isAr ? 'فيزا / بطاقة' : t(method)}</span>
+                  </div>
+                  <input
+                    data-testid={`pos-split-payment-${method}`}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={splitAmounts[method] || ''}
+                    onChange={(event) => setSplitAmount(method, parseFloat(event.target.value) || 0)}
+                    className="h-11 rounded-xl border border-ui-border bg-ui-surface px-3 text-end text-sm font-black text-ui-text outline-none focus:border-ui-primary"
+                  />
+                  <button type="button" onClick={() => fillRemaining(method)} className="rounded-xl bg-ui-surface px-2.5 py-2 text-[10px] font-black text-ui-accent">
+                    {isAr ? 'الباقي' : 'Rest'}
+                  </button>
                 </div>
               ))}
-              <div className={`rounded-2xl p-3 text-xs font-black ${splitValid ? 'bg-ui-success/10 text-ui-success' : splitOver > 0 ? 'bg-ui-danger/10 text-ui-danger' : 'bg-ui-warning/10 text-ui-warning'}`}>{splitValid ? (isAr ? 'التقسيم مكتمل ومتطابق مع إجمالي الفاتورة.' : 'Payment split matches the invoice total.') : splitOver > 0 ? `${isAr ? 'زيادة' : 'Over'}: ${formatCurrency(splitOver, p.currency, lang)}` : `${isAr ? 'المتبقي' : 'Remaining'}: ${formatCurrency(splitRemaining, p.currency, lang)}`}</div>
+
+              <div className={`rounded-2xl p-3 text-xs font-black ${splitValid ? 'bg-ui-success/10 text-ui-success' : splitOver > 0 ? 'bg-ui-danger/10 text-ui-danger' : 'bg-ui-warning/10 text-ui-warning'}`}>
+                {splitValid
+                  ? (isAr ? 'التقسيم مكتمل ومتطابق مع إجمالي الفاتورة.' : 'Payment split matches the invoice total.')
+                  : splitOver > 0
+                    ? `${isAr ? 'زيادة' : 'Over'}: ${formatCurrency(splitOver, p.currency, lang)}`
+                    : `${isAr ? 'المتبقي' : 'Remaining'}: ${formatCurrency(splitRemaining, p.currency, lang)}`}
+              </div>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">
-                {methods.map((m) => (
-                  <button data-testid={`pos-payment-method-${m}`} key={m} onClick={() => p.onPaymentMethodChange(m)} className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-ui-surface text-sm font-black shadow-ui-sm transition active:scale-[.98] ${p.paymentMethod === m ? 'border-ui-primary bg-ui-primary-soft text-ui-accent shadow-ui-lg' : 'border-ui-border text-ui-muted'}`}>
-                    {ICONS[m]}{methodLabel(m)}{p.paymentMethod === m && <CheckCircle2 className="h-4 w-4 text-ui-accent" />}
+                {METHODS.map((m) => (
+                  <button
+                    data-testid={`pos-payment-method-${m}`}
+                    key={m}
+                    onClick={() => p.onPaymentMethodChange(m)}
+                    className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-ui-surface text-sm font-black shadow-ui-sm transition active:scale-[.98] ${p.paymentMethod === m ? 'border-ui-primary bg-ui-primary-soft text-ui-accent shadow-ui-lg' : 'border-ui-border text-ui-muted'}`}
+                  >
+                    {ICONS[m]}
+                    {m === 'card' && isAr ? 'فيزا / بطاقة' : t(m)}
+                    {p.paymentMethod === m && <CheckCircle2 className="h-4 w-4 text-ui-accent" />}
                   </button>
                 ))}
               </div>
 
-              {p.paymentMethod === 'employee_credit' && (
-                <div data-testid="pos-employee-credit-selector" className="rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui-sm">
-                  <label className="mb-2 block text-xs font-black text-ui-muted">{isAr ? 'الموظف صاحب الذمة' : 'Employee account'}</label>
-                  <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} disabled={employeeLoading} className="h-12 w-full rounded-2xl border border-ui-border bg-ui-page-alt px-3 text-sm font-bold text-ui-text outline-none focus:border-ui-primary">
-                    <option value="">{employeeLoading ? (isAr ? 'جاري تحميل الموظفين...' : 'Loading employees...') : (isAr ? 'اختر الموظف' : 'Select employee')}</option>
-                    {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.email || employee.id}{employee.branch?.name ? ` — ${employee.branch.name}` : ''}</option>)}
-                  </select>
-                  <p className="mt-2 text-[10px] font-bold text-ui-subtle">{isAr ? 'لن يدخل هذا المبلغ ضمن نقدية الدرج، وسيظهر في ذمم الموظفين.' : 'This amount will not increase drawer cash and will be recorded as employee receivable.'}</p>
-                </div>
-              )}
-
-              {p.paymentMethod !== 'credit' && p.paymentMethod !== 'employee_credit' && (
+              {p.paymentMethod !== 'credit' && (
                 <div className="rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui-sm">
                   <label className="mb-2 block text-xs font-black text-ui-muted">{t('paid')}</label>
-                  <input type="number" value={p.paidAmount || ''} onChange={(e) => p.onPaidAmountChange(parseFloat(e.target.value) || 0)} className="h-16 w-full rounded-2xl border border-ui-border bg-ui-page-alt text-center text-3xl font-black text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-ring" />
-                  <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => p.onPaidAmountChange(p.total)} className="rounded-xl bg-ui-success/10 px-4 py-2.5 text-xs font-black text-ui-success">{isAr ? 'بالضبط' : 'Exact'}</button><button onClick={() => p.onPaidAmountChange(round)} className="rounded-xl bg-ui-page-alt px-4 py-2.5 text-xs font-black text-ui-muted">{formatCurrency(round, p.currency, lang)}</button>{quick.map((v) => <button key={v} onClick={() => p.onPaidAmountChange(p.paidAmount + v)} className="rounded-xl bg-ui-page-alt px-4 py-2.5 text-xs font-black text-ui-muted">+{v}</button>)}</div>
+                  <input
+                    type="number"
+                    value={p.paidAmount || ''}
+                    onChange={(e) => p.onPaidAmountChange(parseFloat(e.target.value) || 0)}
+                    className="h-16 w-full rounded-2xl border border-ui-border bg-ui-page-alt text-center text-3xl font-black text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-ring"
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button onClick={() => p.onPaidAmountChange(p.total)} className="rounded-xl bg-ui-success/10 px-4 py-2.5 text-xs font-black text-ui-success">{isAr ? 'بالضبط' : 'Exact'}</button>
+                    <button onClick={() => p.onPaidAmountChange(round)} className="rounded-xl bg-ui-page-alt px-4 py-2.5 text-xs font-black text-ui-muted">{formatCurrency(round, p.currency, lang)}</button>
+                    {quick.map((v) => <button key={v} onClick={() => p.onPaidAmountChange(p.paidAmount + v)} className="rounded-xl bg-ui-page-alt px-4 py-2.5 text-xs font-black text-ui-muted">+{v}</button>)}
+                  </div>
                   {p.change > 0 && <div className="mt-3 flex justify-between rounded-2xl bg-ui-success/10 p-4 text-sm font-black text-ui-success"><span>{t('change')}</span><span>{formatCurrency(p.change, p.currency, lang)}</span></div>}
                 </div>
               )}
@@ -319,9 +334,22 @@ export function PaymentPanel(p: PaymentPanelProps) {
 
       <div className="border-t border-ui-border bg-ui-surface p-4">
         <div className="mx-auto max-w-2xl">
-          <div className="mb-3 flex items-end justify-between"><span className="text-sm font-bold text-ui-muted">{t('total')}</span><span className="text-3xl font-black text-ui-accent">{formatCurrency(p.total, p.currency, lang)}</span></div>
-          <Button data-testid="pos-payment-confirm" size="lg" className="w-full !min-h-14 !rounded-2xl !bg-ui-success text-lg font-black shadow-ui-xl" onClick={complete} disabled={p.completing || !p.canComplete || (splitMode && !splitValid) || (p.paymentMethod === 'employee_credit' && !employeeId)}>
-            {p.completing ? (isAr ? 'جاري المعالجة...' : 'Processing...') : splitMode ? (isAr ? 'تأكيد الدفع المقسّم' : 'Confirm Split Payment') : p.paymentMethod === 'employee_credit' ? (isAr ? 'تسجيل آجل الموظف' : 'Post Employee Credit') : (isAr ? 'تأكيد الدفع' : 'Confirm Payment')}
+          <div className="mb-3 flex items-end justify-between">
+            <span className="text-sm font-bold text-ui-muted">{t('total')}</span>
+            <span className="text-3xl font-black text-ui-accent">{formatCurrency(p.total, p.currency, lang)}</span>
+          </div>
+          <Button
+            data-testid="pos-payment-confirm"
+            size="lg"
+            className="w-full !min-h-14 !rounded-2xl !bg-ui-success text-lg font-black shadow-ui-xl"
+            onClick={complete}
+            disabled={p.completing || !p.canComplete || (splitMode && !splitValid)}
+          >
+            {p.completing
+              ? (isAr ? 'جاري المعالجة...' : 'Processing...')
+              : splitMode
+                ? (isAr ? 'تأكيد الدفع المقسّم' : 'Confirm Split Payment')
+                : (isAr ? 'تأكيد الدفع' : 'Confirm Payment')}
           </Button>
         </div>
       </div>

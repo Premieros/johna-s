@@ -94,29 +94,6 @@ export const pos = {
     return rpc<RpcResult>('process_sale', p);
   },
 
-  async processEmployeeCreditSale(p: {
-    p_invoice_number: string;
-    p_branch_id: string;
-    p_warehouse_id: string | null;
-    p_employee_id: string;
-    p_salesperson_id: string | null;
-    p_subtotal: number;
-    p_discount_amount: number;
-    p_discount_type: 'percent' | 'amount';
-    p_tax_amount: number;
-    p_bonus_amount: number;
-    p_total: number;
-    p_status: string;
-    p_items: SaleItemInput[];
-    p_shift_id: string | null;
-    p_order_type?: OrderType;
-    p_table_id?: string | null;
-    p_order_id?: string | null;
-    p_guest_count?: number | null;
-  }): ApiResult<RpcResult & { employee_credit?: boolean; employee_id?: string; employee_customer_id?: string; credit_amount?: number }> {
-    return rpc('process_employee_credit_sale', p);
-  },
-
   reconcileOfflineSale(p: {
     p_invoice_number: string;
     p_branch_id: string;

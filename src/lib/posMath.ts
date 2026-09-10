@@ -31,8 +31,7 @@ export function computeLineDiscount(lineTotal: number, discount: number): number
 
 export function computePosTotals(input: PosTotalsInput): PosTotals {
   const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unit_price - i.discount_amount, 0);
-  const discountValue = input.discountType === 'percent' ? (subtotal * input.discountAmount) / 100 : input.discountAmount;
-  const taxableAmount = subtotal - discountValue;
+  const discountValue = input.discountType === 'percent' ? (subtotal * input.discountAmount) / 100 : input.discountAmount;  const taxableAmount = subtotal - discountValue;
   const taxRate = input.taxEnabled ? input.taxRate || 0 : 0;
   const taxAmount = (taxableAmount * taxRate) / 100;
   const total = taxableAmount + taxAmount;
