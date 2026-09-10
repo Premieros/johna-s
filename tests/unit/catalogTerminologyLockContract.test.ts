@@ -14,11 +14,13 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(source).toContain("insert({ ...commonPayload, unit_id: form.unit_id })");
   });
 
-  it('presents inventory units as manufactured items without changing the storage contract', () => {
+  it('presents only manufactured inventory items and forces type only on create', () => {
     const source = read('src/features/catalog/pages/InventoryUnitsPage.tsx');
     const menu = read('src/core/navigation/menu.config.ts');
 
-    expect(source).toContain("unit_type: 'manufactured' as const");
+    expect(source).toContain("filters: [{ column: 'unit_type', value: 'manufactured' }]");
+    expect(source).toContain(".update(payload).eq('id', editing.id)");
+    expect(source).toContain("insert({ ...payload, unit_type: 'manufactured' as const })");
     expect(source).toContain("title={isAr ? 'المصنعات' : 'Manufactured Items'}");
     expect(source).not.toContain('<option value="ready">');
     expect(menu).toContain("label: { ar: 'المصنعات', en: 'Manufactured Items' }");
