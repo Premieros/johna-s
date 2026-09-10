@@ -16,10 +16,22 @@ describe.skipIf(skip)('Phase 1 — inventory units & order status split', () => 
   const productId = randomUUID();
   const orderId = randomUUID();
   const orderId2 = randomUUID();
+  const printUserId = randomUUID();
 
   async function asAdmin<T>(fn: () => Promise<T>): Promise<T> {
     await client.query(`SELECT set_config('app.user_id', $1, true)`, [randomUUID()]);
     await client.query(`SET LOCAL ROLE service_role`);
+    try {
+      return await fn();
+    } finally {
+      await client.query('RESET ROLE').catch(() => {});
+      await client.query('RESET app.user_id').catch(() => {});
+    }
+  }
+
+  async function asPrintUser<T>(fn: () => Promise<T>): Promise<T> {
+    await client.query(`SELECT set_config('app.user_id', $1, true)`, [printUserId]);
+    await client.query(`SET LOCAL ROLE authenticated`);
     try {
       return await fn();
     } finally {
@@ -38,6 +50,24 @@ describe.skipIf(skip)('Phase 1 — inventory units & order status split', () => 
     await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
 
     await client.query(`INSERT INTO public.branches (id, name) VALUES ($1, $2)`, [branchId, 'Phase1 Test']);
+    await client.query(
+      `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
+       VALUES ($1, $2, 'Phase1 Print User', 'cashier', $3, true)`,
+      [printUserId, `${randomUUID()}@test.local`, branchId],
+    );
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = CASE
+         WHEN jsonb_typeof(COALESCE(permissions, '[]'::jsonb)) = 'array'
+           THEN CASE
+             WHEN COALESCE(permissions, '[]'::jsonb) ? 'pos.receipt.print' THEN COALESCE(permissions, '[]'::jsonb)
+             ELSE COALESCE(permissions, '[]'::jsonb) || '["pos.receipt.print"]'::jsonb
+           END
+         ELSE jsonb_set(COALESCE(permissions, '{}'::jsonb), '{pos.receipt.print}', 'true'::jsonb, true)
+       END,
+       updated_at = now()
+       WHERE role = 'cashier'`,
+    );
     await client.query(`INSERT INTO public.warehouses (id, name, branch_id) VALUES ($1, $2, $3)`, [whId, 'WH', branchId]);
     await client.query(`INSERT INTO public.raw_materials (id, code, name, min_stock, default_cost, is_active, branch_id) VALUES ($1, 'RM-001', 'Flour', 0, 10, true, $2)`, [rmId, branchId]);
     await client.query(`INSERT INTO public.products (id, name, branch_id, product_type, sale_price, cost_price) VALUES ($1, $2, $3, 'ready', 25, 10)`, [productId, 'Burger', branchId]);
@@ -178,8 +208,8 @@ describe.skipIf(skip)('Phase 1 — inventory units & order status split', () => 
     });
   });
 
-  it('set_print_status RPC updates order', async () => {
-    await asAdmin(async () => {
+  it('set_print_status RPC updates order with explicit receipt permission', async () => {
+    await asPrintUser(async () => {
       await client.query(`SELECT public.set_print_status($1, 'printed')`, [orderId]);
       const rows = await q(`SELECT print_status FROM public.orders WHERE id = $1`, [orderId]);
       expect(rows[0].print_status).toBe('printed');
