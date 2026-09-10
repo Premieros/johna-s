@@ -37,19 +37,25 @@ describe('print execution truth contract', () => {
     expect(record).toContain('REVOKE ALL ON FUNCTION public.record_sale_print(uuid, uuid) FROM anon');
   });
 
-  it('does not persist a receipt print before the browser print path runs', () => {
+  it('records official receipts only after Electron or Print Agent explicitly confirms execution', () => {
     const printing = read('src/features/pos/utils/printing.ts');
     const openWindow = between(printing, 'export function openPrintWindow', 'export async function buildReceiptHtml');
     const receiptBuilder = between(printing, 'export async function buildReceiptHtml', 'export function buildKitchenTicketHtml');
 
     expect(openWindow).toContain("const win = window.open('', '_blank'");
     expect(openWindow).toContain('if (!win) return false');
-    expect(openWindow).toContain('win.print();');
-    expect(openWindow).toContain('await recordReceiptPrint(authorization);');
-    expect(openWindow.indexOf('win.print();')).toBeLessThan(openWindow.indexOf('await recordReceiptPrint(authorization);'));
+    expect(openWindow).toContain('accepted = await executeSilentPrint');
+    expect(openWindow).toContain('if (accepted) {');
+    expect(openWindow).toContain('await recordReceiptPrint(pending.authorization);');
+    expect(openWindow.indexOf('accepted = await executeSilentPrint')).toBeLessThan(openWindow.indexOf('await recordReceiptPrint(pending.authorization);'));
+
+    const fallback = openWindow.slice(openWindow.indexOf("console.warn('[receipt-print] local print not confirmed"));
+    expect(fallback).toContain('win.print();');
+    expect(fallback).not.toContain('recordReceiptPrint(');
 
     expect(receiptBuilder).toContain('await authorizeReceiptPrint(receipt)');
-    expect(receiptBuilder).toContain('pendingReceiptPrints.set(printToken, authorization)');
+    expect(receiptBuilder).toContain('pendingReceiptPrints.set(printToken');
+    expect(receiptBuilder).toContain('plainText: buildReceiptPlainText');
     expect(receiptBuilder).toContain('johns-print-auth');
     expect(receiptBuilder).not.toContain('window.print()');
   });
