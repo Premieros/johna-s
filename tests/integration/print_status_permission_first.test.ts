@@ -130,12 +130,18 @@ describe.skipIf(skip)('print status permission-first boundary', () => {
   });
 
   it('records printed_at only after an authorized printed transition while preserving RETURNS void', async () => {
+    const signature = await client.query<{ returns_void: boolean }>(
+      `SELECT p.prorettype = 'void'::regtype AS returns_void
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+         AND p.proname = 'set_print_status'
+         AND pg_get_function_identity_arguments(p.oid) = 'p_order_id uuid, p_status text'`,
+    );
+    expect(signature.rows[0]?.returns_void).toBe(true);
+
     await asUser(printerUser, async () => {
-      const call = await client.query<{ value: null }>(
-        `SELECT public.set_print_status($1, 'printed') AS value`,
-        [orderA],
-      );
-      expect(call.rows[0]?.value ?? null).toBeNull();
+      await client.query(`SELECT public.set_print_status($1, 'printed')`, [orderA]);
 
       const printed = await client.query<{ print_status: string; printed_at: Date | null }>(
         `SELECT print_status, printed_at FROM public.orders WHERE id = $1`,
