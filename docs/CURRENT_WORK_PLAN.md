@@ -38,12 +38,13 @@
 ## 3) Development baseline الحالي
 
 - Branch: `development/final-handover`
-- Current HEAD وقت تحديث السجل: `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
+- Current HEAD وقت آخر مزامنة للسجل: `bbd9e4e78ba95b2b5f0ff00c7d256930c3bc912f`
+- Functional fix مباشرة قبل تحديث السجل: `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
 - Parent before print-status constraint fix: `a417301fb3b61786dec1d13a95d3974a45610b15`
 - PR #56: `fix: final offline reconciliation and print truth hardening`
 - PR #56: **Open / Draft / غير مدمج**.
 - Base: `main@de0aed9e3f2ed58958b3b2b1c9b0fd44c0b1f3b1`
-- Verify #985 / run `34451756872` على `d942bbc...`: **IN PROGRESS وقت تحديث السجل**.
+- Verify #986 / run `34452227662` على HEAD `bbd9e4e...`: **IN PROGRESS وقت آخر مزامنة للسجل**.
 
 ممنوع دمج PR #56 قبل Full Verify Green وإغلاق Production E2E المطلوب داخل Transaction مع ROLLBACK.
 
@@ -163,7 +164,7 @@ Verify #984 على HEAD `a417301fb3b61786dec1d13a95d3974a45610b15` لم يغلق
 - لا تعديل على permission model ✅
 - لا Migration على Production ✅
 
-Verify #985 هو التحقق المباشر لهذا الإصلاح ولا تعتبر الدفعة مغلقة قبل نجاحه بالكامل.
+تحديث السجل بعد هذا الإصلاح أنشأ HEAD docs-only جديدًا `bbd9e4e...`؛ لذلك Verify #986 هو الـrun الحالي الواجب اعتماده للإغلاق، وليس نجاح run أقدم على HEAD مختلف.
 
 ## 9) بوابات التسليم المتبقية
 
@@ -228,4 +229,4 @@ Verify #985 هو التحقق المباشر لهذا الإصلاح ولا تع
 
 ---
 
-**NEXT ACTION:** افحص نتيجة Verify #985 على `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`. إذا Full Green، أغلق Offline/Print regression gate ثم اختبر Captain/mobile printer routing، وبعدها نفذ Real Production E2E داخل Transaction مع ROLLBACK. لا تدمج PR #56 قبل إغلاق هذه البوابات وتحديث هذا السجل مرة أخرى.
+**NEXT ACTION:** افحص نتيجة Verify #986 على `bbd9e4e78ba95b2b5f0ff00c7d256930c3bc912f`. إذا Full Green، أغلق Offline/Print regression gate ثم اختبر Captain/mobile printer routing، وبعدها نفذ Real Production E2E داخل Transaction مع ROLLBACK. لا تدمج PR #56 قبل إغلاق هذه البوابات وتحديث هذا السجل مرة أخرى.
