@@ -20,6 +20,7 @@ describe('offline financial truth contract', () => {
     expect(hook).toContain('!result.offline || !result.pending_sync');
     expect(hook).toContain('لم يتم تسجيل البيع أو الدفع نهائيًا بعد');
     expect(hook).toContain('The sale/payment is not final until the server confirms it.');
+    expect(hook).toContain("'warning',");
     expect(hook).not.toContain("from '../services/localPrintAgent'");
     expect(hook).not.toContain('executeCashDrawerKick(');
   });
