@@ -34,6 +34,22 @@ describe('offline sale originating-user contract', () => {
     expect(reconcile).toBeGreaterThan(ownerGuard);
   });
 
+  it('resolves an authoritative warehouse before replay and fails closed when none exists', () => {
+    const sync = read('src/core/offline/syncEngine.ts');
+
+    expect(sync).toContain('private async resolveReplayWarehouse');
+    expect(sync).toContain(".select('inventory_warehouse_id')");
+    expect(sync).toContain(".from('warehouses')");
+    expect(sync).toContain(".order('is_default', { ascending: false })");
+    expect(sync).toContain("throw new Error('WAREHOUSE_REQUIRED_OFFLINE_SYNC')");
+    expect(sync).toContain('p_warehouse_id: warehouseId');
+
+    const resolveWarehouse = sync.indexOf('const warehouseId = await this.resolveReplayWarehouse(item)');
+    const processSale = sync.indexOf('await posApi.processSale(replayPayload)');
+    expect(resolveWarehouse).toBeGreaterThanOrEqual(0);
+    expect(processSale).toBeGreaterThan(resolveWarehouse);
+  });
+
   it('enforces the same owner identity at the database reconciliation boundary', () => {
     const migration = read('supabase/migrations/20260910008000_offline_sale_owner_reconciliation.sql');
 
