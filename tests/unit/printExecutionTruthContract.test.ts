@@ -14,7 +14,7 @@ function between(source: string, start: string, end: string): string {
 
 describe('print execution truth contract', () => {
   it('keeps authorization non-mutating and records only in the execution RPC', () => {
-    const migration = read('supabase/migrations/20260910006000_print_execution_truth.sql');
+    const migration = read('supabase/migrations/20260910093914_print_execution_truth.sql');
     const authorize = between(
       migration,
       'CREATE OR REPLACE FUNCTION public.authorize_sale_print',
@@ -95,7 +95,7 @@ describe('print execution truth contract', () => {
   });
 
   it('keeps print status permission-first and branch scoped', () => {
-    const migration = read('supabase/migrations/20260910005000_print_status_permission_first.sql');
+    const migration = read('supabase/migrations/20260910093844_print_status_permission_first.sql');
     expect(migration).toContain("public.can_permission('pos.receipt.print')");
     expect(migration).toContain('public.user_may_access_branch');
     expect(migration).toContain("p_status = 'printed'");
