@@ -87,10 +87,8 @@ export function RawMaterialsPage() {
   }
   useEffect(() => { loadMeta(); }, []);
 
-  const branchLabel = (id: string | null | undefined) =>
-    branches.find((br) => br.id === id)?.name || '-';
-  const unitLabel = (id: string | null | undefined) =>
-    units.find((u) => u.id === id)?.name || '-';
+  const branchLabel = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
+  const unitLabel = (id: string | null | undefined) => units.find((u) => u.id === id)?.name || '-';
 
   const filteredMaterials = materials.filter((m) => {
     if (!search) return true;
@@ -114,10 +112,13 @@ export function RawMaterialsPage() {
 
   const save = async () => {
     if (!form.code.trim() || !form.name.trim()) { show(t('required'), 'error'); return; }
-    const payload = {
+    if (!form.id && !form.unit_id) {
+      show(isAr ? 'وحدة قياس الخامة مطلوبة عند الإنشاء' : 'Raw-material measurement unit is required on creation', 'error');
+      return;
+    }
+    const commonPayload = {
       code: form.code.trim(),
       name: form.name.trim(),
-      unit_id: form.unit_id || null,
       category: form.category.trim() || null,
       min_stock: form.min_stock,
       default_cost: form.default_cost,
@@ -126,14 +127,16 @@ export function RawMaterialsPage() {
       is_active: form.is_active,
     };
     if (form.id) {
-      const { error } = await supabase.from('raw_materials').update(payload).eq('id', form.id);
+      // Measurement unit is intentionally immutable after creation.
+      // Do not send unit_id on update, so a UI regression cannot change it accidentally.
+      const { error } = await supabase.from('raw_materials').update(commonPayload).eq('id', form.id);
       if (error) { show(error.message, 'error'); return; }
       await logAudit('update', 'raw_materials', form.id);
       show(t('saveSuccess'), 'success');
     } else {
-      const { data, error } = await supabase.from('raw_materials').insert(payload).select().single();
+      const { data, error } = await supabase.from('raw_materials').insert({ ...commonPayload, unit_id: form.unit_id }).select().single();
       if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'raw_materials', (data as RawMaterial)?.id);
+      await logAudit('create', 'raw_materials', (data as RawMaterial)?.id, { unit_id: form.unit_id });
       show(t('saveSuccess'), 'success');
     }
     setModalOpen(false);
@@ -175,59 +178,28 @@ export function RawMaterialsPage() {
   const materialColumns: Column<RawMaterial>[] = [
     { key: 'name', header: t('materialName'), render: (m) => (
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-ui-success-soft  flex items-center justify-center text-xs font-bold text-ui-success dark:text-ui-success">
-          {m.name[0]}
-        </div>
-        <div>
-          <p className="font-medium text-ui-text">{m.name}</p>
-          {m.code && <p className="text-xs text-ui-subtle">{m.code}</p>}
-        </div>
+        <div className="w-8 h-8 rounded-lg bg-ui-success-soft flex items-center justify-center text-xs font-bold text-ui-success dark:text-ui-success">{m.name[0]}</div>
+        <div><p className="font-medium text-ui-text">{m.name}</p>{m.code && <p className="text-xs text-ui-subtle">{m.code}</p>}</div>
       </div>
     )},
-    { key: 'unit', header: t('unit'), render: (m) => unitLabel(m.unit_id) },
+    { key: 'unit', header: isAr ? 'وحدة القياس' : 'Measurement unit', render: (m) => unitLabel(m.unit_id) },
     { key: 'category', header: t('category'), render: (m) => m.category || '-' },
     { key: 'branch', header: t('branch'), render: (m) => <BranchBadge name={branchLabel(m.branch_id)} /> },
     { key: 'min_stock', header: t('minStock'), render: (m) => formatNumber(Number(m.min_stock)) },
     { key: 'default_cost', header: t('defaultCost'), render: (m) => formatNumber(Number(m.default_cost), 2) },
-    { key: 'is_active', header: t('status'), render: (m) => (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-subtle dark:text-ui-subtle'}`}>
-        {m.is_active ? t('active') : t('inactive')}
-      </span>
-    )},
-    { key: 'actions', header: t('actions'), render: (m) => (
-      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-        {can('raw_materials.manage') && (
-          <button onClick={() => openEdit(m)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}>
-            <Edit2 className="w-4 h-4" />
-          </button>
-        )}
-        {can('raw_materials.manage') && (
-          <button onClick={() => setDeleteId(m.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('delete')}>
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    )},
+    { key: 'is_active', header: t('status'), render: (m) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-subtle dark:text-ui-subtle'}`}>{m.is_active ? t('active') : t('inactive')}</span> },
+    { key: 'actions', header: t('actions'), render: (m) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+      {can('raw_materials.manage') && <button onClick={() => openEdit(m)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>}
+      {can('raw_materials.manage') && <button onClick={() => setDeleteId(m.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('delete')}><Trash2 className="w-4 h-4" /></button>}
+    </div> },
   ];
 
   const stockColumns: Column<RawMaterialInventory>[] = [
     { key: 'material', header: t('rawMaterial'), render: (i) => i.raw_material?.name || '-' },
     { key: 'branch', header: t('branch'), render: (i) => branchLabel(i.branch_id) },
-    { key: 'quantity', header: t('quantity'), render: (i) => (
-      <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>
-        {formatNumber(Number(i.quantity))}
-      </span>
-    )},
+    { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatNumber(Number(i.quantity))}</span> },
     { key: 'avg_cost', header: t('avgCost'), render: (i) => formatNumber(Number(i.avg_cost), 2) },
-    { key: 'actions', header: t('actions'), render: (i) => (
-      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-        {can('raw_materials.manage') && (
-          <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}>
-            <Edit2 className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    )},
+    { key: 'actions', header: t('actions'), render: (i) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('raw_materials.manage') && <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}><Edit2 className="w-4 h-4" /></button>}</div> },
   ];
 
   const batchColumns: Column<RawMaterialBatch>[] = [
@@ -248,117 +220,43 @@ export function RawMaterialsPage() {
 
   return (
     <DesignSurface testId="raw-materials-page">
-      <DesignPageHeader title={t('rawMaterials')} subtitle={isAr ? 'إدارة المواد الخام وأرصدتها ودفعاتها' : 'Manage raw materials, stock and batches'} actions={
-        can('raw_materials.manage') ? (
-          <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4" /> {t('addRawMaterial')}</Button>
-        ) : undefined
-      } />
+      <DesignPageHeader title={t('rawMaterials')} subtitle={isAr ? 'وحدة القياس تحدد عند إنشاء الخامة وتبقى ثابتة بعد ذلك' : 'Measurement unit is selected when the raw material is created and remains fixed afterwards'} actions={can('raw_materials.manage') ? <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4" /> {t('addRawMaterial')}</Button> : undefined} />
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        {tabs.map((tb) => (
-          <button
-            key={tb.key}
-            onClick={() => setTab(tb.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-              tab === tb.key
-                ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]'
-                : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'
-            }`}
-          >
-            {tb.icon}
-            {tb.label}
-          </button>
-        ))}
-      </div>
+      <div className="flex flex-wrap gap-2 mb-4">{tabs.map((tb) => <button key={tb.key} onClick={() => setTab(tb.key)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${tab === tb.key ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]' : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'}`}>{tb.icon}{tb.label}</button>)}</div>
 
-      {tab !== 'materials' && (
-        <DesignPanel testId="raw-materials-branch-panel">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <Select value={stockBranch} onChange={(e) => setStockBranch(e.target.value)} label={t('branch')} className="sm:w-64">
-              <option value="">{t('all')} - {t('branches')}</option>
-              {branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}
-            </Select>
-          </div>
-        </DesignPanel>
-      )}
-
-      {tab === 'materials' && (
-        <DesignPanel testId="raw-materials-search-panel">
-          <DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="raw-materials-search" />
-        </DesignPanel>
-      )}
+      {tab !== 'materials' && <DesignPanel testId="raw-materials-branch-panel"><div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center"><Select value={stockBranch} onChange={(e) => setStockBranch(e.target.value)} label={t('branch')} className="sm:w-64"><option value="">{t('all')} - {t('branches')}</option>{branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select></div></DesignPanel>}
+      {tab === 'materials' && <DesignPanel testId="raw-materials-search-panel"><DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="raw-materials-search" /></DesignPanel>}
 
       <DesignPanel testId="raw-materials-table-panel">
-        {tab === 'materials' && (
-          <>
-            <DataTable columns={materialColumns} data={filteredMaterials} loading={materialsLoading} error={error} emptyMessage={t('noData')} />
-            <DesignPagination loaded={materials.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
-          </>
-        )}
-        {tab === 'stock' && (
-          <DataTable columns={stockColumns} data={filteredStock} loading={loading} error={error} emptyMessage={t('noData')} />
-        )}
-        {tab === 'batches' && (
-          <DataTable columns={batchColumns} data={filteredBatches} loading={loading} error={error} emptyMessage={t('noData')} />
-        )}
+        {tab === 'materials' && <><DataTable columns={materialColumns} data={filteredMaterials} loading={materialsLoading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={materials.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></>}
+        {tab === 'stock' && <DataTable columns={stockColumns} data={filteredStock} loading={loading} error={error} emptyMessage={t('noData')} />}
+        {tab === 'batches' && <DataTable columns={batchColumns} data={filteredBatches} loading={loading} error={error} emptyMessage={t('noData')} />}
       </DesignPanel>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id ? t('editRawMaterial') : t('addRawMaterial')} size="lg">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label={t('materialName')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Input label={t('code')} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="RM-001" />
-          <Select label={t('unit')} value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })}>
-            <option value="">-</option>
-            {units.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.code})</option>)}
-          </Select>
-          <Input label={t('category')} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-          {branchFilter ? (
-            <div>
-              <label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label>
-              <div className="min-h-11 flex items-center"><BranchBadge name={branchLabel(form.branch_id || branchFilter)} /></div>
-            </div>
+          {form.id ? (
+            <div data-testid="raw-material-measurement-unit-locked"><label className="block text-sm font-medium text-ui-muted mb-1">{isAr ? 'وحدة القياس' : 'Measurement unit'}</label><div className="min-h-11 flex items-center rounded-lg border border-ui-border bg-ui-page-alt px-3 text-sm font-semibold text-ui-text">{unitLabel(form.unit_id)}<span className="ms-2 text-xs font-normal text-ui-subtle">{isAr ? 'ثابتة' : 'locked'}</span></div></div>
           ) : (
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}>
-              <option value="">--</option>
-              {branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}
+            <Select data-testid="raw-material-measurement-unit-create" label={isAr ? 'وحدة القياس' : 'Measurement unit'} value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} required>
+              <option value="">{isAr ? 'اختر وحدة القياس' : 'Select measurement unit'}</option>
+              {units.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.code})</option>)}
             </Select>
           )}
+          <Input label={t('category')} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+          {branchFilter ? <div><label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label><div className="min-h-11 flex items-center"><BranchBadge name={branchLabel(form.branch_id || branchFilter)} /></div></div> : <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}><option value="">--</option>{branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select>}
           <Input label={t('minStock')} type="number" step="0.0001" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: parseFloat(e.target.value) || 0 })} />
           <Input label={t('defaultCost')} type="number" step="0.01" value={form.default_cost} onChange={(e) => setForm({ ...form, default_cost: parseFloat(e.target.value) || 0 })} />
-          <div className="sm:col-span-2">
-            <Input label={t('description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-ui-muted">
-            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="w-4 h-4 rounded border-ui-border text-brand-600 focus:ring-brand-500" />
-            {t('active')}
-          </label>
+          <div className="sm:col-span-2"><Input label={t('description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+          <label className="flex items-center gap-2 text-sm text-ui-muted"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded border-ui-border text-brand-600 focus:ring-brand-500" />{t('active')}</label>
         </div>
-        <div className="flex justify-end gap-2 mt-6">
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>{t('cancel')}</Button>
-          <Button onClick={save}>{t('save')}</Button>
-        </div>
+        <div className="flex justify-end gap-2 mt-6"><Button variant="secondary" onClick={() => setModalOpen(false)}>{t('cancel')}</Button><Button onClick={save}>{t('save')}</Button></div>
       </Modal>
 
       <Modal open={!!adjustTarget} onClose={() => setAdjustTarget(null)} title={t('adjustRawStock')} size="sm">
-        {adjustTarget && (
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-ui-subtle">{t('rawMaterial')}</p>
-              <p className="font-medium text-ui-text">{adjustTarget.raw_material?.name}</p>
-            </div>
-            <div>
-              <p className="text-sm text-ui-subtle">{t('branch')}</p>
-              <p className="font-medium text-ui-text">{branchLabel(adjustTarget.branch_id)}</p>
-            </div>
-            <Input label={t('quantity')} type="number" step="0.0001" value={adjustQty} onChange={(e) => setAdjustQty(parseFloat(e.target.value) || 0)} />
-            <Input label={t('reason')} value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder={isAr ? 'مثال: جرد، تالف، تصحيح' : 'e.g. count, damaged, correction'} />
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setAdjustTarget(null)}>{t('cancel')}</Button>
-              <Button onClick={saveAdjust}>{t('save')}</Button>
-            </div>
-          </div>
-        )}
+        {adjustTarget && <div className="space-y-4"><div><p className="text-sm text-ui-subtle">{t('rawMaterial')}</p><p className="font-medium text-ui-text">{adjustTarget.raw_material?.name}</p></div><div><p className="text-sm text-ui-subtle">{t('branch')}</p><p className="font-medium text-ui-text">{branchLabel(adjustTarget.branch_id)}</p></div><Input label={t('quantity')} type="number" step="0.0001" value={adjustQty} onChange={(e) => setAdjustQty(parseFloat(e.target.value) || 0)} /><Input label={t('reason')} value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder={isAr ? 'مثال: جرد، تالف، تصحيح' : 'e.g. count, damaged, correction'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAdjustTarget(null)}>{t('cancel')}</Button><Button onClick={saveAdjust}>{t('save')}</Button></div></div>}
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />

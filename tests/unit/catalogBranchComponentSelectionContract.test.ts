@@ -15,14 +15,14 @@ describe('catalog branch/component selection contracts', () => {
     expect(modifiersPage).toContain("branch_id: branchFilter, is_active: true");
   });
 
-  it('loads product component choices from the selected product branch only', () => {
-    expect(setupWizard).toContain(".from('inventory_units').select('*').eq('branch_id', branchId).eq('is_active', true)");
+  it('loads manufactured and raw-material component choices from the selected product branch only', () => {
+    expect(setupWizard).toContain(".from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true)");
     expect(setupWizard).toContain(".from('raw_materials').select('id,name,branch_id,is_active,default_cost').eq('branch_id', branchId).eq('is_active', true)");
-    expect(setupWizard).toContain('unit.branch_id === branchId');
+    expect(setupWizard).toContain("item.branch_id === branchId && item.unit_type === 'manufactured'");
     expect(setupWizard).toContain('material.branch_id === branchId');
   });
 
-  it('never creates raw materials or inventory units inline while adding a product', () => {
+  it('never creates raw materials or manufactured inventory items inline while adding a product', () => {
     expect(setupWizard).not.toContain("from('inventory_units').insert");
     expect(setupWizard).not.toContain("from('raw_materials').insert");
     expect(setupWizard).not.toContain('Create new unit');
