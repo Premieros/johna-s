@@ -4,7 +4,7 @@
  * handles conflict prevention and emits sync progress/events.
  */
 
-import { pos as posApi } from '@/api';
+import { pos as posApi, supabase } from '@/api';
 import {
   getAllOfflineSales,
   updateOfflineSaleStatus,
@@ -31,6 +31,10 @@ type SaleSyncResponse = {
   error?: string;
   detail?: string;
   reconciled?: boolean;
+};
+
+type OwnedOfflineSaleQueueItem = OfflineSaleQueueItem & {
+  created_by_user_id?: string;
 };
 
 class OfflineSyncEngine {
@@ -161,10 +165,38 @@ class OfflineSyncEngine {
     this.lastError = null;
     this.emit();
 
+    // The same authenticated user who created an offline financial action must
+    // be the one who replays/reconciles it. Otherwise process_sale would record
+    // cashier_id = auth.uid() for the user who happened to log in later on the
+    // shared terminal, corrupting operator attribution.
+    let currentUserId: string | null = null;
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (!sessionError) currentUserId = sessionData.session?.user?.id || null;
+    } catch {
+      currentUserId = null;
+    }
+
+    if (!currentUserId) {
+      this.isSyncing = false;
+      this.lastError = 'AUTH_REQUIRED_OFFLINE_SYNC';
+      this.emit();
+      return { successCount: 0, failedCount: 0 };
+    }
+
     let successCount = 0;
     let failedCount = 0;
 
     for (const item of pendingItems) {
+      const originatingUserId = (item as OwnedOfflineSaleQueueItem).created_by_user_id || null;
+      if (!originatingUserId || originatingUserId !== currentUserId) {
+        const ownerError = originatingUserId ? 'OFFLINE_SALE_OWNER_MISMATCH' : 'OFFLINE_SALE_OWNER_MISSING';
+        failedCount++;
+        this.lastError = ownerError;
+        await updateOfflineSaleStatus(item.id, 'failed', ownerError);
+        continue;
+      }
+
       try {
         await updateOfflineSaleStatus(item.id, 'syncing');
 
