@@ -22,6 +22,12 @@ describe('POS availability display contract', () => {
     expect(source).toContain('const blocked = unavailable || unknownAvailability || !canAddToCart;');
   });
 
+  it('trusts the authoritative raw-shortage signal regardless of the broad product type label', () => {
+    expect(source).toContain('const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;');
+    expect(source).not.toContain("product.product_type !== 'manufactured' && rawShortageOnly[product.id] === true");
+    expect(source).toContain('const gated = (!rawShortage && blocked) || cartChecking || cartAvailabilityError;');
+  });
+
   it('does not require a legacy product_components recipe when authoritative availability is known', () => {
     expect(source).not.toContain('const noRecipe =');
     expect(source).not.toContain("t('noRecipe')");

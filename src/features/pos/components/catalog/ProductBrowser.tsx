@@ -100,8 +100,11 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
   }, [branchId, hasBranch]);
 
   const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;
-  const isRawShortageOnly = (product: Product) =>
-    product.product_type !== 'manufactured' && rawShortageOnly[product.id] === true;
+  // The database RPC is authoritative here: it already excludes products that
+  // depend on manufactured units. Do not second-guess that signal using the
+  // broad product_type label, because recipe-based products may also carry the
+  // manufactured label while their only shortage is raw material stock.
+  const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;
   const ensureSellable = (product: Product) => {
     if (cartChecking) {
       show(isAr ? 'جاري إعادة حساب المخزون للطلب الحالي.' : 'Rechecking inventory for the current order.', 'warning');
@@ -208,7 +211,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
               const imageUrl = imageOverrides[product.id] || product.image_url;
               const uploading = uploadingProductId === product.id;
               return (
-<article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
+                <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
                     <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${rawLow || cartChecking || cartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : unavailable ? 'bg-ui-danger/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{cartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : cartAvailabilityError || unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : rawLow ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
