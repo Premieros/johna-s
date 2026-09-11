@@ -141,7 +141,8 @@ export interface StockCount {
 export interface StockCountItem {
   id: string;
   stock_count_id: string;
-  product_id: string;
+  product_id: string | null;
+  raw_material_id: string | null;
   system_quantity: number;
   counted_quantity: number;
   variance_quantity: number;
@@ -149,6 +150,7 @@ export interface StockCountItem {
   variance_value: number;
   reason: string | null;
   product?: Product;
+  raw_material?: RawMaterial;
 }
 
 export interface LowStockAlertRow {
