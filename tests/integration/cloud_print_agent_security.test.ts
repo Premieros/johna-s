@@ -142,4 +142,33 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
     expect(statusConstraint.rows).toHaveLength(1);
     expect(statusConstraint.rows[0].definition.toLowerCase()).toContain('submitted');
   });
+
+  it('deduplicates a retryable failed receipt job until its retry window is exhausted', async () => {
+    const index = await client.query<{ predicate: string }>(`
+      SELECT lower(pg_get_expr(i.indpred, i.indrelid)) AS predicate
+      FROM pg_index i
+      JOIN pg_class idx ON idx.oid = i.indexrelid
+      JOIN pg_class t ON t.oid = i.indrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE n.nspname = 'public'
+        AND t.relname = 'cloud_print_jobs'
+        AND idx.relname = 'uq_cloud_print_active_receipt_sale'
+    `);
+    expect(index.rows).toHaveLength(1);
+    expect(index.rows[0].predicate).toContain("status = 'failed'::text");
+    expect(index.rows[0].predicate).toContain('attempts < 5');
+
+    const rpc = await client.query<{ definition: string }>(`
+      SELECT lower(pg_get_functiondef(p.oid)) AS definition
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname = 'enqueue_cloud_receipt_print'
+        AND pg_get_function_identity_arguments(p.oid) = 'p_sale_id uuid, p_approval_request_id uuid, p_payload jsonb, p_idempotency_key text'
+    `);
+    expect(rpc.rows).toHaveLength(1);
+    expect(rpc.rows[0].definition).toContain("status = 'failed'");
+    expect(rpc.rows[0].definition).toContain('attempts < 5');
+    expect(rpc.rows[0].definition).toContain('v_job := v_existing');
+  });
 });
