@@ -44,16 +44,18 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(modal).toContain("invoice_time: ['عند إنشاء الفاتورة', 'At invoice creation']");
   });
 
-  it('shows raw-material stock only for an explicitly selected branch using the canonical measurement unit relation', () => {
+  it('shows every accessible raw material, including zero balances, without widening branch scope', () => {
     const panel = read('src/features/inventory/components/RawMaterialBranchStockPanel.tsx');
     const inventoryPage = read('src/features/inventory/pages/InventoryPage.tsx');
     expect(inventoryPage).toContain('<RawMaterialBranchStockPanel />');
+    expect(panel).toContain(".from('raw_materials')");
     expect(panel).toContain(".from('raw_material_inventory')");
-    expect(panel).toContain(".eq('branch_id', selectedBranchId)");
-    expect(panel).toContain('if (!selectedBranchId)');
+    expect(panel).toContain('branches.map((branch) => branch.id)');
+    expect(panel).toContain(".in('branch_id', accessibleBranchIds)");
+    expect(panel).toContain("id: balance?.id || `raw:${material.branch_id}:${material.id}`");
+    expect(panel).toContain('quantity: Number(balance?.quantity) || 0');
     expect(panel).not.toContain('branches[0]');
-    expect(panel).not.toMatch(/selectedBranchId\s*\|\|\s*branches/);
-    expect(panel).toContain("row.branch_id === selectedBranchId");
+    expect(panel).not.toMatch(/selectedBranchId\s*\|\|\s*branches\[0\]/);
     expect(panel).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)');
     expect(panel).not.toContain('unit:units(name,symbol)');
   });
