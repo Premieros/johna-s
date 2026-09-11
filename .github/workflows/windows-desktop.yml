@@ -27,7 +27,12 @@ jobs:
           cache: npm
       - name: Install web dependencies
         shell: pwsh
-        run: npm ci
+        run: |
+          npm ci
+          # npm/lockfile optional-dependency bug can omit Rollup's Windows native package.
+          # Install exactly the native binary matching the already locked Rollup version.
+          $rollupVersion = node -p "require('./node_modules/rollup/package.json').version"
+          npm install --no-save "@rollup/rollup-win32-x64-msvc@$rollupVersion"
       - name: Verify Electron scripts parse
         shell: pwsh
         run: |
