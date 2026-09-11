@@ -22,7 +22,7 @@ import type { WarehouseTransfer, Warehouse, Product, Branch, RpcResult } from '@
 type TransferItemType = 'product' | 'raw_material';
 interface RawMaterialChoice { id: string; name: string; branch_id: string; default_cost: number; }
 interface TransferLine { item_type: TransferItemType; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
-interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; to_branch?: Branch | null; }
+interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; }
 
 const EMPTY_LINE: TransferLine = { item_type: 'product', item_id: '', destination_item_id: '', quantity: 1, unit_cost: 0 };
 
@@ -36,7 +36,7 @@ export function TransfersPage() {
 
   const { rows: transfers, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadTransfers } = usePaginatedRows<TransferRow>({
     table: 'warehouse_transfers',
-    select: '*, from_warehouse:warehouses!warehouse_transfers_from_warehouse_id_fkey(*), to_warehouse:warehouses!warehouse_transfers_to_warehouse_id_fkey(*), branch:branches!warehouse_transfers_branch_id_fkey(*), to_branch:branches!warehouse_transfers_to_branch_id_fkey(*), requester:users!warehouse_transfers_requested_by_fkey(id, full_name, email)',
+    select: '*, from_warehouse:warehouses!warehouse_transfers_from_warehouse_id_fkey(*), to_warehouse:warehouses!warehouse_transfers_to_warehouse_id_fkey(*), branch:branches!warehouse_transfers_branch_id_fkey(*), requester:users!warehouse_transfers_requested_by_fkey(id, full_name, email)',
     order: { column: 'created_at', ascending: false },
     pageSize: 100,
   });
@@ -81,15 +81,19 @@ export function TransfersPage() {
   const destinationProducts = useMemo(() => products.filter((p) => p.branch_id === form.destination_branch_id), [products, form.destination_branch_id]);
   const destinationRawMaterials = useMemo(() => rawMaterials.filter((r) => r.branch_id === form.destination_branch_id), [rawMaterials, form.destination_branch_id]);
 
+  const transferDestinationBranchId = (tr: TransferRow) => tr.to_branch_id || tr.to_warehouse?.branch_id || tr.branch_id;
+  const destinationBranchName = (tr: TransferRow) => branches.find((branch) => branch.id === transferDestinationBranchId(tr))?.name || '-';
+
   const filtered = transfers.filter((tr) => {
-    if (branchFilter && tr.branch_id !== branchFilter && tr.to_branch_id !== branchFilter) return false;
+    const destinationBranchId = transferDestinationBranchId(tr);
+    if (branchFilter && tr.branch_id !== branchFilter && destinationBranchId !== branchFilter) return false;
     if (!search) return true;
     const needle = search.toLowerCase();
     return tr.transfer_number.toLowerCase().includes(needle)
       || (tr.from_warehouse?.name || '').toLowerCase().includes(needle)
       || (tr.to_warehouse?.name || '').toLowerCase().includes(needle)
       || (tr.branch?.name || '').toLowerCase().includes(needle)
-      || (tr.to_branch?.name || '').toLowerCase().includes(needle);
+      || destinationBranchName(tr).toLowerCase().includes(needle);
   });
 
   const openAdd = () => {
@@ -217,7 +221,7 @@ export function TransfersPage() {
   const columns: Column<TransferRow>[] = [
     { key: 'transfer_number', header: t('transferNumber'), render: (tr) => <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-info-soft flex items-center justify-center text-ui-info"><ArrowLeftRight className="w-4 h-4" /></div><div><p className="font-semibold text-ui-text">{tr.transfer_number}</p>{tr.reason && <p className="text-xs text-ui-subtle">{tr.reason}</p>}</div></div> },
     { key: 'from', header: t('fromWarehouse'), render: (tr) => <div>{tr.from_warehouse?.name || '-'}<div className="mt-1"><BranchBadge name={tr.branch?.name || '-'} /></div></div> },
-    { key: 'to', header: t('toWarehouse'), render: (tr) => <div>{tr.to_warehouse?.name || '-'}<div className="mt-1"><BranchBadge name={tr.to_branch?.name || tr.branch?.name || '-'} /></div></div> },
+    { key: 'to', header: t('toWarehouse'), render: (tr) => <div>{tr.to_warehouse?.name || '-'}<div className="mt-1"><BranchBadge name={destinationBranchName(tr)} /></div></div> },
     { key: 'status', header: t('status'), render: (tr) => statusPill(tr.status) },
     { key: 'requested_at', header: t('requestedAt'), render: (tr) => formatDateTime(tr.requested_at, lang) },
     { key: 'actions', header: t('actions'), render: (tr) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('inventory.transfer.approve') && tr.status === 'pending' && <><button onClick={() => approve(tr)} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveTransfer')}><CheckCircle2 className="w-4 h-4" /></button><button onClick={() => openReject(tr)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectTransfer')}><XCircle className="w-4 h-4" /></button></>}</div> },
