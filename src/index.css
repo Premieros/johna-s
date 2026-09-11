@@ -299,7 +299,6 @@
     overflow-y: auto;
   }
 
-  [data-testid='user-menu-button'],
   [data-testid='sign-out-button'] {
     display: none;
   }
