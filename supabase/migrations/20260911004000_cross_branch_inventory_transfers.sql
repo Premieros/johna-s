@@ -41,6 +41,7 @@ WHERE product_id IS NOT NULL
   AND destination_product_id IS NULL;
 
 ALTER TABLE public.warehouse_transfer_items
+  DROP CONSTRAINT IF EXISTS warehouse_transfer_items_product_id_check,
   DROP CONSTRAINT IF EXISTS warehouse_transfer_items_source_kind_check,
   DROP CONSTRAINT IF EXISTS warehouse_transfer_items_destination_kind_check;
 
@@ -256,11 +257,13 @@ BEGIN
   IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED'); END IF;
   IF NOT public.is_pos_admin() AND NOT public.can_permission('inventory.transfer.approve') THEN RETURN jsonb_build_object('success', false, 'error', 'NOT_ALLOWED'); END IF;
 
-  SELECT wt.* INTO v_transfer FROM public.warehouse_transfers wt WHERE wt.id = p_transfer_id FOR UPDATE;
+  SELECT wt.* INTO v_transfer
+  FROM public.warehouse_transfers wt
+  WHERE wt.id = p_transfer_id
+    AND public.user_may_access_branch(wt.branch_id)
+    AND public.user_may_access_branch(COALESCE(wt.to_branch_id, wt.branch_id))
+  FOR UPDATE;
   IF v_transfer.id IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'TRANSFER_NOT_FOUND'); END IF;
-  IF NOT public.user_may_access_branch(v_transfer.branch_id) OR NOT public.user_may_access_branch(COALESCE(v_transfer.to_branch_id, v_transfer.branch_id)) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
-  END IF;
   IF v_transfer.status <> 'pending' THEN RETURN jsonb_build_object('success', false, 'error', 'INVALID_STATUS', 'status', v_transfer.status); END IF;
   IF NOT EXISTS (SELECT 1 FROM public.warehouses WHERE id = v_transfer.from_warehouse_id AND branch_id = v_transfer.branch_id)
      OR NOT EXISTS (SELECT 1 FROM public.warehouses WHERE id = v_transfer.to_warehouse_id AND branch_id = COALESCE(v_transfer.to_branch_id, v_transfer.branch_id)) THEN
@@ -288,22 +291,22 @@ BEGIN
         v_short := COALESCE((v_res->>'shortage')::numeric, 0);
         IF v_short > 0 THEN RAISE EXCEPTION 'TRANSFER_STOCK_RACE product=% shortage=%', v_item.product_id, v_short; END IF;
       ELSE
-        v_res := public._product_inv_remove_fifo(v_item.product_id, v_transfer.from_warehouse_id, v_transfer.branch_id, v_item.quantity, 'warehouse_transfer_out', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
+        v_res := public._product_inv_remove_fifo(v_item.product_id, v_transfer.from_warehouse_id, v_transfer.branch_id, v_item.quantity, 'transfer', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
         IF COALESCE((v_res->>'success')::boolean, true) IS NOT TRUE THEN RAISE EXCEPTION 'TRANSFER_REMOVE_FAILED product=% detail=%', v_item.product_id, v_res::text; END IF;
         v_short := COALESCE((v_res->>'shortage')::numeric, 0);
         IF v_short > 0 THEN RAISE EXCEPTION 'TRANSFER_STOCK_RACE product=% shortage=%', v_item.product_id, v_short; END IF;
         v_cost := COALESCE((v_res->>'avg_cost')::numeric, v_item.unit_cost, 0);
-        v_add := public._product_inv_add(v_item.destination_product_id, v_transfer.to_warehouse_id, v_transfer.to_branch_id, v_item.quantity, v_cost, NULL, NULL, NULL, 'warehouse_transfer_in', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
+        v_add := public._product_inv_add(v_item.destination_product_id, v_transfer.to_warehouse_id, v_transfer.to_branch_id, v_item.quantity, v_cost, NULL, NULL, NULL, 'transfer', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
         IF COALESCE((v_add->>'success')::boolean, false) IS NOT TRUE THEN RAISE EXCEPTION 'TRANSFER_DESTINATION_ADD_FAILED product=% detail=%', v_item.destination_product_id, v_add::text; END IF;
       END IF;
     ELSE
       IF v_transfer.branch_id = COALESCE(v_transfer.to_branch_id, v_transfer.branch_id) THEN RAISE EXCEPTION 'RAW_MATERIAL_SAME_BRANCH_WAREHOUSE_TRANSFER_UNSUPPORTED'; END IF;
-      v_res := public._raw_remove_fifo(v_item.raw_material_id, v_transfer.branch_id, v_item.quantity, 'warehouse_transfer_out', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
+      v_res := public._raw_remove_fifo(v_item.raw_material_id, v_transfer.branch_id, v_item.quantity, 'transfer', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
       IF COALESCE((v_res->>'success')::boolean, true) IS NOT TRUE THEN RAISE EXCEPTION 'TRANSFER_RAW_REMOVE_FAILED raw=% detail=%', v_item.raw_material_id, v_res::text; END IF;
       v_short := COALESCE((v_res->>'shortage')::numeric, 0);
       IF v_short > 0 THEN RAISE EXCEPTION 'TRANSFER_RAW_STOCK_RACE raw=% shortage=%', v_item.raw_material_id, v_short; END IF;
       v_cost := COALESCE((v_res->>'avg_cost')::numeric, v_item.unit_cost, 0);
-      v_add := public._raw_add(v_item.destination_raw_material_id, v_transfer.to_branch_id, v_item.quantity, v_cost, NULL, NULL, NULL, 'warehouse_transfer_in', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
+      v_add := public._raw_add(v_item.destination_raw_material_id, v_transfer.to_branch_id, v_item.quantity, v_cost, NULL, NULL, NULL, 'transfer', 'warehouse_transfer', v_transfer.id, v_transfer.transfer_number, auth.uid());
       IF COALESCE((v_add->>'success')::boolean, false) IS NOT TRUE THEN RAISE EXCEPTION 'TRANSFER_DESTINATION_RAW_ADD_FAILED raw=% detail=%', v_item.destination_raw_material_id, v_add::text; END IF;
     END IF;
   END LOOP;
@@ -325,9 +328,13 @@ DECLARE v_transfer record;
 BEGIN
   IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED'); END IF;
   IF NOT public.is_pos_admin() AND NOT public.can_permission('inventory.transfer.approve') THEN RETURN jsonb_build_object('success', false, 'error', 'NOT_ALLOWED'); END IF;
-  SELECT wt.* INTO v_transfer FROM public.warehouse_transfers wt WHERE wt.id = p_transfer_id FOR UPDATE;
+  SELECT wt.* INTO v_transfer
+  FROM public.warehouse_transfers wt
+  WHERE wt.id = p_transfer_id
+    AND public.user_may_access_branch(wt.branch_id)
+    AND public.user_may_access_branch(COALESCE(wt.to_branch_id, wt.branch_id))
+  FOR UPDATE;
   IF v_transfer.id IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'TRANSFER_NOT_FOUND'); END IF;
-  IF NOT public.user_may_access_branch(v_transfer.branch_id) OR NOT public.user_may_access_branch(COALESCE(v_transfer.to_branch_id, v_transfer.branch_id)) THEN RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH'); END IF;
   IF v_transfer.status <> 'pending' THEN RETURN jsonb_build_object('success', false, 'error', 'INVALID_STATUS', 'status', v_transfer.status); END IF;
   UPDATE public.warehouse_transfers SET status = 'rejected', approved_by = auth.uid(), approved_at = now(), rejection_reason = p_reason, updated_at = now() WHERE id = p_transfer_id;
   RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id);

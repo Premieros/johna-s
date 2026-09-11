@@ -57,6 +57,7 @@ describe('multi-branch warehouse transfer contract', () => {
   });
 
   it('keeps source/destination item identities explicit and mutually exclusive', () => {
+    expect(migration).toContain('DROP CONSTRAINT IF EXISTS warehouse_transfer_items_product_id_check');
     expect(migration).toContain('warehouse_transfer_items_source_kind_check');
     expect(migration).toContain('destination_product_id');
     expect(migration).toContain('destination_raw_material_id');
@@ -65,5 +66,11 @@ describe('multi-branch warehouse transfer contract', () => {
     expect(migration).toContain('warehouse_transfer_items_branch_read');
     expect(migration).toContain('warehouse_transfers_rpc_only_update');
     expect(migration).toContain('warehouse_transfer_items_rpc_only_update');
+  });
+
+  it('uses the stock transaction type accepted by the current inventory contract', () => {
+    expect(migration).toContain("'transfer', 'warehouse_transfer'");
+    expect(migration).not.toContain("'warehouse_transfer_out'");
+    expect(migration).not.toContain("'warehouse_transfer_in'");
   });
 });

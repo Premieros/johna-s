@@ -242,8 +242,10 @@ export async function seedRlsFixture(client: pg.Client): Promise<RlsIds> {
       `INSERT INTO public.production_orders (order_number, product_id, branch_id, warehouse_id, quantity) VALUES ('${uniq('PO')}', '${ids.prodB}', '${ids.branchB}', '${ids.whB}', 1)`);
   await row('recipes', `INSERT INTO public.recipes (product_id, branch_id, name, yield_quantity) VALUES ('${ids.prodA}', '${ids.branchA}', 'R', 1)`,
       `INSERT INTO public.recipes (product_id, branch_id, name, yield_quantity) VALUES ('${ids.prodB}', '${ids.branchB}', 'R', 1)`);
-  await row('warehouse_transfers', `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${ids.whA}', '${R.warehouses.own}', '${ids.branchA}', '${ids.branchA}', 'pending')`,
-      `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${ids.whB}', '${R.warehouses.other}', '${ids.branchB}', '${ids.branchB}', 'pending')`);
+  const transferWhA = await ins(client, `INSERT INTO public.warehouses (name, branch_id, is_active) VALUES ('Transfer W', '${ids.branchA}', true)`);
+  const transferWhB = await ins(client, `INSERT INTO public.warehouses (name, branch_id, is_active) VALUES ('Transfer W', '${ids.branchB}', true)`);
+  await row('warehouse_transfers', `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${ids.whA}', '${transferWhA}', '${ids.branchA}', '${ids.branchA}', 'pending')`,
+      `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${ids.whB}', '${transferWhB}', '${ids.branchB}', '${ids.branchB}', 'pending')`);
   await row('chart_of_accounts', `INSERT INTO public.chart_of_accounts (branch_id, code, name, account_type) VALUES ('${ids.branchA}', '${uniq('RC')}', 'R', 'asset')`,
       `INSERT INTO public.chart_of_accounts (branch_id, code, name, account_type) VALUES ('${ids.branchB}', '${uniq('RC')}', 'R', 'asset')`);
   await row('account_mappings', `INSERT INTO public.account_mappings (branch_id, semantic_key, account_id) VALUES ('${ids.branchA}', '${uniq('SK')}', '${coaPoolA[0]}')`,
