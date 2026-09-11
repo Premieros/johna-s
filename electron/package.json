@@ -1,10 +1,11 @@
 {
-  "name": "premier-pos-desktop",
+  "name": "premier-print-agent",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
+    "test:queue": "node printerQueue.test.cjs",
     "build:win": "electron-builder --projectDir .. --config electron/electron-builder.json --win"
   },
   "devDependencies": {
