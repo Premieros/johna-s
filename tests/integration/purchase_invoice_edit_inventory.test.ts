@@ -33,7 +33,7 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
   async function rawQty(rawId: string): Promise<number> {
     const rows = await q<{ quantity: string }>(
       `SELECT COALESCE(quantity,0)::text AS quantity
-       FROM public.raw_material_inventory
+       FROM public.raw_material_warehouse_inventory
        WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3`,
       [rawId, branchId, warehouseId],
     );
