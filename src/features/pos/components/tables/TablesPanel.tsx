@@ -125,8 +125,16 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
                 );
               })}
             </div>
+          ) : tables.length === 0 ? (
+            <div data-testid="pos-tables-empty-setup" className="rounded-2xl border border-ui-warning/30 bg-ui-warning/5 px-5 py-10 text-center">
+              <UtensilsCrossed className="mx-auto mb-3 h-10 w-10 text-ui-warning opacity-70" />
+              <p className="text-sm font-black text-ui-text">{isAr ? 'لا توجد طاولات معدّة لهذا الفرع' : 'No tables are configured for this branch'}</p>
+              <p className="mx-auto mt-2 max-w-xs text-xs font-bold leading-5 text-ui-subtle">
+                {isAr ? 'أكمل إعداد الصالات والطاولات لهذا الفرع أولًا. لم يتم إنشاء أي بيانات تلقائيًا.' : 'Complete dining-area and table setup for this branch first. No data was created automatically.'}
+              </p>
+            </div>
           ) : (
-            <div className="py-12 text-center text-xs font-bold text-ui-muted">{isAr ? 'لا توجد طاولات مطابقة' : 'No matching tables'}</div>
+            <div className="py-12 text-center text-xs font-bold text-ui-muted">{isAr ? 'لا توجد طاولات مطابقة للبحث أو الفلتر' : 'No tables match the current search or filter'}</div>
           )}
         </div>
       </aside>
