@@ -1,233 +1,172 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
 > **هذا هو السجل الحي الوحيد للمشروع.**
-> أي نموذج أو مطور يبدأ من هذا الملف فقط.
-> الملفات القديمة الخاصة بالـBug Register / Remaining Stages / Handover / Post-Repair مراجع تاريخية فقط ولا تحدد الحالة الحالية.
+> أي نموذج أو مطور يبدأ من هذا الملف فقط، ثم يتحقق من HEAD الحالي قبل أي تعديل لأن نماذج أخرى قد تعمل بالتوازي.
 
-آخر تحديث: **2026-09-10 — Africa/Cairo — Final Offline/Reconciliation + Print Truth hardening active**
+آخر تحديث: **2026-09-11 — Africa/Cairo — Thermal printing merged; multi-branch inventory transfer remediation active**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
 - Repository الوحيد: `Premieros/johna-s`
 - Production Supabase الوحيد: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Permanent development branch: `development/final-handover`
 - Published site: `https://premieros.github.io/johna-s/`
-- أي مستودع أو فرع مرجعي مثل `55` / `pos.v2` / `v4` / ZIP خارجي = **READ-ONLY REFERENCE ONLY**.
-- الميزة تُنقل بالفكرة والسلوك فقط ثم يعاد تنفيذها بما يناسب `johna-s`؛ ممنوع النقل الأعمى أو نسخ migrations/RLS/RPC أو Supabase config من مشروع آخر.
+- أي مشروع/مستودع آخر مثل `55` / `pos.v2` / `v4` / ZIP خارجي = **READ-ONLY REFERENCE ONLY**.
 - ممنوع استخدام Supabase `scpovyrqmsbiduanykod` لهذا المشروع.
 - ممنوع تعديل `main` مباشرة أو Force Push.
-- ممنوع Production DDL/Migration قبل Full Verify Green.
+- ممنوع تشغيل Production migration قبل Full Verify Green.
 - ممنوع تخفيف RLS أو الاختبارات لإجبار CI على النجاح.
 - Super Admin فقط implicit bypass.
-- كل الأدوار الأخرى Labels فقط؛ Authorization = Permission-First + canonical branch/RLS.
-- قبل أي تعديل: اجلب HEAD الحالي لـ`main` و`development/final-handover` وافهم أي commits أحدث حتى لا يتم عكس عمل نموذج آخر.
+- كل الأدوار الأخرى Labels فقط؛ Authorization = Permission-First + branch/RLS.
+- قبل أي write: اجلب HEAD الحالي لـ`main` والفرع/PR المستهدف، وافحص commits الأحدث ولا تعكس عمل نموذج آخر.
+- عند الدمج استخدم expected SHA guard متى أمكن.
 
-## 2) Verified Production baseline — محدث
+## 2) الحالة الحالية لـ main
 
-آخر Production baseline مغلق ومثبت:
+تم التحقق وقت تحديث هذا السجل أن:
 
-- `main`: `de0aed9e3f2ed58958b3b2b1c9b0fd44c0b1f3b1`
-- PR #55: `feat(pos): operator attribution and safe table resume` — **Merged ✅**
-- Verify main #955 / run `34408216822`: **Full Green ✅**
-- Deploy #585 / run `34408216824`: **Success ✅**
-- Core cycle المحمي: Open Shift → Create Order → Hold → Resume → Send Kitchen → Inventory deduction → Payment → Sale/Shift attribution → Close Shift.
+- `main` HEAD = `bb73674604c97e810a4dd2f8f3d36ccf9ea552f0`
+- هذا الـcommit هو Merge لـPR #63:
+  - `fix(printing): size thermal output to 58/80mm content`
+- Parent السابق:
+  - `9f32aba8bc5c3ab688d9c54c06cba1c3481570b5`
+- PR #62 كان قد دمج إصلاح Windows thermal print transport عبر Chromium/Electron.
+- PR #63 أضاف هندسة ورق حراري 80mm افتراضيًا و58mm عند الطلب، مع pageSize محسوب من المحتوى لكل ما يمر عبر Electron silent print.
 
-لا يوصف أي commit أحدث من هذا الـbaseline بأنه Production Verified قبل الدمج وVerify main جديد ناجح.
+**مهم:** وصول job إلى Windows Print Queue يثبت وصوله للـspooler فقط، ولا يثبت خروج الورق فعليًا. لا تدّعِ نجاح الطباعة الفيزيائية دون اختبار الجهاز نفسه.
 
-## 3) Development baseline الحالي
+## 3) دفعات مغلقة حديثًا
 
-- Branch: `development/final-handover`
-- **Current functional/code baseline:** `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
-- Parent before print-status constraint fix: `a417301fb3b61786dec1d13a95d3974a45610b15`
-- أي commits لاحقة مخصصة لتحديث `docs/CURRENT_WORK_PLAN.md` فقط = **Docs-only** ولا تغيّر الـfunctional/code baseline.
-- PR #56: `fix: final offline reconciliation and print truth hardening`
-- PR #56: **Open / Draft / غير مدمج**.
-- Base: `main@de0aed9e3f2ed58958b3b2b1c9b0fd44c0b1f3b1`
-- Verify #985 بدأ على `d942bbc...`، ثم أدت تحديثات السجل Docs-only إلى Runs أحدث على HEAD الفرع.
-- **قاعدة الاعتماد:** عند الإغلاق اعتمد أحدث Verify كامل على HEAD الفعلي للفرع، ولا تعتمد نجاح Run على SHA أقدم.
+### PR #61 — Accounting / Supplier / Employee Credit
 
-ممنوع دمج PR #56 قبل Full Verify Green وإغلاق Production E2E المطلوب داخل Transaction مع ROLLBACK.
+تم دمجه سابقًا ويتضمن:
 
-## 4) الدفعات المغلقة — لا تُفتح دون Regression مثبت
+- Supplier accounts / statement.
+- Cash paid vs credit/debt.
+- Shift closing split by payment methods.
+- Employee credit via existing customer credit path.
+- Raw material available inventory panel.
+- لا role-name authorization.
+- لا كسر لـRLS أو branch isolation.
 
-الآتي مغلق وظيفيًا/أمنيًا ضمن الـbaseline الحالي ما لم يظهر Regression محدد:
+Production migrations الخاصة به طُبقت على `azzdesuowpdcoflmyezn` فقط بعد التحقق.
 
-- Users / Roles / Permission-First ✅
-- Super Admin implicit bypass فقط ✅
-- Shared Branch Shift / settlement / UI ✅
-- POS Discount / Payment / Order Completion ✅
-- POS operator ownership + controlled operator transfer ✅
-- Operator label privacy / same-branch narrow visibility ✅
-- TABLE_BUSY safe owner resume ✅
-- POS Availability authoritative contract ✅
-- Delivery / Drive-Thru structured service contract + direct entries ✅
-- Modifiers الحالية وعقود min/max/required/default/price delta/snapshots ✅ ما لم يظهر Regression محدد
-- KDS Permission-First + branch/station boundaries ✅
-- Send-to-kitchen delta semantics ✅
-- **Inventory deduction at `send_to_kitchen`** ✅ قرار ثابت
-- Warehouse transfer branch isolation ✅
-- Controlled branch delete ✅
-- Warehouse lifecycle ✅
-- `close_shift` Permission-First ✅
-- SECURITY DEFINER hardened search_path ✅
-- Identity/subscription hardening ✅
-- Inventory-unit production Permission-First/branch/warehouse ✅
-- Shift cash integrity + branch scope ✅
-- Functional core cycle release gate ✅
-- Exact scan SKU/Barcode ✅
-- Guided Workflow Permission-First ✅
-- Financial Authority: server rejection أو ambiguous online failure لا تتحول تلقائيًا إلى offline success ✅
+### PR #62 — Windows print transport
 
-## 5) الدفعة النشطة — Offline / Reconciliation hardening
+Merged ✅
 
-**الحالة: ACTIVE — FINAL DELIVERY GATE**
+- Receipt/kitchen/text test printing عبر Chromium `webContents.print` بدل `Out-Printer`.
+- UTF-8 / Arabic support أفضل.
+- exact `deviceName`.
+- Print Truth محفوظ: callback failure لا يسجل نجاحًا كاذبًا.
+- Cash drawer بقي مسارًا منفصلًا.
 
-هدف الدفعة: لا تظهر أي عملية مالية كبيع/دفع ناجح قبل وجود حقيقة مالية مؤكدة، مع منع التكرار عند replay أو فقد الرد بعد COMMIT.
+### PR #63 — Thermal page geometry
 
-العقود الجاري تثبيتها في PR #56:
+Merged ✅ إلى `main@bb736746...`
 
-1. **Durable offline sale outbox**
-   - البيع المقصود Offline يحفظ كعملية `pending sync` وليس كحقيقة مالية نهائية.
-   - الصفوف `pending` / `failed` / `syncing` تبقى محسوبة Pending حتى التأكيد النهائي.
-   - crash/reload أثناء `syncing` لا يجعل الطابور يبدو فارغًا.
+- 80mm default.
+- 58mm supported via option.
+- no A4/Letter assumption داخل Electron silent print.
+- content-sized page height + small bottom feed.
+- HTML/text payloads التي تمر عبر Electron silent print تأخذ نفس thermal page geometry.
+- هذا لا يعني أن Chrome browser print preview نفسه أعيد تصميمه.
+- هذا لا يثبت التوافق الفيزيائي مع كل thermal driver.
 
-2. **Financial truth**
-   - server rejection لا يتحول إلى offline success.
-   - ambiguous online exception لا يتم enqueue تلقائيًا لأن الخادم قد يكون عمل COMMIT قبل فقد الرد.
-   - التأكيد النهائي يتطلب server-authoritative success مع `sale_id` صالح.
+## 4) الدفعة النشطة الحالية — PR #64
 
-3. **Replay ownership**
-   - نفس المستخدم الذي أنشأ العملية المالية Offline هو الذي يعيد replay/reconciliation لها.
-   - لا يسمح بتغيير cashier/operator attribution بسبب تسجيل مستخدم آخر على نفس الجهاز لاحقًا.
+PR #64:
 
-4. **Warehouse reconciliation**
-   - Offline capture لا يخترع warehouse.
-   - عند العودة Online يتم حل warehouse الحقيقي المرتبط بالطلب أو فرع العملية قبل أي كتابة مالية.
-   - إذا لم يمكن تحديد warehouse بأمان يفشل sync ويظل Pending.
+- Title: `fix(inventory): multi-branch transfer and branch visibility`
+- State: **Open / Draft / غير مدمج** وقت تحديث هذا السجل.
+- Branch: `development/raw-transfer-multibranch-fix`
+- HEAD وقت الفحص: `ec52d8fe06e5f35a8e74c1caaed29fe22ce05972`
+- الـPR كان مبنيًا أساسًا على `main@9f32aba8...`، بينما `main` تحرك لاحقًا إلى `bb736746...` بعد دمج PR #63؛ لذلك **يلزم فحص drift/rebase/merge compatibility قبل الدمج ولا يجوز blind merge**.
 
-5. **Idempotency / reconciliation**
-   - Offline invoice key تستخدم لمنع/اكتشاف replay المكرر.
-   - عند احتمال فقد الرد بعد COMMIT يتم reconciliation مع الخادم بدل افتراض الفشل أو إنشاء بيع ثانٍ.
+الهدف الحالي:
 
-## 6) الدفعة النشطة — Printing truth + Permission-First
+1. Multi-branch branch visibility بدون role-name shortcuts.
+2. المستخدم الذي يملك وصولًا لأكثر من فرع يمكنه العمل على كل الفروع المسموح بها عبر RLS، وليس التثبيت الإجباري على primary branch فقط.
+3. Warehouse transfer يدعم Source branch وDestination branch بشكل صريح.
+4. يدعم products وraw materials في النقل بين الفروع.
+5. الـsource/destination warehouse يجب أن يتطابقا مع فروعهما.
+6. إنشاء/اعتماد التحويل يتطلب صلاحيات فعلية ووصولًا للفرعين.
+7. لا fallback أو cross-branch leakage.
+8. Raw materials حاليًا branch-level؛ النقل بين مخزنين داخل نفس الفرع للخامة غير مدعوم بهذا العقد ويجب أن يفشل بوضوح.
+9. مطابقة الصنف في فرع الوجهة تكون deterministic ولا يجوز إنشاء mapping غامض صامت.
+10. لا Production migration قبل Full Verify Green ثم قرار صريح بالتطبيق.
 
-**الحالة: ACTIVE — FINAL DELIVERY GATE**
+## 5) المخاطر التي يجب مراجعتها قبل دمج PR #64
 
-العقود الجاري تثبيتها في PR #56:
+- `main` تحرك بعد إنشاء PR #64 بسبب PR #63، لذلك يجب أولًا إعادة فحص المقارنة مع أحدث main.
+- يجب التأكد أن تغييرات `useBranchFilter` لا توسع عرض البيانات أبعد مما يسمح به RLS.
+- يجب اختبار مستخدم single-branch ومستخدم multi-branch ومستخدم بلا وصول للفرع الوجهة.
+- يجب اختبار read policies لطرفي transfer، بينما mutation تحتاج access للطرفين.
+- يجب التحقق أن raw material transfer لا يكرر/يضاعف الكميات عند approve أو retry.
+- يجب التأكد أن product matching في destination لا يربط منتجًا خاطئًا بالاسم عند وجود تشابه/تكرار.
+- يجب التأكد أن approval لا يخصم/يزيد المخزون أكثر من مرة.
+- أي migration جديدة يجب أن تمر Fresh DB + schema + Integration/Security/RLS قبل Production.
 
-1. فصل صلاحية طلب الطباعة/إعادة الطباعة عن تسجيل تنفيذ الطباعة الفعلي.
-2. Printer management يظل محميًا بصلاحية الإعدادات المناسبة فقط.
-3. عدم تسجيل `printed` لمجرد أن المستخدم ضغط زر الطباعة.
-4. Local Print Agent يجب أن يعيد نجاحًا فعليًا قبل تسجيل نجاح التنفيذ.
-5. Agent absent / station missing / printer missing / print failure = fail-closed ولا يسجل نجاحًا كاذبًا.
-6. دعم مسار Cash Drawer في Local Print Agent مع فشل واضح عند عدم وجود Printer route مناسب.
-7. Branch/station routing يجب أن يظل معزولًا ولا يسمح بطباعة محطة/فرع غير مخول.
-8. طباعة الكابتن من الهاتف إلى طابعات الفرع الثابتة تبقى Gate تشغيلية نهائية يجب إثبات مسارها بعد Full Green الحالي.
-
-## 7) Verify #984 — الفشل المحدد والجذر
-
-Verify #984 على HEAD `a417301fb3b61786dec1d13a95d3974a45610b15` لم يغلق الدفعة.
-
-النتيجة التشغيلية المهمة:
-
-- Frontend checks ✅
-- Fresh DB ✅
-- Schema ✅
-- Integration/Security/RLS: **605 passed / 4 failed** ❌
-
-الجذر واحد:
-
-- مسار `set_print_status(..., 'failed')` احتاج حفظ حالة `failed`.
-- قاعدة `orders_print_status_check` كانت تسمح فقط بـ:
-  - `pending`
-  - `printed`
-  - `cancelled`
-- أول failure كسر الـtransaction، والثلاث failures الأخرى كانت نتائج لاحقة لـtransaction aborted.
-
-لم يتم تخفيف الاختبار أو RLS.
-
-## 8) إصلاح #984
-
-تمت إضافة إصلاح DB contract منفصل على فرع التطوير:
-
-- Commit: `d942bbcafad946d6a385ddd50c33f7d7602a3a4b`
-- Message: `fix(printing): allow failed print status`
-
-الإصلاح محدود إلى `orders.print_status`:
-
-- الحفاظ على `pending` ✅
-- الحفاظ على `printed` ✅
-- الحفاظ على `cancelled` ✅
-- إضافة `failed` ✅
-- الحفاظ على Default = `pending` ✅
-- لا تعديل على RLS ✅
-- لا تعديل على permission model ✅
-- لا Migration على Production ✅
-
-أي Verify بعد `d942bbc...` يحتوي تغييرات Docs-only فقط لا يغير هذا الـfunctional fix؛ لكنه يظل الـVerify الواجب اعتماده إذا كان هو HEAD الفعلي لحظة الإغلاق.
-
-## 9) بوابات التسليم المتبقية
-
-لا يقال Final 100% قبل إغلاق الثلاثة التالية بالأدلة:
-
-### Gate A — Offline / Reconciliation
-
-- intentional offline sale يظهر `Pending Sync` وليس نجاحًا ماليًا نهائيًا.
-- server rejection لا يدخل outbox كنجاح.
-- ambiguous online failure لا يتحول تلقائيًا إلى Offline.
-- lost-response-after-COMMIT لا يسبب duplicate sale.
-- replay/reconciliation idempotent.
-- failed sync يظل Pending وقابلًا للمراجعة.
-- successful reconciliation وحده ينهي Pending state.
-- operator/cashier attribution لا يتغير أثناء replay.
-
-### Gate B — Printing / Permission Matrix
-
-- `pos.receipt.print` / reprint rules تطبق حسب الصلاحيات الفعلية لا role names.
-- Printer management لا يظهر إلا بصلاحية الإعدادات المناسبة.
-- Print Agent absent لا يسجل print success.
-- فشل printer/station لا يسجل success.
-- branch/station isolation مثبت.
-- Captain/mobile printing → branch cashier/kitchen/barista routing يتم إثباته عمليًا.
-
-### Gate C — Real Production E2E with ROLLBACK
-
-على Production الوحيد `azzdesuowpdcoflmyezn`:
-
-- الاختبار يكون داخل Transaction واحدة قدر الإمكان.
-- كل writes التجريبية يتم ROLLBACK لها.
-- ممنوع ترك بيانات اختبار دائمة.
-- يغطي على الأقل: branch scope → active shift → order → send_to_kitchen → stock deduction contract → payment/settlement → attribution → permission/RLS boundaries.
-- Physical/local printing negative-path والـPrint Agent يختبران خارج DB transaction؛ لا يتم ادعاء طباعة فعلية من اختبار SQL.
-
-## 10) متطلبات تشغيلية ثابتة يجب الحفاظ عليها
+## 6) متطلبات ثابتة لا يجوز كسرها
 
 - Arabic-first RTL، Touch-friendly.
-- صلاحيات POS granular مثل `pos.view`, `pos.order.create`, `pos.order.edit`, `pos.payment.take`, `pos.order.split`, `pos.order.transfer`, `pos.receipt.print`, `pos.send_kitchen`, `pos.pay`؛ لا استخدام role names كAuthorization.
-- يجب دعم أنماط مثل View Only وPay Only متى كانت الصلاحيات المطلوبة متاحة.
-- Dine-in / Take Away / Drive Thru / Delivery / Quick Order.
-- الطاولة المشغولة تعرض اسم المشغل الآمن.
-- Send to kitchen مرة واحدة ثم التعديلات كDelta.
-- المخزون يخصم عند `send_to_kitchen` وليس عند إنشاء الطلب أو فحص Availability.
-- Hold/Resume، split bill، table/order transfer، print once/reprint permission.
-- Printer management لا يظهر إلا لمن يملك صلاحية الإعدادات المناسبة.
-- التقارير compact/tabular وليست crowded؛ filters/export حسب العقود المتاحة.
-- أي نقل UI لا يغيّر منطق الصلاحيات أو RLS أو financial authority ضمنيًا.
+- Permission-First، لا استخدام أسماء roles كAuthorization.
+- Super Admin فقط implicit bypass.
+- Branch isolation عبر RLS على كل business data.
+- `send_to_kitchen` هو نقطة خصم المخزون.
+- POS granular permissions تشمل على الأقل:
+  - `pos.view`
+  - `pos.order.create`
+  - `pos.order.edit`
+  - `pos.payment.take`
+  - `pos.order.split`
+  - `pos.order.transfer`
+  - `pos.receipt.print`
+  - `pos.send_kitchen`
+  - `pos.pay`
+- يجب دعم أنماط مثل View Only وPay Only متى تسمح الصلاحيات.
+- Approval system enforced.
+- Printer management لا يظهر إلا لصاحب صلاحية الإعدادات المناسبة.
+- الطاولة المشغولة وكل ما يتعلق بمستخدم يجب أن يعرض اسم المشغل/المستخدم بصورة آمنة ضمن النطاق المسموح.
+- Send to kitchen أول مرة ثم التعديلات كDelta.
+- Hold/Resume، split، merge/transfer، print once + controlled reprint.
+- عدم تحويل network/online ambiguity إلى sale/payment success وهمي.
+- Print Agent absent/failure لا يسجل print success كاذبًا.
 
-## 11) قاعدة الإغلاق والدمج
+## 7) قواعد التحقق والإغلاق
 
-أي دفعة لا تعتبر مغلقة إلا إذا:
+أي دفعة لا تعتبر جاهزة للدمج إلا بعد:
 
-1. تم تحديث هذا السجل بنتيجتها الدقيقة.
-2. lint/typecheck/unit/build خضراء.
-3. Fresh DB + schema خضراء عند وجود DB contract.
-4. Integration/Security/RLS خضراء.
-5. Browser Smoke أخضر للدفعات المؤثرة على الواجهة/التشغيل.
-6. لا Production migration غير Verified.
-7. لا merge إلى `main` إلا بعد تحقق الشروط السابقة وقرار الدمج المناسب.
-8. لا يعتمد الإغلاق على اسم workflow أو نجاح جزئي؛ يجب مطابقة نتيجة الـrun مع HEAD الفعلي للفرع.
+1. Fetch أحدث `main` وHEAD الفرع/PR.
+2. فهم أي drift أو commits أحدث.
+3. lint ✅
+4. typecheck ✅
+5. unit ✅
+6. build ✅
+7. Fresh DB ✅ عند وجود DB contract/migration.
+8. schema ✅
+9. Integration/Security/RLS ✅
+10. Browser Smoke ✅ للتغييرات المؤثرة على الواجهة/التشغيل.
+11. عدم وجود migration غير Verified على Production.
+12. لا دمج إذا تحرك `main` بعد verification إلا بعد إعادة الفحص/التحقق المناسب.
+13. لا ادعاء Physical Print success إلا بعد اختبار فعلي على جهاز/تعريف الطابعة.
 
----
+## 8) NEXT ACTION — إلزامي للمحادثة التالية
 
-**NEXT ACTION:** افحص أحدث Verify كامل على HEAD الفعلي لـ`development/final-handover`. إذا Full Green، أغلق Offline/Print regression gate ثم اختبر Captain/mobile printer routing، وبعدها نفذ Real Production E2E داخل Transaction مع ROLLBACK. لا تدمج PR #56 قبل إغلاق هذه البوابات وتحديث هذا السجل بنتيجة الإغلاق.
+ابدأ من PR #64 ولا تعيد فتح الأعمال المغلقة دون Regression مثبت:
+
+1. اجلب أحدث `main` HEAD وتأكد هل ما زال `bb73674604c97e810a4dd2f8f3d36ccf9ea552f0` أم تحرك.
+2. اجلب PR #64 وHEAD الحالي وقارن مع أحدث main.
+3. راجع الاختلاف الناتج عن دمج PR #63 بعد base القديم لـPR #64.
+4. افحص كل ملفات PR #64، خصوصًا:
+   - `src/lib/useBranchFilter.ts`
+   - `src/features/inventory/pages/TransfersPage.tsx`
+   - `src/api/domains/inventory.ts`
+   - migration الخاصة بـcross-branch transfers.
+5. لا تشغل migration على Production.
+6. أصلح أي conflict/regression على فرع PR #64 فقط.
+7. شغّل Full Verify حتى الأخضر بالكامل.
+8. اختبر branch/RLS/multi-branch transfer contract end-to-end.
+9. بعد Full Green فقط: حدث هذا السجل بالنتيجة الدقيقة واطلب/نفذ الدمج حسب توجيه المستخدم.
+
+لا تلمس أي مستودع أو قاعدة بيانات أخرى.
