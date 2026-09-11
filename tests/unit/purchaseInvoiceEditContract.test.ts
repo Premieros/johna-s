@@ -38,10 +38,10 @@ describe('purchase invoice edit and inline raw-material contract', () => {
     expect(migration).not.toContain("branch_manager");
   });
 
-  it('creates raw materials inline only with the canonical create permission and required unit', () => {
+  it('creates raw materials inline only with the canonical manage permission and required unit', () => {
     const page = read('src/features/trade/pages/PurchasesPage.tsx');
 
-    expect(page).toContain("can('raw_materials.create')");
+    expect(page).toContain("can('raw_materials.manage')");
     expect(page).toContain("supabase.from('measurement_units')");
     expect(page).toContain("!rawForm.code.trim() || !rawForm.name.trim() || !rawForm.unit_id");
     expect(page).toContain("supabase.from('raw_materials').insert(payload).select('*').single()");
