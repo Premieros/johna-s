@@ -26,12 +26,14 @@ function printRouteForStation(station: string, routes: Record<string, string>): 
   return '';
 }
 
-async function executeJob(job: CloudPrintJob, agentId: string): Promise<void> {
+function physicalPrinterKey(printerName: string): string {
+  return printerName.trim().toLocaleLowerCase();
+}
+
+async function executeJob(job: CloudPrintJob, agentId: string, printerName: string): Promise<void> {
   const started = await startCloudPrintJob(job.id, agentId);
   if (!started) return;
 
-  const routes = getLocalPrinterRoutes();
-  const printerName = printRouteForStation(job.station_code, routes);
   if (!printerName) {
     await completeCloudPrintJob(job.id, agentId, false, `PRINTER_ROUTE_MISSING:${job.station_code}`);
     return;
@@ -45,6 +47,31 @@ async function executeJob(job: CloudPrintJob, agentId: string): Promise<void> {
     paperWidthMm: Number(job.payload?.paperWidthMm || 80),
   });
   await completeCloudPrintJob(job.id, agentId, result.success, result.error);
+}
+
+async function executeClaimedBatch(jobs: CloudPrintJob[], agentId: string): Promise<void> {
+  // claim_cloud_print_jobs returns created_at/id order. Resolve routing once for
+  // the whole batch, then keep that order inside each physical-printer lane.
+  // Different printer lanes run concurrently; jobs sharing one printer run
+  // sequentially even if their start RPCs have different network latency.
+  const routes = getLocalPrinterRoutes();
+  const lanes = new Map<string, Array<{ job: CloudPrintJob; printerName: string }>>();
+
+  for (const job of jobs) {
+    const printerName = printRouteForStation(job.station_code, routes).trim();
+    const key = printerName
+      ? `printer:${physicalPrinterKey(printerName)}`
+      : `missing:${job.id}`;
+    const lane = lanes.get(key) || [];
+    lane.push({ job, printerName });
+    lanes.set(key, lane);
+  }
+
+  await Promise.allSettled(Array.from(lanes.values()).map(async (lane) => {
+    for (const entry of lane) {
+      await executeJob(entry.job, agentId, entry.printerName);
+    }
+  }));
 }
 
 /**
@@ -88,10 +115,7 @@ export function CloudPrintAgent() {
       try {
         const jobs = await claimCloudPrintJobs(branchId, agentId, 12);
         if (jobs.length > 0) {
-          // Electron owns one independent FIFO per physical printer. Running the
-          // claimed jobs concurrently here means a stalled kitchen printer does
-          // not block cashier/barista, while same-printer ordering stays intact.
-          await Promise.allSettled(jobs.map((job) => executeJob(job, agentId)));
+          await executeClaimedBatch(jobs, agentId);
         }
       } catch (error) {
         console.warn('[cloud-print-agent] poll failed', error);
