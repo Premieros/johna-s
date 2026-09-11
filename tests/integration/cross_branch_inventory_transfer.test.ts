@@ -170,7 +170,7 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
       { item_type: 'product', item_id: productA, destination_item_id: productB, quantity: 1, unit_cost: 5 },
     ]);
     expect(created.success).toBe(true);
-    expect(await approve(userSingle, created.transfer_id!)).toMatchObject({ success: false, error: 'BRANCH_MISMATCH' });
+    expect(await approve(userSingle, created.transfer_id!)).toMatchObject({ success: false, error: 'TRANSFER_NOT_FOUND' });
   });
 
   it('uses the explicit destination product and never a same-name decoy', async () => {
