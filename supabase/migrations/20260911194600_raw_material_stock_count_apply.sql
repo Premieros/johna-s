@@ -28,17 +28,19 @@ begin
     loop
       if v_item.raw_material_id is not null then
         select coalesce(quantity,0) into v_current
-        from public.raw_material_inventory
-        where raw_material_id=v_item.raw_material_id and branch_id=v_count.branch_id;
+        from public.raw_material_warehouse_inventory
+        where raw_material_id=v_item.raw_material_id
+          and branch_id=v_count.branch_id
+          and warehouse_id=v_count.warehouse_id;
         v_current:=coalesce(v_current,0);
         v_variance:=v_item.counted_quantity-v_current;
         if v_variance>0 then
-          v_res:=public._raw_add(v_item.raw_material_id,v_count.branch_id,v_variance,v_item.unit_cost,null,null,null,'adjustment','stock_count',v_count.id,v_count.count_number,auth.uid());
+          v_res:=public._raw_add(v_item.raw_material_id,v_count.branch_id,v_count.warehouse_id,v_variance,v_item.unit_cost,null,null,null,'adjustment','stock_count',v_count.id,v_count.count_number,auth.uid());
           if not coalesce((v_res->>'success')::boolean,false) then
             return jsonb_build_object('success',false,'error','RAW_ADJUST_FAILED','raw_material_id',v_item.raw_material_id,'detail',v_res->>'error');
           end if;
         elsif v_variance<0 then
-          v_res:=public._raw_remove_fifo(v_item.raw_material_id,v_count.branch_id,-v_variance,'adjustment','stock_count',v_count.id,v_count.count_number,auth.uid());
+          v_res:=public._raw_remove_fifo(v_item.raw_material_id,v_count.branch_id,v_count.warehouse_id,-v_variance,'adjustment','stock_count',v_count.id,v_count.count_number,auth.uid());
           v_shortage:=coalesce((v_res->>'shortage')::numeric,0);
           if v_shortage>0 then
             return jsonb_build_object('success',false,'error','STOCK_COUNT_SHORTAGE','raw_material_id',v_item.raw_material_id,'shortage',v_shortage);
