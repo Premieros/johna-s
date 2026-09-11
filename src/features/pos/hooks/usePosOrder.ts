@@ -28,10 +28,15 @@ export function usePosOrder(input: UsePosOrderInput) {
   const isAr = lang === 'ar';
   const { show } = useToast();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
+  const kitchenRefreshKey = base.kitchenSentItems
+    .map((item) => `${item.order_item_id}:${Number(item.quantity || 0)}`)
+    .sort()
+    .join('|');
   const cartAvailability = useCartAwareAvailability({
     branchId: input.branchId,
     activeOrderId: base.activeOrderId,
     cart: base.cart,
+    refreshKey: kitchenRefreshKey,
   });
 
   const showAvailabilityBlocked = useCallback((productName?: string) => {
@@ -41,6 +46,10 @@ export function usePosOrder(input: UsePosOrderInput) {
         : `${productName ? `${productName}: ` : ''}Insufficient availability after accounting for the current order components.`,
       'error',
     );
+  }, [isAr, show]);
+
+  const showPhysicalStockBlocked = useCallback((productName: string, stock: number) => {
+    show(`${productName}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${stock})`, 'error');
   }, [isAr, show]);
 
   const addToCart = useCallback((...args: Parameters<typeof base.addToCart>) => {
@@ -53,13 +62,14 @@ export function usePosOrder(input: UsePosOrderInput) {
     const currentQty = base.cart
       .filter((item) => item.product.id === product.id)
       .reduce((sum, item) => sum + item.quantity, 0);
-    if (currentQty + quantity > Number(input.stockMap[product.id] || 0)) {
-      show(`${product.name}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${Number(input.stockMap[product.id] || 0)})`, 'error');
+    const physicalStock = Number(input.stockMap[product.id] || 0);
+    if (currentQty + quantity > physicalStock) {
+      showPhysicalStockBlocked(product.name, physicalStock);
       return;
     }
     cartAvailability.markMutationPending();
     base.addToCart(...args);
-  }, [base, cartAvailability, input.stockMap, isAr, show, showAvailabilityBlocked]);
+  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const updateQty = useCallback((...args: Parameters<typeof base.updateQty>) => {
     const [lineKey, delta] = args;
@@ -73,14 +83,15 @@ export function usePosOrder(input: UsePosOrderInput) {
       const currentQty = base.cart
         .filter((item) => item.product.id === target.product.id)
         .reduce((sum, item) => sum + item.quantity, 0);
-      if (currentQty + delta > Number(input.stockMap[target.product.id] || 0)) {
-        show(`${target.product.name}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${Number(input.stockMap[target.product.id] || 0)})`, 'error');
+      const physicalStock = Number(input.stockMap[target.product.id] || 0);
+      if (currentQty + delta > physicalStock) {
+        showPhysicalStockBlocked(target.product.name, physicalStock);
         return;
       }
       cartAvailability.markMutationPending();
     }
     base.updateQty(...args);
-  }, [base, cartAvailability, input.stockMap, isAr, show, showAvailabilityBlocked]);
+  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const setQty = useCallback((...args: Parameters<typeof base.setQty>) => {
     const [lineKey, qty] = args;
@@ -95,14 +106,15 @@ export function usePosOrder(input: UsePosOrderInput) {
       const otherQty = base.cart
         .filter((item) => item.product.id === target.product.id && cartLineKey(item) !== lineKey)
         .reduce((sum, item) => sum + item.quantity, 0);
-      if (otherQty + Number(qty) > Number(input.stockMap[target.product.id] || 0)) {
-        show(`${target.product.name}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${Number(input.stockMap[target.product.id] || 0)})`, 'error');
+      const physicalStock = Number(input.stockMap[target.product.id] || 0);
+      if (otherQty + Number(qty) > physicalStock) {
+        showPhysicalStockBlocked(target.product.name, physicalStock);
         return;
       }
       cartAvailability.markMutationPending();
     }
     base.setQty(...args);
-  }, [base, cartAvailability, input.stockMap, isAr, show, showAvailabilityBlocked]);
+  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const replaceCartLine = useCallback((...args: Parameters<typeof base.replaceCartLine>) => {
     const [lineKey, nextItem] = args;
@@ -116,9 +128,19 @@ export function usePosOrder(input: UsePosOrderInput) {
       showAvailabilityBlocked(nextItem.product.name);
       return false;
     }
+
+    const otherQty = base.cart
+      .filter((item) => item.product.id === nextItem.product.id && cartLineKey(item) !== lineKey)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    const physicalStock = Number(input.stockMap[nextItem.product.id] || 0);
+    if (otherQty + nextItem.quantity > physicalStock) {
+      showPhysicalStockBlocked(nextItem.product.name, physicalStock);
+      return false;
+    }
+
     if (positiveDemand > 0) cartAvailability.markMutationPending();
     return base.replaceCartLine(...args);
-  }, [base, cartAvailability, showAvailabilityBlocked]);
+  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const removeFromCart = useCallback((...args: Parameters<typeof base.removeFromCart>) => {
     base.removeFromCart(...args);
