@@ -26,7 +26,7 @@ describe.skipIf(skip)('Unit hierarchy — production to inventory', () => {
        VALUES ($1, $2, 100, 10)`,
       [rawMaterialId, branchId],
     );
-    await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, batch_number, quantity, unit_cost, source_type) VALUES ($1, $2, 'UH-RM-BATCH', 100, 10, 'opening')`, [rawMaterialId, branchId]);
+    await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, warehouse_id, batch_number, quantity, unit_cost, source_type) VALUES ($1, $2, $3, 'UH-RM-BATCH', 100, 10, 'opening')`, [rawMaterialId, branchId, warehouseId]);
     await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, cost_price, sale_price, is_active) VALUES ($1, 'UH-UNIT-001', 'Burger Sauce', 'manufactured', $2, 0, 5, true)`, [unitId, branchId]);
     await client.query(`INSERT INTO public.inventory_unit_recipes (unit_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 2, 0)`, [unitId, rawMaterialId]);
   });

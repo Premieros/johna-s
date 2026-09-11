@@ -52,9 +52,9 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
     );
     await client.query(`INSERT INTO public.raw_material_inventory (raw_material_id,branch_id,quantity,avg_cost) VALUES ($1,$2,5,4)`, [rawId, branchId]);
     await client.query(
-      `INSERT INTO public.raw_material_batches (raw_material_id,branch_id,batch_number,quantity,unit_cost,source_type)
-       VALUES ($1,$2,$3,5,4,'opening')`,
-      [rawId, branchId, `OPEN-${randomUUID()}`],
+      `INSERT INTO public.raw_material_batches (raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type)
+       VALUES ($1,$2,$3,$4,5,4,'opening')`,
+      [rawId, branchId, warehouseId, `OPEN-${randomUUID()}`],
     );
     await client.query(
       `INSERT INTO public.inventory_units (id,code,name,unit_type,branch_id,cost_price,sale_price,is_active)

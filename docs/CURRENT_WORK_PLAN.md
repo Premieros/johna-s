@@ -1,9 +1,9 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
 > **هذا هو السجل الحي الوحيد للمشروع.**
-> أي نموذج أو مطور يبدأ من هذا الملف، ثم يجلب HEAD الحالي لـ`main` والفرع/PR قبل أي تعديل لأن نماذج أخرى قد تعمل بالتوازي.
+> أي نموذج أو مطور يبدأ من هذا الملف ثم يجلب HEAD الحالي لـ`main` والفرع/PR المستهدف قبل أي تعديل، لأن نماذج أخرى قد تعمل بالتوازي.
 
-آخر تحديث: **2026-09-11 — Africa/Cairo — PR #65 stabilization/cleanup نشط على فرع تطوير منفصل**
+آخر تحديث: **2026-09-11 — Africa/Cairo — Accelerated Dependency-First Stabilization**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -21,70 +21,284 @@
 - قبل أي write: اجلب HEAD الحالي لـ`main` والفرع/PR المستهدف وافحص أي commits أحدث.
 - عند الدمج استخدم expected SHA guard متى أمكن.
 
-## 2) الحالة الحالية لـ main
+## 2) Baseline الحالي
 
-- `main` HEAD الموثق = `93f72e50bf1ad2457cac9cc6b5d513a5c2f5ee6e`.
-- هذا هو merge commit لـPR #64: `fix(inventory): multi-branch transfer and branch visibility (#64)`.
-- PR #64 مدمج ومغلق.
-- Verify main #1056 بعد الدمج: Full Green ✅.
-- Deploy GitHub Pages #594: Success ✅.
-- Migration الخاصة بـPR #64 **لم تُطبق على Production** وقت هذا التوثيق؛ لا تطبقها دون تحقق جديد وخطة نشر صريحة.
-- لا تفترض أن هذا الـSHA ما زال الأحدث: يجب fetch قبل أي عمل جديد.
+- latest verified `main` عند إعادة ترتيب الخطة: `c462b2014671ed6a4cc003006c8ad87bf848cd21`.
+- فرع التثبيت الحالي بعد إغلاق Stage 1: `development/stabilization-phase-2`.
+- Stage 1 — Purchase Requests Permission Stabilization: **VERIFIED / Full Green** على Verify #1076 قبل تحديث هذه الخطة.
+- PR #68 ما زال غير مدمج وقت إعادة ترتيب الخطة.
+- Production Supabase لم تُطبق عليها migration بسبب Stage 1.
+- `main` غير محمي حاليًا؛ يبقى Governance Risk ويعالج دون تعطيل المسار الوظيفي الحرج.
+- لا تفترض أن أي SHA أعلاه ما زال الأحدث لاحقًا؛ fetch إلزامي قبل كل كتابة/دمج.
 
-## 3) الدفعة النشطة — PR #65
+## 3) الهدف التنفيذي الجديد — أسرع طريق جذري آمن
 
-- PR: `#65` — `stabilize: regression coverage before safe cleanup`
-- State: **Open / Draft / غير مدمج**.
-- Branch: `development/stabilization-cleanup`
-- Base: `main@93f72e50...`
-- آخر HEAD وظيفي قبل هذا التحديث: `2eae743cf5dc76bae117f1c22f63c2e075db464e`؛ commit تحديث هذا الملف يأتي بعده، لذلك اجلب HEAD الفعلي دائمًا.
-- ممنوع الدمج قبل Full Verify Green على HEAD النهائي ومراجعة أي drift من `main`.
+بدل حل الشاشات واحدة واحدة، العمل من **الجذور المشتركة إلى النتائج**. أي عقد مشترك يُغلق مرة واحدة باختبارات Regression ثم يُعاد استخدامه في كل الوحدات التابعة.
 
-### ما تم إصلاحه في PR #65
+الترتيب الإلزامي:
 
-1. **Mobile interaction regression**
-   - إعادة إظهار `theme-toggle` على الهاتف بدل إخفائه.
-   - إعادة إظهار زر المستخدم/الحساب على الهاتف مع إبقاء الـheader مضغوطًا.
-   - Browser Smoke بقي صارمًا ولم يتم تخفيف الاختبار لإخفاء الفشل.
+`Identity/Permissions/Branch/RLS -> Inventory/Ledger -> Purchases -> POS/Kitchen/Payments -> Shift/Reports -> Printing/Offline -> Cleanup`
 
-2. **Product manufactured-unit edit contract**
-   - تعديل المنتج يحفظ روابط المصنعات في `product_unit_links` بدل الاعتماد التشغيلي على `product_components` القديم.
-   - الإضافة/الحذف/تعديل الكمية تعمل على العقد الحديث نفسه.
-   - أزيل الاستنتاج الوهمي لمصنع باسم المنتج.
-   - المسار الحديث لا يمسح `product_components` القديم بلا داعٍ.
+### لماذا هذا الترتيب؟
 
-3. **Import branch safety**
-   - الاستيراد لا يختار `branches[0]` عشوائيًا.
-   - يجب تحديد الفرع بوضوح بدل fallback قد يكتب في فرع غير مقصود.
+- الصلاحيات والفروع/RLS تؤثر على كل شاشة، لذلك تُحسم أولًا.
+- المخزون والـLedger هما المصدر المشترك للشراء، التوافر، الاستهلاك، الإرجاع والتقارير.
+- المشتريات تغذي المخزون؛ لا نختبر POS availability قبل تثبيت الاستلام والمخزون.
+- POS/Kitchen/Payments تعتمد على الهوية والمخزون والعقود المالية.
+- Shift/Reports يجب أن تقرأ نتائج تشغيل مثبتة، لا بيانات غير مستقرة.
+- Printing/Offline طبقة توصيل/مزامنة بعد ثبات المعاملة الأساسية.
+- Cleanup يأتي أخيرًا بعد وجود Regression Safety Net.
 
-4. **Dining areas / tables incomplete setup UX**
-   - إذا لم توجد أي `dining_areas` للفرع، شاشة اختيار الطاولة تعرض حالة واضحة: إعداد الصالات غير مكتمل.
-   - لا يتم عرض الطاولة المنفردة وكأن إعداد الصالات سليم عندما لا توجد أي صالة.
-   - إذا لم توجد طاولات أصلًا، درج الطاولات يعرض أن إعداد الصالات/الطاولات للفرع غير مكتمل بدل رسالة بحث فارغة مضللة.
-   - إذا كانت هناك طاولات لكن البحث/الفلتر لا يطابق شيئًا، تبقى رسالة البحث منفصلة.
-   - لا يتم إنشاء مناطق أو طاولات تلقائيًا، ولا اختراع بيانات Production.
+## 4) قواعد التنفيذ السريع — إلزامية
 
-## 4) Production findings — read-only فقط
+### 4.1 Root cause قبل UI patch
 
-تمت القراءة من Production `azzdesuowpdcoflmyezn` للتحقق من البلاغات، بدون تعديل بيانات التشغيل:
+عند ظهور مشكلة:
 
-### Super Admin
+`UI symptom -> API/RPC -> Permission -> branch/RLS -> tables/ledger -> side effect -> test`
 
-- Super Admin النشط: `john_s`.
-- `auth.users` و`public.users` متطابقان على نفس User UUID، والحساب نشط.
-- username lookup يعمل ويصل إلى هوية Auth الصحيحة.
-- **فرع سموحة معيّن بالفعل لـ`john_s` كـprimary branch في `public.users.branch_id`.**
-- **سموحة موجودة بالفعل في `public.user_branch_access` لنفس المستخدم.**
-- لذلك لم يتم تنفيذ UPDATE/INSERT مكرر على Production لتعيين سموحة؛ المطلوب كان محققًا مسبقًا وتم التحقق منه فقط.
+لا نصلح العرض فقط إذا كان السبب في العقد الخلفي.
 
-### Dining data
+### 4.2 اختبار واحد قد يغلق عدة شاشات
 
-- فرع كليوباترا: 0 مناطق / 0 طاولات وقت الفحص.
-- فرع نادي سموحة: 0 مناطق / طاولة نشطة واحدة وقت الفحص.
-- هذه فجوة بيانات/إعداد حقيقية وليست مجرد فلتر واجهة.
-- لا تُنشئ مناطق أو طاولات افتراضية دون بيانات تشغيل صريحة من المستخدم.
+الأولوية لاختبارات العقود المشتركة، مثل:
 
-## 5) متطلبات ثابتة لا يجوز كسرها
+- Permission-First helper/RPC contracts.
+- branch + warehouse isolation.
+- inventory posting/ledger idempotency.
+- payment idempotency.
+- kitchen delta/stock consumption.
+
+### 4.3 PR صغير لكن Stage مجمّعة حول Dependency واحدة
+
+PR واحد لا يجمع نطاقات غير مترابطة، لكن يمكن أن يغطي أكثر من شاشة عندما يكون **نفس العقد المشترك** هو السبب.
+
+### 4.4 Test first عند تعديل سلوك قائم
+
+`prove current/expected contract -> fix -> focused tests -> Full Verify`
+
+### 4.5 لا حذف Legacy قبل الإثبات
+
+`usage search -> contract map -> regression coverage -> remove -> Full Verify`
+
+### 4.6 لا نجاح وهمي
+
+- network/offline ambiguity لا تتحول إلى sale/payment success.
+- غياب/فشل Print Agent لا يسجل physical print success.
+- retry لا يكرر stock consumption أو payment أو ledger posting.
+
+## 5) ROOT STAGE A — Identity / Permissions / Branch / RLS
+
+**الأولوية: P0 — أول جذر مشترك**
+
+### المطلوب
+
+- Authentication identity ثابتة.
+- `user -> allowed branches` مصدر واحد واضح.
+- Permission-First لجميع العمليات؛ لا role-name authorization لغير Super Admin.
+- approvals لها permissions وعقد Backend واضح، لا UI-only protection.
+- settings/printer management لا يظهر إلا بالصلاحية المناسبة.
+- warehouse operations تحمل branch + warehouse scope صريح.
+- لا `branches[0]` fallback ولا cross-branch fallback.
+
+### Regression contracts
+
+- View Only دون Create/Edit.
+- Pay Only دون منح إنشاء غير مطلوب.
+- `pos.send_kitchen` مستقل.
+- `pos.receipt.print` مستقل.
+- same permission works regardless of role label.
+- branch A user cannot read/write branch B data unless explicitly granted.
+
+### شرط الإغلاق
+
+Full Green + لا role-name auth drift + لا branch fallback مثبت.
+
+## 6) ROOT STAGE B — Inventory / Ledger / Availability
+
+**الأولوية: P0 — المصدر التشغيلي المشترك**
+
+### الترتيب الداخلي
+
+1. Raw Materials + immutable unit contract.
+2. Manufactured Units / product composition.
+3. Warehouses + branch/warehouse identity.
+4. Purchase/receive posting into stock.
+5. Transfers idempotently بين المخازن.
+6. Availability من المصدر الصحيح للمخزن/BOM.
+7. Ledger consistency مع كل حركة.
+
+### العقود الثابتة
+
+- المنتج نفسه لا يملك وحدة قياس خامات.
+- raw material unit إلزامية عند الإنشاء وغير قابلة للتغيير بعد ذلك.
+- `Inventory Units` يمكن عرضها كـ«المصنعات» مع إبقاء أسماء DB الداخلية.
+- لا cross-branch stock fallback.
+- transfer لا يخلق أو يضاعف stock.
+- receive/retry لا يكرر stock أو ledger.
+
+### شرط الإغلاق
+
+دورة `setup -> receive -> transfer -> availability -> ledger` خضراء على Fresh DB.
+
+## 7) ROOT STAGE C — Purchases End-to-End
+
+مرجع الواجهة المنشورة:
+`https://premieros.github.io/johna-s/#/purchases/requests`
+
+Stage 1 أغلق Permission إنشاء Purchase Request. المتبقي هنا دورة المشتريات نفسها:
+
+`Purchase Request -> Submit/Approval -> RFQ/PO as applicable -> Receive -> Inventory/Ledger -> Supplier/Account impact -> Reports source`
+
+### يجب إثبات
+
+- status transitions صحيحة.
+- approval/reject permission contract صريح.
+- branch + warehouse scope.
+- requested vs received quantities.
+- partial receive/backorder.
+- duplicate receive protection.
+- cancellation after/no receipt حسب العقد.
+- supplier/account impact مرة واحدة فقط.
+- لا بيانات فرع آخر.
+
+### شرط الإغلاق
+
+E2E مشتريات واحد يغطي الدورة كاملة + Full Green.
+
+## 8) ROOT STAGE D — POS / Tables / Kitchen / Payments
+
+### الترتيب الداخلي
+
+1. POS granular permissions.
+2. order create/edit + hold/resume.
+3. Dining/table occupancy + operator username.
+4. `send_to_kitchen` first send + delta changes.
+5. stock consumption عند `send_to_kitchen` فقط.
+6. KDS/station routing.
+7. split/merge/transfer approvals.
+8. partial/split payments.
+9. returns/voids/partial voids.
+
+### عقود لا تقبل الكسر
+
+- first send مرة واحدة، ثم delta فقط.
+- retry لا يسبب double consumption.
+- View Only وPay Only حقيقيان.
+- payment retry/offline ambiguity لا يعطي success وهمي.
+- كل كيان مرتبط بالمستخدم يعرض اسمه حيث يلزم وضمن النطاق المسموح.
+
+### شرط الإغلاق
+
+Critical POS E2E أخضر من order حتى payment وreceipt contract.
+
+## 9) ROOT STAGE E — Shift / Close / Reports
+
+### المطلوب
+
+- open shift/open balance.
+- sales by shift.
+- sales by user/operator.
+- cash/card totals.
+- drawer reconciliation.
+- close shift/day.
+- reports تقرأ المصدر المعاملي الصحيح ولا تعيد حساب أرقام مختلفة.
+- صفحة تقارير واحدة compact/tabular، filters + Excel export، بدون charts.
+
+### شرط الإغلاق
+
+Totals للطلبات/الدفع/الشفت/التقارير متطابقة في E2E واحد.
+
+## 10) ROOT STAGE F — Printing / Offline / Mobile
+
+### Printing
+
+- branch/station routing.
+- cashier/kitchen/barista routing حسب الإعداد.
+- queue success != physical print success.
+- Print Agent failure لا يسجل completed كاذبًا.
+- print once + controlled reprint.
+
+### Offline/Reconciliation
+
+- انقطاع الشبكة لا ينتج sale/payment نجاحًا وهميًا.
+- retry/reconcile idempotent.
+- close shift/day offline فقط حسب العقد المثبت.
+
+### Mobile UX
+
+- critical navigation/touch flows فقط؛ لا إعادة تصميم واسعة قبل استقرار الوظائف.
+
+### شرط الإغلاق
+
+Browser/mobile smoke + offline/reconciliation regression + printing truthfulness contract.
+
+## 11) Critical E2E واحد يربط المراحل
+
+بدل اختبارات متفرقة فقط، نبني ونوسع نفس الدورة الحرجة تدريجيًا:
+
+`Login -> Branch -> Warehouse -> Raw/Manufactured/Product setup -> Purchase Request -> Purchase/Receive -> Availability -> Open Shift -> Order -> Send to Kitchen -> KDS -> Payment -> Receipt -> Close Shift -> Reports`
+
+كل Root Stage تضيف جزءًا لهذه الدورة؛ لا نعيد بناء الاختبار من الصفر في كل مرحلة.
+
+## 12) أعمال تسير بالتوازي ولا تعطل المسار الحرج
+
+### Branch inventory cleanup
+
+لكل فرع: `Merged / Superseded / Unique useful / Unknown`.
+
+- لا حذف حسب العمر/الاسم.
+- أي unique useful work يُستخرج إلى PR صغير من أحدث baseline.
+- `Premieros-patch-1` مصنف حاليًا **Superseded/Dangerous — DO NOT MERGE** حتى اكتمال التدقيق.
+
+### Governance
+
+- محاولة حماية `main` عبر Ruleset/Branch Protection إن سمحت صلاحيات GitHub.
+- عدم تعطيل إصلاحات P0 الوظيفية إذا لم تتوفر صلاحيات الإدارة.
+
+### Contract Map
+
+يُبنى فقط للعقود التي نلمسها فعليًا أولًا، بدل توثيق 18 نطاقًا بالكامل قبل بدء الإصلاح. الشكل الثابت:
+
+`UI -> service/API/RPC -> tables/views -> permission -> RLS/branch scope -> side effects -> tests`
+
+## 13) Safe Cleanup — بعد الجذور فقط
+
+بعد وجود Regression Safety Net:
+
+- duplicated helpers.
+- dead components.
+- obsolete RPCs.
+- dangerous fallbacks.
+- temporary adapters.
+- unused imports/routes.
+
+**Cleanup لا يغير business behavior إلا كتغيير مستقل ومثبت.**
+
+## 14) Production Readiness & Rollout
+
+قبل أي Final handover أو Production migration:
+
+1. latest `main` fetched.
+2. no unexplained drift.
+3. locked Supabase identity ✅
+4. frontend API contract ✅
+5. lint ✅
+6. typecheck app + tests ✅
+7. unit ✅
+8. build ✅
+9. Fresh DB canonical migrations ✅
+10. schema ✅
+11. Integration ✅
+12. Security/RLS ✅
+13. Browser Smoke ✅
+14. Critical E2E ✅
+15. Offline/Reconciliation ✅
+16. Printing truthfulness ✅
+17. migration plan + rollback path إن وجدت migration.
+18. explicit approval قبل أي Production write.
+
+## 15) متطلبات ثابتة لا يجوز كسرها
 
 - Arabic-first RTL، Touch-friendly.
 - Permission-First؛ لا تستخدم أسماء roles كAuthorization.
@@ -101,50 +315,31 @@
   - `pos.receipt.print`
   - `pos.send_kitchen`
   - `pos.pay`
-- يجب دعم View Only وPay Only عندما تسمح الصلاحيات.
-- Approval system enforced، بما في ذلك العمليات الحساسة مثل split/merge/transfer حسب العقد.
+- Approval system enforced للعمليات الحساسة حسب العقد.
 - Printer management لا يظهر إلا لصاحب صلاحية الإعدادات المناسبة.
-- الطاولة المشغولة وكل كيان مرتبط بمستخدم يجب أن يعرض اسم المشغل/المستخدم بصورة آمنة ضمن النطاق المسموح.
-- Send to kitchen أول مرة ثم التعديلات كDelta.
 - Hold/Resume، split، merge/transfer، print once + controlled reprint.
-- لا تحوّل network/offline ambiguity إلى sale/payment success وهمي.
-- غياب/فشل Print Agent لا يسجل print success كاذبًا.
-- لا ادعاء Physical Print success إلا بعد اختبار فعلي على جهاز/تعريف الطابعة.
+- لا network/offline ambiguity تتحول إلى sale/payment success وهمي.
 
-## 6) قواعد التحقق والإغلاق
+## 16) Definition of Done
 
-أي دفعة لا تعتبر جاهزة للدمج إلا بعد:
+لا تعتبر Stabilization مغلقة إلا عندما:
 
-1. Fetch أحدث `main` وHEAD الفرع/PR.
-2. فهم أي drift أو commits أحدث وعدم عكس عمل متوازٍ بلا مراجعة.
-3. locked Supabase identity ✅
-4. frontend API contract ✅
-5. lint ✅
-6. typecheck application + tests ✅
-7. unit ✅
-8. build ✅
-9. Fresh DB canonical migrations ✅ عند الحاجة
-10. schema ✅
-11. Integration/Security/RLS ✅
-12. Browser Smoke ✅ للتغييرات المؤثرة على الواجهة/التشغيل
-13. عدم وجود migration غير Verified تم دفعها إلى Production.
-14. إذا تحرك `main` بعد verification، أعد فحص drift والتحقق المناسب قبل الدمج.
+- كل Root Stage A-F Full Green.
+- Critical E2E يغطي الدورة الكاملة.
+- لا cross-branch fallback.
+- لا role-name authorization لغير Super Admin.
+- source-of-truth التشغيلي لكل نطاق حرج واضح ومختبر.
+- لا فرع/PR مجهول الغرض عند الإغلاق النهائي.
+- الموقع المنشور يمر Browser Smoke + Critical E2E.
+- Production DB لم تتعرض لأي migration غير verified.
 
-## 7) حالة التحقق الحالية لـPR #65
+## 17) NEXT ACTION — المسار المختصر الإلزامي
 
-- Runs السابقة أثبتت أن Verify + DB/RLS كانت خضراء، بينما Browser Smoke كشف تدريجيًا عناصر الهاتف المخفية؛ تم إصلاح السبب بدل تخفيف الاختبار.
-- بعد إصلاح المصنعات وإعداد الطاولات/الصالات، يجب اعتماد **أحدث run فقط** الذي يطابق HEAD النهائي.
-- عند تحديث هذا السجل، run `Verify main #1068` على functional HEAD `2eae743c...` كان قد بدأ ولم تكن النتيجة النهائية قد صدرت بعد.
-- commit توثيق هذا الملف سيُنتج HEAD أحدث؛ لذلك لا تعتبر #1068 وحده دليل الدمج النهائي إذا لم يطابق HEAD النهائي.
-
-## 8) NEXT ACTION — إلزامي
-
-1. اجلب HEAD الحالي لـPR #65 بعد هذا التوثيق.
-2. تابع/تحقق من GitHub Actions للـHEAD النهائي فقط.
-3. يجب أن تكون Verify + DB/schema/Integration/Security/RLS + Browser Smoke كلها Green.
-4. إذا ظهر فشل، أصلح السبب الحقيقي على نفس فرع التطوير، ولا تخفف الاختبار/RLS.
-5. أبقِ PR #65 Draft وغير مدمج إلى أن يكتمل Full Verify Green.
-6. لا تشغّل أي Production migration بسبب هذه الدفعة؛ تغييرات الطاولات الحالية UX فقط.
-7. بعد Full Green، حدّث هذا السجل بنتيجة run النهائية والـSHA ثم انتظر توجيه المستخدم الصريح بالدمج.
+1. لا تبدأ Branch Cleanup كعمل حاجب للمشروع؛ اجعله Parallel housekeeping.
+2. أغلق/ادمج Stage 1 فقط بعد التأكد من أحدث HEAD وCI وحالة PR #68 وفق مسار الدمج الآمن.
+3. ابدأ مباشرة **ROOT STAGE A — Identity / Permissions / Branch / RLS** عبر contract search واختبارات مشتركة، وليس شاشة شاشة.
+4. أول deviation مثبت داخل Stage A يُصلح من الجذر مع Regression test يغطي كل المستهلكين الممكنين.
+5. بعد Full Green انتقل إلى Stage B، ثم C، ثم D، ثم E، ثم F دون إعادة فتح المغلق إلا Regression مثبت.
+6. لا Production migration دون Full Verify Green + سبب موثق + موافقة صريحة.
 
 لا تلمس أي مستودع أو قاعدة بيانات أخرى.

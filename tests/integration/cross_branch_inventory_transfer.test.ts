@@ -127,9 +127,9 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
       [rawA, branchA],
     );
     await client.query(
-      `INSERT INTO public.raw_material_batches(raw_material_id,branch_id,batch_number,quantity,unit_cost,source_type)
-       VALUES ($1,$2,'RAW-TRANSFER-QA',20,4,'opening')`,
-      [rawA, branchA],
+      `INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type)
+       VALUES ($1,$2,$3,'RAW-TRANSFER-QA',20,4,'opening')`,
+      [rawA, branchA, whA1],
     );
   });
 
