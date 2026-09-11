@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { cartToItems } from '../utils/cart';
+import { cartLineKey, cartToItems } from '../utils/cart';
 import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
+import { useCartAwareAvailability } from './useCartAwareAvailability';
 import {
   usePosOrder as usePosOrderBase,
   type ActiveShiftInfo,
@@ -14,9 +15,12 @@ export type { ActiveShiftInfo, UsePosOrderInput } from './usePosOrderBase';
 /**
  * Safety wrapper around the proven online POS hook.
  *
- * Online checkout is delegated unchanged to usePosOrderBase. Only an explicit
- * navigator.offline checkout is intercepted so it can be persisted as a durable
- * outbox item without presenting a server-unconfirmed payment as completed.
+ * Online checkout is delegated unchanged to usePosOrderBase. The additional
+ * online cart guard is read-only: it projects only unsent cart demand against
+ * canonical warehouse/BOM availability. Physical deduction remains owned by
+ * send_to_kitchen / the server sale path.
+ *
+ * Explicit offline checkout keeps the existing durable-outbox behavior.
  */
 export function usePosOrder(input: UsePosOrderInput) {
   const base = usePosOrderBase(input);
@@ -24,6 +28,107 @@ export function usePosOrder(input: UsePosOrderInput) {
   const isAr = lang === 'ar';
   const { show } = useToast();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
+  const cartAvailability = useCartAwareAvailability({
+    branchId: input.branchId,
+    activeOrderId: base.activeOrderId,
+    cart: base.cart,
+  });
+
+  const showAvailabilityBlocked = useCallback((productName?: string) => {
+    show(
+      isAr
+        ? `${productName ? `${productName}: ` : ''}الكمية غير متاحة بعد احتساب مكونات الطلب الحالي.`
+        : `${productName ? `${productName}: ` : ''}Insufficient availability after accounting for the current order components.`,
+      'error',
+    );
+  }, [isAr, show]);
+
+  const addToCart = useCallback((...args: Parameters<typeof base.addToCart>) => {
+    const product = args[0];
+    const quantity = Number(args[1] ?? 1);
+    if (!cartAvailability.canAdd(product.id, quantity)) {
+      showAvailabilityBlocked(product.name);
+      return;
+    }
+    const currentQty = base.cart
+      .filter((item) => item.product.id === product.id)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    if (currentQty + quantity > Number(input.stockMap[product.id] || 0)) {
+      show(`${product.name}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${Number(input.stockMap[product.id] || 0)})`, 'error');
+      return;
+    }
+    cartAvailability.markMutationPending();
+    base.addToCart(...args);
+  }, [base, cartAvailability, input.stockMap, isAr, show, showAvailabilityBlocked]);
+
+  const updateQty = useCallback((...args: Parameters<typeof base.updateQty>) => {
+    const [lineKey, delta] = args;
+    const target = base.cart.find((item) => cartLineKey(item) === lineKey);
+    if (!target) return;
+    if (delta > 0 && !cartAvailability.canAdd(target.product.id, delta)) {
+      showAvailabilityBlocked(target.product.name);
+      return;
+    }
+    if (delta > 0) {
+      const currentQty = base.cart
+        .filter((item) => item.product.id === target.product.id)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      if (currentQty + delta > Number(input.stockMap[target.product.id] || 0)) {
+        show(`${target.product.name}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${Number(input.stockMap[target.product.id] || 0)})`, 'error');
+        return;
+      }
+      cartAvailability.markMutationPending();
+    }
+    base.updateQty(...args);
+  }, [base, cartAvailability, input.stockMap, isAr, show, showAvailabilityBlocked]);
+
+  const setQty = useCallback((...args: Parameters<typeof base.setQty>) => {
+    const [lineKey, qty] = args;
+    const target = base.cart.find((item) => cartLineKey(item) === lineKey);
+    if (!target) return;
+    const delta = Number(qty) - target.quantity;
+    if (delta > 0 && !cartAvailability.canAdd(target.product.id, delta)) {
+      showAvailabilityBlocked(target.product.name);
+      return;
+    }
+    if (delta > 0) {
+      const otherQty = base.cart
+        .filter((item) => item.product.id === target.product.id && cartLineKey(item) !== lineKey)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      if (otherQty + Number(qty) > Number(input.stockMap[target.product.id] || 0)) {
+        show(`${target.product.name}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${Number(input.stockMap[target.product.id] || 0)})`, 'error');
+        return;
+      }
+      cartAvailability.markMutationPending();
+    }
+    base.setQty(...args);
+  }, [base, cartAvailability, input.stockMap, isAr, show, showAvailabilityBlocked]);
+
+  const replaceCartLine = useCallback((...args: Parameters<typeof base.replaceCartLine>) => {
+    const [lineKey, nextItem] = args;
+    const current = base.cart.find((item) => cartLineKey(item) === lineKey);
+    if (!current) return false;
+
+    const positiveDemand = current.product.id === nextItem.product.id
+      ? Math.max(nextItem.quantity - current.quantity, 0)
+      : nextItem.quantity;
+    if (positiveDemand > 0 && !cartAvailability.canAdd(nextItem.product.id, positiveDemand)) {
+      showAvailabilityBlocked(nextItem.product.name);
+      return false;
+    }
+    if (positiveDemand > 0) cartAvailability.markMutationPending();
+    return base.replaceCartLine(...args);
+  }, [base, cartAvailability, showAvailabilityBlocked]);
+
+  const removeFromCart = useCallback((...args: Parameters<typeof base.removeFromCart>) => {
+    base.removeFromCart(...args);
+    cartAvailability.markMutationPending();
+  }, [base, cartAvailability]);
+
+  const clearCart = useCallback(() => {
+    base.clearCart();
+    cartAvailability.markMutationPending();
+  }, [base, cartAvailability]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -118,6 +223,12 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   return {
     ...base,
+    addToCart,
+    updateQty,
+    setQty,
+    replaceCartLine,
+    removeFromCart,
+    clearCart,
     completing: base.completing || offlineCompleting,
     completeSale,
   };
