@@ -27,20 +27,30 @@ export function useCartAwareAvailability({ branchId, activeOrderId, cart }: UseC
   const [map, setMap] = useState<Record<string, number> | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mapRef = useRef<Record<string, number> | null>(null);
   const generation = useRef(0);
   const mutationPending = useRef(false);
 
   const publish = useCallback((next: { map: Record<string, number> | null; checking: boolean; error: string | null }) => {
+    mapRef.current = next.map;
     setMap(next.map);
     setChecking(next.checking);
     setError(next.error);
     setCartAvailabilitySnapshot({ branchId, ...next });
   }, [branchId]);
 
+  const clear = useCallback(() => {
+    mapRef.current = null;
+    setMap(null);
+    setChecking(false);
+    setError(null);
+    resetCartAvailabilitySnapshot(branchId);
+  }, [branchId]);
+
   const markMutationPending = useCallback(() => {
     mutationPending.current = true;
-    publish({ map, checking: true, error: null });
-  }, [map, publish]);
+    publish({ map: mapRef.current, checking: true, error: null });
+  }, [publish]);
 
   useEffect(() => {
     const currentGeneration = ++generation.current;
@@ -48,14 +58,11 @@ export function useCartAwareAvailability({ branchId, activeOrderId, cart }: UseC
 
     if (!branchId || cart.length === 0 || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       mutationPending.current = false;
-      setMap(null);
-      setChecking(false);
-      setError(null);
-      resetCartAvailabilitySnapshot(branchId);
+      clear();
       return () => { cancelled = true; };
     }
 
-    publish({ map, checking: true, error: null });
+    publish({ map: mapRef.current, checking: true, error: null });
 
     void (async () => {
       try {
@@ -76,10 +83,7 @@ export function useCartAwareAvailability({ branchId, activeOrderId, cart }: UseC
         if (demand.length === 0) {
           if (!cancelled && generation.current === currentGeneration) {
             mutationPending.current = false;
-            setMap(null);
-            setChecking(false);
-            setError(null);
-            resetCartAvailabilitySnapshot(branchId);
+            clear();
           }
           return;
         }
@@ -116,7 +120,7 @@ export function useCartAwareAvailability({ branchId, activeOrderId, cart }: UseC
     })();
 
     return () => { cancelled = true; };
-  }, [activeOrderId, branchId, cart, map, publish]);
+  }, [activeOrderId, branchId, cart, clear, publish]);
 
   useEffect(() => () => resetCartAvailabilitySnapshot(''), []);
 
