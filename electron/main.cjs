@@ -11,11 +11,7 @@ const { PerPrinterQueue, withTimeout } = require('./printerQueue.cjs');
 const DEFAULT_URL = 'https://premieros.github.io/johna-s/';
 const TRUSTED_ORIGIN = 'https://premieros.github.io';
 const DEFAULT_THERMAL_WIDTH_MM = 80;
-const THERMAL_BOTTOM_FEED_MM = 5;
-const PX_PER_INCH = 96;
-const MICRONS_PER_INCH = 25400;
 const PRINT_LOAD_TIMEOUT_MS = 6000;
-const PRINT_MEASURE_TIMEOUT_MS = 3000;
 const PRINT_CALLBACK_TIMEOUT_MS = 12000;
 
 let mainWindow = null;
@@ -93,7 +89,13 @@ function normalizeThermalWidthMm(value) {
 function thermalCss(widthMm) {
   return `
 <style id="premier-thermal-page">
-  @page { size: ${widthMm}mm auto; margin: 0; }
+  /*
+   * Keep 58/80mm as document layout only. Do not advertise a custom CSS page
+   * size here: Windows thermal drivers commonly expose a roll/form selected in
+   * Printer Preferences and some of them stall when Chromium submits a unique
+   * custom page height for every receipt.
+   */
+  @page { margin: 0; }
   html, body {
     width: ${widthMm}mm !important;
     min-width: ${widthMm}mm !important;
@@ -149,23 +151,17 @@ function textToPrintableHtml(text, widthMm) {
 </html>`, widthMm);
 }
 
-async function measureThermalPageSize(worker, widthMm) {
-  const heightPx = await worker.webContents.executeJavaScript(`(() => {
-    const body = document.body;
-    const root = document.documentElement;
-    return Math.ceil(Math.max(
-      body ? body.scrollHeight : 0,
-      body ? body.offsetHeight : 0,
-      root ? root.scrollHeight : 0,
-      root ? root.offsetHeight : 0
-    ));
-  })()`);
-  if (!Number.isFinite(heightPx) || heightPx <= 0) throw new Error('THERMAL_PAGE_SIZE_FAILED');
-  const contentMicrons = Math.ceil((heightPx * MICRONS_PER_INCH) / PX_PER_INCH);
-  const minHeightMicrons = 30000;
-  const maxHeightMicrons = 3000000;
-  const height = Math.min(maxHeightMicrons, Math.max(minHeightMicrons, contentMicrons + (THERMAL_BOTTOM_FEED_MM * 1000)));
-  return { width: widthMm * 1000, height };
+function driverCompatiblePrintOptions(printerName, options) {
+  return {
+    silent: true,
+    printBackground: true,
+    deviceName: printerName,
+    copies: options.copies,
+    // Intentionally omit Electron pageSize. The selected Windows printer form
+    // controls physical roll geometry; CSS still lays out content at 58/80mm.
+    // This avoids per-receipt custom heights that can remain stuck in Spooler.
+    margins: { marginType: 'none' },
+  };
 }
 
 async function printOnPhysicalPrinter(printerName, options) {
@@ -180,21 +176,9 @@ async function printOnPhysicalPrinter(printerName, options) {
       PRINT_LOAD_TIMEOUT_MS,
       'PRINT_LOAD_TIMEOUT',
     );
-    const pageSize = await withTimeout(
-      measureThermalPageSize(worker, options.paperWidthMm),
-      PRINT_MEASURE_TIMEOUT_MS,
-      'PRINT_MEASURE_TIMEOUT',
-    );
     const result = await withTimeout(new Promise((resolve) => {
       worker.webContents.print(
-        {
-          silent: true,
-          printBackground: true,
-          deviceName: printerName,
-          copies: options.copies,
-          pageSize,
-          margins: { marginType: 'none' },
-        },
+        driverCompatiblePrintOptions(printerName, options),
         (success, failureReason) => {
           resolve(success
             ? { success: true, printerName }
