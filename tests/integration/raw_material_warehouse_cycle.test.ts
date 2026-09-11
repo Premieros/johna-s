@@ -148,7 +148,8 @@ describe.skipIf(skip)('Stage B raw material warehouse cycle', () => {
       `SELECT pg_get_functiondef('public.check_product_availability(uuid,uuid,uuid,numeric)'::regprocedure) AS body`,
     );
     expect(def.rows[0].body).toContain('product_unit_links');
-    expect(def.rows[0].body).toContain('raw_material_warehouse_inventory');
+    expect(def.rows[0].body).toContain('raw_material_batches');
+    expect(def.rows[0].body).toContain('warehouse_id = p_warehouse_id');
   });
 
   it('moves raw stock once between warehouses and re-approval cannot duplicate stock or ledger', async () => {
