@@ -2,13 +2,20 @@ import type { ApiResult } from '../types';
 import type { RpcResult, LowStockAlertRow, StockValuationRow, StockValuationSummaryRow, ExpiringBatchRow } from '@/lib/types';
 import { rpc } from '../rpc';
 
+type StockCountInputItem = {
+  product_id?: string | null;
+  raw_material_id?: string | null;
+  counted_quantity: number | null;
+  reason: string | null;
+};
+
 export const inventory = {
   adjustStock(p: { p_inventory_id: string; p_new_quantity: number; p_reason: string | null }): ApiResult<RpcResult> { return rpc('adjust_stock', p); },
   adjustRawStock(p: { p_raw_material_id: string; p_branch_id: string; p_new_quantity: number; p_reason: string | null }): ApiResult<RpcResult> { return rpc('adjust_raw_stock', p); },
   createTransfer(p: { p_from_warehouse_id: string; p_to_warehouse_id: string; p_branch_id: string; p_items: { item_type: 'product' | 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number }[]; p_reason: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('create_warehouse_transfer', p); },
   approveTransfer(p: { p_transfer_id: string }): ApiResult<RpcResult> { return rpc('approve_warehouse_transfer', p); },
   rejectTransfer(p: { p_transfer_id: string; p_reason: string | null }): ApiResult<RpcResult> { return rpc('reject_warehouse_transfer', p); },
-  createStockCount(p: { p_branch_id: string; p_warehouse_id: string; p_count_type: string; p_notes: string | null; p_items: { product_id: string; counted_quantity: number | null; reason: string | null }[] | null }): ApiResult<RpcResult & { stock_count_id?: string; count_number?: string; items_added?: number }> { return rpc('create_stock_count', p); },
+  createStockCount(p: { p_branch_id: string; p_warehouse_id: string; p_count_type: string; p_notes: string | null; p_items: StockCountInputItem[] | null }): ApiResult<RpcResult & { stock_count_id?: string; count_number?: string; items_added?: number }> { return rpc('create_stock_count', p); },
   addStockCountItem(p: { p_stock_count_id: string; p_product_id: string; p_counted_quantity?: number | null; p_reason?: string | null }): ApiResult<RpcResult> { return rpc('add_stock_count_item', p); },
   updateStockCountItem(p: { p_stock_count_id: string; p_product_id: string; p_counted_quantity: number | null; p_reason?: string | null }): ApiResult<RpcResult> { return rpc('update_stock_count_item', p); },
   removeStockCountItem(p: { p_stock_count_id: string; p_product_id: string }): ApiResult<RpcResult> { return rpc('remove_stock_count_item', p); },

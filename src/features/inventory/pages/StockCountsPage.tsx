@@ -23,6 +23,9 @@ interface EditLine {
   reason: string;
 }
 
+type CountItemKind = 'product' | 'raw_material';
+type CreateLine = { item_id: string; counted_quantity: string; reason: string };
+
 export function StockCountsPage() {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
@@ -40,29 +43,29 @@ export function StockCountsPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [branchId, setBranchId] = useState(branchFilter || '');
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '' });
-  const [formItems, setFormItems] = useState<{ product_id: string; counted_quantity: string; reason: string }[]>([{ product_id: '', counted_quantity: '', reason: '' }]);
+  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '', item_kind: 'product' as CountItemKind });
+  const [formItems, setFormItems] = useState<CreateLine[]>([{ item_id: '', counted_quantity: '', reason: '' }]);
 
   const [viewTarget, setViewTarget] = useState<StockCount | null>(null);
   const [editTarget, setEditTarget] = useState<StockCount | null>(null);
   const [editLines, setEditLines] = useState<EditLine[]>([]);
-
   const [confirmTarget, setConfirmTarget] = useState<{ count: StockCount; action: 'submit' | 'approve' | 'reject' | 'apply' } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const statusOptions: { key: string; label: string }[] = [
+  const statusOptions = [
     { key: 'draft', label: t('countStatusDraft') },
     { key: 'submitted', label: t('countStatusSubmitted') },
     { key: 'approved', label: t('countStatusApproved') },
     { key: 'applied', label: t('countStatusApplied') },
     { key: 'rejected', label: t('countStatusRejected') },
   ];
-  const typeOptions: { key: string; label: string }[] = [
+  const typeOptions = [
     { key: 'full', label: t('countFull') },
     { key: 'partial', label: t('countPartial') },
     { key: 'cycle', label: t('countCycle') },
@@ -70,17 +73,20 @@ export function StockCountsPage() {
 
   const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
   const formProducts = form.branch_id ? products.filter((p) => p.branch_id === form.branch_id) : [];
+  const formRawMaterials = form.branch_id ? rawMaterials.filter((r) => r.branch_id === form.branch_id) : [];
   const editProducts = editTarget ? products.filter((p) => p.branch_id === editTarget.branch_id) : [];
 
   async function loadMeta() {
-    const [br, wh, pr] = await Promise.all([
+    const [br, wh, pr, rm] = await Promise.all([
       supabase.from('branches').select('*').eq('is_active', true).order('name'),
       supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
       supabase.from('products').select('*').eq('is_active', true).order('name'),
+      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
     ]);
     setBranches((br.data as Branch[]) || []);
     setWarehouses((wh.data as Warehouse[]) || []);
     setProducts((pr.data as Product[]) || []);
+    setRawMaterials((rm.data as RawMaterial[]) || []);
   }
   useEffect(() => { loadMeta(); }, []);
 
@@ -107,29 +113,30 @@ export function StockCountsPage() {
       || (c.warehouse?.name || '').toLowerCase().includes(q);
   });
 
+  const resetCreateLines = () => setFormItems([{ item_id: '', counted_quantity: '', reason: '' }]);
+
   const openCreate = () => {
     const defaultBranchId = branchFilter || (visibleBranches.length === 1 ? visibleBranches[0].id : '');
     const branchWarehouses = warehouses.filter((w) => w.branch_id === defaultBranchId);
-    setForm({
-      branch_id: defaultBranchId,
-      warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '',
-      count_type: 'cycle',
-      notes: '',
-    });
-    setFormItems([{ product_id: '', counted_quantity: '', reason: '' }]);
+    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'cycle', notes: '', item_kind: 'product' });
+    resetCreateLines();
     setCreateOpen(true);
   };
 
-  const addFormItem = () => setFormItems([...formItems, { product_id: '', counted_quantity: '', reason: '' }]);
-  const updateFormItem = (idx: number, field: keyof typeof formItems[number], value: string) =>
-    setFormItems(formItems.map((l, i) => i === idx ? { ...l, [field]: value } : l));
+  const addFormItem = () => setFormItems([...formItems, { item_id: '', counted_quantity: '', reason: '' }]);
+  const updateFormItem = (idx: number, field: keyof CreateLine, value: string) => setFormItems(formItems.map((l, i) => i === idx ? { ...l, [field]: value } : l));
   const removeFormItem = (idx: number) => setFormItems(formItems.filter((_, i) => i !== idx));
 
   const createCount = async () => {
     if (!form.branch_id || !form.warehouse_id) { show(t('required') + ': ' + t('branch') + ' / ' + t('warehouse'), 'error'); return; }
     const hasActiveForWarehouse = counts.some((c) => c.warehouse_id === form.warehouse_id && (c.status === 'draft' || c.status === 'submitted'));
-    if (hasActiveForWarehouse) show(isAr ? 'توجد بالفعل جلسة جرد قيد المعالجة (مسودة أو مرسلة) لهذا المستودع.' : 'An active stock count session already exists for this warehouse.', 'warning');
-    const items = formItems.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, counted_quantity: l.counted_quantity === '' ? null : parseFloat(l.counted_quantity), reason: l.reason || null }));
+    if (hasActiveForWarehouse) show(isAr ? 'توجد بالفعل جلسة جرد قيد المعالجة لهذا المستودع.' : 'An active stock count already exists for this warehouse.', 'warning');
+    const items = formItems.filter((l) => l.item_id).map((l) => ({
+      product_id: form.item_kind === 'product' ? l.item_id : null,
+      raw_material_id: form.item_kind === 'raw_material' ? l.item_id : null,
+      counted_quantity: l.counted_quantity === '' ? null : parseFloat(l.counted_quantity),
+      reason: l.reason || null,
+    }));
     const { data, error: err } = await api.inventory.createStockCount({ p_branch_id: form.branch_id, p_warehouse_id: form.warehouse_id, p_count_type: form.count_type, p_notes: form.notes || null, p_items: items.length > 0 ? items : null });
     if (err) { show(err.message, 'error'); return; }
     const result = data as { success: boolean; error?: string; detail?: string } | null;
@@ -172,9 +179,8 @@ export function StockCountsPage() {
     const { count } = confirmTarget;
     const id = count.id;
     let res: { data: { success?: boolean; error?: string; detail?: string } | null; error?: { message: string } | null };
-    if (action === 'submit') {
-      res = await api.inventory.submitStockCount({ p_stock_count_id: id });
-    } else if (action === 'approve') {
+    if (action === 'submit') res = await api.inventory.submitStockCount({ p_stock_count_id: id });
+    else if (action === 'approve') {
       res = await api.inventory.approveStockCount({ p_stock_count_id: id });
       if (res.error) { show(res.error.message, 'error'); return; }
       if (!res.data?.success) { show(res.data?.detail || res.data?.error || t('error'), 'error'); return; }
@@ -182,29 +188,19 @@ export function StockCountsPage() {
       if (applyRes.error || !applyRes.data?.success) {
         show((isAr ? 'تم اعتماد الجرد ولكن تعذر تطبيق الرصيد: ' : 'Count approved, but applying stock failed: ') + (applyRes.error?.message || applyRes.data?.detail || applyRes.data?.error || t('error')), 'error');
         await logAudit('update', 'stock_counts', id, { action: 'approve', apply_failed: true, count_number: count.count_number });
-        setConfirmTarget(null);
-        reloadCounts();
-        return;
+        setConfirmTarget(null); reloadCounts(); return;
       }
       show(t('countApplied'), 'success');
       await logAudit('update', 'stock_counts', id, { action: 'approve_apply', count_number: count.count_number });
-      setConfirmTarget(null);
-      setRejectReason('');
-      reloadCounts();
-      return;
-    } else if (action === 'reject') {
-      res = await api.inventory.rejectStockCount({ p_stock_count_id: id, p_reason: rejectReason || null });
-    } else {
-      res = await api.inventory.applyStockCount({ p_stock_count_id: id });
-    }
+      setConfirmTarget(null); setRejectReason(''); reloadCounts(); return;
+    } else if (action === 'reject') res = await api.inventory.rejectStockCount({ p_stock_count_id: id, p_reason: rejectReason || null });
+    else res = await api.inventory.applyStockCount({ p_stock_count_id: id });
     if (res.error) { show(res.error.message, 'error'); return; }
     if (!res.data?.success) { show(res.data?.detail || res.data?.error || t('error'), 'error'); return; }
     const keyMap = { submit: 'countSubmitted', reject: 'countRejected', apply: 'countApplied' } as const;
     show(t(keyMap[action as keyof typeof keyMap]), 'success');
     await logAudit('update', 'stock_counts', id, { action, count_number: count.count_number });
-    setConfirmTarget(null);
-    setRejectReason('');
-    reloadCounts();
+    setConfirmTarget(null); setRejectReason(''); reloadCounts();
   };
 
   const statusPill = (status: string) => {
@@ -221,24 +217,19 @@ export function StockCountsPage() {
     { key: 'count_type', header: t('countType'), render: (c) => typePill(c.count_type) },
     { key: 'items_count', header: t('countItems'), render: (c) => c.items?.length || 0 },
     { key: 'status', header: t('status'), render: (c) => statusPill(c.status) },
-    { key: 'actions', header: t('actions'), render: (c) => (
-      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+    { key: 'actions', header: t('actions'), render: (c) => {
+      const hasRaw = (c.items || []).some((i) => !!i.raw_material_id);
+      return <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => setViewTarget(c)} className="p-1.5 rounded-md hover:bg-ui-page-alt text-ui-subtle" title={t('viewCountItems')}><Eye className="w-4 h-4" /></button>
-        {can('inventory.count.create') && c.status === 'draft' && <><button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('addCountItem')}><Plus className="w-4 h-4" /></button><button onClick={() => setConfirmTarget({ count: c, action: 'submit' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('submitCount')}><Send className="w-4 h-4" /></button></>}
+        {can('inventory.count.create') && c.status === 'draft' && <>{!hasRaw && <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('addCountItem')}><Plus className="w-4 h-4" /></button>}<button onClick={() => setConfirmTarget({ count: c, action: 'submit' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('submitCount')}><Send className="w-4 h-4" /></button></>}
         {can('inventory.count.approve') && c.status === 'submitted' && <><button onClick={() => setConfirmTarget({ count: c, action: 'approve' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveCount')}><CheckCircle2 className="w-4 h-4" /></button><button onClick={() => { setConfirmTarget({ count: c, action: 'reject' }); setRejectReason(''); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectCount')}><XCircle className="w-4 h-4" /></button></>}
         {can('inventory.count.approve') && c.status === 'approved' && <button onClick={() => setConfirmTarget({ count: c, action: 'apply' })} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={t('applyCount')}><CheckCheck className="w-4 h-4" /></button>}
-      </div>
-    )},
+      </div>;
+    }},
   ];
 
   const itemColumns: Column<StockCountItem>[] = [
-    { key: 'item', header: isAr ? 'الصنف / الخامة' : 'Item / Raw Material', render: (i) => {
-      const product = i.product as Product | undefined;
-      const rawMaterial = i.raw_material as RawMaterial | undefined;
-      const name = product?.name || rawMaterial?.name || '-';
-      const sub = product?.barcode || (rawMaterial ? (isAr ? 'خامة' : 'Raw material') : '');
-      return <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{name[0] || '?'}</div><div><p className="font-medium text-ui-text">{name}</p><p className="text-xs text-ui-subtle">{sub}</p></div></div>;
-    } },
+    { key: 'item', header: isAr ? 'الصنف / الخامة' : 'Item / Raw Material', render: (i) => { const product = i.product as Product | undefined; const rawMaterial = i.raw_material as RawMaterial | undefined; const name = product?.name || rawMaterial?.name || '-'; const sub = product?.barcode || (rawMaterial ? (isAr ? 'خامة' : 'Raw material') : ''); return <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{name[0] || '?'}</div><div><p className="font-medium text-ui-text">{name}</p><p className="text-xs text-ui-subtle">{sub}</p></div></div>; } },
     { key: 'system', header: t('systemQuantity'), render: (i) => formatNumber(Number(i.system_quantity)) },
     { key: 'counted', header: t('countedQuantity'), render: (i) => formatNumber(Number(i.counted_quantity)) },
     { key: 'variance', header: t('varianceQuantity'), render: (i) => <span className={`font-semibold ${Number(i.variance_quantity) >= 0 ? 'text-ui-success' : 'text-ui-danger'}`}>{Number(i.variance_quantity) >= 0 ? '+' : ''}{formatNumber(Number(i.variance_quantity))}</span> },
@@ -246,13 +237,22 @@ export function StockCountsPage() {
     { key: 'reason', header: t('reason'), render: (i) => i.reason || '-' },
   ];
 
+  const createChoices = form.item_kind === 'product' ? formProducts : formRawMaterials;
+
   return (
     <DesignSurface testId="stock-counts-page">
-      <DesignPageHeader title={t('stockCounts')} subtitle={isAr ? 'جرد دوري وحصر للمخزون مع اعتماد وتطبيق الأرصدة' : 'Physical counts with approval and stock adjustment workflow'} actions={can('inventory.count.create') ? <Button size="sm" onClick={openCreate}><ClipboardCheck className="w-4 h-4" /> {t('newStockCount')}</Button> : undefined} />
+      <DesignPageHeader title={t('stockCounts')} subtitle={isAr ? 'جرد المنتجات والخامات مع اعتماد وتطبيق الأرصدة' : 'Product and raw-material physical counts with approval and stock adjustment'} actions={can('inventory.count.create') ? <Button size="sm" onClick={openCreate}><ClipboardCheck className="w-4 h-4" /> {t('newStockCount')}</Button> : undefined} />
       <DesignPanel testId="stock-counts-search-panel"><div className="flex flex-col sm:flex-row gap-3"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="stock-counts-search" /><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-44"><option value="all">{t('all')}</option>{statusOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</Select><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-48"><option value="">{t('allBranches')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select></div></DesignPanel>
       <DesignPanel testId="stock-counts-table-panel"><DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={counts.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('newStockCount')} size="lg"><div className="space-y-4"><div className="grid sm:grid-cols-3 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); setFormItems([{ product_id: '', counted_quantity: '', reason: '' }]); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select></div><Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} /><div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? t('product') : undefined} value={l.product_id} onChange={(e) => updateFormItem(idx, 'product_id', e.target.value)}><option value="">{t('product')}</option>{formProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{t('save')}</Button></div></div></Modal>
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('newStockCount')} size="lg"><div className="space-y-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select><Select label={isAr ? 'نوع الجرد' : 'Count items'} value={form.item_kind} onChange={(e) => { setForm({ ...form, item_kind: e.target.value as CountItemKind }); resetCreateLines(); }}><option value="product">{isAr ? 'منتجات' : 'Products'}</option><option value="raw_material">{isAr ? 'خامات' : 'Raw materials'}</option></Select></div>
+        {form.item_kind === 'raw_material' && <p className="text-xs text-ui-subtle">{isAr ? 'رصيد الخامات الحالي محسوب على مستوى الفرع حسب عقد قاعدة البيانات الحالي.' : 'Raw-material stock is currently branch-scoped by the database contract.'}</p>}
+        <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} />
+        <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (form.item_kind === 'product' ? t('product') : (isAr ? 'الخامة' : 'Raw material')) : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{form.item_kind === 'product' ? t('product') : (isAr ? 'اختر الخامة' : 'Choose raw material')}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{t('save')}</Button></div>
+      </div></Modal>
+
       <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} />}</Modal>
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={t('editCountItem')} size="lg">{editTarget && <div className="space-y-4"><div className="flex items-center justify-between"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addEditLine}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{editLines.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? t('product') : undefined} value={l.product_id} onChange={(e) => updateEditLine(idx, 'product_id', e.target.value)}><option value="">{t('product')}</option>{editProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateEditLine(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateEditLine(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeEditLine(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setEditTarget(null)}>{t('cancel')}</Button><Button onClick={saveEdit}>{t('save')}</Button></div></div>}</Modal>
       <ConfirmDialog open={!!confirmTarget && confirmTarget.action !== 'reject'} onClose={() => setConfirmTarget(null)} onConfirm={() => confirmTarget && runWorkflow(confirmTarget.action)} title={confirmTarget?.action ? t(confirmTarget.action === 'submit' ? 'submitCount' : confirmTarget.action === 'approve' ? 'approveCount' : 'applyCount') : ''} message={confirmTarget?.action ? (confirmTarget.action === 'submit' ? t('submitCountConfirm') : confirmTarget.action === 'approve' ? t('approveCountConfirm') : t('applyCountConfirm')) : ''} confirmLabel={t('save')} cancelLabel={t('cancel')} />
