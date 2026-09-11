@@ -80,9 +80,7 @@ begin
       raw_material_id,
       system_quantity,
       counted_quantity,
-      variance_quantity,
       unit_cost,
-      variance_value,
       reason
     )
     select
@@ -91,9 +89,7 @@ begin
       l.raw_material_id,
       0,
       sum(l.quantity),
-      sum(l.quantity),
       case when sum(l.quantity) <> 0 then round(sum(l.total_cost) / sum(l.quantity), 6) else 0 end,
-      sum(l.total_cost),
       'رصيد افتتاحي 01/09/2026'
     from public.inventory_ledger l
     where l.branch_id = v_branch_id
@@ -104,9 +100,7 @@ begin
     on conflict (stock_count_id, raw_material_id) where raw_material_id is not null
     do update set
       counted_quantity = excluded.counted_quantity,
-      variance_quantity = excluded.variance_quantity,
       unit_cost = excluded.unit_cost,
-      variance_value = excluded.variance_value,
       reason = excluded.reason;
   end if;
 end $$;
