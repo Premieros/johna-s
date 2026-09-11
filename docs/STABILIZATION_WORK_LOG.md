@@ -88,7 +88,56 @@ Align Purchase Request creation with the canonical Permission-First contract wit
 - **No Stage 1 code/test work remains.**
 - PR #68 stays Draft/unmerged.
 - No migration has been applied to Production.
-- Do not start Stage 2 until the user writes `تم`.
+- User wrote `تم`; transition to Root Stage B is authorized.
+
+## ROOT STAGE B — Inventory / Ledger / Availability
+
+Status: **IN PROGRESS**
+Start head: `c34a7803e559bdc1ab5f8d85546b0fa684c9f124`
+Production `main` baseline at start: `c462b2014671ed6a4cc003006c8ad87bf848cd21`
+Production Supabase writes: **NONE**
+
+### Goal
+Prove and stabilize the shared inventory contract before continuing to Purchases/POS:
+
+`setup -> receive -> transfer -> availability -> ledger`
+
+### Stage B scope
+
+1. Raw Materials + immutable unit contract.
+2. Manufactured Units / product composition.
+3. Warehouses + branch/warehouse identity.
+4. Purchase/receive posting into stock.
+5. Idempotent transfers between warehouses.
+6. Availability from the correct warehouse/BOM source.
+7. Ledger consistency for every movement.
+
+### Mandatory regression properties
+
+- Product itself has no raw-material UOM.
+- Raw-material unit is mandatory on create and immutable after creation.
+- No cross-branch stock fallback.
+- Transfer never creates/duplicates stock.
+- Receive/retry never duplicates stock or ledger posting.
+- Availability must reflect the correct warehouse/BOM contract.
+
+### What was done
+
+- User authorized transition from the verified Stage 1 by writing `تم`.
+- Current `main` and stabilization branch HEADs were re-fetched before Stage B documentation.
+- Stage B was opened only in the stabilization log; no runtime code, migration, RLS, or Production data has been changed yet.
+
+### Verification/tests
+
+- Not yet executed for Stage B.
+
+### Remaining
+
+- Build the Stage B contract map from actual RPC/service/table/test paths.
+- Run focused Fresh DB regression tests for receive/transfer/availability/ledger.
+- Fix only proven root-cause deviations.
+- Run Full Verify and record exact evidence.
+- Do not start Root Stage C until Stage B is VERIFIED and the user writes `تم` after the Stage B closure report.
 
 ## Deferred branch audit note
 
