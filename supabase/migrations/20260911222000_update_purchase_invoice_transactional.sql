@@ -24,6 +24,7 @@ SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_purchase public.purchases%ROWTYPE;
+  v_purchase_branch_id uuid;
   v_return jsonb;
   v_replacement jsonb;
   v_revision_number text;
@@ -40,6 +41,21 @@ BEGIN
     );
   END IF;
 
+  -- Resolve and authorize the invoice branch before taking a row lock. This
+  -- prevents an unauthorized caller from locking a purchase row it cannot use.
+  SELECT branch_id
+  INTO v_purchase_branch_id
+  FROM public.purchases
+  WHERE id = p_purchase_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'PURCHASE_NOT_FOUND');
+  END IF;
+
+  IF NOT public.user_may_access_branch(v_purchase_branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+  END IF;
+
   SELECT *
   INTO v_purchase
   FROM public.purchases
@@ -50,7 +66,10 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'PURCHASE_NOT_FOUND');
   END IF;
 
-  IF NOT public.user_may_access_branch(v_purchase.branch_id) THEN
+  -- Recheck after locking as a defense-in-depth guard against any unexpected
+  -- branch mutation between the authorization read and acquisition of the lock.
+  IF v_purchase.branch_id <> v_purchase_branch_id
+     OR NOT public.user_may_access_branch(v_purchase.branch_id) THEN
     RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
 
