@@ -24,7 +24,6 @@ SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_purchase public.purchases%ROWTYPE;
-  v_purchase_branch_id uuid;
   v_return jsonb;
   v_replacement jsonb;
   v_revision_number text;
@@ -41,10 +40,10 @@ BEGIN
     );
   END IF;
 
-  -- Resolve and authorize the invoice branch before taking a row lock. This
-  -- prevents an unauthorized caller from locking a purchase row it cannot use.
-  SELECT branch_id
-  INTO v_purchase_branch_id
+  -- Read first without taking a row lock so callers must pass branch access and
+  -- lifecycle/editability checks before they are allowed to lock the invoice.
+  SELECT *
+  INTO v_purchase
   FROM public.purchases
   WHERE id = p_purchase_id;
 
@@ -52,10 +51,24 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'PURCHASE_NOT_FOUND');
   END IF;
 
-  IF NOT public.user_may_access_branch(v_purchase_branch_id) THEN
+  IF NOT public.user_may_access_branch(v_purchase.branch_id) THEN
     RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
 
+  -- Editing lifecycle states that are still awaiting approval/receiving would
+  -- bypass their workflow. Completed invoices are corrected through a full
+  -- reversal followed by a replacement in this same database transaction.
+  IF v_purchase.status <> 'completed' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'PURCHASE_EDIT_STATUS_NOT_ALLOWED',
+      'detail', 'Only completed purchase invoices can be corrected here.'
+    );
+  END IF;
+
+  -- Lock only after the caller has been authorized and the invoice is known to
+  -- be editable. Re-read under the lock, then repeat critical checks to guard
+  -- against a branch/status change between the initial read and lock acquisition.
   SELECT *
   INTO v_purchase
   FROM public.purchases
@@ -66,16 +79,10 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'PURCHASE_NOT_FOUND');
   END IF;
 
-  -- Recheck after locking as a defense-in-depth guard against any unexpected
-  -- branch mutation between the authorization read and acquisition of the lock.
-  IF v_purchase.branch_id <> v_purchase_branch_id
-     OR NOT public.user_may_access_branch(v_purchase.branch_id) THEN
+  IF NOT public.user_may_access_branch(v_purchase.branch_id) THEN
     RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
 
-  -- Editing lifecycle states that are still awaiting approval/receiving would
-  -- bypass their workflow. Completed invoices are corrected through a full
-  -- reversal followed by a replacement in this same database transaction.
   IF v_purchase.status <> 'completed' THEN
     RETURN jsonb_build_object(
       'success', false,
