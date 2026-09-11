@@ -65,9 +65,9 @@ describe.skipIf(skip)('Product -> manufactured unit -> sale stock flow', () => {
       [rawMaterialId, branchId],
     );
     await client.query(
-      `INSERT INTO public.raw_material_batches (raw_material_id, branch_id, batch_number, quantity, unit_cost, source_type)
-       VALUES ($1, $2, $3, 20, 5, 'opening')`,
-      [rawMaterialId, branchId, `OPEN-${randomUUID()}`],
+      `INSERT INTO public.raw_material_batches (raw_material_id, branch_id, warehouse_id, batch_number, quantity, unit_cost, source_type)
+       VALUES ($1, $2, $3, $4, 20, 5, 'opening')`,
+      [rawMaterialId, branchId, warehouseId, `OPEN-${randomUUID()}`],
     );
     await client.query(
       `INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, cost_price, sale_price, is_active)
