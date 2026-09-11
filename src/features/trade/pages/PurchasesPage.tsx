@@ -223,15 +223,15 @@ export function PurchasesPage() {
   };
 
   const openInlineRaw = (lineIndex: number) => {
-    if (!can('raw_materials.create')) return;
+    if (!can('raw_materials.manage')) return;
     setRawTargetLine(lineIndex);
     setRawForm({ code: '', name: '', unit_id: '' });
     setRawModalOpen(true);
   };
 
   const saveInlineRaw = async () => {
-    if (!can('raw_materials.create')) {
-      show(lang === 'ar' ? 'لا تملك صلاحية إنشاء الخامات' : 'Raw-material create permission is required', 'error');
+    if (!can('raw_materials.manage')) {
+      show(lang === 'ar' ? 'لا تملك صلاحية إدارة الخامات' : 'Raw-material manage permission is required', 'error');
       return;
     }
     if (!rawForm.code.trim() || !rawForm.name.trim() || !rawForm.unit_id) {
@@ -316,7 +316,7 @@ export function PurchasesPage() {
         p_items: rpcItems,
       });
       if (updateError) {
-        const handled = interceptDbError(updateError, 'purchase_edit', 'تعديل فاتورة مشتريات', 'Edit Purchase Invoice', { purchaseId: editingPurchase.id, form, lineItems });
+        const handled = interceptDbError(updateError, 'purchase_create', 'تعديل فاتورة مشتريات', 'Edit Purchase Invoice', { purchaseId: editingPurchase.id, form, lineItems });
         if (!handled) show(updateError.message, 'error');
         return;
       }
@@ -634,7 +634,7 @@ export function PurchasesPage() {
                           <option value="">--</option>
                           {rawMaterials.map((rm) => <option key={rm.id} value={rm.id}>{rm.name}</option>)}
                         </select>
-                        {can('raw_materials.create') && (
+                        {can('raw_materials.manage') && (
                           <button
                             type="button"
                             title={lang === 'ar' ? 'إنشاء خامة جديدة' : 'Create raw material'}
