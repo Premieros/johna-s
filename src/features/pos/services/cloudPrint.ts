@@ -39,7 +39,13 @@ function safeText(value: unknown): string {
 }
 
 function randomId(): string {
-  return globalThis.crypto?.randomUUID?.() || `agent_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const hex = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+  return hex.replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = char === 'x' ? value : ((value & 0x3) | 0x8);
+    return nibble.toString(16);
+  });
 }
 
 export function isCloudPrintAgentEnabled(): boolean {
@@ -77,7 +83,7 @@ export async function enqueueCloudKitchenPrintJobs(params: {
   paperWidthMm?: number;
 }): Promise<{ accepted: boolean; queuedStations: string[]; failedStations: string[] }> {
   const branchId = safeText(params.branchId);
-  if (!branchId || params.items.length === 0 || typeof navigator !== 'undefined' && !navigator.onLine) {
+  if (!branchId || params.items.length === 0 || (typeof navigator !== 'undefined' && !navigator.onLine)) {
     return { accepted: false, queuedStations: [], failedStations: [] };
   }
 
