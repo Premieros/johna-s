@@ -26,18 +26,18 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
-      - name: Install web dependencies
-        run: npm ci
+      - name: Install web dependencies including Windows native optionals
+        run: npm install --include=optional --no-audit --no-fund
 
       - name: Build web app
         run: npm run build
 
       - name: Install Print Agent dependencies
         working-directory: electron
-        run: npm install --no-audit --no-fund
+        run: npm install --include=optional --no-audit --no-fund
 
       - name: Test isolated printer queues
         working-directory: electron
