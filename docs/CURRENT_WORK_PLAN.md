@@ -3,7 +3,7 @@
 > **هذا هو السجل الحي الوحيد للمشروع.**
 > أي نموذج أو مطور يبدأ من هذا الملف، ثم يجلب HEAD الحالي لـ`main` والفرع/PR قبل أي تعديل لأن نماذج أخرى قد تعمل بالتوازي.
 
-آخر تحديث: **2026-09-11 — Africa/Cairo — PR #65 stabilization/cleanup نشط على فرع تطوير منفصل**
+آخر تحديث: **2026-09-11 — Africa/Cairo — إصلاح تذكرة المطبخ V2 نشط على فرع تطوير منفصل**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -23,66 +23,48 @@
 
 ## 2) الحالة الحالية لـ main
 
-- `main` HEAD الموثق = `93f72e50bf1ad2457cac9cc6b5d513a5c2f5ee6e`.
-- هذا هو merge commit لـPR #64: `fix(inventory): multi-branch transfer and branch visibility (#64)`.
-- PR #64 مدمج ومغلق.
-- Verify main #1056 بعد الدمج: Full Green ✅.
-- Deploy GitHub Pages #594: Success ✅.
-- Migration الخاصة بـPR #64 **لم تُطبق على Production** وقت هذا التوثيق؛ لا تطبقها دون تحقق جديد وخطة نشر صريحة.
-- لا تفترض أن هذا الـSHA ما زال الأحدث: يجب fetch قبل أي عمل جديد.
+- `main` HEAD الحالي = `c462b2014671ed6a4cc003006c8ad87bf848cd21`.
+- هذا هو merge commit لـPR #66: `fix(print): restore 80mm kitchen ticket layout (#66)`.
+- PR #66 مدمج ومغلق.
+- Verify main #1072 بعد الدمج: Full Green ✅.
+- Deploy GitHub Pages #596: Success ✅.
+- Production `receipt_width_mm` تم تصحيحه من 58 إلى 80 للطابعة الحالية XP-80C بدون migration.
 
-## 3) الدفعة النشطة — PR #65
+## 3) الدفعة النشطة — Kitchen Ticket Layout V2
 
-- PR: `#65` — `stabilize: regression coverage before safe cleanup`
-- State: **Open / Draft / غير مدمج**.
-- Branch: `development/stabilization-cleanup`
-- Base: `main@93f72e50...`
-- آخر HEAD وظيفي قبل هذا التحديث: `2eae743cf5dc76bae117f1c22f63c2e075db464e`؛ commit تحديث هذا الملف يأتي بعده، لذلك اجلب HEAD الفعلي دائمًا.
-- ممنوع الدمج قبل Full Verify Green على HEAD النهائي ومراجعة أي drift من `main`.
+- Branch: `development/kitchen-ticket-layout-v2`
+- Base: `main@c462b201...`
+- السبب: اختبار الطابعة الفعلي بعد PR #66 أظهر أن الخط أصبح أوضح، لكن:
+  - الكمية لم تكن بارزة بما يكفي بجانب الصنف.
+  - لم تكن حدود جسم التذكرة واضحة.
+  - Chrome/تعريف الطابعة كان يعرض صفحة أطول بكثير من المحتوى مع فراغ أبيض كبير.
 
-### ما تم إصلاحه في PR #65
+### التعديلات الحالية
 
-1. **Mobile interaction regression**
-   - إعادة إظهار `theme-toggle` على الهاتف بدل إخفائه.
-   - إعادة إظهار زر المستخدم/الحساب على الهاتف مع إبقاء الـheader مضغوطًا.
-   - Browser Smoke بقي صارمًا ولم يتم تخفيف الاختبار لإخفاء الفشل.
+1. **كمية الطلب**
+   - كل صنف مطبخ يعرض الكمية في badge كبيرة ملاصقة لاسم الصنف بصيغة `2×`.
+   - تبقى أيضًا تسمية `الكمية: 2` أسفل الصنف كتحقق بصري إضافي.
 
-2. **Product manufactured-unit edit contract**
-   - تعديل المنتج يحفظ روابط المصنعات في `product_unit_links` بدل الاعتماد التشغيلي على `product_components` القديم.
-   - الإضافة/الحذف/تعديل الكمية تعمل على العقد الحديث نفسه.
-   - أزيل الاستنتاج الوهمي لمصنع باسم المنتج.
-   - المسار الحديث لا يمسح `product_components` القديم بلا داعٍ.
+2. **حدود التذكرة**
+   - جسم تذكرة المطبخ له border أسود واضح حول المحتوى بالكامل.
+   - فواصل العناصر والبيانات تبقى واضحة للطابعة الحرارية.
 
-3. **Import branch safety**
-   - الاستيراد لا يختار `branches[0]` عشوائيًا.
-   - يجب تحديد الفرع بوضوح بدل fallback قد يكتب في فرع غير مقصود.
+3. **تقليل المساحة البيضاء**
+   - يتم حساب `pageHeightMm` من عدد صفوف البيانات وعدد الأصناف وطول أسماء الأصناف.
+   - `@page size` يرسل للطباعة عرض الورق الحقيقي وارتفاعًا قريبًا من المحتوى بدل صفحة طويلة ثابتة.
+   - `html/body` لا يفرضان min-height كبيرًا.
 
-4. **Dining areas / tables incomplete setup UX**
-   - إذا لم توجد أي `dining_areas` للفرع، شاشة اختيار الطاولة تعرض حالة واضحة: إعداد الصالات غير مكتمل.
-   - لا يتم عرض الطاولة المنفردة وكأن إعداد الصالات سليم عندما لا توجد أي صالة.
-   - إذا لم توجد طاولات أصلًا، درج الطاولات يعرض أن إعداد الصالات/الطاولات للفرع غير مكتمل بدل رسالة بحث فارغة مضللة.
-   - إذا كانت هناك طاولات لكن البحث/الفلتر لا يطابق شيئًا، تبقى رسالة البحث منفصلة.
-   - لا يتم إنشاء مناطق أو طاولات تلقائيًا، ولا اختراع بيانات Production.
+4. **Regression test**
+   - `tests/unit/kitchenTicketLayoutContract.test.ts`
+   - يقفل ظهور quantity badge وحدود التذكرة وcontent-sized page contract.
 
-## 4) Production findings — read-only فقط
+## 4) Production findings / safety
 
-تمت القراءة من Production `azzdesuowpdcoflmyezn` للتحقق من البلاغات، بدون تعديل بيانات التشغيل:
-
-### Super Admin
-
-- Super Admin النشط: `john_s`.
-- `auth.users` و`public.users` متطابقان على نفس User UUID، والحساب نشط.
-- username lookup يعمل ويصل إلى هوية Auth الصحيحة.
-- **فرع سموحة معيّن بالفعل لـ`john_s` كـprimary branch في `public.users.branch_id`.**
-- **سموحة موجودة بالفعل في `public.user_branch_access` لنفس المستخدم.**
-- لذلك لم يتم تنفيذ UPDATE/INSERT مكرر على Production لتعيين سموحة؛ المطلوب كان محققًا مسبقًا وتم التحقق منه فقط.
-
-### Dining data
-
-- فرع كليوباترا: 0 مناطق / 0 طاولات وقت الفحص.
-- فرع نادي سموحة: 0 مناطق / طاولة نشطة واحدة وقت الفحص.
-- هذه فجوة بيانات/إعداد حقيقية وليست مجرد فلتر واجهة.
-- لا تُنشئ مناطق أو طاولات افتراضية دون بيانات تشغيل صريحة من المستخدم.
+- لا يوجد migration في هذه الدفعة.
+- لا تغيير على RLS أو الصلاحيات أو المخزون أو approvals.
+- لا تغيير على منطق `send_to_kitchen` أو تسجيل نجاح الطباعة.
+- لا ادعاء Physical Print success إلا بعد اختبار المستخدم على XP-80C.
+- إذا تجاهل تعريف XP-80C قيمة CSS `@page size`، سيكون الجزء المتبقي إعداد Paper Size في Windows driver، وليس منطق الطلب نفسه.
 
 ## 5) متطلبات ثابتة لا يجوز كسرها
 
@@ -109,7 +91,6 @@
 - Hold/Resume، split، merge/transfer، print once + controlled reprint.
 - لا تحوّل network/offline ambiguity إلى sale/payment success وهمي.
 - غياب/فشل Print Agent لا يسجل print success كاذبًا.
-- لا ادعاء Physical Print success إلا بعد اختبار فعلي على جهاز/تعريف الطابعة.
 
 ## 6) قواعد التحقق والإغلاق
 
@@ -130,21 +111,12 @@
 13. عدم وجود migration غير Verified تم دفعها إلى Production.
 14. إذا تحرك `main` بعد verification، أعد فحص drift والتحقق المناسب قبل الدمج.
 
-## 7) حالة التحقق الحالية لـPR #65
+## 7) NEXT ACTION — إلزامي
 
-- Runs السابقة أثبتت أن Verify + DB/RLS كانت خضراء، بينما Browser Smoke كشف تدريجيًا عناصر الهاتف المخفية؛ تم إصلاح السبب بدل تخفيف الاختبار.
-- بعد إصلاح المصنعات وإعداد الطاولات/الصالات، يجب اعتماد **أحدث run فقط** الذي يطابق HEAD النهائي.
-- عند تحديث هذا السجل، run `Verify main #1068` على functional HEAD `2eae743c...` كان قد بدأ ولم تكن النتيجة النهائية قد صدرت بعد.
-- commit توثيق هذا الملف سيُنتج HEAD أحدث؛ لذلك لا تعتبر #1068 وحده دليل الدمج النهائي إذا لم يطابق HEAD النهائي.
-
-## 8) NEXT ACTION — إلزامي
-
-1. اجلب HEAD الحالي لـPR #65 بعد هذا التوثيق.
-2. تابع/تحقق من GitHub Actions للـHEAD النهائي فقط.
-3. يجب أن تكون Verify + DB/schema/Integration/Security/RLS + Browser Smoke كلها Green.
-4. إذا ظهر فشل، أصلح السبب الحقيقي على نفس فرع التطوير، ولا تخفف الاختبار/RLS.
-5. أبقِ PR #65 Draft وغير مدمج إلى أن يكتمل Full Verify Green.
-6. لا تشغّل أي Production migration بسبب هذه الدفعة؛ تغييرات الطاولات الحالية UX فقط.
-7. بعد Full Green، حدّث هذا السجل بنتيجة run النهائية والـSHA ثم انتظر توجيه المستخدم الصريح بالدمج.
+1. افتح PR للفرع `development/kitchen-ticket-layout-v2`.
+2. شغّل Verify على HEAD النهائي الذي يشمل كود الطباعة + regression test + تحديث هذا السجل.
+3. لا تدمج قبل Full Green على نفس HEAD.
+4. بعد الدمج والنشر، اختبر XP-80C فعليًا.
+5. إذا بقيت مساحة بيضاء رغم نجاح `@page size` في الكود، افحص Windows printer driver / custom paper size كسبب خارجي منفصل.
 
 لا تلمس أي مستودع أو قاعدة بيانات أخرى.
