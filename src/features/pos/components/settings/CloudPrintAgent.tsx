@@ -11,7 +11,7 @@ import {
   type CloudPrintJob,
 } from '../../services/cloudPrint';
 import {
-  executeSilentPrint,
+  executeSilentPrintDetailed,
   getLocalPrinterRoutes,
   isRunningInElectron,
   isSilentPrintEnabled,
@@ -37,14 +37,14 @@ async function executeJob(job: CloudPrintJob, agentId: string): Promise<void> {
     return;
   }
 
-  const accepted = await executeSilentPrint({
+  const result = await executeSilentPrintDetailed({
     printerName,
     text: job.payload?.text,
     html: job.payload?.html,
     copies: Math.max(1, Math.min(5, Number(job.payload?.copies || 1))),
     paperWidthMm: Number(job.payload?.paperWidthMm || 80),
   });
-  await completeCloudPrintJob(job.id, agentId, accepted, accepted ? undefined : 'PHYSICAL_PRINT_FAILED');
+  await completeCloudPrintJob(job.id, agentId, result.success, result.error);
 }
 
 /**
