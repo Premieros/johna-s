@@ -25,6 +25,11 @@ export interface DetectedPrinter {
   status?: number;
 }
 
+export interface SilentPrintResult {
+  success: boolean;
+  error?: string;
+}
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -225,16 +230,16 @@ export async function getAvailablePrinters(): Promise<DetectedPrinter[]> {
   }
 }
 
-export async function executeSilentPrint(options: {
+export async function executeSilentPrintDetailed(options: {
   printerName: string;
   text?: string;
   html?: string;
   copies?: number;
   paperWidthMm?: number;
-}): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+}): Promise<SilentPrintResult> {
+  if (typeof window === 'undefined') return { success: false, error: 'WINDOW_UNAVAILABLE' };
   const printerName = safeText(options.printerName);
-  if (!printerName) return false;
+  if (!printerName) return { success: false, error: 'PRINTER_NAME_REQUIRED' };
 
   if (isRunningInElectron() && window.electronAPI) {
     try {
@@ -245,9 +250,11 @@ export async function executeSilentPrint(options: {
         copies: Math.max(1, Math.min(5, Number(options.copies || 1))),
         paperWidthMm: Number(options.paperWidthMm || 80),
       });
-      return Boolean(result?.success);
-    } catch {
-      return false;
+      return result?.success
+        ? { success: true }
+        : { success: false, error: safeText(result?.error) || 'PRINT_FAILED' };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'PRINT_ERROR' };
     }
   }
 
@@ -261,12 +268,25 @@ export async function executeSilentPrint(options: {
         text: options.text || options.html || '',
       }),
     });
-    if (!response.ok) return false;
-    const result = await response.json() as { success?: boolean };
-    return Boolean(result.success);
-  } catch {
-    return false;
+    if (!response.ok) return { success: false, error: `LOCAL_AGENT_HTTP_${response.status}` };
+    const result = await response.json() as { success?: boolean; error?: string };
+    return result.success
+      ? { success: true }
+      : { success: false, error: safeText(result.error) || 'PRINT_FAILED' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'LOCAL_AGENT_ERROR';
+    return { success: false, error: message || 'LOCAL_AGENT_ERROR' };
   }
+}
+
+export async function executeSilentPrint(options: {
+  printerName: string;
+  text?: string;
+  html?: string;
+  copies?: number;
+  paperWidthMm?: number;
+}): Promise<boolean> {
+  return (await executeSilentPrintDetailed(options)).success;
 }
 
 export async function executeCashDrawerKick(printerName?: string): Promise<boolean> {
