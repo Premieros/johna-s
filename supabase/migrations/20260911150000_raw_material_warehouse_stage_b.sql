@@ -110,25 +110,29 @@ BEGIN
 END $patch$;
 
 -- Patch exact availability source from branch aggregate to requested warehouse batches.
+-- pg_get_functiondef() normalizes qualification/whitespace, so use a narrow regexp
+-- anchored to the unique raw-material availability block instead of a brittle literal.
 DO $patch$
-DECLARE v_oid oid; v_def text; v_old text; v_new text;
+DECLARE v_oid oid; v_def text; v_new text; v_patched text;
 BEGIN
   SELECT p.oid INTO v_oid FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
   WHERE n.nspname='public' AND p.proname='check_product_availability' AND pg_get_function_identity_arguments(p.oid)='p_product_id uuid, p_branch_id uuid, p_warehouse_id uuid, p_quantity numeric';
   IF v_oid IS NULL THEN RAISE EXCEPTION 'check_product_availability target not found'; END IF;
   v_def:=pg_get_functiondef(v_oid);
-  v_old:=$old$SELECT COALESCE(rmi.quantity, 0)
-    INTO v_available
-    FROM public.raw_material_inventory rmi
-    WHERE rmi.raw_material_id = v_row.raw_material_id AND rmi.branch_id = p_branch_id;$old$;
-  v_new:=$new$SELECT COALESCE(rwi.quantity, 0)
-    INTO v_available
-    FROM public.raw_material_warehouse_inventory rwi
-    WHERE rwi.raw_material_id = v_row.raw_material_id
-      AND rwi.branch_id = p_branch_id
-      AND rwi.warehouse_id = p_warehouse_id;$new$;
-  IF position(v_old in v_def)=0 THEN RAISE EXCEPTION 'check_product_availability raw marker not found'; END IF;
-  v_def:=replace(v_def,v_old,v_new); EXECUTE v_def;
+  v_new:=$new$SELECT COALESCE((SELECT SUM(b.quantity)
+      FROM public.raw_material_batches b
+      WHERE b.raw_material_id = v_row.raw_material_id
+        AND b.branch_id = p_branch_id
+        AND b.warehouse_id = p_warehouse_id), 0)
+    INTO v_available;$new$;
+  v_patched:=regexp_replace(
+    v_def,
+    'SELECT[[:space:]]+COALESCE\(rmi\.quantity,[[:space:]]*0\)[[:space:]]+INTO[[:space:]]+v_available[[:space:]]+FROM[[:space:]]+(public\.)?raw_material_inventory[[:space:]]+rmi[[:space:]]+WHERE[[:space:]]+rmi\.raw_material_id[[:space:]]*=[[:space:]]*v_row\.raw_material_id[[:space:]]+AND[[:space:]]+rmi\.branch_id[[:space:]]*=[[:space:]]*p_branch_id;',
+    v_new,
+    'i'
+  );
+  IF v_patched = v_def THEN RAISE EXCEPTION 'check_product_availability raw marker not found'; END IF;
+  EXECUTE v_patched;
 END $patch$;
 
 -- Allow same-branch raw transfer identity; destination remains explicit for cross-branch.
