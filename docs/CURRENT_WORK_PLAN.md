@@ -3,7 +3,7 @@
 > **هذا هو السجل الحي الوحيد للمشروع.**
 > أي نموذج أو مطور يبدأ من هذا الملف فقط، ثم يتحقق من HEAD الحالي قبل أي تعديل لأن نماذج أخرى قد تعمل بالتوازي.
 
-آخر تحديث: **2026-09-11 — Africa/Cairo — Thermal printing merged; multi-branch inventory transfer remediation active**
+آخر تحديث: **2026-09-11 — Africa/Cairo — PR #64 Full Green؛ بانتظار توجيه صريح بالدمج**
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
@@ -78,10 +78,14 @@ Merged ✅ إلى `main@bb736746...`
 PR #64:
 
 - Title: `fix(inventory): multi-branch transfer and branch visibility`
-- State: **Open / Draft / غير مدمج** وقت تحديث هذا السجل.
+- State: **Open / Draft / غير مدمج** وقت تحديث هذا السجل؛ لا تدمجه دون توجيه صريح من المستخدم.
 - Branch: `development/raw-transfer-multibranch-fix`
-- HEAD وقت الفحص: `ec52d8fe06e5f35a8e74c1caaed29fe22ce05972`
-- الـPR كان مبنيًا أساسًا على `main@9f32aba8...`، بينما `main` تحرك لاحقًا إلى `bb736746...` بعد دمج PR #63؛ لذلك **يلزم فحص drift/rebase/merge compatibility قبل الدمج ولا يجوز blind merge**.
+- HEAD الموثق بعد الإصلاح والتحقق: `ee5c2e53046419c20cee288ef4bb1c2c9ae57522`
+- أحدث `main` وقت إعادة الفحص قبل تحديث السجل: `bb73674604c97e810a4dd2f8f3d36ccf9ea552f0`
+- تمت مراجعة drift الناتج عن PR #63، ثم دُمج أحدث `main` داخل فرع PR #64 فقط عبر merge commit غير قسري `0c1ec792af54d319cbf50874c45e4e1d52c44400`؛ أبواه هما HEAD الفرع الموثق السابق `a5f9536b446fd33632142be6cfd13a6b19f67196` و`main@bb736746...`.
+- commits اللاحقة على فرع PR فقط:
+  - `a06373a2acd2145fb568ca54d150cd6d33809b3f` — إغلاق فجوات التحقق والعقد الذري.
+  - `ee5c2e53046419c20cee288ef4bb1c2c9ae57522` — تثبيت عدم كشف وجود transfer لفرع غير متاح.
 
 الهدف الحالي:
 
@@ -96,16 +100,35 @@ PR #64:
 9. مطابقة الصنف في فرع الوجهة تكون deterministic ولا يجوز إنشاء mapping غامض صامت.
 10. لا Production migration قبل Full Verify Green ثم قرار صريح بالتطبيق.
 
-## 5) المخاطر التي يجب مراجعتها قبل دمج PR #64
+## 5) مراجعة PR #64 ونتيجة التحقق
 
-- `main` تحرك بعد إنشاء PR #64 بسبب PR #63، لذلك يجب أولًا إعادة فحص المقارنة مع أحدث main.
-- يجب التأكد أن تغييرات `useBranchFilter` لا توسع عرض البيانات أبعد مما يسمح به RLS.
-- يجب اختبار مستخدم single-branch ومستخدم multi-branch ومستخدم بلا وصول للفرع الوجهة.
-- يجب اختبار read policies لطرفي transfer، بينما mutation تحتاج access للطرفين.
-- يجب التحقق أن raw material transfer لا يكرر/يضاعف الكميات عند approve أو retry.
-- يجب التأكد أن product matching في destination لا يربط منتجًا خاطئًا بالاسم عند وجود تشابه/تكرار.
-- يجب التأكد أن approval لا يخصم/يزيد المخزون أكثر من مرة.
-- أي migration جديدة يجب أن تمر Fresh DB + schema + Integration/Security/RLS قبل Production.
+تمت مراجعة `useBranchFilter` وواجهة التحويل وAPI وmigration مقابل أحدث `main`. النتيجة:
+
+- `useBranchFilter` يزيل تثبيت المستخدم متعدد الفروع على primary branch، لكنه لا يمنح وصولًا جديدًا؛ استعلامات الفروع والبيانات تظل محكومة بـRLS.
+- القراءة لطرف المصدر أو الوجهة مسموحة وفق RLS، بينما create/approve/reject تتطلب permission فعلية ووصولًا للفرعين.
+- أُغلقت INSERT/UPDATE/DELETE المباشرة على `warehouse_transfers` و`warehouse_transfer_items`؛ الكتابة تمر فقط عبر RPCs الذرية، فلا يمكن اعتماد header مباشرة وتجاوز حركة المخزون.
+- approve/reject لا يكشفان وجود transfer غير متاح: النتيجة `TRANSFER_NOT_FOUND` بدل existence/status oracle.
+- product/raw destination identity أصبحت مطلوبة وصريحة في كل سطر cross-branch، مع تحقق من النوع والفرع والحالة؛ لا مطابقة صامتة بالاسم/SKU/barcode ولا ارتباط بصنف مشابه خاطئ.
+- migration تسقط قيد product-only القديم قبل إضافة عقد product-or-raw، وتمنع ترقية legacy cross-branch غير القابل للاستنتاج بأمان.
+- product transfer يستخدم نوع حركة المخزون القانوني `transfer`، وraw material transfer يتحرك بين الفروع فقط.
+- الاختبارات تغطي single-branch وmulti-branch وعدم الوصول للوجهة، قراءة الطرفين، منتجات وخامات، destination decoy/wrong branch/missing، direct-DML denial، approve retry وعدم مضاعفة الخصم/الإضافة.
+
+Full Green على `ee5c2e53046419c20cee288ef4bb1c2c9ae57522` عبر GitHub Actions `Verify main` run **#1053** (`34546879995`)، attempt النهائي:
+
+- locked Supabase identity `azzdesuowpdcoflmyezn` ✅
+- frontend API contract ✅
+- lint ✅ — 0 errors؛ 3 warnings قديمة غير متصلة بهذه الدفعة.
+- typecheck application + tests ✅
+- unit ✅ — 474/474.
+- build ✅
+- Fresh DB canonical migrations ✅
+- schema ✅ — tables 60/60، functions 65/65، contract RPCs 114/114، contract tables 58/58.
+- Integration/Security/RLS ✅ — 617/617 في 100 files.
+- Browser Smoke / Playwright Chromium ✅ — 105/105.
+
+ملاحظة سجلية: attempt الأول لـ#1053 اصطدم بـPostgreSQL deadlock عابر في اختبار user management غير المتصل بهذه الدفعة؛ إعادة job الفاشل على نفس commit مرّت كاملة دون تعديل كود. run #1052 السابق كشف قيد الخامات ونوع حركة المنتج وباقي الفجوات وساعد على تصحيحها، لكنه ليس Full Green نهائيًا.
+
+**لم تُطبق migration الخاصة بـPR #64 على Production، ولم يُدمج PR إلى `main`.**
 
 ## 6) متطلبات ثابتة لا يجوز كسرها
 
@@ -153,20 +176,13 @@ PR #64:
 
 ## 8) NEXT ACTION — إلزامي للمحادثة التالية
 
-ابدأ من PR #64 ولا تعيد فتح الأعمال المغلقة دون Regression مثبت:
+PR #64 جاهز من ناحية التحقق لكنه غير مدمج. لا تعِد العمل المغلق دون Regression مثبت:
 
-1. اجلب أحدث `main` HEAD وتأكد هل ما زال `bb73674604c97e810a4dd2f8f3d36ccf9ea552f0` أم تحرك.
-2. اجلب PR #64 وHEAD الحالي وقارن مع أحدث main.
-3. راجع الاختلاف الناتج عن دمج PR #63 بعد base القديم لـPR #64.
-4. افحص كل ملفات PR #64، خصوصًا:
-   - `src/lib/useBranchFilter.ts`
-   - `src/features/inventory/pages/TransfersPage.tsx`
-   - `src/api/domains/inventory.ts`
-   - migration الخاصة بـcross-branch transfers.
-5. لا تشغل migration على Production.
-6. أصلح أي conflict/regression على فرع PR #64 فقط.
-7. شغّل Full Verify حتى الأخضر بالكامل.
-8. اختبر branch/RLS/multi-branch transfer contract end-to-end.
-9. بعد Full Green فقط: حدث هذا السجل بالنتيجة الدقيقة واطلب/نفذ الدمج حسب توجيه المستخدم.
+1. انتظر توجيه المستخدم الصريح بالدمج؛ لا تدمج تلقائيًا.
+2. قبل الدمج اجلب أحدث `main` وHEAD PR #64 وتأكد أن الفرع ما زال `ee5c2e53046419c20cee288ef4bb1c2c9ae57522` وأن `main` لم يتحرك من `bb736746...`.
+3. إذا تحرك أي منهما، افحص الفرق ولا تعمل blind merge، ثم أعد التحقق المناسب.
+4. عند التوجيه بالدمج استخدم expected SHA guard وبدون Force Push أو تعديل مباشر لـ`main`.
+5. migration لم تُطبق على Production؛ لا تطبقها إلا بعد الحفاظ على Full Green وضمن توجيه صريح وخطة نشر آمنة.
+6. بعد أي دمج/نشر حدّث هذا السجل بالـSHAs والنتائج الفعلية.
 
 لا تلمس أي مستودع أو قاعدة بيانات أخرى.
