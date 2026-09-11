@@ -242,8 +242,10 @@ export async function seedRlsFixture(client: pg.Client): Promise<RlsIds> {
       `INSERT INTO public.production_orders (order_number, product_id, branch_id, warehouse_id, quantity) VALUES ('${uniq('PO')}', '${ids.prodB}', '${ids.branchB}', '${ids.whB}', 1)`);
   await row('recipes', `INSERT INTO public.recipes (product_id, branch_id, name, yield_quantity) VALUES ('${ids.prodA}', '${ids.branchA}', 'R', 1)`,
       `INSERT INTO public.recipes (product_id, branch_id, name, yield_quantity) VALUES ('${ids.prodB}', '${ids.branchB}', 'R', 1)`);
-  await row('warehouse_transfers', `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, status) VALUES ('${uniq('WT')}', '${ids.whA}', '${ids.whB}', '${ids.branchA}', 'pending')`,
-      `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, status) VALUES ('${uniq('WT')}', '${ids.whA}', '${ids.whB}', '${ids.branchB}', 'pending')`);
+  const transferWhA = await ins(client, `INSERT INTO public.warehouses (name, branch_id, is_active) VALUES ('Transfer W', '${ids.branchA}', true)`);
+  const transferWhB = await ins(client, `INSERT INTO public.warehouses (name, branch_id, is_active) VALUES ('Transfer W', '${ids.branchB}', true)`);
+  await row('warehouse_transfers', `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${ids.whA}', '${transferWhA}', '${ids.branchA}', '${ids.branchA}', 'pending')`,
+      `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${ids.whB}', '${transferWhB}', '${ids.branchB}', '${ids.branchB}', 'pending')`);
   await row('chart_of_accounts', `INSERT INTO public.chart_of_accounts (branch_id, code, name, account_type) VALUES ('${ids.branchA}', '${uniq('RC')}', 'R', 'asset')`,
       `INSERT INTO public.chart_of_accounts (branch_id, code, name, account_type) VALUES ('${ids.branchB}', '${uniq('RC')}', 'R', 'asset')`);
   await row('account_mappings', `INSERT INTO public.account_mappings (branch_id, semantic_key, account_id) VALUES ('${ids.branchA}', '${uniq('SK')}', '${coaPoolA[0]}')`,
@@ -305,8 +307,8 @@ export async function seedRlsFixture(client: pg.Client): Promise<RlsIds> {
       `INSERT INTO public.purchase_items (purchase_id, product_id, unit_name, quantity, unit_cost, total) VALUES ('${ids.purchB}', '${ids.prodB}', 'piece', 1, 10, 10)`);
   await child('shift_operations', `INSERT INTO public.shift_operations (shift_id, operation_type, amount, payment_method) VALUES ('${ids.shiftA}', 'opening', 0, 'cash')`,
       `INSERT INTO public.shift_operations (shift_id, operation_type, amount, payment_method) VALUES ('${ids.shiftB}', 'opening', 0, 'cash')`);
-  await child('warehouse_transfer_items', `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, quantity) VALUES ('${R.warehouse_transfers.own}', '${ids.prodA}', 1)`,
-      `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, quantity) VALUES ('${R.warehouse_transfers.other}', '${ids.prodB}', 1)`);
+  await child('warehouse_transfer_items', `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, destination_product_id, quantity) VALUES ('${R.warehouse_transfers.own}', '${ids.prodA}', '${ids.prodA}', 1)`,
+      `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, destination_product_id, quantity) VALUES ('${R.warehouse_transfers.other}', '${ids.prodB}', '${ids.prodB}', 1)`);
   await child('recipe_items', `INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity) VALUES ('${R.recipes.own}', '${ids.rm}', 1)`,
       `INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity) VALUES ('${R.recipes.other}', '${ids.rm}', 1)`);
   await child('journal_entry_lines', `INSERT INTO public.journal_entry_lines (journal_entry_id, account_id, debit, credit) VALUES ('${ids.jeA}', '${ids.coaCashA}', 0, 10)`,

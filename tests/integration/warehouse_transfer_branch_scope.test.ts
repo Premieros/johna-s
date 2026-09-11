@@ -114,7 +114,7 @@ describe.skipIf(skip)('warehouse transfer branch scope', () => {
       );
       return r.rows[0].r;
     });
-    expect(result).toMatchObject({ success: false, error: 'WAREHOUSE_BRANCH_MISMATCH' });
+    expect(result).toMatchObject({ success: false, error: 'SOURCE_WAREHOUSE_BRANCH_MISMATCH' });
   });
 
   it('rejects a product from another branch', async () => {
