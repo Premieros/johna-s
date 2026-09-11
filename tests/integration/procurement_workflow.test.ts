@@ -71,6 +71,19 @@ describe.skipIf(skip)('procurement workflow (075)', () => {
     await client.query(`INSERT INTO public.raw_materials (id, code, name, branch_id, is_active) VALUES ($1, $2, $3, $4, true)`, [rmId, `RM-${rmId.slice(0, 8)}`, 'Proc Raw', branchA]);
     await client.query(`INSERT INTO public.suppliers (id, name, branch_id, balance) VALUES ($1, $2, $3, 0), ($4, $5, $6, 0)`, [supplierA, 'Supplier A', branchA, supplierB, 'Supplier B', branchB]);
 
+    // Keep the legacy workflow fixture aligned with the canonical app preset.
+    // Runtime authorization still checks the explicit permission via can_permission();
+    // this test never authorizes by the branch_manager role name itself.
+    await client.query(`
+      UPDATE public.roles
+      SET permissions = CASE
+        WHEN COALESCE(permissions, '[]'::jsonb) ? 'procurement.request.create'
+          THEN COALESCE(permissions, '[]'::jsonb)
+        ELSE COALESCE(permissions, '[]'::jsonb) || '["procurement.request.create"]'::jsonb
+      END
+      WHERE role = 'branch_manager'
+    `);
+
     const mkUser = async (id: string, role: string, branch: string | null) => {
       await client.query(
         `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active) VALUES ($1, $2, $3, $4, $5, true)`,
@@ -95,7 +108,7 @@ describe.skipIf(skip)('procurement workflow (075)', () => {
     }
   });
 
-  it('rejects requests from users without purchases.manage (NOT_ALLOWED)', async () => {
+  it('rejects requests from users without procurement.request.create (NOT_ALLOWED)', async () => {
     const res = await asUser(accountantId, () =>
       call(`SELECT public.create_purchase_request($1, NULL, 'normal', NULL, NULL, NULL) AS r`, [branchA]),
     );
