@@ -585,6 +585,7 @@ GRANT EXECUTE ON FUNCTION public._restore_kitchen_inventory_for_void(uuid,uuid,n
 -- shortage state still blocks. Products whose availability depends on a
 -- manufactured unit stay strict (their production cannot run negative).
 -- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.get_pos_product_availability(uuid, uuid, integer);
 CREATE OR REPLACE FUNCTION public.get_pos_product_availability(
   p_branch_id uuid,
   p_warehouse_id uuid,
