@@ -49,7 +49,9 @@ async function mockPosBackend(page: Page) {
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/**`, async (r) => {
     const name = new URL(r.request().url()).pathname.split('/').pop() || '';
     rpcCalls.push(name);
-    try { rpcPayloads[name] = [...(rpcPayloads[name] || []), JSON.parse(r.request().postData() || '{}')]; } catch { rpcPayloads[name] = [...(rpcPayloads[name] || []), {}]; }
+    let requestPayload: Record<string, unknown> = {};
+    try { requestPayload = JSON.parse(r.request().postData() || '{}') as Record<string, unknown>; } catch { requestPayload = {}; }
+    rpcPayloads[name] = [...(rpcPayloads[name] || []), requestPayload];
     if (name === 'get_login_email') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, email: fakeUser.email }) });
     if (name === 'record_login_success' || name === 'record_login_failure') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
     if (name === 'get_active_shift') return r.fulfill({
@@ -70,6 +72,14 @@ async function mockPosBackend(page: Page) {
       }),
     });
     if (name === 'get_pos_product_availability') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, available_quantity: 20, is_available: true }]) });
+    if (name === 'get_pos_cart_product_availability') {
+      const items = Array.isArray(requestPayload.p_items) ? requestPayload.p_items as Array<{ product_id?: string; quantity?: number }> : [];
+      const reserved = items
+        .filter((item) => item.product_id === PRODUCT_ID)
+        .reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      const available = Math.max(0, 20 - reserved);
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, available_quantity: available, is_available: available > 0 }]) });
+    }
     if (name === 'get_pos_order_operator_labels') return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     if (name === 'next_sale_document_number') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, number: 'E2E-INV-001' }) });
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, id: 'e2e-order-id', order_id: 'e2e-order-id', order_number: 'E2E-001', sale_id: 'e2e-sale-id', sent: [{ product_name: product.name, quantity: 1, unit_name: 'piece' }], items_sent_count: 1 }) });
@@ -92,6 +102,8 @@ async function addProduct(page: Page) {
   await expect(addButton).toBeEnabled({ timeout: 10000 });
   await addButton.click({ timeout: 10000 });
   await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('1', { timeout: 10000 });
+  await expect.poll(() => rpcCalls.includes('get_pos_cart_product_availability'), { timeout: 10000 }).toBe(true);
+  await expect(addButton).toBeEnabled({ timeout: 10000 });
 }
 
 function tableButton(page: Page) {
