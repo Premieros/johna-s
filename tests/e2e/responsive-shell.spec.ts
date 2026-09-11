@@ -99,3 +99,36 @@ for (const viewport of viewports) {
     expect(metrics.bodyWidth).toBeLessThanOrEqual(metrics.viewportWidth + 1);
   });
 }
+
+test('critical shell and page actions remain clickable on a small phone', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await mockAuthenticatedApp(page);
+  await login(page);
+
+  const sidebarOpen = page.getByTestId('sidebar-open');
+  await expect(sidebarOpen).toBeVisible();
+  await sidebarOpen.click();
+  await expect(page.getByTestId('sidebar-close')).toBeVisible();
+  await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeVisible();
+  await page.getByTestId('sidebar-close').click();
+  await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeHidden();
+
+  await expect(page.getByTestId('theme-toggle')).toBeVisible();
+  await page.getByTestId('theme-toggle').click();
+
+  await expect(page.getByTestId('active-orders-button')).toBeVisible();
+  await page.getByTestId('active-orders-button').click();
+  await expect(page).toHaveURL(/#\/floor-plan$/);
+  await expect(page.getByTestId('active-orders-page')).toBeVisible();
+
+  await page.goto('/#/products');
+  await expect(page.getByTestId('products-page')).toBeVisible();
+  await expect(page.getByTestId('products-add')).toBeVisible();
+  await page.getByTestId('products-add').click();
+  await expect(page).toHaveURL(/#\/products\/setup$/);
+
+  await page.goto('/#/dashboard');
+  await expect(page.getByTestId('user-menu-button')).toBeVisible();
+  await page.getByTestId('user-menu-button').click();
+  await expect(page).toHaveURL(/#\/settings$/);
+});
