@@ -30,7 +30,7 @@ declare global {
     electronAPI?: {
       isElectron: boolean;
       getPrinters: () => Promise<Array<{ name: string; displayName?: string; isDefault?: boolean; status?: number }>>;
-      printSilent: (options: { html?: string; text?: string; printerName: string; copies?: number }) => Promise<{ success: boolean; error?: string }>;
+      printSilent: (options: { html?: string; text?: string; printerName: string; copies?: number; paperWidthMm?: number }) => Promise<{ success: boolean; error?: string }>;
       kickDrawer: (printerName?: string) => Promise<{ success: boolean; error?: string }>;
       getSystemInfo: () => Promise<{ isElectron: boolean; platform: string; hostname: string }>;
     };
@@ -89,10 +89,6 @@ export function saveLocalPrinterRoutes(routes: PrinterRouteConfig): void {
   window.localStorage.setItem(STORAGE_ROUTING_KEY, JSON.stringify(normalized));
 }
 
-/** Save device routing and, when running in a browser, synchronize it to the
- * proven local Windows agent so kitchen printing uses the same configuration.
- * Electron consumes the device-local routes directly and never needs a DB row.
- */
 export async function applyLocalPrinterRoutes(routes: PrinterRouteConfig): Promise<boolean> {
   saveLocalPrinterRoutes(routes);
   if (typeof window === 'undefined') return false;
@@ -234,6 +230,7 @@ export async function executeSilentPrint(options: {
   text?: string;
   html?: string;
   copies?: number;
+  paperWidthMm?: number;
 }): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   const printerName = safeText(options.printerName);
@@ -246,6 +243,7 @@ export async function executeSilentPrint(options: {
         text: options.text,
         html: options.html,
         copies: Math.max(1, Math.min(5, Number(options.copies || 1))),
+        paperWidthMm: Number(options.paperWidthMm || 80),
       });
       return Boolean(result?.success);
     } catch {
@@ -301,9 +299,9 @@ export async function executeCashDrawerKick(printerName?: string): Promise<boole
 }
 
 /**
- * Print each authoritative kitchen station group through Electron or the proven
- * local Windows agent. Returns true only when every station is configured and
- * accepted. A false result preserves the existing browser-print fallback.
+ * Print station groups concurrently across physical printers. Electron itself
+ * serializes jobs only when they target the same printer, so a stalled device
+ * cannot block unrelated cashier/kitchen/barista queues.
  */
 export async function printKitchenStationsLocally(
   items: KitchenSendItem[],
@@ -311,67 +309,54 @@ export async function printKitchenStationsLocally(
 ): Promise<boolean> {
   if (typeof window === 'undefined' || items.length === 0) return false;
   if (!isSilentPrintEnabled()) return false;
-
-  // Never guess a station while frontend and Production migrations are out of
-  // sync. Missing station data keeps the proven browser-print fallback active.
   if (items.some((item) => !safeText(item.station_code))) return false;
 
   const groups = groupKitchenItemsByStation(items);
   const stations = Object.keys(groups);
   if (stations.length === 0) return false;
 
-  // Electron uses only explicitly saved device-local routing. We preflight all
-  // stations before the first print so browser fallback cannot duplicate only a
-  // subset of a multi-station order.
   if (isRunningInElectron()) {
     const routes = getLocalPrinterRoutes();
     if (stations.some((station) => !safeText(routes[station]))) return false;
-    for (const [station, stationItems] of Object.entries(groups)) {
-      const accepted = await executeSilentPrint({
-        printerName: routes[station],
-        text: buildStationTicketText(station, stationItems, ctx),
-      });
-      if (!accepted) return false;
-    }
-    return true;
+    const results = await Promise.all(Object.entries(groups).map(([station, stationItems]) => executeSilentPrint({
+      printerName: routes[station],
+      text: buildStationTicketText(station, stationItems, ctx),
+    })));
+    return results.every(Boolean);
   }
 
   try {
     const health = await fetchWithTimeout(`${PRINT_AGENT_URL}/health`);
     if (!health.ok) return false;
-
-    // Preserve the current agent-side authoritative routes. Local UI routes are
-    // intentionally not allowed to override the agent unless running Electron.
     const configResponse = await fetchWithTimeout(`${PRINT_AGENT_URL}/config`);
     if (!configResponse.ok) return false;
     const config = await configResponse.json() as { routes?: Record<string, string> };
     const routes = config.routes || {};
     if (stations.some((station) => !safeText(routes[station]))) return false;
 
-    for (const [station, stationItems] of Object.entries(groups)) {
-      const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/print`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          station,
-          text: buildStationTicketText(station, stationItems, ctx),
-        }),
-      });
-      if (!response.ok) return false;
-      const result = await response.json() as { success?: boolean };
-      if (!result.success) return false;
-    }
-    return true;
+    const results = await Promise.all(Object.entries(groups).map(async ([station, stationItems]) => {
+      try {
+        const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            station,
+            text: buildStationTicketText(station, stationItems, ctx),
+          }),
+        });
+        if (!response.ok) return false;
+        const result = await response.json() as { success?: boolean };
+        return Boolean(result.success);
+      } catch {
+        return false;
+      }
+    }));
+    return results.every(Boolean);
   } catch {
     return false;
   }
 }
 
-/**
- * Existing POS code immediately opens one browser ticket after send_to_kitchen.
- * When every station was already printed locally, suppress exactly that one
- * popup and restore window.open immediately. If no popup happens, auto-restore.
- */
 export function suppressNextKitchenBrowserPopup(): void {
   if (typeof window === 'undefined') return;
   const original = window.open;
