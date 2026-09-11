@@ -121,14 +121,14 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
 
     expect(rows.rows).toHaveLength(2);
     for (const row of rows.rows) {
-      expect(row.definition, `${row.name} physical truth`).toContain("'physical_print_confirmed', false");
-      expect(row.definition, `${row.name} must never claim physical confirmation`).not.toContain("'physical_print_confirmed', true");
+      expect(row.definition, `${row.name} physical truth`).toMatch(/'physical_print_confirmed'(?:::text)?,\s*false/);
+      expect(row.definition, `${row.name} must never claim physical confirmation`).not.toMatch(/'physical_print_confirmed'(?:::text)?,\s*true/);
     }
 
     const complete = rows.rows.find((row) => row.name === 'complete_cloud_print_job');
-    expect(complete?.definition).toContain("status = 'submitted'");
-    expect(complete?.definition).not.toContain("status = 'printed'");
-    expect(complete?.definition).toContain("'status', 'submitted'");
+    expect(complete?.definition).toMatch(/status\s*=\s*'submitted'(?:::text)?/);
+    expect(complete?.definition).not.toMatch(/status\s*=\s*'printed'(?:::text)?/);
+    expect(complete?.definition).toMatch(/'status'(?:::text)?,\s*'submitted'(?:::text)?/);
 
     const statusConstraint = await client.query<{ definition: string }>(`
       SELECT pg_get_constraintdef(c.oid) AS definition
@@ -155,8 +155,8 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
         AND idx.relname = 'uq_cloud_print_active_receipt_sale'
     `);
     expect(index.rows).toHaveLength(1);
-    expect(index.rows[0].predicate).toContain("status = 'failed'::text");
-    expect(index.rows[0].predicate).toContain('attempts < 5');
+    expect(index.rows[0].predicate).toMatch(/status\s*=\s*'failed'::text/);
+    expect(index.rows[0].predicate).toMatch(/attempts\s*<\s*5/);
 
     const rpc = await client.query<{ definition: string }>(`
       SELECT lower(pg_get_functiondef(p.oid)) AS definition
@@ -167,8 +167,8 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
         AND pg_get_function_identity_arguments(p.oid) = 'p_sale_id uuid, p_approval_request_id uuid, p_payload jsonb, p_idempotency_key text'
     `);
     expect(rpc.rows).toHaveLength(1);
-    expect(rpc.rows[0].definition).toContain("status = 'failed'");
-    expect(rpc.rows[0].definition).toContain('attempts < 5');
+    expect(rpc.rows[0].definition).toMatch(/status\s*=\s*'failed'(?:::text)?/);
+    expect(rpc.rows[0].definition).toMatch(/attempts\s*<\s*5/);
     expect(rpc.rows[0].definition).toContain('v_job := v_existing');
   });
 });
