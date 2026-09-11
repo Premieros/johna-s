@@ -66,10 +66,6 @@ export class ReceiptPrintApprovalError extends Error {
   }
 }
 
-/**
- * Check whether the current user may print. This function is intentionally
- * non-mutating: authorization alone must never create a successful print event.
- */
 async function authorizeReceiptPrint(receipt: ReceiptData): Promise<ReceiptPrintAuthorization> {
   const invoice = receipt.invoice?.trim();
   if (!invoice) {
@@ -249,7 +245,6 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
   win.document.write(html);
   win.document.close();
 
-  // Kitchen/browser fallback tickets keep their embedded print script.
   if (!pending) return true;
 
   const runReceiptPrint = async () => {
@@ -266,18 +261,11 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
       }
 
       if (accepted) {
-        // sale_print_events and the SALE_PRINTED audit entry are created only
-        // after Electron/Print Agent explicitly confirms that it accepted the
-        // physical print command. Missing/rejecting agents can never be logged
-        // as a successful official print.
         await recordReceiptPrint(pending.authorization);
         if (!win.closed) win.close();
         return;
       }
 
-      // Browser print dialogs cannot report whether the user actually printed or
-      // cancelled. Keep this as an unconfirmed fallback: allow the operator to
-      // print, but deliberately do not create a successful print event.
       console.warn('[receipt-print] local print not confirmed; browser fallback is not recorded as printed');
       win.focus();
       win.print();
@@ -508,9 +496,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
           overflow-wrap: anywhere;
         }
         .thank-you { margin-top: 2mm; font-weight: 800; }
-        @page {
-          margin: 0;
-        }
+        @page { margin: 0; }
         @media print {
           html,
           body {
@@ -543,37 +529,147 @@ export function buildKitchenTicketHtml(params: {
   s: Settings;
   isAr: boolean;
 }): string {
-  const width = Math.max(50, Math.min(100, params.s.receipt_width_mm || 80));
+  const width = receiptWidthMm(params.s.receipt_width_mm || 80);
+  const compact = isCompactThermalWidth(width);
+  const sidePaddingMm = compact ? 2 : 3;
+  const bodyFontPx = compact ? 15 : 17;
+  const headerFontPx = compact ? 19 : 22;
+  const metaFontPx = compact ? 14 : 16;
+  const itemFontPx = compact ? 19 : 22;
+  const qtyFontPx = compact ? 17 : 20;
   const { orderNumber, tableName, orderTypeLabel, guestCount, items, isAr } = params;
-  const now = new Date().toLocaleString(isAr ? 'ar-SA' : 'en-US');
+  const now = new Date().toLocaleString(isAr ? 'ar-EG' : 'en-US');
   const rows = items
-    .map((i) => `<div class="item-name">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` (${escapeHtml(i.unit_name)})` : ''}</div><div class="row item-detail"><span>${isAr ? 'الكمية' : 'Qty'}</span><span>${i.qty}</span></div>`)
+    .map((i) => `<section class="item-row"><div class="item-name">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class="unit">(${escapeHtml(i.unit_name)})</span>` : ''}</div><div class="qty-row"><span>${isAr ? 'الكمية' : 'Qty'}</span><strong>${escapeHtml(i.qty)}</strong></div></section>`)
     .join('');
+
   return `<!DOCTYPE html>
-    <html dir="${isAr ? 'rtl' : 'ltr'}">
-    <head><title>${isAr ? 'تذكرة المطبخ' : 'Kitchen Ticket'}</title>
-    <style>
-      * { font-family: 'Courier New', monospace; margin: 0; padding: 0; box-sizing: border-box; }
-      body { width: ${width}mm; padding: 4mm; font-size: 13px; color: #000; }
-      .center { text-align: center; }
-      .header { font-size: 15px; font-weight: bold; margin-bottom: 4px; }
-      .divider { border-top: 2px solid #000; margin: 6px 0; }
-      .row { display: flex; justify-content: space-between; margin: 2px 0; }
-      .item-name { font-size: 15px; font-weight: bold; margin-top: 8px; }
-      .item-detail { font-size: 13px; }
-    </style></head>
+    <html lang="${isAr ? 'ar' : 'en'}" dir="${isAr ? 'rtl' : 'ltr'}">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>${isAr ? 'تذكرة المطبخ' : 'Kitchen Ticket'}</title>
+      <style>
+        :root { color-scheme: light only; }
+        * { box-sizing: border-box; }
+        html, body {
+          margin: 0;
+          padding: 0;
+          width: ${width}mm;
+          min-width: ${width}mm;
+          max-width: ${width}mm;
+          background: #fff;
+          color: #000;
+          font-family: Tahoma, Arial, "Segoe UI", sans-serif;
+          font-size: ${bodyFontPx}px;
+          line-height: 1.35;
+          font-weight: 600;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        body { overflow: visible; }
+        .ticket {
+          width: ${width}mm;
+          padding: 2.5mm ${sidePaddingMm}mm 4mm;
+          background: #fff;
+          color: #000;
+        }
+        .center { text-align: center; }
+        .header {
+          font-size: ${headerFontPx}px;
+          line-height: 1.2;
+          font-weight: 900;
+          margin-bottom: 1.5mm;
+          overflow-wrap: anywhere;
+        }
+        .ticket-title {
+          font-size: ${metaFontPx}px;
+          font-weight: 900;
+          margin-bottom: 1mm;
+        }
+        .divider {
+          width: 100%;
+          margin: 2mm 0;
+          border: 0;
+          border-top: .45mm solid #000;
+        }
+        .meta-row {
+          display: block;
+          margin: 1mm 0;
+          font-size: ${metaFontPx}px;
+          font-weight: 700;
+          overflow-wrap: anywhere;
+        }
+        .item-row {
+          padding: 2.2mm 0;
+          border-bottom: .35mm dashed #000;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .item-row:last-child { border-bottom: 0; }
+        .item-name {
+          font-size: ${itemFontPx}px;
+          line-height: 1.25;
+          font-weight: 900;
+          overflow-wrap: anywhere;
+        }
+        .unit { font-size: .72em; font-weight: 700; }
+        .qty-row {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 3mm;
+          margin-top: 1.2mm;
+          font-size: ${qtyFontPx}px;
+          font-weight: 800;
+        }
+        .qty-row strong {
+          direction: ltr;
+          unicode-bidi: isolate;
+          font-size: 1.2em;
+          font-weight: 900;
+        }
+        .footer {
+          margin-top: 2mm;
+          text-align: center;
+          font-size: ${metaFontPx}px;
+          font-weight: 800;
+        }
+        @page { margin: 0; }
+        @media print {
+          html,
+          body {
+            width: ${width}mm !important;
+            min-width: ${width}mm !important;
+            max-width: ${width}mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            color: #000 !important;
+          }
+          .ticket {
+            width: ${width}mm !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+          }
+        }
+      </style>
+    </head>
     <body>
-      <div class="center header">${escapeHtml(params.s.store_name)}</div>
-      <div class="divider"></div>
-      <div class="row"><span>${isAr ? 'التاريخ' : 'Date'}: ${now}</span></div>
-      <div class="row"><span>${isAr ? 'النوع' : 'Type'}: ${escapeHtml(orderTypeLabel)}</span></div>
-      ${orderNumber ? `<div class="row"><span>${isAr ? 'الطلب' : 'Order'}: ${escapeHtml(orderNumber)}</span></div>` : ''}
-      ${tableName ? `<div class="row"><span>${isAr ? 'طاولة' : 'Table'}: ${escapeHtml(tableName)}</span></div>` : ''}
-      ${guestCount ? `<div class="row"><span>${isAr ? 'الضيوف' : 'Guests'}: ${guestCount}</span></div>` : ''}
-      <div class="divider"></div>
-      ${rows}
-      <div class="divider"></div>
-      <div class="center">${isAr ? 'شكراً' : 'Thank you'}</div>
+      <main class="ticket">
+        <div class="center header">${escapeHtml(params.s.store_name)}</div>
+        <div class="center ticket-title">${isAr ? 'تذكرة المطبخ' : 'Kitchen Ticket'}</div>
+        <div class="divider"></div>
+        <div class="meta-row">${isAr ? 'التاريخ' : 'Date'}: ${escapeHtml(now)}</div>
+        <div class="meta-row">${isAr ? 'النوع' : 'Type'}: ${escapeHtml(orderTypeLabel)}</div>
+        ${orderNumber ? `<div class="meta-row">${isAr ? 'الطلب' : 'Order'}: ${escapeHtml(orderNumber)}</div>` : ''}
+        ${tableName ? `<div class="meta-row">${isAr ? 'طاولة' : 'Table'}: ${escapeHtml(tableName)}</div>` : ''}
+        ${guestCount ? `<div class="meta-row">${isAr ? 'الضيوف' : 'Guests'}: ${guestCount}</div>` : ''}
+        <div class="divider"></div>
+        ${rows}
+        <div class="divider"></div>
+        <div class="footer">${isAr ? 'شكراً' : 'Thank you'}</div>
+      </main>
     </body>
     <script>window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); }</script>
     </html>`;
