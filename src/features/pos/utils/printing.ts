@@ -536,11 +536,18 @@ export function buildKitchenTicketHtml(params: {
   const headerFontPx = compact ? 19 : 22;
   const metaFontPx = compact ? 14 : 16;
   const itemFontPx = compact ? 19 : 22;
-  const qtyFontPx = compact ? 17 : 20;
+  const qtyFontPx = compact ? 20 : 24;
   const { orderNumber, tableName, orderTypeLabel, guestCount, items, isAr } = params;
   const now = new Date().toLocaleString(isAr ? 'ar-EG' : 'en-US');
+  const metaRows = 2 + (orderNumber ? 1 : 0) + (tableName ? 1 : 0) + (guestCount ? 1 : 0);
+  const estimatedItemMm = items.reduce((sum, item) => {
+    const wrapAt = compact ? 16 : 24;
+    const nameLines = Math.max(1, Math.ceil(String(item.name || '').length / wrapAt));
+    return sum + 12 + (nameLines * 5.5);
+  }, 0);
+  const pageHeightMm = Math.max(80, Math.ceil(38 + (metaRows * 6) + estimatedItemMm + 14));
   const rows = items
-    .map((i) => `<section class="item-row"><div class="item-name">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class="unit">(${escapeHtml(i.unit_name)})</span>` : ''}</div><div class="qty-row"><span>${isAr ? 'الكمية' : 'Qty'}</span><strong>${escapeHtml(i.qty)}</strong></div></section>`)
+    .map((i) => `<section class="item-row"><div class="item-line"><strong class="qty-badge">${escapeHtml(i.qty)}×</strong><div class="item-name">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class="unit">(${escapeHtml(i.unit_name)})</span>` : ''}</div></div><div class="qty-caption">${isAr ? 'الكمية' : 'Qty'}: <strong>${escapeHtml(i.qty)}</strong></div></section>`)
     .join('');
 
   return `<!DOCTYPE html>
@@ -558,6 +565,8 @@ export function buildKitchenTicketHtml(params: {
           width: ${width}mm;
           min-width: ${width}mm;
           max-width: ${width}mm;
+          min-height: 0;
+          height: auto;
           background: #fff;
           color: #000;
           font-family: Tahoma, Arial, "Segoe UI", sans-serif;
@@ -570,9 +579,10 @@ export function buildKitchenTicketHtml(params: {
         body { overflow: visible; }
         .ticket {
           width: ${width}mm;
-          padding: 2.5mm ${sidePaddingMm}mm 4mm;
+          padding: 2.5mm ${sidePaddingMm}mm 3mm;
           background: #fff;
           color: #000;
+          border: .45mm solid #000;
         }
         .center { text-align: center; }
         .header {
@@ -607,26 +617,39 @@ export function buildKitchenTicketHtml(params: {
           page-break-inside: avoid;
         }
         .item-row:last-child { border-bottom: 0; }
+        .item-line {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 2.5mm;
+          align-items: center;
+        }
+        .qty-badge {
+          min-width: 12mm;
+          padding: 1mm 1.5mm;
+          border: .4mm solid #000;
+          text-align: center;
+          direction: ltr;
+          unicode-bidi: isolate;
+          font-size: ${qtyFontPx}px;
+          line-height: 1;
+          font-weight: 900;
+        }
         .item-name {
           font-size: ${itemFontPx}px;
-          line-height: 1.25;
+          line-height: 1.2;
           font-weight: 900;
           overflow-wrap: anywhere;
         }
         .unit { font-size: .72em; font-weight: 700; }
-        .qty-row {
-          display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 3mm;
+        .qty-caption {
           margin-top: 1.2mm;
-          font-size: ${qtyFontPx}px;
+          font-size: ${metaFontPx}px;
           font-weight: 800;
         }
-        .qty-row strong {
+        .qty-caption strong {
           direction: ltr;
           unicode-bidi: isolate;
-          font-size: 1.2em;
+          font-size: 1.15em;
           font-weight: 900;
         }
         .footer {
@@ -635,13 +658,18 @@ export function buildKitchenTicketHtml(params: {
           font-size: ${metaFontPx}px;
           font-weight: 800;
         }
-        @page { margin: 0; }
+        @page {
+          size: ${width}mm ${pageHeightMm}mm;
+          margin: 0;
+        }
         @media print {
           html,
           body {
             width: ${width}mm !important;
             min-width: ${width}mm !important;
             max-width: ${width}mm !important;
+            min-height: 0 !important;
+            height: auto !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
