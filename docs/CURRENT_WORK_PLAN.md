@@ -80,7 +80,7 @@ PR #64:
 - Title: `fix(inventory): multi-branch transfer and branch visibility`
 - State: **Open / Draft / غير مدمج** وقت تحديث هذا السجل؛ لا تدمجه دون توجيه صريح من المستخدم.
 - Branch: `development/raw-transfer-multibranch-fix`
-- HEAD الموثق بعد الإصلاح والتحقق: `ee5c2e53046419c20cee288ef4bb1c2c9ae57522`
+- Functional HEAD الموثق بعد الإصلاح والتحقق: `ee5c2e53046419c20cee288ef4bb1c2c9ae57522`؛ توجد بعده commits توثيقية فقط، لذلك يجب دائمًا fetch للـHEAD الفعلي بدل افتراض SHA السجل.
 - أحدث `main` وقت إعادة الفحص قبل تحديث السجل: `bb73674604c97e810a4dd2f8f3d36ccf9ea552f0`
 - تمت مراجعة drift الناتج عن PR #63، ثم دُمج أحدث `main` داخل فرع PR #64 فقط عبر merge commit غير قسري `0c1ec792af54d319cbf50874c45e4e1d52c44400`؛ أبواه هما HEAD الفرع الموثق السابق `a5f9536b446fd33632142be6cfd13a6b19f67196` و`main@bb736746...`.
 - commits اللاحقة على فرع PR فقط:
@@ -127,6 +127,8 @@ Full Green على `ee5c2e53046419c20cee288ef4bb1c2c9ae57522` عبر GitHub Actio
 - Browser Smoke / Playwright Chromium ✅ — 105/105.
 
 ملاحظة سجلية: attempt الأول لـ#1053 اصطدم بـPostgreSQL deadlock عابر في اختبار user management غير المتصل بهذه الدفعة؛ إعادة job الفاشل على نفس commit مرّت كاملة دون تعديل كود. run #1052 السابق كشف قيد الخامات ونوع حركة المنتج وباقي الفجوات وساعد على تصحيحها، لكنه ليس Full Green نهائيًا.
+
+تم كذلك تشغيل Full Green مستقل على documentation-only successor عبر run **#1054** (`34547630135`): verify + Fresh DB/schema + Integration/Security/RLS + Browser Smoke كلها نجحت من أول محاولة.
 
 **لم تُطبق migration الخاصة بـPR #64 على Production، ولم يُدمج PR إلى `main`.**
 
@@ -179,7 +181,7 @@ Full Green على `ee5c2e53046419c20cee288ef4bb1c2c9ae57522` عبر GitHub Actio
 PR #64 جاهز من ناحية التحقق لكنه غير مدمج. لا تعِد العمل المغلق دون Regression مثبت:
 
 1. انتظر توجيه المستخدم الصريح بالدمج؛ لا تدمج تلقائيًا.
-2. قبل الدمج اجلب أحدث `main` وHEAD PR #64 وتأكد أن الفرع ما زال `ee5c2e53046419c20cee288ef4bb1c2c9ae57522` وأن `main` لم يتحرك من `bb736746...`.
+2. قبل الدمج اجلب أحدث `main` وHEAD PR #64 وتأكد أن الفرع ما زال descendant مباشرًا موثوقًا من functional HEAD `ee5c2e530...` بلا تغييرات وظيفية غير موثقة، وأن `main` لم يتحرك من `bb736746...`.
 3. إذا تحرك أي منهما، افحص الفرق ولا تعمل blind merge، ثم أعد التحقق المناسب.
 4. عند التوجيه بالدمج استخدم expected SHA guard وبدون Force Push أو تعديل مباشر لـ`main`.
 5. migration لم تُطبق على Production؛ لا تطبقها إلا بعد الحفاظ على Full Green وضمن توجيه صريح وخطة نشر آمنة.
