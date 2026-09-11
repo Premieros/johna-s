@@ -72,11 +72,11 @@ describe('print execution truth contract', () => {
     const executeDetailed = between(
       localAgent,
       'export async function executeSilentPrintDetailed',
-      'export async function executeSilentPrint(options:',
+      'export async function executeSilentPrint(',
     );
     const executeSilent = between(
       localAgent,
-      'export async function executeSilentPrint(options:',
+      'export async function executeSilentPrint(',
       'export async function executeCashDrawerKick',
     );
     const drawer = between(localAgent, 'export async function executeCashDrawerKick', '/**\n * Print each authoritative kitchen station group');
