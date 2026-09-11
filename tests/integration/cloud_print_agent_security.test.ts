@@ -108,4 +108,38 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
       }
     }
   });
+
+  it('records Windows acceptance as submitted and never as physical print success', async () => {
+    const rows = await client.query<{ name: string; definition: string }>(
+      `SELECT p.proname AS name, lower(pg_get_functiondef(p.oid)) AS definition
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+         AND p.proname = ANY($1::text[])`,
+      [['record_sale_print', 'complete_cloud_print_job']],
+    );
+
+    expect(rows.rows).toHaveLength(2);
+    for (const row of rows.rows) {
+      expect(row.definition, `${row.name} physical truth`).toContain("'physical_print_confirmed', false");
+      expect(row.definition, `${row.name} must never claim physical confirmation`).not.toContain("'physical_print_confirmed', true");
+    }
+
+    const complete = rows.rows.find((row) => row.name === 'complete_cloud_print_job');
+    expect(complete?.definition).toContain("status = 'submitted'");
+    expect(complete?.definition).not.toContain("status = 'printed'");
+    expect(complete?.definition).toContain("'status', 'submitted'");
+
+    const statusConstraint = await client.query<{ definition: string }>(`
+      SELECT pg_get_constraintdef(c.oid) AS definition
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE n.nspname = 'public'
+        AND t.relname = 'cloud_print_jobs'
+        AND c.conname = 'cloud_print_jobs_status_check'
+    `);
+    expect(statusConstraint.rows).toHaveLength(1);
+    expect(statusConstraint.rows[0].definition.toLowerCase()).toContain('submitted');
+  });
 });
