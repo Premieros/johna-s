@@ -15,7 +15,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatNumber, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { StockCount, StockCountItem, Branch, Warehouse, Product } from '@/lib/types';
+import type { StockCount, StockCountItem, Branch, Warehouse, Product, RawMaterial } from '@/lib/types';
 
 interface EditLine {
   product_id: string;
@@ -32,7 +32,7 @@ export function StockCountsPage() {
 
   const { rows: counts, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadCounts } = usePaginatedRows<StockCount>({
     table: 'stock_counts',
-    select: '*, branch:branches(*), warehouse:warehouses(*), items:stock_count_items(*, product:products(*)), created_user:users!stock_counts_created_by_fkey(id, full_name, email)',
+    select: '*, branch:branches(*), warehouse:warehouses(*), items:stock_count_items(*, product:products(*), raw_material:raw_materials(*)), created_user:users!stock_counts_created_by_fkey(id, full_name, email)',
     order: { column: 'created_at', ascending: false },
     pageSize: 100,
   });
@@ -141,7 +141,7 @@ export function StockCountsPage() {
 
   const openEdit = (count: StockCount) => {
     setEditTarget(count);
-    setEditLines((count.items || []).map((it) => ({ product_id: it.product_id, counted_quantity: String(it.counted_quantity), reason: it.reason || '' })));
+    setEditLines((count.items || []).map((it) => ({ product_id: it.product_id || '', counted_quantity: String(it.counted_quantity), reason: it.reason || '' })));
   };
   const addEditLine = () => setEditLines([...editLines, { product_id: '', counted_quantity: '', reason: '' }]);
   const updateEditLine = (idx: number, field: keyof EditLine, value: string) => setEditLines(editLines.map((l, i) => i === idx ? { ...l, [field]: value } : l));
@@ -149,7 +149,7 @@ export function StockCountsPage() {
 
   const saveEdit = async () => {
     if (!editTarget) return;
-    const original = new Map((editTarget.items || []).map((it) => [it.product_id, String(it.counted_quantity)]));
+    const original = new Map((editTarget.items || []).filter((it) => it.product_id).map((it) => [it.product_id as string, String(it.counted_quantity)]));
     for (const line of editLines) {
       if (!line.product_id) continue;
       const hasCount = line.counted_quantity.trim() !== '';
@@ -161,7 +161,7 @@ export function StockCountsPage() {
       }
     }
     const kept = new Set(editLines.filter((l) => l.product_id).map((l) => l.product_id));
-    for (const it of editTarget.items || []) if (!kept.has(it.product_id)) await api.inventory.removeStockCountItem({ p_stock_count_id: editTarget.id, p_product_id: it.product_id });
+    for (const it of editTarget.items || []) if (it.product_id && !kept.has(it.product_id)) await api.inventory.removeStockCountItem({ p_stock_count_id: editTarget.id, p_product_id: it.product_id });
     show(t('countSaved'), 'success');
     setEditTarget(null);
     reloadCounts();
@@ -232,7 +232,13 @@ export function StockCountsPage() {
   ];
 
   const itemColumns: Column<StockCountItem>[] = [
-    { key: 'product', header: t('product'), render: (i) => <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{((i.product as Product | undefined)?.name || '?')[0]}</div><div><p className="font-medium text-ui-text">{(i.product as Product | undefined)?.name || '-'}</p><p className="text-xs text-ui-subtle">{(i.product as Product | undefined)?.barcode || ''}</p></div></div> },
+    { key: 'item', header: isAr ? 'الصنف / الخامة' : 'Item / Raw Material', render: (i) => {
+      const product = i.product as Product | undefined;
+      const rawMaterial = i.raw_material as RawMaterial | undefined;
+      const name = product?.name || rawMaterial?.name || '-';
+      const sub = product?.barcode || (rawMaterial ? (isAr ? 'خامة' : 'Raw material') : '');
+      return <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{name[0] || '?'}</div><div><p className="font-medium text-ui-text">{name}</p><p className="text-xs text-ui-subtle">{sub}</p></div></div>;
+    } },
     { key: 'system', header: t('systemQuantity'), render: (i) => formatNumber(Number(i.system_quantity)) },
     { key: 'counted', header: t('countedQuantity'), render: (i) => formatNumber(Number(i.counted_quantity)) },
     { key: 'variance', header: t('varianceQuantity'), render: (i) => <span className={`font-semibold ${Number(i.variance_quantity) >= 0 ? 'text-ui-success' : 'text-ui-danger'}`}>{Number(i.variance_quantity) >= 0 ? '+' : ''}{formatNumber(Number(i.variance_quantity))}</span> },
