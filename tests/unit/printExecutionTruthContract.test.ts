@@ -79,7 +79,7 @@ describe('print execution truth contract', () => {
       'export async function executeSilentPrint(',
       'export async function executeCashDrawerKick',
     );
-    const drawer = between(localAgent, 'export async function executeCashDrawerKick', '/**\n * Print each authoritative kitchen station group');
+    const drawer = between(localAgent, 'export async function executeCashDrawerKick', '/**\n * Print station groups concurrently across physical printers.');
     const kitchen = between(localAgent, 'export async function printKitchenStationsLocally', 'export function suppressNextKitchenBrowserPopup');
     const agent = read('local-print-agent/agent.cjs');
 
