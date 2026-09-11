@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, Trash2, Eye, Download, Send, Check, X, PackageOpen, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Eye, Download, Send, Check, X, PackageOpen, RotateCcw, Edit2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -32,6 +32,8 @@ interface PurchaseFormItem {
   unit_cost: number;
 }
 
+type InlineRawUnit = { id: string; name: string; symbol?: string | null };
+
 const EMPTY_LINE: PurchaseFormItem = { line_type: 'product', product_id: '', raw_material_id: '', unit_name: 'piece', quantity: 1, unit_cost: 0 };
 
 export function PurchasesPage() {
@@ -61,10 +63,15 @@ export function PurchasesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [rawUnits, setRawUnits] = useState<InlineRawUnit[]>([]);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [viewModal, setViewModal] = useState<Purchase | null>(null);
   const [viewItems, setViewItems] = useState<{ name: string; quantity: number; unit_name: string; unit_cost: number; total: number }[]>([]);
+  const [rawModalOpen, setRawModalOpen] = useState(false);
+  const [rawTargetLine, setRawTargetLine] = useState<number | null>(null);
+  const [rawForm, setRawForm] = useState({ code: '', name: '', unit_id: '' });
 
   const [form, setForm] = useState({
     supplier_id: '',
@@ -76,18 +83,20 @@ export function PurchasesPage() {
   const [lineItems, setLineItems] = useState<PurchaseFormItem[]>([{ ...EMPTY_LINE }]);
 
   async function loadMeta() {
-    const [s, pr, rm, w] = await Promise.all([
+    const [s, pr, rm, w, u] = await Promise.all([
       supabase.from('suppliers').select('*').order('name'),
       supabase.from('products').select('*').eq('is_active', true).order('name'),
       supabase.from('raw_materials').select('*, unit:units(*)').eq('is_active', true).order('name'),
       supabase.from('warehouses').select('*').order('name'),
+      supabase.from('measurement_units').select('id,name,symbol').eq('is_active', true).order('name'),
     ]);
     setSuppliers((s.data as Supplier[]) || []);
     setProducts((pr.data as Product[]) || []);
     setRawMaterials((rm.data as RawMaterial[]) || []);
     setWarehouses((w.data as Warehouse[]) || []);
+    setRawUnits((u.data as InlineRawUnit[]) || []);
   }
-  useEffect(() => { loadMeta(); }, []);
+  useEffect(() => { void loadMeta(); }, []);
 
   // Restore draft if returning from guided prerequisite setup
   useEffect(() => {
@@ -95,6 +104,7 @@ export function PurchasesPage() {
     if (state?.fromGuidance && state?.restoredDraft) {
       if (state.restoredDraft.form) setForm((prev) => ({ ...prev, ...state.restoredDraft?.form }));
       if (state.restoredDraft.lineItems) setLineItems(state.restoredDraft.lineItems);
+      setEditingPurchase(null);
       setModalOpen(true);
     }
   }, [location.state]);
@@ -113,6 +123,7 @@ export function PurchasesPage() {
     });
     if (!allowed) return;
 
+    setEditingPurchase(null);
     setForm({
       supplier_id: suppliers[0]?.id || '',
       warehouse_id: warehouses[0]?.id || '',
@@ -121,6 +132,41 @@ export function PurchasesPage() {
       notes: '',
     });
     setLineItems([{ ...EMPTY_LINE }]);
+    setModalOpen(true);
+  };
+
+  const openEdit = async (purchase: Purchase) => {
+    if (!can('purchases.manage') || purchase.status !== 'completed') return;
+    const { data, error: itemsError } = await supabase
+      .from('purchase_items')
+      .select('product_id,raw_material_id,unit_name,quantity,unit_cost')
+      .eq('purchase_id', purchase.id)
+      .order('created_at');
+    if (itemsError) { show(itemsError.message, 'error'); return; }
+
+    const editableLines = ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+      line_type: row.raw_material_id ? 'raw' as const : 'product' as const,
+      product_id: String(row.product_id || ''),
+      raw_material_id: String(row.raw_material_id || ''),
+      unit_name: String(row.unit_name || 'piece'),
+      quantity: Number(row.quantity || 0),
+      unit_cost: Number(row.unit_cost || 0),
+    }));
+    if (editableLines.length === 0) {
+      show(lang === 'ar' ? 'لا توجد بنود قابلة للتعديل في الفاتورة' : 'No editable items were found for this invoice', 'error');
+      return;
+    }
+
+    setEditingPurchase(purchase);
+    setForm({
+      supplier_id: purchase.supplier_id || '',
+      warehouse_id: purchase.warehouse_id || '',
+      branch_id: purchase.branch_id || '',
+      payment_method: purchase.payment_method || 'cash',
+      notes: purchase.notes || '',
+    });
+    setLineItems(editableLines);
+    setViewModal(null);
     setModalOpen(true);
   };
 
@@ -176,6 +222,61 @@ export function PurchasesPage() {
     )));
   };
 
+  const openInlineRaw = (lineIndex: number) => {
+    if (!can('raw_materials.create')) return;
+    setRawTargetLine(lineIndex);
+    setRawForm({ code: '', name: '', unit_id: '' });
+    setRawModalOpen(true);
+  };
+
+  const saveInlineRaw = async () => {
+    if (!can('raw_materials.create')) {
+      show(lang === 'ar' ? 'لا تملك صلاحية إنشاء الخامات' : 'Raw-material create permission is required', 'error');
+      return;
+    }
+    if (!rawForm.code.trim() || !rawForm.name.trim() || !rawForm.unit_id) {
+      show(lang === 'ar' ? 'الكود واسم الخامة ووحدة القياس مطلوبة' : 'Code, raw-material name, and measurement unit are required', 'error');
+      return;
+    }
+    if (!form.branch_id) {
+      show(lang === 'ar' ? 'حدد الفرع أولًا' : 'Select the branch first', 'error');
+      return;
+    }
+
+    const payload = {
+      code: rawForm.code.trim(),
+      name: rawForm.name.trim(),
+      unit_id: rawForm.unit_id,
+      category: null,
+      min_stock: 0,
+      default_cost: 0,
+      description: null,
+      branch_id: form.branch_id,
+      is_active: true,
+    };
+    const { data, error: rawError } = await supabase.from('raw_materials').insert(payload).select('*').single();
+    if (rawError) { show(rawError.message, 'error'); return; }
+
+    const created = data as RawMaterial;
+    const selectedUnit = rawUnits.find((unit) => unit.id === rawForm.unit_id);
+    const createdWithUnit = {
+      ...created,
+      unit: selectedUnit ? { ...selectedUnit } : undefined,
+    } as RawMaterial;
+    setRawMaterials((current) => [...current, createdWithUnit].sort((a, b) => a.name.localeCompare(b.name)));
+
+    if (rawTargetLine !== null) {
+      const unitName = selectedUnit?.symbol || selectedUnit?.name || 'وحدة';
+      setLineItems((current) => current.map((line, idx) => idx === rawTargetLine
+        ? { ...line, line_type: 'raw', raw_material_id: created.id, product_id: '', unit_name: unitName }
+        : line));
+    }
+    await logAudit('create', 'raw_materials', created.id, { unit_id: rawForm.unit_id, source: 'purchase_invoice' });
+    setRawModalOpen(false);
+    setRawTargetLine(null);
+    show(lang === 'ar' ? 'تم إنشاء الخامة وإضافتها للفاتورة' : 'Raw material created and selected', 'success');
+  };
+
   const save = async () => {
     const allowed = guardPurchase({
       warehousesCount: warehouses.length,
@@ -192,6 +293,46 @@ export function PurchasesPage() {
     const hasProductLines = validItems.some((l) => l.line_type === 'product');
     if (hasProductLines && !form.warehouse_id) { show(t('required') + ': ' + t('warehouse'), 'error'); return; }
 
+    const totalValue = validItems.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
+    const rpcItems = validItems.map((i) => ({
+      ...(i.line_type === 'raw' ? { raw_material_id: i.raw_material_id } : { product_id: i.product_id }),
+      unit_name: i.unit_name || (i.line_type === 'raw' ? rawUnitName(i.raw_material_id) : 'piece'),
+      quantity: i.quantity,
+      unit_cost: i.unit_cost,
+    }));
+
+    if (editingPurchase) {
+      const { data, error: updateError } = await api.trade.updatePurchase({
+        p_purchase_id: editingPurchase.id,
+        p_supplier_id: form.supplier_id,
+        p_warehouse_id: form.warehouse_id || null,
+        p_subtotal: totalValue,
+        p_discount_amount: 0,
+        p_tax_amount: 0,
+        p_total: totalValue,
+        p_paid_amount: totalValue,
+        p_payment_method: form.payment_method,
+        p_notes: form.notes,
+        p_items: rpcItems,
+      });
+      if (updateError) {
+        const handled = interceptDbError(updateError, 'purchase_edit', 'تعديل فاتورة مشتريات', 'Edit Purchase Invoice', { purchaseId: editingPurchase.id, form, lineItems });
+        if (!handled) show(updateError.message, 'error');
+        return;
+      }
+      const result = data as RpcResult | null;
+      if (!result?.success) {
+        show(result?.detail || result?.error || t('error'), 'error');
+        return;
+      }
+      await logAudit('update', 'purchases', result.purchase_id || editingPurchase.id, { previous_purchase_id: editingPurchase.id, total: totalValue });
+      show(lang === 'ar' ? 'تم تعديل فاتورة المشتريات بأمان' : 'Purchase invoice updated safely', 'success');
+      setEditingPurchase(null);
+      setModalOpen(false);
+      reloadPurchases();
+      return;
+    }
+
     const { data: serialRes, error: serialError } = await api.trade.nextDocumentNumber({ p_type: 'purchase' });
     if (serialError || !serialRes?.success) {
       const handled = interceptDbError(serialError, 'purchase_create', 'تسجيل مشتريات', 'Create Purchase Invoice', { form, lineItems });
@@ -201,27 +342,21 @@ export function PurchasesPage() {
       return;
     }
     const invoiceNumber = (serialRes as { number?: string }).number || generateInvoiceNumber('PUR');
-    const total = validItems.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
 
     const { data, error } = await api.trade.processPurchase({
       p_invoice_number: invoiceNumber,
       p_supplier_id: form.supplier_id,
       p_branch_id: form.branch_id || null,
       p_warehouse_id: form.warehouse_id || null,
-      p_subtotal: total,
+      p_subtotal: totalValue,
       p_discount_amount: 0,
       p_tax_amount: 0,
-      p_total: total,
-      p_paid_amount: total,
+      p_total: totalValue,
+      p_paid_amount: totalValue,
       p_payment_method: form.payment_method,
       p_status: 'completed',
       p_notes: form.notes,
-      p_items: validItems.map((i) => ({
-        ...(i.line_type === 'raw' ? { raw_material_id: i.raw_material_id } : { product_id: i.product_id }),
-        unit_name: i.unit_name || (i.line_type === 'raw' ? rawUnitName(i.raw_material_id) : 'piece'),
-        quantity: i.quantity,
-        unit_cost: i.unit_cost,
-      })),
+      p_items: rpcItems,
     });
     if (error) {
       const handled = interceptDbError(error, 'purchase_create', 'تسجيل مشتريات', 'Create Purchase Invoice', { form, lineItems });
@@ -239,7 +374,7 @@ export function PurchasesPage() {
       return;
     }
 
-    await logAudit('create', 'purchases', result.purchase_id || '', { invoice: invoiceNumber, total });
+    await logAudit('create', 'purchases', result.purchase_id || '', { invoice: invoiceNumber, total: totalValue });
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadPurchases();
@@ -321,7 +456,7 @@ export function PurchasesPage() {
     reloadPurchases();
   };
 
-  const canReversePurchase = can('purchases.manage') && ['super_admin', 'owner', 'branch_manager', 'warehouse_manager'].includes(user?.role || '');
+  const canReversePurchase = can('purchases.manage');
   const purchaseStatusLabel = (status: string) => {
     const labels: Record<string, { ar: string; en: string }> = {
       draft: { ar: 'مسودة', en: 'Draft' },
@@ -355,6 +490,15 @@ export function PurchasesPage() {
         )}
         {['approved', 'submitted', 'partial'].includes(p.status) && can('purchases.receiving') && (
           <button title={t('receive')} onClick={() => navigate('/purchases/receiving')} className="p-1.5 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-500"><PackageOpen className="w-4 h-4" /></button>
+        )}
+        {p.status === 'completed' && can('purchases.manage') && (
+          <button
+            title={lang === 'ar' ? 'تعديل فاتورة المشتريات' : 'Edit purchase invoice'}
+            onClick={(e) => { e.stopPropagation(); void openEdit(p); }}
+            className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
         )}
         {['draft', 'submitted', 'cancelled', 'returned'].includes(p.status) && can('purchases.delete') && (
           <button
@@ -430,9 +574,21 @@ export function PurchasesPage() {
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
 
-      {/* Add Purchase Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t('purchaseInvoice')} size="xl">
+      {/* Add / Edit Purchase Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditingPurchase(null); }}
+        title={editingPurchase ? (lang === 'ar' ? `تعديل فاتورة ${editingPurchase.invoice_number}` : `Edit ${editingPurchase.invoice_number}`) : t('purchaseInvoice')}
+        size="xl"
+      >
         <div className="space-y-4">
+          {editingPurchase && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+              {lang === 'ar'
+                ? 'سيتم عكس النسخة الحالية وإعادة تسجيل النسخة المصححة داخل عملية واحدة آمنة، مع الاحتفاظ بالنسخة السابقة كمرتجع للمراجعة.'
+                : 'The current version will be reversed and the corrected version posted atomically; the prior version remains as a returned audit revision.'}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Select label={t('supplier')} value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} required>
               <option value="">--</option>
@@ -440,9 +596,9 @@ export function PurchasesPage() {
             </Select>
             <Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}>
               <option value="">--</option>
-              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </Select>
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}>
+            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })} disabled={!!editingPurchase}>
               <option value="">--</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
@@ -473,10 +629,22 @@ export function PurchasesPage() {
                         {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     ) : (
-                      <select value={l.raw_material_id} onChange={(e) => updateRawMaterial(i, e.target.value)} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm">
-                        <option value="">--</option>
-                        {rawMaterials.map((rm) => <option key={rm.id} value={rm.id}>{rm.name}</option>)}
-                      </select>
+                      <div className="flex gap-1">
+                        <select value={l.raw_material_id} onChange={(e) => updateRawMaterial(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm">
+                          <option value="">--</option>
+                          {rawMaterials.map((rm) => <option key={rm.id} value={rm.id}>{rm.name}</option>)}
+                        </select>
+                        {can('raw_materials.create') && (
+                          <button
+                            type="button"
+                            title={lang === 'ar' ? 'إنشاء خامة جديدة' : 'Create raw material'}
+                            onClick={() => openInlineRaw(i)}
+                            className="shrink-0 rounded-md border border-ui-border px-2 text-ui-info hover:bg-ui-info-soft"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                   {l.line_type === 'raw' ? (
@@ -490,7 +658,7 @@ export function PurchasesPage() {
                     </select>
                   ) : (
                     <input value={l.unit_name} onChange={(e) => updateLine(i, 'unit_name', e.target.value)} className="col-span-2 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" placeholder={lang === 'ar' ? 'الوحدة' : 'Unit'} />
-                 )}
+                  )}
                   <input type="number" placeholder={t('quantity')} value={l.quantity || ''} onChange={(e) => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)} className="col-span-1 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
                   <input type="number" placeholder={t('cost')} step="0.01" value={l.unit_cost || ''} onChange={(e) => updateLine(i, 'unit_cost', parseFloat(e.target.value) || 0)} className="col-span-2 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
                   <span className="col-span-1 text-sm text-ui-muted text-end">{formatCurrency(l.quantity * l.unit_cost, currency, lang)}</span>
@@ -503,9 +671,30 @@ export function PurchasesPage() {
           <div className="flex justify-between items-center pt-2 border-t border-ui-border">
             <span className="text-lg font-bold">{t('total')}: {formatCurrency(subtotal, currency, lang)}</span>
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setModalOpen(false)}>{t('cancel')}</Button>
-              <Button onClick={save}>{t('save')}</Button>
+              <Button variant="secondary" onClick={() => { setModalOpen(false); setEditingPurchase(null); }}>{t('cancel')}</Button>
+              <Button onClick={save}>{editingPurchase ? (lang === 'ar' ? 'حفظ التعديل' : 'Save changes') : t('save')}</Button>
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={rawModalOpen} onClose={() => setRawModalOpen(false)} title={lang === 'ar' ? 'إضافة خامة أثناء الفاتورة' : 'Add raw material'} size="sm">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ui-muted">{lang === 'ar' ? 'كود الخامة' : 'Raw code'}</label>
+            <input value={rawForm.code} onChange={(e) => setRawForm({ ...rawForm, code: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ui-muted">{lang === 'ar' ? 'اسم الخامة' : 'Raw-material name'}</label>
+            <input value={rawForm.name} onChange={(e) => setRawForm({ ...rawForm, name: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-3 py-2 text-sm" />
+          </div>
+          <Select label={lang === 'ar' ? 'وحدة القياس' : 'Measurement unit'} value={rawForm.unit_id} onChange={(e) => setRawForm({ ...rawForm, unit_id: e.target.value })} required>
+            <option value="">--</option>
+            {rawUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}{unit.symbol ? ` (${unit.symbol})` : ''}</option>)}
+          </Select>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setRawModalOpen(false)}>{t('cancel')}</Button>
+            <Button onClick={saveInlineRaw}>{t('save')}</Button>
           </div>
         </div>
       </Modal>
@@ -545,6 +734,11 @@ export function PurchasesPage() {
               <span>{t('total')}</span>
               <span className="text-brand-600 dark:text-brand-400">{formatCurrency(viewModal.total, currency, lang)}</span>
             </div>
+            {viewModal.status === 'completed' && can('purchases.manage') && (
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => void openEdit(viewModal)}><Edit2 className="h-4 w-4" /> {lang === 'ar' ? 'تعديل الفاتورة' : 'Edit invoice'}</Button>
+              </div>
+            )}
           </div>
         )}
       </Modal>
