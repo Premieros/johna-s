@@ -74,6 +74,7 @@ interface BranchCtx {
 type WriteMode =
   | 'full' // branch staff may also write their own branch
   | 'rpcOnlyHeader' // all authenticated INSERT denied; process_sale is the write boundary
+  | 'rpcOnlyTransfer' // all transfer DML is denied; atomic RPCs are the only write boundary
   | 'perm' // writes: admin OR can_permission('<module>.manage') AND own branch (branch_manager holds it)
   | 'permProduction' // writes: admin OR production.manage AND own branch (production_manager holds it)
   | 'adminWrite' // writes are admin-only
@@ -179,7 +180,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
     // to administrators because it bypasses pricing, inventory and accounting.
     { name: 'sales', key: 'sales', mode: 'rpcOnlyHeader', ins: (c) => `INSERT INTO public.sales (invoice_number, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status) VALUES ('${uniq('INV')}', '${c.branch}', '${c.wh}', 0, 0, 0, 0, 0, 'cash', 'completed')`, upd: () => `SET payment_method = 'cash'`, noDel: 'cashier' },
     { name: 'purchases', key: 'purchases', mode: 'full', ins: (c) => `INSERT INTO public.purchases (invoice_number, supplier_id, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status) VALUES ('${uniq('PINV')}', '${c.supp}', '${c.branch}', '${c.wh}', 0, 0, 0, 0, 0, 'cash', 'completed')`, upd: () => `SET payment_method = 'cash'`, noDel: 'cashier' },
-    { name: 'warehouse_transfers', key: 'warehouse_transfers', mode: 'full', ins: (c) => `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, status) VALUES ('${uniq('WT')}', '${c.wh}', '${c.whOther}', '${c.branch}', 'pending')`, upd: () => `SET notes = 'probe'`, noDel: 'all' },
+    { name: 'warehouse_transfers', key: 'warehouse_transfers', mode: 'rpcOnlyTransfer', ins: (c) => `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${c.wh}', '${c.whOther}', '${c.branch}', '${c.branch === ids.branchA ? ids.branchB : ids.branchA}', 'pending')`, upd: () => `SET notes = 'probe'`, noDel: 'all' },
     { name: 'dining_tables', key: 'dining_tables', mode: 'full', ins: (c) => `INSERT INTO public.dining_tables (name, branch_id, capacity, status) VALUES ('Probe', '${c.branch}', 4, 'vacant')`, upd: () => `SET name = 'probe'`, noDel: 'all' },
     { name: 'orders', key: 'orders', mode: 'full', ins: (c) => `INSERT INTO public.orders (order_number, branch_id, order_type, status) VALUES ('${uniq('ORD')}', '${c.branch}', 'dine_in', 'open')`, upd: () => `SET notes = 'probe'`, noDel: 'all' },
 
@@ -253,7 +254,8 @@ describe.skipIf(skip)('RLS branch isolation', () => {
     const del = (id: string) => `DELETE FROM ${tbl.name} WHERE id = '${id}'`;
 
     if (tbl.ins) {
-      await runProbe(client, `${tbl.name} INSERT admin→B`, adminId(), tbl.ins(ctxB), tbl.mode === 'rpcOnlyHeader' ? 'denied' : 'ok');
+      await runProbe(client, `${tbl.name} INSERT admin→B`, adminId(), tbl.ins(ctxB),
+        tbl.mode === 'rpcOnlyHeader' || tbl.mode === 'rpcOnlyTransfer' ? 'denied' : 'ok');
       await runProbe(client, `${tbl.name} INSERT cashier→B`, cashierId(), tbl.ins(ctxB), 'denied');
     }
 
@@ -291,6 +293,21 @@ describe.skipIf(skip)('RLS branch isolation', () => {
         await runProbe(client, `${tbl.name} DELETE cashier own`, cashierId(), del(own), 'denied');
         await runProbe(client, `${tbl.name} DELETE cashier other`, cashierId(), del(other), 'denied');
         await runProbe(client, `${tbl.name} DELETE admin other`, adminId(), del(other), 'ok');
+        break;
+
+      case 'rpcOnlyTransfer':
+        if (tbl.ins) {
+          await runProbe(client, `${tbl.name} INSERT admin→A`, adminId(), tbl.ins(ctxA), 'denied');
+          await runProbe(client, `${tbl.name} INSERT cashier→A`, cashierId(), tbl.ins(ctxA), 'denied');
+        }
+        if (tbl.upd) {
+          await runProbe(client, `${tbl.name} UPDATE admin own`, adminId(), upd(own), 'denied');
+          await runProbe(client, `${tbl.name} UPDATE cashier own`, cashierId(), upd(own), 'denied');
+          await runProbe(client, `${tbl.name} UPDATE cashier other`, cashierId(), upd(other), 'denied');
+        }
+        await runProbe(client, `${tbl.name} DELETE cashier own`, cashierId(), del(own), 'denied');
+        await runProbe(client, `${tbl.name} DELETE cashier other`, cashierId(), del(other), 'denied');
+        await runProbe(client, `${tbl.name} DELETE admin other`, adminId(), del(other), 'denied');
         break;
 
       case 'adminWrite':
@@ -572,7 +589,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
       key: string;
       parent: string;
       fk: string;
-      mode: 'parentWrite' | 'rpcOnlySaleItem' | 'adminWrite' | 'permRecipes' | 'adminInsOnly' | 'adminInsUpd' | 'shiftOps';
+      mode: 'parentWrite' | 'rpcOnlySaleItem' | 'rpcOnlyTransferItem' | 'adminWrite' | 'permRecipes' | 'adminInsOnly' | 'adminInsUpd' | 'shiftOps';
       ins: (ownParent: string, otherParent: string) => { sql: string; paramsA: unknown[]; paramsB: unknown[] };
       noDel?: 'all' | 'cashier';
       updSet?: string;
@@ -590,8 +607,8 @@ describe.skipIf(skip)('RLS branch isolation', () => {
         ins: () => ({ sql: `INSERT INTO public.purchase_items (purchase_id, product_id, unit_name, quantity, unit_cost, total) VALUES ($1, $2, 'piece', 1, 10, 10)`, paramsA: [ids.purchA, ids.prodA], paramsB: [ids.purchB, ids.prodB] }),
       },
       {
-        name: 'warehouse_transfer_items', key: 'warehouse_transfer_items', parent: 'warehouse_transfers', fk: 'transfer_id', mode: 'parentWrite', noDel: 'all',
-        ins: () => ({ sql: `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, quantity) VALUES ($1, $2, 1)`, paramsA: [ids.rows.warehouse_transfers.own, ids.prodA], paramsB: [ids.rows.warehouse_transfers.other, ids.prodB] }),
+        name: 'warehouse_transfer_items', key: 'warehouse_transfer_items', parent: 'warehouse_transfers', fk: 'transfer_id', mode: 'rpcOnlyTransferItem', noDel: 'all',
+        ins: () => ({ sql: `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, destination_product_id, quantity) VALUES ($1, $2, $2, 1)`, paramsA: [ids.rows.warehouse_transfers.own, ids.prodA], paramsB: [ids.rows.warehouse_transfers.other, ids.prodB] }),
       },
       {
         name: 'recipe_items', key: 'recipe_items', parent: 'recipes', fk: 'recipe_id', mode: 'parentWrite', noDel: 'all',
@@ -665,6 +682,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
             break;
 
           case 'rpcOnlySaleItem':
+          case 'rpcOnlyTransferItem':
             await runProbe(client, `${ch.name} INSERT cashier own parent`, cashierId(), sql, 'denied', paramsA);
             await runProbe(client, `${ch.name} INSERT cashier other parent`, cashierId(), sql, 'denied', paramsB);
             await runProbe(client, `${ch.name} INSERT admin other parent`, adminId(), sql, 'denied', paramsB);

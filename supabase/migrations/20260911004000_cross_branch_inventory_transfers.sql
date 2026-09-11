@@ -10,6 +10,26 @@ FROM public.warehouses w
 WHERE w.id = wt.to_warehouse_id
   AND wt.to_branch_id IS NULL;
 
+-- Cross-branch transfers were not supported by the previous RPC contract.
+-- Refuse to guess a destination identity for any legacy/corrupt cross-branch
+-- row; an operator must remediate it explicitly before this migration runs.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.warehouse_transfers wt
+    LEFT JOIN public.warehouses fw ON fw.id = wt.from_warehouse_id
+    LEFT JOIN public.warehouses tw ON tw.id = wt.to_warehouse_id
+    WHERE fw.id IS NULL
+       OR tw.id IS NULL
+       OR fw.branch_id IS DISTINCT FROM wt.branch_id
+       OR tw.branch_id IS DISTINCT FROM wt.to_branch_id
+       OR wt.to_branch_id IS DISTINCT FROM wt.branch_id
+  ) THEN
+    RAISE EXCEPTION 'LEGACY_WAREHOUSE_TRANSFER_REQUIRES_EXPLICIT_REMEDIATION';
+  END IF;
+END $$;
+
 ALTER TABLE public.warehouse_transfer_items
   ADD COLUMN IF NOT EXISTS raw_material_id uuid REFERENCES public.raw_materials(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS destination_product_id uuid REFERENCES public.products(id) ON DELETE RESTRICT,
@@ -62,6 +82,29 @@ USING (EXISTS (
     )
 ));
 
+-- All transfer mutations must pass through the atomic SECURITY DEFINER RPCs.
+-- Direct DML could otherwise mark a transfer approved without moving stock,
+-- or construct a source-only row that bypasses destination-branch access.
+DROP POLICY IF EXISTS auth_insert_warehouse_transfers ON public.warehouse_transfers;
+DROP POLICY IF EXISTS auth_update_warehouse_transfers ON public.warehouse_transfers;
+DROP POLICY IF EXISTS auth_delete_warehouse_transfers ON public.warehouse_transfers;
+CREATE POLICY warehouse_transfers_rpc_only_insert ON public.warehouse_transfers
+FOR INSERT TO authenticated WITH CHECK (false);
+CREATE POLICY warehouse_transfers_rpc_only_update ON public.warehouse_transfers
+FOR UPDATE TO authenticated USING (false) WITH CHECK (false);
+CREATE POLICY warehouse_transfers_rpc_only_delete ON public.warehouse_transfers
+FOR DELETE TO authenticated USING (false);
+
+DROP POLICY IF EXISTS auth_insert_warehouse_transfer_items ON public.warehouse_transfer_items;
+DROP POLICY IF EXISTS auth_update_warehouse_transfer_items ON public.warehouse_transfer_items;
+DROP POLICY IF EXISTS auth_delete_warehouse_transfer_items ON public.warehouse_transfer_items;
+CREATE POLICY warehouse_transfer_items_rpc_only_insert ON public.warehouse_transfer_items
+FOR INSERT TO authenticated WITH CHECK (false);
+CREATE POLICY warehouse_transfer_items_rpc_only_update ON public.warehouse_transfer_items
+FOR UPDATE TO authenticated USING (false) WITH CHECK (false);
+CREATE POLICY warehouse_transfer_items_rpc_only_delete ON public.warehouse_transfer_items
+FOR DELETE TO authenticated USING (false);
+
 CREATE OR REPLACE FUNCTION public.create_warehouse_transfer(
   p_from_warehouse_id uuid,
   p_to_warehouse_id uuid,
@@ -83,12 +126,10 @@ DECLARE
   v_item_type text;
   v_source_id uuid;
   v_destination_id uuid;
+  v_requested_destination_id uuid;
   v_qty numeric(14,4);
   v_unit_cost numeric(14,4);
   v_to_branch_id uuid;
-  v_source_product public.products%ROWTYPE;
-  v_source_raw public.raw_materials%ROWTYPE;
-  v_match_count integer;
 BEGIN
   IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED'); END IF;
   IF NOT public.is_pos_admin() AND NOT public.can_permission('inventory.transfer.create') THEN
@@ -117,6 +158,7 @@ BEGIN
       v_qty := COALESCE((v_item->>'quantity')::numeric, 0);
       v_unit_cost := COALESCE((v_item->>'unit_cost')::numeric, 0);
       v_source_id := COALESCE(NULLIF(v_item->>'item_id', '')::uuid, NULLIF(v_item->>'product_id', '')::uuid, NULLIF(v_item->>'raw_material_id', '')::uuid);
+      v_requested_destination_id := NULLIF(v_item->>'destination_item_id', '')::uuid;
     EXCEPTION WHEN OTHERS THEN
       RETURN jsonb_build_object('success', false, 'error', 'INVALID_ITEM');
     END;
@@ -125,46 +167,42 @@ BEGIN
     END IF;
 
     v_destination_id := NULL;
-    v_match_count := 0;
-
     IF v_item_type = 'product' THEN
-      SELECT * INTO v_source_product FROM public.products WHERE id = v_source_id AND branch_id = p_branch_id AND is_active;
-      IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'PRODUCT_BRANCH_MISMATCH', 'product_id', v_source_id); END IF;
+      IF NOT EXISTS (SELECT 1 FROM public.products WHERE id = v_source_id AND branch_id = p_branch_id AND is_active) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'PRODUCT_BRANCH_MISMATCH', 'product_id', v_source_id);
+      END IF;
 
       IF p_branch_id = v_to_branch_id THEN
+        IF v_requested_destination_id IS NOT NULL AND v_requested_destination_id <> v_source_id THEN
+          RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_ITEM_BRANCH_MISMATCH', 'product_id', v_source_id);
+        END IF;
         v_destination_id := v_source_id;
       ELSE
-        -- Deterministic matching priority: SKU -> barcode -> normalized name.
-        IF NULLIF(btrim(v_source_product.sku), '') IS NOT NULL THEN
-          SELECT count(*), min(p.id) INTO v_match_count, v_destination_id
-          FROM public.products p WHERE p.branch_id = v_to_branch_id AND p.is_active AND p.sku = v_source_product.sku;
-          IF v_match_count > 1 THEN RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_PRODUCT_AMBIGUOUS', 'match_by', 'sku', 'product_id', v_source_id); END IF;
-          IF v_match_count = 0 THEN v_destination_id := NULL; END IF;
+        IF v_requested_destination_id IS NULL THEN
+          RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_ITEM_REQUIRED', 'product_id', v_source_id, 'destination_branch_id', v_to_branch_id);
         END IF;
-        IF v_destination_id IS NULL AND NULLIF(btrim(v_source_product.barcode), '') IS NOT NULL THEN
-          SELECT count(*), min(p.id) INTO v_match_count, v_destination_id
-          FROM public.products p WHERE p.branch_id = v_to_branch_id AND p.is_active AND p.barcode = v_source_product.barcode;
-          IF v_match_count > 1 THEN RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_PRODUCT_AMBIGUOUS', 'match_by', 'barcode', 'product_id', v_source_id); END IF;
-          IF v_match_count = 0 THEN v_destination_id := NULL; END IF;
-        END IF;
+        SELECT p.id INTO v_destination_id
+        FROM public.products p
+        WHERE p.id = v_requested_destination_id AND p.branch_id = v_to_branch_id AND p.is_active;
         IF v_destination_id IS NULL THEN
-          SELECT count(*), min(p.id) INTO v_match_count, v_destination_id
-          FROM public.products p WHERE p.branch_id = v_to_branch_id AND p.is_active AND lower(btrim(p.name)) = lower(btrim(v_source_product.name));
-          IF v_match_count <> 1 THEN
-            RETURN jsonb_build_object('success', false, 'error', CASE WHEN v_match_count = 0 THEN 'DESTINATION_PRODUCT_NOT_FOUND' ELSE 'DESTINATION_PRODUCT_AMBIGUOUS' END, 'match_by', 'name', 'product_id', v_source_id, 'destination_branch_id', v_to_branch_id);
-          END IF;
+          RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_ITEM_BRANCH_MISMATCH', 'product_id', v_source_id, 'destination_item_id', v_requested_destination_id);
         END IF;
       END IF;
     ELSE
-      SELECT * INTO v_source_raw FROM public.raw_materials WHERE id = v_source_id AND branch_id = p_branch_id AND is_active;
-      IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'RAW_MATERIAL_BRANCH_MISMATCH', 'raw_material_id', v_source_id); END IF;
+      IF NOT EXISTS (SELECT 1 FROM public.raw_materials WHERE id = v_source_id AND branch_id = p_branch_id AND is_active) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'RAW_MATERIAL_BRANCH_MISMATCH', 'raw_material_id', v_source_id);
+      END IF;
       IF p_branch_id = v_to_branch_id THEN
         RETURN jsonb_build_object('success', false, 'error', 'RAW_MATERIAL_SAME_BRANCH_WAREHOUSE_TRANSFER_UNSUPPORTED');
       END IF;
-      SELECT count(*), min(r.id) INTO v_match_count, v_destination_id
-      FROM public.raw_materials r WHERE r.branch_id = v_to_branch_id AND r.is_active AND lower(btrim(r.name)) = lower(btrim(v_source_raw.name));
-      IF v_match_count <> 1 THEN
-        RETURN jsonb_build_object('success', false, 'error', CASE WHEN v_match_count = 0 THEN 'DESTINATION_RAW_MATERIAL_NOT_FOUND' ELSE 'DESTINATION_RAW_MATERIAL_AMBIGUOUS' END, 'raw_material_id', v_source_id, 'destination_branch_id', v_to_branch_id);
+      IF v_requested_destination_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_ITEM_REQUIRED', 'raw_material_id', v_source_id, 'destination_branch_id', v_to_branch_id);
+      END IF;
+      SELECT r.id INTO v_destination_id
+      FROM public.raw_materials r
+      WHERE r.id = v_requested_destination_id AND r.branch_id = v_to_branch_id AND r.is_active;
+      IF v_destination_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'DESTINATION_ITEM_BRANCH_MISMATCH', 'raw_material_id', v_source_id, 'destination_item_id', v_requested_destination_id);
       END IF;
     END IF;
 

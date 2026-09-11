@@ -13,7 +13,7 @@ describe('multi-branch warehouse transfer contract', () => {
     expect(page).toContain("supabase.from('raw_materials').select('id,name,branch_id,default_cost')");
     expect(page).toContain('source_branch_id');
     expect(page).toContain('destination_branch_id');
-    expect(page).toContain("item_type: 'raw_material'");
+    expect(page).toContain("type TransferItemType = 'product' | 'raw_material'");
     expect(page).toContain('sourceRawMaterials');
     expect(page).not.toContain('user?.branch_id || branchFilter');
   });
@@ -21,7 +21,8 @@ describe('multi-branch warehouse transfer contract', () => {
   it('uses a mixed typed transfer payload instead of product-only items', () => {
     expect(api).toContain("item_type: 'product' | 'raw_material'");
     expect(api).toContain('item_id: string');
-    expect(page).toContain('item_type: l.item_type, item_id: l.item_id');
+    expect(api).toContain('destination_item_id: string');
+    expect(page).toContain('item_type: l.item_type, item_id: l.item_id, destination_item_id: l.destination_item_id');
   });
 
   it('requires access to both branches before a cross-branch stock mutation', () => {
@@ -39,13 +40,12 @@ describe('multi-branch warehouse transfer contract', () => {
     expect(migration).toContain("v_validated_items jsonb := '[]'::jsonb");
   });
 
-  it('matches cross-branch products deterministically by SKU then barcode then name', () => {
-    const sku = migration.indexOf("p.sku = v_source_product.sku");
-    const barcode = migration.indexOf("p.barcode = v_source_product.barcode");
-    const name = migration.indexOf("lower(btrim(p.name)) = lower(btrim(v_source_product.name))");
-    expect(sku).toBeGreaterThan(-1);
-    expect(barcode).toBeGreaterThan(sku);
-    expect(name).toBeGreaterThan(barcode);
+  it('requires and validates an explicit destination identity instead of guessing by name', () => {
+    expect(page).toContain('destination_item_id');
+    expect(migration).toContain("'DESTINATION_ITEM_REQUIRED'");
+    expect(migration).toContain("'DESTINATION_ITEM_BRANCH_MISMATCH'");
+    expect(migration).not.toContain('lower(btrim(p.name))');
+    expect(migration).not.toContain('lower(btrim(r.name))');
   });
 
   it('moves product inventory warehouse-to-warehouse and raw inventory branch-to-branch', () => {
@@ -63,5 +63,7 @@ describe('multi-branch warehouse transfer contract', () => {
     expect(migration).toContain('to_branch_id');
     expect(migration).toContain('warehouse_transfers_branch_read');
     expect(migration).toContain('warehouse_transfer_items_branch_read');
+    expect(migration).toContain('warehouse_transfers_rpc_only_update');
+    expect(migration).toContain('warehouse_transfer_items_rpc_only_update');
   });
 });
