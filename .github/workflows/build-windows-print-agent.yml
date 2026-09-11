@@ -30,7 +30,9 @@ jobs:
           cache: npm
 
       - name: Install web dependencies including Windows native optionals
-        run: npm install --include=optional --no-audit --no-fund
+        run: |
+          npm install --include=optional --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund @rollup/rollup-win32-x64-msvc@4.63.0
 
       - name: Build web app
         run: npm run build
