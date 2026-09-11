@@ -299,8 +299,6 @@
     overflow-y: auto;
   }
 
-  [data-testid='user-menu-button'],
-  [data-testid='theme-toggle'],
   [data-testid='sign-out-button'] {
     display: none;
   }

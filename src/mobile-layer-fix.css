@@ -1,0 +1,35 @@
+@media (max-width: 1023px) {
+  [data-testid="app-sidebar"] {
+    z-index: 70 !important;
+  }
+
+  [data-testid="mobile-sidebar-backdrop"] {
+    z-index: 65 !important;
+  }
+}
+
+@media (max-width: 479px) {
+  [data-testid="app-header"] {
+    gap: 0.25rem !important;
+    padding-inline: 0.5rem !important;
+  }
+
+  [data-testid="top-navigation"],
+  [data-testid="branch-indicator"] {
+    display: none !important;
+  }
+
+  [data-testid="app-header"] > div:first-child {
+    gap: 0.25rem !important;
+    flex: 0 1 auto !important;
+  }
+
+  [data-testid="app-header"] > div:last-child {
+    gap: 0.125rem !important;
+    flex: 0 0 auto !important;
+  }
+
+  [data-testid="user-menu-button"] {
+    padding-inline-end: 0.375rem !important;
+  }
+}
