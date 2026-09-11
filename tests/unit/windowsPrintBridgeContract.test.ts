@@ -14,6 +14,7 @@ describe('Windows Electron print bridge contract', () => {
   it('routes receipt and kitchen work through a per-printer queue into Chromium printing, not PowerShell Out-Printer', () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), 'electron/main.cjs'), 'utf8');
     const silentPrintHandler = between(source, "ipcMain.handle('pos:print-silent'", "ipcMain.handle('pos:kick-drawer'");
+    const printOptions = between(source, 'function driverCompatiblePrintOptions', 'async function printOnPhysicalPrinter');
     const physicalPrint = between(source, 'async function printOnPhysicalPrinter', 'function createWindow');
 
     expect(silentPrintHandler).toContain('printerQueue.enqueue(printerName');
@@ -21,27 +22,30 @@ describe('Windows Electron print bridge contract', () => {
     expect(physicalPrint).toContain('textToPrintableHtml(options.text, options.paperWidthMm)');
     expect(physicalPrint).toContain('applyThermalLayout(options.html, options.paperWidthMm)');
     expect(physicalPrint).toContain('worker.webContents.print');
-    expect(physicalPrint).toContain('deviceName: printerName');
+    expect(physicalPrint).toContain('driverCompatiblePrintOptions(printerName, options)');
+    expect(printOptions).toContain('deviceName: printerName');
     expect(silentPrintHandler).not.toContain('Out-Printer');
     expect(physicalPrint).not.toContain('Out-Printer');
     expect(physicalPrint).not.toContain('powershell.exe');
   });
 
-  it('prints on explicit 58/80mm thermal geometry sized to rendered content with bounded waits', () => {
+  it('keeps 58/80mm document layout but lets the Windows driver own physical paper geometry', () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), 'electron/main.cjs'), 'utf8');
+    const printOptions = between(source, 'function driverCompatiblePrintOptions', 'async function printOnPhysicalPrinter');
     const physicalPrint = between(source, 'async function printOnPhysicalPrinter', 'function createWindow');
 
     expect(source).toContain('DEFAULT_THERMAL_WIDTH_MM = 80');
     expect(source).toContain('width === 58 ? 58 : DEFAULT_THERMAL_WIDTH_MM');
-    expect(source).toContain('@page { size: ${widthMm}mm auto; margin: 0; }');
-    expect(physicalPrint).toContain('measureThermalPageSize(worker, options.paperWidthMm)');
-    expect(source).toContain('document.body');
-    expect(source).toContain('scrollHeight');
+    expect(source).toContain('width: ${widthMm}mm !important');
+    expect(source).toContain('@page { margin: 0; }');
+    expect(source).not.toContain('@page { size: ${widthMm}mm auto; margin: 0; }');
+    expect(source).not.toContain('measureThermalPageSize');
+    expect(source).not.toContain('PRINT_MEASURE_TIMEOUT_MS');
+    expect(printOptions).not.toContain('pageSize');
+    expect(physicalPrint).not.toContain('pageSize');
     expect(physicalPrint).toContain('PRINT_LOAD_TIMEOUT_MS');
-    expect(physicalPrint).toContain('PRINT_MEASURE_TIMEOUT_MS');
     expect(physicalPrint).toContain('PRINT_CALLBACK_TIMEOUT_MS');
-    expect(physicalPrint).toContain('pageSize,');
-    expect(physicalPrint).toContain("margins: { marginType: 'none' }");
+    expect(printOptions).toContain("margins: { marginType: 'none' }");
     expect(source).not.toContain("pageSize: 'A4'");
     expect(source).not.toContain("pageSize: 'Letter'");
   });
