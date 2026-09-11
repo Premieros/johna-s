@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-10T19:20:00.000Z",
+  "generated_at": "2026-09-11T19:14:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {"name":"activate_subscription","params":["activate","billing_period","branch_id","plan_id"]},
@@ -111,6 +111,7 @@
     {"name":"update_branch","params":["address","branch_id","is_active","name","name_en","phone"]},
     {"name":"update_financial_visibility_settings","params":["historical_percent","recent_days"]},
     {"name":"update_order","params":["customer_id","discount_amount","discount_type","guest_count","items","notes","order_id","order_type","status","subtotal","table_id","tax_amount","total"]},
+    {"name":"update_purchase_invoice","params":["discount_amount","items","notes","paid_amount","payment_method","purchase_id","subtotal","supplier_id","tax_amount","total","warehouse_id"]},
     {"name":"update_purchase_order_status","params":["purchase_id","status"]},
     {"name":"update_purchase_request_status","params":["request_id","status"]},
     {"name":"update_rfq_status","params":["rfq_id","status"]},
