@@ -13,6 +13,7 @@ interface UseCartAwareAvailabilityInput {
   branchId: string;
   activeOrderId: string | null;
   cart: CartItem[];
+  refreshKey?: string;
 }
 
 export interface CartAwareAvailabilityResult {
@@ -23,7 +24,7 @@ export interface CartAwareAvailabilityResult {
   markMutationPending: () => void;
 }
 
-export function useCartAwareAvailability({ branchId, activeOrderId, cart }: UseCartAwareAvailabilityInput): CartAwareAvailabilityResult {
+export function useCartAwareAvailability({ branchId, activeOrderId, cart, refreshKey = '' }: UseCartAwareAvailabilityInput): CartAwareAvailabilityResult {
   const [map, setMap] = useState<Record<string, number> | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +121,7 @@ export function useCartAwareAvailability({ branchId, activeOrderId, cart }: UseC
     })();
 
     return () => { cancelled = true; };
-  }, [activeOrderId, branchId, cart, clear, publish]);
+  }, [activeOrderId, branchId, cart, clear, publish, refreshKey]);
 
   useEffect(() => () => resetCartAvailabilitySnapshot(''), []);
 
