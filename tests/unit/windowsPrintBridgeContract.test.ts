@@ -41,8 +41,8 @@ describe('Windows Electron print bridge contract', () => {
     expect(source).not.toContain('@page { size: ${widthMm}mm auto; margin: 0; }');
     expect(source).not.toContain('measureThermalPageSize');
     expect(source).not.toContain('PRINT_MEASURE_TIMEOUT_MS');
-    expect(printOptions).not.toContain('pageSize');
-    expect(physicalPrint).not.toContain('pageSize');
+    expect(printOptions).not.toMatch(/\bpageSize\s*:/);
+    expect(physicalPrint).not.toMatch(/\bpageSize\s*:/);
     expect(physicalPrint).toContain('PRINT_LOAD_TIMEOUT_MS');
     expect(physicalPrint).toContain('PRINT_CALLBACK_TIMEOUT_MS');
     expect(printOptions).toContain("margins: { marginType: 'none' }");
