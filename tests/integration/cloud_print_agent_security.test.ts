@@ -155,8 +155,12 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
         AND idx.relname = 'uq_cloud_print_active_receipt_sale'
     `);
     expect(index.rows).toHaveLength(1);
-    expect(index.rows[0].predicate).toMatch(/status\s*=\s*'failed'::text/);
-    expect(index.rows[0].predicate).toMatch(/attempts\s*<\s*5/);
+    const normalizedPredicate = index.rows[0].predicate
+      .replace(/[()]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    expect(normalizedPredicate).toContain("status = 'failed'::text");
+    expect(normalizedPredicate).toContain('attempts < 5');
 
     const rpc = await client.query<{ definition: string }>(`
       SELECT lower(pg_get_functiondef(p.oid)) AS definition
