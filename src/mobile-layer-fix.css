@@ -1,0 +1,9 @@
+@media (max-width: 1023px) {
+  [data-testid="app-sidebar"] {
+    z-index: 70 !important;
+  }
+
+  [data-testid="mobile-sidebar-backdrop"] {
+    z-index: 65 !important;
+  }
+}
