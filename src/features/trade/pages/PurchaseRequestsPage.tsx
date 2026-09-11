@@ -187,7 +187,7 @@ export function PurchaseRequestsPage() {
   return (
     <DesignSurface testId="purchase-requests-page">
       <DesignPageHeader title={t('purchaseRequests')} actions={
-        can('purchases.manage') && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4" /> {t('createRequest')}</Button>
+        can('procurement.request.create') && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4" /> {t('createRequest')}</Button>
       } />
       <DesignPanel testId="purchase-requests-search-panel">
         <DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="purchase-requests-search" />
