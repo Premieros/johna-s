@@ -1,0 +1,54 @@
+name: Build Windows Desktop
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'electron/**'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
+  VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'dummy_anon_key_for_ci_build' }}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install web dependencies
+        shell: pwsh
+        run: npm ci
+      - name: Verify Electron scripts parse
+        shell: pwsh
+        run: |
+          node --check electron/main.cjs
+          node --check electron/preload.cjs
+      - name: Build web fallback
+        shell: pwsh
+        run: npm run build
+      - name: Install desktop dependencies
+        shell: pwsh
+        run: npm install --prefix electron
+      - name: Build Windows installer and portable app
+        shell: pwsh
+        run: npm run --prefix electron build:win
+      - name: List release files
+        shell: pwsh
+        run: Get-ChildItem -Path electron/release -File | Select-Object Name,Length
+      - name: Upload Windows apps
+        uses: actions/upload-artifact@v4
+        with:
+          name: Premier-POS-Windows-v2
+          path: electron/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
