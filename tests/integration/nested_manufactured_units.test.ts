@@ -62,8 +62,8 @@ describe.skipIf(skip)('Nested manufactured units', () => {
       [rawId, branchId]
     );
     await client.query(
-      `SELECT public._raw_add($1, $2, 20, 4, 'NEST-RAW', NULL, NULL, 'opening', 'opening', NULL, 'NEST-RAW', $3)`,
-      [rawId, branchId, testUserId]
+      `SELECT public._raw_add($1, $2, $3, 20, 4, 'NEST-RAW', NULL, NULL, 'opening', 'opening', NULL, 'NEST-RAW', $4)`,
+      [rawId, branchId, warehouseId, testUserId]
     );
     await client.query(
       `INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, cost_price, is_active)
