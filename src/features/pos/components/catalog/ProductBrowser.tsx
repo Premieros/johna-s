@@ -19,6 +19,7 @@ interface ProductBrowserProps {
   categories: Category[];
   stockMap: Record<string, number>;
   sellableStock: Record<string, number>;
+  rawShortageOnly?: Record<string, boolean>;
   recipeMap: Record<string, ProductComponent[]>;
   search: string;
   selectedCategory: string;
@@ -34,7 +35,7 @@ interface ProductBrowserProps {
 
 const hasStockValue = (map: Record<string, number>, productId: string) => Object.prototype.hasOwnProperty.call(map, productId);
 
-export function ProductBrowser({ products, categories, stockMap, sellableStock, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export function ProductBrowser({ products, categories, stockMap, sellableStock, rawShortageOnly = {}, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -99,6 +100,8 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
   }, [branchId, hasBranch]);
 
   const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;
+  const isRawShortageOnly = (product: Product) =>
+    product.product_type !== 'manufactured' && rawShortageOnly[product.id] === true;
   const ensureSellable = (product: Product) => {
     if (cartChecking) {
       show(isAr ? 'جاري إعادة حساب المخزون للطلب الحالي.' : 'Rechecking inventory for the current order.', 'warning');
@@ -113,6 +116,9 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
     if (!hasStockValue(source, product.id)) {
       show(isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.', 'error');
       return false;
+    }
+    if (isRawShortageOnly(product)) {
+      return true;
     }
     if ((source[product.id] || 0) <= 0) {
       show(isAr ? 'المنتج غير متوفر بالمخزون.' : 'Product is out of stock.', 'error');
@@ -191,19 +197,21 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
               const stockKnown = hasStockValue(source, product.id);
               const stock = stockKnown ? source[product.id] : 0;
               const unavailable = stockKnown && stock <= 0;
+              const rawShortage = isRawShortageOnly(product);
+              const rawLow = rawShortage && stockKnown && stock <= 0;
               const unknownAvailability = !stockKnown;
               const blocked = unavailable || unknownAvailability || !canAddToCart;
               const cartAvailabilityError = !!cartError;
-              const interactionBlocked = blocked || cartChecking || cartAvailabilityError;
+              const gated = (!rawShortage && blocked) || cartChecking || cartAvailabilityError;
               const productLabel = isAr ? product.name : product.name_en || product.name;
               const categoryLabel = product.category_id ? categoryById[product.category_id] : '';
               const imageUrl = imageOverrides[product.id] || product.image_url;
               const uploading = uploadingProductId === product.id;
               return (
-                <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${interactionBlocked ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
-                  <button type="button" disabled={interactionBlocked} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${interactionBlocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+<article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
+                  <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${unavailable ? 'bg-ui-danger/90' : unknownAvailability || cartAvailabilityError || cartChecking ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{cartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : cartAvailabilityError || unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
+                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${rawLow || cartChecking || cartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : unavailable ? 'bg-ui-danger/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{cartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : cartAvailabilityError || unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : rawLow ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
                   </button>
                   {can('products.edit') && (
                     <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>
@@ -216,7 +224,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
                     {categoryLabel && <p className="mt-0.5 truncate text-[10px] font-medium text-ui-subtle">{categoryLabel}</p>}
                     <div className="mt-auto flex items-end justify-between gap-1 pt-2">
                       <span className="min-w-0 truncate text-sm font-black text-ui-accent">{formatCurrency(product.sale_price, currency, lang)}</span>
-                      {!interactionBlocked && <div className="flex shrink-0 items-center gap-1">{onConfigureProduct && <button type="button" onClick={(event) => { event.stopPropagation(); onConfigureProduct(product); }} title={isAr ? 'تخصيص الصنف' : 'Configure Item'} className="flex h-8 w-8 items-center justify-center rounded-lg border border-ui-border bg-ui-page-alt text-ui-muted transition hover:border-ui-primary hover:text-ui-accent"><SlidersHorizontal className="h-3.5 w-3.5" /></button>}<button type="button" aria-label={isAr ? 'إضافة' : 'Add'} onClick={(event) => { event.stopPropagation(); addProductDirectly(product); }} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ui-primary text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary/90 active:scale-95"><Plus className="h-4 w-4" /></button></div>}
+                      {!gated && <div className="flex shrink-0 items-center gap-1">{onConfigureProduct && <button type="button" onClick={(event) => { event.stopPropagation(); onConfigureProduct(product); }} title={isAr ? 'تخصيص الصنف' : 'Configure Item'} className="flex h-8 w-8 items-center justify-center rounded-lg border border-ui-border bg-ui-page-alt text-ui-muted transition hover:border-ui-primary hover:text-ui-accent"><SlidersHorizontal className="h-3.5 w-3.5" /></button>}<button type="button" aria-label={isAr ? 'إضافة' : 'Add'} onClick={(event) => { event.stopPropagation(); addProductDirectly(product); }} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ui-primary text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary/90 active:scale-95"><Plus className="h-4 w-4" /></button></div>}
                     </div>
                   </div>
                 </article>
