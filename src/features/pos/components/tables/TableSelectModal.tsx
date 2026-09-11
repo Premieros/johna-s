@@ -31,6 +31,7 @@ export function TableSelectModal({
     if (selectedAreaId && table.area_id !== selectedAreaId) return false;
     return true;
   });
+  const setupIncomplete = areas.length === 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ui-text/50 p-4 backdrop-blur-sm">
@@ -83,7 +84,19 @@ export function TableSelectModal({
 
         {/* Tables Grid */}
         <div className="flex-1 overflow-y-auto p-6">
-          {filteredTables.length === 0 ? (
+          {setupIncomplete ? (
+            <div data-testid="pos-tables-setup-incomplete" className="rounded-2xl border border-ui-warning/30 bg-ui-warning/5 px-5 py-10 text-center text-ui-muted">
+              <UtensilsCrossed className="mx-auto mb-3 h-10 w-10 text-ui-warning opacity-70" />
+              <p className="text-sm font-black text-ui-text">
+                {isAr ? 'إعداد الصالات غير مكتمل لهذا الفرع' : 'Dining-area setup is incomplete for this branch'}
+              </p>
+              <p className="mx-auto mt-2 max-w-md text-xs font-bold leading-5 text-ui-subtle">
+                {isAr
+                  ? 'يجب إعداد صالة واحدة على الأقل وربط الطاولات بها قبل استخدام طلبات الصالة. لم يتم إنشاء أو تعديل أي طاولات تلقائيًا.'
+                  : 'Create at least one dining area and assign tables to it before using dine-in orders. No tables were created or changed automatically.'}
+              </p>
+            </div>
+          ) : filteredTables.length === 0 ? (
             <div className="py-12 text-center text-ui-subtle">
               <UtensilsCrossed className="mx-auto mb-2 h-10 w-10 opacity-30" />
               <p className="text-xs font-bold">{t('noData')}</p>
