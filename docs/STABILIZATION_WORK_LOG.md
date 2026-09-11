@@ -4,14 +4,14 @@ Date: 2026-09-11
 Repository: `Premieros/johna-s`
 Working branch: `development/stabilization-phase-2`
 Production branch: `main` (read-only during stabilization)
-Production Supabase: `azzdesuowpdcoflmyezn` (no migration is applied during a stage before Full Verify is green)
+Production Supabase: `azzdesuowpdcoflmyezn`
 
 ## Execution protocol
 
 - `docs/CURRENT_WORK_PLAN.md` remains the Source of Truth.
 - Work proceeds one stage at a time.
 - Each stage is tracked as `IN PROGRESS`, `VERIFIED`, or `BLOCKED`.
-- Every stage records: what was done, verification/tests, remaining work, and evidence.
+- Every stage records what was done, verification/tests, remaining work, and evidence.
 - The next stage MUST NOT start until the user writes `تم` after the current stage report.
 - No direct writes to `main`, no force push, no weakening RLS/tests, no role-name authorization. Super Admin is the only implicit bypass.
 - Do not touch other repositories or databases.
@@ -20,7 +20,7 @@ Production Supabase: `azzdesuowpdcoflmyezn` (no migration is applied during a st
 
 Status: **VERIFIED**
 Route reference: `#/purchases/requests`
-Verified code/documentation head before this closure-only log commit: `fe81c38ac7508e5993541a61e87824dd036378f8`
+Verified code/documentation head before closure-only log commit: `fe81c38ac7508e5993541a61e87824dd036378f8`
 Verification workflow: **Verify main #1076 — Full Green**
 Draft PR: **#68 — remains unmerged**
 
@@ -37,35 +37,101 @@ Align Purchase Request creation with the canonical Permission-First contract wit
 | Approve / Reject transitions | Verify exact backend/approval contract before changing UI | `purchases.manage` in UI | intentionally deferred; not modified |
 | RFQ creation | `purchases.rfq` | `purchases.rfq` | unchanged |
 
-### Evidence reviewed
+### Stage 1 evidence
 
-- `src/features/trade/pages/PurchaseRequestsPage.tsx`: Stage 1 changes only the Create capability to `procurement.request.create`.
-- `src/lib/permissionDefs.ts`: canonical model explicitly contains `procurement.request.create`, and the application preset for `branch_manager` includes it.
-- `src/api/domains/procurement.ts`: frontend creation calls RPC `create_purchase_request`.
-- `supabase/migrations/075_procurement_workflow.sql`: legacy RPC gate used `purchases.manage`.
-- Later Permission-First migrations did not reconcile this RPC before Stage 1.
-- `tests/integration/purchase_request_permission_first.test.ts`: permanent regression coverage proves the canonical permission, rejects legacy `purchases.manage`-only creation, and preserves branch isolation.
-- `tests/integration/procurement_workflow.test.ts`: legacy fixture was corrected to synchronize the canonical create permission inside its transaction only; Runtime Authorization/RLS were not weakened.
+- `src/features/trade/pages/PurchaseRequestsPage.tsx`: Create capability aligned to `procurement.request.create`.
+- `src/lib/permissionDefs.ts`: canonical permission exists.
+- `src/api/domains/procurement.ts`: creation calls `create_purchase_request`.
+- Added permanent regression coverage for explicit create permission and branch isolation.
+- Legacy procurement fixture was corrected only inside its transaction; Runtime Authorization/RLS were not weakened.
+- Verify main #1076: **FULL GREEN**.
+- Production Supabase was not modified.
 
-### What was done
+### Remaining after Stage 1
 
-1. Stabilization branch was synced with verified `main` before Stage 1 changes.
-2. Added the Stage 1 work journal and one-stage execution gate.
-3. Added a regression-safe migration aligning `create_purchase_request` to `procurement.request.create`; no Production migration was run.
-4. Updated only the Purchase Request Create UI gate to `procurement.request.create`. Submit/Cancel/Approve/Reject were deliberately left unchanged pending their own backend-contract verification.
-5. Added permanent regression coverage proving:
-   - same-branch user with `procurement.request.create` can create;
-   - user with only legacy `purchases.manage` cannot create;
-   - cross-branch creation remains rejected;
-   - RPC definition contains the canonical permission and hardened search path.
-6. Opened Draft PR #68 for Stage 1 only; it remains unmerged.
-7. Verify #1073 exposed a stale legacy integration fixture: 375 tests passed / 7 failed, all seven cascading from the first Purchase Request creation failure. The new Stage 1 test itself passed 4/4.
-8. Root cause was documented: the old procurement workflow fixture created `branch_manager` users but did not synchronize the newly canonical create capability used by the app preset.
-9. Fixed only that fixture in commit `9e31fec3435686683c7dfcb99031a7c58ffb4f95`, inside BEGIN/ROLLBACK. No role-name authorization, no RLS weakening and no Production change were introduced.
-10. Verify #1076 on head `fe81c38ac7508e5993541a61e87824dd036378f8` completed Full Green.
-11. Production Supabase `azzdesuowpdcoflmyezn` has not been modified.
+- No Stage 1 code/test work remains.
+- PR #68 remains Draft/unmerged.
+- User wrote `تم`; transition to Root Stage B was authorized.
 
-### Verification/tests — final Stage 1 evidence
+## ROOT STAGE B — Inventory / Ledger / Availability
+
+Status: **VERIFIED**
+Start head: `c34a7803e559bdc1ab5f8d85546b0fa684c9f124`
+Verified code/test head: `4744e217c2e4b19a1ea5f75b1da3dd9cc90e2326`
+Verification workflow: **Verify main #1090 — FULL GREEN**
+Production `main` baseline during verification: `c462b2014671ed6a4cc003006c8ad87bf848cd21`
+Production Supabase writes: **NONE**
+
+### Goal
+Stabilize and prove the shared inventory contract:
+
+`setup -> receive -> transfer -> availability -> ledger`
+
+### Proven root cause
+
+The raw-material path was inconsistent with warehouse identity:
+
+1. `raw_material_inventory` represented only a branch aggregate.
+2. Raw FIFO batches did not carry an operational `warehouse_id` contract.
+3. Purchase/receipt records knew the warehouse, but raw `_raw_add` calls could discard it.
+4. `check_product_availability` read branch-wide raw stock, allowing one warehouse to satisfy another warehouse's availability.
+5. Same-branch raw-material warehouse transfers were explicitly rejected with `RAW_MATERIAL_SAME_BRANCH_WAREHOUSE_TRANSFER_UNSUPPORTED`.
+6. Legacy raw helper signatures could consume/add branch-wide stock without an explicit warehouse.
+7. Several old integration fixtures created opening raw stock without a warehouse, masking the branch-pooled behavior.
+
+### Fix implemented
+
+- Added warehouse identity to `raw_material_batches` and a warehouse-level raw stock projection.
+- Kept `raw_material_inventory` only as the branch aggregate compatibility summary; it is no longer the operational warehouse truth for availability/FIFO movement.
+- Added warehouse-aware `_raw_add` and `_raw_remove_fifo` contracts.
+- Purchase receipt raw posting now uses the purchase/receipt warehouse explicitly.
+- Direct `process_purchase` compatibility resolves the purchase warehouse and preserves raw UOM normalization before delegating to the warehouse-aware helper.
+- Product availability reads raw capacity from the requested warehouse only.
+- Same-branch raw transfers now debit the source warehouse and credit the destination warehouse exactly once.
+- Cross-branch transfer compatibility resolves explicit source/destination warehouses; no same-name or branch-wide stock fallback was introduced.
+- Legacy raw helper signatures now resolve a warehouse only from their authoritative business document (purchase, receipt, sale, transfer). If no warehouse can be resolved, they fail with `WAREHOUSE_REQUIRED` instead of falling back to branch stock.
+- Production raw consumption now passes `p_warehouse_id` directly into the warehouse-aware FIFO path.
+- Existing opening-stock/manufacturing fixtures were updated to identify their warehouse explicitly rather than relying on implicit branch stock.
+- Operational product composition remains based on `product_unit_links`; no live `product_components` fallback was introduced.
+
+### Files / migrations
+
+- `supabase/migrations/20260911150000_raw_material_warehouse_stage_b.sql`
+- `supabase/migrations/20260911151500_raw_material_warehouse_legacy_bridge.sql`
+- `tests/integration/raw_material_warehouse_cycle.test.ts`
+- `tests/integration/cross_branch_inventory_transfer.test.ts`
+- `tests/integration/auto_production_sale_availability.test.ts`
+- `tests/integration/phase2_production_variance.test.ts`
+- `tests/integration/nested_manufactured_units.test.ts`
+- `tests/integration/unit_inventory_hierarchy.test.ts`
+- `tests/integration/unit_production_sale_flow.test.ts`
+
+### Focused Stage B proof
+
+`raw_material_warehouse_cycle.test.ts` proves:
+
+- receive posts raw stock only to the selected warehouse;
+- another warehouse remains unchanged;
+- inventory ledger receipt row contains the receiving `warehouse_id`;
+- availability succeeds in the stocked warehouse and fails in the unstocked warehouse;
+- availability definition retains `product_unit_links` and a warehouse-filtered raw source;
+- same-branch raw transfer decreases source once and increases destination once;
+- transfer produces exactly one negative and one positive warehouse ledger movement;
+- re-approval is rejected and cannot duplicate stock/ledger;
+- forged cross-branch access is denied.
+
+Existing cross-branch, production, sale, UOM, RLS and inventory suites were also kept green after the warehouse contract was enforced.
+
+### CI investigation history
+
+- Verify #1081: application checks green; Fresh DB failed because the first migration used a brittle textual marker while patching `check_product_availability`.
+- Commit `dcd637b1e4397537db8fe4bb9cc9d9dbb57d1d80` replaced that brittle match with a normalized/regex-safe patch.
+- Verify #1082: Fresh DB + Schema green; three integration regressions exposed branch-pooled fixtures / direct purchase compatibility.
+- Added the legacy bridge migration and updated only fixtures that represented opening stock without warehouse identity.
+- Verify #1086: Fresh DB + Schema green; four production fixtures still seeded raw stock without a warehouse and were corrected to use their declared production warehouse.
+- Final code/test head `4744e217c2e4b19a1ea5f75b1da3dd9cc90e2326` passed Verify main #1090 Full Green.
+
+### Verification/tests — final Stage B evidence
 
 - Locked Supabase project identity: ✅
 - Frontend API contract: ✅
@@ -79,102 +145,19 @@ Align Purchase Request creation with the canonical Permission-First contract wit
 - DB identity: ✅
 - Explicit Permission-First CI role capabilities: ✅
 - Integration + Security/RLS regression suite: ✅
-- Purchase Request Permission-First regression test: ✅ 4/4
+- Focused raw receive/warehouse/availability/transfer/ledger/idempotency coverage: ✅
+- Cross-branch transfer coverage: ✅
+- Production / nested manufacturing / purchase UOM regression coverage: ✅
 - Browser Smoke / Playwright: ✅
-- Verify main #1076: **FULL GREEN**
+- Verify main #1090: **FULL GREEN**
 
-### Remaining after Stage 1
+### Stage B closure
 
-- **No Stage 1 code/test work remains.**
-- PR #68 stays Draft/unmerged.
-- No migration has been applied to Production.
-- User wrote `تم`; transition to Root Stage B is authorized.
-
-## ROOT STAGE B — Inventory / Ledger / Availability
-
-Status: **IN PROGRESS**
-Start head: `c34a7803e559bdc1ab5f8d85546b0fa684c9f124`
-Latest checkpoint head before this log update: `0439fa404b9bd3ae36e40624b6f461950985c30c`
-Production `main` baseline at latest refetch: `c462b2014671ed6a4cc003006c8ad87bf848cd21`
-Production Supabase writes: **NONE**
-
-### Goal
-Prove and stabilize the shared inventory contract before continuing to Purchases/POS:
-
-`setup -> receive -> transfer -> availability -> ledger`
-
-### Stage B scope
-
-1. Raw Materials + immutable unit contract.
-2. Manufactured Units / product composition.
-3. Warehouses + branch/warehouse identity.
-4. Purchase/receive posting into stock.
-5. Idempotent transfers between warehouses.
-6. Availability from the correct warehouse/BOM source.
-7. Ledger consistency for every movement.
-
-### Mandatory regression properties
-
-- Product itself has no raw-material UOM.
-- Raw-material unit is mandatory on create and immutable after creation.
-- No cross-branch stock fallback.
-- Transfer never creates/duplicates stock.
-- Receive/retry never duplicates stock or ledger posting.
-- Availability must reflect the correct warehouse/BOM contract.
-
-### What was done
-
-- User authorized transition from the verified Stage 1 by writing `تم`.
-- Current `main` and stabilization branch HEADs were re-fetched before Stage B documentation.
-- Stage B was opened only in the stabilization log; no Production migration, RLS change, or Production data write was performed.
-- Reviewed the active inventory API and transfer/security regression coverage, including:
-  - `src/api/domains/inventory.ts`
-  - `tests/integration/cross_branch_inventory_transfer.test.ts`
-  - `tests/integration/warehouse_transfer_branch_scope.test.ts`
-  - `tests/integration/warehouse_lifecycle_security.test.ts`
-- Confirmed that warehouse transfer creation/approval paths already contain explicit branch/warehouse access checks and separate permissions, and that product warehouse transfer tests exercise `warehouse_id`.
-- Confirmed that ambiguous destination identity / cross-branch transfer patterns have dedicated regression coverage and that re-approval/double-approval protection exists.
-- Identified an unresolved Stage B contract question in the raw-material path: current integration coverage observed during review proves `branch_id` isolation, but does not yet prove that raw-material stock identity, ledger writes, receive posting, and availability are consistently scoped by `branch_id + warehouse_id` end-to-end.
-- The old migration `supabase/migrations/003_inventory_v2.sql` was explicitly treated as legacy evidence only and is **not** being used as proof of the current schema.
-- No runtime fix has been applied yet because the current/latest schema and RPC contract still need to be traced before declaring a defect.
-
-### Current findings / risk
-
-| Area | Current evidence | Stage B status |
-| --- | --- | --- |
-| Product warehouse transfer | Tests explicitly use `warehouse_id` | covered, still needs full cycle verification |
-| Transfer branch isolation | Explicit source/destination branch checks and regression coverage exist | covered |
-| Transfer retry / re-approval | Double approval protection exists | covered |
-| Raw-material stock identity | Current reviewed tests prove branch isolation but not yet end-to-end warehouse identity | **UNRESOLVED** |
-| Purchase receive -> stock | Exact latest RPC/table/ledger path still needs tracing | **UNRESOLVED** |
-| Raw-material availability | Exact warehouse-aware source still needs tracing | **UNRESOLVED** |
-| Inventory ledger consistency | Exact receive/transfer side effects still need Fresh DB proof | **UNRESOLVED** |
-| Product operational composition | Must remain on `product_unit_links`; no live operational fallback to `product_components` is allowed without explicit contract evidence | requires verification |
-
-### Verification/tests
-
-- No Stage B Full Verify has been claimed.
-- No Stage B Fresh DB end-to-end inventory cycle has been completed yet.
-- Existing focused transfer/security tests were inspected as evidence only; Stage B remains `IN PROGRESS` until the complete receive/transfer/availability/ledger cycle is proven.
-
-### Remaining — exact next actions
-
-1. Refetch `main` and `development/stabilization-phase-2` HEADs before any write because parallel work may have advanced either branch.
-2. Re-read `docs/CURRENT_WORK_PLAN.md` and this log before changing code.
-3. Locate the **latest** schema/RPC definitions for:
-   - `raw_material_inventory` warehouse key and uniqueness;
-   - purchase receive/apply-to-stock;
-   - warehouse transfer create/approve/apply;
-   - inventory ledger / stock movement writes;
-   - raw-material and product availability calculations.
-4. Build the Stage B contract map:
-   `UI -> service/API/RPC -> tables/views -> permission -> RLS/branch+warehouse scope -> side effects -> tests`.
-5. Verify that `product_unit_links` is the only current operational product composition source in availability/stock paths; treat any live fallback to `product_components` as candidate drift unless proven legacy/migration-only.
-6. Add or strengthen focused integration tests that prove `branch_id + warehouse_id` correctness for raw-material receive, transfer, availability, and ledger behavior, including retry/idempotency.
-7. Fix only a proven root cause on `development/stabilization-phase-2`; do not edit `main`, do not weaken RLS/tests, and do not use role names for authorization.
-8. Run Fresh DB + focused integration/security/RLS tests, then Full Verify including Browser Smoke.
-9. Only after Full Green, update this log to `Status: VERIFIED` with exact commit SHA, Verify run number/test counts, and confirmation that Production remained unchanged.
-10. Stop after Stage B closure and wait for a **new** user `تم` before starting Root Stage C.
+- Root Stage B is **VERIFIED / CLOSED**.
+- No Production migration was applied.
+- Production Supabase `azzdesuowpdcoflmyezn` was not modified.
+- `main` was not directly modified.
+- Do not start Root Stage C until the user writes a **new** `تم` after this closure report.
 
 ## New-chat handoff checkpoint
 
@@ -184,10 +167,11 @@ Prove and stabilize the shared inventory contract before continuing to Purchases
 - Working branch: `development/stabilization-phase-2`
 - Source of Truth: `docs/CURRENT_WORK_PLAN.md`
 - Live log: `docs/STABILIZATION_WORK_LOG.md`
-- Stage 1: **VERIFIED / CLOSED** — do not reopen without regression evidence.
-- Root Stage B: **IN PROGRESS** — continue from the raw-material warehouse/ledger/availability contract investigation above.
-- Production writes during Stage B so far: **NONE**.
-- Do not start Root Stage C until Stage B is Full Green, logged as VERIFIED, and the user subsequently writes `تم`.
+- Stage 1: **VERIFIED / CLOSED**.
+- Root Stage B: **VERIFIED / CLOSED** at code/test head `4744e217c2e4b19a1ea5f75b1da3dd9cc90e2326`, Verify #1090 Full Green.
+- Production writes during Stage B: **NONE**.
+- PR #68 remains unmerged pending explicit merge action.
+- Do not start Root Stage C until the user writes a new `تم`.
 
 ## Deferred branch audit note
 
