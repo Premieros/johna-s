@@ -48,7 +48,8 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (!base.activeOrderId) {
       for (const item of base.cart) {
         const cachedStock = Number(input.stockMap[item.product.id] || 0);
-        if (cachedStock < item.quantity) {
+        const negativeEligible = input.rawShortageOnly?.[item.product.id] === true;
+        if (!negativeEligible && cachedStock < item.quantity) {
           show(
             isAr
               ? `${item.product.name}: المخزون المحلي غير كافٍ (${cachedStock})`
@@ -114,7 +115,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setOfflineCompleting(false);
     }
-  }, [base, input.activeShift?.id, input.branchId, input.stockMap, isAr, offlineCompleting, show]);
+  }, [base, input.activeShift?.id, input.branchId, input.stockMap, input.rawShortageOnly, isAr, offlineCompleting, show]);
 
   return {
     ...base,
