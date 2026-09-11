@@ -94,7 +94,8 @@ Align Purchase Request creation with the canonical Permission-First contract wit
 
 Status: **IN PROGRESS**
 Start head: `c34a7803e559bdc1ab5f8d85546b0fa684c9f124`
-Production `main` baseline at start: `c462b2014671ed6a4cc003006c8ad87bf848cd21`
+Latest checkpoint head before this log update: `0439fa404b9bd3ae36e40624b6f461950985c30c`
+Production `main` baseline at latest refetch: `c462b2014671ed6a4cc003006c8ad87bf848cd21`
 Production Supabase writes: **NONE**
 
 ### Goal
@@ -125,19 +126,68 @@ Prove and stabilize the shared inventory contract before continuing to Purchases
 
 - User authorized transition from the verified Stage 1 by writing `تم`.
 - Current `main` and stabilization branch HEADs were re-fetched before Stage B documentation.
-- Stage B was opened only in the stabilization log; no runtime code, migration, RLS, or Production data has been changed yet.
+- Stage B was opened only in the stabilization log; no Production migration, RLS change, or Production data write was performed.
+- Reviewed the active inventory API and transfer/security regression coverage, including:
+  - `src/api/domains/inventory.ts`
+  - `tests/integration/cross_branch_inventory_transfer.test.ts`
+  - `tests/integration/warehouse_transfer_branch_scope.test.ts`
+  - `tests/integration/warehouse_lifecycle_security.test.ts`
+- Confirmed that warehouse transfer creation/approval paths already contain explicit branch/warehouse access checks and separate permissions, and that product warehouse transfer tests exercise `warehouse_id`.
+- Confirmed that ambiguous destination identity / cross-branch transfer patterns have dedicated regression coverage and that re-approval/double-approval protection exists.
+- Identified an unresolved Stage B contract question in the raw-material path: current integration coverage observed during review proves `branch_id` isolation, but does not yet prove that raw-material stock identity, ledger writes, receive posting, and availability are consistently scoped by `branch_id + warehouse_id` end-to-end.
+- The old migration `supabase/migrations/003_inventory_v2.sql` was explicitly treated as legacy evidence only and is **not** being used as proof of the current schema.
+- No runtime fix has been applied yet because the current/latest schema and RPC contract still need to be traced before declaring a defect.
+
+### Current findings / risk
+
+| Area | Current evidence | Stage B status |
+| --- | --- | --- |
+| Product warehouse transfer | Tests explicitly use `warehouse_id` | covered, still needs full cycle verification |
+| Transfer branch isolation | Explicit source/destination branch checks and regression coverage exist | covered |
+| Transfer retry / re-approval | Double approval protection exists | covered |
+| Raw-material stock identity | Current reviewed tests prove branch isolation but not yet end-to-end warehouse identity | **UNRESOLVED** |
+| Purchase receive -> stock | Exact latest RPC/table/ledger path still needs tracing | **UNRESOLVED** |
+| Raw-material availability | Exact warehouse-aware source still needs tracing | **UNRESOLVED** |
+| Inventory ledger consistency | Exact receive/transfer side effects still need Fresh DB proof | **UNRESOLVED** |
+| Product operational composition | Must remain on `product_unit_links`; no live operational fallback to `product_components` is allowed without explicit contract evidence | requires verification |
 
 ### Verification/tests
 
-- Not yet executed for Stage B.
+- No Stage B Full Verify has been claimed.
+- No Stage B Fresh DB end-to-end inventory cycle has been completed yet.
+- Existing focused transfer/security tests were inspected as evidence only; Stage B remains `IN PROGRESS` until the complete receive/transfer/availability/ledger cycle is proven.
 
-### Remaining
+### Remaining — exact next actions
 
-- Build the Stage B contract map from actual RPC/service/table/test paths.
-- Run focused Fresh DB regression tests for receive/transfer/availability/ledger.
-- Fix only proven root-cause deviations.
-- Run Full Verify and record exact evidence.
-- Do not start Root Stage C until Stage B is VERIFIED and the user writes `تم` after the Stage B closure report.
+1. Refetch `main` and `development/stabilization-phase-2` HEADs before any write because parallel work may have advanced either branch.
+2. Re-read `docs/CURRENT_WORK_PLAN.md` and this log before changing code.
+3. Locate the **latest** schema/RPC definitions for:
+   - `raw_material_inventory` warehouse key and uniqueness;
+   - purchase receive/apply-to-stock;
+   - warehouse transfer create/approve/apply;
+   - inventory ledger / stock movement writes;
+   - raw-material and product availability calculations.
+4. Build the Stage B contract map:
+   `UI -> service/API/RPC -> tables/views -> permission -> RLS/branch+warehouse scope -> side effects -> tests`.
+5. Verify that `product_unit_links` is the only current operational product composition source in availability/stock paths; treat any live fallback to `product_components` as candidate drift unless proven legacy/migration-only.
+6. Add or strengthen focused integration tests that prove `branch_id + warehouse_id` correctness for raw-material receive, transfer, availability, and ledger behavior, including retry/idempotency.
+7. Fix only a proven root cause on `development/stabilization-phase-2`; do not edit `main`, do not weaken RLS/tests, and do not use role names for authorization.
+8. Run Fresh DB + focused integration/security/RLS tests, then Full Verify including Browser Smoke.
+9. Only after Full Green, update this log to `Status: VERIFIED` with exact commit SHA, Verify run number/test counts, and confirmation that Production remained unchanged.
+10. Stop after Stage B closure and wait for a **new** user `تم` before starting Root Stage C.
+
+## New-chat handoff checkpoint
+
+- Repository: `Premieros/johna-s`
+- Production Supabase ONLY: `azzdesuowpdcoflmyezn`
+- Production branch: `main`
+- Working branch: `development/stabilization-phase-2`
+- Source of Truth: `docs/CURRENT_WORK_PLAN.md`
+- Live log: `docs/STABILIZATION_WORK_LOG.md`
+- Stage 1: **VERIFIED / CLOSED** — do not reopen without regression evidence.
+- Root Stage B: **IN PROGRESS** — continue from the raw-material warehouse/ledger/availability contract investigation above.
+- Production writes during Stage B so far: **NONE**.
+- Do not start Root Stage C until Stage B is Full Green, logged as VERIFIED, and the user subsequently writes `تم`.
 
 ## Deferred branch audit note
 
