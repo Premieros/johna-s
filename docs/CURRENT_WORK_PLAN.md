@@ -5,6 +5,8 @@
 
 آخر تحديث: **2026-09-11 — Africa/Cairo — Accelerated Dependency-First Stabilization**
 
+> إضافة داخل مسار Root Stage B: **Negative Raw-Material Inventory (sell-through allowance)** قيد الإغلاق — migration `20260911160000_negative_raw_material_inventory.sql` + عقود واختبارات + واجهة POS؛ سجل التنفيذ في `docs/STABILIZATION_WORK_LOG.md`.
+
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
 - Repository الوحيد: `Premieros/johna-s`

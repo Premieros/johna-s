@@ -72,6 +72,7 @@ export function PosWorkspacePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [diningAreas, setDiningAreas] = useState<DiningArea[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
+  const [rawShortageMap, setRawShortageMap] = useState<Record<string, boolean>>({});
   const [recipeMap, setRecipeMap] = useState<Record<string, ProductComponent[]>>({});
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -128,6 +129,7 @@ export function PosWorkspacePage() {
   const loadStock = useCallback(async (branchId: string) => {
     if (!branchId) {
       setStockMap({});
+      setRawShortageMap({});
       return;
     }
     const { data: warehouses } = await supabase
@@ -141,6 +143,7 @@ export function PosWorkspacePage() {
     const warehouseId = ((warehouses || []) as { id: string }[])[0]?.id || null;
     if (!warehouseId) {
       setStockMap({});
+      setRawShortageMap({});
       return;
     }
     const { data, error } = await supabase.rpc('get_pos_product_availability', {
@@ -150,13 +153,17 @@ export function PosWorkspacePage() {
     });
     if (error) {
       setStockMap({});
+      setRawShortageMap({});
       return;
     }
     const map: Record<string, number> = {};
-    for (const row of (data || []) as { product_id: string; available_quantity: number | string }[]) {
+    const rawShortage: Record<string, boolean> = {};
+    for (const row of (data || []) as { product_id: string; available_quantity: number | string; raw_shortage_only?: boolean }[]) {
       map[row.product_id] = Number(row.available_quantity) || 0;
+      if (row.raw_shortage_only) rawShortage[row.product_id] = true;
     }
     setStockMap(map);
+    setRawShortageMap(rawShortage);
   }, []);
 
   const handleInventoryChanged = useCallback(() => {
@@ -174,6 +181,7 @@ export function PosWorkspacePage() {
     activeShift,
     products,
     stockMap,
+    rawShortageOnly: rawShortageMap,
     onInventoryChanged: handleInventoryChanged,
   });
   const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;
@@ -841,6 +849,7 @@ export function PosWorkspacePage() {
               categories={categories}
               stockMap={displayStockMap}
               sellableStock={displaySellableStock}
+              rawShortageOnly={rawShortageMap}
               recipeMap={recipeMap}
               search={search}
               selectedCategory={selectedCategory}
