@@ -45,7 +45,7 @@ describe('catalog dead wrapper usage contract (PR3 6C)', () => {
       const callers = sourceFiles
         .filter((file) => file !== catalogApiPath)
         .filter((file) => readFileSync(file, 'utf8').includes(wrapper))
-        .map((file) => file.slice(repoRoot.length + 1).replaceAll('\\', '/'));
+        .map((file) => file.slice(repoRoot.length + 1).replace(/\\/g, '/'));
 
       expect(callers, `${wrapper} unexpectedly gained a source caller`).toEqual([]);
     }
