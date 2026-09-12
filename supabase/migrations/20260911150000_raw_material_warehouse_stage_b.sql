@@ -135,8 +135,15 @@ BEGIN
     v_new,
     'i'
   );
-  IF v_patched = v_def THEN RAISE EXCEPTION 'check_product_availability raw marker not found'; END IF;
-  EXECUTE v_patched;
+  IF v_patched = v_def THEN
+    IF v_def ~* 'raw_material_batches[[:space:]]+b' AND v_def ~* 'b\.warehouse_id[[:space:]]*=[[:space:]]*p_warehouse_id' THEN
+      NULL; -- A later availability migration has already installed this source.
+    ELSE
+      RAISE EXCEPTION 'check_product_availability raw marker not found';
+    END IF;
+  ELSE
+    EXECUTE v_patched;
+  END IF;
 END $patch$;
 
 -- Allow same-branch raw transfer identity; destination remains explicit for cross-branch.
