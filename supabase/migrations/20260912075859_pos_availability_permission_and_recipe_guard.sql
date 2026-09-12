@@ -55,7 +55,11 @@ END;
 $function$;
 
 DROP TRIGGER IF EXISTS trg_validate_recipe_item_branch ON public.recipe_items;
-CREATE TRIGGER trg_validate_recipe_item_branch
+DROP TRIGGER IF EXISTS trg_00_validate_recipe_item_branch ON public.recipe_items;
+-- PostgreSQL fires same-kind triggers by name. Keep the invariant guard first
+-- so no later compatibility trigger can silently skip an invalid row before
+-- this validation runs.
+CREATE TRIGGER trg_00_validate_recipe_item_branch
 BEFORE INSERT OR UPDATE ON public.recipe_items
 FOR EACH ROW EXECUTE FUNCTION public.validate_recipe_item_branch_match();
 

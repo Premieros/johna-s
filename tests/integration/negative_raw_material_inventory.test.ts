@@ -520,7 +520,7 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
        CROSS JOIN public.recipes r
        CROSS JOIN public.raw_materials rm
        WHERE t.tgrelid='public.recipe_items'::regclass
-         AND t.tgname='trg_validate_recipe_item_branch'
+         AND t.tgname='trg_00_validate_recipe_item_branch'
          AND r.id=$1 AND rm.id=$2`,
       [recipeBad, rawBX],
     );
@@ -546,13 +546,13 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     // Simulate a legacy corrupt row that predates the write-time guard. The
     // read contract must still return a precise blocked row, never omit it or
     // classify it as ordinary negative-raw sell-through.
-    await client.query('ALTER TABLE public.recipe_items DISABLE TRIGGER trg_validate_recipe_item_branch');
+    await client.query('ALTER TABLE public.recipe_items DISABLE TRIGGER trg_00_validate_recipe_item_branch');
     await client.query(
       `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
        VALUES($1,$2,1,0)`,
       [recipeBad, rawBX],
     );
-    await client.query('ALTER TABLE public.recipe_items ENABLE TRIGGER trg_validate_recipe_item_branch');
+    await client.query('ALTER TABLE public.recipe_items ENABLE TRIGGER trg_00_validate_recipe_item_branch');
 
     const material = await q<{ branch_id: string }>(
       `SELECT branch_id FROM public.raw_materials WHERE id=$1`,
