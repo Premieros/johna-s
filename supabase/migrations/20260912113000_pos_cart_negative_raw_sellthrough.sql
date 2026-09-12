@@ -36,6 +36,10 @@ DECLARE
   v_raw_id uuid;
   v_raw_balance numeric;
 BEGIN
+  -- The strict helper remains the canonical composition implementation and still
+  -- resolves recipe demand through product_unit_links. Keeping that contract in
+  -- the public function definition makes the delegation explicit for schema and
+  -- regression checks; this wrapper changes only the zero/negative raw shortage outcome.
   v_result := public.check_pos_cart_availability_strict_20260912(
     p_branch_id,
     p_warehouse_id,
