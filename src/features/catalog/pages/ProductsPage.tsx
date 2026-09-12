@@ -194,24 +194,14 @@ export function ProductsPage() {
     }
 
     if (editing) {
-      const { data: existingLinks, error: existingLinksError } = await supabase.from('product_unit_links').select('unit_id').eq('product_id', pid);
-      if (existingLinksError) { show(existingLinksError.message, 'error'); return; }
-      const existingIds = new Set(((existingLinks || []) as { unit_id: string }[]).map((row) => row.unit_id));
-      const desiredLinks = form.product_type === 'manufactured' ? linkedInventoryUnits : [];
-      const desiredIds = new Set(desiredLinks.map((row) => row.unit_id));
-      const removedIds = [...existingIds].filter((unitId) => !desiredIds.has(unitId));
-      if (removedIds.length > 0) {
-        const { error: linkDeleteError } = await supabase.from('product_unit_links').delete().eq('product_id', pid).in('unit_id', removedIds);
-        if (linkDeleteError) { show(linkDeleteError.message, 'error'); return; }
-      }
-      for (const row of desiredLinks) {
-        if (existingIds.has(row.unit_id)) {
-          const { error: linkUpdateError } = await supabase.from('product_unit_links').update({ quantity: row.quantity }).eq('product_id', pid).eq('unit_id', row.unit_id);
-          if (linkUpdateError) { show(linkUpdateError.message, 'error'); return; }
-        } else {
-          const { error: linkInsertError } = await supabase.from('product_unit_links').insert({ product_id: pid, unit_id: row.unit_id, quantity: row.quantity });
-          if (linkInsertError) { show(linkInsertError.message, 'error'); return; }
-        }
+      const desiredLinks = form.product_type === 'manufactured'
+        ? linkedInventoryUnits.map(({ unit_id, quantity }) => ({ unit_id, quantity }))
+        : [];
+      try {
+        await api.catalog.setProductUnitLinks(pid, desiredLinks);
+      } catch (linkError) {
+        show(linkError instanceof Error ? linkError.message : String(linkError), 'error');
+        return;
       }
     }
 
