@@ -18,6 +18,8 @@ describe('purchase invoice edit and inline raw-material contract', () => {
     expect(migration).toContain('RAISE EXCEPTION USING');
     expect(migration).toContain("p_reference_type = 'purchase_return'");
     expect(migration).toContain('SELECT p.warehouse_id INTO v_warehouse_id');
+    expect(migration).toContain('v_norm := public._normalize_raw_purchase_uom(');
+    expect(migration).toContain("v_qty := (v_norm->>'stock_quantity')::numeric");
   });
 
   it('keeps branch immutable and checks corrected warehouse ownership', () => {

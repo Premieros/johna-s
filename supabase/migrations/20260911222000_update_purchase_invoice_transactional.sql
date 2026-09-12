@@ -24,6 +24,10 @@ SET search_path = public, pg_temp
 AS $bridge$
 DECLARE
   v_warehouse_id uuid;
+  v_qty numeric := p_qty;
+  v_purchase_unit text;
+  v_purchase_cost numeric;
+  v_norm jsonb;
 BEGIN
   IF p_reference_type = 'warehouse_transfer' AND p_reference_id IS NOT NULL THEN
     SELECT wt.from_warehouse_id INTO v_warehouse_id
@@ -40,6 +44,27 @@ BEGIN
     SELECT p.warehouse_id INTO v_warehouse_id
     FROM public.purchases p
     WHERE p.id = p_reference_id AND p.branch_id = p_branch_id;
+
+    -- purchase_items retain the invoice UOM (for example kg), while raw stock
+    -- and its FIFO batches use the material's base UOM (for example g).
+    SELECT pi.unit_name, pi.unit_cost
+      INTO v_purchase_unit, v_purchase_cost
+    FROM public.purchase_items pi
+    WHERE pi.purchase_id = p_reference_id
+      AND pi.raw_material_id = p_raw_material_id
+    ORDER BY pi.created_at DESC NULLS LAST, pi.id DESC
+    LIMIT 1;
+
+    IF FOUND THEN
+      v_norm := public._normalize_raw_purchase_uom(
+        p_raw_material_id,
+        p_qty,
+        COALESCE(v_purchase_cost, 0),
+        v_purchase_unit
+      );
+      IF COALESCE((v_norm->>'success')::boolean, false) IS NOT TRUE THEN RETURN v_norm; END IF;
+      v_qty := (v_norm->>'stock_quantity')::numeric;
+    END IF;
   END IF;
 
   IF v_warehouse_id IS NULL THEN
@@ -47,7 +72,7 @@ BEGIN
   END IF;
 
   RETURN public._raw_remove_fifo(
-    p_raw_material_id, p_branch_id, v_warehouse_id, p_qty,
+    p_raw_material_id, p_branch_id, v_warehouse_id, v_qty,
     p_entry_type, p_reference_type, p_reference_id, p_reference_number, p_created_by
   );
 END;
