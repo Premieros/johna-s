@@ -110,6 +110,14 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
     ? (isAr ? 'خامة الوصفة خارج الفرع' : 'Recipe material belongs to another branch')
     : (isAr ? `خطأ إعداد المخزون: ${code}` : `Inventory configuration error: ${code}`);
   const ensureSellable = (product: Product) => {
+    const availabilityError = availabilityErrors[product.id];
+    if (availabilityError) {
+      show(availabilityErrorLabel(availabilityError), 'error');
+      return false;
+    }
+    if (isRawShortageOnly(product)) {
+      return true;
+    }
     if (cartChecking) {
       show(isAr ? 'جاري إعادة حساب المخزون للطلب الحالي.' : 'Rechecking inventory for the current order.', 'warning');
       return false;
@@ -123,14 +131,6 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
     if (!hasStockValue(source, product.id)) {
       show(isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.', 'error');
       return false;
-    }
-    const availabilityError = availabilityErrors[product.id];
-    if (availabilityError) {
-      show(availabilityErrorLabel(availabilityError), 'error');
-      return false;
-    }
-    if (isRawShortageOnly(product)) {
-      return true;
     }
     if ((source[product.id] || 0) <= 0) {
       show(isAr ? 'المنتج غير متوفر بالمخزون.' : 'Product is out of stock.', 'error');
@@ -183,7 +183,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
         )}
         {cartError && (
           <div className="mb-3 rounded-xl border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-[11px] font-bold text-ui-danger">
-            {isAr ? 'تعذر التحقق من مخزون مكونات الطلب. الإضافة متوقفة مؤقتًا.' : 'Could not verify current-order component inventory. Adding items is temporarily blocked.'}
+            {isAr ? 'تعذر التحقق من بعض مكونات الطلب. الأصناف ذات نقص الخام فقط تظل متاحة للبيع.' : 'Some current-order component inventory could not be verified. Raw-shortage-only items remain sellable.'}
           </div>
         )}
         <div className="flex gap-2">
@@ -215,7 +215,11 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
               const unknownAvailability = !stockKnown;
               const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;
               const cartAvailabilityError = !!cartError;
-              const gated = (!rawShortage && blocked) || cartChecking || cartAvailabilityError;
+              const productCartChecking = cartChecking && !rawShortage;
+              const productCartAvailabilityError = cartAvailabilityError && !rawShortage;
+              const gated = rawShortage
+                ? (!!availabilityError || !canAddToCart)
+                : blocked || productCartChecking || productCartAvailabilityError;
               const productLabel = isAr ? product.name : product.name_en || product.name;
               const categoryLabel = product.category_id ? categoryById[product.category_id] : '';
               const imageUrl = imageOverrides[product.id] || product.image_url;
@@ -224,7 +228,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${availabilityError || unavailable ? 'bg-ui-danger/90' : rawLow || cartChecking || cartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{cartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : cartAvailabilityError || unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : availabilityError ? availabilityErrorLabel(availabilityError) : rawLow ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
+                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${availabilityError || (!rawShortage && unavailable) ? 'bg-ui-danger/90' : rawLow || productCartChecking || productCartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{productCartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : productCartAvailabilityError || (!rawShortage && unknownAvailability) ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : availabilityError ? availabilityErrorLabel(availabilityError) : rawLow || rawShortage ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
                   </button>
                   {can('products.edit') && (
                     <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>
