@@ -90,12 +90,34 @@ export const catalog = {
   },
 
   async setProductUnitLinks(product_id: string, links: { unit_id: string; quantity: number }[]) {
-    const { error: delErr } = await supabase.from('product_unit_links').delete().eq('product_id', product_id);
-    if (delErr) throw delErr;
-    if (links.length === 0) return;
-    const rows = links.map(l => ({ product_id, unit_id: l.unit_id, quantity: l.quantity }));
-    const { error } = await supabase.from('product_unit_links').insert(rows);
-    if (error) throw error;
+    const { data: existingLinks, error: existingLinksError } = await supabase
+      .from('product_unit_links')
+      .select('unit_id')
+      .eq('product_id', product_id);
+    if (existingLinksError) throw existingLinksError;
+
+    const existingIds = new Set(((existingLinks || []) as { unit_id: string }[]).map((row) => row.unit_id));
+    const desiredIds = new Set(links.map((row) => row.unit_id));
+    const removedIds = [...existingIds].filter((unitId) => !desiredIds.has(unitId));
+
+    if (removedIds.length > 0) {
+      const { error } = await supabase.from('product_unit_links').delete().eq('product_id', product_id).in('unit_id', removedIds);
+      if (error) throw error;
+    }
+
+    for (const row of links) {
+      if (existingIds.has(row.unit_id)) {
+        const { error } = await supabase
+          .from('product_unit_links')
+          .update({ quantity: row.quantity })
+          .eq('product_id', product_id)
+          .eq('unit_id', row.unit_id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('product_unit_links').insert({ product_id, unit_id: row.unit_id, quantity: row.quantity });
+        if (error) throw error;
+      }
+    }
   },
 
   async getInventoryUnitRecipes(unit_id: string) {

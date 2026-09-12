@@ -3,14 +3,16 @@
 > **هذا هو السجل الحي الوحيد للمشروع.**
 > أي نموذج أو مطور يبدأ من هذا الملف ثم يجلب HEAD الحالي لـ`main` والفرع/PR المستهدف قبل أي تعديل، لأن نماذج أخرى قد تعمل بالتوازي.
 
-آخر تحديث: **2026-09-12 — Backend Simplification Program (PR 1 ✅ + PR 2 ✅ مدمجان / PR 3 Catalog في مساره)**
+آخر تحديث: **2026-09-12 — Backend Simplification Program (PR 1 ✅ + PR 2 ✅ + Catalog 6A ✅ مغلقة / 6B فعالة)**
 
 > **برنامج التبسيط النشط الحالي:** الحفاظ على كل Feature ظاهرة للمستخدم وهوية المشروع، وتبسيط البنية الخلفية فقط — إزالة الازدواج الداخلي، المسارات الميتة ببديل مثبت، والـ layers التاريخية، دون حذف أي Feature مستخدمة ودون فقد بيانات Production.
 > **خريطة التصنيف الكاملة**: `docs/SIMPLIFICATION_MAP.md` (مخرَج PR 1 — جرد + تصنيف KEEP/MERGE/HIDE/LEGACY/REMOVE-LATER).
-> ترتيب التنفيذ: **PR1** Map+Audit ✅ **مدمج** → **PR2** Inventory contracts ✅ **مدمج** → **PR3** Catalog (فعالة) → **PR4** Purchases → **PR5** Sales/POS/Kitchen → **PR6** Finance/Reports → **PR7** Legacy cleanup المؤكد.
-> **PR 2:** `docs/INVENTORY_CONTRACTS.md` — عقود المخزون/التوفر canonical (توثيقي فقط؛ مُدمج). **PR 3:** `docs/CATALOG_CONTRACTS.md` — عقد إنشاء واحد (نطاق Catalog فقط). أي تغيير سلوك في PR 3 يَنفذ بموافقة صريحة منفصلة.
-> الفرع النشط: `development/catalog-simplification`. الـ migrations تضاف **forward-only** ولا تُعدَّل المطبَّقة؛ أي حذف بعد إثبات عدم الاستخدام و Regression Green.
+> ترتيب التنفيذ: **PR1** Map+Audit ✅ **مدمج** → **PR2** Inventory contracts ✅ **مدمج** → **PR3** Catalog: 6A ✅ ثم 6B 🔄 ثم 6C ثم 6D → **PR4** Purchases → **PR5** Sales/POS/Kitchen → **PR6** Finance/Reports → **PR7** Legacy cleanup المؤكد.
+> **PR 2:** `docs/INVENTORY_CONTRACTS.md` — عقود المخزون/التوفر canonical (توثيقي فقط؛ مُدمج). **PR 3:** `docs/CATALOG_CONTRACTS.md` — عقد إنشاء واحد (نطاق Catalog فقط).
+> الفرع النشط: `development/catalog-6b-unit-links`، والـPR النشط: **#92**. الـ migrations تضاف **forward-only** ولا تُعدَّل المطبَّقة؛ أي حذف بعد إثبات عدم الاستخدام و Regression Green.
 > سجل التنفيذ التفصيلي: `docs/STABILIZATION_WORK_LOG.md`.
+
+> **DATA PRESERVATION LOCK — إلزامي:** البيانات الحالية، تهيئة المستخدم، وأي نموذج عامل موجود لا تُمس ولا تُصفّر ولا تُعاد كتابتها أو ترحيلها كجزء من refactor. قبل كل write يجب جلب آخر `main` وآخر فرع/PR وفهم أي تعديل أحدث. عند الحاجة لتغيير مسار كتابة قائم، نحافظ على نفس semantics المثبتة أولًا، ونضيف Regression قبل الدمج.
 
 > إضافة داخل مسار Root Stage B: **Negative Raw-Material Inventory (sell-through allowance)** قيد الإغلاق — migration `20260911160000_negative_raw_material_inventory.sql` + عقود واختبارات + واجهة POS؛ سجل التنفيذ في `docs/STABILIZATION_WORK_LOG.md`.
 
@@ -20,7 +22,7 @@
 - Production Supabase الوحيد: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Published site: `https://premieros.github.io/johna-s/`
-- أي مشروع/مستودع آخر مثل `55` / `pos.v2` / `v4` / ZIP خارجي = **READ-ONLY REFERENCE ONLY**.
+- ممنوع لمس أي مشروع/مستودع آخر خارج `Premieros/johna-s` أثناء هذا المسار.
 - ممنوع استخدام Supabase `scpovyrqmsbiduanykod` لهذا المشروع.
 - ممنوع تعديل `main` مباشرة أو Force Push.
 - ممنوع تشغيل Production migration قبل Full Verify Green وقرار نشر صريح.
@@ -28,15 +30,21 @@
 - Super Admin فقط implicit bypass.
 - كل الأدوار الأخرى Labels فقط؛ Authorization = Permission-First + branch/RLS.
 - قبل أي write: اجلب HEAD الحالي لـ`main` والفرع/PR المستهدف وافحص أي commits أحدث.
+- لا تمسح أو تعيد إنشاء بيانات مستخدم/إعدادات/نماذج عاملة لتسهيل refactor أو الاختبار.
 - عند الدمج استخدم expected SHA guard متى أمكن.
 
 ## 2) Baseline الحالي
 
-- latest verified `main` عند إعادة ترتيب الخطة: `c462b2014671ed6a4cc003006c8ad87bf848cd21`.
-- فرع التثبيت الحالي بعد إغلاق Stage 1: `development/stabilization-phase-2`.
-- Stage 1 — Purchase Requests Permission Stabilization: **VERIFIED / Full Green** على Verify #1076 قبل تحديث هذه الخطة.
-- PR #68 ما زال غير مدمج وقت إعادة ترتيب الخطة.
-- Production Supabase لم تُطبق عليها migration بسبب Stage 1.
+- latest verified `main`: `934d26829c2644696152c21a52d83ca449a18c00`.
+- 6A أُغلقت بالكامل:
+  - PR #88 مدمج.
+  - Production migration المعتمدة صراحة تم تطبيقها على `azzdesuowpdcoflmyezn` فقط وسُجلت باسم `20260912181145_catalog_create_contract`.
+  - Regression مولد API contract أُصلح في PR #90.
+  - Deploy #618: build + Production API parity + GitHub Pages ✅.
+  - Verify #1213: Full Green ✅.
+- العمل النشط الآن: **6B فقط** على `development/catalog-6b-unit-links` / PR #92.
+- 6B لا يحتاج SQL أو migration أو Production write؛ هدفه توحيد كتابة `product_unit_links` عبر `api.catalog.setProductUnitLinks` مع الحفاظ على نفس diff semantics للنموذج العامل.
+- 6C و6D لم يبدأ تنفيذهما بعد.
 - `main` غير محمي حاليًا؛ يبقى Governance Risk ويعالج دون تعطيل المسار الوظيفي الحرج.
 - لا تفترض أن أي SHA أعلاه ما زال الأحدث لاحقًا؛ fetch إلزامي قبل كل كتابة/دمج.
 
@@ -95,6 +103,13 @@ PR واحد لا يجمع نطاقات غير مترابطة، لكن يمكن �
 - network/offline ambiguity لا تتحول إلى sale/payment success.
 - غياب/فشل Print Agent لا يسجل physical print success.
 - retry لا يكرر stock consumption أو payment أو ledger posting.
+
+### 4.7 حماية البيانات والنموذج العامل
+
+- refactor لا يبرر delete-all أو reset أو re-seed لبيانات قائمة.
+- إذا كان هناك مسار قائم يعمل لمستخدم حقيقي، يُحفظ سلوكه أولًا ثم يُنقل خلف عقد موحد.
+- أي تغيير semantics أو migration للبيانات يحتاج سببًا مثبتًا ونطاقًا مستقلاً وموافقة مناسبة.
+- الاختبارات تستخدم Fresh/Test DB؛ لا تُستخدم Production كمساحة اختبار.
 
 ## 5) ROOT STAGE A — Identity / Permissions / Branch / RLS
 
@@ -328,6 +343,7 @@ Browser/mobile smoke + offline/reconciliation regression + printing truthfulness
 - Printer management لا يظهر إلا لصاحب صلاحية الإعدادات المناسبة.
 - Hold/Resume، split، merge/transfer، print once + controlled reprint.
 - لا network/offline ambiguity تتحول إلى sale/payment success وهمي.
+- البيانات الحالية/تهيئة المستخدم/النموذج العامل لا تُمس لمجرد refactor؛ أي تغيير بيانات يكون مستقلاً ومثبتًا ومصرحًا به.
 
 ## 16) Definition of Done
 
@@ -344,11 +360,11 @@ Browser/mobile smoke + offline/reconciliation regression + printing truthfulness
 
 ## 17) NEXT ACTION — المسار المختصر الإلزامي
 
-1. لا تبدأ Branch Cleanup كعمل حاجب للمشروع؛ اجعله Parallel housekeeping.
-2. أغلق/ادمج Stage 1 فقط بعد التأكد من أحدث HEAD وCI وحالة PR #68 وفق مسار الدمج الآمن.
-3. ابدأ مباشرة **ROOT STAGE A — Identity / Permissions / Branch / RLS** عبر contract search واختبارات مشتركة، وليس شاشة شاشة.
-4. أول deviation مثبت داخل Stage A يُصلح من الجذر مع Regression test يغطي كل المستهلكين الممكنين.
-5. بعد Full Green انتقل إلى Stage B، ثم C، ثم D، ثم E، ثم F دون إعادة فتح المغلق إلا Regression مثبت.
+1. أغلق **Catalog 6B فقط** على PR #92: focused regression → Full Verify → مراجعة diff → إعادة fetch لـ`main` وPR head → merge بـexpected SHA فقط إذا ظل النطاق 6B وغير متعارض.
+2. 6B لا يطبق أي Production migration ولا يغير بيانات المستخدم الحالية.
+3. بعد إغلاق 6B بنجاح يبدأ **6C مستقلاً**: إثبات zero-callers قبل حذف أي wrapper ميت؛ لا يبدأ 6D معه.
+4. بعد 6C يبدأ 6D مستقلاً؛ وبعد إغلاق 6A+6B+6C+6D يُغلق Catalog بالكامل ثم ننتقل إلى Purchases.
+5. لا إعادة فتح 6A إلا Regression مثبت.
 6. لا Production migration دون Full Verify Green + سبب موثق + موافقة صريحة.
 
 لا تلمس أي مستودع أو قاعدة بيانات أخرى.
