@@ -4,8 +4,14 @@ import { rpc } from '../rpc';
 
 export const trade = {
   nextDocumentNumber(p: { p_type: string }): ApiResult<RpcResult> { return rpc('next_purchase_document_number', p); },
-  processPurchase(p: { p_invoice_number: string; p_supplier_id: string; p_branch_id: string | null; p_warehouse_id: string | null; p_subtotal: number; p_discount_amount: number; p_tax_amount: number; p_total: number; p_paid_amount: number; p_payment_method: string; p_status: string; p_notes: string | null; p_items: PurchaseItemInput[] }): ApiResult<RpcResult> { return rpc('process_purchase', p); },
-  updatePurchase(p: { p_purchase_id: string; p_supplier_id: string; p_warehouse_id: string | null; p_subtotal: number; p_discount_amount: number; p_tax_amount: number; p_total: number; p_paid_amount: number; p_payment_method: string; p_notes: string | null; p_items: PurchaseItemInput[] }): ApiResult<RpcResult & { previous_purchase_id?: string; previous_revision_number?: string }> { return rpc('update_purchase_invoice', p); },
+  processPurchase(p: { p_invoice_number: string; p_supplier_id: string; p_branch_id: string | null; p_warehouse_id: string | null; p_subtotal: number; p_discount_amount: number; p_tax_amount: number; p_total: number; p_paid_amount: number; p_payment_method: string; p_status: string; p_notes: string | null; p_items: PurchaseItemInput[] }): ApiResult<RpcResult> {
+    p = { ...p, p_paid_amount: p.p_payment_method === 'credit' ? 0 : p.p_paid_amount };
+    return rpc('process_purchase', p);
+  },
+  updatePurchase(p: { p_purchase_id: string; p_supplier_id: string; p_warehouse_id: string | null; p_subtotal: number; p_discount_amount: number; p_tax_amount: number; p_total: number; p_paid_amount: number; p_payment_method: string; p_notes: string | null; p_items: PurchaseItemInput[] }): ApiResult<RpcResult & { previous_purchase_id?: string; previous_revision_number?: string }> {
+    p = { ...p, p_paid_amount: p.p_payment_method === 'credit' ? 0 : p.p_paid_amount };
+    return rpc('update_purchase_invoice', p);
+  },
   deletePurchase(p: { p_purchase_id: string }): ApiResult<RpcResult> { return rpc('delete_purchase_invoice', p); },
   processPurchaseReturn(p: { p_purchase_id: string; p_items?: { purchase_item_id: string; quantity: number }[] | null; p_reason?: string | null }): ApiResult<RpcResult & { returned_amount?: number; fully_returned?: boolean }> { return rpc('process_purchase_return', p); },
   processRefund(p: { p_sale_id: string; p_items: RefundItemInput[]; p_reason: string | null }): ApiResult<RpcResult> { return rpc('process_refund', p); },
