@@ -13,14 +13,19 @@ function between(source: string, start: string, end: string): string {
 }
 
 describe('print execution truth contract', () => {
-  it('keeps authorization non-mutating and records only in the execution RPC', () => {
-    const migration = read('supabase/migrations/20260910093914_print_execution_truth.sql');
+  it('keeps authorization non-mutating and records only after an accepted execution attempt', () => {
+    const authorizationMigration = read('supabase/migrations/20260910093914_print_execution_truth.sql');
+    const submissionTruth = read('supabase/migrations/20260912002000_cloud_print_submission_truth.sql');
     const authorize = between(
-      migration,
+      authorizationMigration,
       'CREATE OR REPLACE FUNCTION public.authorize_sale_print',
       'CREATE OR REPLACE FUNCTION public.record_sale_print',
     );
-    const record = migration.slice(migration.indexOf('CREATE OR REPLACE FUNCTION public.record_sale_print'));
+    const record = between(
+      submissionTruth,
+      'CREATE OR REPLACE FUNCTION public.record_sale_print',
+      'CREATE OR REPLACE FUNCTION public.complete_cloud_print_job',
+    );
 
     expect(authorize).not.toContain('INSERT INTO public.sale_print_events');
     expect(authorize).not.toContain('INSERT INTO public.audit_log');
@@ -33,11 +38,13 @@ describe('print execution truth contract', () => {
     expect(record).toContain('INSERT INTO public.sale_print_events');
     expect(record).toContain('INSERT INTO public.audit_log');
     expect(record).toContain("SET status = 'consumed', consumed_at = now()");
-    expect(record).toContain("'execution_confirmed_by_client', true");
-    expect(record).toContain('REVOKE ALL ON FUNCTION public.record_sale_print(uuid, uuid) FROM anon');
+    expect(record).toContain("'print_call_accepted_by_client', true");
+    expect(record).toContain("'physical_print_confirmed', false");
+    expect(record).not.toContain("'physical_print_confirmed', true");
+    expect(submissionTruth).toContain('REVOKE ALL ON FUNCTION public.record_sale_print(uuid, uuid) FROM PUBLIC, anon');
   });
 
-  it('records official receipts only after Electron or Print Agent explicitly confirms execution', () => {
+  it('records receipt submission only after Electron or Print Agent accepts execution', () => {
     const printing = read('src/features/pos/utils/printing.ts');
     const openWindow = between(printing, 'export function openPrintWindow', 'export async function buildReceiptHtml');
     const receiptBuilder = between(printing, 'export async function buildReceiptHtml', 'export function buildKitchenTicketHtml');
@@ -62,15 +69,28 @@ describe('print execution truth contract', () => {
 
   it('treats missing or rejecting local Print Agent as failure, never success', () => {
     const localAgent = read('src/features/pos/services/localPrintAgent.ts');
-    const executeSilent = between(localAgent, 'export async function executeSilentPrint', 'export async function executeCashDrawerKick');
-    const drawer = between(localAgent, 'export async function executeCashDrawerKick', '/**\n * Print each authoritative kitchen station group');
+    const executeDetailed = between(
+      localAgent,
+      'export async function executeSilentPrintDetailed',
+      'export async function executeSilentPrint(',
+    );
+    const executeSilent = between(
+      localAgent,
+      'export async function executeSilentPrint(',
+      'export async function executeCashDrawerKick',
+    );
+    const drawer = between(localAgent, 'export async function executeCashDrawerKick', '/**\n * Print station groups concurrently across physical printers.');
     const kitchen = between(localAgent, 'export async function printKitchenStationsLocally', 'export function suppressNextKitchenBrowserPopup');
     const agent = read('local-print-agent/agent.cjs');
 
-    expect(executeSilent).toContain("fetchWithTimeout(`${PRINT_AGENT_URL}/print`");
-    expect(executeSilent).toContain('if (!response.ok) return false');
-    expect(executeSilent).toContain('return Boolean(result.success)');
-    expect(executeSilent).toContain('catch {\n    return false;');
+    expect(executeDetailed).toContain("fetchWithTimeout(`${PRINT_AGENT_URL}/print`");
+    expect(executeDetailed).toContain('if (!response.ok) return { success: false');
+    expect(executeDetailed).toContain('return result.success');
+    expect(executeDetailed).toContain('? { success: true }');
+    expect(executeDetailed).toContain(': { success: false');
+    expect(executeDetailed).toContain('catch (error)');
+    expect(executeDetailed).toContain('return { success: false');
+    expect(executeSilent).toContain('return (await executeSilentPrintDetailed(options)).success;');
 
     expect(drawer).toContain("fetchWithTimeout(`${PRINT_AGENT_URL}/drawer`");
     expect(drawer).toContain('if (!response.ok) return false');
@@ -81,8 +101,8 @@ describe('print execution truth contract', () => {
     expect(kitchen).toContain('if (!health.ok) return false');
     expect(kitchen).toContain('if (!configResponse.ok) return false');
     expect(kitchen).toContain('if (!response.ok) return false');
-    expect(kitchen).toContain('if (!result.success) return false');
-    expect(kitchen).toContain('catch {\n    return false;');
+    expect(kitchen).toContain('return Boolean(result.success);');
+    expect(kitchen).toContain('catch {\n        return false;');
 
     expect(agent).toContain("if (req.method === 'POST' && url.pathname === '/print')");
     expect(agent).toContain('await printText(printer, text);');
@@ -92,6 +112,19 @@ describe('print execution truth contract', () => {
     expect(agent).toContain('await kickDrawer(printer);');
     expect(agent.indexOf('await kickDrawer(printer);')).toBeLessThan(agent.indexOf("return json(res, 200, { success: true, printer });"));
     expect(agent).toContain("return json(res, 500, { success: false");
+  });
+
+  it('never promotes Windows print-call acceptance to physical print success', () => {
+    const submissionTruth = read('supabase/migrations/20260912002000_cloud_print_submission_truth.sql');
+    const complete = submissionTruth.slice(submissionTruth.indexOf('CREATE OR REPLACE FUNCTION public.complete_cloud_print_job'));
+
+    expect(submissionTruth).toContain("CHECK (status IN ('pending', 'claimed', 'printing', 'submitted', 'printed', 'failed'))");
+    expect(complete).toContain("SET status = 'submitted'");
+    expect(complete).not.toContain("SET status = 'printed'");
+    expect(complete).toContain("'print_call_accepted_by_cloud_agent', true");
+    expect(complete).toContain("'physical_print_confirmed', false");
+    expect(complete).not.toContain("'physical_print_confirmed', true");
+    expect(complete).toContain("'status', 'submitted'");
   });
 
   it('keeps print status permission-first and branch scoped', () => {

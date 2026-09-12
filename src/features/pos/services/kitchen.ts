@@ -1,5 +1,7 @@
 import type { KitchenSendItem, KitchenSendResult } from '../types';
 import { rpc } from '@/api/rpc';
+import { supabase } from '@/api';
+import { enqueueCloudKitchenPrintJobs } from './cloudPrint';
 import { printKitchenStationsLocally, suppressNextKitchenBrowserPopup } from './localPrintAgent';
 
 // In-flight locks prevent rapid duplicate clicks. The server remains the
@@ -34,9 +36,12 @@ function withKitchenInstructions(item: KitchenSendItem): KitchenSendItem {
  * Hard rules:
  * - The client never mutates inventory directly.
  * - The server deducts only the positive kitchen delta and decides station_code.
- * - If the local Windows print agent successfully prints every station, the
- *   legacy browser kitchen-print popup is suppressed once. If the agent is not
- *   installed/configured, the existing browser print remains the fallback.
+ * - Printing is a side effect after the authoritative kitchen mutation. Cloud
+ *   retries therefore replay PRINT ONLY and can never deduct inventory again.
+ * - Once any cloud station job is accepted, the generic browser ticket is
+ *   suppressed so a successful station cannot be duplicated by fallback.
+ * - Until the cloud migration is deployed, the proven local/legacy print path
+ *   remains the compatibility fallback.
  */
 export async function sendOrderToKitchen(p: {
   p_order_id: string;
@@ -92,14 +97,39 @@ export async function sendOrderToKitchen(p: {
 
     const rawSentItems = result.sent || [];
     if (rawSentItems.length > 0 && typeof window !== 'undefined') {
-      const localPrinted = await printKitchenStationsLocally(rawSentItems, {
+      const context = {
         orderNumber: result.order_number || result.order_id || orderId,
         tableName: result.table_name || null,
         orderType: result.order_type || null,
         guestCount: result.guest_count || null,
         isAr: document.documentElement.dir === 'rtl' || document.documentElement.lang?.startsWith('ar'),
-      });
-      if (localPrinted) suppressNextKitchenBrowserPopup();
+      };
+
+      let cloudQueuedStations = 0;
+      try {
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('branch_id')
+          .eq('id', orderId)
+          .maybeSingle();
+        const branchId = (orderRow as { branch_id?: string } | null)?.branch_id || '';
+        if (branchId) {
+          const cloud = await enqueueCloudKitchenPrintJobs({
+            branchId,
+            items: rawSentItems,
+            context,
+          });
+          cloudQueuedStations = cloud.queuedStations.length;
+          if (cloudQueuedStations > 0) suppressNextKitchenBrowserPopup();
+        }
+      } catch (error) {
+        console.warn('[cloud-print] kitchen queue unavailable; using compatibility print path', error);
+      }
+
+      if (cloudQueuedStations === 0) {
+        const localPrinted = await printKitchenStationsLocally(rawSentItems, context);
+        if (localPrinted) suppressNextKitchenBrowserPopup();
+      }
     }
 
     const sentItems = rawSentItems.map(withKitchenInstructions);

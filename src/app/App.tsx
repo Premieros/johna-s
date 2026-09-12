@@ -3,6 +3,7 @@ import { AppRoutes } from './routes';
 import { FinancialVisibilityAdminControl } from '@/features/admin/components/FinancialVisibilityAdminControl';
 import { SessionProfileGuard } from '@/core/security/SessionProfileGuard';
 import { PrinterSettingsLauncher } from '@/features/pos/components/settings/PrinterSettingsLauncher';
+import { CloudPrintAgent } from '@/features/pos/components/settings/CloudPrintAgent';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <AppRoutes />
         <FinancialVisibilityAdminControl />
         <PrinterSettingsLauncher />
+        <CloudPrintAgent />
       </SessionProfileGuard>
     </AppProviders>
   );

@@ -1,20 +1,23 @@
-// Premier POS - Windows Desktop shell.
-// Exposes only the minimal local hardware bridge required for printing.
+// Premier Print Agent - Windows desktop shell and local thermal print bridge.
+// Every physical printer owns an independent FIFO queue and hidden print worker.
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
+const { PerPrinterQueue, withTimeout } = require('./printerQueue.cjs');
 
 const DEFAULT_URL = 'https://premieros.github.io/johna-s/';
 const TRUSTED_ORIGIN = 'https://premieros.github.io';
 const DEFAULT_THERMAL_WIDTH_MM = 80;
-const THERMAL_BOTTOM_FEED_MM = 5;
-const PX_PER_INCH = 96;
-const MICRONS_PER_INCH = 25400;
+const PRINT_LOAD_TIMEOUT_MS = 6000;
+const PRINT_CALLBACK_TIMEOUT_MS = 12000;
+
 let mainWindow = null;
-let printWorkerWindow = null;
+let allowQuit = false;
+const printerQueue = new PerPrinterQueue();
+const printWorkerWindows = new Map();
 
 function resolveTargetUrl() {
   const candidate = process.env.ELECTRON_START_URL || process.env.POS_APP_URL || DEFAULT_URL;
@@ -29,9 +32,31 @@ function resolveTargetUrl() {
   return DEFAULT_URL;
 }
 
-function createPrintWorker() {
-  if (printWorkerWindow && !printWorkerWindow.isDestroyed()) return printWorkerWindow;
-  printWorkerWindow = new BrowserWindow({
+function workerKey(printerName) {
+  return String(printerName || '').trim().toLocaleLowerCase();
+}
+
+function destroyPrintWorker(printerName) {
+  const key = workerKey(printerName);
+  const worker = printWorkerWindows.get(key);
+  if (worker && !worker.isDestroyed()) worker.destroy();
+  printWorkerWindows.delete(key);
+}
+
+function destroyAllPrintWorkers() {
+  for (const worker of printWorkerWindows.values()) {
+    if (worker && !worker.isDestroyed()) worker.destroy();
+  }
+  printWorkerWindows.clear();
+  printerQueue.clear();
+}
+
+function createPrintWorker(printerName) {
+  const key = workerKey(printerName);
+  const existing = printWorkerWindows.get(key);
+  if (existing && !existing.isDestroyed()) return existing;
+
+  const worker = new BrowserWindow({
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -40,7 +65,11 @@ function createPrintWorker() {
       webSecurity: true,
     },
   });
-  return printWorkerWindow;
+  printWorkerWindows.set(key, worker);
+  worker.on('closed', () => {
+    if (printWorkerWindows.get(key) === worker) printWorkerWindows.delete(key);
+  });
+  return worker;
 }
 
 function escapeHtml(value) {
@@ -60,7 +89,13 @@ function normalizeThermalWidthMm(value) {
 function thermalCss(widthMm) {
   return `
 <style id="premier-thermal-page">
-  @page { size: ${widthMm}mm auto; margin: 0; }
+  /*
+   * Keep 58/80mm as document layout only. Do not advertise a custom CSS page
+   * size here: Windows thermal drivers commonly expose a roll/form selected in
+   * Printer Preferences and some of them stall when Chromium submits a unique
+   * custom page height for every receipt.
+   */
+  @page { margin: 0; }
   html, body {
     width: ${widthMm}mm !important;
     min-width: ${widthMm}mm !important;
@@ -116,23 +151,50 @@ function textToPrintableHtml(text, widthMm) {
 </html>`, widthMm);
 }
 
-async function measureThermalPageSize(worker, widthMm) {
-  const heightPx = await worker.webContents.executeJavaScript(`(() => {
-    const body = document.body;
-    const root = document.documentElement;
-    return Math.ceil(Math.max(
-      body ? body.scrollHeight : 0,
-      body ? body.offsetHeight : 0,
-      root ? root.scrollHeight : 0,
-      root ? root.offsetHeight : 0
-    ));
-  })()`);
-  if (!Number.isFinite(heightPx) || heightPx <= 0) throw new Error('THERMAL_PAGE_SIZE_FAILED');
-  const contentMicrons = Math.ceil((heightPx * MICRONS_PER_INCH) / PX_PER_INCH);
-  const minHeightMicrons = 30000;
-  const maxHeightMicrons = 3000000;
-  const height = Math.min(maxHeightMicrons, Math.max(minHeightMicrons, contentMicrons + (THERMAL_BOTTOM_FEED_MM * 1000)));
-  return { width: widthMm * 1000, height };
+function driverCompatiblePrintOptions(printerName, options) {
+  return {
+    silent: true,
+    printBackground: true,
+    deviceName: printerName,
+    copies: options.copies,
+    // Intentionally omit Electron pageSize. The selected Windows printer form
+    // controls physical roll geometry; CSS still lays out content at 58/80mm.
+    // This avoids per-receipt custom heights that can remain stuck in Spooler.
+    margins: { marginType: 'none' },
+  };
+}
+
+async function printOnPhysicalPrinter(printerName, options) {
+  const worker = createPrintWorker(printerName);
+  const printableHtml = options.html
+    ? applyThermalLayout(options.html, options.paperWidthMm)
+    : textToPrintableHtml(options.text, options.paperWidthMm);
+
+  try {
+    await withTimeout(
+      worker.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printableHtml)}`),
+      PRINT_LOAD_TIMEOUT_MS,
+      'PRINT_LOAD_TIMEOUT',
+    );
+    const result = await withTimeout(new Promise((resolve) => {
+      worker.webContents.print(
+        driverCompatiblePrintOptions(printerName, options),
+        (success, failureReason) => {
+          resolve(success
+            ? { success: true, printerName }
+            : { success: false, error: failureReason || 'PRINT_FAILED' });
+        },
+      );
+    }), PRINT_CALLBACK_TIMEOUT_MS, 'PRINT_CALLBACK_TIMEOUT');
+
+    if (!result.success) destroyPrintWorker(printerName);
+    return result;
+  } catch (error) {
+    // A worker that timed out or threw is discarded. Only this printer queue is
+    // affected; all other physical printers continue independently.
+    destroyPrintWorker(printerName);
+    throw error;
+  }
 }
 
 function createWindow() {
@@ -141,7 +203,7 @@ function createWindow() {
     height: 800,
     minWidth: 1024,
     minHeight: 700,
-    title: 'Premier POS',
+    title: 'Premier Print Agent',
     autoHideMenuBar: true,
     backgroundColor: '#0f172a',
     webPreferences: {
@@ -172,15 +234,19 @@ function createWindow() {
 
   const targetUrl = resolveTargetUrl();
   mainWindow.loadURL(targetUrl).catch((error) => {
-    console.error('[Premier POS Desktop] Failed to load remote app:', error);
+    console.error('[Premier Print Agent] Failed to load remote app:', error);
     const localIndex = path.join(__dirname, '..', 'dist', 'index.html');
     if (fs.existsSync(localIndex) && mainWindow) void mainWindow.loadFile(localIndex);
   });
 
+  mainWindow.on('close', (event) => {
+    if (!allowQuit) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
-    if (printWorkerWindow && !printWorkerWindow.isDestroyed()) printWorkerWindow.destroy();
-    printWorkerWindow = null;
   });
 }
 
@@ -212,30 +278,12 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
   if (!html && !text) return { success: false, error: 'NO_CONTENT_TO_PRINT' };
 
   try {
-    const worker = createPrintWorker();
-    const printableHtml = html
-      ? applyThermalLayout(html, paperWidthMm)
-      : textToPrintableHtml(text, paperWidthMm);
-    await worker.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printableHtml)}`);
-    const pageSize = await measureThermalPageSize(worker, paperWidthMm);
-
-    return await new Promise((resolve) => {
-      worker.webContents.print(
-        {
-          silent: true,
-          printBackground: true,
-          deviceName: printerName,
-          copies,
-          pageSize,
-          margins: { marginType: 'none' },
-        },
-        (success, failureReason) => {
-          resolve(success
-            ? { success: true, printerName }
-            : { success: false, error: failureReason || 'PRINT_FAILED' });
-        },
-      );
-    });
+    return await printerQueue.enqueue(printerName, () => printOnPhysicalPrinter(printerName, {
+      html,
+      text,
+      copies,
+      paperWidthMm,
+    }));
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'PRINT_ERROR' };
   }
@@ -253,7 +301,7 @@ ipcMain.handle('pos:kick-drawer', async (_event, requestedPrinterName) => {
     execFile(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script, printerName, tempFile],
-      { windowsHide: true },
+      { windowsHide: true, timeout: PRINT_CALLBACK_TIMEOUT_MS },
       (error, _stdout, stderr) => {
         try { fs.unlinkSync(tempFile); } catch { /* best effort cleanup */ }
         resolve(error ? { success: false, error: String(stderr || error.message || '').trim() } : { success: true });
@@ -270,13 +318,39 @@ ipcMain.handle('pos:get-system-info', async () => ({
   version: app.getVersion(),
 }));
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) createWindow();
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
+
+  app.whenReady().then(() => {
+    if (process.platform === 'win32' && app.isPackaged) {
+      app.setLoginItemSettings({ openAtLogin: true, path: process.execPath });
+    }
+    createWindow();
+    app.on('activate', () => {
+      if (!mainWindow) createWindow();
+      else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  });
+}
+
+app.on('before-quit', () => {
+  allowQuit = true;
+  destroyAllPrintWorkers();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+// Keep the agent alive after the window is hidden. Launching it again restores
+// the existing single instance, while cloud jobs continue printing in background.
+app.on('window-all-closed', () => {});
