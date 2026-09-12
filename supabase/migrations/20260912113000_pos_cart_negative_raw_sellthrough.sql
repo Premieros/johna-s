@@ -1,11 +1,13 @@
 -- Align cart-aware POS availability with the canonical negative raw-material contract.
--- Raw-material shortage alone must not block selling. All other availability
--- failures remain blocking, including branch/warehouse/configuration errors.
+-- Raw-material shortage at zero/negative raw balance must not block selling.
+-- All other availability failures remain blocking, including branch/warehouse/
+-- configuration errors and positive-stock cart overcommit.
 --
 -- Preserve the existing aggregate implementation as an internal strict helper,
--- then expose a wrapper that relaxes only INSUFFICIENT_RAW_MATERIAL_STOCK after
--- re-checking every requested product through the authoritative single-product
--- checker. This keeps historical invalid recipe wiring blocked explicitly.
+-- then expose a wrapper that relaxes only INSUFFICIENT_RAW_MATERIAL_STOCK when
+-- the authoritative warehouse balance for the blocking raw is already <= 0.
+-- This fixes the zero/negative raw sell-through path without weakening the
+-- existing shared-positive-stock cart reservation behavior.
 
 ALTER FUNCTION public.check_pos_cart_availability(uuid, uuid, jsonb)
   RENAME TO check_pos_cart_availability_strict_20260912;
@@ -31,6 +33,8 @@ DECLARE
   v_quantity numeric;
   v_check jsonb;
   v_error text;
+  v_raw_id uuid;
+  v_raw_balance numeric;
 BEGIN
   v_result := public.check_pos_cart_availability_strict_20260912(
     p_branch_id,
@@ -38,14 +42,31 @@ BEGIN
     p_items
   );
 
-  -- Preserve every strict failure except aggregate raw-material shortage.
+  -- Preserve every strict failure except raw-material shortage.
   IF COALESCE(v_result->>'error', '') <> 'INSUFFICIENT_RAW_MATERIAL_STOCK' THEN
     RETURN v_result;
   END IF;
 
-  -- A raw shortage may only be relaxed when each requested product is itself
-  -- valid for this branch/warehouse and its only blocking source is raw stock.
-  -- Unknown/configuration/unit/product failures remain blocked.
+  -- Only the explicit zero/negative raw balance path is eligible for sell-through.
+  BEGIN
+    v_raw_id := (v_result->>'raw_material_id')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN v_result;
+  END;
+
+  SELECT COALESCE(SUM(b.quantity), 0)
+  INTO v_raw_balance
+  FROM public.raw_material_batches b
+  WHERE b.raw_material_id = v_raw_id
+    AND b.branch_id = p_branch_id
+    AND b.warehouse_id = p_warehouse_id;
+
+  IF v_raw_balance > 0 THEN
+    RETURN v_result;
+  END IF;
+
+  -- Re-check each requested product through the authoritative single-product
+  -- checker so invalid recipe/branch/unit configuration never becomes sellable.
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
     RETURN v_result;
   END IF;
