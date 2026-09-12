@@ -10,7 +10,6 @@ import { useToast } from '@/components/Toast';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranches } from '@/hooks/useBranches';
 import { catalog } from '@/api/domains/catalog';
-import { supabase } from '@/api';
 import { useCan } from '@/lib/permissions';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import type { KitchenStation } from '@/lib/types';
@@ -95,7 +94,7 @@ export function KitchenStationsPage() {
       setAssignments({});
       return;
     }
-    const { data, error } = await supabase.rpc('get_kitchen_station_assignments', { p_branch_id: selectedBranchId });
+    const { data, error } = await catalog.getKitchenStationAssignments(selectedBranchId);
     if (error) throw error;
     const res = data as { success?: boolean; error?: string; stations?: AssignmentStation[] } | null;
     if (!res?.success) throw new Error(res?.error || 'ASSIGNMENTS_LOAD_FAILED');
@@ -187,9 +186,7 @@ export function KitchenStationsPage() {
 
     setLoadingAssignmentContext(true);
     try {
-      const { data, error } = await supabase.rpc('get_kitchen_station_editor_context', {
-        p_branch_id: selectedBranchId,
-      });
+      const { data, error } = await catalog.getKitchenStationEditorContext(selectedBranchId);
       if (error) throw error;
       const context = data as EditorContext | null;
       if (!context?.success) throw new Error(context?.error || 'EDITOR_CONTEXT_LOAD_FAILED');
@@ -211,7 +208,7 @@ export function KitchenStationsPage() {
     if (!selectedBranchId || !assignmentTarget) return;
     setSavingAssignment(true);
     try {
-      const { data, error } = await supabase.rpc('save_kitchen_station_assignments', {
+      const { data, error } = await catalog.saveKitchenStationAssignments({
         p_branch_id: selectedBranchId,
         p_station_id: assignmentTarget.id,
         p_user_ids: selectedUsers,
