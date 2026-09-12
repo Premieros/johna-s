@@ -81,6 +81,8 @@ BEGIN
       COALESCE(sum(p.returned_amount), 0) AS total_returns,
       COALESCE(sum(
         CASE
+          -- A credit invoice is unpaid at creation by definition. Historical
+          -- stale paid_amount values must not be presented as real payments.
           WHEN p.payment_method = 'credit' THEN 0
           ELSE GREATEST(
             COALESCE(p.paid_amount, 0) - COALESCE((
@@ -197,6 +199,8 @@ BEGIN
 END;
 $function$;
 
+-- Preserve the existing invocation surface: authenticated app users and the
+-- service role may execute it; anon/public may not.
 REVOKE ALL ON FUNCTION public.get_supplier_statement(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_supplier_statement(uuid, uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_supplier_statement(uuid, uuid) TO authenticated;
