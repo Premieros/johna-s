@@ -31,21 +31,17 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $function$
-DECLARE
-  v_recipe_branch uuid;
-  v_material_branch uuid;
 BEGIN
-  SELECT branch_id INTO v_recipe_branch
-  FROM public.recipes
-  WHERE id = NEW.recipe_id;
-
-  SELECT branch_id INTO v_material_branch
-  FROM public.raw_materials
-  WHERE id = NEW.raw_material_id;
-
-  IF v_recipe_branch IS NULL
-     OR v_material_branch IS NULL
-     OR v_recipe_branch <> v_material_branch THEN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.recipes r
+    JOIN public.raw_materials rm
+      ON rm.id = NEW.raw_material_id
+     AND rm.branch_id = r.branch_id
+     AND rm.is_active = true
+    WHERE r.id = NEW.recipe_id
+      AND COALESCE(r.is_active, true) = true
+  ) THEN
     RAISE EXCEPTION 'RAW_MATERIAL_BRANCH_MISMATCH'
       USING ERRCODE = '23514';
   END IF;
