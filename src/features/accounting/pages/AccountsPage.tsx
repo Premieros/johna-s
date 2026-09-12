@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Coins, Landmark } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -16,7 +16,6 @@ import { formatCurrency } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
-import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
@@ -44,18 +43,16 @@ export function AccountsPage() {
   const [editing, setEditing] = useState<ChartOfAccount | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
-  const [adminBranchFilter, setAdminBranchFilter] = useState('');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState('');
   const [form, setForm] = useState({ code: '', name: '', name_en: '', account_type: 'asset' as AccountType, is_active: true });
 
-  useEffect(() => {
-    if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
-    const preferred = user?.branch_id && branches.some((b) => b.id === user.branch_id)
-      ? user.branch_id
-      : branches[0].id;
-    setAdminBranchFilter(preferred);
-  }, [user?.role, user?.branch_id, branches, adminBranchFilter]);
-
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const primaryBranchId = user?.branch_id && branches.some((branch) => branch.id === user.branch_id)
+    ? user.branch_id
+    : null;
+  const effectiveBranchFilter = selectedBranchFilter
+    || branchFilter
+    || primaryBranchId
+    || (branches.length === 1 ? branches[0].id : null);
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const isAr = lang === 'ar';
   const canManage = can('accounts.manage');
@@ -89,6 +86,7 @@ export function AccountsPage() {
 
   const save = async () => {
     if (!form.code || !form.name) { show(t('required'), 'error'); return; }
+    if (!effectiveBranchFilter) { show(t('filterByBranch'), 'error'); return; }
     const payload = {
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
@@ -101,7 +99,7 @@ export function AccountsPage() {
       if (error) { show(error.message, 'error'); return; }
       await logAudit('update', 'chart_of_accounts', editing.id);
     } else {
-      const { error } = await supabase.from('chart_of_accounts').insert({ ...payload, branch_id: effectiveBranchFilter || user?.branch_id || null });
+      const { error } = await supabase.from('chart_of_accounts').insert({ ...payload, branch_id: effectiveBranchFilter });
       if (error) { show(error.message, 'error'); return; }
       await logAudit('create', 'chart_of_accounts');
     }
@@ -190,12 +188,11 @@ export function AccountsPage() {
       <DesignPanel testId="accounts-search-panel">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <DesignSearch value={search} onChange={setSearch} className="flex-1 w-full" label={t('search')} placeholder={t('search')} testId="accounts-search" />
-          {isAdminRole(user?.role) && branches.length > 0 && (
+          {branches.length > 1 && (
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-ui-muted">{t('filterByBranch')}</label>
-              <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}
+              <select value={selectedBranchFilter || effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
                 className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-                <option value="" disabled>{t('filterByBranch')}</option>
                 {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
               </select>
             </div>
