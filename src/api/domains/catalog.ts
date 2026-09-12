@@ -45,9 +45,8 @@ export const catalog = {
   createRawMaterial(p: CreateRawMaterialInput): ApiResult<CreateRawMaterialResult> { return rpc('create_raw_material', p); },
   createProduct(p: CreateProductInput): ApiResult<CreateProductResult> { return rpc('create_product', p); },
   getProductModifiers(p_product_id: string): ApiResult<unknown> { return rpc('get_product_modifiers', { p_product_id }); },
-  getProductModifiersAdmin(p: { p_product_id: string } | string): ApiResult<unknown> {
-    if (typeof p === 'string') p = { p_product_id: p };
-    return rpc('get_product_modifiers_admin', p);
+  getProductModifiersAdmin(p_product_id: string) {
+    return supabase.rpc('get_product_modifiers_admin', { p_product_id });
   },
   saveProductModifiers(p_product_id: string, p_groups: unknown): ApiResult<unknown> { return rpc('save_product_modifiers', { p_product_id, p_groups }); },
 
@@ -125,18 +124,16 @@ export const catalog = {
     if (error) throw error;
   },
 
-  getKitchenStationAssignments(p: { p_branch_id: string } | string): ApiResult<unknown> {
-    if (typeof p === 'string') p = { p_branch_id: p };
-    return rpc('get_kitchen_station_assignments', p);
+  getKitchenStationAssignments(p_branch_id: string) {
+    return supabase.rpc('get_kitchen_station_assignments', { p_branch_id });
   },
 
-  getKitchenStationEditorContext(p: { p_branch_id: string } | string): ApiResult<unknown> {
-    if (typeof p === 'string') p = { p_branch_id: p };
-    return rpc('get_kitchen_station_editor_context', p);
+  getKitchenStationEditorContext(p_branch_id: string) {
+    return supabase.rpc('get_kitchen_station_editor_context', { p_branch_id });
   },
 
-  saveKitchenStationAssignments(p: { p_branch_id: string; p_station_id: string; p_user_ids: string[]; p_category_ids: string[] }): ApiResult<unknown> {
-    return rpc('save_kitchen_station_assignments', p);
+  saveKitchenStationAssignments(p: { p_branch_id: string; p_station_id: string; p_user_ids: string[]; p_category_ids: string[] }) {
+    return supabase.rpc('save_kitchen_station_assignments', p);
   },
 
   async setKitchenStatus(p_order_id: string, p_status: string) {
