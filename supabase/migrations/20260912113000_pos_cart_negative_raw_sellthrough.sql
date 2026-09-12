@@ -6,8 +6,9 @@
 -- Preserve the existing aggregate implementation as an internal strict helper,
 -- then expose a wrapper that relaxes only INSUFFICIENT_RAW_MATERIAL_STOCK when
 -- the authoritative warehouse balance for the blocking raw is already <= 0.
--- This fixes the zero/negative raw sell-through path without weakening the
--- existing shared-positive-stock cart reservation behavior.
+-- If the same branch still has positive stock for that raw in another warehouse,
+-- keep the strict failure: POS must not manufacture a negative balance in an empty
+-- warehouse while usable stock exists elsewhere. This preserves warehouse isolation.
 
 ALTER FUNCTION public.check_pos_cart_availability(uuid, uuid, jsonb)
   RENAME TO check_pos_cart_availability_strict_20260912;
@@ -35,6 +36,7 @@ DECLARE
   v_error text;
   v_raw_id uuid;
   v_raw_balance numeric;
+  v_other_warehouse_positive numeric;
 BEGIN
   -- The strict helper remains the canonical composition implementation and still
   -- resolves recipe demand through product_unit_links. Keeping that contract in
@@ -66,6 +68,21 @@ BEGIN
     AND b.warehouse_id = p_warehouse_id;
 
   IF v_raw_balance > 0 THEN
+    RETURN v_result;
+  END IF;
+
+  -- Never borrow another warehouse implicitly. If this branch still owns positive
+  -- stock for the same raw in a different warehouse, the caller is targeting the
+  -- wrong warehouse and the strict shortage must remain blocking.
+  SELECT COALESCE(SUM(b.quantity), 0)
+  INTO v_other_warehouse_positive
+  FROM public.raw_material_batches b
+  WHERE b.raw_material_id = v_raw_id
+    AND b.branch_id = p_branch_id
+    AND b.warehouse_id IS DISTINCT FROM p_warehouse_id
+    AND b.quantity > 0;
+
+  IF v_other_warehouse_positive > 0 THEN
     RETURN v_result;
   END IF;
 
