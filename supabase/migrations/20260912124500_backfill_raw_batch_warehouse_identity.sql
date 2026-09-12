@@ -3,7 +3,7 @@
 -- This restores warehouse-scoped availability without cross-warehouse guessing.
 
 WITH single_active_warehouse AS (
-  SELECT branch_id, MIN(id) AS warehouse_id
+  SELECT branch_id, MIN(id::text)::uuid AS warehouse_id
   FROM public.warehouses
   WHERE is_active = true
   GROUP BY branch_id
@@ -16,7 +16,7 @@ WHERE b.branch_id = w.branch_id
   AND b.warehouse_id IS NULL;
 
 WITH single_active_warehouse AS (
-  SELECT branch_id, MIN(id) AS warehouse_id
+  SELECT branch_id, MIN(id::text)::uuid AS warehouse_id
   FROM public.warehouses
   WHERE is_active = true
   GROUP BY branch_id
@@ -29,8 +29,8 @@ WHERE l.branch_id = w.branch_id
   AND l.warehouse_id IS NULL
   AND l.raw_material_id IS NOT NULL;
 
--- Refuse to leave ambiguous legacy raw stock silently assigned.
--- Branches with multiple active warehouses remain untouched and must be reconciled explicitly.
+-- Branches with multiple active warehouses are deliberately left untouched.
+-- They require explicit reconciliation because choosing a warehouse would be ambiguous.
 DO $$
 DECLARE
   v_ambiguous integer;
