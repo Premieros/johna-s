@@ -213,3 +213,50 @@ Allow raw-material inventory to go negative on a sale so manufacturing/sales are
 
 1. Run the full official check suite once more.
 2. No Production migration until an explicit decision and Full Verify Green.
+
+## 2026-09-12 — Branch cleanup checkpoint on main
+
+### Canonical identities
+
+- Repository: `Premieros/johna-s`
+- Production branch: `main`
+- Production Supabase ONLY: `azzdesuowpdcoflmyezn`
+- Source of Truth: `docs/CURRENT_WORK_PLAN.md`
+- Live log: `docs/STABILIZATION_WORK_LOG.md`
+
+### Recent merged fixes
+
+- PR #80 — POS raw-shortage availability/cart sell-through stabilization — merged and verified.
+- PR #81 — POS raw-shortage cart guard follow-up — merged.
+- PR #82 — purchase invoice warehouse identity repair — merged to `main` at `e0c9f35682ca2725cb244285eae6326d9e320e3a`.
+- PR #83 — remove ambiguous `_raw_remove_fifo` warehouse-aware overload — merged to `main` at `6f38d1a04e87290be7553d8d1ec593dee564ed15` after Verify #1187 Full Green.
+- Post-merge Verify #1189 and Deploy #610 were started automatically after PR #83 merge; confirm final status before any new Production migration/action.
+
+### Persistent development branch policy
+
+- **KEEP:** `development/cloud-print-agent`
+- This is the only persistent `development/*` branch to preserve.
+- It contains the unfinished Premier Print Agent work tracked by Draft PR #78.
+- Draft PR #78 is not approved for Production yet; its migration must not be applied to Production until its own verification is complete.
+- `development/windows-thermal-print-v2` / Draft PR #76 is superseded by the cloud print agent line.
+- All other historical `development/*` branches may be deleted during cleanup.
+
+### Temporary fix branches
+
+- The former `fix/raw-remove-fifo-overload-ambiguity` branch belonged to merged PR #83 and no longer needs to be preserved after cleanup.
+- Going forward, `fix/*` branches are temporary only while a focused PR is active and may be deleted after merge/closure plus post-merge verification.
+
+### Intended branch layout after cleanup
+
+1. `main` — Production only.
+2. `development/cloud-print-agent` — single persistent development branch.
+3. Temporary `fix/*` only while an active focused PR exists.
+
+### Safety rules preserved
+
+- No force push.
+- No direct feature development on `main`.
+- Permission-First authorization remains mandatory; role names are labels only, Super Admin is the only implicit bypass.
+- Do not weaken RLS or tests.
+- Never use another Supabase project; Production identity remains `azzdesuowpdcoflmyezn` only.
+- Do not reintroduce cross-branch or cross-warehouse fallback.
