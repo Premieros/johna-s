@@ -137,3 +137,42 @@
 ## 9) قرار مفتوح للاعتماد
 
 هل أُنفّذ **6A–6D** (ضمن PR 3 نفسه بعد Regression واختبارات مركّزة) أم أُبقي PR 3 **وثيقة + خطة فقط** ويصبح التنفيذ PR 3.1 منفصلًا؟ الإجابة تحدد الخطوة التالية بعد إنشاء الـ PR.
+
+---
+
+## 10) تنفيذ 6A — سجل تغيير (تم بتوجيه صريح "تنفيذ 6A")
+
+> الكود بعد الموافقة، داخل PR 3 (#88) على فرع `development/catalog-simplification`.
+
+### ما أُنفّذ (نطاق 6A فقط)
+
+| الملف | التغيير |
+|---|---|
+| `supabase/migrations/20260912140000_catalog_create_contract.sql` (جديد) | `create_raw_material(...)` + `create_product(...)`: SECURITY DEFINER + `SET search_path = public, pg_temp`، Permission-First (`can_permission('raw_materials.manage')` / `can_permission('products.create')`)، تحقق `user_may_access_branch` مع fallback لفرع المستخدم، **`UNIT_REQUIRED` إلزامي** للخامة + وجود الوحدة في `measurement_units`، أرضية قاعدة وحدة لأداء `product_units` (`NO_BASE_UNIT` مطابق لـ `replace_product_units`)، استقبال `product_unit_links` (تحقق وحدة/كمية/تكرار) داخل نفس المعاملة، تعقب `audit_log` موثوق، GRANT `authenticated, service_role` فقط. |
+| `src/api/domains/catalog.ts` | غلافان: `createRawMaterial`/`createProduct` (النوعان `CreateRawMaterialResult`/`CreateProductResult`). |
+| `RawMaterialsPage.tsx` | فرع الإنشاء عبر `api.catalog.createRawMaterial` (بدل insert مباشر)؛ وحدة القياس تظل إلزامية عند الإنشاء وغير قابلة للتغيير لاحقًا. |
+| `ProductSetupWizardPage.tsx` | إنشاء المنتج + روابط `product_unit_links` عبر `api.catalog.createProduct` في معاملة واحدة؛ الـ recipe/recipe_items تبقى كما كانت (حدود create-recipe خارج 6A). |
+| `ProductsPage.tsx` | الإنشاء الفردي عبر `api.catalog.createProduct` (يتضمن legacy `product_units`)؛ مسار الـ edit/delete واستيراد Excel لم يُمس. |
+| `import-executor.ts` | إنشاء المنتج/الخامة عبر `create_product`/`create_raw_material`؛ حلّ وحدة الخامة من `measurement_units` (`p_unit_id` إلزامي). |
+| `tests/unit/catalogCreateContract.test.ts` (جديد) | عقد نصّي: نمط SECURITY DEFINER، الأذونات، `UNIT_REQUIRED`، grants، توجيه FE عبر الأغلفة، أسماء الأذونات في `permissionDefs`. |
+| `tests/integration/catalog_create_contract.test.ts` (جديد) | DB: إنشاء خامة/منتج، `AUTH_REQUIRED`/`PERMISSION_DENIED`/`BRANCH_MISMATCH`/`UNIT_REQUIRED`/`UNIT_NOT_FOUND`/`DUPLICATE_CODE`/`NO_BASE_UNIT`/`DUPLICATE_UNIT_LINK`/audit. |
+
+### عُدّلت اختبارات عقد قديمة لتثبيت العقد الجديد (التنفيذ يتوافق مع نيته الأصلية)
+
+- `tests/unit/catalogTerminologyLockContract.test.ts`: وحدة الخامة تبقى "editable only on create" الآن عبر الإنشاء عبر `create_raw_material` (استبدال جملة الـ insert المباشر).
+- `tests/unit/catalogBranchComponentSelectionContract.test.ts`: روابط المصنعات تتم داخل `create_product` بدل insert مباشر؛ لا تزال **لا** تُنشأ خامات/وحدات مصنعة inline في المعالج.
+
+### خارج نطاق 6A (لم يُمس، يُوثَّق كخطوات لاحقة)
+
+- 6B (تثبيت `product_units` المسؤولية الوحيدة لـ `replace_product_units`/تفعيل `setProductUnitLinks`)، 6C (حذف 16 wrapper ميتة)، 6D (تغليف 6 RPCs مباشرين).
+- إنشاء الـ recipe/recipe_items لا يملك بعد RPC create مخصص (مُفرَد كخطوة لاحقة بعد 6A).
+- مسار البيع/التوفر/الأسعار، الأرصدة، أذونات RLS، `src/v2` — لم تُمس.
+- **تغيير سلوك مقصود:** الخامة الجديدة تتطلب وحدة قياس صالحة الآن (import-executor يحلّها من `measurement_units`؛ صف بلا وحدة يُسجَّل خطأ استيراد كما توحي رسالة الـ remedy الموجودة).
+
+### تحقق محلي
+
+- `npm run typecheck:all`: نظيف.
+- `npm run lint`: 0 errors / 3 warnings قديمة (نفس baseline).
+- `npm run test:unit`: 508 pass؛ الفشل الثلاثة (`auditActionSignature`/`posSharedShiftWorkspace`/`printExecutionTruth`) بيئي CRLF **قائم قبل 6A** وتم تأكيده عبر stash.
+- `npm run build`: نجح.
+- Integration/browser-smoke: CI-only (لا `SUPABASE_DB_URL` محليًا).

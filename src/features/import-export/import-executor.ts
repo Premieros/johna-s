@@ -158,52 +158,34 @@ export class ImportExecutor {
                 if (updErr) throw updErr;
                 updatedCount++;
               } else {
-                // Insert new product
-                const { data: inserted, error: insErr } = await supabase
-                  .from('products')
-                  .insert({
-                    sku,
-                    name,
-                    name_en: name_en || null,
-                    barcode: barcode || null,
-                    category_id: categoryId || null,
-                    cost_price: cost,
-                    sale_price: price,
-                    wholesale_price: price,
-                    product_type: 'ready',
-                    is_active,
-                    branch_id: context.userBranchId || null,
-                  })
-                  .select()
-                  .single();
-
+                // Insert new product through the guarded create contract so
+                // permission/branch/validation happen server-side atomically.
+                const { data: inserted, error: insErr } = await supabase.rpc('create_product', {
+                  p_name: name,
+                  p_name_en: name_en || null,
+                  p_barcode: barcode || null,
+                  p_sku: sku || null,
+                  p_category_id: categoryId || null,
+                  p_branch_id: context.userBranchId || null,
+                  p_cost_price: cost,
+                  p_sale_price: price,
+                  p_wholesale_price: price,
+                  p_product_type: 'ready',
+                  p_is_active: is_active,
+                  p_units: [{ unit_name: unitName, unit_name_en: unitName, conversion_factor: 1, sale_price: price, cost_price: cost, is_base: true }],
+                });
                 if (insErr) throw insErr;
-                if (inserted) {
-                  const pid = (inserted as { id: string }).id;
-                  context.existingProducts.push({
-                    id: pid,
-                    sku,
-                    name,
-                    barcode: barcode || undefined,
-                    category_id: categoryId || undefined,
-                    unit: unitName,
-                  });
-
-                  // Add default unit safely
-                  try {
-                    await supabase.from('product_units').insert({
-                      product_id: pid,
-                      unit_name: unitName,
-                      unit_name_en: unitName,
-                      conversion_factor: 1,
-                      sale_price: price,
-                      cost_price: cost,
-                      is_base: true,
-                    });
-                  } catch {
-                    // Ignore unit errors to avoid failing the whole product
-                  }
-                }
+                if (!inserted || inserted.success === false) throw new Error(inserted?.error || 'Failed to create product');
+                const pid = (inserted as { success: boolean; product_id?: string }).product_id;
+                if (!pid) throw new Error('Failed to create product');
+                context.existingProducts.push({
+                  id: pid,
+                  sku,
+                  name,
+                  barcode: barcode || undefined,
+                  category_id: categoryId || undefined,
+                  unit: unitName,
+                });
                 insertedCount++;
               }
             } catch (err: unknown) {
@@ -300,6 +282,20 @@ export class ImportExecutor {
         }
 
         case 'components': {
+          // Measurement units are required for every newly created raw
+          // material. Build a name/code/symbol lookup once so each row can be
+          // resolved to an existing measurement_units id.
+          const { data: unitRows, error: unitLoadError } = await supabase
+            .from('measurement_units')
+            .select('id, code, name, symbol');
+          if (unitLoadError) throw unitLoadError;
+          const unitMap = new Map<string, string>();
+          for (const u of (unitRows as Array<{ id: string; code?: string | null; name: string; symbol?: string | null }> || [])) {
+            const keys = [u.name, u.code, u.symbol];
+            for (const key of keys) {
+              if (key) unitMap.set(key.trim().toLowerCase(), u.id);
+            }
+          }
           for (let i = 0; i < mappedRows.length; i++) {
             const row = mappedRows[i];
             const rowNumber = i + 2;
@@ -343,29 +339,26 @@ export class ImportExecutor {
                 if (updErr) throw updErr;
                 updatedCount++;
               } else {
-                const { data: insMat, error: insErr } = await supabase
-                  .from('raw_materials')
-                  .insert({
-                    code: sku,
-                    name,
-                    category,
-                    default_cost: cost,
-                    min_stock,
-                    is_active,
-                    description: `الوحدة: ${unit}`,
-                  })
-                  .select()
-                  .single();
-                if (insErr) throw insErr;
-                if (insMat) {
-                  context.existingComponents.push({
-                    id: (insMat as { id: string }).id,
-                    sku,
-                    name,
-                    unit,
-                    cost,
-                  });
+                const resolvedUnitId = unitMap.get(unit.toLowerCase());
+                if (!resolvedUnitId) {
+                  throw new Error(`وحدة قياس غير معروفة: ${unit}`);
                 }
+                const { data: insMat, error: insErr } = await supabase.rpc('create_raw_material', {
+                  p_code: sku,
+                  p_name: name,
+                  p_unit_id: resolvedUnitId,
+                  p_branch_id: context.userBranchId || null,
+                  p_category: category,
+                  p_min_stock: min_stock,
+                  p_default_cost: cost,
+                  p_description: `الوحدة: ${unit}`,
+                  p_is_active: is_active,
+                });
+                if (insErr) throw insErr;
+                if (!insMat || insMat.success === false) throw new Error(insMat?.error || 'Failed to create raw material');
+                const materialId = (insMat as { success: boolean; raw_material_id?: string }).raw_material_id;
+                if (!materialId) throw new Error('Failed to create raw material');
+                context.existingComponents.push({ id: materialId, sku, name, unit, cost });
                 insertedCount++;
               }
             } catch (err: unknown) {

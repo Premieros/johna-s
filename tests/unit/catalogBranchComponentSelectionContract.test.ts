@@ -30,7 +30,7 @@ describe('catalog branch/component selection contracts', () => {
     expect(setupWizard).not.toContain("from('raw_materials').insert");
     expect(setupWizard).not.toContain('Create new unit');
     expect(setupWizard).not.toContain('إنشاء وحدة جديدة');
-    expect(setupWizard).toContain("from('product_unit_links').insert");
+    expect(setupWizard).toContain('api.catalog.createProduct');
     expect(setupWizard).toContain("from('recipes').insert");
     expect(setupWizard).toContain("from('recipe_items').insert");
   });

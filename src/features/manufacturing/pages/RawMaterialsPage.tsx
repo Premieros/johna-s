@@ -134,9 +134,18 @@ export function RawMaterialsPage() {
       await logAudit('update', 'raw_materials', form.id);
       show(t('saveSuccess'), 'success');
     } else {
-      const { data, error } = await supabase.from('raw_materials').insert({ ...commonPayload, unit_id: form.unit_id }).select().single();
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'raw_materials', (data as RawMaterial)?.id, { unit_id: form.unit_id });
+      const { data, error } = await api.catalog.createRawMaterial({
+        p_code: commonPayload.code,
+        p_name: commonPayload.name,
+        p_unit_id: form.unit_id,
+        p_branch_id: commonPayload.branch_id,
+        p_category: commonPayload.category,
+        p_min_stock: commonPayload.min_stock,
+        p_default_cost: commonPayload.default_cost,
+        p_description: commonPayload.description,
+        p_is_active: commonPayload.is_active,
+      });
+      if (error || !data || data.success === false) { show(error?.message || data?.error || 'error', 'error'); return; }
       show(t('saveSuccess'), 'success');
     }
     setModalOpen(false);

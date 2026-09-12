@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, PackagePlus, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/api';
+import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
@@ -11,10 +12,9 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useBranches } from '@/hooks/useBranches';
 import { useCan } from '@/lib/permissions';
 import { generateBarcode } from '@/lib/format';
-import { logAudit } from '@/lib/audit';
 import { useGuidedWorkflow } from '@/core/guard';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
-import type { Category, Product, InventoryUnit } from '@/lib/types';
+import type { Category, InventoryUnit } from '@/lib/types';
 
 type ManufacturedComponent = { unit_id: string; quantity: number };
 type RawComponent = { raw_material_id: string; quantity: number; wastage_percent: number };
@@ -178,31 +178,25 @@ export function ProductSetupWizardPage() {
     let createdProductId: string | null = null;
     try {
       const derivedProductType: 'ready' | 'manufactured' = rawComponents.length > 0 || manufacturedComponents.length > 0 ? 'manufactured' : 'ready';
-      const { data: product, error: productError } = await supabase.from('products').insert({
-        name: form.name.trim(),
-        name_en: form.name_en.trim() || null,
-        barcode: form.barcode || null,
-        sku: form.sku.trim() || null,
-        category_id: form.category_id || null,
-        branch_id: branchId,
-        cost_price: Number(form.cost_price) || 0,
-        sale_price: Number(form.sale_price) || 0,
-        wholesale_price: Number(form.wholesale_price) || 0,
-        is_active: form.is_active,
-        product_type: derivedProductType,
-      }).select().single();
-      if (productError) throw productError;
-
-      createdProductId = (product as Product).id;
-
-      if (manufacturedComponents.length > 0) {
-        const { error: linkError } = await supabase.from('product_unit_links').insert(manufacturedComponents.map((row) => ({
-          product_id: createdProductId,
-          unit_id: row.unit_id,
-          quantity: Number(row.quantity),
-        })));
-        if (linkError) throw linkError;
-      }
+      const { data, error: productError } = await api.catalog.createProduct({
+        p_name: form.name.trim(),
+        p_name_en: form.name_en.trim() || null,
+        p_barcode: form.barcode || null,
+        p_sku: form.sku.trim() || null,
+        p_category_id: form.category_id || null,
+        p_branch_id: branchId,
+        p_cost_price: Number(form.cost_price) || 0,
+        p_sale_price: Number(form.sale_price) || 0,
+        p_wholesale_price: Number(form.wholesale_price) || 0,
+        p_is_active: form.is_active,
+        p_product_type: derivedProductType,
+        p_unit_links: manufacturedComponents.length > 0
+          ? manufacturedComponents.map((row) => ({ unit_id: row.unit_id, quantity: Number(row.quantity) }))
+          : null,
+      });
+      if (productError || !data || data.success === false) throw productError || new Error(data?.error || 'error');
+      createdProductId = data.product_id ?? null;
+      if (!createdProductId) throw new Error(data?.error || 'error');
 
       if (rawComponents.length > 0) {
         const { data: recipe, error: recipeError } = await supabase.from('recipes').insert({
@@ -224,13 +218,6 @@ export function ProductSetupWizardPage() {
         if (itemError) throw itemError;
       }
 
-      await logAudit('create', 'products', createdProductId, {
-        name: form.name,
-        branch_id: branchId,
-        manufactured_components: manufacturedComponents.length,
-        raw_components: rawComponents.length,
-        product_type: derivedProductType,
-      });
       await invalidatePosCatalogCache();
       show(t('saveSuccess'), 'success');
       if (guidedContext?.missingStep.key.includes('product')) {

@@ -2,8 +2,48 @@ import type { ApiResult } from '../types';
 import { rpc } from '../rpc';
 import { supabase } from '../client';
 
+export type CreateRawMaterialInput = {
+  p_code: string;
+  p_name: string;
+  p_unit_id: string;
+  p_branch_id?: string | null;
+  p_category?: string | null;
+  p_min_stock?: number;
+  p_default_cost?: number;
+  p_description?: string | null;
+  p_is_active?: boolean;
+};
+
+export type CreateRawMaterialResult = { success?: boolean; error?: string; raw_material_id?: string; branch_id?: string | null };
+
+export type CreateProductInput = {
+  p_name: string;
+  p_branch_id?: string | null;
+  p_name_en?: string | null;
+  p_barcode?: string | null;
+  p_sku?: string | null;
+  p_category_id?: string | null;
+  p_description?: string | null;
+  p_image_url?: string | null;
+  p_cost_price?: number;
+  p_sale_price?: number;
+  p_wholesale_price?: number;
+  p_low_stock_threshold?: number;
+  p_min_stock?: number;
+  p_max_stock?: number;
+  p_reorder_point?: number;
+  p_product_type?: 'ready' | 'manufactured';
+  p_is_active?: boolean;
+  p_units?: { unit_name: string; unit_name_en?: string; conversion_factor?: number; sale_price?: number; cost_price?: number; barcode?: string | null; is_base?: boolean }[] | null;
+  p_unit_links?: { unit_id: string; quantity: number }[] | null;
+};
+
+export type CreateProductResult = { success?: boolean; error?: string; product_id?: string; branch_id?: string | null };
+
 export const catalog = {
   replaceProductUnits(p: { p_product_id: string; p_units: unknown }): ApiResult<null> { return rpc('replace_product_units', p); },
+  createRawMaterial(p: CreateRawMaterialInput): ApiResult<CreateRawMaterialResult> { return rpc('create_raw_material', p); },
+  createProduct(p: CreateProductInput): ApiResult<CreateProductResult> { return rpc('create_product', p); },
   getProductModifiers(p_product_id: string): ApiResult<unknown> { return rpc('get_product_modifiers', { p_product_id }); },
   saveProductModifiers(p_product_id: string, p_groups: unknown): ApiResult<unknown> { return rpc('save_product_modifiers', { p_product_id, p_groups }); },
 
