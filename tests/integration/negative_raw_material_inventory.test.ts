@@ -19,6 +19,19 @@ type BatchRow = { batch_number: string; quantity: string; source_type: string; w
 
 const num = (v: unknown): number => Number(v || 0);
 
+async function asUser(client: pg.Client, userId: string, sql: string, params: unknown[] = []) {
+  const savepoint = `sp_${randomUUID().replace(/-/g, '')}`;
+  await client.query(`SAVEPOINT ${savepoint}`);
+  try {
+    await client.query('SET LOCAL ROLE authenticated');
+    await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
+    return await client.query(sql, params);
+  } finally {
+    await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+  }
+}
+
 describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt batches)', () => {
   let client: pg.Client;
 
@@ -29,6 +42,8 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
   const whA2 = randomUUID();
   const whB = randomUUID();
   const unitId = randomUUID();
+  const recipeWriter = randomUUID();
+  const recipeWriterRole = `qa_recipe_writer_${randomUUID().slice(0, 8)}`;
 
   const rawX = randomUUID();
   const rawY = randomUUID();
@@ -41,6 +56,7 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
   const rawM = randomUUID();
   const rawX2 = randomUUID();
   const rawY2 = randomUUID();
+  const rawU = randomUUID();
   const rawBX = randomUUID();
 
   const prodX = randomUUID();
@@ -54,6 +70,11 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
   const prod2 = randomUUID();
   const prodBx = randomUUID();
   const readyProd = randomUUID();
+  const prodMfg = randomUUID();
+  const unitMfg = randomUUID();
+  const prodInactive = randomUUID();
+  const prodBadRecipe = randomUUID();
+  const recipeBad = randomUUID();
 
   const recipeX = randomUUID();
   const recipeY = randomUUID();
@@ -171,6 +192,18 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
 
     await client.query(`INSERT INTO public.branches(id,name) VALUES ($1,'Negative A'),($2,'Negative B')`, [branchA, branchB]);
     await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
+       VALUES($1,'كاتب وصفات','Recipe writer','["recipes.manage"]'::jsonb,'branch',true)`,
+      [recipeWriterRole],
+    );
+    await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
+    await client.query(
+      `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
+       VALUES($1,$2,'Recipe Writer',$3,$4,true)`,
+      [recipeWriter, `${recipeWriter}@example.test`, recipeWriterRole, branchA],
+    );
+    await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
+    await client.query(
       `INSERT INTO public.warehouses(id,name,branch_id,is_active) VALUES
        ($1,'Neg A1',$4,true),($2,'Neg A2',$4,true),($3,'Neg B1',$5,true)`,
       [whA1, whA2, whB, branchA, branchB],
@@ -183,7 +216,7 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
 
     const branchARaws: Array<[string, string]> = [
       [rawX, 'X'], [rawY, 'Y'], [rawZ, 'Z'], [rawW, 'W'], [rawV, 'V'],
-      [rawD, 'D'], [rawK, 'K'], [rawL, 'L'], [rawM, 'M'], [rawX2, 'X2'], [rawY2, 'Y2'],
+      [rawD, 'D'], [rawK, 'K'], [rawL, 'L'], [rawM, 'M'], [rawX2, 'X2'], [rawY2, 'Y2'], [rawU, 'U'],
     ];
     for (const [rawId, code] of branchARaws) await insertRaw(rawId, branchA, code);
     await insertRaw(rawBX, branchB, 'BX');
@@ -203,6 +236,43 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
       `INSERT INTO public.products(id,name,branch_id,product_type,sale_price,cost_price,is_active)
        VALUES($1,'Neg Ready Product',$2,'ready',30,10,true)`,
       [readyProd, branchA],
+    );
+
+    await client.query(
+      `INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,is_active)
+       VALUES($1,$2,'Mfg Unit A','manufactured',$3,true)`,
+      [unitMfg, `MU-${randomUUID().slice(0, 8)}`, branchA],
+    );
+    await client.query(
+      `INSERT INTO public.products(id,name,branch_id,product_type,sale_price,cost_price,is_active)
+       VALUES($1,'Neg Mfg Product',$2,'manufactured',25,6,true)`,
+      [prodMfg, branchA],
+    );
+    await client.query(
+      `INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)`,
+      [prodMfg, unitMfg],
+    );
+    await client.query(
+      `INSERT INTO public.inventory_unit_recipes(unit_id,raw_material_id,quantity,wastage_percent)
+       VALUES($1,$2,1,0)`,
+      [unitMfg, rawU],
+    );
+
+    await client.query(
+      `INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active)
+       VALUES($1,'Neg Inactive Product',$2,40,5,false)`,
+      [prodInactive, branchA],
+    );
+
+    await client.query(
+      `INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active)
+       VALUES($1,'Neg Bad Recipe Product',$2,20,5,true)`,
+      [prodBadRecipe, branchA],
+    );
+    await client.query(
+      `INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active)
+       VALUES($1,$2,$3,'Bad Cross-Branch Recipe',1,true)`,
+      [recipeBad, prodBadRecipe, branchA],
     );
   });
 
@@ -429,5 +499,115 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     expect(num(r[0].r.oversold)).toBe(0);
     expect(await balance(rawM, branchA)).toBe(0);
     expect(await oversoldBatches(rawM)).toEqual([]);
+  });
+
+  it('keeps manufactured-unit products strictly unavailable (never raw_shortage_only)', async () => {
+    const rows = await q<{ product_id: string; available_quantity: string; is_available: boolean; raw_shortage_only: boolean }>(
+      `SELECT product_id, available_quantity::text, is_available, raw_shortage_only
+       FROM public.get_pos_product_availability($1,$2,100)
+       WHERE product_id = $3`,
+      [branchA, whA1, prodMfg],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].is_available).toBe(false);
+    expect(num(rows[0].available_quantity)).toBe(0);
+    expect(rows[0].raw_shortage_only).toBe(false);
+
+    const sale = await q<{ r: CoreRpc }>(
+      `SELECT public._deduct_sale_inventory_with_modifiers_core($1,$2,$3::jsonb,$4,$5) AS r`,
+      [branchA, whA1, JSON.stringify([{ product_id: prodMfg, quantity: 1 }]), randomUUID(), 'SALE-MFG'],
+    );
+    expect(sale[0].r).toMatchObject({ success: false, error: 'SALE_INVENTORY_DEDUCTION_FAILED' });
+    expect(await warehouseBalance(rawU, branchA, whA1)).toBe(0);
+    expect(await oversoldBatches(rawU)).toEqual([]);
+  });
+
+  it('never exposes an inactive product through POS availability', async () => {
+    const rows = await q<{ product_id: string }>(
+      `SELECT product_id FROM public.get_pos_product_availability($1,$2,100) WHERE product_id = $3`,
+      [branchA, whA1, prodInactive],
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('returns a cross-branch recipe as a blocked configuration row, never raw shortage', async () => {
+    const guardState = await q<{
+      replication_role: string;
+      trigger_enabled: string;
+      function_has_guard: boolean;
+      recipe_branch: string;
+      material_branch: string;
+    }>(
+      `SELECT current_setting('session_replication_role') AS replication_role,
+              t.tgenabled::text AS trigger_enabled,
+              position('RAW_MATERIAL_BRANCH_MISMATCH' in pg_get_functiondef(t.tgfoid)) > 0 AS function_has_guard,
+              r.branch_id::text AS recipe_branch,
+              rm.branch_id::text AS material_branch
+       FROM pg_trigger t
+       CROSS JOIN public.recipes r
+       CROSS JOIN public.raw_materials rm
+       WHERE t.tgrelid='public.recipe_items'::regclass
+         AND t.tgname='trg_00_validate_recipe_item_branch'
+         AND r.id=$1 AND rm.id=$2`,
+      [recipeBad, rawBX],
+    );
+    expect(guardState).toEqual([{
+      replication_role: 'origin',
+      trigger_enabled: 'O',
+      function_has_guard: true,
+      recipe_branch: branchA,
+      material_branch: branchB,
+    }]);
+
+    await expect(
+      asUser(
+        client,
+        recipeWriter,
+        `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
+         VALUES($1,$2,1,0)`,
+        [recipeBad, rawBX],
+      ),
+    ).rejects.toThrow(/RAW_MATERIAL_BRANCH_MISMATCH|row-level security/);
+
+    // Simulate a legacy row made invalid by a later material branch move. The
+    // read contract must still return a precise blocked row, never omit it or
+    // classify it as ordinary negative-raw sell-through.
+    await client.query('UPDATE public.raw_materials SET branch_id=$1 WHERE id=$2', [branchA, rawBX]);
+    await client.query(
+      `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
+       VALUES($1,$2,1,0)`,
+      [recipeBad, rawBX],
+    );
+    await client.query('UPDATE public.raw_materials SET branch_id=$1 WHERE id=$2', [branchB, rawBX]);
+
+    const material = await q<{ branch_id: string }>(
+      `SELECT branch_id FROM public.raw_materials WHERE id=$1`,
+      [rawBX],
+    );
+    expect(material[0].branch_id).toBe(branchB);
+
+    const chk = await q<{ r: CoreRpc }>(
+      `SELECT public.check_product_availability($1,$2,$3,1) AS r`,
+      [prodBadRecipe, branchA, whA1],
+    );
+    expect(chk[0].r).toMatchObject({ success: false, error: 'RAW_MATERIAL_NOT_IN_BRANCH' });
+
+    const rows = await q<{ available_quantity: string; is_available: boolean; raw_shortage_only: boolean; availability_error: string | null }>(
+      `SELECT available_quantity::text,is_available,raw_shortage_only,availability_error
+       FROM public.get_pos_product_availability($1,$2,100) WHERE product_id=$3`,
+      [branchA, whA1, prodBadRecipe],
+    );
+    expect(rows).toEqual([{
+      available_quantity: '0',
+      is_available: false,
+      raw_shortage_only: false,
+      availability_error: 'RAW_MATERIAL_NOT_IN_BRANCH',
+    }]);
+
+    const sale = await q<{ r: CoreRpc }>(
+      `SELECT public._deduct_sale_inventory_with_modifiers_core($1,$2,$3::jsonb,$4,$5) AS r`,
+      [branchA, whA1, JSON.stringify([{ product_id: prodBadRecipe, quantity: 1 }]), randomUUID(), 'SALE-BAD'],
+    );
+    expect(sale[0].r).toMatchObject({ success: false, error: 'RAW_MATERIAL_NOT_IN_BRANCH' });
   });
 });

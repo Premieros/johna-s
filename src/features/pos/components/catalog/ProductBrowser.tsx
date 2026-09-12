@@ -20,6 +20,7 @@ interface ProductBrowserProps {
   stockMap: Record<string, number>;
   sellableStock: Record<string, number>;
   rawShortageOnly?: Record<string, boolean>;
+  availabilityErrors?: Record<string, string>;
   recipeMap: Record<string, ProductComponent[]>;
   search: string;
   selectedCategory: string;
@@ -35,7 +36,7 @@ interface ProductBrowserProps {
 
 const hasStockValue = (map: Record<string, number>, productId: string) => Object.prototype.hasOwnProperty.call(map, productId);
 
-export function ProductBrowser({ products, categories, stockMap, sellableStock, rawShortageOnly = {}, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export function ProductBrowser({ products, categories, stockMap, sellableStock, rawShortageOnly = {}, availabilityErrors = {}, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -105,6 +106,9 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
   // broad product_type label, because recipe-based products may also carry the
   // manufactured label while their only shortage is raw material stock.
   const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;
+  const availabilityErrorLabel = (code: string) => code === 'RAW_MATERIAL_NOT_IN_BRANCH'
+    ? (isAr ? 'خامة الوصفة خارج الفرع' : 'Recipe material belongs to another branch')
+    : (isAr ? `خطأ إعداد المخزون: ${code}` : `Inventory configuration error: ${code}`);
   const ensureSellable = (product: Product) => {
     if (cartChecking) {
       show(isAr ? 'جاري إعادة حساب المخزون للطلب الحالي.' : 'Rechecking inventory for the current order.', 'warning');
@@ -118,6 +122,11 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
     const source = cartMap || fallback;
     if (!hasStockValue(source, product.id)) {
       show(isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.', 'error');
+      return false;
+    }
+    const availabilityError = availabilityErrors[product.id];
+    if (availabilityError) {
+      show(availabilityErrorLabel(availabilityError), 'error');
       return false;
     }
     if (isRawShortageOnly(product)) {
@@ -201,9 +210,10 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
               const stock = stockKnown ? source[product.id] : 0;
               const unavailable = stockKnown && stock <= 0;
               const rawShortage = isRawShortageOnly(product);
+              const availabilityError = availabilityErrors[product.id];
               const rawLow = rawShortage && stockKnown && stock <= 0;
               const unknownAvailability = !stockKnown;
-              const blocked = unavailable || unknownAvailability || !canAddToCart;
+              const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;
               const cartAvailabilityError = !!cartError;
               const gated = (!rawShortage && blocked) || cartChecking || cartAvailabilityError;
               const productLabel = isAr ? product.name : product.name_en || product.name;
@@ -214,7 +224,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${rawLow || cartChecking || cartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : unavailable ? 'bg-ui-danger/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{cartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : cartAvailabilityError || unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : rawLow ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
+                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${availabilityError || unavailable ? 'bg-ui-danger/90' : rawLow || cartChecking || cartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{cartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : cartAvailabilityError || unknownAvailability ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : availabilityError ? availabilityErrorLabel(availabilityError) : rawLow ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
                   </button>
                   {can('products.edit') && (
                     <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>

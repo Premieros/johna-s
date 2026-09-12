@@ -19,7 +19,9 @@ describe('POS availability display contract', () => {
     expect(source).toContain("isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.'");
     expect(source).toContain('if ((source[product.id] || 0) <= 0)');
     expect(source).toContain("isAr ? 'المنتج غير متوفر بالمخزون.' : 'Product is out of stock.'");
-    expect(source).toContain('const blocked = unavailable || unknownAvailability || !canAddToCart;');
+    expect(source).toContain(
+      'const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;',
+    );
   });
 
   it('trusts the authoritative raw-shortage signal regardless of the broad product type label', () => {

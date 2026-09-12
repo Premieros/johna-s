@@ -13,7 +13,9 @@ describe('POS availability gate contract', () => {
     expect(browser).not.toContain("t('noRecipe')");
     expect(browser).toContain('const ensureSellable = (product: Product) =>');
     expect(browser).toContain("if ((source[product.id] || 0) <= 0)");
-    expect(browser).toContain('const blocked = unavailable || unknownAvailability || !canAddToCart;');
+    expect(browser).toContain(
+      'const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;',
+    );
   });
 
   it('keeps raw-only products as a supported product composition', () => {
