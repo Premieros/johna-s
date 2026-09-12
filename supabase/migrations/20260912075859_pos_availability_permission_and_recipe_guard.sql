@@ -62,6 +62,50 @@ FOR EACH ROW EXECUTE FUNCTION public.validate_recipe_item_branch_match();
 REVOKE ALL ON FUNCTION public.validate_recipe_item_branch_match() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.validate_recipe_item_branch_match() TO service_role, postgres;
 
+-- Defense in depth for the real authenticated write path. The recipe writer
+-- needs the explicit capability, branch access, and a same-branch active raw.
+DROP POLICY IF EXISTS auth_insert_recipe_items ON public.recipe_items;
+CREATE POLICY auth_insert_recipe_items ON public.recipe_items
+FOR INSERT TO authenticated
+WITH CHECK (
+  public.can_permission('recipes.manage')
+  AND EXISTS (
+    SELECT 1
+    FROM public.recipes r
+    JOIN public.raw_materials rm
+      ON rm.id = recipe_items.raw_material_id
+     AND rm.branch_id = r.branch_id
+     AND rm.is_active = true
+    WHERE r.id = recipe_items.recipe_id
+      AND public.user_may_access_branch(r.branch_id)
+  )
+);
+
+DROP POLICY IF EXISTS auth_update_recipe_items ON public.recipe_items;
+CREATE POLICY auth_update_recipe_items ON public.recipe_items
+FOR UPDATE TO authenticated
+USING (
+  public.can_permission('recipes.manage')
+  AND EXISTS (
+    SELECT 1 FROM public.recipes r
+    WHERE r.id = recipe_items.recipe_id
+      AND public.user_may_access_branch(r.branch_id)
+  )
+)
+WITH CHECK (
+  public.can_permission('recipes.manage')
+  AND EXISTS (
+    SELECT 1
+    FROM public.recipes r
+    JOIN public.raw_materials rm
+      ON rm.id = recipe_items.raw_material_id
+     AND rm.branch_id = r.branch_id
+     AND rm.is_active = true
+    WHERE r.id = recipe_items.recipe_id
+      AND public.user_may_access_branch(r.branch_id)
+  )
+);
+
 -- Positive raw-shortage classification hardening.
 --
 -- A recipe (or manufactured-unit recipe) must only consume raw materials that

@@ -19,6 +19,19 @@ type BatchRow = { batch_number: string; quantity: string; source_type: string; w
 
 const num = (v: unknown): number => Number(v || 0);
 
+async function asUser(client: pg.Client, userId: string, sql: string, params: unknown[] = []) {
+  const savepoint = `sp_${randomUUID().replace(/-/g, '')}`;
+  await client.query(`SAVEPOINT ${savepoint}`);
+  try {
+    await client.query('SET LOCAL ROLE authenticated');
+    await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
+    return await client.query(sql, params);
+  } finally {
+    await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+  }
+}
+
 describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt batches)', () => {
   let client: pg.Client;
 
@@ -29,6 +42,8 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
   const whA2 = randomUUID();
   const whB = randomUUID();
   const unitId = randomUUID();
+  const recipeWriter = randomUUID();
+  const recipeWriterRole = `qa_recipe_writer_${randomUUID().slice(0, 8)}`;
 
   const rawX = randomUUID();
   const rawY = randomUUID();
@@ -176,6 +191,18 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     await client.query('BEGIN');
 
     await client.query(`INSERT INTO public.branches(id,name) VALUES ($1,'Negative A'),($2,'Negative B')`, [branchA, branchB]);
+    await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
+       VALUES($1,'كاتب وصفات','Recipe writer','["recipes.manage"]'::jsonb,'branch',true)`,
+      [recipeWriterRole],
+    );
+    await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
+    await client.query(
+      `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
+       VALUES($1,$2,'Recipe Writer',$3,$4,true)`,
+      [recipeWriter, `${recipeWriter}@example.test`, recipeWriterRole, branchA],
+    );
+    await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
     await client.query(
       `INSERT INTO public.warehouses(id,name,branch_id,is_active) VALUES
        ($1,'Neg A1',$4,true),($2,'Neg A2',$4,true),($3,'Neg B1',$5,true)`,
@@ -532,16 +559,15 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
       material_branch: branchB,
     }]);
 
-    await client.query('SAVEPOINT invalid_recipe_write');
     await expect(
-      client.query(
+      asUser(
+        client,
+        recipeWriter,
         `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
          VALUES($1,$2,1,0)`,
         [recipeBad, rawBX],
       ),
-    ).rejects.toThrow(/RAW_MATERIAL_BRANCH_MISMATCH/);
-    await client.query('ROLLBACK TO SAVEPOINT invalid_recipe_write');
-    await client.query('RELEASE SAVEPOINT invalid_recipe_write');
+    ).rejects.toThrow(/RAW_MATERIAL_BRANCH_MISMATCH|row-level security/);
 
     // Simulate a legacy corrupt row that predates the write-time guard. The
     // read contract must still return a precise blocked row, never omit it or

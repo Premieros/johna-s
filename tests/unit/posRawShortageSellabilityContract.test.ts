@@ -45,6 +45,8 @@ describe('POS raw-shortage and verified-availability contract', () => {
   it('returns invalid recipes as explicit blocked rows', () => {
     expect(migration).toContain('CREATE TRIGGER trg_00_validate_recipe_item_branch');
     expect(migration).toContain("RAISE EXCEPTION 'RAW_MATERIAL_BRANCH_MISMATCH'");
+    expect(migration).toContain("public.can_permission('recipes.manage')");
+    expect(migration).toContain('AND rm.branch_id = r.branch_id');
     expect(migration).toContain("'error', 'RAW_MATERIAL_NOT_IN_BRANCH'");
     expect(migration).toContain('availability_error := v_error;');
     expect(migration).toContain('raw_shortage_only := false;');
