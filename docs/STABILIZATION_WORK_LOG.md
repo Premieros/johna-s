@@ -261,14 +261,14 @@ Allow raw-material inventory to go negative on a sale so manufacturing/sales are
 - Never use another Supabase project; Production identity remains `azzdesuowpdcoflmyezn` only.
 - Do not reintroduce cross-branch or cross-warehouse fallback.
 
-## 2026-09-12 — Backend Simplification Program (PR 1: Simplification Map + Dependency Audit)
+## 2026-09-12 — Backend Simplification Program: PR 1 (merged) and PR 2 (in flight)
 
 ### Canonical identities (unchanged)
 
 - Repository: `Premieros/johna-s`
-- Production branch: `main` (merged PRs #80–#83; HEAD `952b315`)
+- Production branch: `main` (merged PRs #80–#84; after PR #84 merge `3fe6d3c`; parallel fix `44cc490` present)
 - Production Supabase ONLY: `azzdesuowpdcoflmyezn`
-- Working branch: `development/architecture-baseline` (new, from latest `main`)
+- Working branch: `development/inventory-contracts` (rebased onto the updated `main` for PR 2)
 
 ### Decision (user redirection)
 
@@ -290,12 +290,25 @@ Stop the wide multi-layered architecture effort. Keep exactly the user-facing ca
 - Dead code proven (REMOVE-LATER, deletion only in a dedicated PR): `src/services/subscription/subscriptionService.ts` (dead object; only re-exported via barrel), `src/features/admin/pages/SubscriptionsAdminPage.tsx`, `src/features/reporting/pages/ReportDeepLinkPage.tsx`, `src/components/subscription/SubscriptionBanner.tsx` (+ dormant `useSubscription` chain).
 - HIDE/LEGACY: `src/v2/**` gateway reachable only by direct URL (not in menu); `DashboardExecutiveInsightsV2` is live (name only).
 
-### Artifact
+### PR 1 (Simplification Map + Dependency Audit) — MERGED
 
-- `docs/SIMPLIFICATION_MAP.md` — full KEEP/MERGE/HIDE/LEGACY/REMOVE-LATER classification + PR roadmap (PR2–PR7) + binding rules.
-- This log entry + updated `docs/CURRENT_WORK_PLAN.md` header (section 17 pointer retained).
+- Branch: `development/architecture-baseline` (from `main` 952b315).
+- Commit merged: `b5331078b0d7ea559930f95aa7e051d3eb719f7e` — files: `docs/SIMPLIFICATION_MAP.md` (new), `docs/CURRENT_WORK_PLAN.md`, `docs/STABILIZATION_WORK_LOG.md`, `scripts/db/pos_availability_diagnosis.sql` (new, read-only).
+- PR: **#84 — MERGED as `3fe6d3c`** after re-running the failed `db` job. The initial failure was the transient `deadlock detected (40P01)` flake in `tests/integration/user_management_permission_first.test.ts`; the rerun was fully green (verify ✅, db ✅ 1m9s, browser-smoke ✅ 3m47s; Supabase Preview skipped).
 
-### Next (only after explicit go)
+### PR 2 — evidence audit results (docs, Full Verify pending)
 
-1. Commit PR 1 (docs only) on `development/architecture-baseline` and open PR against `main`.
-2. Then PR 2 — Inventory contracts consolidation (single stock/availability source of truth), then PR 3 Catalog → PR 4 Purchases → PR 5 Sales/POS/Kitchen → PR 6 Finance/Reports → PR 7 Legacy cleanup, each with Baseline → Change → Focused Tests → Full Verify → Regression Report.
+Independent branch `development/inventory-contracts` (from `main`, rebased on the updated `main`; preserves all PR 1 + PR 2 documentation). Dual audit (backend + frontend) produced `docs/INVENTORY_CONTRACTS.md`. Headline facts:
+
+- Availability canonical family: `check_product_availability` (`20260912075859:127`) is the single authoritative evaluator; `get_pos_product_availability` (`20260912075859:432`) and `get_pos_cart_product_availability` (`20260911173000:259`) are POS snapshots derived from it; `check_pos_cart_availability` strict/lax wrapper (`20260912113000:13-21`).
+- Source of Truth per layer: ready goods = `inventory` + `inventory_batches`; raw = `raw_material_batches` (warehouse FIFO, operational) with `raw_material_inventory` as branch summary only; units = `inventory_unit_batches`; ledger = `inventory_ledger` (+`stock_transactions`, +history views).
+- **No `AFTER` triggers maintain balances** — all stock mutation happens inside SECURITY DEFINER RPCs (confirmed across all 295 migrations).
+- Highest-risk client write bypass: `src/api/domains/manufacturing.ts:156-241` (`completeOrder` fallback mutates `raw_material_inventory`, `inventory`, `raw_material_movements`, `production_waste` directly) — documented, fix deferred to a future RPC-strengthening PR.
+- Dead file confirmed: `src/lib/sales-deduction.ts` (0 imports) → REMOVE-LATER (PR 7 scope).
+- Legacy layers documented (kept): `consume_order_kitchen_inventory` vs `send_to_kitchen`; `_raw_remove_fifo`/`_raw_add` legacy bridges.
+- Map of direct `from()` reads on balances to reroute through `src/api/inventory` in future PRs (with Regression requirement).
+
+### Status
+
+- PR 1: **#84 MERGED**. PR 2: **#86** submitted; Full Verify running after rebase onto the updated `main` (sequence: merge PR 1 → rebase PR 2 → Full Verify on #86 → merge #86 → then PR 3 Catalog).
+- No Production migration applied; Production Supabase `azzdesuowpdcoflmyezn` untouched.
