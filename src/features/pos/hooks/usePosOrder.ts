@@ -39,6 +39,11 @@ export function usePosOrder(input: UsePosOrderInput) {
     refreshKey: kitchenRefreshKey,
   });
 
+  const isRawShortageOnly = useCallback(
+    (productId: string) => input.rawShortageOnly?.[productId] === true,
+    [input.rawShortageOnly],
+  );
+
   const showAvailabilityBlocked = useCallback((productName?: string) => {
     show(
       isAr
@@ -63,13 +68,13 @@ export function usePosOrder(input: UsePosOrderInput) {
       .filter((item) => item.product.id === product.id)
       .reduce((sum, item) => sum + item.quantity, 0);
     const physicalStock = Number(input.stockMap[product.id] || 0);
-    if (currentQty + quantity > physicalStock) {
+    if (!isRawShortageOnly(product.id) && currentQty + quantity > physicalStock) {
       showPhysicalStockBlocked(product.name, physicalStock);
       return;
     }
     cartAvailability.markMutationPending();
     base.addToCart(...args);
-  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
+  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const updateQty = useCallback((...args: Parameters<typeof base.updateQty>) => {
     const [lineKey, delta] = args;
@@ -84,14 +89,14 @@ export function usePosOrder(input: UsePosOrderInput) {
         .filter((item) => item.product.id === target.product.id)
         .reduce((sum, item) => sum + item.quantity, 0);
       const physicalStock = Number(input.stockMap[target.product.id] || 0);
-      if (currentQty + delta > physicalStock) {
+      if (!isRawShortageOnly(target.product.id) && currentQty + delta > physicalStock) {
         showPhysicalStockBlocked(target.product.name, physicalStock);
         return;
       }
       cartAvailability.markMutationPending();
     }
     base.updateQty(...args);
-  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
+  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const setQty = useCallback((...args: Parameters<typeof base.setQty>) => {
     const [lineKey, qty] = args;
@@ -107,14 +112,14 @@ export function usePosOrder(input: UsePosOrderInput) {
         .filter((item) => item.product.id === target.product.id && cartLineKey(item) !== lineKey)
         .reduce((sum, item) => sum + item.quantity, 0);
       const physicalStock = Number(input.stockMap[target.product.id] || 0);
-      if (otherQty + Number(qty) > physicalStock) {
+      if (!isRawShortageOnly(target.product.id) && otherQty + Number(qty) > physicalStock) {
         showPhysicalStockBlocked(target.product.name, physicalStock);
         return;
       }
       cartAvailability.markMutationPending();
     }
     base.setQty(...args);
-  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
+  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const replaceCartLine = useCallback((...args: Parameters<typeof base.replaceCartLine>) => {
     const [lineKey, nextItem] = args;
@@ -133,14 +138,14 @@ export function usePosOrder(input: UsePosOrderInput) {
       .filter((item) => item.product.id === nextItem.product.id && cartLineKey(item) !== lineKey)
       .reduce((sum, item) => sum + item.quantity, 0);
     const physicalStock = Number(input.stockMap[nextItem.product.id] || 0);
-    if (otherQty + nextItem.quantity > physicalStock) {
+    if (!isRawShortageOnly(nextItem.product.id) && otherQty + nextItem.quantity > physicalStock) {
       showPhysicalStockBlocked(nextItem.product.name, physicalStock);
       return false;
     }
 
     if (positiveDemand > 0) cartAvailability.markMutationPending();
     return base.replaceCartLine(...args);
-  }, [base, cartAvailability, input.stockMap, showAvailabilityBlocked, showPhysicalStockBlocked]);
+  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
 
   const removeFromCart = useCallback((...args: Parameters<typeof base.removeFromCart>) => {
     base.removeFromCart(...args);
