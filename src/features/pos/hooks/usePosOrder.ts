@@ -60,7 +60,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const addToCart = useCallback((...args: Parameters<typeof base.addToCart>) => {
     const product = args[0];
     const quantity = Number(args[1] ?? 1);
-    if (!cartAvailability.canAdd(product.id, quantity)) {
+    if (!isRawShortageOnly(product.id) && !cartAvailability.canAdd(product.id, quantity)) {
       showAvailabilityBlocked(product.name);
       return;
     }
@@ -80,7 +80,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const [lineKey, delta] = args;
     const target = base.cart.find((item) => cartLineKey(item) === lineKey);
     if (!target) return;
-    if (delta > 0 && !cartAvailability.canAdd(target.product.id, delta)) {
+    if (delta > 0 && !isRawShortageOnly(target.product.id) && !cartAvailability.canAdd(target.product.id, delta)) {
       showAvailabilityBlocked(target.product.name);
       return;
     }
@@ -103,7 +103,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const target = base.cart.find((item) => cartLineKey(item) === lineKey);
     if (!target) return;
     const delta = Number(qty) - target.quantity;
-    if (delta > 0 && !cartAvailability.canAdd(target.product.id, delta)) {
+    if (delta > 0 && !isRawShortageOnly(target.product.id) && !cartAvailability.canAdd(target.product.id, delta)) {
       showAvailabilityBlocked(target.product.name);
       return;
     }
@@ -129,7 +129,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const positiveDemand = current.product.id === nextItem.product.id
       ? Math.max(nextItem.quantity - current.quantity, 0)
       : nextItem.quantity;
-    if (positiveDemand > 0 && !cartAvailability.canAdd(nextItem.product.id, positiveDemand)) {
+    if (positiveDemand > 0 && !isRawShortageOnly(nextItem.product.id) && !cartAvailability.canAdd(nextItem.product.id, positiveDemand)) {
       showAvailabilityBlocked(nextItem.product.name);
       return false;
     }

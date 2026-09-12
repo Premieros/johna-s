@@ -13,7 +13,7 @@ describe('POS availability display contract', () => {
     expect(source).toContain("isAr ? 'نفد المخزون' : 'Out of stock'");
   });
 
-  it('fails closed when availability is unknown or zero instead of bypassing stock validation', () => {
+  it('fails closed for non-raw items when availability is unknown or zero', () => {
     expect(source).toContain('const ensureSellable = (product: Product) =>');
     expect(source).toContain('if (!hasStockValue(source, product.id))');
     expect(source).toContain("isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.'");
@@ -24,10 +24,14 @@ describe('POS availability display contract', () => {
     );
   });
 
-  it('trusts the authoritative raw-shortage signal regardless of the broad product type label', () => {
+  it('trusts the authoritative raw-shortage signal regardless of broad product type or transient cart state', () => {
     expect(source).toContain('const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;');
     expect(source).not.toContain("product.product_type !== 'manufactured' && rawShortageOnly[product.id] === true");
-    expect(source).toContain('const gated = (!rawShortage && blocked) || cartChecking || cartAvailabilityError;');
+    expect(source).toContain('const productCartChecking = cartChecking && !rawShortage;');
+    expect(source).toContain('const productCartAvailabilityError = cartAvailabilityError && !rawShortage;');
+    expect(source).toContain('const gated = rawShortage');
+    expect(source).toContain('? (!!availabilityError || !canAddToCart)');
+    expect(source).toContain(': blocked || productCartChecking || productCartAvailabilityError;');
   });
 
   it('does not require a legacy product_components recipe when authoritative availability is known', () => {
