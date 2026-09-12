@@ -31,6 +31,50 @@ function walk(dir, out = []) {
   return out;
 }
 
+function readObjectBlock(content, openBracePos, endLimit = content.length) {
+  let braceCount = 0;
+  for (let i = openBracePos; i < endLimit; i++) {
+    if (content[i] === '{') braceCount++;
+    else if (content[i] === '}') {
+      braceCount--;
+      if (braceCount === 0) return content.slice(openBracePos + 1, i);
+    }
+  }
+  return null;
+}
+
+function extractParamNames(paramBlock) {
+  return [...new Set([...paramBlock.matchAll(/p_([\w]+)(?=\s*\??\s*:)/g)].map((x) => x[1]))].sort();
+}
+
+function resolveMethodParamBlock(content, matchIndex) {
+  const textBefore = content.slice(0, matchIndex);
+  const methodMatches = [...textBefore.matchAll(/(?:async\s+)?\w+\s*\(\s*p\s*:\s*(\{|[A-Za-z_$][\w$]*)/g)];
+  if (methodMatches.length === 0) return null;
+
+  const methodMatch = methodMatches[methodMatches.length - 1];
+  const typeToken = methodMatch[1];
+
+  if (typeToken === '{') {
+    const openBracePos = methodMatch.index + methodMatch[0].lastIndexOf('{');
+    return readObjectBlock(content, openBracePos, matchIndex);
+  }
+
+  const escapedType = typeToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const typePatterns = [
+    new RegExp(`(?:export\\s+)?type\\s+${escapedType}\\s*=\\s*\\{`),
+    new RegExp(`(?:export\\s+)?interface\\s+${escapedType}\\s*\\{`),
+  ];
+  for (const pattern of typePatterns) {
+    const typeMatch = pattern.exec(content);
+    if (!typeMatch) continue;
+    const openBracePos = typeMatch.index + typeMatch[0].lastIndexOf('{');
+    return readObjectBlock(content, openBracePos);
+  }
+
+  return null;
+}
+
 function extractRpcCalls() {
   const calls = new Map();
   for (const file of walk(join(ROOT, 'src', 'api', 'domains'))) {
@@ -38,27 +82,8 @@ function extractRpcCalls() {
     const rpcMatches = [...content.matchAll(/rpc(?:<[^>]*>)?\('([\w_]+)',\s*p\)/g)];
     for (const match of rpcMatches) {
       const fn = match[1];
-      const matchIndex = match.index;
-      const textBefore = content.slice(0, matchIndex);
-      const methodStartMatches = [...textBefore.matchAll(/(?:async\s+)?(\w+)\s*\(\s*p\s*:\s*\{/g)];
-      if (methodStartMatches.length > 0) {
-        const lastMethodStart = methodStartMatches[methodStartMatches.length - 1];
-        const methodStartPos = lastMethodStart.index + lastMethodStart[0].length - 1;
-        let braceCount = 0;
-        let paramBlock = '';
-        for (let i = methodStartPos; i < matchIndex; i++) {
-          if (content[i] === '{') braceCount++;
-          else if (content[i] === '}') {
-            braceCount--;
-            if (braceCount === 0) {
-              paramBlock = content.slice(methodStartPos + 1, i);
-              break;
-            }
-          }
-        }
-        const params = [...new Set([...paramBlock.matchAll(/p_([\w]+)(?=\s*\??\s*:)/g)].map((x) => x[1]))].sort();
-        calls.set(fn, params);
-      }
+      const paramBlock = resolveMethodParamBlock(content, match.index);
+      if (paramBlock !== null) calls.set(fn, extractParamNames(paramBlock));
     }
   }
   return calls;
