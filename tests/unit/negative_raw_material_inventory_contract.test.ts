@@ -6,6 +6,11 @@ const migration = readFileSync(
   'utf8',
 ).replace(/\r\n/g, '\n');
 
+const warehouseBridge = readFileSync(
+  'supabase/migrations/20260911151500_raw_material_warehouse_legacy_bridge.sql',
+  'utf8',
+).replace(/\r\n/g, '\n');
+
 describe('negative raw material inventory migration contract', () => {
   it('relaxes only the raw-material quantity CHECK constraints', () => {
     expect(migration).toContain('DROP CONSTRAINT IF EXISTS raw_material_inventory_quantity_check');
@@ -58,5 +63,17 @@ describe('negative raw material inventory migration contract', () => {
     expect(migration).toContain("'INSUFFICIENT_PRODUCT_STOCK',");
     expect(migration).toContain("'INSUFFICIENT_UNIT_STOCK',");
     expect(migration).toContain("'INSUFFICIENT_RAW_MATERIAL_STOCK'");
+  });
+
+  it('keeps the legacy raw deduction wrapper internal-only', () => {
+    expect(warehouseBridge).toContain(
+      'REVOKE ALL ON FUNCTION public.deduct_raw_material_inventory(uuid,numeric,uuid,uuid) FROM PUBLIC, anon, authenticated;',
+    );
+    expect(warehouseBridge).toContain(
+      'GRANT EXECUTE ON FUNCTION public.deduct_raw_material_inventory(uuid,numeric,uuid,uuid) TO service_role, postgres;',
+    );
+    expect(warehouseBridge).not.toContain(
+      'GRANT EXECUTE ON FUNCTION public.deduct_raw_material_inventory(uuid,numeric,uuid,uuid) TO authenticated',
+    );
   });
 });

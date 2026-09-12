@@ -139,7 +139,8 @@ REVOKE ALL ON FUNCTION public._raw_add(uuid,uuid,numeric,numeric,text,date,date,
 REVOKE ALL ON FUNCTION public._raw_remove_fifo(uuid,uuid,numeric,text,text,uuid,text,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public._raw_add(uuid,uuid,numeric,numeric,text,date,date,text,text,uuid,text,uuid) TO service_role, postgres;
 GRANT EXECUTE ON FUNCTION public._raw_remove_fifo(uuid,uuid,numeric,text,text,uuid,text,uuid) TO service_role, postgres;
-GRANT EXECUTE ON FUNCTION public.deduct_raw_material_inventory(uuid,numeric,uuid,uuid) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.deduct_raw_material_inventory(uuid,numeric,uuid,uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.deduct_raw_material_inventory(uuid,numeric,uuid,uuid) TO service_role, postgres;
 
 DO $patch$
 DECLARE v_oid oid; v_def text; v_patched text;
