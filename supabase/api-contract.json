@@ -177,8 +177,25 @@
     {
       "name": "create_product",
       "params": [
-        "product_id",
-        "units"
+        "barcode",
+        "branch_id",
+        "category_id",
+        "cost_price",
+        "description",
+        "image_url",
+        "is_active",
+        "low_stock_threshold",
+        "max_stock",
+        "min_stock",
+        "name",
+        "name_en",
+        "product_type",
+        "reorder_point",
+        "sale_price",
+        "sku",
+        "unit_links",
+        "units",
+        "wholesale_price"
       ]
     },
     {
@@ -219,8 +236,15 @@
     {
       "name": "create_raw_material",
       "params": [
-        "product_id",
-        "units"
+        "branch_id",
+        "category",
+        "code",
+        "default_cost",
+        "description",
+        "is_active",
+        "min_stock",
+        "name",
+        "unit_id"
       ]
     },
     {

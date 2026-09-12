@@ -11,6 +11,9 @@ const productsPage = read('src/features/catalog/pages/ProductsPage.tsx');
 const importExecutor = read('src/features/import-export/import-executor.ts');
 const catalogApi = read('src/api/domains/catalog.ts');
 const permissionDefs = read('src/lib/permissionDefs.ts');
+const apiContract = JSON.parse(read('supabase/api-contract.json')) as {
+  rpcs: Array<{ name: string; params: string[] }>;
+};
 
 describe('catalog create contract (PR3 6A)', () => {
   it('defines create_raw_material with the guarded SECURITY DEFINER profile', () => {
@@ -71,6 +74,44 @@ describe('catalog create contract (PR3 6A)', () => {
   it('exposes the two wrappers from the catalog domain with the exact RPC names', () => {
     expect(catalogApi).toContain("rpc('create_raw_material', p)");
     expect(catalogApi).toContain("rpc('create_product', p)");
+  });
+
+  it('pins the generated API contract to the real 6A RPC signatures', () => {
+    const createProduct = apiContract.rpcs.find((rpc) => rpc.name === 'create_product');
+    const createRawMaterial = apiContract.rpcs.find((rpc) => rpc.name === 'create_raw_material');
+
+    expect(createProduct?.params).toEqual([
+      'barcode',
+      'branch_id',
+      'category_id',
+      'cost_price',
+      'description',
+      'image_url',
+      'is_active',
+      'low_stock_threshold',
+      'max_stock',
+      'min_stock',
+      'name',
+      'name_en',
+      'product_type',
+      'reorder_point',
+      'sale_price',
+      'sku',
+      'unit_links',
+      'units',
+      'wholesale_price',
+    ]);
+    expect(createRawMaterial?.params).toEqual([
+      'branch_id',
+      'category',
+      'code',
+      'default_cost',
+      'description',
+      'is_active',
+      'min_stock',
+      'name',
+      'unit_id',
+    ]);
   });
 
   it('keeps the permission names authoritative in permissionDefs', () => {
