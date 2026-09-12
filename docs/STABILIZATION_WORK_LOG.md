@@ -176,3 +176,40 @@ Existing cross-branch, production, sale, UOM, RLS and inventory suites were also
 ## Deferred branch audit note
 
 - `Premieros-patch-1`: **Superseded / Dangerous — DO NOT MERGE**. It contains changes that can weaken the Supabase identity lock / reintroduce environment ambiguity. No deletion is performed until the later branch-audit stage.
+
+## Negative Raw-Material Inventory — sell-through allowance
+
+Status: **IN PROGRESS (frontend + verification complete; Full Verify + Production decision pending)**
+Working branch: `development/stabilization-phase-2`
+New migration: `supabase/migrations/20260911160000_negative_raw_material_inventory.sql`
+
+### Goal
+
+Allow raw-material inventory to go negative on a sale so manufacturing/sales are not blocked by a few units of shortage. The shortage is recorded as an accounting debt (negative raw-material batch) that purchases later offset arithmetically via `SUM` netting — no clamping, no hidden zeroing.
+
+### Design decisions
+
+- Shortage is written as a **negative raw-material batch** (`quantity = -shortage`, `source_type = 'sale_oversold'`, warehouse = the sale warehouse). Branch/warehouse net raw stock = `SUM(quantity)`; a later purchase with the same raw material offsets the debt naturally.
+- **Strict scope**: manufactured units / ready products / transfers keep `allow_negative` **OFF** by default. Only the sale-deduction core opts in.
+- The availability RPC returns a new `raw_shortage_only` signal for non-manufactured products whose raw stock is negative but >= the recipe need, so POS can sell them while still labeling them as unavailable.
+- Stage B regression was fixed inside this migration: sale deduction passes the explicit warehouse into the canonical `_raw_remove_fifo(..., true)`, and void restore passes `v_event.warehouse_id` into canonical `_raw_add`.
+
+### Files
+
+- `supabase/migrations/20260911160000_negative_raw_material_inventory.sql`
+- `tests/unit/negative_raw_material_inventory_contract.test.ts` (8 contracts on the migration text)
+- `tests/integration/negative_raw_material_inventory.test.ts` (12 cases; skipped locally without `SUPABASE_DB_URL`)
+- Frontend: `PosWorkspacePage.tsx` (`rawShortageMap`), `ProductBrowser.tsx` (`rawShortageOnly` prop + sellable raw-shortage cards), `usePosOrderBase.ts` / `usePosOrder.ts` (hook-level stock guards exempt raw-shortage products)
+
+### Verification status
+
+- `npm run typecheck` (app): ✅
+- `npm run lint` on all touched files: 0 errors; the single `kitchenSendsForActive` warning is pre-existing baseline.
+- Contract tests reading the touched files (`posAvailabilityDisplayContract`, `posAvailabilityGateContract`, `branchPrintContract`, `posProductImagesRedesignContract`, `productScanContract`, `recentUiWiringContract`, `posOperatorDisplayContract`, negative contract): ✅
+- `posSharedShiftWorkspaceContract` failure is the pre-existing environmental CRLF failure (unchanged).
+- Full official suite (`npm run lint` + `npm run typecheck:all` + `npm run test:unit` + `npm run build`): ✅ — lint 0 errors/3 pre-existing warnings; unit 479 passed / 3 pre-existing CRLF failures; typecheck + build clean.
+
+### Next
+
+1. Run the full official check suite once more.
+2. No Production migration until an explicit decision and Full Verify Green.

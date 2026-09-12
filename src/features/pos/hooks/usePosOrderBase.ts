@@ -31,6 +31,7 @@ export interface UsePosOrderInput {
   activeShift: ActiveShiftInfo | null;
   products: Product[];
   stockMap: Record<string, number>;
+  rawShortageOnly?: Record<string, boolean>;
   onInventoryChanged?: () => void;
 }
 
@@ -45,7 +46,7 @@ const EMPTY_CART: CartItem[] = [];
 const VALID_PAYMENT_METHODS: PosPaymentMethod[] = ['cash', 'card', 'transfer', 'credit'];
 
 export function usePosOrder(input: UsePosOrderInput) {
-  const { branchId, branchName, orderId, customers, effSettings, activeShift, stockMap, onInventoryChanged } = input;
+  const { branchId, branchName, orderId, customers, effSettings, activeShift, stockMap, rawShortageOnly = {}, onInventoryChanged } = input;
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { user } = useAuth();
@@ -161,6 +162,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [tableId]);
 
   const getStock = useCallback((productId: string) => stockMap[productId] || 0, [stockMap]);
+  const isNegativeEligible = useCallback((productId: string) => rawShortageOnly[productId] === true, [rawShortageOnly]);
 
   const addToCart = useCallback((
     product: Product,
@@ -175,7 +177,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const totalProductQty = cart
       .filter((i) => i.product.id === product.id)
       .reduce((sum, i) => sum + i.quantity, 0);
-    if (totalProductQty + quantity > stock) {
+    if (!isNegativeEligible(product.id) && totalProductQty + quantity > stock) {
       show(`${product.name}: ${t('insufficientStock')} (${stock})`, 'error');
       return;
     }
@@ -200,7 +202,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return [...prev, incoming];
     });
-  }, [getStock, cart, show, t]);
+  }, [getStock, isNegativeEligible, cart, show, t]);
 
   const updateQty = useCallback((lineKey: string, delta: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
@@ -210,12 +212,12 @@ export function usePosOrder(input: UsePosOrderInput) {
       const totalProductQty = cart
         .filter((i) => i.product.id === target.product.id)
         .reduce((sum, i) => sum + i.quantity, 0);
-      if (totalProductQty + delta > stock) { show(`${t('insufficientStock')} (${stock})`, 'error'); return; }
+      if (!isNegativeEligible(target.product.id) && totalProductQty + delta > stock) { show(`${t('insufficientStock')} (${stock})`, 'error'); return; }
     }
     setCart((prev) => prev
       .map((i) => cartLineKey(i) === lineKey ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
       .filter((i) => i.quantity > 0));
-  }, [getStock, cart, show, t]);
+  }, [getStock, isNegativeEligible, cart, show, t]);
 
   const setQty = useCallback((lineKey: string, qty: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
@@ -224,11 +226,13 @@ export function usePosOrder(input: UsePosOrderInput) {
     const otherQty = cart
       .filter((i) => i.product.id === target.product.id && cartLineKey(i) !== lineKey)
       .reduce((sum, i) => sum + i.quantity, 0);
-    const maxForLine = Math.max(0, stock - otherQty);
+    const maxForLine = isNegativeEligible(target.product.id)
+      ? Number.MAX_SAFE_INTEGER
+      : Math.max(0, stock - otherQty);
     if (qty > maxForLine) { show(`${t('insufficientStock')} (${stock})`, 'error'); qty = maxForLine; }
     setCart((prev) => prev
       .map((i) => cartLineKey(i) === lineKey ? { ...i, quantity: Math.max(1, qty) } : i));
-  }, [cart, getStock, show, t]);
+  }, [cart, getStock, isNegativeEligible, show, t]);
 
   const removeFromCart = useCallback((lineKey: string) => setCart((prev) => prev.filter((i) => cartLineKey(i) !== lineKey)), []);
   const clearCart = useCallback(() => setCart(EMPTY_CART), []);
@@ -246,7 +250,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const otherQty = cart
       .filter((i) => i.product.id === nextItem.product.id && cartLineKey(i) !== lineKey)
       .reduce((sum, i) => sum + i.quantity, 0);
-    if (otherQty + nextItem.quantity > stock) {
+    if (!isNegativeEligible(nextItem.product.id) && otherQty + nextItem.quantity > stock) {
       show(`${nextItem.product.name}: ${t('insufficientStock')} (${stock})`, 'error');
       return false;
     }
@@ -262,7 +266,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       return [...withoutOld, nextItem];
     });
     return true;
-  }, [cart, getStock, show, t]);
+  }, [cart, getStock, isNegativeEligible, show, t]);
 
   const taxRate = effSettings?.tax_enabled ? (effSettings?.tax_rate || 0) : 0;
   const totals = useMemo(
@@ -732,7 +736,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       if (!activeOrderId) {
         for (const item of cart) {
           const stock = getStock(item.product.id);
-          if (stock < item.quantity) { show(`${item.product.name}: ${t('insufficientStock')} (${stock})`, 'error'); return false; }
+          if (!isNegativeEligible(item.product.id) && stock < item.quantity) { show(`${item.product.name}: ${t('insufficientStock')} (${stock})`, 'error'); return false; }
         }
       }
 
@@ -809,7 +813,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setCompleting(false);
     }
-  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
+  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
 
   const printReceipt = useCallback(async () => {
     if (!lastReceipt || !effSettings) return;
