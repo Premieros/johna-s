@@ -45,7 +45,7 @@ export const catalog = {
   createRawMaterial(p: CreateRawMaterialInput): ApiResult<CreateRawMaterialResult> { return rpc('create_raw_material', p); },
   createProduct(p: CreateProductInput): ApiResult<CreateProductResult> { return rpc('create_product', p); },
   getProductModifiers(p_product_id: string): ApiResult<unknown> { return rpc('get_product_modifiers', { p_product_id }); },
-  getProductModifiersAdmin(p_product_id: string): ApiResult<unknown> { return rpc('get_product_modifiers_admin', { p_product_id }); },
+  getProductModifiersAdmin(p: { p_product_id: string }): ApiResult<unknown> { return rpc('get_product_modifiers_admin', p); },
   saveProductModifiers(p_product_id: string, p_groups: unknown): ApiResult<unknown> { return rpc('save_product_modifiers', { p_product_id, p_groups }); },
 
   async listInventoryUnits(filters?: { branch_id?: string; unit_type?: string; is_active?: boolean }) {
@@ -122,12 +122,12 @@ export const catalog = {
     if (error) throw error;
   },
 
-  getKitchenStationAssignments(p_branch_id: string): ApiResult<unknown> {
-    return rpc('get_kitchen_station_assignments', { p_branch_id });
+  getKitchenStationAssignments(p: { p_branch_id: string }): ApiResult<unknown> {
+    return rpc('get_kitchen_station_assignments', p);
   },
 
-  getKitchenStationEditorContext(p_branch_id: string): ApiResult<unknown> {
-    return rpc('get_kitchen_station_editor_context', { p_branch_id });
+  getKitchenStationEditorContext(p: { p_branch_id: string }): ApiResult<unknown> {
+    return rpc('get_kitchen_station_editor_context', p);
   },
 
   saveKitchenStationAssignments(p: { p_branch_id: string; p_station_id: string; p_user_ids: string[]; p_category_ids: string[] }): ApiResult<unknown> {
