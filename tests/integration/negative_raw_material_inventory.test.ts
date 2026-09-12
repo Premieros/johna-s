@@ -247,11 +247,6 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
        VALUES($1,$2,$3,'Bad Cross-Branch Recipe',1,true)`,
       [recipeBad, prodBadRecipe, branchA],
     );
-    await client.query(
-      `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
-       VALUES($1,$2,1,0)`,
-      [recipeBad, rawBX],
-    );
   });
 
   afterAll(async () => {
@@ -495,7 +490,9 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
       `SELECT public._deduct_sale_inventory_with_modifiers_core($1,$2,$3::jsonb,$4,$5) AS r`,
       [branchA, whA1, JSON.stringify([{ product_id: prodMfg, quantity: 1 }]), randomUUID(), 'SALE-MFG'],
     );
-    expect(sale[0].r).toMatchObject({ success: false, error: 'INSUFFICIENT_UNIT_STOCK' });
+    expect(sale[0].r).toMatchObject({ success: false, error: 'SALE_INVENTORY_DEDUCTION_FAILED' });
+    expect(await warehouseBalance(rawU, branchA, whA1)).toBe(0);
+    expect(await oversoldBatches(rawU)).toEqual([]);
   });
 
   it('never exposes an inactive product through POS availability', async () => {
@@ -507,6 +504,34 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
   });
 
   it('returns a cross-branch recipe as a blocked configuration row, never raw shortage', async () => {
+    await client.query('SAVEPOINT invalid_recipe_write');
+    await expect(
+      client.query(
+        `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
+         VALUES($1,$2,1,0)`,
+        [recipeBad, rawBX],
+      ),
+    ).rejects.toThrow(/RAW_MATERIAL_BRANCH_MISMATCH/);
+    await client.query('ROLLBACK TO SAVEPOINT invalid_recipe_write');
+    await client.query('RELEASE SAVEPOINT invalid_recipe_write');
+
+    // Simulate a legacy corrupt row that predates the write-time guard. The
+    // read contract must still return a precise blocked row, never omit it or
+    // classify it as ordinary negative-raw sell-through.
+    await client.query('ALTER TABLE public.recipe_items DISABLE TRIGGER trg_validate_recipe_item_branch');
+    await client.query(
+      `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
+       VALUES($1,$2,1,0)`,
+      [recipeBad, rawBX],
+    );
+    await client.query('ALTER TABLE public.recipe_items ENABLE TRIGGER trg_validate_recipe_item_branch');
+
+    const material = await q<{ branch_id: string }>(
+      `SELECT branch_id FROM public.raw_materials WHERE id=$1`,
+      [rawBX],
+    );
+    expect(material[0].branch_id).toBe(branchB);
+
     const chk = await q<{ r: CoreRpc }>(
       `SELECT public.check_product_availability($1,$2,$3,1) AS r`,
       [prodBadRecipe, branchA, whA1],

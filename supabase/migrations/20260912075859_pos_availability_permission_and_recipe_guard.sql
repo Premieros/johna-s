@@ -22,6 +22,46 @@ USING (
   )
 );
 
+-- Restore the write-time branch invariant on fresh databases as well as
+-- upgrades. Existing deployments may already have this trigger; recreating it
+-- is idempotent and prevents new cross-branch recipe links.
+CREATE OR REPLACE FUNCTION public.validate_recipe_item_branch_match()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_recipe_branch uuid;
+  v_material_branch uuid;
+BEGIN
+  SELECT branch_id INTO v_recipe_branch
+  FROM public.recipes
+  WHERE id = NEW.recipe_id;
+
+  SELECT branch_id INTO v_material_branch
+  FROM public.raw_materials
+  WHERE id = NEW.raw_material_id;
+
+  IF v_recipe_branch IS NULL
+     OR v_material_branch IS NULL
+     OR v_recipe_branch <> v_material_branch THEN
+    RAISE EXCEPTION 'RAW_MATERIAL_BRANCH_MISMATCH'
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_validate_recipe_item_branch ON public.recipe_items;
+CREATE TRIGGER trg_validate_recipe_item_branch
+BEFORE INSERT OR UPDATE ON public.recipe_items
+FOR EACH ROW EXECUTE FUNCTION public.validate_recipe_item_branch_match();
+
+REVOKE ALL ON FUNCTION public.validate_recipe_item_branch_match() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.validate_recipe_item_branch_match() TO service_role, postgres;
+
 -- Positive raw-shortage classification hardening.
 --
 -- A recipe (or manufactured-unit recipe) must only consume raw materials that
