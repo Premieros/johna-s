@@ -3,9 +3,13 @@
 > **هذا هو السجل الحي الوحيد للمشروع.**
 > أي نموذج أو مطور يبدأ من هذا الملف ثم يجلب HEAD الحالي لـ`main` والفرع/PR المستهدف قبل أي تعديل، لأن نماذج أخرى قد تعمل بالتوازي.
 
-آخر تحديث: **2026-09-11 — Africa/Cairo — Accelerated Dependency-First Stabilization**
+آخر تحديث: **2026-09-12 — Backend Simplification Program (PR 1)**
 
-> إضافة داخل مسار Root Stage B: **Negative Raw-Material Inventory (sell-through allowance)** قيد الإغلاق — migration `20260911160000_negative_raw_material_inventory.sql` + عقود واختبارات + واجهة POS؛ سجل التنفيذ في `docs/STABILIZATION_WORK_LOG.md`.
+> **برنامج التبسيط النشط الحالي:** الحفاظ على كل Feature ظاهرة للمستخدم وهوية المشروع، وتبسيط البنية الخلفية فقط — إزالة الازدواج الداخلي، المسارات الميتة ببديل مثبت، والـ layers التاريخية، دون حذف أي Feature مستخدمة ودون فقد بيانات Production.
+> **خريطة التصنيف الكاملة**: `docs/SIMPLIFICATION_MAP.md` (مخرَج PR 1 — جرد + تصنيف KEEP/MERGE/HIDE/LEGACY/REMOVE-LATER).
+> ترتيب التنفيذ: **PR1** Map+Audit → **PR2** Inventory contracts → **PR3** Catalog → **PR4** Purchases → **PR5** Sales/POS/Kitchen → **PR6** Finance/Reports → **PR7** Legacy cleanup المؤكد.
+> الفرع النشط: `development/architecture-baseline` (من أحدث `main`). الـ migrations تضاف **forward-only** ولا تُعدَّل المطبَّقة؛ أي حذف بعد إثبات عدم الاستخدام و Regression Green.
+> سجل التنفيذ التفصيلي: `docs/STABILIZATION_WORK_LOG.md`.
 
 ## 1) الهوية الثابتة — غير قابلة للخلط
 
