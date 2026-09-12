@@ -611,7 +611,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
         ins: () => ({ sql: `INSERT INTO public.warehouse_transfer_items (transfer_id, product_id, destination_product_id, quantity) VALUES ($1, $2, $2, 1)`, paramsA: [ids.rows.warehouse_transfers.own, ids.prodA], paramsB: [ids.rows.warehouse_transfers.other, ids.prodB] }),
       },
       {
-        name: 'recipe_items', key: 'recipe_items', parent: 'recipes', fk: 'recipe_id', mode: 'parentWrite', noDel: 'all',
+        name: 'recipe_items', key: 'recipe_items', parent: 'recipes', fk: 'recipe_id', mode: 'permRecipes', noDel: 'all',
         ins: () => ({ sql: `INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity) VALUES ($1, $2, 1)`, paramsA: [ids.rows.recipes.own, ids.rm], paramsB: [ids.rows.recipes.other, ids.rm] }),
       },
       {

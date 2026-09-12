@@ -569,16 +569,16 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
       ),
     ).rejects.toThrow(/RAW_MATERIAL_BRANCH_MISMATCH|row-level security/);
 
-    // Simulate a legacy corrupt row that predates the write-time guard. The
+    // Simulate a legacy row made invalid by a later material branch move. The
     // read contract must still return a precise blocked row, never omit it or
     // classify it as ordinary negative-raw sell-through.
-    await client.query('ALTER TABLE public.recipe_items DISABLE TRIGGER trg_00_validate_recipe_item_branch');
+    await client.query('UPDATE public.raw_materials SET branch_id=$1 WHERE id=$2', [branchA, rawBX]);
     await client.query(
       `INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
        VALUES($1,$2,1,0)`,
       [recipeBad, rawBX],
     );
-    await client.query('ALTER TABLE public.recipe_items ENABLE TRIGGER trg_00_validate_recipe_item_branch');
+    await client.query('UPDATE public.raw_materials SET branch_id=$1 WHERE id=$2', [branchB, rawBX]);
 
     const material = await q<{ branch_id: string }>(
       `SELECT branch_id FROM public.raw_materials WHERE id=$1`,
