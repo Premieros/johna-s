@@ -9,15 +9,30 @@ const browser = read('src/features/pos/components/catalog/ProductBrowser.tsx');
 const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 const offline = read('src/context/OfflineContext.tsx');
 const migration = read('supabase/migrations/20260912075859_pos_availability_permission_and_recipe_guard.sql');
+const cartMigration = read('supabase/migrations/20260912113000_pos_cart_negative_raw_sellthrough.sql');
 
 describe('POS raw-shortage and verified-availability contract', () => {
   it('keeps same-branch raw shortages exempt from every client stock guard', () => {
     expect(hook).toContain('if (!isNegativeEligible(product.id) && totalProductQty + quantity > stock)');
     expect(hook).toContain('if (!isNegativeEligible(target.product.id) && totalProductQty + delta > stock)');
     expect(hook).toContain('const maxForLine = isNegativeEligible(target.product.id)');
+    expect(wrapper).toContain('(productId: string) => input.rawShortageOnly?.[productId] === true');
+    expect(wrapper).toContain('if (!isRawShortageOnly(product.id) && currentQty + quantity > physicalStock)');
+    expect(wrapper).toContain('if (!isRawShortageOnly(target.product.id) && currentQty + delta > physicalStock)');
+    expect(wrapper).toContain('if (!isRawShortageOnly(target.product.id) && otherQty + Number(qty) > physicalStock)');
+    expect(wrapper).toContain('if (!isRawShortageOnly(nextItem.product.id) && otherQty + nextItem.quantity > physicalStock)');
     expect(wrapper).toContain('input.rawShortageOnly?.[item.product.id] === true');
     expect(browser).toContain('const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;');
     expect(browser).toContain('if (isRawShortageOnly(product)) {\n      return true;\n    }');
+  });
+
+  it('keeps cart aggregate availability permissive only for raw shortage', () => {
+    expect(cartMigration).toContain("<> 'INSUFFICIENT_RAW_MATERIAL_STOCK'");
+    expect(cartMigration).toContain("v_error <> 'INSUFFICIENT_RAW_MATERIAL_STOCK'");
+    expect(cartMigration).toContain('public.check_product_availability(');
+    expect(cartMigration).toContain("'mode', 'cart_aggregate_raw_shortage_sellthrough'");
+    expect(cartMigration).toContain("'raw_shortage_only', true");
+    expect(cartMigration).not.toContain("'INSUFFICIENT_PRODUCT_STOCK' THEN RETURN jsonb_build_object('success', true");
   });
 
   it('loads and caches the server raw-shortage signal without inventing success', () => {
