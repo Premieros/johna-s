@@ -4,6 +4,58 @@
 -- A corrected invoice keeps the customer-facing invoice number while the old
 -- version remains as a returned revision for audit/history.
 
+-- Stage B made raw FIFO warehouse-explicit. The canonical purchase-return RPC
+-- still calls the locked legacy signature, so teach that compatibility bridge
+-- to resolve the warehouse from its authoritative purchase document. This
+-- keeps process_purchase_return as the sole reversal writer and avoids any
+-- direct inventory mutation in update_purchase_invoice.
+CREATE OR REPLACE FUNCTION public._raw_remove_fifo(
+  p_raw_material_id uuid,
+  p_branch_id uuid,
+  p_qty numeric,
+  p_entry_type text DEFAULT 'production',
+  p_reference_type text DEFAULT NULL,
+  p_reference_id uuid DEFAULT NULL,
+  p_reference_number text DEFAULT NULL,
+  p_created_by uuid DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $bridge$
+DECLARE
+  v_warehouse_id uuid;
+BEGIN
+  IF p_reference_type = 'warehouse_transfer' AND p_reference_id IS NOT NULL THEN
+    SELECT wt.from_warehouse_id INTO v_warehouse_id
+    FROM public.warehouse_transfers wt
+    WHERE wt.id = p_reference_id AND wt.branch_id = p_branch_id;
+  ELSIF p_reference_type = 'sale' AND p_reference_id IS NOT NULL THEN
+    SELECT s.warehouse_id INTO v_warehouse_id
+    FROM public.sales s WHERE s.id = p_reference_id AND s.branch_id = p_branch_id;
+  ELSIF p_reference_type = 'production' AND p_reference_id IS NOT NULL THEN
+    SELECT iup.warehouse_id INTO v_warehouse_id
+    FROM public.inventory_unit_productions iup
+    WHERE iup.id = p_reference_id AND iup.branch_id = p_branch_id;
+  ELSIF p_reference_type = 'purchase_return' AND p_reference_id IS NOT NULL THEN
+    SELECT p.warehouse_id INTO v_warehouse_id
+    FROM public.purchases p
+    WHERE p.id = p_reference_id AND p.branch_id = p_branch_id;
+  END IF;
+
+  IF v_warehouse_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'WAREHOUSE_REQUIRED', 'shortage', p_qty);
+  END IF;
+
+  RETURN public._raw_remove_fifo(
+    p_raw_material_id, p_branch_id, v_warehouse_id, p_qty,
+    p_entry_type, p_reference_type, p_reference_id, p_reference_number, p_created_by
+  );
+END;
+$bridge$;
+
+REVOKE ALL ON FUNCTION public._raw_remove_fifo(uuid,uuid,numeric,text,text,uuid,text,uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._raw_remove_fifo(uuid,uuid,numeric,text,text,uuid,text,uuid) TO service_role, postgres;
+
 CREATE OR REPLACE FUNCTION public.update_purchase_invoice(
   p_purchase_id uuid,
   p_supplier_id uuid,

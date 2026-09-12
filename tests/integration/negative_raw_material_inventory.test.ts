@@ -282,8 +282,9 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     expect(await inventoryBalance(rawZ, branchA)).toBe(-7);
     const debts = await oversoldBatches(rawZ);
     expect(debts).toHaveLength(2);
-    expect(num(debts[0].quantity)).toBe(-4);
-    expect(num(debts[1].quantity)).toBe(-3);
+    // created_at is transaction-stable in PostgreSQL, so UUID ordering cannot
+    // prove insertion order. Assert the complete debt set without weakening it.
+    expect(debts.map((row) => num(row.quantity)).sort((a, b) => a - b)).toEqual([-4, -3]);
   });
 
   it('offsets a negative balance back to positive with plain SUM netting (no clamp)', async () => {

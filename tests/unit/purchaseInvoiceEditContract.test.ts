@@ -16,6 +16,8 @@ describe('purchase invoice edit and inline raw-material contract', () => {
     expect(migration).toContain("public.process_purchase_return(");
     expect(migration).toContain("public.process_purchase(");
     expect(migration).toContain('RAISE EXCEPTION USING');
+    expect(migration).toContain("p_reference_type = 'purchase_return'");
+    expect(migration).toContain('SELECT p.warehouse_id INTO v_warehouse_id');
   });
 
   it('keeps branch immutable and checks corrected warehouse ownership', () => {
@@ -36,6 +38,13 @@ describe('purchase invoice edit and inline raw-material contract', () => {
     expect(migration).toContain("can_permission('purchases.manage')");
     expect(migration).not.toContain("v_role NOT IN");
     expect(migration).not.toContain("branch_manager");
+  });
+
+  it('never mutates inventory or accounting tables from the purchase UI', () => {
+    const page = read('src/features/trade/pages/PurchasesPage.tsx');
+
+    expect(page).not.toMatch(/from\(['"](?:inventory|inventory_batches|raw_material_inventory|raw_material_batches|stock_transactions|inventory_ledger|journal_entries|journal_entry_lines|supplier_payments)['"]\)\s*\.(?:insert|update|delete)/);
+    expect(page).toContain('api.trade.updatePurchase');
   });
 
   it('creates raw materials inline only with the canonical manage permission and required unit', () => {
