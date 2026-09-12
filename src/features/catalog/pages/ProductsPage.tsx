@@ -169,14 +169,28 @@ export function ProductsPage() {
       if (unitError) { show(unitError.message, 'error'); return; }
       await logAudit('update', 'products', editing.id, { name: form.name });
     } else {
-      const { data, error } = await supabase.from('products').insert(payload).select().single();
-      if (error) { show(error.message, 'error'); return; }
-      pid = (data as { id: string }).id;
-      if (unitPayload.length > 0) {
-        const { error: unitError } = await api.catalog.replaceProductUnits({ p_product_id: pid, p_units: unitPayload });
-        if (unitError) { show(unitError.message, 'error'); return; }
-      }
-      await logAudit('create', 'products', pid, { name: form.name });
+      const { data, error } = await api.catalog.createProduct({
+        p_name: payload.name,
+        p_name_en: payload.name_en || null,
+        p_barcode: payload.barcode || null,
+        p_sku: payload.sku || null,
+        p_category_id: payload.category_id || null,
+        p_branch_id: effectiveBranch,
+        p_description: payload.description || null,
+        p_image_url: payload.image_url || null,
+        p_cost_price: payload.cost_price,
+        p_sale_price: payload.sale_price,
+        p_wholesale_price: payload.wholesale_price,
+        p_low_stock_threshold: payload.low_stock_threshold,
+        p_min_stock: payload.min_stock,
+        p_max_stock: payload.max_stock,
+        p_reorder_point: payload.reorder_point,
+        p_product_type: payload.product_type,
+        p_is_active: payload.is_active,
+        p_units: unitPayload.length > 0 ? unitPayload : null,
+      });
+      if (error || !data || data.success === false) { show(error?.message || data?.error || 'error', 'error'); return; }
+      pid = data.product_id!;
     }
 
     if (editing) {

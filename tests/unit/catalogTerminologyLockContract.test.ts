@@ -11,7 +11,7 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(source).toContain('raw-material-measurement-unit-locked');
     expect(source).toContain("Measurement unit is intentionally immutable after creation");
     expect(source).toContain(".update(commonPayload).eq('id', form.id)");
-    expect(source).toContain("insert({ ...commonPayload, unit_id: form.unit_id })");
+    expect(source).toContain('api.catalog.createRawMaterial');
   });
 
   it('presents only manufactured inventory items and forces type only on create', () => {

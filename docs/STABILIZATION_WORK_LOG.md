@@ -310,5 +310,28 @@ Independent branch `development/inventory-contracts` (from `main`, rebased on th
 
 ### Status
 
-- PR 1: **#84 MERGED**. PR 2: **#86** submitted; Full Verify running after rebase onto the updated `main` (sequence: merge PR 1 → rebase PR 2 → Full Verify on #86 → merge #86 → then PR 3 Catalog).
+- PR 1: **#84 MERGED**. PR 2: **#86 MERGED** (as `42a7c66`) after rebase onto the updated `main` and a green Full Verify (verify ✅, db ✅ 58s, browser-smoke ✅ 4m1s).
 - No Production migration applied; Production Supabase `azzdesuowpdcoflmyezn` untouched.
+
+## 2026-09-12 — Backend Simplification Program: PR 3 (Catalog) started
+
+- Branch: `development/catalog-simplification` (independent, from `main` `42a7c66`). **Catalog only** per Simplification Map §5; no broad cleanup.
+- Artifact: `docs/CATALOG_CONTRACTS.md` — evidence-driven (dual FE+SQL audit). Headline facts:
+  - Catalog creation is scattered plain `from()` writes: `RawMaterialsPage.tsx:132/137/148`, `ProductsPage.tsx:165/172/235/251`, `ProductSetupWizardPage.tsx:181-223` (100% direct, zero RPC), `RecipesPage.tsx:159/162`, `InventoryUnitsPage.tsx:110/114/170/154/157`.
+  - Recipe edit/delete use guarded RPCs directly (`update_recipe_with_items` `RecipesPage.tsx:145` canonical `20260906180000:20`; `delete_recipe_controlled` `:174` canonical `:144`); recipe direct DML blocked by RLS `USING(false)`.
+  - No `create_product`/`create_raw_material`/`create_inventory_unit`/`update_inventory_unit` exist anywhere — creation relies on raw table writes.
+  - Purchase/receive paths never auto-create products/raw materials (only reference existing IDs) — the "invoice uses same contract" gap is on the FE import/pages side (`import-executor.ts` writes `products`/`product_units`/`raw_materials`/`recipes`/`recipe_items`/`categories` directly).
+  - `product_units` (001:89, legacy) vs `product_unit_links` (084:48, the canonical read in availability `20260912075859:202-260/488-494`); `replace_product_units` (077:18) still mutates legacy `product_units`.
+  - 16/26 exports of `api/domains/catalog.ts` have zero call sites (incl. the config CRUD wrappers pages bypass).
+  - Gaps: no unique on products sku/barcode/name (001:63-67); `raw_materials.unit_id` nullable/mutable (011:74) — "unit immutable at creation" is contract-documented but not SQL-enforced.
+- Proposed focused change plan (6A single create-contract RPCs; 6B unify unit linking via existing `api.catalog.setProductUnitLinks`; 6C delete 16 dead wrappers; 6D wrap the 6 unwrapped direct RPCs) — **pending explicit user approval**; PR 3 stays documentation until approved.
+- Status: PR 3 commit/docs not yet pushed at the time of this note. No Production migration; `main` untouched.
+
+## 2026-09-12 — PR 3 (Catalog): 6A implementation (explicit approval "تنفيذ 6A")
+
+- New migration `supabase/migrations/20260912140000_catalog_create_contract.sql` (forward-only) adds `create_raw_material(...)` and `create_product(...)`: SECURITY DEFINER + `SET search_path = public, pg_temp`, auth + active-user checks, `can_permission('raw_materials.manage')` / `can_permission('products.create')`, branch authorization via `user_may_access_branch` (fallback to the user's own branch), **required** measurement unit for raw materials (`UNIT_REQUIRED`/`UNIT_NOT_FOUND`), `NO_BASE_UNIT` parity with `replace_product_units`, `product_unit_links` validation (existence/quantity/duplicates) inside one transaction, authoritative `audit_log` entry, grants to `authenticated, service_role` only (full 9-/19-argument signatures on REVOKE/GRANT).
+- FE routed through the contract: `RawMaterialsPage.save` create branch → `api.catalog.createRawMaterial`; `ProductSetupWizardPage.save` → `api.catalog.createProduct` (product + `product_unit_links` atomic; recipe/recipe_items left as-is — a create-recipe boundary is a documented follow-up); `ProductsPage.save` single-create → `api.catalog.createProduct` (edit/delete and Excel bulk untouched); `import-executor` product/component creation → `create_product`/`create_raw_material` with unit resolution from `measurement_units` (unknown unit = row error, matching the existing remedy wording).
+- Wrappers: `api.catalog.createRawMaterial` / `api.catalog.createProduct` in `src/api/domains/catalog.ts`.
+- Tests: new `tests/unit/catalogCreateContract.test.ts` (text contract) + `tests/integration/catalog_create_contract.test.ts` (DB; runs on CI). Updated two contract tests whose assertions pinned the old direct-insert implementation (`catalogTerminologyLockContract`, `catalogBranchComponentSelectionContract`) to pin the new RPC boundary while preserving their original invariants.
+- Local verify: `typecheck:all` ✅, `lint` ✅ (0 errors / 3 pre-existing warnings), `test:unit` ✅ 508 pass (3 failing files — `auditActionSignature`/`posSharedShiftWorkspace`/`printExecutionTruth` — confirmed pre-existing environmental CRLF failures via stash, before 6A), `build` ✅.
+- Punctuation of scope: 6B/6C/6D and recipe-create RPC remain out of scope; no sale/availability/price/balances changes; no RLS weakening; Production untouched.
