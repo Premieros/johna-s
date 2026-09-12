@@ -260,3 +260,42 @@ Allow raw-material inventory to go negative on a sale so manufacturing/sales are
 - Do not weaken RLS or tests.
 - Never use another Supabase project; Production identity remains `azzdesuowpdcoflmyezn` only.
 - Do not reintroduce cross-branch or cross-warehouse fallback.
+
+## 2026-09-12 — Backend Simplification Program (PR 1: Simplification Map + Dependency Audit)
+
+### Canonical identities (unchanged)
+
+- Repository: `Premieros/johna-s`
+- Production branch: `main` (merged PRs #80–#83; HEAD `952b315`)
+- Production Supabase ONLY: `azzdesuowpdcoflmyezn`
+- Working branch: `development/architecture-baseline` (new, from latest `main`)
+
+### Decision (user redirection)
+
+Stop the wide multi-layered architecture effort. Keep exactly the user-facing capabilities; simplify the backend only (remove internal duplication, dead paths proven unused, duplicate business rules). No feature removal without proof + full replacement; no production data changes; no `branch_id`/`warehouse_id` rewrites without a proven defect + explicit mapping.
+
+### Baseline on the new branch (green)
+
+- `npm run lint` — 0 errors / 3 pre-existing warnings.
+- `npm run typecheck:all` — ✅.
+- `npm run test:unit` — 498 passed / 3 environmental CRLF text-contract failures (pre-existing, no source change).
+- `npm run build` — ✅.
+- Fresh DB / integration / browser smoke: CI-only (no local `SUPABASE_DB_URL`).
+
+### Dependency audit (evidence)
+
+- Frontend: 15 feature modules, 62 pages, 43 components; `supabase.from()` direct = 258, RPC via `api.<domain>` = 113, direct RPC in pages = 34; `src/api` = 128 unique RPCs / 14 domains.
+- Permissions: single RBAC source (`lib/permissionDefs.ts` — 110 permissions / 20 groups); no parallel RBAC. `useV2Can` only delegates to `useCan`.
+- Backend: 295 migrations; 572 `CREATE FUNCTION` → 282 unique names; **134 redefined** (~48%). RLS: 107 ENABLE / 684 CREATE policies / 702 DROP across 77 files. DB-defined RPCs not called by `src`: 161 (mostly intentional internal helpers `_*`/`private`). `src` calls missing from migrations: 0.
+- Dead code proven (REMOVE-LATER, deletion only in a dedicated PR): `src/services/subscription/subscriptionService.ts` (dead object; only re-exported via barrel), `src/features/admin/pages/SubscriptionsAdminPage.tsx`, `src/features/reporting/pages/ReportDeepLinkPage.tsx`, `src/components/subscription/SubscriptionBanner.tsx` (+ dormant `useSubscription` chain).
+- HIDE/LEGACY: `src/v2/**` gateway reachable only by direct URL (not in menu); `DashboardExecutiveInsightsV2` is live (name only).
+
+### Artifact
+
+- `docs/SIMPLIFICATION_MAP.md` — full KEEP/MERGE/HIDE/LEGACY/REMOVE-LATER classification + PR roadmap (PR2–PR7) + binding rules.
+- This log entry + updated `docs/CURRENT_WORK_PLAN.md` header (section 17 pointer retained).
+
+### Next (only after explicit go)
+
+1. Commit PR 1 (docs only) on `development/architecture-baseline` and open PR against `main`.
+2. Then PR 2 — Inventory contracts consolidation (single stock/availability source of truth), then PR 3 Catalog → PR 4 Purchases → PR 5 Sales/POS/Kitchen → PR 6 Finance/Reports → PR 7 Legacy cleanup, each with Baseline → Change → Focused Tests → Full Verify → Regression Report.
