@@ -16,13 +16,16 @@ WITH single_active_warehouse AS (
 UPDATE public.purchases p
 SET warehouse_id = saw.warehouse_id
 FROM single_active_warehouse saw
-LEFT JOIN public.warehouses current_w ON current_w.id = p.warehouse_id
 WHERE p.branch_id = saw.branch_id
   AND (
     p.warehouse_id IS NULL
-    OR current_w.id IS NULL
-    OR current_w.branch_id IS DISTINCT FROM p.branch_id
-    OR current_w.is_active IS NOT TRUE
+    OR NOT EXISTS (
+      SELECT 1
+      FROM public.warehouses current_w
+      WHERE current_w.id = p.warehouse_id
+        AND current_w.branch_id = p.branch_id
+        AND current_w.is_active = true
+    )
   );
 
 -- Reinstall the locked legacy raw FIFO bridge as an append-only migration.
