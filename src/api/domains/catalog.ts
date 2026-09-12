@@ -133,7 +133,12 @@ export const catalog = {
   },
 
   saveKitchenStationAssignments(p: { p_branch_id: string; p_station_id: string; p_user_ids: string[]; p_category_ids: string[] }) {
-    return supabase.rpc('save_kitchen_station_assignments', p);
+    return supabase.rpc('save_kitchen_station_assignments', {
+      p_branch_id: p.p_branch_id,
+      p_station_id: p.p_station_id,
+      p_user_ids: p.p_user_ids,
+      p_category_ids: p.p_category_ids,
+    });
   },
 
   async setKitchenStatus(p_order_id: string, p_status: string) {
