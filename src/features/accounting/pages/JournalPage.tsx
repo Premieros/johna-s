@@ -15,7 +15,6 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
-import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import type { JournalDto, ChartOfAccount } from '@/lib/types';
@@ -59,10 +58,16 @@ export function JournalPage() {
   const [search, setSearch] = useState('');
   const [refType, setRefType] = useState('');
   const [viewing, setViewing] = useState<JournalDto | null>(null);
-  const [adminBranchFilter, setAdminBranchFilter] = useState('');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const primaryBranchId = user?.branch_id && branches.some((branch) => branch.id === user.branch_id)
+    ? user.branch_id
+    : null;
+  const effectiveBranchFilter = selectedBranchFilter
+    || branchFilter
+    || primaryBranchId
+    || (branches.length === 1 ? branches[0].id : null);
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const isAr = lang === 'ar';
 
@@ -76,7 +81,7 @@ export function JournalPage() {
     setLoading(true);
     try {
       if (effectiveBranchFilter) {
-        const { data } = await api.accounting.getJournals( {
+        const { data } = await api.accounting.getJournals({
           p_branch_id: effectiveBranchFilter,
           p_from_date: from || null,
           p_to_date: to || null,
@@ -155,7 +160,7 @@ export function JournalPage() {
     if (Math.abs(db - cr) > 0.001) { show(t('journalUnbalanced'), 'error'); return; }
 
     setSaving(true);
-    const { data, error } = await api.accounting.postManualJournal( {
+    const { data, error } = await api.accounting.postManualJournal({
       p_branch_id: effectiveBranchFilter,
       p_description: manualDesc.trim(),
       p_lines: lines,
@@ -199,12 +204,11 @@ export function JournalPage() {
             </Select>
             <Input label={t('from')} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             <Input label={t('to')} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            {isAdminRole(user?.role) && branches.length > 0 && (
+            {branches.length > 1 && (
               <div>
                 <label className="block text-sm font-medium text-ui-muted mb-1">{t('filterByBranch')}</label>
-                <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}
+                <select value={selectedBranchFilter || effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
                   className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-                  <option value="">{t('allBranches')}</option>
                   {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
                 </select>
               </div>
