@@ -504,6 +504,34 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
   });
 
   it('returns a cross-branch recipe as a blocked configuration row, never raw shortage', async () => {
+    const guardState = await q<{
+      replication_role: string;
+      trigger_enabled: string;
+      function_has_guard: boolean;
+      recipe_branch: string;
+      material_branch: string;
+    }>(
+      `SELECT current_setting('session_replication_role') AS replication_role,
+              t.tgenabled::text AS trigger_enabled,
+              position('RAW_MATERIAL_BRANCH_MISMATCH' in pg_get_functiondef(t.tgfoid)) > 0 AS function_has_guard,
+              r.branch_id::text AS recipe_branch,
+              rm.branch_id::text AS material_branch
+       FROM pg_trigger t
+       CROSS JOIN public.recipes r
+       CROSS JOIN public.raw_materials rm
+       WHERE t.tgrelid='public.recipe_items'::regclass
+         AND t.tgname='trg_validate_recipe_item_branch'
+         AND r.id=$1 AND rm.id=$2`,
+      [recipeBad, rawBX],
+    );
+    expect(guardState).toEqual([{
+      replication_role: 'origin',
+      trigger_enabled: 'O',
+      function_has_guard: true,
+      recipe_branch: branchA,
+      material_branch: branchB,
+    }]);
+
     await client.query('SAVEPOINT invalid_recipe_write');
     await expect(
       client.query(
