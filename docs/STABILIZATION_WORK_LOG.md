@@ -213,3 +213,45 @@ Allow raw-material inventory to go negative on a sale so manufacturing/sales are
 
 1. Run the full official check suite once more.
 2. No Production migration until an explicit decision and Full Verify Green.
+
+## Branch consolidation checkpoint — 2026-09-12
+
+Status: **ACTIVE CLEANUP CHECKPOINT**
+
+### Canonical identities
+
+- Repository: `Premieros/johna-s`
+- Production branch: `main`
+- Production Supabase ONLY: `azzdesuowpdcoflmyezn`
+- Source of Truth: `docs/CURRENT_WORK_PLAN.md`
+- Live log: `docs/STABILIZATION_WORK_LOG.md`
+
+### Single development branch to preserve
+
+- **KEEP:** `development/cloud-print-agent`
+- This is the only `development/*` branch that must survive branch cleanup because it contains the unfinished Premier Print Agent work tracked by Draft PR #78.
+- Draft PR #78 is not approved for Production and its migration must not be applied to Production until its own verification is complete.
+- `development/windows-thermal-print-v2` / Draft PR #76 is superseded by the cloud print agent line and is not required as the surviving development branch.
+- All other `development/*` branches are historical, merged, superseded, or no longer required for continuing work and may be deleted during branch cleanup.
+
+### Temporary non-development branch that must survive until its PR closes
+
+- **DO NOT DELETE YET:** `fix/raw-remove-fifo-overload-ambiguity`
+- It is the head of PR #83 and addresses the confirmed Production error where a 9-argument `_raw_remove_fifo` call is ambiguous because both a legacy 9-argument overload and the canonical 10-argument overload with `p_allow_negative DEFAULT false` exist.
+- PR #83 remains temporary. Delete this branch only after PR #83 is merged/closed and post-merge verification is complete.
+
+### Recent closed work
+
+- POS raw-shortage sell-through/cart guard work has been merged and verified; old POS availability development/fix branches are not required as persistent development branches.
+- Purchase invoice warehouse identity repair PR #82 is merged into `main`; its former development/fix branch is not required after merge.
+- Production branch/warehouse identity for the confirmed purchase invoice was repaired without cross-branch fallback.
+
+### Branch-cleanup rule from this checkpoint
+
+After cleanup, the intended branch layout is:
+
+1. `main` — Production only.
+2. `development/cloud-print-agent` — the **single persistent development branch**.
+3. Temporary `fix/*` branches may exist only while an active verified PR is in progress; remove them after merge/closure.
+
+Do not delete `development/cloud-print-agent` when removing the other development branches.
