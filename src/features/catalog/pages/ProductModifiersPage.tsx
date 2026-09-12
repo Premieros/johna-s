@@ -131,7 +131,7 @@ export function ProductModifiersPage() {
     (async () => {
       setLoading(true);
       const [mods, raws, units] = await Promise.all([
-        supabase.rpc('get_product_modifiers_admin', { p_product_id: selectedProduct.id }),
+        api.catalog.getProductModifiersAdmin(selectedProduct.id),
         supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
         api.catalog.listInventoryUnits({ branch_id: branchFilter, is_active: true }),
       ]);
