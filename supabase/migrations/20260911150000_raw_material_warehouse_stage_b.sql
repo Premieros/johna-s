@@ -95,18 +95,22 @@ GRANT EXECUTE ON FUNCTION public._raw_remove_fifo(uuid,uuid,uuid,numeric,text,te
 
 -- Patch current receipt function to pass its already-canonical warehouse id.
 DO $patch$
-DECLARE v_oid oid; v_def text; v_old text; v_new text;
+DECLARE v_oid oid; v_def text; v_new text; v_patched text;
 BEGIN
   SELECT p.oid INTO v_oid FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
   WHERE n.nspname='public' AND p.proname='receive_purchase_order' AND pg_get_function_identity_arguments(p.oid)='p_purchase_id uuid, p_receipt_items jsonb';
   IF v_oid IS NULL THEN RAISE EXCEPTION 'receive_purchase_order target not found'; END IF;
   v_def:=pg_get_functiondef(v_oid);
-  v_old:=$old$v_res := public._raw_add(v_pitem.raw_material_id, v_purchase.branch_id,
-          (v_res->>'stock_quantity')::numeric, (v_res->>'stock_unit_cost')::numeric,$old$;
   v_new:=$new$v_res := public._raw_add(v_pitem.raw_material_id, v_purchase.branch_id, v_purchase.warehouse_id,
           (v_res->>'stock_quantity')::numeric, (v_res->>'stock_unit_cost')::numeric,$new$;
-  IF position(v_old in v_def)=0 THEN RAISE EXCEPTION 'receive_purchase_order raw posting marker not found'; END IF;
-  v_def:=replace(v_def,v_old,v_new); EXECUTE v_def;
+  v_patched:=regexp_replace(
+    v_def,
+    'v_res[[:space:]]*:=[[:space:]]*public\._raw_add\([[:space:]]*v_pitem\.raw_material_id[[:space:]]*,[[:space:]]*v_purchase\.branch_id[[:space:]]*,[[:space:]]*\(v_res->>''stock_quantity''\)::numeric[[:space:]]*,[[:space:]]*\(v_res->>''stock_unit_cost''\)::numeric[[:space:]]*,',
+    v_new,
+    'i'
+  );
+  IF v_patched = v_def THEN RAISE EXCEPTION 'receive_purchase_order raw posting marker not found'; END IF;
+  EXECUTE v_patched;
 END $patch$;
 
 -- Patch exact availability source from branch aggregate to requested warehouse batches.
