@@ -310,5 +310,19 @@ Independent branch `development/inventory-contracts` (from `main`, rebased on th
 
 ### Status
 
-- PR 1: **#84 MERGED**. PR 2: **#86** submitted; Full Verify running after rebase onto the updated `main` (sequence: merge PR 1 → rebase PR 2 → Full Verify on #86 → merge #86 → then PR 3 Catalog).
+- PR 1: **#84 MERGED**. PR 2: **#86 MERGED** (as `42a7c66`) after rebase onto the updated `main` and a green Full Verify (verify ✅, db ✅ 58s, browser-smoke ✅ 4m1s).
 - No Production migration applied; Production Supabase `azzdesuowpdcoflmyezn` untouched.
+
+## 2026-09-12 — Backend Simplification Program: PR 3 (Catalog) started
+
+- Branch: `development/catalog-simplification` (independent, from `main` `42a7c66`). **Catalog only** per Simplification Map §5; no broad cleanup.
+- Artifact: `docs/CATALOG_CONTRACTS.md` — evidence-driven (dual FE+SQL audit). Headline facts:
+  - Catalog creation is scattered plain `from()` writes: `RawMaterialsPage.tsx:132/137/148`, `ProductsPage.tsx:165/172/235/251`, `ProductSetupWizardPage.tsx:181-223` (100% direct, zero RPC), `RecipesPage.tsx:159/162`, `InventoryUnitsPage.tsx:110/114/170/154/157`.
+  - Recipe edit/delete use guarded RPCs directly (`update_recipe_with_items` `RecipesPage.tsx:145` canonical `20260906180000:20`; `delete_recipe_controlled` `:174` canonical `:144`); recipe direct DML blocked by RLS `USING(false)`.
+  - No `create_product`/`create_raw_material`/`create_inventory_unit`/`update_inventory_unit` exist anywhere — creation relies on raw table writes.
+  - Purchase/receive paths never auto-create products/raw materials (only reference existing IDs) — the "invoice uses same contract" gap is on the FE import/pages side (`import-executor.ts` writes `products`/`product_units`/`raw_materials`/`recipes`/`recipe_items`/`categories` directly).
+  - `product_units` (001:89, legacy) vs `product_unit_links` (084:48, the canonical read in availability `20260912075859:202-260/488-494`); `replace_product_units` (077:18) still mutates legacy `product_units`.
+  - 16/26 exports of `api/domains/catalog.ts` have zero call sites (incl. the config CRUD wrappers pages bypass).
+  - Gaps: no unique on products sku/barcode/name (001:63-67); `raw_materials.unit_id` nullable/mutable (011:74) — "unit immutable at creation" is contract-documented but not SQL-enforced.
+- Proposed focused change plan (6A single create-contract RPCs; 6B unify unit linking via existing `api.catalog.setProductUnitLinks`; 6C delete 16 dead wrappers; 6D wrap the 6 unwrapped direct RPCs) — **pending explicit user approval**; PR 3 stays documentation until approved.
+- Status: PR 3 commit/docs not yet pushed at the time of this note. No Production migration; `main` untouched.
