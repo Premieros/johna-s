@@ -139,9 +139,14 @@ BEGIN
   IF v_recipe_id IS NOT NULL AND EXISTS (
     SELECT 1
     FROM public.recipe_items ri
-    JOIN public.raw_materials rm ON rm.id = ri.raw_material_id
     WHERE ri.recipe_id = v_recipe_id
-      AND rm.branch_id IS DISTINCT FROM p_branch_id
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.raw_materials rm
+        WHERE rm.id = ri.raw_material_id
+          AND rm.branch_id = p_branch_id
+          AND rm.is_active = true
+      )
   ) THEN
     RETURN jsonb_build_object(
       'success', false,
@@ -261,9 +266,14 @@ BEGIN
       IF EXISTS (
         SELECT 1
         FROM public.inventory_unit_recipes iur
-        JOIN public.raw_materials rm ON rm.id = iur.raw_material_id
         WHERE iur.unit_id = v_row.unit_id
-          AND rm.branch_id IS DISTINCT FROM p_branch_id
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.raw_materials rm
+            WHERE rm.id = iur.raw_material_id
+              AND rm.branch_id = p_branch_id
+              AND rm.is_active = true
+          )
       ) THEN
         RETURN jsonb_build_object(
           'success', false,

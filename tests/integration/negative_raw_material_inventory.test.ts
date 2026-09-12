@@ -491,12 +491,11 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     expect(num(rows[0].available_quantity)).toBe(0);
     expect(rows[0].raw_shortage_only).toBe(false);
 
-    await expect(
-      client.query(
-        `SELECT public._deduct_sale_inventory_with_modifiers_core($1,$2,$3::jsonb,$4,$5) AS r`,
-        [branchA, whA1, JSON.stringify([{ product_id: prodMfg, quantity: 1 }]), randomUUID(), 'SALE-MFG'],
-      ),
-    ).rejects.toThrow(/INSUFFICIENT_UNIT_STOCK/);
+    const sale = await q<{ r: CoreRpc }>(
+      `SELECT public._deduct_sale_inventory_with_modifiers_core($1,$2,$3::jsonb,$4,$5) AS r`,
+      [branchA, whA1, JSON.stringify([{ product_id: prodMfg, quantity: 1 }]), randomUUID(), 'SALE-MFG'],
+    );
+    expect(sale[0].r).toMatchObject({ success: false, error: 'INSUFFICIENT_UNIT_STOCK' });
   });
 
   it('never exposes an inactive product through POS availability', async () => {
