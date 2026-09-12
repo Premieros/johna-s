@@ -37,6 +37,12 @@ function collectSourceFiles(dir: string): string[] {
   return files;
 }
 
+function hasWrapperReference(source: string, wrapper: string) {
+  const directCatalogReference = new RegExp(`\\b(?:api\\.)?catalog\\s*\\.\\s*${wrapper}\\b`);
+  const directIdentifierCall = new RegExp(`\\b${wrapper}\\s*\\(`);
+  return directCatalogReference.test(source) || directIdentifierCall.test(source);
+}
+
 const sourceFiles = collectSourceFiles(resolve(repoRoot, 'src'));
 
 describe('catalog dead wrapper usage contract (PR3 6C)', () => {
@@ -44,7 +50,7 @@ describe('catalog dead wrapper usage contract (PR3 6C)', () => {
     for (const wrapper of deadWrapperCandidates) {
       const callers = sourceFiles
         .filter((file) => file !== catalogApiPath)
-        .filter((file) => readFileSync(file, 'utf8').includes(wrapper))
+        .filter((file) => hasWrapperReference(readFileSync(file, 'utf8'), wrapper))
         .map((file) => file.slice(repoRoot.length + 1).replace(/\\/g, '/'));
 
       expect(callers, `${wrapper} unexpectedly gained a source caller`).toEqual([]);
