@@ -134,7 +134,7 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
     });
   });
 
-  it('omits a product whose inventory source cannot be resolved', async () => {
+  it('returns an explicit blocked row when the inventory source cannot be resolved', async () => {
     await asUser(adminUserId, async () => {
       const direct = await q<{ result: { success: boolean; error?: string } }>(
         `SELECT public.check_product_availability($1,$2,$3,1) AS result`,
@@ -143,13 +143,18 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
       expect(direct[0].result.success).toBe(false);
       expect(direct[0].result.error).toBe('MANUFACTURED_UNIT_HAS_NO_RECIPE');
 
-      const rows = await q<{ available_quantity: string }>(
-        `SELECT available_quantity::text
+      const rows = await q<{ available_quantity: string; is_available: boolean; raw_shortage_only: boolean; availability_error: string | null }>(
+        `SELECT available_quantity::text,is_available,raw_shortage_only,availability_error
          FROM public.get_pos_product_availability($1,$2,100)
          WHERE product_id=$3`,
         [branchId, warehouseId, unresolvedProductId],
       );
-      expect(rows).toEqual([]);
+      expect(rows).toEqual([{
+        available_quantity: '0',
+        is_available: false,
+        raw_shortage_only: false,
+        availability_error: 'MANUFACTURED_UNIT_HAS_NO_RECIPE',
+      }]);
     });
   });
 

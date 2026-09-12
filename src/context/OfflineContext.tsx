@@ -29,6 +29,7 @@ interface OfflineContextValue {
     settings?: Settings | null;
     branches?: Branch[];
     stockMap?: Record<string, number>;
+    rawShortageOnly?: Record<string, boolean>;
   }) => Promise<void>;
   loadCachedPosData: (branchId?: string) => Promise<{
     products: Product[];
@@ -38,6 +39,7 @@ interface OfflineContextValue {
     branches: Branch[];
     settings: Settings | null;
     stockMap: Record<string, number>;
+    rawShortageOnly: Record<string, boolean>;
   }>;
   queueSaleForOffline: (invoiceNumber: string, payload: Record<string, unknown>) => Promise<string>;
   getOfflineQueue: () => Promise<OfflineSaleQueueItem[]>;
@@ -73,6 +75,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       settings?: Settings | null;
       branches?: Branch[];
       stockMap?: Record<string, number>;
+      rawShortageOnly?: Record<string, boolean>;
     }) => {
       if (data.products) await saveOfflineCache('products', data.products);
       if (data.categories) await saveOfflineCache('categories', data.categories);
@@ -85,6 +88,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
           productId,
           quantity,
           branch_id: data.branchId,
+          rawShortageOnly: data.rawShortageOnly?.[productId] === true,
         }));
         await saveOfflineCache('stock_map', stockItems);
       }
@@ -105,6 +109,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         branches: [],
         settings: null,
         stockMap: {},
+        rawShortageOnly: {},
       };
     }
 
@@ -114,7 +119,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       getOfflineCache<Customer>('customers'),
       getOfflineCache<DiningTable>('dining_tables'),
       getOfflineCache<Branch>('branches'),
-      getOfflineCache<{ productId: string; quantity: number; branch_id?: string }>('stock_map'),
+      getOfflineCache<{ productId: string; quantity: number; branch_id?: string; rawShortageOnly?: boolean }>('stock_map'),
       getOfflineSetting<Settings>('settings_' + branchId),
     ]);
 
@@ -126,9 +131,11 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
     const allowedProductIds = new Set(products.map((product) => product.id));
     const stockMap: Record<string, number> = {};
+    const rawShortageOnly: Record<string, boolean> = {};
     for (const item of stockArr) {
       if (item.branch_id === branchId && allowedProductIds.has(item.productId)) {
         stockMap[item.productId] = item.quantity;
+        if (item.rawShortageOnly) rawShortageOnly[item.productId] = true;
       }
     }
 
@@ -140,6 +147,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       branches,
       settings: cachedSettings || null,
       stockMap,
+      rawShortageOnly,
     };
   }, []);
 
@@ -194,6 +202,7 @@ const defaultOfflineValue: OfflineContextValue = {
     branches: [],
     settings: null,
     stockMap: {},
+    rawShortageOnly: {},
   }),
   queueSaleForOffline: async () => '',
   getOfflineQueue: async () => [],

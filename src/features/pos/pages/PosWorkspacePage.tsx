@@ -73,6 +73,7 @@ export function PosWorkspacePage() {
   const [diningAreas, setDiningAreas] = useState<DiningArea[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [rawShortageMap, setRawShortageMap] = useState<Record<string, boolean>>({});
+  const [availabilityErrorMap, setAvailabilityErrorMap] = useState<Record<string, string>>({});
   const [recipeMap, setRecipeMap] = useState<Record<string, ProductComponent[]>>({});
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -130,6 +131,7 @@ export function PosWorkspacePage() {
     if (!branchId) {
       setStockMap({});
       setRawShortageMap({});
+      setAvailabilityErrorMap({});
       return;
     }
     const { data: warehouses } = await supabase
@@ -144,6 +146,7 @@ export function PosWorkspacePage() {
     if (!warehouseId) {
       setStockMap({});
       setRawShortageMap({});
+      setAvailabilityErrorMap({});
       return;
     }
     const { data, error } = await supabase.rpc('get_pos_product_availability', {
@@ -154,17 +157,22 @@ export function PosWorkspacePage() {
     if (error) {
       setStockMap({});
       setRawShortageMap({});
+      setAvailabilityErrorMap({});
       return;
     }
     const map: Record<string, number> = {};
     const rawShortage: Record<string, boolean> = {};
-    for (const row of (data || []) as { product_id: string; available_quantity: number | string; raw_shortage_only?: boolean }[]) {
+    const availabilityErrors: Record<string, string> = {};
+    for (const row of (data || []) as { product_id: string; available_quantity: number | string; raw_shortage_only?: boolean; availability_error?: string | null }[]) {
       map[row.product_id] = Number(row.available_quantity) || 0;
       if (row.raw_shortage_only) rawShortage[row.product_id] = true;
+      if (row.availability_error) availabilityErrors[row.product_id] = row.availability_error;
     }
     setStockMap(map);
     setRawShortageMap(rawShortage);
-  }, []);
+    setAvailabilityErrorMap(availabilityErrors);
+    void cachePosData({ branchId, stockMap: map, rawShortageOnly: rawShortage });
+  }, [cachePosData]);
 
   const handleInventoryChanged = useCallback(() => {
     if (effectiveBranch) void loadStock(effectiveBranch);
@@ -338,6 +346,7 @@ export function PosWorkspacePage() {
               if (offlineData.settings) setSettings(offlineData.settings);
               if (offlineData.branches.length > 0) setBranches(offlineData.branches);
               if (offlineData.stockMap) setStockMap(offlineData.stockMap);
+              if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
               setLoading(false);
             }
             return;
@@ -429,6 +438,8 @@ export function PosWorkspacePage() {
             setCategories(fallbackCats);
             if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
             if (offlineData.settings) setSettings(offlineData.settings);
+            if (offlineData.stockMap && Object.keys(offlineData.stockMap).length > 0) setStockMap(offlineData.stockMap);
+            if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
             // Clear errors because we successfully recovered with offline catalog
           } else if (errors.length > 0) {
             setLoadError(errors.join('\n'));
@@ -850,6 +861,7 @@ export function PosWorkspacePage() {
               stockMap={displayStockMap}
               sellableStock={displaySellableStock}
               rawShortageOnly={rawShortageMap}
+              availabilityErrors={availabilityErrorMap}
               recipeMap={recipeMap}
               search={search}
               selectedCategory={selectedCategory}
