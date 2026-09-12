@@ -57,9 +57,18 @@ describe('catalog dead wrapper usage contract (PR3 6C)', () => {
     }
   });
 
+  it('removes every proven-dead 6C wrapper from the catalog API surface', () => {
+    const catalogSource = readFileSync(catalogApiPath, 'utf8');
+    for (const wrapper of deadWrapperCandidates) {
+      expect(hasWrapperReference(catalogSource, wrapper), `${wrapper} must stay removed after zero-caller proof`).toBe(false);
+    }
+  });
+
   it('does not classify the live 6B setProductUnitLinks wrapper as dead', () => {
     const productsPage = readFileSync(resolve(repoRoot, 'src/features/catalog/pages/ProductsPage.tsx'), 'utf8');
+    const catalogSource = readFileSync(catalogApiPath, 'utf8');
     expect(productsPage).toContain('api.catalog.setProductUnitLinks');
+    expect(catalogSource).toContain('async setProductUnitLinks');
     expect(deadWrapperCandidates).not.toContain('setProductUnitLinks');
   });
 });
