@@ -57,38 +57,6 @@ export const catalog = {
     return data;
   },
 
-  async getInventoryUnit(id: string) {
-    const { data, error } = await supabase.from('inventory_units').select('*').eq('id', id).single();
-    if (error) throw error;
-    return data;
-  },
-
-  async createInventoryUnit(unit: Record<string, unknown>) {
-    const { data, error } = await supabase.from('inventory_units').insert(unit).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  async updateInventoryUnit(id: string, updates: Record<string, unknown>) {
-    const { data, error } = await supabase.from('inventory_units').update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  async deleteInventoryUnit(id: string) {
-    const { error } = await supabase.from('inventory_units').delete().eq('id', id);
-    if (error) throw error;
-  },
-
-  async getProductUnitLinks(product_id: string) {
-    const { data, error } = await supabase
-      .from('product_unit_links')
-      .select('*, unit:inventory_units(*)')
-      .eq('product_id', product_id);
-    if (error) throw error;
-    return data;
-  },
-
   async setProductUnitLinks(product_id: string, links: { unit_id: string; quantity: number }[]) {
     const { data: existingLinks, error: existingLinksError } = await supabase
       .from('product_unit_links')
@@ -120,74 +88,11 @@ export const catalog = {
     }
   },
 
-  async getInventoryUnitRecipes(unit_id: string) {
-    const { data, error } = await supabase
-      .from('inventory_unit_recipes')
-      .select('*, raw_material:raw_materials(*)')
-      .eq('unit_id', unit_id);
-    if (error) throw error;
-    return data;
-  },
-
-  async setInventoryUnitRecipes(unit_id: string, recipes: { raw_material_id: string; quantity: number; wastage_percent: number }[]) {
-    const { error: delErr } = await supabase.from('inventory_unit_recipes').delete().eq('unit_id', unit_id);
-    if (delErr) throw delErr;
-    if (recipes.length === 0) return;
-    const rows = recipes.map(r => ({ unit_id, ...r }));
-    const { error } = await supabase.from('inventory_unit_recipes').insert(rows);
-    if (error) throw error;
-  },
-
-  async listMeasurementUnits() {
-    const { data, error } = await supabase.from('measurement_units').select('*').eq('is_active', true).order('name');
-    if (error) throw error;
-    return data;
-  },
-
-  // ─── Waste ────────────────────────────────────────────────
-  async listWasteCategories() {
-    const { data, error } = await supabase.from('waste_categories').select('*').eq('is_active', true).order('name');
-    if (error) throw error;
-    return data;
-  },
-
-  async listWasteEntries(filters?: { branch_id?: string; status?: string; waste_type?: string; limit?: number }) {
-    let q = supabase.from('waste_entries').select('*, waste_category:waste_categories(*)').order('created_at', { ascending: false });
-    if (filters?.branch_id) q = q.eq('branch_id', filters.branch_id);
-    if (filters?.status) q = q.eq('status', filters.status);
-    if (filters?.waste_type) q = q.eq('waste_type', filters.waste_type);
-    if (filters?.limit) q = q.limit(filters.limit);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
-  },
-
-  async getWasteReport(p_branch_id: string, p_from_date: string, p_to_date: string) {
-    const { data, error } = await supabase.rpc('get_waste_report', { p_branch_id, p_from_date, p_to_date });
-    if (error) throw error;
-    return data;
-  },
-
   // ─── Production ───────────────────────────────────────────
   async produceInventoryUnit(p_unit_id: string, p_quantity: number, p_warehouse_id: string, p_notes?: string) {
     const { data, error } = await supabase.rpc('produce_inventory_unit', {
       p_unit_id, p_quantity, p_warehouse_id, p_notes: p_notes ?? null,
     });
-    if (error) throw error;
-    return data;
-  },
-
-  async getProductionVariance(p_unit_id: string) {
-    const { data, error } = await supabase.rpc('get_production_variance', { p_unit_id });
-    if (error) throw error;
-    return data;
-  },
-
-  async listInventoryUnitProductions(filters?: { unit_id?: string; status?: string }) {
-    let q = supabase.from('inventory_unit_productions').select('*').order('created_at', { ascending: false });
-    if (filters?.unit_id) q = q.eq('unit_id', filters.unit_id);
-    if (filters?.status) q = q.eq('status', filters.status);
-    const { data, error } = await q;
     if (error) throw error;
     return data;
   },
@@ -213,17 +118,6 @@ export const catalog = {
 
   async deleteKitchenStation(id: string) {
     const { error } = await supabase.from('kitchen_stations').delete().eq('id', id);
-    if (error) throw error;
-  },
-
-  async getKitchenQueue(p_station?: string) {
-    const { data, error } = await supabase.rpc('get_kitchen_queue', { p_station: p_station ?? null });
-    if (error) throw error;
-    return data;
-  },
-
-  async routeToStation(p_order_id: string, p_station: string) {
-    const { error } = await supabase.rpc('route_to_station', { p_order_id, p_station });
     if (error) throw error;
   },
 
