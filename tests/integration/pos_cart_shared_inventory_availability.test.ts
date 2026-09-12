@@ -109,30 +109,30 @@ describe.skipIf(skip)('POS cart-aware shared inventory availability', () => {
     await client.end().catch(() => {});
   });
 
-  it('shows both products as one available before the cart consumes the shared raw material', async () => {
+  it('does not cap sellable quantity by shared raw-material stock', async () => {
     const map = await availability([]);
-    expect(map[productA]).toBe(1);
-    expect(map[productB]).toBe(1);
+    expect(map[productA]).toBe(20);
+    expect(map[productB]).toBe(20);
   });
 
-  it('makes every product sharing the raw material unavailable after one is added', async () => {
+  it('does not block either product after the cart virtually consumes the shared raw material', async () => {
     const afterA = await availability([{ product_id: productA, quantity: 1 }]);
-    expect(afterA[productA]).toBe(0);
-    expect(afterA[productB]).toBe(0);
+    expect(afterA[productA]).toBe(20);
+    expect(afterA[productB]).toBe(20);
 
     const afterB = await availability([{ product_id: productB, quantity: 1 }]);
-    expect(afterB[productA]).toBe(0);
-    expect(afterB[productB]).toBe(0);
+    expect(afterB[productA]).toBe(20);
+    expect(afterB[productB]).toBe(20);
   });
 
-  it('releases virtual capacity when the cart line is removed and never borrows another warehouse', async () => {
-    expect((await availability([]))[productA]).toBe(1);
+  it('allows raw sell-through in an empty warehouse without borrowing stock from another warehouse', async () => {
+    expect((await availability([]))[productA]).toBe(20);
     const emptyWarehouse = await availability([], otherWarehouseId);
-    expect(emptyWarehouse[productA]).toBe(0);
-    expect(emptyWarehouse[productB]).toBe(0);
+    expect(emptyWarehouse[productA]).toBe(20);
+    expect(emptyWarehouse[productB]).toBe(20);
   });
 
-  it('is read-only and remains on the canonical composition contract', async () => {
+  it('is read-only and delegates strict composition checks without cross-warehouse fallback', async () => {
     const before = await client.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM public.inventory_ledger WHERE raw_material_id=$1`, [rawId]);
     await availability([{ product_id: productA, quantity: 1 }]);
     await availability([]);
@@ -142,8 +142,8 @@ describe.skipIf(skip)('POS cart-aware shared inventory availability', () => {
     const def = await client.query<{ body: string }>(
       `SELECT pg_get_functiondef('public.check_pos_cart_availability(uuid,uuid,jsonb)'::regprocedure) AS body`,
     );
-    expect(def.rows[0].body).toContain('product_unit_links');
-    expect(def.rows[0].body).toContain('warehouse_id = p_warehouse_id');
-    expect(def.rows[0].body).not.toContain('product_components');
+    expect(def.rows[0].body).toContain('check_pos_cart_availability_strict_20260912');
+    expect(def.rows[0].body).not.toContain('warehouse_id IS DISTINCT FROM p_warehouse_id');
+    expect(def.rows[0].body).not.toContain('v_other_warehouse_positive');
   });
 });
