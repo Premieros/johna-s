@@ -49,6 +49,20 @@ export const catalog = {
     return supabase.rpc('get_product_modifiers_admin', { p_product_id });
   },
   saveProductModifiers(p_product_id: string, p_groups: unknown): ApiResult<unknown> { return rpc('save_product_modifiers', { p_product_id, p_groups }); },
+  listModifierGroupsAdmin(p_branch_id: string) {
+    return supabase.rpc('list_modifier_groups_admin', { p_branch_id });
+  },
+  saveModifierGroup(p: { p_group_id?: string | null; p_branch_id: string; p_group: unknown; p_product_ids: string[] }) {
+    return supabase.rpc('save_modifier_group', {
+      p_group_id: p.p_group_id ?? null,
+      p_branch_id: p.p_branch_id,
+      p_group: p.p_group,
+      p_product_ids: p.p_product_ids,
+    });
+  },
+  deleteModifierGroup(p_group_id: string, p_branch_id: string) {
+    return supabase.rpc('delete_modifier_group', { p_group_id, p_branch_id });
+  },
 
   async listInventoryUnits(filters?: { branch_id?: string; unit_type?: string; is_active?: boolean }) {
     let q = supabase.from('inventory_units').select('*').order('name');
