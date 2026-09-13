@@ -155,11 +155,30 @@ function driverCompatiblePrintOptions(printerName, options) {
   };
 }
 
+function minimalDriverPrintOptions(printerName) {
+  return {
+    silent: true,
+    printBackground: true,
+    deviceName: printerName,
+  };
+}
+
 async function printOnPhysicalPrinter(printerName, options) {
   const worker = createPrintWorker(printerName);
   const printableHtml = options.html
     ? applyThermalLayout(options.html, options.paperWidthMm)
     : textToPrintableHtml(options.text, options.paperWidthMm);
+
+  const attemptPrint = (printOptions) => withTimeout(new Promise((resolve) => {
+    worker.webContents.print(
+      printOptions,
+      (success, failureReason) => {
+        resolve(success
+          ? { success: true, printerName }
+          : { success: false, error: failureReason || 'PRINT_FAILED' });
+      },
+    );
+  }), PRINT_CALLBACK_TIMEOUT_MS, 'PRINT_CALLBACK_TIMEOUT');
 
   try {
     await withTimeout(
@@ -167,16 +186,14 @@ async function printOnPhysicalPrinter(printerName, options) {
       PRINT_LOAD_TIMEOUT_MS,
       'PRINT_LOAD_TIMEOUT',
     );
-    const result = await withTimeout(new Promise((resolve) => {
-      worker.webContents.print(
-        driverCompatiblePrintOptions(printerName, options),
-        (success, failureReason) => {
-          resolve(success
-            ? { success: true, printerName }
-            : { success: false, error: failureReason || 'PRINT_FAILED' });
-        },
-      );
-    }), PRINT_CALLBACK_TIMEOUT_MS, 'PRINT_CALLBACK_TIMEOUT');
+
+    let result = await attemptPrint(driverCompatiblePrintOptions(printerName, options));
+    if (!result.success && /invalid printer settings/i.test(String(result.error || ''))) {
+      result = await attemptPrint(minimalDriverPrintOptions(printerName));
+      if (!result.success) {
+        result.error = `INVALID_PRINTER_SETTINGS: ${result.error || 'PRINT_FAILED'}`;
+      }
+    }
 
     if (!result.success) destroyPrintWorker(printerName);
     return result;
@@ -267,6 +284,12 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
   if (!html && !text) return { success: false, error: 'NO_CONTENT_TO_PRINT' };
 
   try {
+    if (!mainWindow) return { success: false, error: 'AGENT_WINDOW_UNAVAILABLE' };
+    const availablePrinters = await mainWindow.webContents.getPrintersAsync();
+    if (!availablePrinters.some((printer) => printer.name === printerName)) {
+      return { success: false, error: `PRINTER_NOT_FOUND: ${printerName}` };
+    }
+
     return await printerQueue.enqueue(printerName, () => printOnPhysicalPrinter(printerName, {
       html,
       text,

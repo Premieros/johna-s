@@ -50,6 +50,18 @@ describe('Windows Electron print bridge contract', () => {
     expect(source).not.toContain("pageSize: 'Letter'");
   });
 
+  it('preflights the selected Windows printer and retries invalid driver settings with minimal options', () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), 'electron/main.cjs'), 'utf8');
+    const silentPrintHandler = between(source, "ipcMain.handle('pos:print-silent'", "ipcMain.handle('pos:kick-drawer'");
+    const physicalPrint = between(source, 'async function printOnPhysicalPrinter', 'function createWindow');
+
+    expect(silentPrintHandler).toContain('getPrintersAsync()');
+    expect(silentPrintHandler).toContain('PRINTER_NOT_FOUND');
+    expect(physicalPrint).toContain('minimalDriverPrintOptions(printerName)');
+    expect(physicalPrint).toContain('/invalid printer settings/i');
+    expect(physicalPrint).toContain('INVALID_PRINTER_SETTINGS');
+  });
+
   it('keeps cash-drawer handling separate from receipt/kitchen printing', () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), 'electron/main.cjs'), 'utf8');
     const drawerStart = source.indexOf("ipcMain.handle('pos:kick-drawer'");
