@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Download, TrendingUp, ShoppingCart, Receipt, Package, BarChart3, CreditCard, Users, FileText, List, Layers, TrendingDown, AlertTriangle, FileDown, Printer, UserCheck, RotateCcw, Trash2 } from 'lucide-react';
 import { supabase, costing } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { formatCurrency, formatDate, todayISO } from '@/lib/format';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { isAdminRole, useCan } from '@/lib/permissions';
+import { useCan } from '@/lib/permissions';
 import { useColumnPreferences } from '../useColumnPreferences';
 import { ColumnPicker } from '../ColumnPicker';
 import { useCustomReports } from '../useCustomReports';
@@ -35,7 +34,6 @@ interface ReportsPageProps {
 export function ReportsPage({ controlledReportType, onReportTypeChange }: ReportsPageProps = {}) {
   /* REPORT-BRANCH-AUDIT-2026 */
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
   const can = useCan();
   const navigate = useNavigate();
   const branchFilter = useBranchFilter();
@@ -60,7 +58,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const [, setChartData] = useState<{ name: string; value: number }[]>([]);
   const [summary, setSummary] = useState({ total: 0, count: 0 });
   const [loading, setLoading] = useState(false);
-  const [adminBranchFilter, setAdminBranchFilter] = useState<string>('');
   const [filters, setFilters] = useState<ReportFilters>({});
   const [options, setOptions] = useState<{
     warehouses: { id: string; name: string }[];
@@ -72,7 +69,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     tables: { id: string; name: string }[];
     expenseCategories: string[];
   }>({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [] });
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const effectiveBranchFilter = branchFilter;
   const { branches } = useBranches();
   const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch';
   const branchNameById = (branchId: unknown): string => {
@@ -90,7 +87,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const { savedReports, saveReport, deleteReport } = useCustomReports();
   const reportBranchLabel = effectiveBranchFilter
     ? branchNameById(effectiveBranchFilter)
-    : (lang === 'ar' ? 'كل الفروع' : 'All branches');
+    : (lang === 'ar' ? 'لم يتم تحديد فرع' : 'No branch selected');
 
   const filterQ = <T,>(q: T, f: ReportFilters, applier: (b: EqBuilder, x: ReportFilters) => EqBuilder): T =>
     applier(q as unknown as EqBuilder, f) as unknown as T;
@@ -159,15 +156,19 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }
 
   useEffect(() => {
+    if (!effectiveBranchFilter) {
+      setOptions({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [] });
+      return;
+    }
     (async () => {
       const [warehouses, cashiers, customers, suppliers, products, categories, tables] = await Promise.all([
-        supabase.from('warehouses').select('id, name'),
-        supabase.from('users').select('id, full_name, email'),
-        supabase.from('customers').select('id, name, name_en'),
-        supabase.from('suppliers').select('id, name, name_en'),
-        supabase.from('products').select('id, name, name_en'),
-        supabase.from('categories').select('id, name, name_en'),
-        supabase.from('dining_tables').select('id, name'),
+        supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter),
+        supabase.from('users').select('id, full_name, email').eq('branch_id', effectiveBranchFilter),
+        supabase.from('customers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
+        supabase.from('suppliers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
+        supabase.from('products').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
+        supabase.from('categories').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
+        supabase.from('dining_tables').select('id, name').eq('branch_id', effectiveBranchFilter),
       ]);
       setOptions({
         warehouses: warehouses.data || [],
@@ -180,16 +181,16 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         expenseCategories: [],
       });
     })();
-  }, []);
+  }, [effectiveBranchFilter]);
 
   useEffect(() => {
-    if (reportType !== 'expenses') return;
+    if (reportType !== 'expenses' || !effectiveBranchFilter) return;
     (async () => {
-      const { data } = await supabase.from('expenses').select('category');
+      const { data } = await supabase.from('expenses').select('category').eq('branch_id', effectiveBranchFilter);
       const unique = Array.from(new Set((data || []).map((r) => String((r as Record<string, unknown>).category || '')).filter(Boolean)));
       setOptions((prev) => ({ ...prev, expenseCategories: unique }));
     })();
-  }, [reportType]);
+  }, [reportType, effectiveBranchFilter]);
 
   useEffect(() => {
     loadReport();
@@ -729,10 +730,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         to={to}
         onFromChange={(v) => { setFrom(v); setPeriod('custom'); }}
         onToChange={(v) => { setTo(v); setPeriod('custom'); }}
-        showBranchFilter={isAdminRole(user?.role) && branches.length > 0}
+        showBranchFilter={false}
         branches={branches}
-        branchFilterValue={adminBranchFilter}
-        onBranchFilterChange={setAdminBranchFilter}
+        branchFilterValue={branchFilter || ''}
+        onBranchFilterChange={() => undefined}
         filterOptions={filterOptions}
         filterLabel={filterLabel}
         allLabel={allLabel}

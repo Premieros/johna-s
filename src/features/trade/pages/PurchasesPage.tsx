@@ -83,11 +83,21 @@ export function PurchasesPage() {
   const [lineItems, setLineItems] = useState<PurchaseFormItem[]>([{ ...EMPTY_LINE }]);
 
   async function loadMeta() {
+    let supplierQuery = supabase.from('suppliers').select('*').order('name');
+    let productQuery = supabase.from('products').select('*').eq('is_active', true).order('name');
+    let rawMaterialQuery = supabase.from('raw_materials').select('*, unit:units(*)').eq('is_active', true).order('name');
+    let warehouseQuery = supabase.from('warehouses').select('*').order('name');
+    if (branchFilter) {
+      supplierQuery = supplierQuery.eq('branch_id', branchFilter);
+      productQuery = productQuery.eq('branch_id', branchFilter);
+      rawMaterialQuery = rawMaterialQuery.eq('branch_id', branchFilter);
+      warehouseQuery = warehouseQuery.eq('branch_id', branchFilter);
+    }
     const [s, pr, rm, w, u] = await Promise.all([
-      supabase.from('suppliers').select('*').order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('*, unit:units(*)').eq('is_active', true).order('name'),
-      supabase.from('warehouses').select('*').order('name'),
+      supplierQuery,
+      productQuery,
+      rawMaterialQuery,
+      warehouseQuery,
       supabase.from('measurement_units').select('id,name,symbol').eq('is_active', true).order('name'),
     ]);
     setSuppliers((s.data as Supplier[]) || []);
@@ -96,7 +106,7 @@ export function PurchasesPage() {
     setWarehouses((w.data as Warehouse[]) || []);
     setRawUnits((u.data as InlineRawUnit[]) || []);
   }
-  useEffect(() => { void loadMeta(); }, []);
+  useEffect(() => { void loadMeta(); }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore draft if returning from guided prerequisite setup
   useEffect(() => {
@@ -127,7 +137,7 @@ export function PurchasesPage() {
     setForm({
       supplier_id: suppliers[0]?.id || '',
       warehouse_id: warehouses[0]?.id || '',
-      branch_id: user?.branch_id || branches[0]?.id || '',
+      branch_id: branchFilter || user?.branch_id || branches[0]?.id || '',
       payment_method: 'cash',
       notes: '',
     });

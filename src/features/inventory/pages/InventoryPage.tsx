@@ -5,6 +5,7 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
+import { useBranchFilter } from '@/lib/useBranchFilter';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
@@ -24,11 +25,13 @@ export function InventoryPage() {
   const isAr = lang === 'ar';
   const { show } = useToast();
   const can = useCan();
+  const branchFilter = useBranchFilter();
   const { branches } = useBranches();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadInventory } = usePaginatedRows<Inventory>({
     table: 'inventory',
     select: '*, product:products(*), warehouse:warehouses(*)',
     order: { column: 'updated_at', ascending: false },
+    branch_id: branchFilter,
     pageSize: 100,
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -42,15 +45,18 @@ export function InventoryPage() {
 
   useEffect(() => {
     async function loadMeta() {
+      let warehouseQuery = supabase.from('warehouses').select('*').order('name');
+      if (branchFilter) warehouseQuery = warehouseQuery.eq('branch_id', branchFilter);
       const [wh, pc] = await Promise.all([
-        supabase.from('warehouses').select('*').order('name'),
+        warehouseQuery,
         supabase.from('product_components').select('component_product_id'),
       ]);
       setWarehouses((wh.data as Warehouse[]) || []);
       setComponentIds(new Set((pc.data || []).map((row: { component_product_id: string }) => row.component_product_id)));
     }
+    setFilterWarehouse('');
     void loadMeta();
-  }, []);
+  }, [branchFilter]);
 
   const filtered = items.filter((item) => {
     if (filterWarehouse && item.warehouse_id !== filterWarehouse) return false;

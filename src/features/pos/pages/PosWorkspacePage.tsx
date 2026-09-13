@@ -6,6 +6,7 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useActiveBranchId } from '@/lib/activeBranch';
 import { useOffline } from '@/context/OfflineContext';
 import { offlinePosManager } from '../services/offlinePos';
 import { Modal } from '@/components/Modal';
@@ -54,6 +55,7 @@ export function PosWorkspacePage() {
   const isAr = lang === 'ar';
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
+  const [, setActiveBranchId] = useActiveBranchId();
   const { branchSettingsMap } = useSettings();
   const { show } = useToast();
   const perms = usePosPermissions();
@@ -77,7 +79,6 @@ export function PosWorkspacePage() {
   const [recipeMap, setRecipeMap] = useState<Record<string, ProductComponent[]>>({});
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState(initState.branchId || branchFilter || '');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeShift, setActiveShift] = useState<{ id: string; expected: number; opened_at: string; opening_amount: number } | null>(null);
@@ -104,7 +105,7 @@ export function PosWorkspacePage() {
 
   const barcodeRef = useRef<HTMLInputElement>(null);
   const payConsumed = useRef(false);
-  const effectiveBranch = selectedBranch || branchFilter || user?.branch_id || '';
+  const effectiveBranch = branchFilter || user?.branch_id || '';
   const effSettings: Settings | null = settings ? mergeEffectiveSettings(settings, effectiveBranch ? branchSettingsMap[effectiveBranch] : null) : null;
 
   const reloadShift = useCallback(() => {
@@ -563,7 +564,7 @@ export function PosWorkspacePage() {
       const ok = window.confirm(isAr ? 'تبديل الفرع سيمسح السلة الحالية. متابعة؟' : 'Switching branch will clear the current cart. Continue?');
       if (!ok) return;
     }
-    setSelectedBranch(v);
+    setActiveBranchId(v);
     pos.resetWorkspace();
     void loadStock(v);
   };

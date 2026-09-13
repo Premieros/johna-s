@@ -12,7 +12,6 @@ import { formatCurrency, todayISO, formatDate } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
-import { useBranches } from '@/hooks/useBranches';
 import type {
   TrialBalanceRow, GeneralLedgerRow, TrialBalanceSummary,
   IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow,
@@ -37,18 +36,13 @@ export function FinancialReportsPage() {
   const [to, setTo] = useState(() => searchParams.get('to') || todayISO());
   const [loading, setLoading] = useState(false);
   const { effectiveSettings } = useSettings();
-  const { branches } = useBranches();
-  const [reportBranchFilter, setReportBranchFilter] = useState('');
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [accountId, setAccountId] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [partySide, setPartySide] = useState<'ar' | 'ap'>('ar');
   const [partyId, setPartyId] = useState('');
-  const selectedReportBranch = reportBranchFilter && branches.some((branch) => branch.id === reportBranchFilter)
-    ? reportBranchFilter
-    : '';
-  const effectiveBranchFilter = selectedReportBranch || branchFilter || (branches.length === 1 ? branches[0].id : null);
+  const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
 
   const [tb, setTb] = useState<TrialBalanceRow[]>([]);
@@ -215,16 +209,6 @@ export function FinancialReportsPage() {
                   {partyList.map((p) => <option key={p.id} value={p.id}>{isAr ? p.name : p.name}</option>)}
                 </Select>
               </>
-            )}
-            {branches.length > 1 && (
-              <Select
-                label={t('filterByBranch')}
-                value={selectedReportBranch || branchFilter || ''}
-                onChange={(e) => setReportBranchFilter(e.target.value)}
-              >
-                <option value="">{t('filterByBranch')}</option>
-                {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-              </Select>
             )}
           </div>
         </div>

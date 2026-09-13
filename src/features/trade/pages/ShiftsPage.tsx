@@ -13,7 +13,7 @@ import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagin
 import { DataTable, type Column } from '@/components/DataTable';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { Button } from '@/components/Button';
-import { Input, Textarea, Select } from '@/components/Input';
+import { Input, Textarea } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { BranchBadge } from '@/components/BranchBadge';
 import { formatCurrency, formatDateTime } from '@/lib/format';
@@ -33,18 +33,17 @@ export function ShiftsPage() {
   const can = useCan();
   const isAr = lang === 'ar';
 
-  const [branchSel, setBranchSel] = useState<string>(branchFilter || '');
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadShifts } = usePaginatedRows<Shift>({
     table: 'shifts',
     select: 'id, branch_id, cashier_id, opened_at, closed_at, opening_amount, expected_amount, actual_amount, difference, status, notes, created_at',
     order: { column: 'opened_at', ascending: false },
-    branch_id: branchSel || branchFilter,
+    branch_id: branchFilter,
     pageSize: 100,
   });
   const [search, setSearch] = useState('');
   const { branches } = useBranches();
   const { effectiveSettings } = useSettings();
-  const currency = effectiveSettings(branchSel || branchFilter)?.currency || 'EGP';
+  const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [users, setUsers] = useState<ShiftUserRow[]>([]);
   const [liveExpectedByShift, setLiveExpectedByShift] = useState<Record<string, number>>({});
 
@@ -98,7 +97,7 @@ export function ShiftsPage() {
 
   const openShift = async () => {
     if (!can('shifts.open')) return;
-    const targetBranchId = branchSel || branchFilter || user?.branch_id || '';
+    const targetBranchId = branchFilter || user?.branch_id || '';
     if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
     const { data, error } = await api.shifts.open({
       p_branch_id: targetBranchId,
@@ -261,12 +260,6 @@ export function ShiftsPage() {
       <DesignPanel testId="shifts-search-panel">
         <div className="flex flex-col sm:flex-row gap-3">
           <DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={isAr ? 'بحث بالفرع أو الكاشير...' : 'Search by branch or cashier...'} testId="shifts-search" />
-          {!branchFilter && (
-            <Select label={t('filterByBranch')} value={branchSel} onChange={(e) => setBranchSel(e.target.value)} className="sm:w-64">
-              <option value="">{t('allBranches')}</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
-          )}
         </div>
       </DesignPanel>
 
@@ -279,8 +272,8 @@ export function ShiftsPage() {
         <div className="space-y-4">
           <div className="p-4 bg-ui-page-alt rounded-lg text-sm text-ui-muted">
             {isAr
-              ? `الفرع: ${branches.find((b) => b.id === user?.branch_id)?.name || '-'}`
-              : `Branch: ${branches.find((b) => b.id === user?.branch_id)?.name || '-'}`}
+              ? `الفرع: ${branches.find((b) => b.id === (branchFilter || user?.branch_id))?.name || '-'}`
+              : `Branch: ${branches.find((b) => b.id === (branchFilter || user?.branch_id))?.name || '-'}`}
           </div>
           <Input type="number" min={0} step="0.01" label={t('openingAmount')} value={String(openForm.opening_amount)} onChange={(e) => setOpenForm({ ...openForm, opening_amount: Number(e.target.value) })} />
           <Textarea label={t('notes')} value={openForm.notes} onChange={(e) => setOpenForm({ ...openForm, notes: e.target.value })} rows={2} />

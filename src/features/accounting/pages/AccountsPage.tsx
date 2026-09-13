@@ -4,7 +4,6 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { useAuth } from '@/context/AuthContext';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -17,7 +16,6 @@ import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
-import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ChartOfAccount, AccountType, TrialBalanceRow } from '@/lib/types';
 
@@ -32,27 +30,18 @@ const ACCOUNT_TYPES: { value: AccountType; labelKey: 'typeAsset' | 'typeLiabilit
 export function AccountsPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const { effectiveSettings } = useSettings();
-  const { branches } = useBranches();
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ChartOfAccount | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState('');
   const [form, setForm] = useState({ code: '', name: '', name_en: '', account_type: 'asset' as AccountType, is_active: true });
 
-  const primaryBranchId = user?.branch_id && branches.some((branch) => branch.id === user.branch_id)
-    ? user.branch_id
-    : null;
-  const effectiveBranchFilter = selectedBranchFilter
-    || branchFilter
-    || primaryBranchId
-    || (branches.length === 1 ? branches[0].id : null);
+  const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const isAr = lang === 'ar';
   const canManage = can('accounts.manage');
@@ -188,15 +177,6 @@ export function AccountsPage() {
       <DesignPanel testId="accounts-search-panel">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <DesignSearch value={search} onChange={setSearch} className="flex-1 w-full" label={t('search')} placeholder={t('search')} testId="accounts-search" />
-          {branches.length > 1 && (
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-ui-muted">{t('filterByBranch')}</label>
-              <select value={selectedBranchFilter || effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-                {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-              </select>
-            </div>
-          )}
         </div>
       </DesignPanel>
 

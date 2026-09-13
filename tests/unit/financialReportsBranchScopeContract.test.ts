@@ -5,13 +5,13 @@ import { resolve } from 'node:path';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('financial reports branch scope contract', () => {
-  it('uses RLS-visible branches instead of operational role labels', () => {
+  it('uses the shared RLS-visible active branch instead of a page-local selector', () => {
     const page = read('src/features/accounting/pages/FinancialReportsPage.tsx');
 
-    expect(page).toContain('const { branches } = useBranches();');
-    expect(page).toContain('branches.length > 1');
-    expect(page).toContain('setReportBranchFilter(e.target.value)');
-    expect(page).toContain('selectedReportBranch || branchFilter || (branches.length === 1 ? branches[0].id : null)');
+    expect(page).toContain('const branchFilter = useBranchFilter();');
+    expect(page).toContain('const effectiveBranchFilter = branchFilter;');
+    expect(page).not.toContain('setReportBranchFilter(');
+    expect(page).not.toContain('selectedReportBranch');
     expect(page).not.toContain('isAdminRole(');
     expect(page).not.toContain("t('allBranches')");
   });
