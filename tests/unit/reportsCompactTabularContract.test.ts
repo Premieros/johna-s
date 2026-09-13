@@ -13,9 +13,12 @@ describe('ReportsPage compact tabular contract (PR6)', () => {
     expect(source).toContain('<table className="w-full text-sm">');
   });
 
-  it('preserves filters, branch context and export/print actions', () => {
+  it('preserves filters, shared branch context and export/print actions', () => {
     expect(source).toContain('<ReportFilterBar');
-    expect(source).toContain('showBranchFilter={isAdminRole(user?.role) && branches.length > 0}');
+    expect(source).toContain('showBranchFilter={false}');
+    expect(source).toContain("branchFilterValue={branchFilter || ''}");
+    expect(source).toContain('onBranchFilterChange={() => undefined}');
+    expect(source).not.toContain('isAdminRole(user?.role)');
     expect(source).toContain('exportToExcelAdvanced');
     expect(source).toContain('downloadCSV');
     expect(source).toContain('openPrintWindow');
