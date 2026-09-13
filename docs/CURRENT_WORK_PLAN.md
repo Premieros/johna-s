@@ -1,10 +1,8 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
-> هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` و`docs/PLAN_CHECKPOINT_2026-09-13.md` و`docs/STABILIZATION_WORK_LOG_2026-09-13_ADDENDUM.md`.
+آخر تحديث: **2026-09-13 — Post-PR7 closure**
 
-آخر تحديث: **2026-09-13 — PR5 Sales/POS/Kitchen closeout**
-
-> **تصحيح الحالة الحالية — 2026-09-13:** الأقسام الخاصة بـPR5 أدناه محفوظة كسجل تاريخي وليست المرحلة الحالية. PR5 (#99) وPR6 (#100) تم دمجهما، ثم تم دمج PR #101. المرحلة الحالية هي **PR7 Confirmed Legacy Cleanup** على `development/pr7-confirmed-legacy-cleanup`، وPR الحالي هو **#105**. Baseline الحالي `main@2ba3deab61b519a6950656efb4badbc1880f4e19`. Implementation head `35e59c0f273c1557a69ab75060054efca103d5fd` اجتاز Verify #1279 Full Green، وملف الإغلاق الحالي هو `docs/PR7_CONFIRMED_LEGACY_CLEANUP_CLOSURE.md`. PR #103 وPR #78 مساران منفصلان ولا يختلطان بـPR7. لا يتم دمج PR7 قبل Full Verify على final PR head وموافقة المستخدم الصريحة.
+> هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` و`docs/PLAN_CHECKPOINT_2026-09-13.md` و`docs/STABILIZATION_WORK_LOG_2026-09-13_ADDENDUM.md` و`docs/PR7_CONFIRMED_LEGACY_CLEANUP_CLOSURE.md`.
 
 ## الهوية الثابتة
 
@@ -15,100 +13,57 @@
 - ممنوع لمس أي Repository أو قاعدة أخرى.
 - ممنوع استخدام `scpovyrqmsbiduanykod`.
 - ممنوع تعديل `main` مباشرة أو Force Push.
-- Super Admin فقط implicit bypass؛ باقي الأدوار Labels وAuthorization = Permission-First + branch/RLS.
+- Super Admin فقط implicit bypass؛ باقي الأدوار Authorization = Permission-First + branch/RLS.
 - ممنوع تخفيف RLS أو الاختبارات.
 - ممنوع reset/reseed/delete/rewrite لبيانات المستخدم أو الإعدادات أو الأرصدة لتسهيل الاختبار أو refactor.
 - أي Migration: forward-only + append-only؛ لا تعديل Migration مطبقة.
-- لا Production migration قبل Full Verify Green.
-- قبل كل write/merge: اجلب أحدث `main` والفرع/PR وافحص أي عمل أحدث.
+- لا Production migration قبل Full Verify Green وموافقة صريحة عند الحاجة.
+- قبل كل write/merge: اجلب أحدث `main` والفرع/PR وافحص أي عمل أحدث أو متوازٍ.
 
-## المراحل
+## الحالة الحالية المثبتة
+
+- `main@433ff97d9dd4425df74e82f65170497bfd28bab2`
+- PR #105 — PR7 Confirmed Legacy Cleanup: **MERGED**
+- Post-merge Verify main #1286: **Full Green**
+- Deploy #630: **Green** بما في ذلك Production API parity والنشر على GitHub Pages
+- لا Production migration ولا reset/reseed/backfill ولا تعديل لبيانات المستخدم تم ضمن PR7.
+
+## برنامج التبسيط — الحالة النهائية
 
 مغلق ومثبت:
 
-- PR1 Architecture / Simplification Map ✅
-- PR2 Inventory Contracts ✅
-- PR3 Catalog 6A/6B/6C/6D ✅
-- PR4 Purchases End-to-End — PR #98 ✅ merged; post-merge Verify main #1245 + Deploy #625 Green
+1. PR1 — Architecture / Simplification Map ✅
+2. PR2 — Inventory Contracts ✅
+3. PR3 — Catalog Simplification 6A / 6B / 6C / 6D ✅
+4. PR4 — Purchases End-to-End — PR #98 ✅
+5. PR5 — Sales / POS / Tables / Kitchen / Payments — PR #99 ✅
+6. PR6 — Shift / Finance / Reports — PR #100 ✅
+7. PR7 — Confirmed Legacy Cleanup — PR #105 ✅
 
-الحالي:
+### PR7 — آخر مرحلة تنظيف بعد إثبات أن الأكواد القديمة غير مستخدمة
 
-- **PR5 Sales / POS / Tables / Kitchen / Payments — PR #99 / `development/pr5-sales-pos-kitchen`**
+هذه المرحلة **مغلقة**، ولم يكن مسموحًا حذف أي Legacy لمجرد أنه قديم.
 
-التالي فقط بعد إغلاق PR5 ونجاح post-merge Verify/Deploy:
+قاعدة الإغلاق الإلزامية كانت:
 
-1. PR6 Shift / Finance / Reports
-2. PR7 Confirmed Legacy Cleanup
+`usage proof -> replacement proof -> regression coverage -> removal -> Full Verify`
 
-`Premier Print Agent` / PR #78 مسار مستقل ولا يختلط بهذه المراحل.
+المعنى التنفيذي:
 
-## Baseline PR5
+- إثبات أن الكود/المسار القديم لم يعد جزءًا من الـsupported product flow.
+- إثبات أن الوظيفة المطلوبة محفوظة أو أن المسار الملغي لم يعد له استخدام مدعوم.
+- إضافة Regression coverage تمنع رجوع الاعتماد القديم بالخطأ.
+- إزالة الـLegacy المؤكد فقط، بدون حذف تاريخ قاعدة البيانات أو عقود لازمة لعمل حالي.
+- Full Verify قبل الدمج ثم Verify/Deploy بعد الدمج.
 
-- بدأ من `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca` بعد إغلاق PR4.
-- Baseline post-merge لـPR4: Verify main #1245 Full Green؛ Deploy #625 ✅؛ Production API parity ✅؛ Browser Smoke ✅.
-- لا Production write ولا migration جديدة في PR5.
+في PR #105 تم تطبيق ذلك على Subscription/Billing/Trial runtime والواجهة القديمة فقط بعد فصل callers وإثبات عدم اعتماد الـsupported flow عليها. لم يتم حذف migrations تاريخية أو جداول/RPCs من Production، ولم يتم تغيير POS/Kitchen/Payments/Inventory business rules.
 
-## PR5 — Sales / POS / Tables / Kitchen / Payments
+## عقود ثابتة لا يعاد فتحها بلا Regression مثبت
 
-المسار المدقق:
-
-`POS order -> table/operator ownership -> send_to_kitchen -> inventory delta -> payment/settlement -> offline/reconciliation safeguards`
-
-### العقود المثبتة ولم تُفتح بلا Regression
-
-- Permission-First بصلاحيات POS منفصلة مثل view/create/edit/pay/split/transfer/receipt/send-kitchen؛ لا role-name authorization جديد.
-- `send_to_kitchen` هو authority لاستهلاك Kitchen ويقفل الطلب بـ`FOR UPDATE` قبل حساب الـpositive unsent delta.
-- `inventory_warehouse_id` يثبت على الطلب؛ لا silent cross-warehouse switch لطلب قائم في Kitchen/settlement.
-- إعادة الإرسال بدون زيادة كمية = no-op ولا تكرر الخصم.
-- Normal/Split settlement لا يعيدان خصم ما استهلكه Kitchen Send.
-- Split payment atomic.
-- Offline/reconciliation لا يحوّل rejection/ambiguous online failure إلى sale/payment success وهمي ويحافظ على idempotency/cashier identity.
-- occupied table/order ownership وoperator display يبقون scoped ولا يوسعون `users.view`.
-
-### Gap المثبت
-
-التغطية السابقة لم تثبت صراحة سباقًا حقيقيًا بين جلستين PostgreSQL مستقلتين تستدعيان `send_to_kitchen` لنفس الطلب بينما الجلسة الأولى ما زالت تحتفظ بقفل صف الطلب.
-
-### Change
-
-`tests/integration/kitchen_send_concurrency.test.ts` فقط:
-
-- Session A ترسل للمطبخ وتبقي transaction مفتوحة.
-- Session B تستدعي نفس RPC لنفس order وتثبت أنها تنتظر القفل.
-- بعد Commit لـA، Session B تستكمل كـsuccessful no-op (`items_sent_count = 0`).
-- المخزون ينقص مرة واحدة فقط.
-- KDS / `order_kitchen_sends` ينتج صفًا واحدًا فقط، بلا duplicate.
-
-الاختبار نجح على Fresh DB؛ لذلك لم يتم تغيير SQL أو Business Logic أو إضافة migration.
-
-سجل الإغلاق التفصيلي: `docs/PR5_SALES_POS_KITCHEN_CLOSURE.md`.
-
-## UX Acceptance Gate
-
-**UX Acceptance Gate: For every active phase, review affected screens/dialogs for missing required actions, duplicate controls/content, unclear labels/status/help, and unnecessary steps. Apply small behavior-preserving UX improvements within the phase scope. Do not broaden into redesign or alter authorization/business rules.**
-
-في PR5 تمت مراجعة POS/Kitchen/Payments/Tables مع الحفاظ على Arabic-first/RTL والصلاحيات. لم يظهر UX Regression مثبت يحتاج تغييرًا، لذلك لم يُدخل redesign أو cosmetic change بلا سبب.
-
-## Data Preservation Lock
-
-- Production ليست test environment.
-- لا حذف أو تصفير أو إعادة Seed.
-- لا تعديل يدوي لبيانات Production لتجاوز مشكلة.
-- لا cross-branch ولا cross-warehouse fallback.
-- أي تغيير تاريخي للبيانات يحتاج سببًا مثبتًا وmapping واضحًا ونطاقًا مستقلاً.
-
-## التنفيذ القياسي
-
-`Baseline -> Root cause -> Small change -> Focused tests -> Integration/Regression -> Full Verify -> Merge -> Verify main -> Deploy`
-
-لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ أو لمجرد توسيع حجم PR.
-
-## متطلبات ثابتة للمراحل التالية
-
-- Arabic-first RTL + touch-friendly.
 - Permission-First؛ Super Admin فقط implicit bypass.
 - granular POS permissions تشمل view/create/edit/pay/split/transfer/receipt/send-kitchen.
-- `send_to_kitchen` هو نقطة خصم المخزون؛ first send مرة ثم delta، وretry لا يكرر consumption.
+- `send_to_kitchen` هو authority لاستهلاك المخزون؛ first send مرة ثم delta، وretry لا يكرر الاستهلاك.
+- branch + warehouse isolation وRLS لا يتم تخفيفها.
 - approval system enforced.
 - username يظهر على الطاولة المشغولة وما يخص المستخدم حيث يلزم.
 - printer management فقط لصاحب صلاحية الإعدادات.
@@ -116,11 +71,42 @@
 - لا network/offline ambiguity تتحول إلى sale/payment success وهمي.
 - Reports compact/tabular + filters + Excel export.
 - guided prerequisite routing بدل raw errors حيث أمكن.
+- Production ليست test environment.
+
+## Settings / Permissions / Offline
+
+- عقود Settings/Permissions الأساسية أصبحت جزءًا من العقود الثابتة أعلاه، وليست مرحلة تنظيف مفتوحة لإعادة البناء من الصفر.
+- Offline/Reconciliation safeguards أُغلقت ضمن POS/Sales contracts، ولا تُفتح إلا عند Regression مثبت.
+- أي تحسين UX أو Permission جديد بعد ذلك ينفذ كـscope مستقل صغير مع اختبارات، وليس بإعادة فتح المراحل المغلقة.
+
+## المسار النشط المنفصل — Premier Print Agent
+
+الطباعة مسار مستقل عن برنامج التبسيط المغلق.
+
+الحالة الحالية:
+
+- PR #78 — Windows Print Agent + cloud printing: Draft / غير مدمج.
+- PR #104 — branch kitchen-station printer routing: Draft / غير مدمج.
+- PR #106 — توحيد شغل Print Agent على فرع تطوير: Draft، وقاعدته `development/print-agent-unified` وليست `main`.
+
+قواعد هذا المسار:
+
+- لا إنشاء Station model أو Print Queue بديلة إذا الموجود الحالي يكفي.
+- printer management فقط مع `settings.manage`.
+- queues مستقلة لكل طابعة؛ تعطل طابعة لا يوقف الأخرى.
+- Kitchen print لا يُسجل قبل نجاح `send_to_kitchen` authoritative، وأي retry للطباعة لا يكرر stock/order mutations.
+- receipt print success يجب أن يعني physical confirmation حقيقية، لا success وهمي.
+- لا Production migration قبل Full Verify Green وموافقة صريحة.
 
 ## NEXT ACTION
 
-1. حدّث سجلات PR5 (`STABILIZATION_WORK_LOG` / addendum) بدون حذف التاريخ.
-2. Full Verify على documentation-complete HEAD لـPR #99.
-3. إذا Green: راجع diff/mergeability، حوّل PR من Draft، وادمج بـexpected head SHA.
-4. تحقق من Verify main وDeploy بعد الدمج.
-5. لا تبدأ PR6 قبل نجاح post-merge gates.
+1. لا تعِد فتح PR1–PR7 إلا بوجود Regression مثبت.
+2. أكمل توحيد Premier Print Agent على أحدث `main` بدون خلط الفروع المتوازية.
+3. نفذ Full Verify + Windows artifact/routing/idempotency/print-truth gates قبل أي دمج للطباعة.
+4. أي تطوير وظيفي جديد مثل Modifier Groups أو تحسين Catalog/POS UX يكون في PR مستقل صغير بعد فحص آخر `main`.
+
+## التنفيذ القياسي
+
+`Baseline -> Root Cause -> Small Change -> Focused Tests -> Integration/Regression -> Full Verify -> PR -> Merge only when allowed -> Verify main -> Deploy`
+
+لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ، ولا يُحذف Legacy إلا بعد إثبات الاستخدام/الاستبدال/التغطية ثم Full Verify.
