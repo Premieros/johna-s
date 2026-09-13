@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Printer } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
+import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useCan } from '@/lib/permissions';
 import { APP_ROUTES } from '@/core/navigation/routes';
@@ -10,6 +11,7 @@ import { PrinterSettingsPanel } from './PrinterSettingsPanel';
 export function PrinterSettingsLauncher() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const { user } = useAuth();
   const { lang } = useLanguage();
   const can = useCan();
   const isAr = lang === 'ar';
@@ -34,7 +36,7 @@ export function PrinterSettingsLauncher() {
         title={isAr ? 'إدارة طابعات الجهاز' : 'Device Printer Settings'}
         size="xl"
       >
-        <PrinterSettingsPanel />
+        <PrinterSettingsPanel branchId={user?.branch_id ?? undefined} />
       </Modal>
     </>
   );
