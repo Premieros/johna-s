@@ -5,36 +5,33 @@ import { resolve } from 'node:path';
 const source = readFileSync(resolve(process.cwd(), 'src/features/pos/components/catalog/ProductBrowser.tsx'), 'utf8');
 
 describe('POS availability display contract', () => {
-  it('distinguishes missing availability from a confirmed numeric zero', () => {
-    expect(source).toContain('Object.prototype.hasOwnProperty.call(map, productId)');
-    expect(source).toContain('const unknownAvailability = !stockKnown;');
-    expect(source).toContain('const unavailable = stockKnown && stock <= 0;');
-    expect(source).toContain("isAr ? 'تعذر التحقق' : 'Stock unknown'");
-    expect(source).toContain("isAr ? 'نفد المخزون' : 'Out of stock'");
+  it('does not expose quantity availability as a saleability signal', () => {
+    expect(source).not.toContain('Object.prototype.hasOwnProperty.call(map, productId)');
+    expect(source).not.toContain('const unknownAvailability = !stockKnown;');
+    expect(source).not.toContain('const unavailable = stockKnown && stock <= 0;');
+    expect(source).not.toContain("isAr ? 'نفد المخزون' : 'Out of stock'");
+    expect(source).not.toContain("`${isAr ? 'متاح' : 'Stock'} ${stock}`");
   });
 
-  it('fails closed for non-raw items when availability is unknown or zero', () => {
+  it('allows sale regardless of stock quantity while keeping configuration errors blocking', () => {
     expect(source).toContain('const ensureSellable = (product: Product) =>');
-    expect(source).toContain('if (!hasStockValue(source, product.id))');
-    expect(source).toContain("isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.'");
-    expect(source).toContain('if ((source[product.id] || 0) <= 0)');
-    expect(source).toContain("isAr ? 'المنتج غير متوفر بالمخزون.' : 'Product is out of stock.'");
-    expect(source).toContain(
-      'const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;',
-    );
+    expect(source).toContain('const availabilityError = availabilityErrors[product.id];');
+    expect(source).toContain('if (availabilityError)');
+    expect(source).toContain('return true;');
+    expect(source).not.toContain('if ((source[product.id] || 0) <= 0)');
+    expect(source).not.toContain('if (!hasStockValue(source, product.id))');
+    expect(source).toContain('const gated = !!availabilityError || !canAddToCart;');
   });
 
-  it('trusts the authoritative raw-shortage signal regardless of broad product type or transient cart state', () => {
-    expect(source).toContain('const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;');
-    expect(source).not.toContain("product.product_type !== 'manufactured' && rawShortageOnly[product.id] === true");
-    expect(source).toContain('const productCartChecking = cartChecking && !rawShortage;');
-    expect(source).toContain('const productCartAvailabilityError = cartAvailabilityError && !rawShortage;');
-    expect(source).toContain('const gated = rawShortage');
-    expect(source).toContain('? (!!availabilityError || !canAddToCart)');
-    expect(source).toContain(': blocked || productCartChecking || productCartAvailabilityError;');
+  it('does not gate the catalog on cart availability checking or cart availability errors', () => {
+    expect(source).not.toContain('useCartAvailabilitySnapshot');
+    expect(source).not.toContain('cartChecking');
+    expect(source).not.toContain('cartError');
+    expect(source).not.toContain('productCartChecking');
+    expect(source).not.toContain('productCartAvailabilityError');
   });
 
-  it('does not require a legacy product_components recipe when authoritative availability is known', () => {
+  it('does not require a legacy product_components recipe when configuration is otherwise valid', () => {
     expect(source).not.toContain('const noRecipe =');
     expect(source).not.toContain("t('noRecipe')");
   });

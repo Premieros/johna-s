@@ -1,9 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { cartLineKey, cartToItems } from '../utils/cart';
+import { cartToItems } from '../utils/cart';
 import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
-import { useCartAwareAvailability } from './useCartAwareAvailability';
 import {
   usePosOrder as usePosOrderBase,
   type ActiveShiftInfo,
@@ -13,149 +12,27 @@ import {
 export type { ActiveShiftInfo, UsePosOrderInput } from './usePosOrderBase';
 
 /**
- * Safety wrapper around the proven online POS hook.
+ * POS wrapper for unconditional quantity sell-through.
  *
- * Online checkout is delegated unchanged to usePosOrderBase. The additional
- * online cart guard is read-only: it projects only unsent cart demand against
- * canonical warehouse/BOM availability. Physical deduction remains owned by
- * send_to_kitchen / the server sale path.
- *
- * Explicit offline checkout keeps the existing durable-outbox behavior.
+ * Stock quantity is informational/accounting state, not a saleability gate.
+ * Physical raw-material deduction remains server-owned at send_to_kitchen and
+ * may take inventory negative according to the established inventory contract.
+ * Configuration, branch, permission, shift and order-state checks remain intact.
  */
 export function usePosOrder(input: UsePosOrderInput) {
-  const base = usePosOrderBase(input);
+  const sellThroughInput = useMemo<UsePosOrderInput>(() => ({
+    ...input,
+    // usePosOrderBase historically uses this map only to bypass client-side
+    // quantity guards. Mark every visible product eligible here without
+    // changing the real raw-shortage signal or any server inventory behavior.
+    rawShortageOnly: Object.fromEntries(input.products.map((product) => [product.id, true])),
+  }), [input]);
+
+  const base = usePosOrderBase(sellThroughInput);
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const { show } = useToast();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
-  const kitchenRefreshKey = base.kitchenSentItems
-    .map((item) => `${item.order_item_id}:${Number(item.quantity || 0)}`)
-    .sort()
-    .join('|');
-  const cartAvailability = useCartAwareAvailability({
-    branchId: input.branchId,
-    activeOrderId: base.activeOrderId,
-    cart: base.cart,
-    refreshKey: kitchenRefreshKey,
-  });
-
-  const isRawShortageOnly = useCallback(
-    (productId: string) => input.rawShortageOnly?.[productId] === true,
-    [input.rawShortageOnly],
-  );
-
-  const showAvailabilityBlocked = useCallback((productName?: string) => {
-    show(
-      isAr
-        ? `${productName ? `${productName}: ` : ''}الكمية غير متاحة بعد احتساب مكونات الطلب الحالي.`
-        : `${productName ? `${productName}: ` : ''}Insufficient availability after accounting for the current order components.`,
-      'error',
-    );
-  }, [isAr, show]);
-
-  const showPhysicalStockBlocked = useCallback((productName: string, stock: number) => {
-    show(`${productName}: ${isAr ? 'المخزون غير كافٍ' : 'Insufficient stock'} (${stock})`, 'error');
-  }, [isAr, show]);
-
-  const addToCart = useCallback((...args: Parameters<typeof base.addToCart>) => {
-    const product = args[0];
-    const quantity = Number(args[1] ?? 1);
-    if (!isRawShortageOnly(product.id) && !cartAvailability.canAdd(product.id, quantity)) {
-      showAvailabilityBlocked(product.name);
-      return;
-    }
-    const currentQty = base.cart
-      .filter((item) => item.product.id === product.id)
-      .reduce((sum, item) => sum + item.quantity, 0);
-    const physicalStock = Number(input.stockMap[product.id] || 0);
-    if (!isRawShortageOnly(product.id) && currentQty + quantity > physicalStock) {
-      showPhysicalStockBlocked(product.name, physicalStock);
-      return;
-    }
-    cartAvailability.markMutationPending();
-    base.addToCart(...args);
-  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
-
-  const updateQty = useCallback((...args: Parameters<typeof base.updateQty>) => {
-    const [lineKey, delta] = args;
-    const target = base.cart.find((item) => cartLineKey(item) === lineKey);
-    if (!target) return;
-    if (delta > 0 && !isRawShortageOnly(target.product.id) && !cartAvailability.canAdd(target.product.id, delta)) {
-      showAvailabilityBlocked(target.product.name);
-      return;
-    }
-    if (delta > 0) {
-      const currentQty = base.cart
-        .filter((item) => item.product.id === target.product.id)
-        .reduce((sum, item) => sum + item.quantity, 0);
-      const physicalStock = Number(input.stockMap[target.product.id] || 0);
-      if (!isRawShortageOnly(target.product.id) && currentQty + delta > physicalStock) {
-        showPhysicalStockBlocked(target.product.name, physicalStock);
-        return;
-      }
-      cartAvailability.markMutationPending();
-    }
-    base.updateQty(...args);
-  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
-
-  const setQty = useCallback((...args: Parameters<typeof base.setQty>) => {
-    const [lineKey, qty] = args;
-    const target = base.cart.find((item) => cartLineKey(item) === lineKey);
-    if (!target) return;
-    const delta = Number(qty) - target.quantity;
-    if (delta > 0 && !isRawShortageOnly(target.product.id) && !cartAvailability.canAdd(target.product.id, delta)) {
-      showAvailabilityBlocked(target.product.name);
-      return;
-    }
-    if (delta > 0) {
-      const otherQty = base.cart
-        .filter((item) => item.product.id === target.product.id && cartLineKey(item) !== lineKey)
-        .reduce((sum, item) => sum + item.quantity, 0);
-      const physicalStock = Number(input.stockMap[target.product.id] || 0);
-      if (!isRawShortageOnly(target.product.id) && otherQty + Number(qty) > physicalStock) {
-        showPhysicalStockBlocked(target.product.name, physicalStock);
-        return;
-      }
-      cartAvailability.markMutationPending();
-    }
-    base.setQty(...args);
-  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
-
-  const replaceCartLine = useCallback((...args: Parameters<typeof base.replaceCartLine>) => {
-    const [lineKey, nextItem] = args;
-    const current = base.cart.find((item) => cartLineKey(item) === lineKey);
-    if (!current) return false;
-
-    const positiveDemand = current.product.id === nextItem.product.id
-      ? Math.max(nextItem.quantity - current.quantity, 0)
-      : nextItem.quantity;
-    if (positiveDemand > 0 && !isRawShortageOnly(nextItem.product.id) && !cartAvailability.canAdd(nextItem.product.id, positiveDemand)) {
-      showAvailabilityBlocked(nextItem.product.name);
-      return false;
-    }
-
-    const otherQty = base.cart
-      .filter((item) => item.product.id === nextItem.product.id && cartLineKey(item) !== lineKey)
-      .reduce((sum, item) => sum + item.quantity, 0);
-    const physicalStock = Number(input.stockMap[nextItem.product.id] || 0);
-    if (!isRawShortageOnly(nextItem.product.id) && otherQty + nextItem.quantity > physicalStock) {
-      showPhysicalStockBlocked(nextItem.product.name, physicalStock);
-      return false;
-    }
-
-    if (positiveDemand > 0) cartAvailability.markMutationPending();
-    return base.replaceCartLine(...args);
-  }, [base, cartAvailability, input.stockMap, isRawShortageOnly, showAvailabilityBlocked, showPhysicalStockBlocked]);
-
-  const removeFromCart = useCallback((...args: Parameters<typeof base.removeFromCart>) => {
-    base.removeFromCart(...args);
-    cartAvailability.markMutationPending();
-  }, [base, cartAvailability]);
-
-  const clearCart = useCallback(() => {
-    base.clearCart();
-    cartAvailability.markMutationPending();
-  }, [base, cartAvailability]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -175,24 +52,8 @@ export function usePosOrder(input: UsePosOrderInput) {
       return false;
     }
 
-    // Direct offline sales rely on the last branch-scoped cached stock view.
-    // Linked kitchen orders already crossed the authoritative inventory boundary.
-    if (!base.activeOrderId) {
-      for (const item of base.cart) {
-        const cachedStock = Number(input.stockMap[item.product.id] || 0);
-        const negativeEligible = input.rawShortageOnly?.[item.product.id] === true;
-        if (!negativeEligible && cachedStock < item.quantity) {
-          show(
-            isAr
-              ? `${item.product.name}: المخزون المحلي غير كافٍ (${cachedStock})`
-              : `${item.product.name}: cached stock is insufficient (${cachedStock})`,
-            'error',
-          );
-          return false;
-        }
-      }
-    }
-
+    // Offline quantity availability is not a saleability gate. Reconciliation
+    // remains server-authoritative; no cached-stock rejection is performed here.
     setOfflineCompleting(true);
     try {
       const invoiceNumber = await nextInvoiceNumber();
@@ -247,16 +108,10 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setOfflineCompleting(false);
     }
-  }, [base, input.activeShift?.id, input.branchId, input.stockMap, input.rawShortageOnly, isAr, offlineCompleting, show]);
+  }, [base, input.activeShift?.id, input.branchId, isAr, offlineCompleting, show]);
 
   return {
     ...base,
-    addToCart,
-    updateQty,
-    setQty,
-    replaceCartLine,
-    removeFromCart,
-    clearCart,
     completing: base.completing || offlineCompleting,
     completeSale,
   };

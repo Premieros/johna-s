@@ -42,12 +42,14 @@ describe('Recent UI wiring contracts', () => {
     expect(page).toContain('data-testid="report-contextual-filters"');
   });
 
-  it('keeps POS cart additions blocked until the active shift check and stock verification pass', () => {
+  it('keeps POS cart additions blocked by shift/configuration prerequisites, never stock quantity', () => {
     const page = source('src/features/pos/components/catalog/ProductBrowser.tsx');
     expect(page).toContain('const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen');
     expect(page).toContain('ممنوع إضافة منتجات بدون شفت مفتوح');
     expect(page).toContain('if (!canAddToCart || !ensureSellable(product)) return;');
-    expect(page).toContain('if (!hasStockValue(source, product.id))');
-    expect(page).toContain('if ((source[product.id] || 0) <= 0)');
+    expect(page).toContain('const gated = !!availabilityError || !canAddToCart;');
+    expect(page).not.toContain('if (!hasStockValue(source, product.id))');
+    expect(page).not.toContain('if ((source[product.id] || 0) <= 0)');
+    expect(page).not.toContain('Out of stock');
   });
 });
