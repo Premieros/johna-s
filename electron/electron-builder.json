@@ -1,6 +1,6 @@
 {
-  "appId": "com.premieros.johnas",
-  "productName": "Premier POS",
+  "appId": "com.premieros.printagent",
+  "productName": "Premier Print Agent",
   "directories": {
     "output": "electron/release"
   },
@@ -22,14 +22,15 @@
         "arch": ["x64"]
       }
     ],
-    "requestedExecutionLevel": "asInvoker"
+    "requestedExecutionLevel": "asInvoker",
+    "artifactName": "Premier-Print-Agent-${version}-${arch}.${ext}"
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "Premier POS"
+    "shortcutName": "Premier Print Agent"
   },
   "electronVersion": "38.1.0"
 }
