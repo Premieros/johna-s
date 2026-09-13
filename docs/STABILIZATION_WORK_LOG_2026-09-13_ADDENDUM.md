@@ -88,6 +88,31 @@ The receiving surface was reviewed under the mandatory UX gate: Arabic-first/RTL
 
 Implementation/test head `6841962e5c65b9356033370d645a13e4cbe1aec5` passed Verify #1241 Full Green: lint, typecheck, unit, build, Fresh DB, schema, integration/security/RLS, and Browser Smoke all succeeded.
 
-Closure documentation changed the branch head after #1241, so PR4 remains **pending one final Full Verify on the documentation-complete head before merge**.
+PR #98 was subsequently merged to `main`; post-merge Verify main #1245 and Deploy #625 were Full Green, including Production API parity and Browser Smoke. Production Supabase was not manually modified.
 
-Production Supabase writes during PR4 verification: **NONE**.
+## PR5 — Sales / POS / Tables / Kitchen / Payments closure checkpoint
+
+Branch: `development/pr5-sales-pos-kitchen`
+PR: #99
+Base: `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca`
+Detailed evidence: `docs/PR5_SALES_POS_KITCHEN_CLOSURE.md`
+
+### Audit result
+
+Existing POS/Kitchen/Payment contracts were reviewed before any write. The audit confirmed granular Permission-First POS permissions, server-side Kitchen delta consumption, pinned order warehouse behavior, payment/offline ambiguity safeguards, split-payment atomicity, and scoped table/operator ownership. Existing green behavior was not reopened without evidence.
+
+### Coverage gap and change
+
+The missing proof was a true concurrent Kitchen Send using two database sessions against the same order. `tests/integration/kitchen_send_concurrency.test.ts` now proves the second caller blocks behind the first order-row `FOR UPDATE`, then resumes as a no-op after the first commit. Final inventory decreases once and only one KDS/send row is created.
+
+The test passed on Fresh DB. No defect in `send_to_kitchen` Business Logic was found, so **no runtime SQL, migration, POS rule, payment rule, or user data was changed**.
+
+### UX gate
+
+POS/Kitchen/Payments/Tables were reviewed for missing required actions, duplicate controls, unclear status/help, prerequisite guidance, dangerous-action clarity, Arabic-first/RTL, and unnecessary steps. No proven UX regression required a change, so no cosmetic redesign was introduced simply to expand PR scope.
+
+### Verification checkpoint
+
+Implementation commit `e025de3ca641e3e611b41086c4ae32861cbb306b` passed repository identity, API parity, lint, application/test typecheck, unit, build, Fresh DB migrations, schema, Permission-First seed/drift checks, integration/security/RLS, and the new true-concurrency regression in Verify #1246.
+
+Closure documentation changes the branch HEAD, therefore PR #99 still requires a fresh Full Verify on the documentation-complete HEAD before merge. Production Supabase writes during PR5: **NONE**.
