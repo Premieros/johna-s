@@ -2,6 +2,7 @@ import type { Language, Settings } from '@/lib/types';
 import { formatCurrency, escapeHtml } from '@/lib/format';
 import { generateQRCodeDataURL } from '@/lib/barcode';
 import { supabase } from '@/api';
+import { enqueueCloudReceiptPrint } from '../services/cloudPrint';
 import {
   executeSilentPrint,
   getLocalPrinterRoutes,
@@ -234,13 +235,70 @@ function buildReceiptPlainText(receipt: ReceiptData, s: Settings, lang: Language
   return Array.from({ length: copies }, () => one).join('\r\n\f\r\n');
 }
 
-export function openPrintWindow(html: string, widthMm: number): boolean {
+function openBrowserFallback(html: string, widthMm: number): boolean {
   const win = window.open('', '_blank', `width=${Math.min(500, widthMm + 140)},height=600`);
   if (!win) return false;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+  window.setTimeout(() => {
+    if (!win.closed) win.close();
+  }, 300);
+  return true;
+}
 
+export function openPrintWindow(html: string, widthMm: number): boolean {
   const token = receiptPrintToken(html);
   const pending = token ? pendingReceiptPrints.get(token) ?? null : null;
   if (token) pendingReceiptPrints.delete(token);
+
+  // Browser/mobile clients should not need a local network connection to the
+  // branch PC. Queue the authorized receipt first; the Windows Print Agent will
+  // confirm the physical print and only then persist the sale print event.
+  if (pending && !isRunningInElectron()) {
+    void (async () => {
+      try {
+        const cloud = await enqueueCloudReceiptPrint({
+          saleId: pending.authorization.saleId,
+          approvalRequestId: pending.authorization.approvalRequestId,
+          payload: {
+            text: pending.plainText,
+            paperWidthMm: widthMm,
+            copies: 1,
+          },
+          idempotencyKey: token ? `receipt-ui:${token}` : undefined,
+        });
+        if (cloud.accepted) return;
+
+        // Compatibility fallback for installations that have not applied the
+        // cloud queue migration yet: keep the proven localhost agent path.
+        const routes = getLocalPrinterRoutes();
+        const printerName = routes.cashier || routes.receipt || routes.main || '';
+        if (printerName && isSilentPrintEnabled()) {
+          const accepted = await executeSilentPrint({
+            printerName,
+            text: pending.plainText,
+            paperWidthMm: widthMm,
+          });
+          if (accepted) {
+            await recordReceiptPrint(pending.authorization);
+            return;
+          }
+        }
+
+        console.warn('[receipt-print] cloud/local print not confirmed; browser fallback is not recorded as printed');
+        openBrowserFallback(html, widthMm);
+      } catch (error) {
+        console.error('[receipt-print] remote print failed', error);
+        openBrowserFallback(html, widthMm);
+      }
+    })();
+    return true;
+  }
+
+  const win = window.open('', '_blank', `width=${Math.min(500, widthMm + 140)},height=600`);
+  if (!win) return false;
 
   win.document.write(html);
   win.document.close();
@@ -256,7 +314,8 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
       if (printerName && isSilentPrintEnabled()) {
         accepted = await executeSilentPrint({
           printerName,
-          ...(isRunningInElectron() ? { html } : { text: pending.plainText }),
+          html,
+          paperWidthMm: widthMm,
         });
       }
 
