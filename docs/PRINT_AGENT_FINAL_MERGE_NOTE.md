@@ -1,0 +1,1 @@
+This clean merge branch points to validated print-agent commit b577a543e5184c767ba19ac990a72e2bdf10f4b9. Latest main is preserved by PR merge; no direct main write.
