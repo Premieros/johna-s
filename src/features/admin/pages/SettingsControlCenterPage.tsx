@@ -1,19 +1,16 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Palette,
   Languages,
-  CreditCard,
   Store,
   Users,
   ShieldAlert,
   Sparkles,
   Save,
-  Check,
   Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/api';
-import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -25,11 +22,10 @@ import { Button } from '@/components/Button';
 import { Input, Select, Textarea } from '@/components/Input';
 import { logAudit } from '@/lib/audit';
 import { findUiTheme, UI_THEMES } from '@/lib/themes';
-import { formatCurrency, formatDate } from '@/lib/format';
-import type { BranchSettings, SubscriptionPlan, SubscriptionStatus } from '@/lib/types';
+import type { BranchSettings } from '@/lib/types';
 import { APP_ROUTES } from '@/core/navigation/routes';
 
-type SettingsTab = 'branch_profile' | 'branch_subscription' | 'branch_staff' | 'appearance' | 'language';
+type SettingsTab = 'branch_profile' | 'branch_staff' | 'appearance' | 'language';
 
 interface UserRow {
   id: string;
@@ -50,36 +46,16 @@ export function SettingsControlCenterPage() {
 
   const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'owner';
 
-  // Section tabs
   const [active, setActive] = useState<SettingsTab>('branch_profile');
   const [saving, setSaving] = useState(false);
 
-  // Branch override / edit state
   const myBranchId = user?.branch_id || (branches[0]?.id ?? '');
   const [selectedBranchId, setSelectedBranchId] = useState<string>(myBranchId);
   const [branchForm, setBranchForm] = useState<Partial<BranchSettings>>({});
 
-  // Branch subscription state
-  const [branchSubStatus, setBranchSubStatus] = useState<SubscriptionStatus | null>(null);
-  const [publicPlans, setPublicPlans] = useState<SubscriptionPlan[]>([]);
-  const [gatewaySettings, setGatewaySettings] = useState<{
-    instapay_id: string | null;
-    beneficiary_name: string | null;
-    qr_code_url: string | null;
-    instructions_ar: string | null;
-    instructions_en: string | null;
-  } | null>(null);
-  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState<SubscriptionPlan | null>(null);
-  const [upgradeCycle, setUpgradeCycle] = useState<'monthly' | 'yearly'>('monthly');
-  const [paymentRef, setPaymentRef] = useState('');
-  const [receiptUrl, setReceiptUrl] = useState('');
-  const [submittingPayment, setSubmittingPayment] = useState(false);
-
-  // Branch staff state
   const [branchStaff, setBranchStaff] = useState<UserRow[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
 
-  // Load branch specific form data
   const targetBranchId = selectedBranchId || myBranchId;
   useEffect(() => {
     if (targetBranchId) {
@@ -97,20 +73,6 @@ export function SettingsControlCenterPage() {
     }
   }, [targetBranchId, branchSettingsMap]);
 
-  // Load branch subscription data & public plans
-  const loadBranchSubData = useCallback(async () => {
-    if (!targetBranchId) return;
-    const [stRes, plansRes, sRes] = await Promise.all([
-      api.subscriptions.status({ p_branch_id: targetBranchId }),
-      api.subscriptions.listPlans(),
-      supabase.rpc('subscription_settings_get'),
-    ]);
-    if (!stRes.error && stRes.data) setBranchSubStatus(stRes.data);
-    if (!plansRes.error && plansRes.data) setPublicPlans(plansRes.data);
-    if (!sRes.error && sRes.data) setGatewaySettings(sRes.data as never);
-  }, [targetBranchId]);
-
-  // Load branch staff
   const loadBranchStaff = useCallback(async () => {
     if (!targetBranchId) return;
     setLoadingStaff(true);
@@ -125,21 +87,9 @@ export function SettingsControlCenterPage() {
     }
   }, [targetBranchId]);
 
-  const currentPlan = useMemo(
-    () => publicPlans.find((p) => p.id === branchSubStatus?.plan_id),
-    [publicPlans, branchSubStatus?.plan_id]
-  );
-
-  const daysRemaining = useMemo(() => {
-    if (!branchSubStatus?.current_period_ends_at) return 0;
-    const diff = new Date(branchSubStatus.current_period_ends_at).getTime() - Date.now();
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-  }, [branchSubStatus?.current_period_ends_at]);
-
   useEffect(() => {
-    if (active === 'branch_subscription') void loadBranchSubData();
     if (active === 'branch_staff') void loadBranchStaff();
-  }, [active, loadBranchSubData, loadBranchStaff]);
+  }, [active, loadBranchStaff]);
 
   const pickTheme = (key: string) => {
     const p = findUiTheme(key);
@@ -173,45 +123,8 @@ export function SettingsControlCenterPage() {
     setSaving(false);
   };
 
-  // Submit payment for branch manager
-  const submitBranchPayment = async () => {
-    if (!selectedUpgradePlan || !targetBranchId) return;
-    setSubmittingPayment(true);
-    const price =
-      upgradeCycle === 'yearly'
-        ? selectedUpgradePlan.yearly_price_egp
-        : selectedUpgradePlan.monthly_price_egp;
-
-    const { data, error } = await supabase.rpc('submit_instapay_payment', {
-      p_branch_id: targetBranchId,
-      p_plan_id: selectedUpgradePlan.id,
-      p_amount: price,
-      p_billing_period: upgradeCycle,
-      p_reference: paymentRef || null,
-      p_receipt_url: receiptUrl || null,
-    });
-
-    setSubmittingPayment(false);
-    if (error || !(data as { success?: boolean })?.success) {
-      show((data as { error?: string })?.error || error?.message || 'Payment submission failed', 'error');
-      return;
-    }
-
-    show(
-      isAr
-        ? 'تم إرسال إشعار الدفع بنجاح! سيتم تفعيل الباقة فور مراجعة التحويل'
-        : 'Payment proof submitted! Subscription will be activated upon review',
-      'success'
-    );
-    setSelectedUpgradePlan(null);
-    setPaymentRef('');
-    setReceiptUrl('');
-    void loadBranchSubData();
-  };
-
   const SECTIONS: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'branch_profile', label: isAr ? 'بيانات الفرع والطباعة' : 'Branch Profile & Receipts', icon: <Store className="w-4 h-4" /> },
-    { key: 'branch_subscription', label: isAr ? 'اشتراك الفرع والترقية' : 'Branch Subscription', icon: <CreditCard className="w-4 h-4" /> },
     { key: 'branch_staff', label: isAr ? 'طاقم عمل الفرع' : 'Branch Staff', icon: <Users className="w-4 h-4" /> },
     { key: 'appearance', label: isAr ? 'المظهر والثيم' : 'Appearance & Theme', icon: <Palette className="w-4 h-4" /> },
     { key: 'language', label: isAr ? 'اللغة والتوطين' : 'Language', icon: <Languages className="w-4 h-4" /> },
@@ -219,7 +132,6 @@ export function SettingsControlCenterPage() {
 
   return (
     <div className="space-y-6">
-      {/* Super Admin Notice Banner */}
       {isSuperAdmin && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-brand-600/15 via-indigo-600/10 to-transparent border border-brand-500/30">
           <div className="flex items-center gap-3">
@@ -232,8 +144,8 @@ export function SettingsControlCenterPage() {
               </p>
               <p className="text-xs text-ui-subtle">
                 {isAr
-                  ? 'لإدارة كافة إعدادات المنشأة المركزية، المنظمات، الأسعار والاشتراكات، والصلاحيات الكاملة، تفضل بزيارة لوحة المدير العام'
-                  : 'Manage master enterprise settings, tenant organizations, subscription pricing, and full RBAC matrix in the Super Admin hub'}
+                  ? 'لإدارة إعدادات المنشأة المركزية، المنظمات، والصلاحيات الكاملة، تفضل بزيارة لوحة المدير العام'
+                  : 'Manage master enterprise settings, tenant organizations, and the full RBAC matrix in the Super Admin hub'}
               </p>
             </div>
           </div>
@@ -246,12 +158,11 @@ export function SettingsControlCenterPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-ui-border pb-4">
         <div>
           <h1 className="text-2xl font-black text-ui-text tracking-tight">{t('settings')}</h1>
           <p className="text-xs text-ui-subtle mt-0.5">
-            {isAr ? 'إدارة وتخصيص إعدادات الفرع، الإيصالات، المظهر، واشتراك المنشأة' : 'Manage branch configurations, receipts, appearance, and subscriptions'}
+            {isAr ? 'إدارة وتخصيص إعدادات الفرع، الإيصالات، والمظهر' : 'Manage branch configurations, receipts, and appearance'}
           </p>
         </div>
 
@@ -274,9 +185,7 @@ export function SettingsControlCenterPage() {
         )}
       </div>
 
-      {/* Navigation and Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Sidebar Tabs */}
         <div className="space-y-1 md:col-span-1">
           {SECTIONS.map((sec) => (
             <button
@@ -294,9 +203,7 @@ export function SettingsControlCenterPage() {
           ))}
         </div>
 
-        {/* Tab Content Panel */}
         <div className="md:col-span-3 space-y-6">
-          {/* TAB: Branch Profile & Receipts */}
           {active === 'branch_profile' && (
             <Card className="p-6 space-y-6">
               <div>
@@ -346,168 +253,6 @@ export function SettingsControlCenterPage() {
             </Card>
           )}
 
-          {/* TAB: Branch Subscription */}
-          {active === 'branch_subscription' && (
-            <div className="space-y-6">
-              {/* Current Status Card */}
-              <Card className="p-6 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-ui-text">{isAr ? 'حالة اشتراك الفرع الحالي' : 'Branch Subscription Status'}</h2>
-                    <p className="text-xs text-ui-subtle">{isAr ? 'تفاصيل الباقة والمميزات المتاحة لهذا الفرع' : 'Current tier and expiration details'}</p>
-                  </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      branchSubStatus?.status === 'active'
-                        ? 'bg-ui-success-soft text-ui-success'
-                        : branchSubStatus?.status === 'trial'
-                        ? 'bg-ui-info-soft text-ui-info'
-                        : 'bg-ui-danger-soft text-ui-danger'
-                    }`}
-                  >
-                    {branchSubStatus?.status === 'active'
-                      ? isAr ? 'اشتراك نشط' : 'Active Plan'
-                      : branchSubStatus?.status === 'trial'
-                      ? isAr ? 'فترة تجريبية' : 'Trial Mode'
-                      : isAr ? 'منتهي / مطلوب التجديد' : 'Past Due / Expired'}
-                  </span>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-3 p-4 bg-ui-page rounded-2xl border border-ui-border">
-                  <div>
-                    <p className="text-xs text-ui-subtle">{isAr ? 'اسم الباقة:' : 'Current Plan:'}</p>
-                    <p className="text-base font-bold text-ui-text">
-                      {currentPlan
-                        ? isAr ? currentPlan.name_ar : currentPlan.name_en || currentPlan.name_ar
-                        : isAr ? 'الباقة الأساسية' : 'Standard'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-ui-subtle">{isAr ? 'تاريخ الانتهاء:' : 'Expires At:'}</p>
-                    <p className="text-base font-bold text-ui-text">
-                      {branchSubStatus?.current_period_ends_at ? formatDate(branchSubStatus.current_period_ends_at, lang) : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-ui-subtle">{isAr ? 'الأيام المتبقية:' : 'Days Left:'}</p>
-                    <p className="text-base font-bold text-brand-600">
-                      {daysRemaining} {isAr ? 'يوم' : 'days'}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Plans & Upgrade via InstaPay */}
-              <Card className="p-6 space-y-4">
-                <h3 className="text-base font-bold text-ui-text">{isAr ? 'ترقية أو تجديد الباقة عبر InstaPay' : 'Renew or Upgrade Plan via InstaPay'}</h3>
-
-                {/* Gateway Instructions */}
-                {gatewaySettings && (
-                  <div className="p-4 rounded-2xl bg-brand-500/10 border border-brand-500/20 space-y-3">
-                    <div className="flex items-center gap-2 font-bold text-brand-600 dark:text-brand-400">
-                      <CreditCard className="w-5 h-5" />
-                      <span>{isAr ? 'بيانات التحويل عبر InstaPay' : 'InstaPay Payment Details'}</span>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
-                      <div>
-                        <span className="text-ui-subtle">{isAr ? 'معرّف أو رقم InstaPay:' : 'InstaPay ID:'} </span>
-                        <span className="font-mono font-bold text-ui-text">{gatewaySettings.instapay_id || '-'}</span>
-                      </div>
-                      <div>
-                        <span className="text-ui-subtle">{isAr ? 'اسم المستفيد:' : 'Beneficiary:'} </span>
-                        <span className="font-bold text-ui-text">{gatewaySettings.beneficiary_name || '-'}</span>
-                      </div>
-                    </div>
-                    {gatewaySettings.instructions_ar && (
-                      <p className="text-xs text-ui-muted pt-2 border-t border-brand-500/20 whitespace-pre-line">
-                        {isAr ? gatewaySettings.instructions_ar : gatewaySettings.instructions_en || gatewaySettings.instructions_ar}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Plans Selection */}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {publicPlans.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedUpgradePlan(p)}
-                      className={`p-4 rounded-2xl border-2 cursor-pointer transition ${
-                        selectedUpgradePlan?.id === p.id
-                          ? 'border-brand-600 bg-brand-500/5'
-                          : 'border-ui-border hover:border-ui-border/80'
-                      }`}
-                    >
-                      <h4 className="font-bold text-ui-text">{isAr ? p.name_ar : p.name_en || p.name_ar}</h4>
-                      <p className="text-xl font-black text-ui-text my-2">
-                        {formatCurrency(p.monthly_price_egp, 'EGP', lang)} <span className="text-xs text-ui-subtle font-normal">/ {isAr ? 'شهر' : 'mo'}</span>
-                      </p>
-                      <p className="text-xs text-ui-subtle">
-                        {isAr ? 'أو سنوي:' : 'Yearly:'} {formatCurrency(p.yearly_price_egp, 'EGP', lang)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Submit Receipt Form */}
-                {selectedUpgradePlan && (
-                  <div className="p-4 rounded-2xl border border-ui-border bg-ui-page space-y-4 animate-fade-in">
-                    <h4 className="font-bold text-sm text-ui-text">
-                      {isAr ? `تأكيد طلب الاشتراك في باقة: ${selectedUpgradePlan.name_ar}` : `Submit Payment for: ${selectedUpgradePlan.name_en || selectedUpgradePlan.name_ar}`}
-                    </h4>
-
-                    <div className="flex gap-4 text-xs font-semibold">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="cycle"
-                          checked={upgradeCycle === 'monthly'}
-                          onChange={() => setUpgradeCycle('monthly')}
-                        />
-                        <span>{isAr ? `شهري (${selectedUpgradePlan.monthly_price_egp} ج.م)` : `Monthly (${selectedUpgradePlan.monthly_price_egp} EGP)`}</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="cycle"
-                          checked={upgradeCycle === 'yearly'}
-                          onChange={() => setUpgradeCycle('yearly')}
-                        />
-                        <span>{isAr ? `سنوي (${selectedUpgradePlan.yearly_price_egp} ج.م)` : `Yearly (${selectedUpgradePlan.yearly_price_egp} EGP)`}</span>
-                      </label>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Input
-                        label={isAr ? 'الرقم المرجعي للإشعار (Reference No.)' : 'Transaction Reference'}
-                        value={paymentRef}
-                        onChange={(e) => setPaymentRef(e.target.value)}
-                        placeholder="e.g. 123456789"
-                      />
-                      <Input
-                        label={isAr ? 'رابط صورة إيصال التحويل (Receipt URL)' : 'Receipt Image URL'}
-                        value={receiptUrl}
-                        onChange={(e) => setReceiptUrl(e.target.value)}
-                        placeholder="https://..."
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedUpgradePlan(null)}>
-                        {isAr ? 'إلغاء' : 'Cancel'}
-                      </Button>
-                      <Button size="sm" onClick={submitBranchPayment} disabled={submittingPayment}>
-                        {submittingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        <span>{isAr ? 'إرسال إشعار الدفع' : 'Submit Proof'}</span>
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </div>
-          )}
-
-          {/* TAB: Branch Staff */}
           {active === 'branch_staff' && (
             <Card className="p-6 space-y-4">
               <div>
@@ -560,7 +305,6 @@ export function SettingsControlCenterPage() {
             </Card>
           )}
 
-          {/* TAB: Appearance */}
           {active === 'appearance' && (
             <Card className="p-6 space-y-6">
               <div>
@@ -568,7 +312,6 @@ export function SettingsControlCenterPage() {
                 <p className="text-xs text-ui-subtle">{isAr ? 'اختر السمة واللون المفضل لواجهة الاستخدام' : 'Select your preferred visual style and theme mode'}</p>
               </div>
 
-              {/* Mode Toggle */}
               <div>
                 <p className="text-xs font-bold text-ui-text mb-2">{isAr ? 'وضع الإضاءة:' : 'Theme Mode:'}</p>
                 <div className="flex gap-2">
@@ -589,7 +332,6 @@ export function SettingsControlCenterPage() {
                 </div>
               </div>
 
-              {/* Curated Themes */}
               <div>
                 <p className="text-xs font-bold text-ui-text mb-2">{isAr ? 'سمات الواجهة المصممة بعناية:' : 'Curated Themes:'}</p>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -610,7 +352,6 @@ export function SettingsControlCenterPage() {
             </Card>
           )}
 
-          {/* TAB: Language */}
           {active === 'language' && (
             <Card className="p-6 space-y-4">
               <div>

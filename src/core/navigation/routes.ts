@@ -6,8 +6,6 @@ export const APP_ROUTES = {
   login: '/login',
   register: '/register',
   dashboard: '/dashboard',
-  subscription: '/subscription',
-  subscriptions: '/subscriptions',
   superAdmin: '/super-admin',
   frontendV2: '/v2',
   pos: '/pos',
