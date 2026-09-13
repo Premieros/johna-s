@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
-    "prelint": "node -e \"const fs=require('fs'); for (const p of ['src/features/inventory/pages/LowStockAlertsPage.tsx','src/features/inventory/pages/StockValuationPage.tsx']) { let s=fs.readFileSync(p,'utf8'); s=s.replace('    let effBranch = branchId;','    const effBranch = branchId;'); fs.writeFileSync(p,s); } { const p='src/features/costing/pages/CostingCenterPage.tsx'; let s=fs.readFileSync(p,'utf8'); s=s.replace('  }, [branchId, show]);','  }, [show]);'); fs.writeFileSync(p,s); }\"",
     "lint": "eslint . --cache",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
@@ -16,7 +15,7 @@
     "verify:full": "npm run verify:db-identity && npm run typecheck:all && npm run lint && npm run build && npm run test:unit && npm run test:integration",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "timeout 30s vitest run tests/components/pages.smoke.test.tsx -t AuditLogPage --reporter=verbose",
+    "test:unit": "vitest run tests/unit tests/components",
     "test:integration": "vitest run -c vitest.integration.config.ts"
   },
   "dependencies": {
