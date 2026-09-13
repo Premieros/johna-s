@@ -7,7 +7,6 @@ import { useAuth } from '@/context/AuthContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { formatCurrency, formatDate, todayISO } from '@/lib/format';
-import { getBrandColor } from '@/lib/brandColor';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
 import { useBranchFilter } from '@/lib/useBranchFilter';
@@ -20,7 +19,6 @@ import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import { applySalesFilters, applySaleItemFilters, applyPurchaseFilters, applyExpenseFilters, applyProductScopedFilters, REPORT_FILTER_DIMS, DATE_DRIVEN_REPORTS, ORDER_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, SALE_STATUS_OPTIONS, type ReportFilters, type ReportFilterKey, type EqBuilder } from '../reportFilters';
 
 type ReportType = 'sales' | 'purchases' | 'expenses' | 'profit' | 'inventory' | 'sales_by_payment' | 'sales_by_employee' | 'sales_by_product' | 'detailed_invoices' | 'component_consumption' | 'recipe_costs' | 'top_consumed_components' | 'top_consumed_products' | 'low_stock' | 'cashier_performance' | 'returns' | 'production_waste';
@@ -28,8 +26,6 @@ type ReportType = 'sales' | 'purchases' | 'expenses' | 'profit' | 'inventory' | 
 type FinancialReportType = 'trial_balance' | 'ledger' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
-
-const PIE_COLORS = [getBrandColor(600), '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#10b981', '#ec4899', getBrandColor(500)];
 
 interface ReportsPageProps {
   controlledReportType?: ReportType;
@@ -61,7 +57,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const [to, setTo] = useState(todayISO());
   const [period, setPeriod] = useState<PeriodKey>('custom');
   const [data, setData] = useState<Record<string, unknown>[]>([]);
-  const [chartData, setChartData] = useState<{ name: string; value: number }[]>([]);
+  const [, setChartData] = useState<{ name: string; value: number }[]>([]);
   const [summary, setSummary] = useState({ total: 0, count: 0 });
   const [loading, setLoading] = useState(false);
   const [adminBranchFilter, setAdminBranchFilter] = useState<string>('');
@@ -614,8 +610,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     { key: 'production_waste', label: t('productionWasteReport'), icon: <Trash2 className="w-4 h-4" /> },
   ];
 
-  const isPie = reportType === 'expenses' || reportType === 'profit' || reportType === 'sales_by_payment';
-
   const moneyKeys = [lang === 'ar' ? 'الإجمالي' : 'Total', lang === 'ar' ? 'المبلغ' : 'Amount', lang === 'ar' ? 'الربح' : 'Profit', lang === 'ar' ? 'المبيعات' : 'Sales', lang === 'ar' ? 'المشتريات' : 'Purchases', lang === 'ar' ? 'المصروفات' : 'Expenses', lang === 'ar' ? 'الإيراد' : 'Revenue', lang === 'ar' ? 'المدفوع' : 'Paid', lang === 'ar' ? 'متوسط الفاتورة' : 'Avg Invoice', lang === 'ar' ? 'متوسط الفاتورة' : 'Avg Order', lang === 'ar' ? 'تكلفة الاستهلاك' : 'Consumption Cost', lang === 'ar' ? 'تكلفة الوصفة' : 'Recipe Cost', lang === 'ar' ? 'سعر البيع' : 'Sale Price', lang === 'ar' ? 'الهامش' : 'Margin', lang === 'ar' ? 'تكلفة الوحدة' : 'Unit Cost', lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost'];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
@@ -753,30 +747,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         reportTypes={reportTypes}
         onReportTypeChange={handleReportTypeSelect}
       />
-
-      {chartData.length > 0 && (
-        <Card className="mb-4 p-5 border-ui-border bg-ui-surface shadow-ui">
-          <ResponsiveContainer width="100%" height={300}>
-            {isPie ? (
-              <PieChart>
-                <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={(e: { name?: string }) => e.name || ''}>
-                  {chartData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(value) => formatCurrency(Number(value ?? 0), currency, lang)} />
-                <Legend />
-              </PieChart>
-            ) : (
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(value) => formatCurrency(Number(value ?? 0), currency, lang)} />
-                <Bar dataKey="value" fill={getBrandColor(600)} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </Card>
-      )}
 
       <Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (

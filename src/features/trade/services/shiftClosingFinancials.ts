@@ -47,6 +47,17 @@ const ORDER_LABELS: Record<string, string> = {
   drive_thru: 'خدمة السيارات (Drive-thru)',
 };
 
+function calculateExpectedDrawerAmount(openingAmount: number, operations: ShiftOperationRow[]) {
+  const expected = operations.reduce((total, op) => {
+    if ((op.payment_method || 'cash') !== 'cash') return total;
+    const amount = Number(op.amount || 0);
+    if (op.operation_type === 'sale' || op.operation_type === 'cash_in') return total + amount;
+    if (op.operation_type === 'refund' || op.operation_type === 'expense' || op.operation_type === 'cash_out') return total - amount;
+    return total;
+  }, openingAmount);
+  return Number(expected.toFixed(2));
+}
+
 /**
  * Authoritative shift closing reader.
  * A shift is linked to sales through shift_operations.reference_id; `sales`
@@ -79,6 +90,8 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
 
   if (operationsRes.error) throw new Error(operationsRes.error.message);
   const operations = (operationsRes.data || []) as ShiftOperationRow[];
+  const openingAmount = Number(shift.opening_amount || 0);
+  const liveExpectedAmount = calculateExpectedDrawerAmount(openingAmount, operations);
   const saleIds = Array.from(new Set(
     operations
       .filter((op) => op.reference_type === 'sale' && op.reference_id)
@@ -181,6 +194,9 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   }
 
   const totalInvoices = salesList.length;
+  const expectedAmount = shift.status === 'open'
+    ? liveExpectedAmount
+    : Number(shift.expected_amount ?? liveExpectedAmount);
   return {
     shiftId: shift.id,
     branchId: effectiveBranchId,
@@ -188,8 +204,8 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
     cashierName: cashierRes.data?.full_name || cashierRes.data?.email || 'كاشير',
     openedAt: shift.opened_at,
     closedAt: shift.closed_at || null,
-    openingAmount: Number(shift.opening_amount || 0),
-    expectedAmount: Number(shift.expected_amount || shift.opening_amount || 0),
+    openingAmount,
+    expectedAmount,
     actualAmount: Number(shift.actual_amount || 0),
     difference: Number(shift.difference || 0),
     notes: shift.notes || null,
