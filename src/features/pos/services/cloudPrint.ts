@@ -16,7 +16,12 @@ type RpcResult = { success?: boolean; error?: string; detail?: string; job_id?: 
 const safeText = (value: unknown) => String(value ?? '').trim();
 function randomId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `print-agent-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const hex = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+  return hex.replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = char === 'x' ? value : ((value & 0x3) | 0x8);
+    return nibble.toString(16);
+  });
 }
 
 export function isCloudPrintAgentEnabled(): boolean {
