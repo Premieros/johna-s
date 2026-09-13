@@ -11,7 +11,6 @@ import { APP_ROUTES } from '@/core/navigation/routes';
 import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { uploadProductImage } from '@/features/catalog/services/productImages';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
-import { useCartAvailabilitySnapshot } from '../../services/cartAvailabilityStore';
 import type { Category, Product, ProductComponent } from '@/lib/types';
 
 interface ProductBrowserProps {
@@ -34,43 +33,21 @@ interface ProductBrowserProps {
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
-const hasStockValue = (map: Record<string, number>, productId: string) => Object.prototype.hasOwnProperty.call(map, productId);
-
-export function ProductBrowser({ products, categories, stockMap, sellableStock, rawShortageOnly = {}, availabilityErrors = {}, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export function ProductBrowser({ products, categories, availabilityErrors = {}, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
   const navigate = useNavigate();
   const can = useCan();
-  const cartAvailability = useCartAvailabilitySnapshot();
   const [shiftChecked, setShiftChecked] = useState(false);
   const [shiftOpen, setShiftOpen] = useState(false);
   const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
   const [imageOverrides, setImageOverrides] = useState<Record<string, string>>({});
 
   const branchId = useMemo(() => products.find((product) => product.branch_id)?.branch_id || '', [products]);
-  const cartScopeMatches = cartAvailability.branchId === branchId;
-  const cartMap = cartScopeMatches ? cartAvailability.map : null;
-  const cartChecking = cartScopeMatches && cartAvailability.checking;
-  const cartError = cartScopeMatches ? cartAvailability.error : null;
 
   const filteredProducts = useMemo(() => products
-    .filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!search || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(search.toLocaleLowerCase()))))
-    .sort((a, b) => {
-      const aFallback = a.product_type === 'manufactured' ? sellableStock : stockMap;
-      const bFallback = b.product_type === 'manufactured' ? sellableStock : stockMap;
-      const aSource = cartMap || aFallback;
-      const bSource = cartMap || bFallback;
-      const aKnown = hasStockValue(aSource, a.id);
-      const bKnown = hasStockValue(bSource, b.id);
-      const aStock = aKnown ? aSource[a.id] : 0;
-      const bStock = bKnown ? bSource[b.id] : 0;
-      const aAvailable = aKnown && aStock > 0;
-      const bAvailable = bKnown && bStock > 0;
-      if (aAvailable !== bAvailable) return Number(bAvailable) - Number(aAvailable);
-      if (aKnown !== bKnown) return Number(bKnown) - Number(aKnown);
-      return 0;
-    }), [products, search, selectedCategory, sellableStock, stockMap, cartMap]);
+    .filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!search || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(search.toLocaleLowerCase())))), [products, search, selectedCategory]);
   const counts = useMemo(() => products.reduce<Record<string, number>>((accumulator, product) => {
     const key = product.category_id || '_none';
     accumulator[key] = (accumulator[key] || 0) + 1;
@@ -101,43 +78,22 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
   }, [branchId, hasBranch]);
 
   const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;
-  // The database RPC is authoritative here: it already excludes products that
-  // depend on manufactured units. Do not second-guess that signal using the
-  // broad product_type label, because recipe-based products may also carry the
-  // manufactured label while their only shortage is raw material stock.
-  const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;
   const availabilityErrorLabel = (code: string) => code === 'RAW_MATERIAL_NOT_IN_BRANCH'
     ? (isAr ? 'خامة الوصفة خارج الفرع' : 'Recipe material belongs to another branch')
     : (isAr ? `خطأ إعداد المخزون: ${code}` : `Inventory configuration error: ${code}`);
+
+  // Saleability is intentionally independent of quantity availability. The POS
+  // may sell through zero/negative stock; physical raw-material deduction still
+  // happens at send_to_kitchen. Only configuration/scope errors remain blocking.
   const ensureSellable = (product: Product) => {
     const availabilityError = availabilityErrors[product.id];
     if (availabilityError) {
       show(availabilityErrorLabel(availabilityError), 'error');
       return false;
     }
-    if (isRawShortageOnly(product)) {
-      return true;
-    }
-    if (cartChecking) {
-      show(isAr ? 'جاري إعادة حساب المخزون للطلب الحالي.' : 'Rechecking inventory for the current order.', 'warning');
-      return false;
-    }
-    if (cartError) {
-      show(isAr ? 'تعذر التحقق من مخزون مكونات الطلب. أعد المحاولة.' : 'Could not verify current-order component inventory. Please retry.', 'error');
-      return false;
-    }
-    const fallback = product.product_type === 'manufactured' ? sellableStock : stockMap;
-    const source = cartMap || fallback;
-    if (!hasStockValue(source, product.id)) {
-      show(isAr ? 'تعذر التحقق من المخزون. أعد المحاولة.' : 'Could not verify inventory. Please retry.', 'error');
-      return false;
-    }
-    if ((source[product.id] || 0) <= 0) {
-      show(isAr ? 'المنتج غير متوفر بالمخزون.' : 'Product is out of stock.', 'error');
-      return false;
-    }
     return true;
   };
+
   const selectProduct = (product: Product) => {
     if (!canAddToCart || !ensureSellable(product)) return;
     if (onConfigureProduct) onConfigureProduct(product);
@@ -175,17 +131,6 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
             {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-lg bg-ui-warning px-2.5 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'فتح الشفت' : 'Open shift'}</button>}
           </div>
         )}
-        {cartChecking && (
-          <div className="mb-3 flex items-center gap-2 rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2 text-[11px] font-bold text-ui-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {isAr ? 'جاري تحديث توفر المنتجات حسب مكونات الطلب...' : 'Updating product availability for the current order...'}
-          </div>
-        )}
-        {cartError && (
-          <div className="mb-3 rounded-xl border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-[11px] font-bold text-ui-danger">
-            {isAr ? 'تعذر التحقق من بعض مكونات الطلب. الأصناف ذات نقص الخام فقط تظل متاحة للبيع.' : 'Some current-order component inventory could not be verified. Raw-shortage-only items remain sellable.'}
-          </div>
-        )}
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-subtle" />
@@ -204,22 +149,8 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
         {!hasBranch ? <div className="flex h-full flex-col items-center justify-center text-center text-ui-subtle"><ShoppingCart className="mb-3 h-10 w-10 opacity-20" /><p className="font-black">{isAr ? 'اختر الفرع أولاً' : 'Select a branch first'}</p></div> : filteredProducts.length === 0 ? <div className="flex h-full flex-col items-center justify-center text-center text-ui-subtle"><Package className="mb-3 h-10 w-10 opacity-20" /><p className="font-black">{t('noData')}</p></div> : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(138px,1fr))] gap-3" data-testid="pos-product-grid">
             {filteredProducts.map((product) => {
-              const fallback = product.product_type === 'manufactured' ? sellableStock : stockMap;
-              const source = cartMap || fallback;
-              const stockKnown = hasStockValue(source, product.id);
-              const stock = stockKnown ? source[product.id] : 0;
-              const unavailable = stockKnown && stock <= 0;
-              const rawShortage = isRawShortageOnly(product);
               const availabilityError = availabilityErrors[product.id];
-              const rawLow = rawShortage && stockKnown && stock <= 0;
-              const unknownAvailability = !stockKnown;
-              const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;
-              const cartAvailabilityError = !!cartError;
-              const productCartChecking = cartChecking && !rawShortage;
-              const productCartAvailabilityError = cartAvailabilityError && !rawShortage;
-              const gated = rawShortage
-                ? (!!availabilityError || !canAddToCart)
-                : blocked || productCartChecking || productCartAvailabilityError;
+              const gated = !!availabilityError || !canAddToCart;
               const productLabel = isAr ? product.name : product.name_en || product.name;
               const categoryLabel = product.category_id ? categoryById[product.category_id] : '';
               const imageUrl = imageOverrides[product.id] || product.image_url;
@@ -228,7 +159,7 @@ export function ProductBrowser({ products, categories, stockMap, sellableStock, 
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[176px] flex-col overflow-hidden rounded-2xl border bg-ui-surface text-start shadow-ui-sm transition ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-28 w-full overflow-hidden bg-ui-page-alt text-start ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                    <span className={`absolute end-2 top-2 rounded-lg px-2 py-1 text-[9px] font-black text-white shadow-ui-sm ${availabilityError || (!rawShortage && unavailable) ? 'bg-ui-danger/90' : rawLow || productCartChecking || productCartAvailabilityError || unknownAvailability ? 'bg-ui-warning/90' : stock <= (product.low_stock_threshold || 5) ? 'bg-ui-warning/90' : 'bg-ui-success/90'}`}>{productCartChecking ? (isAr ? 'جاري التحقق' : 'Checking') : productCartAvailabilityError || (!rawShortage && unknownAvailability) ? (isAr ? 'تعذر التحقق' : 'Stock unknown') : availabilityError ? availabilityErrorLabel(availabilityError) : rawLow || rawShortage ? (isAr ? 'رصيد خام ناقص' : 'Low raw stock') : unavailable ? (isAr ? 'نفد المخزون' : 'Out of stock') : `${isAr ? 'متاح' : 'Stock'} ${stock}`}</span>
+                    {availabilityError && <span className="absolute end-2 top-2 rounded-lg bg-ui-danger/90 px-2 py-1 text-[9px] font-black text-white shadow-ui-sm">{availabilityErrorLabel(availabilityError)}</span>}
                   </button>
                   {can('products.edit') && (
                     <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>
