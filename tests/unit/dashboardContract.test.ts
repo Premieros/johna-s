@@ -12,11 +12,13 @@ describe('VisualDashboardPage contract (6H-C)', () => {
     expect(source).toContain("'EGP'");
   });
 
-  it('keeps a working admin branch picker wired to the global active branch', () => {
-    expect(source).toContain('useActiveBranchId');
-    expect(source).toContain('isAdmin ? activeBranchId : branchFilter');
-    expect(source).toContain('data-testid="dashboard-branch-filter"');
-    expect(source).toContain('setActiveBranchId');
+  it('follows the single shared operational branch without a page-local picker', () => {
+    expect(source).toContain('useBranchFilter');
+    expect(source).toContain('const effectiveBranch = branchFilter;');
+    expect(source).toContain('}, [effectiveBranch]);');
+    expect(source).not.toContain('useActiveBranchId');
+    expect(source).not.toContain('data-testid="dashboard-branch-filter"');
+    expect(source).not.toContain('setActiveBranchId');
   });
 
   it('keeps KPI deep links to the canonical report destinations', () => {
