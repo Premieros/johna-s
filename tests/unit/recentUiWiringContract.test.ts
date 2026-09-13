@@ -52,4 +52,12 @@ describe('Recent UI wiring contracts', () => {
     expect(page).not.toContain('if ((source[product.id] || 0) <= 0)');
     expect(page).not.toContain('Out of stock');
   });
+
+  it('shows the product category text when a product image is missing', () => {
+    const image = source('src/features/catalog/components/ProductImage.tsx');
+    expect(image).toContain("const fallbackLabel = category?.trim() || name?.trim() || visual.label;");
+    expect(image).toContain('{fallbackLabel}');
+    expect(image).toContain('data-product-image-fallback="true"');
+    expect(image).not.toContain('{visual.emoji}</span>');
+  });
 });
