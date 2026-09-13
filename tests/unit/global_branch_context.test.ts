@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
+// Keep every ordinary operational page on the single shared active-branch contract.
 describe('global operational branch contract', () => {
   it('uses one required accessible branch instead of widening to all branches', () => {
     const hook = source('src/lib/useBranchFilter.ts');
