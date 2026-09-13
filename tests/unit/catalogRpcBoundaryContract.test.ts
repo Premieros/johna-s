@@ -9,6 +9,8 @@ const kitchenSource = readFileSync(resolve(repoRoot, 'src/features/catalog/pages
 
 const currentDirectRpcTargets = [
   'get_product_modifiers_admin',
+  'list_modifier_groups_admin',
+  'save_modifier_group',
   'get_kitchen_station_assignments',
   'get_kitchen_station_editor_context',
   'save_kitchen_station_assignments',
@@ -23,10 +25,12 @@ describe('catalog RPC boundary contract (PR3 6D)', () => {
     }
   });
 
-  it('routes the modifier admin call through catalog API without changing page-level response handling', () => {
-    expect(modifiersSource).toContain('api.catalog.getProductModifiersAdmin(selectedProduct.id)');
-    expect(modifiersSource).toContain('if (mods.error)');
-    expect(modifiersSource).toContain('const result = (mods.data || {}) as AdminModifiersResponse');
+  it('routes reusable modifier-group admin calls through catalog API while preserving response validation', () => {
+    expect(modifiersSource).toContain('api.catalog.listModifierGroupsAdmin(branchFilter)');
+    expect(modifiersSource).toContain('if (groupsResult.error) throw groupsResult.error');
+    expect(modifiersSource).toContain('const result = (groupsResult.data || {}) as AdminGroupsResponse');
+    expect(modifiersSource).toContain('api.catalog.saveModifierGroup({');
+    expect(modifiersSource).toContain("if (!result.success) throw new Error(result.detail || result.error || 'SAVE_MODIFIER_GROUP_FAILED')");
   });
 
   it('routes kitchen assignment calls through catalog API while preserving response validation', () => {
