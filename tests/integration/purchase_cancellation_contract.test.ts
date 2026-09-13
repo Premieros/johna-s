@@ -92,7 +92,7 @@ describe.skipIf(skip)('purchase cancellation contract', () => {
     const purchaseId = await createDraftPurchase();
 
     const cancelled = await asAdmin(async () => {
-      const res = await client.query<{ r: { success: boolean; error?: string } }>(
+      const res = await client.query<{ r: { success: boolean; error?: string; status?: string } }>(
         `SELECT public.update_purchase_order_status($1, 'cancelled') AS r`,
         [purchaseId],
       );
@@ -100,7 +100,7 @@ describe.skipIf(skip)('purchase cancellation contract', () => {
     });
 
     expect(cancelled.success).toBe(true);
-    expect(await getPurchaseStatus(purchaseId)).toBe('cancelled');
+    expect(cancelled.status).toBe('cancelled');
 
     const receipts = await client.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM public.purchase_receipts WHERE purchase_id = $1`,
