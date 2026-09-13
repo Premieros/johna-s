@@ -126,8 +126,6 @@ export function AppRoutes() {
       <Routes>
         <Route path={APP_ROUTES.login} element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path={APP_ROUTES.register} element={<Navigate to={APP_ROUTES.login} replace />} />
-        <Route path={APP_ROUTES.subscription} element={<DefaultRoute />} />
-        <Route path={APP_ROUTES.subscriptions} element={<Navigate to={APP_ROUTES.superAdmin} replace />} />
         <Route path={APP_ROUTES.frontendV2} element={<ProtectedRoute fullscreen><V2GatewayPage /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.frontendV2}/pos`} element={<ProtectedRoute permission="pos.view" fullscreen><Navigate to={APP_ROUTES.pos} replace /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.frontendV2}/shifts`} element={<ProtectedRoute permission="shifts.view" fullscreen><Navigate to={APP_ROUTES.shifts} replace /></ProtectedRoute>} />
