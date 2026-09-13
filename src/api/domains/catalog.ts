@@ -60,8 +60,8 @@ export const catalog = {
       p_product_ids: p.p_product_ids,
     });
   },
-  deleteModifierGroup(p_group_id: string, p_branch_id: string) {
-    return supabase.rpc('delete_modifier_group', { p_group_id, p_branch_id });
+  archiveModifierGroup(p_group_id: string) {
+    return supabase.rpc('archive_modifier_group', { p_group_id });
   },
 
   async listInventoryUnits(filters?: { branch_id?: string; unit_type?: string; is_active?: boolean }) {
