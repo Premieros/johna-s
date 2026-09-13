@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, Users, UtensilsCrossed, Clock,
-  XCircle, Tag, RefreshCw, Banknote, Activity, Pause,
+  XCircle, RefreshCw, Banknote, Activity, Pause,
   Truck, ShoppingBag,
 } from 'lucide-react';
 import { supabase } from '@/api';
@@ -11,7 +11,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { useCan, isAdminRole } from '@/lib/permissions';
+import { useCan } from '@/lib/permissions';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -46,9 +46,7 @@ export function ActiveOrdersPage() {
 
   const [areas, setAreas] = useState<DiningArea[]>([]);
   const [products, setProducts] = useState<{ id: string; name: string; name_en: string | null }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; name_en: string | null }[]>([]);
   const [cashiers, setCashiers] = useState<CashierOption[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState(branchFilter || '');
   const [areasLoading, setAreasLoading] = useState(false);
   const [orderTypeFilter, setOrderTypeFilter] = useState<OrderType | ''>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'held'>('all');
@@ -64,8 +62,7 @@ export function ActiveOrdersPage() {
     name: '', capacity: 4, area_id: '', x: 0, y: 0, w: 120, h: 80,
   });
 
-  const effectiveBranch = selectedBranch || branchFilter || user?.branch_id || '';
-  const isAdmin = isAdminRole(user?.role);
+  const effectiveBranch = branchFilter || user?.branch_id || '';
   const canManage = can('floor_plan.manage');
   const canReassignCashier = can('pos.order.transfer') && can('pos.order.edit') && can('users.manage');
 
@@ -84,16 +81,19 @@ export function ActiveOrdersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      supabase.from('branches').select('id, name, name_en').eq('is_active', true).order('name'),
-      supabase.from('products').select('id, name, name_en').eq('is_active', true),
-    ]).then(([bRes, pRes]) => {
-      if (cancelled) return;
-      setBranches((bRes.data as { id: string; name: string; name_en: string | null }[]) || []);
-      setProducts((pRes.data as { id: string; name: string; name_en: string | null }[]) || []);
-    });
+    if (!effectiveBranch) {
+      setProducts([]);
+      return () => { cancelled = true; };
+    }
+    supabase.from('products')
+      .select('id, name, name_en')
+      .eq('is_active', true)
+      .eq('branch_id', effectiveBranch)
+      .then(({ data }) => {
+        if (!cancelled) setProducts((data as { id: string; name: string; name_en: string | null }[]) || []);
+      });
     return () => { cancelled = true; };
-  }, []);
+  }, [effectiveBranch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -269,24 +269,6 @@ export function ActiveOrdersPage() {
         }
       />
 
-      {isAdmin && (
-        <DesignPanel testId="active-orders-branch-panel">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Tag className="w-4 h-4 text-ui-subtle" />
-            <select
-              value={effectiveBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring"
-            >
-              <option value="">{isAr ? 'اختر الفرع' : 'Select Branch'}</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-            </select>
-            <span className="text-sm text-ui-muted">
-              {isAr ? `${counts.active} طلب نشط` : `${counts.active} active orders`}
-            </span>
-          </div>
-        </DesignPanel>
-      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         {statCards.map((s) => (

@@ -15,6 +15,8 @@ export interface PaginatedQueryOptions {
   order?: { column: string; ascending?: boolean };
   /** Equality filter on branch_id (skipped when null/undefined). */
   branch_id?: string | null;
+  /** Optional PostgREST OR expression for trusted page-defined compound scopes. */
+  or?: string;
   /** Additional equality filters: [{ column: 'status', value: 'open' }]. */
   filters?: { column: string; value: unknown }[];
   /** Optional server-side text search over one or more plain columns. */
@@ -47,7 +49,7 @@ function safeSearchTerm(value: string): string {
 }
 
 export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRowsResult<T> {
-  const { table, select = '*', order, branch_id, filters, search, pageSize = 200, enabled = true } = opts;
+  const { table, select = '*', order, branch_id, or, filters, search, pageSize = 200, enabled = true } = opts;
   const filterKey = JSON.stringify(filters ?? []);
   const searchKey = JSON.stringify({ term: search?.term ?? '', columns: search?.columns ?? [] });
   const orderKey = order?.column ?? '';
@@ -64,6 +66,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     (q: FilterBuilder): FilterBuilder => {
       let bq = q;
       if (branch_id) bq = bq.eq('branch_id', branch_id);
+      if (or) bq = bq.or(or);
       for (const f of filters ?? []) bq = bq.eq(f.column, f.value);
       const term = safeSearchTerm(search?.term ?? '');
       const columns = (search?.columns ?? []).filter((column) => /^[a-zA-Z0-9_]+$/.test(column));
@@ -74,7 +77,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       return bq;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by stable serialized option values
-    [branch_id, filterKey, searchKey]
+    [branch_id, or, filterKey, searchKey]
   );
 
   const buildDataQuery = useCallback(

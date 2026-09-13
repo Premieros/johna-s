@@ -4,7 +4,6 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { useAuth } from '@/context/AuthContext';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -14,9 +13,7 @@ import { Modal } from '@/components/Modal';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
-import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment } from '@/lib/types';
 
@@ -25,19 +22,15 @@ type Tab = 'ar' | 'ap';
 export function PaymentsPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const { effectiveSettings } = useSettings();
-  const { branches } = useBranches();
   const [tab, setTab] = useState<Tab>('ar');
   const [rows, setRows] = useState<ArAgingRow[]>([]);
   const [apRows, setApRows] = useState<ApAgingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [adminBranchFilter, setAdminBranchFilter] = useState('');
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
-  const isAr = lang === 'ar';
   const { rows: payments, loading: paymentsLoading, error: paymentsError, total: paymentsTotal, hasMore: paymentsHasMore, loadMore: loadMorePayments, loadingMore: loadingMorePayments, refresh: reloadPayments } = usePaginatedRows<CustomerPayment>({
     table: 'customer_payments',
     select: 'id, amount, payment_method, reference_number, notes, created_at, customer:customers(name)',
@@ -243,16 +236,6 @@ export function PaymentsPage() {
       <DesignPanel testId="payments-search-panel">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <DesignSearch value={search} onChange={setSearch} className="flex-1 w-full" label={t('search')} placeholder={t('search')} testId="payments-search" />
-          {isAdminRole(user?.role) && branches.length > 0 && (
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-ui-muted">{t('filterByBranch')}</label>
-              <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-                <option value="">{t('allBranches')}</option>
-                {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-              </select>
-            </div>
-          )}
         </div>
       </DesignPanel>
 

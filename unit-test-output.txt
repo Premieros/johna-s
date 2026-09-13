@@ -1,0 +1,98 @@
+
+> vite-react-typescript-starter@0.0.0 test:unit
+> vitest run tests/unit tests/components
+
+[2m1:23:26 PM[22m [33m[1m[vite][22m[39m [33mwarning: `esbuild` option was specified by "vite:react-babel" plugin. This option is deprecated, please use `oxc` instead.[39m
+[2m1:23:26 PM[22m [33m[1m[vite][22m[39m [33mwarning: `optimizeDeps.esbuildOptions` option was specified by "vite:react-babel" plugin. This option is deprecated, please use `optimizeDeps.rolldownOptions` instead.[39m
+[33mBoth esbuild and oxc options were set. oxc options will be used and esbuild options will be ignored.[39m The following esbuild options were set: `{ jsx: 'automatic', jsxImportSource: undefined }`
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/home/runner/work/johna-s/johna-s[39m
+
+ [32m✓[39m tests/unit/navigation-contract.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/permissionDefs.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m tests/components/design-surfaces.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 350[2mms[22m[39m
+ [32m✓[39m tests/unit/reportsCenterContract.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/components/pages.smoke.test.tsx [2m([22m[2m36 tests[22m[2m)[22m[33m 802[2mms[22m[39m
+ [32m✓[39m tests/unit/hooks/usePaginatedRows.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 374[2mms[22m[39m
+ [32m✓[39m tests/unit/printExecutionTruthContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/catalogCreateContract.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/components/pos-payment-panel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 255[2mms[22m[39m
+ [32m✓[39m tests/unit/reportingRegistry.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/pos/productComponentDeduction.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m tests/unit/posRawShortageSellabilityContract.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/saleFinancialAuthorityContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+ [32m✓[39m tests/unit/navigationRegression.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/unit/negative_raw_material_inventory_contract.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/unit/warehouseTransferMultiBranchContract.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/reorder.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/sentState.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/reportFilters.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/unit/hooks/useBranches.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 321[2mms[22m[39m
+ [32m✓[39m tests/unit/accountBalancesClosingInventoryContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/importExportRoundTripContract.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m tests/unit/purchaseInvoiceEditContract.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/offlineFinancialTruthContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/posMath.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/permissionFirstRootContract.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/recentUiWiringContract.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/legacySubscriptionCleanupContract.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/unit/catalogTerminologyLockContract.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/offlineSaleOwnerContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/pos/orderStage.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/posOperatorDisplayContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/catalogDeadWrapperUsageContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 241[2mms[22m[39m
+ [32m✓[39m tests/unit/thermalReceiptContract.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/posProductImagesRedesignContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/inventoryExpiry.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/canonicalPermissionModel.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/posSharedShiftWorkspaceContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/catalogRpcBoundaryContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/reportExport.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/format.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m tests/unit/v2/capabilityRegistry.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/global_branch_context.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/windowsPrintBridgeContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/sales_deduction_units_only.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/catalogBranchComponentSelectionContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/pos/cartModifierIdentity.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/pos/cartAvailability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/dashboardContract.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/pos/orderFilters.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/uiDatabaseDriftContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/printerSettingsPermissionContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/catalogProductUnitLinksContract.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/unit/branchPrintContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/productsPosCatalogContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/posAvailabilityDisplayContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/sessionDataIsolationContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/posRawShortageUiGuardContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/kitchenInventoryBoundaryContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/unit/reportsShiftUserTotalsContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/posAvailabilityGateContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/brandColor.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+ [32m✓[39m tests/unit/shiftLiveExpectedContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/sidebar-direction.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/unit/p2AuthoritativePricingContract.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/posDirectServiceEntryContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/lib/costing.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/posNegativeRawCartGuardContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/reportsCompactTabularContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/purchaseReceiptUomContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/guidedWorkflowPermissionContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/financialReportsBranchScopeContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/posSharedShiftSettlementContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/v2/gatewaySourceContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/purchaseOrderInputValidationContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/kitchenTicketLayoutContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/approvalCenterPermissionContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/multiBranchFilterContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/navigationRegistry.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/interactionIdentity.test.ts [2m([22m[2m63 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m tests/unit/auditActionSignatureContract.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/pos/productScanContract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m82 passed[39m[22m[90m (82)[39m
+[2m      Tests [22m [1m[32m541 passed[39m[22m[90m (541)[39m
+[2m   Start at [22m 13:23:26
+[2m   Duration [22m 44.88s[2m (transform 3.78s, setup 21.14s, import 6.65s, tests 3.38s, environment 85.19s)[22m
+

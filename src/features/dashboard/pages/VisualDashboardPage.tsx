@@ -9,9 +9,6 @@ import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { useActiveBranchId } from '@/lib/activeBranch';
-import { isAdminRole } from '@/lib/permissions';
-import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import { formatCurrency, formatNumber } from '@/lib/format';
 
@@ -123,11 +120,8 @@ export function VisualDashboardPage() {
   const { lang } = useLanguage();
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
-  const { branches } = useBranches();
   const { effectiveSettings } = useSettings();
   const ar = lang === 'ar';
-  const isAdmin = isAdminRole(user?.role);
-  const [activeBranchId, setActiveBranchId] = useActiveBranchId();
   const [range, setRange] = useState<Range>('today');
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -142,7 +136,7 @@ export function VisualDashboardPage() {
   const [wasteRows, setWasteRows] = useState<{ waste_category: string; waste_type: string; total_quantity: number; total_cost: number; entry_count: number }[]>([]);
   const [quickStats, setQuickStats] = useState({ sales: 0, expenses: 0, profit: 0, lowStockCount: 0 });
 
-  const effectiveBranch = isAdmin ? activeBranchId : branchFilter;
+  const effectiveBranch = branchFilter;
   const settings = effectiveSettings(effectiveBranch);
   const money = useCallback((n: number) => formatCurrency(n, settings?.currency || 'EGP', lang), [settings?.currency, lang]);
 
@@ -198,11 +192,15 @@ export function VisualDashboardPage() {
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
       const monthDateStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const monthDateEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
-      const [salesRes, expensesRes, inventoryRes] = await Promise.all([
-        supabase.from('sales').select('total').gte('created_at', monthStart).lte('created_at', monthEnd),
-        supabase.from('expenses').select('amount').gte('expense_date', monthDateStart).lte('expense_date', monthDateEnd),
-        supabase.from('inventory').select('quantity, product:products(low_stock_threshold)'),
-      ]);
+      let salesQuery = supabase.from('sales').select('total').gte('created_at', monthStart).lte('created_at', monthEnd);
+      let expensesQuery = supabase.from('expenses').select('amount').gte('expense_date', monthDateStart).lte('expense_date', monthDateEnd);
+      let inventoryQuery = supabase.from('inventory').select('quantity, product:products(low_stock_threshold)');
+      if (effectiveBranch) {
+        salesQuery = salesQuery.eq('branch_id', effectiveBranch);
+        expensesQuery = expensesQuery.eq('branch_id', effectiveBranch);
+        inventoryQuery = inventoryQuery.eq('branch_id', effectiveBranch);
+      }
+      const [salesRes, expensesRes, inventoryRes] = await Promise.all([salesQuery, expensesQuery, inventoryQuery]);
       const totalSales = (salesRes.data || []).reduce((s: number, r: Record<string, unknown>) => s + Number(r.total || 0), 0);
       const totalExpenses = (expensesRes.data || []).reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount || 0), 0);
       const lowStockCount = (inventoryRes.data || []).filter((r: Record<string, unknown>) => {
@@ -213,7 +211,7 @@ export function VisualDashboardPage() {
       }).length;
       setQuickStats({ sales: totalSales, expenses: totalExpenses, profit: totalSales - totalExpenses, lowStockCount });
     })();
-  }, []);
+  }, [effectiveBranch]);
 
   const filteredSales = useMemo(
     () => (orderTypeFilter ? sales.filter((r) => String(r.order_type || '').toLowerCase() === orderTypeFilter) : sales),
@@ -318,12 +316,6 @@ export function VisualDashboardPage() {
           </div>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          {isAdmin && branches.length > 0 && (
-            <select data-testid="dashboard-branch-filter" value={activeBranchId || ''} onChange={(e) => setActiveBranchId(e.target.value || null)} className="h-10 rounded-xl border border-white/25 bg-white/10 px-3 text-sm font-semibold text-white [&>option]:text-ui-text">
-              <option value="">{ar ? 'كل الفروع' : 'All branches'}</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{ar ? b.name : b.name_en || b.name}</option>)}
-            </select>
-          )}
           <button data-testid="dashboard-compare-toggle" onClick={() => setCompareEnabled((v) => !v)} aria-pressed={compareEnabled} className={`inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-bold ${compareEnabled ? 'border-white bg-ui-surface text-ui-primary' : 'border-white/25 text-white/85 hover:bg-white/10'}`}>
             <span className={`h-5 w-9 rounded-full p-0.5 ${compareEnabled ? 'bg-ui-primary' : 'bg-white/30'}`}><span className={`block h-4 w-4 rounded-full bg-ui-surface shadow transition ${compareEnabled ? 'translate-x-4' : ''}`} /></span>
             {ar ? 'مقارنة' : 'Compare'}

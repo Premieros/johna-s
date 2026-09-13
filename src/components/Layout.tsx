@@ -91,12 +91,12 @@ export function Layout({ children }: { children: ReactNode }) {
   const [, setActiveBranchId] = useActiveBranchId();
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const branchMenuRef = useRef<HTMLDivElement>(null);
-  const canSelectBranch = isAdmin || branches.length > 1;
+  const canSelectBranch = branches.length > 1;
   const effectiveBranch = branchFilter ?? null;
   const activeBranch = branches.find((b) => b.id === effectiveBranch) ?? null;
   const branchLabel = activeBranch
     ? (lang === 'ar' ? activeBranch.name : activeBranch.name_en || activeBranch.name)
-    : (ar ? 'كل الفروع' : 'All branches');
+    : (ar ? 'اختر الفرع' : 'Select branch');
   const showBackButton = location.pathname !== APP_ROUTES.dashboard;
 
   useEffect(() => {
@@ -206,9 +206,6 @@ export function Layout({ children }: { children: ReactNode }) {
             </button>
             {canSelectBranch && branchMenuOpen && (
               <div data-testid="branch-menu" className="absolute end-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-ui-border bg-ui-surface py-1 shadow-ui-lg animate-slide-down">
-                {isAdmin && <button data-testid="branch-option-all" type="button" onClick={() => { setActiveBranchId(null); setBranchMenuOpen(false); }} className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${effectiveBranch === null ? 'bg-ui-primary-soft font-bold text-ui-primary' : 'text-ui-muted hover:bg-ui-page-alt'}`}>
-                  {ar ? 'كل الفروع' : 'All branches'}
-                </button>}
                 {branches.map((b) => (
                   <button key={b.id} data-testid={`branch-option-${b.id}`} type="button" onClick={() => { setActiveBranchId(b.id); setBranchMenuOpen(false); }} className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${effectiveBranch === b.id ? 'bg-ui-primary-soft font-bold text-ui-primary' : 'text-ui-muted hover:bg-ui-page-alt'}`}>
                     <span className="truncate">{lang === 'ar' ? b.name : (b.name_en || b.name)}</span>
