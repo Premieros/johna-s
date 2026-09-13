@@ -42,6 +42,17 @@ describe.skipIf(skip)('purchase cancellation contract', () => {
     });
   }
 
+  async function getPurchaseStatus(purchaseId: string) {
+    return asAdmin(async () => {
+      const row = await client.query<{ status: string }>(
+        `SELECT status FROM public.purchases WHERE id = $1`,
+        [purchaseId],
+      );
+      expect(row.rows).toHaveLength(1);
+      return row.rows[0].status;
+    });
+  }
+
   beforeAll(async () => {
     client = openDb(dbUrl!);
     await client.connect();
@@ -89,9 +100,7 @@ describe.skipIf(skip)('purchase cancellation contract', () => {
     });
 
     expect(cancelled.success).toBe(true);
-
-    const row = await client.query<{ status: string }>(`SELECT status FROM public.purchases WHERE id = $1`, [purchaseId]);
-    expect(row.rows[0].status).toBe('cancelled');
+    expect(await getPurchaseStatus(purchaseId)).toBe('cancelled');
 
     const receipts = await client.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM public.purchase_receipts WHERE purchase_id = $1`,
@@ -132,8 +141,6 @@ describe.skipIf(skip)('purchase cancellation contract', () => {
 
     expect(cancelled.success).toBe(false);
     expect(cancelled.error).toBe('BAD_TRANSITION');
-
-    const row = await client.query<{ status: string }>(`SELECT status FROM public.purchases WHERE id = $1`, [purchaseId]);
-    expect(row.rows[0].status).toBe('approved');
+    expect(await getPurchaseStatus(purchaseId)).toBe('approved');
   });
 });
