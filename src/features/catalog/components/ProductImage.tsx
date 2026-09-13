@@ -47,7 +47,7 @@ export function ProductImage({ src, name, category, className = '', imgClassName
     <div
       className={`flex h-full w-full select-none items-center justify-center bg-gradient-to-br from-ui-page-alt to-ui-surface px-3 ${className}`}
       role="img"
-      aria-label={alt || fallbackLabel}
+      aria-label={alt || name || fallbackLabel}
       title={fallbackLabel}
       data-product-image-fallback="true"
     >
