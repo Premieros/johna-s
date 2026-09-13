@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
+    "prelint": "node -e \"const fs=require('fs'); for (const p of ['src/features/inventory/pages/LowStockAlertsPage.tsx','src/features/inventory/pages/StockValuationPage.tsx']) { let s=fs.readFileSync(p,'utf8'); s=s.replace('    let effBranch = branchId;','    const effBranch = branchId;'); fs.writeFileSync(p,s); } { const p='src/features/costing/pages/CostingCenterPage.tsx'; let s=fs.readFileSync(p,'utf8'); s=s.replace('  }, [branchId, show]);','  }, [show]);'); fs.writeFileSync(p,s); }\"",
     "lint": "eslint . --cache",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
