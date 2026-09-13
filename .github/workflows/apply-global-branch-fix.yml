@@ -40,6 +40,129 @@ jobs:
       - name: Apply guarded codemod
         run: python3 scripts/apply_global_branch_fix.py
 
+      - name: Align branch regression contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str, label: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one {label}, found {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Vitest/Vite rewrites dynamic new URL(import.meta.url) patterns; use an
+          # explicit repository-root path so the contract reads the requested file.
+          replace_once(
+              'tests/unit/global_branch_context.test.ts',
+              "import { readFileSync } from 'node:fs';\nimport { describe, expect, it } from 'vitest';\n\nconst source = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');",
+              "import { readFileSync } from 'node:fs';\nimport { resolve } from 'node:path';\nimport { describe, expect, it } from 'vitest';\n\nconst source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');",
+              'global branch test file reader',
+          )
+
+          # Dashboard no longer owns a second branch picker. It must consume the
+          # single shared operational branch and reload its data when that changes.
+          replace_once(
+              'tests/unit/dashboardContract.test.ts',
+              """  it('keeps a working admin branch picker wired to the global active branch', () => {
+    expect(source).toContain('useActiveBranchId');
+    expect(source).toContain('isAdmin ? activeBranchId : branchFilter');
+    expect(source).toContain('data-testid=\"dashboard-branch-filter\"');
+    expect(source).toContain('setActiveBranchId');
+  });""",
+              """  it('follows the single shared operational branch without a page-local picker', () => {
+    expect(source).toContain('useBranchFilter');
+    expect(source).toContain('const effectiveBranch = branchFilter;');
+    expect(source).toContain('}, [effectiveBranch]);');
+    expect(source).not.toContain('useActiveBranchId');
+    expect(source).not.toContain('data-testid=\"dashboard-branch-filter\"');
+    expect(source).not.toContain('setActiveBranchId');
+  });""",
+              'dashboard branch contract',
+          )
+
+          # Financial reports stay explicitly scoped, but branch choice is global.
+          replace_once(
+              'tests/unit/financialReportsBranchScopeContract.test.ts',
+              """  it('uses RLS-visible branches instead of operational role labels', () => {
+    const page = read('src/features/accounting/pages/FinancialReportsPage.tsx');
+
+    expect(page).toContain('const { branches } = useBranches();');
+    expect(page).toContain('branches.length > 1');
+    expect(page).toContain('setReportBranchFilter(e.target.value)');
+    expect(page).toContain('selectedReportBranch || branchFilter || (branches.length === 1 ? branches[0].id : null)');
+    expect(page).not.toContain('isAdminRole(');
+    expect(page).not.toContain(\"t('allBranches')\");
+  });""",
+              """  it('uses the shared RLS-visible active branch instead of a page-local selector', () => {
+    const page = read('src/features/accounting/pages/FinancialReportsPage.tsx');
+
+    expect(page).toContain('const branchFilter = useBranchFilter();');
+    expect(page).toContain('const effectiveBranchFilter = branchFilter;');
+    expect(page).not.toContain('setReportBranchFilter(');
+    expect(page).not.toContain('selectedReportBranch');
+    expect(page).not.toContain('isAdminRole(');
+    expect(page).not.toContain(\"t('allBranches')\");
+  });""",
+              'financial reports shared branch contract',
+          )
+
+          # Multi-branch users must never widen operational scope to all branches.
+          replace_once(
+              'tests/unit/multiBranchFilterContract.test.ts',
+              """describe('multi-branch filter contract', () => {
+  it('uses RLS-visible branches instead of role-name authorization', () => {
+    expect(source).toContain('branches.length === 1');
+    expect(source).toContain('return branches[0].id');
+    expect(source).toContain('return null');
+    expect(source).not.toContain('isAdminRole');
+  });
+
+  it('never keeps a selected branch that is no longer accessible', () => {
+    expect(source).toContain('activeIsAccessible');
+    expect(source).toContain('setActiveBranchId(null)');
+  });
+});""",
+              """describe('multi-branch filter contract', () => {
+  it('pins operational pages to one RLS-visible branch without role-name authorization', () => {
+    expect(source).toContain('useBranches');
+    expect(source).toContain('activeIsAccessible');
+    expect(source).toContain('primaryIsAccessible');
+    expect(source).toContain('fallbackBranchId');
+    expect(source).toContain('return fallbackBranchId');
+    expect(source).not.toContain('isAdminRole');
+  });
+
+  it('repairs an inaccessible active branch to an accessible fallback instead of widening scope', () => {
+    expect(source).toContain('if (!user || loading || activeIsAccessible) return;');
+    expect(source).toContain('setActiveBranchId(fallbackBranchId)');
+    expect(source).not.toContain('setActiveBranchId(null)');
+  });
+});""",
+              'multi-branch fallback contract',
+          )
+
+          # Reports keep all filters/exports, but their branch selector is intentionally
+          # disabled because the shared header is the sole operational branch control.
+          replace_once(
+              'tests/unit/reportsCompactTabularContract.test.ts',
+              "    expect(source).toContain('showBranchFilter={isAdminRole(user?.role) && branches.length > 0}');",
+              "    expect(source).toContain('showBranchFilter={false}');\n    expect(source).toContain('branchFilterValue={branchFilter || \'\'}');\n    expect(source).toContain('onBranchFilterChange={() => undefined}');\n    expect(source).not.toContain('isAdminRole(user?.role)');",
+              'reports branch selector assertion',
+          )
+
+          # The interaction registry must describe controls that still exist. The
+          # global header branch menu and per-branch options remain registered; only
+          # the removed all-branches and dashboard-local controls are retired.
+          for marker in [
+              "  { testId: 'branch-option-all', file: 'src/components/Layout.tsx', label: 'Branch switcher: all branches', marker: 'data-testid=\"branch-option-all\"' },\n",
+              "  { testId: 'dashboard-branch-filter', file: 'src/features/dashboard/pages/VisualDashboardPage.tsx', label: 'Admin branch picker (wired to setActiveBranchId)', marker: 'data-testid=\"dashboard-branch-filter\"' },\n",
+          ]:
+              replace_once('src/lib/interactionIdentity.ts', marker, '', f'interaction registry retirement: {marker.strip()}')
+          PY
+
       - name: Remove branch-selector lint residue
         run: |
           python3 - <<'PY'
