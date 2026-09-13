@@ -32,11 +32,13 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
        SET permissions = COALESCE(permissions, '[]'::jsonb) || '["shifts.close"]'::jsonb
        WHERE role = 'branch_manager'`,
     );
+    await client.query(`SELECT set_config('app.register_branch', 'on', true)`);
     await client.query(
       `INSERT INTO public.users (id,email,full_name,role,branch_id,is_active)
        VALUES ($1,$2,'Live Shift User','branch_manager',$3,true)`,
       [userId, `${userId}@test.local`, branchId],
     );
+    await client.query(`SELECT set_config('app.register_branch', 'off', true)`);
   });
 
   afterAll(async () => {
