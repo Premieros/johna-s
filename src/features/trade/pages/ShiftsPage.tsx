@@ -23,6 +23,7 @@ import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftCl
 import { fetchShiftClosingDetailsSafe } from '../services/shiftClosingFinancials';
 
 interface ShiftUserRow { id: string; full_name: string | null; email: string | null; }
+interface ActiveShiftPayload { open?: boolean; shift?: { id?: string; expected?: number }; }
 
 export function ShiftsPage() {
   const { t, lang } = useLanguage();
@@ -45,6 +46,7 @@ export function ShiftsPage() {
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(branchSel || branchFilter)?.currency || 'EGP';
   const [users, setUsers] = useState<ShiftUserRow[]>([]);
+  const [liveExpectedByShift, setLiveExpectedByShift] = useState<Record<string, number>>({});
 
   const [openModal, setOpenModal] = useState(false);
   const [openForm, setOpenForm] = useState({ opening_amount: 0, notes: '' });
@@ -58,6 +60,32 @@ export function ShiftsPage() {
     setUsers((data as ShiftUserRow[]) || []);
   }
   useEffect(() => { loadMeta(); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const openItems = items.filter((shift) => shift.status === 'open' && shift.branch_id);
+    if (openItems.length === 0) {
+      setLiveExpectedByShift({});
+      return () => { cancelled = true; };
+    }
+
+    void Promise.all(openItems.map(async (shift) => {
+      const fallback = Number(shift.expected_amount ?? shift.opening_amount ?? 0);
+      const { data, error: activeError } = await api.pos.getActiveShift({ p_branch_id: shift.branch_id });
+      const active = data as unknown as ActiveShiftPayload | null;
+      if (activeError || !active?.open || active.shift?.id !== shift.id) return [shift.id, fallback] as const;
+      return [shift.id, Number(active.shift.expected ?? fallback)] as const;
+    })).then((entries) => {
+      if (!cancelled) setLiveExpectedByShift(Object.fromEntries(entries));
+    });
+
+    return () => { cancelled = true; };
+  }, [items]);
+
+  const getExpectedAmount = (shift: Shift) => {
+    const stored = Number(shift.expected_amount ?? shift.opening_amount ?? 0);
+    return shift.status === 'open' ? (liveExpectedByShift[shift.id] ?? stored) : stored;
+  };
 
   const joinedItems = useMemo(() => {
     const cashierById = new Map(users.map((u) => [u.id, u]));
@@ -89,6 +117,20 @@ export function ShiftsPage() {
     setOpenModal(false);
     setOpenForm({ opening_amount: 0, notes: '' });
     reloadShifts();
+  };
+
+  const openCloseModal = async (shift: Shift) => {
+    let expected = getExpectedAmount(shift);
+    if (shift.status === 'open' && shift.branch_id) {
+      const { data, error: activeError } = await api.pos.getActiveShift({ p_branch_id: shift.branch_id });
+      const active = data as unknown as ActiveShiftPayload | null;
+      if (!activeError && active?.open && active.shift?.id === shift.id) {
+        expected = Number(active.shift.expected ?? expected);
+        setLiveExpectedByShift((current) => ({ ...current, [shift.id]: expected }));
+      }
+    }
+    setCloseTarget(shift);
+    setCloseForm({ actual_amount: expected, notes: '' });
   };
 
   const closeShift = async () => {
@@ -144,7 +186,7 @@ export function ShiftsPage() {
       </span>
     )},
     { key: 'opening_amount', header: t('openingAmount'), render: (r) => <span className="text-sm">{formatCurrency(r.opening_amount, currency, lang)}</span> },
-    { key: 'expected_amount', header: t('expectedAmount'), render: (r) => <span className="text-sm">{formatCurrency(r.expected_amount, currency, lang)}</span> },
+    { key: 'expected_amount', header: t('expectedAmount'), render: (r) => <span className="text-sm">{formatCurrency(getExpectedAmount(r), currency, lang)}</span> },
     { key: 'actual_amount', header: t('actualAmount'), render: (r) => <span className="text-sm">{formatCurrency(r.actual_amount ?? 0, currency, lang)}</span> },
     { key: 'difference', header: t('difference'), render: (r) => (
       <span className={`text-sm font-semibold ${Math.abs(r.difference) > 0.009 ? 'text-ui-danger' : 'text-ui-success'}`}>
@@ -161,7 +203,7 @@ export function ShiftsPage() {
           <FileText className="w-4 h-4" />
         </button>
         {r.status === 'open' && can('shifts.close') && (
-          <button onClick={() => { setCloseTarget(r); setCloseForm({ actual_amount: r.expected_amount, notes: '' }); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger transition" title={isAr ? 'إغلاق اليوم والوردية' : t('closeShift')}>
+          <button onClick={() => { void openCloseModal(r); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger transition" title={isAr ? 'إغلاق اليوم والوردية' : t('closeShift')}>
             <Square className="w-4 h-4" />
           </button>
         )}
@@ -199,7 +241,7 @@ export function ShiftsPage() {
               <Timer className="w-6 h-6 text-brand-600 dark:text-brand-400" />
               <div>
                 <p className="font-semibold text-brand-800 dark:text-brand-300">{t('open')} · {formatDateTime(openShifts[0].opened_at, lang)}</p>
-                <p className="text-sm text-brand-700 dark:text-brand-400">{t('expectedAmount')}: {formatCurrency(openShifts[0].expected_amount, currency, lang)}</p>
+                <p className="text-sm text-brand-700 dark:text-brand-400">{t('expectedAmount')}: {formatCurrency(getExpectedAmount(openShifts[0]), currency, lang)}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -207,7 +249,7 @@ export function ShiftsPage() {
                 <Printer className="w-4 h-4" /> {isAr ? 'إيصال Z-Report' : 'Thermal Z-Report'}
               </Button>
               {can('shifts.close') && (
-                <Button variant="danger" size="sm" onClick={() => { setCloseTarget(openShifts[0]); setCloseForm({ actual_amount: openShifts[0].expected_amount, notes: '' }); }}>
+                <Button variant="danger" size="sm" onClick={() => { void openCloseModal(openShifts[0]); }}>
                   <Square className="w-4 h-4" /> {isAr ? 'إغلاق اليوم والوردية' : t('closeShift')}
                 </Button>
               )}
@@ -259,11 +301,11 @@ export function ShiftsPage() {
               </div>
               <div className="p-3 bg-ui-primary-soft rounded-lg">
                 <p className="text-xs text-ui-subtle mb-1">{t('expectedAmount')}</p>
-                <p className="font-semibold text-ui-primary">{formatCurrency(closeTarget.expected_amount, currency, lang)}</p>
+                <p className="font-semibold text-ui-primary">{formatCurrency(getExpectedAmount(closeTarget), currency, lang)}</p>
               </div>
               <div className="p-3 bg-ui-page-alt rounded-lg">
-                <p className="text-xs text-ui-subtle mb-1">{t('cashSales')}</p>
-                <p className="font-semibold">{formatCurrency(closeTarget.expected_amount - closeTarget.opening_amount, currency, lang)}</p>
+                <p className="text-xs text-ui-subtle mb-1">{isAr ? 'صافي حركة الدرج' : 'Net drawer movement'}</p>
+                <p className="font-semibold">{formatCurrency(getExpectedAmount(closeTarget) - closeTarget.opening_amount, currency, lang)}</p>
               </div>
             </div>
 
