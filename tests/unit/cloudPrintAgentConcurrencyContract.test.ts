@@ -15,8 +15,7 @@ describe('cloud print agent concurrency contract', () => {
     expect(source).toContain('`printer:${physicalPrinterKey(printerName)}`');
     expect(source).toContain('lane.push({ job, printerName });');
     expect(source).toContain('Promise.allSettled(Array.from(lanes.values()).map(async (lane) => {');
-    expect(source).toContain('for (const entry of lane) {');
-    expect(source).toContain('await executeJob(entry.job, agentId, entry.printerName);');
+    expect(source).toContain('for (const entry of lane) await executeJob(entry.job, agentId, entry.printerName);');
 
     const executeJobStart = source.indexOf('async function executeJob');
     const batchStart = source.indexOf('async function executeClaimedBatch');
