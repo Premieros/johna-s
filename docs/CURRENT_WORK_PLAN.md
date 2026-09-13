@@ -4,6 +4,8 @@
 
 آخر تحديث: **2026-09-13 — PR5 Sales/POS/Kitchen closeout**
 
+> **تصحيح الحالة الحالية — 2026-09-13:** الأقسام الخاصة بـPR5 أدناه محفوظة كسجل تاريخي وليست المرحلة الحالية. PR5 (#99) وPR6 (#100) تم دمجهما، ثم تم دمج PR #101. المرحلة الحالية هي **PR7 Confirmed Legacy Cleanup** على `development/pr7-confirmed-legacy-cleanup`، وPR الحالي هو **#105**. Baseline الحالي `main@2ba3deab61b519a6950656efb4badbc1880f4e19`. Implementation head `35e59c0f273c1557a69ab75060054efca103d5fd` اجتاز Verify #1279 Full Green، وملف الإغلاق الحالي هو `docs/PR7_CONFIRMED_LEGACY_CLEANUP_CLOSURE.md`. PR #103 وPR #78 مساران منفصلان ولا يختلطان بـPR7. لا يتم دمج PR7 قبل Full Verify على final PR head وموافقة المستخدم الصريحة.
+
 ## الهوية الثابتة
 
 - Repository الوحيد: `Premieros/johna-s`
