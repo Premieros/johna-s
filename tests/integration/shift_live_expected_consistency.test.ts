@@ -1,44 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 
 const dbUrl = getDbUrl();
 
 describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
   let client: pg.Client;
-  const branchId = randomUUID();
-  const userId = randomUUID();
-
-  async function asUser<T>(fn: () => Promise<T>): Promise<T> {
-    await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
-    await client.query('SET LOCAL ROLE authenticated');
-    try {
-      return await fn();
-    } finally {
-      await client.query('RESET ROLE').catch(() => {});
-      await client.query('RESET app.user_id').catch(() => {});
-    }
-  }
+  let ids: RlsIds;
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
-
-    await client.query(`INSERT INTO public.branches (id,name) VALUES ($1,'QA Shift Live')`, [branchId]);
-    await client.query(
-      `UPDATE public.roles
-       SET permissions = COALESCE(permissions, '[]'::jsonb) || '["shifts.close"]'::jsonb
-       WHERE role = 'branch_manager'`,
-    );
-    await client.query(`SELECT set_config('app.register_branch', 'on', true)`);
-    await client.query(
-      `INSERT INTO public.users (id,email,full_name,role,branch_id,is_active)
-       VALUES ($1,$2,'Live Shift User','branch_manager',$3,true)`,
-      [userId, `${userId}@test.local`, branchId],
-    );
-    await client.query(`SELECT set_config('app.register_branch', 'off', true)`);
+    ids = await seedRlsFixture(client);
   });
 
   afterAll(async () => {
@@ -48,13 +23,21 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
   });
 
   it('returns the same expected drawer amount before close and at close', async () => {
-    const shiftId = (
-      await client.query<{ id: string }>(
-        `INSERT INTO public.shifts (branch_id,cashier_id,opening_amount,status)
-         VALUES ($1,$2,100,'open') RETURNING id`,
-        [branchId, userId],
-      )
-    ).rows[0].id;
+    const shiftId = ids.shiftA;
+    const userId = ids.users.cashier;
+    const branchId = ids.branchA;
+
+    await client.query(
+      `UPDATE public.shifts
+       SET opening_amount = 100,
+           expected_amount = 100,
+           actual_amount = 0,
+           difference = 0,
+           status = 'open',
+           closed_at = NULL
+       WHERE id = $1`,
+      [shiftId],
+    );
 
     await client.query(
       `INSERT INTO public.shift_operations
@@ -69,32 +52,53 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
       [shiftId, userId],
     );
 
-    const active = await asUser(() =>
-      client.query<{ r: { success?: boolean; open?: boolean; shift?: { id?: string; expected?: number; cash_sales?: number; cash_in?: number; cash_out?: number; total_sales?: number } } }>(
-        `SELECT public.get_active_shift($1) AS r`,
-        [branchId],
-      ),
+    const active = await runAsPersist(
+      client,
+      userId,
+      `SELECT public.get_active_shift($1) AS r`,
+      [branchId],
     );
+    if (active.error) throw new Error(active.error);
+    const activeResult = active.rows[0]?.r as {
+      success?: boolean;
+      open?: boolean;
+      shift?: {
+        id?: string;
+        expected?: number;
+        cash_sales?: number;
+        cash_in?: number;
+        cash_out?: number;
+        total_sales?: number;
+      };
+    };
 
-    expect(active.rows[0].r).toMatchObject({ success: true, open: true });
-    expect(active.rows[0].r.shift?.id).toBe(shiftId);
-    expect(Number(active.rows[0].r.shift?.expected)).toBe(215);
-    expect(Number(active.rows[0].r.shift?.cash_sales)).toBe(120);
-    expect(Number(active.rows[0].r.shift?.cash_in)).toBe(30);
-    expect(Number(active.rows[0].r.shift?.cash_out)).toBe(35);
-    expect(Number(active.rows[0].r.shift?.total_sales)).toBe(170);
+    expect(activeResult).toMatchObject({ success: true, open: true });
+    expect(activeResult.shift?.id).toBe(shiftId);
+    expect(Number(activeResult.shift?.expected)).toBe(215);
+    expect(Number(activeResult.shift?.cash_sales)).toBe(120);
+    expect(Number(activeResult.shift?.cash_in)).toBe(30);
+    expect(Number(activeResult.shift?.cash_out)).toBe(35);
+    expect(Number(activeResult.shift?.total_sales)).toBe(170);
 
-    const closed = await asUser(() =>
-      client.query<{ r: { success?: boolean; expected?: number; actual?: number; difference?: number } }>(
-        `SELECT public.close_shift($1,215,'numeric consistency') AS r`,
-        [shiftId],
-      ),
+    const closed = await runAsPersist(
+      client,
+      userId,
+      `SELECT public.close_shift($1,215,'numeric consistency') AS r`,
+      [shiftId],
     );
+    if (closed.error) throw new Error(closed.error);
+    const closedResult = closed.rows[0]?.r as {
+      success?: boolean;
+      expected?: number;
+      actual?: number;
+      difference?: number;
+      error?: string;
+    };
 
-    expect(closed.rows[0].r).toMatchObject({ success: true });
-    expect(Number(closed.rows[0].r.expected)).toBe(215);
-    expect(Number(closed.rows[0].r.actual)).toBe(215);
-    expect(Number(closed.rows[0].r.difference)).toBe(0);
+    expect(closedResult).toMatchObject({ success: true });
+    expect(Number(closedResult.expected)).toBe(215);
+    expect(Number(closedResult.actual)).toBe(215);
+    expect(Number(closedResult.difference)).toBe(0);
 
     const stored = await client.query<{ expected_amount: number; actual_amount: number; difference: number; status: string }>(
       `SELECT expected_amount,actual_amount,difference,status FROM public.shifts WHERE id=$1`,
