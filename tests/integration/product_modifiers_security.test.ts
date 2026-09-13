@@ -37,22 +37,34 @@ describe('product modifier security and atomicity', () => {
     });
   });
 
-  it('validates the complete modifier payload before replacing existing configuration', async () => {
+  it('keeps legacy product-first saves atomic through the reusable-group wrapper', async () => {
     if (!canRun) return;
     const r = await client.query(`
       SELECT pg_get_functiondef('public.save_product_modifiers(uuid,jsonb)'::regprocedure) AS def
     `);
     expect(r.rowCount).toBe(1);
     const def = String(r.rows[0].def || '');
-    const validationPass = def.indexOf('Validation pass. No persistent mutation');
-    const mutationPass = def.indexOf('Mutation pass starts only after');
-    const deleteConfig = def.indexOf('DELETE FROM public.product_modifier_groups');
-    expect(validationPass).toBeGreaterThan(-1);
-    expect(mutationPass).toBeGreaterThan(validationPass);
-    expect(deleteConfig).toBeGreaterThan(mutationPass);
-    expect(def).toContain('RAW_MATERIAL_NOT_IN_BRANCH');
-    expect(def).toContain('INVENTORY_UNIT_NOT_IN_BRANCH');
-    expect(def).toContain('INVALID_MODIFIER_INVENTORY_EFFECT');
+
+    // The legacy API now delegates every submitted group to the reusable-group
+    // transaction contract. A failed delegated save raises inside the function;
+    // PostgreSQL rolls back mutations made in the enclosing PL/pgSQL block
+    // before the exception handler returns the structured error.
+    expect(def).toContain('public.save_modifier_group');
+    expect(def).toContain("RAISE EXCEPTION 'LEGACY_MODIFIER_SAVE_FAILED:%'");
+    expect(def).toContain('WHEN raise_exception THEN');
+
+    // Replacement/detach happens only after all delegated group saves finish.
+    const saveCall = def.indexOf('public.save_modifier_group');
+    const raiseOnFailure = def.indexOf("RAISE EXCEPTION 'LEGACY_MODIFIER_SAVE_FAILED:%'");
+    const detachRemoved = def.indexOf('DELETE FROM public.product_modifier_group_products');
+    expect(saveCall).toBeGreaterThan(-1);
+    expect(raiseOnFailure).toBeGreaterThan(saveCall);
+    expect(detachRemoved).toBeGreaterThan(raiseOnFailure);
+
+    // Shared groups are never destructively deleted by the stale product-first path.
+    expect(def).toContain('gp.product_id <> p_product_id');
+    expect(def).toContain('UPDATE public.product_modifier_groups');
+    expect(def).not.toContain('DELETE FROM public.product_modifier_groups');
   });
 
   it('rejects malformed modifier IDs instead of exposing a database cast error', async () => {
