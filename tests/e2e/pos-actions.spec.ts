@@ -102,7 +102,7 @@ async function addProduct(page: Page) {
   await expect(addButton).toBeEnabled({ timeout: 10000 });
   await addButton.click({ timeout: 10000 });
   await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('1', { timeout: 10000 });
-  await expect.poll(() => rpcCalls.includes('get_pos_cart_product_availability'), { timeout: 10000 }).toBe(true);
+  expect(rpcCalls).not.toContain('get_pos_cart_product_availability');
   await expect(addButton).toBeEnabled({ timeout: 10000 });
 }
 
