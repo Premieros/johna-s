@@ -4,7 +4,6 @@ import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, Bad
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
 import { Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -12,7 +11,6 @@ import { Input, Select } from '@/components/Input';
 import { formatCurrency, todayISO, formatDate } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import type {
@@ -26,7 +24,6 @@ type View = 'trial_balance' | 'ledger' | 'income' | 'balance_sheet' | 'ar_aging'
 
 export function FinancialReportsPage() {
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const isAr = lang === 'ar';
   const [searchParams] = useSearchParams();
@@ -41,14 +38,17 @@ export function FinancialReportsPage() {
   const [loading, setLoading] = useState(false);
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
-  const [adminBranchFilter, setAdminBranchFilter] = useState('');
+  const [reportBranchFilter, setReportBranchFilter] = useState('');
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [accountId, setAccountId] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [partySide, setPartySide] = useState<'ar' | 'ap'>('ar');
   const [partyId, setPartyId] = useState('');
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const selectedReportBranch = reportBranchFilter && branches.some((branch) => branch.id === reportBranchFilter)
+    ? reportBranchFilter
+    : '';
+  const effectiveBranchFilter = selectedReportBranch || branchFilter || (branches.length === 1 ? branches[0].id : null);
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
 
   const [tb, setTb] = useState<TrialBalanceRow[]>([]);
@@ -212,19 +212,19 @@ export function FinancialReportsPage() {
                 </Select>
                 <Select label={t('selectParty')} value={partyId} onChange={(e) => setPartyId(e.target.value)}>
                   <option value="">{t('selectParty')}</option>
-                  {partyList.map((p) => <option key={p.id} value={p.id}>{isAr ? p.name : (p.name)}</option>)}
+                  {partyList.map((p) => <option key={p.id} value={p.id}>{isAr ? p.name : p.name}</option>)}
                 </Select>
               </>
             )}
-            {isAdminRole(user?.role) && branches.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-ui-muted mb-1">{t('filterByBranch')}</label>
-                <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}
-                  className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-                  <option value="">{t('allBranches')}</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-                </select>
-              </div>
+            {branches.length > 1 && (
+              <Select
+                label={t('filterByBranch')}
+                value={selectedReportBranch || branchFilter || ''}
+                onChange={(e) => setReportBranchFilter(e.target.value)}
+              >
+                <option value="">{t('filterByBranch')}</option>
+                {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
+              </Select>
             )}
           </div>
         </div>
