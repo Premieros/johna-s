@@ -29,7 +29,7 @@ describe('global operational branch contract', () => {
       ['src/features/inventory/pages/InventoryBatchesPage.tsx', ['setBranchId', "t('allBranches')"]],
       ['src/features/inventory/pages/StockValuationPage.tsx', ['setBranchId', "t('allBranches')"]],
       ['src/features/inventory/pages/LowStockAlertsPage.tsx', ['setBranchId', 'changeReorderBranch', "t('allBranches')"]],
-      ['src/features/inventory/pages/RawMaterialsPage.tsx', ['stockBranch', 'raw-materials-branch-panel']],
+      ['src/features/manufacturing/pages/RawMaterialsPage.tsx', ['stockBranch', 'raw-materials-branch-panel']],
       ['src/features/costing/pages/CostingCenterPage.tsx', ['setBranchId', "t('allBranches')"]],
       ['src/features/accounting/pages/JournalPage.tsx', ['selectedBranchFilter', 'setSelectedBranchFilter']],
       ['src/features/accounting/pages/TreasuryPage.tsx', ['adminBranchFilter', 'setAdminBranchFilter', 'isAdminRole']],
