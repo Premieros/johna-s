@@ -22,11 +22,13 @@ describe('purchase invoice edit and inline raw-material contract', () => {
     expect(migration).toContain("v_qty := (v_norm->>'stock_quantity')::numeric");
   });
 
-  it('keeps branch immutable and checks corrected warehouse ownership', () => {
+  it('keeps branch immutable through shared context and checks corrected warehouse ownership', () => {
     const page = read('src/features/trade/pages/PurchasesPage.tsx');
     const migration = read('supabase/migrations/20260911222000_update_purchase_invoice_transactional.sql');
 
-    expect(page).toContain('disabled={!!editingPurchase}');
+    expect(page).toContain('const branchFilter = useBranchFilter();');
+    expect(page).toContain('p_branch_id: branchFilter');
+    expect(page).not.toContain("label={t('branch')} value={form.branch_id}");
     expect(migration).toContain('user_may_access_branch(v_purchase.branch_id)');
     expect(migration).toContain('w.branch_id = v_purchase.branch_id');
     expect(migration).toContain("'WAREHOUSE_BRANCH_MISMATCH'");
