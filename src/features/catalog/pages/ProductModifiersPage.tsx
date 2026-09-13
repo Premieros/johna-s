@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Archive, ChevronDown, Plus, Save, Trash2 } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useCan } from '@/lib/permissions';
 import type { InventoryUnit, Product } from '@/lib/types';
 
 interface RawMaterialRef {
@@ -38,10 +39,11 @@ interface ModifierGroupDraft {
   min_selections: number;
   max_selections: number;
   sort_order: number;
+  product_ids: string[];
   options: ModifierOptionDraft[];
 }
 
-type AdminModifiersResponse = {
+type AdminGroupsResponse = {
   success?: boolean;
   error?: string;
   detail?: string;
@@ -54,6 +56,7 @@ const emptyGroup = (sort: number): ModifierGroupDraft => ({
   min_selections: 0,
   max_selections: 1,
   sort_order: sort,
+  product_ids: [],
   options: [],
 });
 
@@ -66,191 +69,187 @@ const emptyOption = (sort: number): ModifierOptionDraft => ({
   inventory_effects: [],
 });
 
+const normalizeGroups = (groups: ModifierGroupDraft[]): ModifierGroupDraft[] => groups.map((group, gi) => ({
+  ...group,
+  name_en: group.name_en || '',
+  sort_order: Number(group.sort_order ?? gi),
+  min_selections: Number(group.min_selections || 0),
+  max_selections: Number(group.max_selections || 1),
+  product_ids: Array.isArray(group.product_ids) ? group.product_ids : [],
+  options: (group.options || []).map((option, oi) => ({
+    ...option,
+    name_en: option.name_en || '',
+    price_delta: Number(option.price_delta || 0),
+    sort_order: Number(option.sort_order ?? oi),
+    is_default: !!option.is_default,
+    inventory_effects: (option.inventory_effects || []).map((effect) => ({
+      target_type: effect.target_type,
+      target_id: effect.target_id,
+      quantity_delta: Number(effect.quantity_delta || 0),
+    })),
+  })),
+}));
+
 export function ProductModifiersPage() {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const { show } = useToast();
+  const can = useCan();
+  const canManage = can('products.modifiers.manage');
   const branchFilter = useBranchFilter();
   const [products, setProducts] = useState<Product[]>([]);
-  const [productId, setProductId] = useState('');
   const [groups, setGroups] = useState<ModifierGroupDraft[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterialRef[]>([]);
   const [inventoryUnits, setInventoryUnits] = useState<InventoryUnit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
 
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === productId) || null,
-    [products, productId],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async () => {
     if (!branchFilter) {
       setProducts([]);
-      setProductId('');
       setGroups([]);
       setRawMaterials([]);
       setInventoryUnits([]);
       setLoading(false);
-      return () => { cancelled = true; };
-    }
-
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('branch_id', branchFilter)
-        .eq('is_active', true)
-        .order('name');
-      if (cancelled) return;
-      if (error) {
-        show(error.message, 'error');
-        setProducts([]);
-        setProductId('');
-        setLoading(false);
-        return;
-      }
-      const rows = (data || []) as Product[];
-      setProducts(rows);
-      setProductId((prev) => rows.some((row) => row.id === prev) ? prev : (rows[0]?.id || ''));
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [branchFilter, show]);
-
-  useEffect(() => {
-    if (!branchFilter || !selectedProduct || selectedProduct.branch_id !== branchFilter) {
-      setGroups([]);
-      setRawMaterials([]);
-      setInventoryUnits([]);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const [mods, raws, units] = await Promise.all([
-        api.catalog.getProductModifiersAdmin(selectedProduct.id),
+
+    setLoading(true);
+    try {
+      const [productResult, groupsResult, rawResult, units] = await Promise.all([
+        supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
+        api.catalog.listModifierGroupsAdmin(branchFilter),
         supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
         api.catalog.listInventoryUnits({ branch_id: branchFilter, is_active: true }),
       ]);
-      if (cancelled) return;
-      if (mods.error) {
-        show(mods.error.message, 'error');
-        setGroups([]);
-      } else {
-        const result = (mods.data || {}) as AdminModifiersResponse;
-        if (!result.success) show(result.detail || result.error || 'Failed to load modifiers', 'error');
-        setGroups((result.groups || []).map((g, gi) => ({
-          ...g,
-          name_en: g.name_en || '',
-          sort_order: Number(g.sort_order ?? gi),
-          min_selections: Number(g.min_selections || 0),
-          max_selections: Number(g.max_selections || 1),
-          options: (g.options || []).map((o, oi) => ({
-            ...o,
-            name_en: o.name_en || '',
-            price_delta: Number(o.price_delta || 0),
-            sort_order: Number(o.sort_order ?? oi),
-            is_default: !!o.is_default,
-            inventory_effects: (o.inventory_effects || []).map((e) => ({
-              target_type: e.target_type,
-              target_id: e.target_id,
-              quantity_delta: Number(e.quantity_delta || 0),
-            })),
-          })),
-        })));
-      }
-      if (raws.error) show(raws.error.message, 'error');
-      setRawMaterials((raws.data || []) as RawMaterialRef[]);
+
+      if (productResult.error) throw productResult.error;
+      if (rawResult.error) throw rawResult.error;
+      if (groupsResult.error) throw groupsResult.error;
+
+      const result = (groupsResult.data || {}) as AdminGroupsResponse;
+      if (!result.success) throw new Error(result.detail || result.error || 'LOAD_MODIFIER_GROUPS_FAILED');
+
+      setProducts((productResult.data || []) as Product[]);
+      setGroups(normalizeGroups(result.groups || []));
+      setRawMaterials((rawResult.data || []) as RawMaterialRef[]);
       setInventoryUnits((units || []) as InventoryUnit[]);
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'Failed to load modifier groups', 'error');
+      setGroups([]);
+    } finally {
       setLoading(false);
-    })().catch((err) => {
-      if (!cancelled) {
-        show(err instanceof Error ? err.message : 'Failed to load modifiers', 'error');
-        setLoading(false);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [branchFilter, selectedProduct, show]);
+    }
+  }, [branchFilter, show]);
+
+  useEffect(() => { void load(); }, [load]);
 
   const updateGroup = (groupIndex: number, patch: Partial<ModifierGroupDraft>) => {
-    setGroups((prev) => prev.map((g, i) => i === groupIndex ? { ...g, ...patch } : g));
+    setGroups((prev) => prev.map((group, index) => index === groupIndex ? { ...group, ...patch } : group));
   };
 
   const updateOption = (groupIndex: number, optionIndex: number, patch: Partial<ModifierOptionDraft>) => {
-    setGroups((prev) => prev.map((g, gi) => gi === groupIndex
-      ? { ...g, options: g.options.map((o, oi) => oi === optionIndex ? { ...o, ...patch } : o) }
-      : g));
+    setGroups((prev) => prev.map((group, gi) => gi === groupIndex
+      ? { ...group, options: group.options.map((option, oi) => oi === optionIndex ? { ...option, ...patch } : option) }
+      : group));
   };
 
   const updateEffect = (groupIndex: number, optionIndex: number, effectIndex: number, patch: Partial<ModifierEffectDraft>) => {
-    setGroups((prev) => prev.map((g, gi) => gi === groupIndex
+    setGroups((prev) => prev.map((group, gi) => gi === groupIndex
       ? {
-          ...g,
-          options: g.options.map((o, oi) => oi === optionIndex
-            ? { ...o, inventory_effects: o.inventory_effects.map((e, ei) => ei === effectIndex ? { ...e, ...patch } : e) }
-            : o),
+          ...group,
+          options: group.options.map((option, oi) => oi === optionIndex
+            ? { ...option, inventory_effects: option.inventory_effects.map((effect, ei) => ei === effectIndex ? { ...effect, ...patch } : effect) }
+            : option),
         }
-      : g));
+      : group));
   };
 
-  const save = async () => {
-    if (!branchFilter || !selectedProduct || selectedProduct.branch_id !== branchFilter) return;
-    for (const group of groups) {
-      if (!group.name.trim()) {
-        show(isAr ? 'اسم مجموعة الإضافات مطلوب' : 'Modifier group name is required', 'error');
-        return;
-      }
-      if (group.min_selections < 0 || group.max_selections < 1 || group.max_selections < group.min_selections || group.max_selections > group.options.length) {
-        show(isAr ? `اختيارات المجموعة غير صالحة: ${group.name}` : `Invalid group selection limits: ${group.name}`, 'error');
-        return;
-      }
-      for (const option of group.options) {
-        if (!option.name.trim()) {
-          show(isAr ? 'اسم الاختيار مطلوب' : 'Modifier option name is required', 'error');
-          return;
-        }
-        for (const effect of option.inventory_effects) {
-          if (!effect.target_id || !Number.isFinite(effect.quantity_delta) || effect.quantity_delta === 0) {
-            show(isAr ? `تأثير المخزون غير صالح: ${option.name}` : `Invalid inventory effect: ${option.name}`, 'error');
-            return;
-          }
+  const toggleProduct = (groupIndex: number, productId: string) => {
+    const group = groups[groupIndex];
+    const productIds = group.product_ids.includes(productId)
+      ? group.product_ids.filter((id) => id !== productId)
+      : [...group.product_ids, productId];
+    updateGroup(groupIndex, { product_ids: productIds });
+  };
+
+  const validateGroup = (group: ModifierGroupDraft) => {
+    if (!group.name.trim()) return isAr ? 'اسم مجموعة الموديفاير مطلوب' : 'Modifier group name is required';
+    if (group.min_selections < 0 || group.max_selections < 1 || group.max_selections < group.min_selections || group.max_selections > Math.max(group.options.length, 1)) {
+      return isAr ? `حدود الاختيار غير صالحة: ${group.name}` : `Invalid selection limits: ${group.name}`;
+    }
+    for (const option of group.options) {
+      if (!option.name.trim()) return isAr ? 'اسم الاختيار مطلوب' : 'Modifier option name is required';
+      for (const effect of option.inventory_effects) {
+        if (!effect.target_id || !Number.isFinite(effect.quantity_delta) || effect.quantity_delta === 0) {
+          return isAr ? `تأثير المخزون غير صالح: ${option.name}` : `Invalid inventory effect: ${option.name}`;
         }
       }
     }
+    return null;
+  };
 
-    setSaving(true);
+  const saveGroup = async (groupIndex: number) => {
+    if (!branchFilter || !canManage) return;
+    const group = groups[groupIndex];
+    const validationError = validateGroup(group);
+    if (validationError) { show(validationError, 'error'); return; }
+
+    setSavingIndex(groupIndex);
     try {
-      const payload = groups.map((g, gi) => ({
-        name: g.name.trim(),
-        name_en: g.name_en.trim() || null,
-        min_selections: g.min_selections,
-        max_selections: g.max_selections,
-        sort_order: gi,
-        options: g.options.map((o, oi) => ({
-          name: o.name.trim(),
-          name_en: o.name_en.trim() || null,
-          price_delta: Number(o.price_delta || 0),
-          is_default: !!o.is_default,
+      const payload = {
+        name: group.name.trim(),
+        name_en: group.name_en.trim() || null,
+        min_selections: group.min_selections,
+        max_selections: group.max_selections,
+        sort_order: groupIndex,
+        options: group.options.map((option, oi) => ({
+          id: option.id || undefined,
+          name: option.name.trim(),
+          name_en: option.name_en.trim() || null,
+          price_delta: Number(option.price_delta || 0),
+          is_default: !!option.is_default,
           sort_order: oi,
-          inventory_effects: o.inventory_effects.map((e) => ({
-            target_type: e.target_type,
-            target_id: e.target_id,
-            quantity_delta: Number(e.quantity_delta),
+          inventory_effects: option.inventory_effects.map((effect) => ({
+            target_type: effect.target_type,
+            target_id: effect.target_id,
+            quantity_delta: Number(effect.quantity_delta),
           })),
         })),
-      }));
-      const { data, error } = await api.catalog.saveProductModifiers(selectedProduct.id, payload);
+      };
+      const { data, error } = await api.catalog.saveModifierGroup({
+        p_group_id: group.id || null,
+        p_branch_id: branchFilter,
+        p_group: payload,
+        p_product_ids: group.product_ids,
+      });
       if (error) throw error;
       const result = (data || {}) as { success?: boolean; error?: string; detail?: string };
-      if (!result.success) throw new Error(result.detail || result.error || 'SAVE_MODIFIERS_FAILED');
-      show(isAr ? 'تم حفظ الموديفاير والمكونات بنجاح' : 'Modifiers and component effects saved', 'success');
+      if (!result.success) throw new Error(result.detail || result.error || 'SAVE_MODIFIER_GROUP_FAILED');
+      show(isAr ? 'تم حفظ المجموعة وربط المنتجات' : 'Modifier group and product links saved', 'success');
+      await load();
     } catch (err) {
-      show(err instanceof Error ? err.message : 'Failed to save modifiers', 'error');
+      show(err instanceof Error ? err.message : 'Failed to save modifier group', 'error');
     } finally {
-      setSaving(false);
+      setSavingIndex(null);
+    }
+  };
+
+  const archiveGroup = async (group: ModifierGroupDraft) => {
+    if (!group.id || !canManage) return;
+    setArchivingId(group.id);
+    try {
+      const { data, error } = await supabase.rpc('archive_modifier_group', { p_group_id: group.id });
+      if (error) throw error;
+      const result = (data || {}) as { success?: boolean; error?: string; detail?: string };
+      if (!result.success) throw new Error(result.detail || result.error || 'ARCHIVE_MODIFIER_GROUP_FAILED');
+      show(isAr ? 'تمت أرشفة المجموعة' : 'Modifier group archived', 'success');
+      await load();
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'Failed to archive modifier group', 'error');
+    } finally {
+      setArchivingId(null);
     }
   };
 
@@ -258,46 +257,39 @@ export function ProductModifiersPage() {
     <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-ui-text">{isAr ? 'موديفاير المنتجات' : 'Product Modifiers'}</h1>
+          <h1 className="text-2xl font-black text-ui-text">{isAr ? 'مجموعات الموديفاير' : 'Modifier Groups'}</h1>
           <p className="text-sm text-ui-muted mt-1">
-            {isAr ? 'سنجل / دبل / إضافات / حذف مكونات — السعر والمخزون يتحكمان من الخادم.' : 'Single / Double / extras / removals — pricing and inventory stay server-controlled.'}
+            {isAr ? 'أنشئ المجموعة مرة واحدة، أضف اختياراتها، ثم اربطها بأي عدد من منتجات الفرع.' : 'Create a group once, add its choices, then attach it to any number of branch products.'}
           </p>
         </div>
-        <button
-          onClick={save}
-          disabled={!branchFilter || !selectedProduct || saving || loading}
-          className="min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ui-primary text-ui-primary-fg font-bold disabled:opacity-50"
-        >
-          <Save className="w-4 h-4" />
-          {saving ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ الإعداد' : 'Save configuration')}
-        </button>
+        {canManage && branchFilter && (
+          <button
+            onClick={() => setGroups((prev) => [...prev, emptyGroup(prev.length)])}
+            className="min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ui-primary text-ui-primary-fg font-bold"
+          >
+            <Plus className="w-4 h-4" /> {isAr ? 'مجموعة جديدة' : 'New group'}
+          </button>
+        )}
       </div>
 
       {!branchFilter ? (
         <div className="rounded-2xl border border-ui-border bg-ui-surface p-5 text-center text-ui-muted">
-          {isAr ? 'اختر فرعًا محددًا من محدد الفروع لعرض موديفاير هذا الفرع فقط.' : 'Select a specific branch to manage only that branch’s modifiers.'}
+          {isAr ? 'اختر الفرع من أعلى الصفحة أولًا.' : 'Select the active branch first.'}
         </div>
-      ) : (
-        <div className="rounded-2xl border border-ui-border bg-ui-surface p-4">
-          <label className="block text-sm font-bold mb-2">{isAr ? 'المنتج' : 'Product'}</label>
-          <select
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="w-full md:max-w-xl min-h-11 rounded-xl border border-ui-border bg-ui-page px-3"
-          >
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.name_en ? ` — ${p.name_en}` : ''}</option>)}
-          </select>
+      ) : !canManage ? (
+        <div className="rounded-2xl border border-ui-border bg-ui-surface p-5 text-center text-ui-muted">
+          {isAr ? 'ليس لديك صلاحية إدارة موديفاير المنتجات.' : 'You do not have permission to manage product modifiers.'}
         </div>
-      )}
-
-      {loading ? (
+      ) : loading ? (
         <div className="py-16 text-center text-ui-muted">{isAr ? 'جاري التحميل…' : 'Loading…'}</div>
-      ) : !branchFilter ? null : !selectedProduct ? (
-        <div className="py-16 text-center text-ui-muted">{isAr ? 'لا توجد منتجات متاحة في هذا الفرع' : 'No products available in this branch'}</div>
+      ) : groups.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-ui-border bg-ui-surface p-10 text-center text-ui-muted">
+          {isAr ? 'لا توجد مجموعات بعد. أنشئ أول مجموعة واربطها بالمنتجات المطلوبة.' : 'No groups yet. Create the first group and attach products.'}
+        </div>
       ) : (
         <div className="space-y-4">
           {groups.map((group, gi) => (
-            <section key={group.id || `g-${gi}`} className="rounded-2xl border border-ui-border bg-ui-surface p-4 space-y-4">
+            <section key={group.id || `new-${gi}`} className="rounded-2xl border border-ui-border bg-ui-surface p-4 space-y-4">
               <div className="grid md:grid-cols-[1fr_1fr_110px_110px_auto] gap-3 items-end">
                 <label className="text-sm font-semibold">{isAr ? 'اسم المجموعة' : 'Group name'}
                   <input value={group.name} onChange={(e) => updateGroup(gi, { name: e.target.value })} className="mt-1 w-full min-h-11 rounded-xl border border-ui-border bg-ui-page px-3" />
@@ -305,79 +297,87 @@ export function ProductModifiersPage() {
                 <label className="text-sm font-semibold">English
                   <input value={group.name_en} onChange={(e) => updateGroup(gi, { name_en: e.target.value })} className="mt-1 w-full min-h-11 rounded-xl border border-ui-border bg-ui-page px-3" />
                 </label>
-                <label className="text-sm font-semibold">Min
+                <label className="text-sm font-semibold">{isAr ? 'أقل عدد' : 'Min'}
                   <input type="number" min={0} value={group.min_selections} onChange={(e) => updateGroup(gi, { min_selections: Number(e.target.value) })} className="mt-1 w-full min-h-11 rounded-xl border border-ui-border bg-ui-page px-3" />
                 </label>
-                <label className="text-sm font-semibold">Max
+                <label className="text-sm font-semibold">{isAr ? 'أقصى عدد' : 'Max'}
                   <input type="number" min={1} value={group.max_selections} onChange={(e) => updateGroup(gi, { max_selections: Number(e.target.value) })} className="mt-1 w-full min-h-11 rounded-xl border border-ui-border bg-ui-page px-3" />
                 </label>
-                <button onClick={() => setGroups((prev) => prev.filter((_, i) => i !== gi))} className="min-h-11 px-3 rounded-xl border border-ui-danger/40 text-ui-danger inline-flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
+                <div className="flex gap-2">
+                  <button onClick={() => void saveGroup(gi)} disabled={savingIndex === gi} className="min-h-11 px-3 rounded-xl bg-ui-primary text-ui-primary-fg inline-flex items-center justify-center gap-2 disabled:opacity-50" title={isAr ? 'حفظ المجموعة' : 'Save group'}><Save className="w-4 h-4" /></button>
+                  {group.id && <button onClick={() => void archiveGroup(group)} disabled={archivingId === group.id} className="min-h-11 px-3 rounded-xl border border-ui-danger/40 text-ui-danger inline-flex items-center justify-center disabled:opacity-50" title={isAr ? 'أرشفة المجموعة' : 'Archive group'}><Archive className="w-4 h-4" /></button>}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-ui-border bg-ui-page p-3">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div>
+                    <div className="text-sm font-bold">{isAr ? 'المنتجات المرتبطة' : 'Attached products'}</div>
+                    <div className="text-xs text-ui-muted">{isAr ? `${group.product_ids.length} منتج — اختر أو ألغِ المنتجات ثم احفظ المجموعة` : `${group.product_ids.length} products — select products then save the group`}</div>
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-1">
+                  {products.map((product) => (
+                    <label key={product.id} className="min-h-10 flex items-center gap-2 rounded-lg border border-ui-border bg-ui-surface px-3 py-2 cursor-pointer">
+                      <input type="checkbox" checked={group.product_ids.includes(product.id)} onChange={() => toggleProduct(gi, product.id)} />
+                      <span className="text-sm font-medium truncate">{product.name}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-bold">{isAr ? 'اختيارات المجموعة' : 'Group choices'}</div>
+                  <span className="text-xs text-ui-muted">{group.options.length}</span>
+                </div>
                 {group.options.map((option, oi) => (
-                  <div key={option.id || `o-${gi}-${oi}`} className="rounded-xl border border-ui-border bg-ui-page p-3 space-y-3">
-                    <div className="grid md:grid-cols-[1fr_1fr_130px_110px_auto] gap-3 items-end">
-                      <label className="text-xs font-semibold">{isAr ? 'الاختيار' : 'Option'}
-                        <input value={option.name} onChange={(e) => updateOption(gi, oi, { name: e.target.value })} className="mt-1 w-full min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" />
-                      </label>
-                      <label className="text-xs font-semibold">English
-                        <input value={option.name_en} onChange={(e) => updateOption(gi, oi, { name_en: e.target.value })} className="mt-1 w-full min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" />
-                      </label>
-                      <label className="text-xs font-semibold">{isAr ? 'فرق السعر' : 'Price delta'}
-                        <input type="number" step="0.01" value={option.price_delta} onChange={(e) => updateOption(gi, oi, { price_delta: Number(e.target.value) })} className="mt-1 w-full min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" />
-                      </label>
-                      <label className="min-h-11 flex items-center gap-2 text-xs font-semibold">
-                        <input type="checkbox" checked={option.is_default} onChange={(e) => updateOption(gi, oi, { is_default: e.target.checked })} />
-                        {isAr ? 'افتراضي' : 'Default'}
-                      </label>
-                      <button onClick={() => updateGroup(gi, { options: group.options.filter((_, i) => i !== oi) })} className="min-h-11 px-3 rounded-lg border border-ui-danger/40 text-ui-danger inline-flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
-                    </div>
+                  <details key={option.id || `option-${gi}-${oi}`} className="rounded-xl border border-ui-border bg-ui-page p-3" open>
+                    <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ChevronDown className="w-4 h-4 shrink-0" />
+                        <span className="font-bold truncate">{option.name || (isAr ? 'اختيار جديد' : 'New option')}</span>
+                        {option.price_delta !== 0 && <span className="text-xs text-ui-muted">({Number(option.price_delta).toFixed(2)})</span>}
+                      </div>
+                      <button type="button" onClick={(e) => { e.preventDefault(); updateGroup(gi, { options: group.options.filter((_, index) => index !== oi) }); }} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
+                    </summary>
 
-                    <div className="space-y-2">
-                      <div className="text-xs font-bold text-ui-muted">{isAr ? 'تأثير المكونات / المخزون' : 'Component / inventory effects'}</div>
-                      {option.inventory_effects.map((effect, ei) => {
-                        const targets = effect.target_type === 'raw_material' ? rawMaterials : inventoryUnits;
-                        return (
-                          <div key={`${gi}-${oi}-${ei}`} className="grid md:grid-cols-[160px_1fr_150px_auto] gap-2">
-                            <select value={effect.target_type} onChange={(e) => updateEffect(gi, oi, ei, { target_type: e.target.value as EffectTarget, target_id: '' })} className="min-h-11 rounded-lg border border-ui-border bg-ui-surface px-2">
-                              <option value="raw_material">{isAr ? 'خامة' : 'Raw material'}</option>
-                              <option value="inventory_unit">{isAr ? 'وحدة مخزون' : 'Inventory unit'}</option>
-                            </select>
-                            <select value={effect.target_id} onChange={(e) => updateEffect(gi, oi, ei, { target_id: e.target.value })} className="min-h-11 rounded-lg border border-ui-border bg-ui-surface px-2">
-                              <option value="">{isAr ? 'اختر المكوّن' : 'Select component'}</option>
-                              {targets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                            <input type="number" step="0.0001" value={effect.quantity_delta} onChange={(e) => updateEffect(gi, oi, ei, { quantity_delta: Number(e.target.value) })} className="min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" title={isAr ? 'موجب للإضافة، سالب للحذف' : 'Positive to add, negative to remove'} />
-                            <button onClick={() => updateOption(gi, oi, { inventory_effects: option.inventory_effects.filter((_, i) => i !== ei) })} className="min-h-11 px-3 rounded-lg border border-ui-danger/40 text-ui-danger inline-flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        );
-                      })}
-                      <button
-                        onClick={() => updateOption(gi, oi, { inventory_effects: [...option.inventory_effects, { target_type: 'raw_material', target_id: '', quantity_delta: 1 }] })}
-                        className="min-h-10 inline-flex items-center gap-2 px-3 rounded-lg border border-ui-border text-sm font-semibold"
-                      >
-                        <Plus className="w-4 h-4" /> {isAr ? 'إضافة تأثير مكوّن' : 'Add component effect'}
-                      </button>
+                    <div className="mt-3 space-y-3">
+                      <div className="grid md:grid-cols-[1fr_1fr_140px_120px] gap-3 items-end">
+                        <label className="text-xs font-semibold">{isAr ? 'اسم الاختيار' : 'Option name'}
+                          <input value={option.name} onChange={(e) => updateOption(gi, oi, { name: e.target.value })} className="mt-1 w-full min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" />
+                        </label>
+                        <label className="text-xs font-semibold">English
+                          <input value={option.name_en} onChange={(e) => updateOption(gi, oi, { name_en: e.target.value })} className="mt-1 w-full min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" />
+                        </label>
+                        <label className="text-xs font-semibold">{isAr ? 'فرق السعر' : 'Price delta'}
+                          <input type="number" step="0.01" value={option.price_delta} onChange={(e) => updateOption(gi, oi, { price_delta: Number(e.target.value) })} className="mt-1 w-full min-h-11 rounded-lg border border-ui-border bg-ui-surface px-3" />
+                        </label>
+                        <label className="min-h-11 flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={option.is_default} onChange={(e) => updateOption(gi, oi, { is_default: e.target.checked })} />{isAr ? 'افتراضي' : 'Default'}</label>
+                      </div>
+
+                      <div className="rounded-lg border border-ui-border bg-ui-surface p-3 space-y-2">
+                        <div className="text-xs font-bold text-ui-muted">{isAr ? 'تأثير المخزون (اختياري)' : 'Inventory effect (optional)'}</div>
+                        {option.inventory_effects.map((effect, ei) => {
+                          const targets = effect.target_type === 'raw_material' ? rawMaterials : inventoryUnits;
+                          return (
+                            <div key={`${gi}-${oi}-${ei}`} className="grid md:grid-cols-[160px_1fr_150px_auto] gap-2">
+                              <select value={effect.target_type} onChange={(e) => updateEffect(gi, oi, ei, { target_type: e.target.value as EffectTarget, target_id: '' })} className="min-h-11 rounded-lg border border-ui-border bg-ui-page px-2"><option value="raw_material">{isAr ? 'خامة' : 'Raw material'}</option><option value="inventory_unit">{isAr ? 'مصنع' : 'Manufactured item'}</option></select>
+                              <select value={effect.target_id} onChange={(e) => updateEffect(gi, oi, ei, { target_id: e.target.value })} className="min-h-11 rounded-lg border border-ui-border bg-ui-page px-2"><option value="">{isAr ? 'اختر المكوّن' : 'Select component'}</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select>
+                              <input type="number" step="0.0001" value={effect.quantity_delta} onChange={(e) => updateEffect(gi, oi, ei, { quantity_delta: Number(e.target.value) })} className="min-h-11 rounded-lg border border-ui-border bg-ui-page px-3" title={isAr ? 'موجب للإضافة، سالب للحذف' : 'Positive to add, negative to remove'} />
+                              <button type="button" onClick={() => updateOption(gi, oi, { inventory_effects: option.inventory_effects.filter((_, index) => index !== ei) })} className="min-h-11 px-3 rounded-lg border border-ui-danger/40 text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          );
+                        })}
+                        <button type="button" onClick={() => updateOption(gi, oi, { inventory_effects: [...option.inventory_effects, { target_type: 'raw_material', target_id: '', quantity_delta: 1 }] })} className="min-h-10 inline-flex items-center gap-2 px-3 rounded-lg border border-ui-border text-sm font-semibold"><Plus className="w-4 h-4" />{isAr ? 'إضافة تأثير' : 'Add effect'}</button>
+                      </div>
                     </div>
-                  </div>
+                  </details>
                 ))}
-                <button
-                  onClick={() => updateGroup(gi, { options: [...group.options, emptyOption(group.options.length)] })}
-                  className="min-h-11 inline-flex items-center gap-2 px-4 rounded-xl border border-ui-border font-bold"
-                >
-                  <Plus className="w-4 h-4" /> {isAr ? 'إضافة اختيار' : 'Add option'}
-                </button>
+                <button type="button" onClick={() => updateGroup(gi, { options: [...group.options, emptyOption(group.options.length)] })} className="min-h-11 inline-flex items-center gap-2 px-4 rounded-xl border border-ui-border font-bold"><Plus className="w-4 h-4" />{isAr ? 'إضافة اختيار' : 'Add choice'}</button>
               </div>
             </section>
           ))}
-
-          <button
-            onClick={() => setGroups((prev) => [...prev, emptyGroup(prev.length)])}
-            className="min-h-11 inline-flex items-center gap-2 px-4 rounded-xl bg-ui-surface border border-ui-border font-bold"
-          >
-            <Plus className="w-4 h-4" /> {isAr ? 'إضافة مجموعة موديفاير' : 'Add modifier group'}
-          </button>
         </div>
       )}
     </div>
