@@ -2,7 +2,7 @@ name: Verify main
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, development/pr7-confirmed-legacy-cleanup]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
