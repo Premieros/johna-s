@@ -37,6 +37,7 @@ export function ProductImage({ src, name, category, className = '', imgClassName
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
   const visual = getApproximateProductVisual(name, category);
+  const fallbackLabel = category?.trim() || visual.label;
 
   if (src && !failed) {
     return <img src={src} alt={alt || name || ''} className={imgClassName || className} loading="lazy" onError={() => setFailed(true)} />;
@@ -44,13 +45,15 @@ export function ProductImage({ src, name, category, className = '', imgClassName
 
   return (
     <div
-      className={`flex h-full w-full select-none items-center justify-center bg-gradient-to-br from-ui-page-alt to-ui-surface ${className}`}
+      className={`flex h-full w-full select-none items-center justify-center bg-gradient-to-br from-ui-page-alt to-ui-surface px-3 ${className}`}
       role="img"
-      aria-label={alt || name || visual.label}
-      title={name || visual.label}
+      aria-label={alt || name || fallbackLabel}
+      title={fallbackLabel}
       data-product-image-fallback="true"
     >
-      <span className="text-[clamp(2rem,5vw,4.5rem)] leading-none drop-shadow-sm" aria-hidden="true">{visual.emoji}</span>
+      <span className="line-clamp-3 max-w-full text-center text-sm font-black leading-5 text-ui-muted sm:text-base">
+        {fallbackLabel}
+      </span>
     </div>
   );
 }
