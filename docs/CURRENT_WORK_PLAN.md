@@ -2,7 +2,7 @@
 
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` و`docs/PLAN_CHECKPOINT_2026-09-13.md` و`docs/STABILIZATION_WORK_LOG_2026-09-13_ADDENDUM.md`.
 
-آخر تحديث: **2026-09-13 — PR4 Purchases closure**
+آخر تحديث: **2026-09-13 — PR5 Sales/POS/Kitchen closeout**
 
 ## الهوية الثابتة
 
@@ -27,71 +27,65 @@
 - PR1 Architecture / Simplification Map ✅
 - PR2 Inventory Contracts ✅
 - PR3 Catalog 6A/6B/6C/6D ✅
+- PR4 Purchases End-to-End — PR #98 ✅ merged; post-merge Verify main #1245 + Deploy #625 Green
 
 الحالي:
 
-- **PR4 Purchases End-to-End — PR #98 / `development/pr4-purchases`**
+- **PR5 Sales / POS / Tables / Kitchen / Payments — PR #99 / `development/pr5-sales-pos-kitchen`**
 
-التالي فقط بعد إغلاق PR4 ونجاح post-merge Verify/Deploy:
+التالي فقط بعد إغلاق PR5 ونجاح post-merge Verify/Deploy:
 
-1. PR5 Sales / POS / Tables / Kitchen / Payments
-2. PR6 Shift / Finance / Reports
-3. PR7 Confirmed Legacy Cleanup
+1. PR6 Shift / Finance / Reports
+2. PR7 Confirmed Legacy Cleanup
 
 `Premier Print Agent` / PR #78 مسار مستقل ولا يختلط بهذه المراحل.
 
-## Baseline PR4
+## Baseline PR5
 
-- بدأ من `main@658b86c91a120c7e634250758a38d4895ff72b9a` (PR #97 merge).
-- Baseline: Verify main #1236 Full Green؛ Deploy #624 ✅.
-- Implementation/test head `6841962e5c65b9356033370d645a13e4cbe1aec5` اجتاز Verify #1241 Full Green:
-  - lint ✅
-  - typecheck + test typecheck ✅
-  - unit ✅
-  - build ✅
-  - Fresh DB migrations ✅
-  - schema ✅
-  - integration/security/RLS ✅
-  - Browser Smoke ✅
-- سجل الإغلاق التفصيلي: `docs/PR4_PURCHASES_CLOSURE.md`.
-- لأن تحديث التوثيق غيّر HEAD، يلزم Full Verify أخير على الـHEAD النهائي قبل merge.
+- بدأ من `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca` بعد إغلاق PR4.
+- Baseline post-merge لـPR4: Verify main #1245 Full Green؛ Deploy #625 ✅؛ Production API parity ✅؛ Browser Smoke ✅.
+- لا Production write ولا migration جديدة في PR5.
 
-## PR4 — Purchases End-to-End
+## PR5 — Sales / POS / Tables / Kitchen / Payments
 
-المسار:
+المسار المدقق:
 
-`Purchase Request -> Submit/Approval -> RFQ/PO where applicable -> Receive -> Inventory/Ledger -> Supplier/Accounts -> Reports source`
+`POS order -> table/operator ownership -> send_to_kitchen -> inventory delta -> payment/settlement -> offline/reconciliation safeguards`
 
-المثبت مسبقًا ولم يُفتح بلا Regression: request/approval/PO transition، partial/full receive، over-receive guard، backorders، stock/journal effect، Permission-First drift sentinel، وتعديل الفواتير المكتملة بعقد Reverse -> Apply -> Recalculate -> Audit.
+### العقود المثبتة ولم تُفتح بلا Regression
 
-### Root cause المثبت
+- Permission-First بصلاحيات POS منفصلة مثل view/create/edit/pay/split/transfer/receipt/send-kitchen؛ لا role-name authorization جديد.
+- `send_to_kitchen` هو authority لاستهلاك Kitchen ويقفل الطلب بـ`FOR UPDATE` قبل حساب الـpositive unsent delta.
+- `inventory_warehouse_id` يثبت على الطلب؛ لا silent cross-warehouse switch لطلب قائم في Kitchen/settlement.
+- إعادة الإرسال بدون زيادة كمية = no-op ولا تكرر الخصم.
+- Normal/Split settlement لا يعيدان خصم ما استهلكه Kitchen Send.
+- Split payment atomic.
+- Offline/reconciliation لا يحوّل rejection/ambiguous online failure إلى sale/payment success وهمي ويحافظ على idempotency/cashier identity.
+- occupied table/order ownership وoperator display يبقون scoped ولا يوسعون `users.view`.
 
-`receive_purchase_order` كان قد يصل إلى GRN/receipt writes قبل رفض Warehouse غير صالح في helper لاحق، ومع JSON validation failure كان يمكن ترك side effects جزئية.
+### Gap المثبت
 
-### Fix
+التغطية السابقة لم تثبت صراحة سباقًا حقيقيًا بين جلستين PostgreSQL مستقلتين تستدعيان `send_to_kitchen` لنفس الطلب بينما الجلسة الأولى ما زالت تحتفظ بقفل صف الطلب.
 
-`supabase/migrations/20260913083000_purchase_receive_atomicity.sql`:
+### Change
 
-- Warehouse preflight قبل receipt allocation/writes.
-- required + active + same branch.
-- no branch/warehouse fallback.
-- PO `FOR UPDATE` يبقى قبل receive writes.
-- valid receive يكتب للمخزن الصحيح فقط.
-- لا delete/reset/reseed/backfill/rewrite لبيانات موجودة.
+`tests/integration/kitchen_send_concurrency.test.ts` فقط:
 
-### Regression
+- Session A ترسل للمطبخ وتبقي transaction مفتوحة.
+- Session B تستدعي نفس RPC لنفس order وتثبت أنها تنتظر القفل.
+- بعد Commit لـA، Session B تستكمل كـsuccessful no-op (`items_sent_count = 0`).
+- المخزون ينقص مرة واحدة فقط.
+- KDS / `order_kitchen_sends` ينتج صفًا واحدًا فقط، بلا duplicate.
 
-`tests/integration/purchase_receive_atomicity.test.ts` يثبت missing/cross-branch warehouse fail-closed، correct warehouse stock، Supplier/AP association، completed retry بدون duplicate side effects، وبقاء row lock.
+الاختبار نجح على Fresh DB؛ لذلك لم يتم تغيير SQL أو Business Logic أو إضافة migration.
 
-`tests/integration/purchase_cancellation_contract.test.ts` يثبت الإلغاء قبل approval بلا stock/accounting effects ومنع الإلغاء بعد approval بـ`BAD_TRANSITION`.
-
-لا dedupe تخميني بالكمية/hash: نفس كمية partial receive قد تكون استلامًا فعليًا جديدًا، ولا يوجد request-id مستقل يميز replay بأمان.
+سجل الإغلاق التفصيلي: `docs/PR5_SALES_POS_KITCHEN_CLOSURE.md`.
 
 ## UX Acceptance Gate
 
 **UX Acceptance Gate: For every active phase, review affected screens/dialogs for missing required actions, duplicate controls/content, unclear labels/status/help, and unnecessary steps. Apply small behavior-preserving UX improvements within the phase scope. Do not broaden into redesign or alter authorization/business rules.**
 
-في PR4: تمت مراجعة `ReceivingPage` لتحسين رسائل الاستلام الملموسة وتحديد كمية الإدخال بالمتبقي دون تغيير Authorization أو Business Logic، وبقي Arabic-first/RTL. لا redesign واسع ولا فتح Reports/POS بلا Regression.
+في PR5 تمت مراجعة POS/Kitchen/Payments/Tables مع الحفاظ على Arabic-first/RTL والصلاحيات. لم يظهر UX Regression مثبت يحتاج تغييرًا، لذلك لم يُدخل redesign أو cosmetic change بلا سبب.
 
 ## Data Preservation Lock
 
@@ -105,7 +99,7 @@
 
 `Baseline -> Root cause -> Small change -> Focused tests -> Integration/Regression -> Full Verify -> Merge -> Verify main -> Deploy`
 
-لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ.
+لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ أو لمجرد توسيع حجم PR.
 
 ## متطلبات ثابتة للمراحل التالية
 
@@ -123,8 +117,8 @@
 
 ## NEXT ACTION
 
-1. حدّث `STABILIZATION_WORK_LOG.md` بإغلاق PR4.
-2. Full Verify على HEAD النهائي لـPR #98.
+1. حدّث سجلات PR5 (`STABILIZATION_WORK_LOG` / addendum) بدون حذف التاريخ.
+2. Full Verify على documentation-complete HEAD لـPR #99.
 3. إذا Green: راجع diff/mergeability، حوّل PR من Draft، وادمج بـexpected head SHA.
 4. تحقق من Verify main وDeploy بعد الدمج.
-5. لا تبدأ PR5 قبل نجاح post-merge gates.
+5. لا تبدأ PR6 قبل نجاح post-merge gates.
