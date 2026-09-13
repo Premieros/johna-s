@@ -21,8 +21,11 @@ describe('PR7 legacy subscription cleanup contract', () => {
   });
 
   it('keeps navigation free of subscription or billing destinations', () => {
+    const menuRoutes = MENU_ITEMS.map((item) => String(item.route));
+
     expect(MENU_ITEMS.some((item) => item.id === 'subscription' || item.id === 'subscriptions')).toBe(false);
-    expect(MENU_ITEMS.some((item) => item.route === '/subscription' || item.route === '/subscriptions')).toBe(false);
+    expect(menuRoutes).not.toContain('/subscription');
+    expect(menuRoutes).not.toContain('/subscriptions');
   });
 
   it('does not load subscription status during auth bootstrap', () => {
@@ -32,6 +35,18 @@ describe('PR7 legacy subscription cleanup contract', () => {
     expect(authSource).not.toContain('api.subscriptions');
     expect(authSource).not.toContain('refreshSubscription');
     expect(authSource).not.toContain('loadSubscriptionFor');
+  });
+
+  it('removes legacy subscription and trial UI from Settings', () => {
+    const settingsSource = read('src/features/admin/pages/SettingsControlCenterPage.tsx');
+
+    expect(settingsSource).not.toContain('branch_subscription');
+    expect(settingsSource).not.toContain('SubscriptionPlan');
+    expect(settingsSource).not.toContain('SubscriptionStatus');
+    expect(settingsSource).not.toContain('api.subscriptions');
+    expect(settingsSource).not.toContain('Trial Mode');
+    expect(settingsSource).not.toContain('اشتراك الفرع');
+    expect(settingsSource).not.toContain('فترة تجريبية');
   });
 
   it('removes the legacy frontend subscription API and type exports', () => {
