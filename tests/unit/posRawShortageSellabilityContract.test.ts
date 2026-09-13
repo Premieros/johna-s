@@ -11,22 +11,21 @@ const offline = read('src/context/OfflineContext.tsx');
 const migration = read('supabase/migrations/20260912075859_pos_availability_permission_and_recipe_guard.sql');
 const cartMigration = read('supabase/migrations/20260912113000_pos_cart_negative_raw_sellthrough.sql');
 
-describe('POS raw-shortage and verified-availability contract', () => {
-  it('keeps same-branch raw shortages exempt from every client stock guard', () => {
+describe('POS sell-through and verified-configuration contract', () => {
+  it('makes every visible POS product quantity-eligible without changing server deduction behavior', () => {
+    // The historical base hook still owns the proven cart implementation. The
+    // wrapper intentionally marks every visible catalog product quantity-eligible
+    // so its legacy client stock guards cannot block zero/negative sell-through.
     expect(hook).toContain('if (!isNegativeEligible(product.id) && totalProductQty + quantity > stock)');
-    expect(hook).toContain('if (!isNegativeEligible(target.product.id) && totalProductQty + delta > stock)');
-    expect(hook).toContain('const maxForLine = isNegativeEligible(target.product.id)');
-    expect(wrapper).toContain('(productId: string) => input.rawShortageOnly?.[productId] === true');
-    expect(wrapper).toContain('if (!isRawShortageOnly(product.id) && currentQty + quantity > physicalStock)');
-    expect(wrapper).toContain('if (!isRawShortageOnly(target.product.id) && currentQty + delta > physicalStock)');
-    expect(wrapper).toContain('if (!isRawShortageOnly(target.product.id) && otherQty + Number(qty) > physicalStock)');
-    expect(wrapper).toContain('if (!isRawShortageOnly(nextItem.product.id) && otherQty + nextItem.quantity > physicalStock)');
-    expect(wrapper).toContain('input.rawShortageOnly?.[item.product.id] === true');
-    expect(browser).toContain('const isRawShortageOnly = (product: Product) => rawShortageOnly[product.id] === true;');
-    expect(browser).toContain('if (isRawShortageOnly(product)) {\n      return true;\n    }');
+    expect(wrapper).toContain('POS wrapper for unconditional quantity sell-through.');
+    expect(wrapper).toContain('rawShortageOnly: Object.fromEntries(input.products.map((product) => [product.id, true]))');
+    expect(wrapper).toContain('Stock quantity is informational/accounting state, not a saleability gate.');
+    expect(wrapper).toContain('Physical raw-material deduction remains server-owned at send_to_kitchen');
+    expect(wrapper).not.toContain('cartAvailability.canAdd(');
+    expect(wrapper).not.toContain('cachedStock < item.quantity');
   });
 
-  it('keeps cart aggregate availability permissive only for raw shortage', () => {
+  it('keeps the existing server cart aggregate contract intact', () => {
     expect(cartMigration).toContain("<> 'INSUFFICIENT_RAW_MATERIAL_STOCK'");
     expect(cartMigration).toContain("v_error <> 'INSUFFICIENT_RAW_MATERIAL_STOCK'");
     expect(cartMigration).toContain('public.check_product_availability(');
@@ -35,7 +34,7 @@ describe('POS raw-shortage and verified-availability contract', () => {
     expect(cartMigration).not.toContain("'INSUFFICIENT_PRODUCT_STOCK' THEN RETURN jsonb_build_object('success', true");
   });
 
-  it('loads and caches the server raw-shortage signal without inventing success', () => {
+  it('still loads server availability/configuration data without inventing success', () => {
     expect(workspace).toContain("await supabase.rpc('get_pos_product_availability'");
     expect(workspace).toContain('if (row.raw_shortage_only) rawShortage[row.product_id] = true;');
     expect(workspace).toContain('if (row.availability_error) availabilityErrors[row.product_id] = row.availability_error;');
@@ -57,7 +56,7 @@ describe('POS raw-shortage and verified-availability contract', () => {
     expect(migration).not.toContain('AND b.quantity > 0');
   });
 
-  it('returns invalid recipes as explicit blocked rows', () => {
+  it('keeps invalid recipes/configuration explicitly blocking even though quantity does not block', () => {
     expect(migration).toContain('CREATE TRIGGER trg_00_validate_recipe_item_branch');
     expect(migration).toContain("RAISE EXCEPTION 'RAW_MATERIAL_BRANCH_MISMATCH'");
     expect(migration).toContain("public.can_permission('recipes.manage')");
@@ -66,6 +65,8 @@ describe('POS raw-shortage and verified-availability contract', () => {
     expect(migration).toContain('availability_error := v_error;');
     expect(migration).toContain('raw_shortage_only := false;');
     expect(browser).toContain("code === 'RAW_MATERIAL_NOT_IN_BRANCH'");
-    expect(browser).toContain('const blocked = unavailable || unknownAvailability || !!availabilityError || !canAddToCart;');
+    expect(browser).toContain('const gated = !!availabilityError || !canAddToCart;');
+    expect(browser).toContain('if (availabilityError) {');
+    expect(browser).toContain('show(availabilityErrorLabel(availabilityError), \'error\');');
   });
 });
