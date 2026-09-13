@@ -53,3 +53,41 @@ A remaining stage may be merged without asking for a fresh intermediate approval
 - no Production migration is applied before its verified deployment gate.
 
 Any change that requires rewriting historical business data, changing balances, or migrating existing documents for convenience is outside this standing authorization and must be isolated rather than silently applied.
+
+## PR4 — Purchases End-to-End closure checkpoint
+
+Branch: `development/pr4-purchases`
+PR: #98
+Base: `main@658b86c91a120c7e634250758a38d4895ff72b9a`
+Detailed evidence: `docs/PR4_PURCHASES_CLOSURE.md`
+
+### Proven defect and fix
+
+`receive_purchase_order` could reach GRN/receipt writes before a later helper rejected an unusable PO warehouse. The forward-only migration `20260913083000_purchase_receive_atomicity.sql` now preflights the warehouse before receipt allocation/writes, requires an active same-branch warehouse, keeps the PO `FOR UPDATE` serialization point, and introduces no branch/warehouse fallback.
+
+No existing business rows are deleted, reset, reseeded, backfilled, or rewritten.
+
+### Added regression coverage
+
+- missing warehouse fails with zero receipt/stock/journal side effects;
+- cross-branch warehouse fails closed;
+- valid receive posts stock only to the PO warehouse;
+- AP journal line retains the PO supplier;
+- retry after completed receive does not duplicate GRN/stock/journal effects;
+- PO row lock remains before receipt writes;
+- pre-approval cancellation is side-effect free;
+- post-approval cancellation is rejected with `BAD_TRANSITION`.
+
+No quantity/hash duplicate heuristic was added because equal partial quantities can represent two valid physical receipts; the current RPC has no independent request-id that can distinguish replay safely.
+
+### UX gate
+
+The receiving surface was reviewed under the mandatory UX gate: Arabic-first/RTL preserved, touched error/status feedback clarified, and entered receipt quantity constrained to the remaining quantity without changing authorization or business rules. No broad redesign was introduced.
+
+### Verification
+
+Implementation/test head `6841962e5c65b9356033370d645a13e4cbe1aec5` passed Verify #1241 Full Green: lint, typecheck, unit, build, Fresh DB, schema, integration/security/RLS, and Browser Smoke all succeeded.
+
+Closure documentation changed the branch head after #1241, so PR4 remains **pending one final Full Verify on the documentation-complete head before merge**.
+
+Production Supabase writes during PR4 verification: **NONE**.
