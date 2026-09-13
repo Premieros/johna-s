@@ -1,0 +1,38 @@
+name: Build Premier Print Agent Lite
+
+on:
+  pull_request:
+    paths:
+      - 'print-agent-lite/**'
+      - '.github/workflows/build-print-agent-lite.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-lite:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore print-agent-lite/PremierPrintAgentLite.csproj
+      - name: Build Release
+        run: dotnet build print-agent-lite/PremierPrintAgentLite.csproj -c Release --no-restore
+      - name: Package Lite ZIP
+        shell: pwsh
+        run: |
+          $out = 'print-agent-lite/bin/Release/net48'
+          if (!(Test-Path "$out/PremierPrintAgentLite.exe")) { throw 'Lite EXE not found' }
+          Compress-Archive -Path "$out/*" -DestinationPath 'Premier-Print-Agent-Lite-Windows-x64.zip' -Force
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: premier-print-agent-lite-windows
+          path: Premier-Print-Agent-Lite-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -10,7 +10,7 @@ import { useCan } from '@/lib/permissions';
 import {
   applyLocalPrinterRoutes,
   executeCashDrawerKick,
-  executeSilentPrint,
+  executeSilentPrintDetailed,
   getAvailablePrinters,
   getLocalPrinterRoutes,
   isAutoDrawerKickEnabled,
@@ -73,6 +73,18 @@ const LEGACY_FALLBACK_STATIONS: StationOption[] = [
 function iconForStation(code: string): typeof Receipt {
   const normalized = code.toLowerCase();
   return normalized.includes('drink') || normalized.includes('bar') || normalized.includes('coffee') ? Coffee : UtensilsCrossed;
+}
+
+function friendlyPrintError(error: string, isAr: boolean): string {
+  const code = String(error || 'PRINT_FAILED').trim();
+  const normalized = code.toUpperCase();
+  let message = isAr ? 'فشل إرسال اختبار الطباعة' : 'Test print submission failed';
+  if (normalized.includes('PRINTER_NOT_FOUND')) message = isAr ? 'الطابعة المختارة لم تعد موجودة في Windows' : 'The selected printer is no longer available in Windows';
+  else if (normalized.includes('INVALID_PRINTER_SETTINGS')) message = isAr ? 'تعريف الطابعة رفض إعدادات الطباعة؛ جرّب تحديث أو إعادة تثبيت تعريف الطابعة' : 'The printer driver rejected the print settings; update or reinstall the printer driver';
+  else if (normalized.includes('PRINT_CALLBACK_TIMEOUT')) message = isAr ? 'تعريف الطابعة لم يرد خلال مهلة الطباعة' : 'The printer driver did not respond before the print timeout';
+  else if (normalized.includes('PRINT_LOAD_TIMEOUT')) message = isAr ? 'تعذر تجهيز صفحة الاختبار للطباعة في الوقت المحدد' : 'The print page could not be prepared before timeout';
+  else if (normalized.includes('NO_CONTENT_TO_PRINT')) message = isAr ? 'لا يوجد محتوى لإرساله للطابعة' : 'There is no content to print';
+  return `${message} — ${code}`;
 }
 
 export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPanelProps) {
@@ -223,7 +235,7 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
     }
     setTestingStation(station);
     try {
-      const ok = await executeSilentPrint({
+      const result = await executeSilentPrintDetailed({
         printerName,
         text: [
           '================================',
@@ -235,7 +247,12 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
           '================================', '', '',
         ].filter(Boolean).join('\r\n'),
       });
-      show(ok ? (isAr ? `تم إرسال الاختبار إلى ${printerName}` : `Test submitted to ${printerName}`) : (isAr ? 'فشل إرسال اختبار الطباعة' : 'Test print submission failed'), ok ? 'success' : 'error');
+      show(
+        result.success
+          ? (isAr ? `تم إرسال الاختبار إلى ${printerName}` : `Test submitted to ${printerName}`)
+          : friendlyPrintError(result.error || 'PRINT_FAILED', isAr),
+        result.success ? 'success' : 'error',
+      );
     } finally {
       setTestingStation(null);
     }
