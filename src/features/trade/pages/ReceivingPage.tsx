@@ -98,8 +98,38 @@ export function ReceivingPage() {
 
   const updateQty = (i: number, qty: string) => setLines(lines.map((l, idx) => idx === i ? { ...l, qty } : l));
 
+  const receiveFailureMessage = (result: RpcResult & { detail?: string }) => {
+    if (lang === 'ar') {
+      if (result.error === 'WAREHOUSE_REQUIRED') return 'حدد مستودعًا لأمر الشراء قبل الاستلام، ثم أعد المحاولة.';
+      if (result.error === 'WAREHOUSE_BRANCH_MISMATCH') return 'مستودع أمر الشراء لا يتبع نفس الفرع. صحح المستودع في أمر الشراء قبل الاستلام.';
+      if (result.error === 'OVER_RECEIPT') return 'كمية الاستلام أكبر من الكمية المتبقية في أمر الشراء.';
+      if (result.error === 'NOT_RECEIVABLE') return 'أمر الشراء ليس في حالة تسمح باستلام جديد.';
+    } else {
+      if (result.error === 'WAREHOUSE_REQUIRED') return 'Select a warehouse on the purchase order before receiving, then try again.';
+      if (result.error === 'WAREHOUSE_BRANCH_MISMATCH') return 'The purchase-order warehouse belongs to another branch. Correct the warehouse before receiving.';
+      if (result.error === 'OVER_RECEIPT') return 'The receipt quantity is greater than the remaining purchase-order quantity.';
+      if (result.error === 'NOT_RECEIVABLE') return 'This purchase order is not in a state that allows another receipt.';
+    }
+    return result.detail || result.error || t('error');
+  };
+
   const saveReceipt = async () => {
     if (!receiveModal) return;
+
+    const overRemaining = lines.find((l) => {
+      const qty = parseFloat(l.qty);
+      return Number.isFinite(qty) && qty > l.ordered - l.received;
+    });
+    if (overRemaining) {
+      show(
+        lang === 'ar'
+          ? `كمية استلام ${overRemaining.name} أكبر من المتبقي (${overRemaining.ordered - overRemaining.received}).`
+          : `Receipt quantity for ${overRemaining.name} exceeds the remaining quantity (${overRemaining.ordered - overRemaining.received}).`,
+        'error',
+      );
+      return;
+    }
+
     const items = lines
       .filter((l) => parseFloat(l.qty) > 0)
       .map((l): ReceiveLineInput => ({ purchase_item_id: l.purchase_item_id, quantity_received: parseFloat(l.qty) }));
@@ -112,8 +142,8 @@ export function ReceivingPage() {
     });
     setSaving(false);
     if (err) { show(err.message, 'error'); return; }
-    const result = data as (RpcResult & { fully_received?: boolean }) | null;
-    if (!result?.success) { show(result?.detail || result?.error || t('error'), 'error'); return; }
+    const result = data as (RpcResult & { fully_received?: boolean; detail?: string }) | null;
+    if (!result?.success) { show(result ? receiveFailureMessage(result) : t('error'), 'error'); return; }
     show(result.fully_received ? t('fullyReceived') : t('partiallyReceived'), 'success');
     setReceiveModal(null);
     loadBackorders();
@@ -204,7 +234,7 @@ export function ReceivingPage() {
                     <td className="py-2 text-center text-ui-text">{l.received}</td>
                     <td className="py-2 text-center font-semibold text-ui-danger">{l.ordered - l.received}</td>
                     <td className="py-2 text-center">
-                      <input type="number" min="0" step="0.01" value={l.qty} placeholder="0" onChange={(e) => updateQty(i, e.target.value)} className="w-24 rounded-md border border-ui-border bg-ui-surface px-2 py-1 text-sm" />
+                      <input type="number" min="0" max={l.ordered - l.received} step="0.01" value={l.qty} placeholder="0" onChange={(e) => updateQty(i, e.target.value)} className="w-24 rounded-md border border-ui-border bg-ui-surface px-2 py-1 text-sm" />
                     </td>
                   </tr>
                 ))}
