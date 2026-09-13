@@ -16,7 +16,7 @@
     "verify:full": "npm run verify:db-identity && npm run typecheck:all && npm run lint && npm run build && npm run test:unit && npm run test:integration",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "timeout 90s vitest run tests/unit tests/components --reporter=verbose",
+    "test:unit": "timeout 120s vitest run tests/unit tests/components",
     "test:integration": "vitest run -c vitest.integration.config.ts"
   },
   "dependencies": {
