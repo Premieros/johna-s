@@ -40,6 +40,18 @@ jobs:
       - name: Apply guarded codemod
         run: python3 scripts/apply_global_branch_fix.py
 
+      - name: Remove branch-selector lint residue
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/features/accounting/pages/PaymentsPage.tsx')
+          text = p.read_text(encoding='utf-8')
+          old = "  const isAr = lang === 'ar';\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one Payments isAr residue, found {text.count(old)}')
+          p.write_text(text.replace(old, '', 1), encoding='utf-8')
+          PY
+
       - name: Install dependencies
         run: npm ci
 
