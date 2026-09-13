@@ -37,7 +37,7 @@ export function ProductImage({ src, name, category, className = '', imgClassName
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
   const visual = getApproximateProductVisual(name, category);
-  const fallbackLabel = category?.trim() || name?.trim() || visual.label;
+  const fallbackLabel = category?.trim() || visual.label;
 
   if (src && !failed) {
     return <img src={src} alt={alt || name || ''} className={imgClassName || className} loading="lazy" onError={() => setFailed(true)} />;
