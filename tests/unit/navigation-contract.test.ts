@@ -26,9 +26,8 @@ describe('navigation contract', () => {
   });
 
   it('keeps menu permissions explicit for protected navigation items', () => {
-    const publicMenuIds = new Set(['subscription']);
     for (const item of MENU_ITEMS) {
-      if (item.superAdminOnly || publicMenuIds.has(item.id)) continue;
+      if (item.superAdminOnly) continue;
       expect(item.permission, `${item.id} is missing a navigation permission`).toBeTruthy();
     }
   });
