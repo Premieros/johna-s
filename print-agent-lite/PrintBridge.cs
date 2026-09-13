@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Printing;
 using System.Linq;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 
 namespace PremierPrintAgentLite
 {
@@ -115,7 +115,7 @@ namespace PremierPrintAgentLite
             if (string.IsNullOrWhiteSpace(html)) return "";
             var normalized = Regex.Replace(html, "(?i)<br\\s*/?>|</p>|</div>|</tr>|</li>", "\n");
             normalized = Regex.Replace(normalized, "<[^>]+>", " ");
-            normalized = HttpUtility.HtmlDecode(normalized);
+            normalized = WebUtility.HtmlDecode(normalized);
             normalized = Regex.Replace(normalized, "[ \\t]+", " ");
             normalized = Regex.Replace(normalized, "\\n\\s*\\n+", "\n");
             return normalized.Trim();
