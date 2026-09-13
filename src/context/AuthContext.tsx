@@ -2,18 +2,16 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import * as api from '../api';
-import type { AppUser, SubscriptionStatus } from '../lib/types';
+import type { AppUser } from '../lib/types';
 
 interface AuthContextValue {
   session: Session | null;
   user: AppUser | null;
-  subscription: SubscriptionStatus | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: { code: string; message: string } | null }>;
   signInWithUsername: (username: string, pin: string) => Promise<{ error: { code: string; message: string } | null }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  refreshSubscription: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -21,26 +19,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const loadSubscriptionFor = useCallback(async (profile: AppUser | null): Promise<void> => {
-    if (!profile?.branch_id) {
-      setSubscription(null);
-      return;
-    }
-    try {
-      const { data } = await api.subscriptions.status({ p_branch_id: profile.branch_id });
-      setSubscription(data as SubscriptionStatus | null);
-    } catch {
-      setSubscription(null);
-    }
-  }, []);
 
   const clearAuthState = useCallback(() => {
     setSession(null);
     setUser(null);
-    setSubscription(null);
   }, []);
 
   const loadUser = useCallback(async (activeSession: Session | null): Promise<AppUser | null> => {
@@ -66,9 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const profile = data as AppUser;
     setSession(activeSession);
     setUser(profile);
-    await loadSubscriptionFor(profile);
     return profile;
-  }, [clearAuthState, loadSubscriptionFor]);
+  }, [clearAuthState]);
 
   useEffect(() => {
     let mounted = true;
@@ -175,12 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadUser(activeSession);
   };
 
-  const refreshSubscription = async () => {
-    await loadSubscriptionFor(user);
-  };
-
   return (
-    <AuthContext.Provider value={{ session, user, subscription, loading, signIn, signInWithUsername, signOut, refreshUser, refreshSubscription }}>
+    <AuthContext.Provider value={{ session, user, loading, signIn, signInWithUsername, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

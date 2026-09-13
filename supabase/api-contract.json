@@ -3,15 +3,6 @@
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
-      "name": "activate_subscription",
-      "params": [
-        "activate",
-        "billing_period",
-        "branch_id",
-        "plan_id"
-      ]
-    },
-    {
       "name": "add_inventory_batch",
       "params": [
         "batch_number",
@@ -796,32 +787,6 @@
       ]
     },
     {
-      "name": "register_branch",
-      "params": [
-        "address",
-        "currency",
-        "email",
-        "owner_name",
-        "password",
-        "phone",
-        "store_name",
-        "store_name_en"
-      ]
-    },
-    {
-      "name": "register_tenant",
-      "params": [
-        "address",
-        "currency",
-        "email",
-        "owner_name",
-        "password",
-        "phone",
-        "store_name",
-        "store_name_en"
-      ]
-    },
-    {
       "name": "reject_stock_count",
       "params": [
         "reason",
@@ -899,12 +864,6 @@
       "name": "submit_stock_count",
       "params": [
         "stock_count_id"
-      ]
-    },
-    {
-      "name": "subscription_status",
-      "params": [
-        "branch_id"
       ]
     },
     {
@@ -1016,7 +975,6 @@
     "approval_policies",
     "audit_log",
     "branch_settings",
-    "branch_subscriptions",
     "branches",
     "categories",
     "chart_of_accounts",
@@ -1037,9 +995,6 @@
     "orders",
     "organization_members",
     "organizations",
-    "plan_features",
-    "plan_prices",
-    "plans",
     "product_components",
     "product_unit_links",
     "product_units",
@@ -1061,9 +1016,6 @@
     "sales",
     "settings",
     "stock_transactions",
-    "subscription_payments",
-    "subscription_plans",
-    "subscriptions",
     "suppliers",
     "system_settings",
     "treasury_accounts",
