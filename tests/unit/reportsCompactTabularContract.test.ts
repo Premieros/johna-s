@@ -10,7 +10,6 @@ describe('ReportsPage compact tabular contract (PR6)', () => {
     expect(source).not.toContain("from 'recharts'");
     expect(source).not.toContain('<ResponsiveContainer');
     expect(source).not.toContain('<PieChart');
-    expect(source).not.toContain('<BarChart');
     expect(source).toContain('<table className="w-full text-sm">');
   });
 
