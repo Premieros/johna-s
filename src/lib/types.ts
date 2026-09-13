@@ -11,5 +11,4 @@ export * from './domains/types/manufacturing';
 export * from './domains/types/inventory';
 export * from './domains/types/costing';
 export * from './domains/types/accounting';
-export * from './domains/types/subscription';
 export * from './domains/types/procurement';
