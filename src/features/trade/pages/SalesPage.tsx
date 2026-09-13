@@ -71,10 +71,11 @@ export function SalesPage() {
   const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
 
   async function loadMeta() {
-    const { data: customersRes } = await supabase.from('customers').select('*').order('name');
+    if (!branchFilter) { setCustomers([]); return; }
+    const { data: customersRes } = await supabase.from('customers').select('*').eq('branch_id', branchFilter).order('name');
     setCustomers((customersRes as Customer[]) || []);
   }
-  useEffect(() => { loadMeta(); }, []);
+  useEffect(() => { void loadMeta(); }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = items.filter((i) => {
     if (!search) return true;

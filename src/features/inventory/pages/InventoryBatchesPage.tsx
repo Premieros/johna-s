@@ -5,7 +5,6 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
-import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -47,19 +46,18 @@ export function InventoryBatchesPage() {
   const isAr = lang === 'ar';
   const { show } = useToast();
   const can = useCan();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const { rows: batches, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadBatches } = usePaginatedRows<BatchRow>({
     table: 'inventory_batches',
     select: '*, product:products(*), warehouse:warehouses(*), branch:branches(*)',
     order: { column: 'expiry_date', ascending: true },
+    branch_id: branchFilter,
     pageSize: 100,
   });
   const [branches, setBranches] = useState<Branch[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
-  const [branchId, setBranchId] = useState(branchFilter || '');
   const [warehouseId, setWarehouseId] = useState('');
   const [filter, setFilter] = useState('all');
   const [addOpen, setAddOpen] = useState(false);
@@ -71,7 +69,6 @@ export function InventoryBatchesPage() {
     { key: 'production', label: t('sourceProduction') },
     { key: 'batch', label: t('sourceBatch') },
   ];
-  const visibleBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
 
   useEffect(() => {
     async function loadMeta() {
@@ -89,7 +86,6 @@ export function InventoryBatchesPage() {
 
   const rowsWithStatus = useMemo(() => batches.map((batch) => ({ ...batch, days: daysUntilExpiry(batch.expiry_date) })), [batches]);
   const filtered = rowsWithStatus.filter((batch) => {
-    if (branchId && batch.branch_id !== branchId) return false;
     if (warehouseId && batch.warehouse_id !== warehouseId) return false;
     if (filter === 'expiring' && (batch.days === null || batch.days > 90 || batch.days < 0)) return false;
     if (filter === 'expired' && (batch.days === null || batch.days >= 0)) return false;
@@ -102,7 +98,7 @@ export function InventoryBatchesPage() {
 
   const openAdd = () => {
     if (!can('inventory.adjust')) return;
-    setForm({ ...EMPTY_FORM, branch_id: user?.branch_id || branchFilter || '' });
+    setForm({ ...EMPTY_FORM, branch_id: branchFilter || '' });
     setAddOpen(true);
   };
 
@@ -156,12 +152,12 @@ export function InventoryBatchesPage() {
     <DesignSurface testId="inventory-batches-page">
       <DesignPageHeader title={t('inventoryBatches')} subtitle={isAr ? 'إدارة الدفعات وتواريخ الصلاحية (FIFO)' : 'Manage lots/batches and expiry tracking (FIFO)'} actions={can('inventory.adjust') ? <Button size="sm" onClick={openAdd}><Layers className="h-4 w-4" /> {t('newBatch')}</Button> : undefined} />
       <DesignPanel testId="batches-expiry-summary"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-ui-lg border border-ui-border bg-ui-page p-4"><p className="text-xs font-medium uppercase tracking-wide text-ui-subtle">{t('expiredBatches')}</p><p className="mt-1 text-2xl font-bold text-ui-danger">{expiredCount}</p></div><div className="rounded-ui-lg border border-ui-border bg-ui-page p-4"><p className="text-xs font-medium uppercase tracking-wide text-ui-subtle">{t('expiringBatches')}</p><p className="mt-1 text-2xl font-bold text-ui-warning">{expiringCount}</p></div><div className="rounded-ui-lg border border-ui-border bg-ui-page p-4"><p className="text-xs font-medium uppercase tracking-wide text-ui-subtle">{t('totalValue')}</p><p className="mt-1 text-2xl font-bold text-ui-text">{formatNumber(rowsWithStatus.reduce((sum, batch) => sum + Number(batch.quantity) * Number(batch.unit_cost), 0), 2)}</p></div></div></DesignPanel>
-      <DesignPanel testId="batches-search-panel"><div className="flex flex-col gap-3 sm:flex-row"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="batches-search" /><Select value={filter} onChange={(event) => setFilter(event.target.value)} className="sm:w-40"><option value="all">{t('all')}</option><option value="expiring">{t('expiringBatches')}</option><option value="expired">{t('expiredBatches')}</option></Select><Select value={branchId} onChange={(event) => { setBranchId(event.target.value); setWarehouseId(''); }} className="sm:w-44"><option value="">{t('allBranches')}</option>{visibleBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select><Select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="sm:w-44"><option value="">{t('all')} - {t('warehouses')}</option>{warehouses.filter((warehouse) => !branchId || warehouse.branch_id === branchId).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</Select></div></DesignPanel>
+      <DesignPanel testId="batches-search-panel"><div className="flex flex-col gap-3 sm:flex-row"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="batches-search" /><Select value={filter} onChange={(event) => setFilter(event.target.value)} className="sm:w-40"><option value="all">{t('all')}</option><option value="expiring">{t('expiringBatches')}</option><option value="expired">{t('expiredBatches')}</option></Select><Select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="sm:w-44"><option value="">{t('all')} - {t('warehouses')}</option>{warehouses.filter((warehouse) => !branchFilter || warehouse.branch_id === branchFilter).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</Select></div></DesignPanel>
       <DesignPanel testId="batches-table-panel"><DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={batches.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t('newBatch')} size="lg">
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2"><Select label={t('branch')} value={form.branch_id} onChange={(event) => setForm({ ...form, branch_id: event.target.value, warehouse_id: '' })}><option value="">{t('branch')}</option>{visibleBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(event) => setForm({ ...form, warehouse_id: event.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((warehouse) => !form.branch_id || warehouse.branch_id === form.branch_id).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</Select></div>
+          <div className="grid gap-3 sm:grid-cols-2"><div><label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label><div className="rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((branch) => branch.id === form.branch_id)?.name || '-'}</div></div><Select label={t('warehouse')} value={form.warehouse_id} onChange={(event) => setForm({ ...form, warehouse_id: event.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((warehouse) => !form.branch_id || warehouse.branch_id === form.branch_id).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</Select></div>
           <Select label={t('product')} value={form.product_id} onChange={(event) => setForm({ ...form, product_id: event.target.value })}><option value="">{t('product')}</option>{products.filter((product) => !form.branch_id || product.branch_id === form.branch_id).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</Select>
           <div className="grid gap-3 sm:grid-cols-3"><Input label={t('batchQty')} type="number" step="0.0001" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} /><Input label={t('unitCost')} type="number" step="0.01" value={form.unit_cost} onChange={(event) => setForm({ ...form, unit_cost: event.target.value })} /><Select label={t('batchSource')} value={form.source_type} onChange={(event) => setForm({ ...form, source_type: event.target.value })}>{sourceOptions.map((source) => <option key={source.key} value={source.key}>{source.label}</option>)}</Select></div>
           <div className="grid gap-3 sm:grid-cols-3"><Input label={t('batchNumber')} value={form.batch_number} onChange={(event) => setForm({ ...form, batch_number: event.target.value })} /><Input label={t('productionDate')} type="date" value={form.production_date} onChange={(event) => setForm({ ...form, production_date: event.target.value })} /><Input label={t('expiryDate')} type="date" value={form.expiry_date} onChange={(event) => setForm({ ...form, expiry_date: event.target.value })} /></div>

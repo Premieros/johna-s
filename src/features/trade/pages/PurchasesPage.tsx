@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
@@ -38,7 +37,6 @@ const EMPTY_LINE: PurchaseFormItem = { line_type: 'product', product_id: '', raw
 
 export function PurchasesPage() {
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const { show } = useToast();
   const can = useCan();
@@ -137,7 +135,7 @@ export function PurchasesPage() {
     setForm({
       supplier_id: suppliers[0]?.id || '',
       warehouse_id: warehouses[0]?.id || '',
-      branch_id: branchFilter || user?.branch_id || branches[0]?.id || '',
+      branch_id: branchFilter || '',
       payment_method: 'cash',
       notes: '',
     });
@@ -248,7 +246,7 @@ export function PurchasesPage() {
       show(lang === 'ar' ? 'الكود واسم الخامة ووحدة القياس مطلوبة' : 'Code, raw-material name, and measurement unit are required', 'error');
       return;
     }
-    if (!form.branch_id) {
+    if (!branchFilter) {
       show(lang === 'ar' ? 'حدد الفرع أولًا' : 'Select the branch first', 'error');
       return;
     }
@@ -261,7 +259,7 @@ export function PurchasesPage() {
       min_stock: 0,
       default_cost: 0,
       description: null,
-      branch_id: form.branch_id,
+      branch_id: branchFilter,
       is_active: true,
     };
     const { data, error: rawError } = await supabase.from('raw_materials').insert(payload).select('*').single();
@@ -356,7 +354,7 @@ export function PurchasesPage() {
     const { data, error } = await api.trade.processPurchase({
       p_invoice_number: invoiceNumber,
       p_supplier_id: form.supplier_id,
-      p_branch_id: form.branch_id || null,
+      p_branch_id: branchFilter,
       p_warehouse_id: form.warehouse_id || null,
       p_subtotal: totalValue,
       p_discount_amount: 0,
@@ -608,10 +606,10 @@ export function PurchasesPage() {
               <option value="">--</option>
               {warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </Select>
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })} disabled={!!editingPurchase}>
-              <option value="">--</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
+            <div>
+              <label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label>
+              <div className="rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === branchFilter)?.name || '-'}</div>
+            </div>
             <Select label={t('paymentMethod')} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               <option value="cash">{t('cash')}</option>
               <option value="card">{t('card')}</option>

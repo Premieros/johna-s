@@ -37,6 +37,7 @@ export function StockCountsPage() {
     table: 'stock_counts',
     select: '*, branch:branches(*), warehouse:warehouses(*), items:stock_count_items(*, product:products(*), raw_material:raw_materials(*)), created_user:users!stock_counts_created_by_fkey(id, full_name, email)',
     order: { column: 'created_at', ascending: false },
+    branch_id: branchFilter,
     pageSize: 100,
   });
 
@@ -46,7 +47,6 @@ export function StockCountsPage() {
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [branchId, setBranchId] = useState(branchFilter || '');
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '', item_kind: 'product' as CountItemKind });
@@ -94,7 +94,7 @@ export function StockCountsPage() {
     if (!createOpen) return;
     setForm((current) => {
       const candidateBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
-      const nextBranchId = current.branch_id || branchFilter || (candidateBranches.length === 1 ? candidateBranches[0].id : '');
+      const nextBranchId = branchFilter || (candidateBranches.length === 1 ? candidateBranches[0].id : '');
       if (!nextBranchId) return current;
       const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId);
       const nextWarehouseId = current.warehouse_id || (branchWarehouses.length === 1 ? branchWarehouses[0].id : '');
@@ -105,7 +105,6 @@ export function StockCountsPage() {
 
   const filtered = counts.filter((c) => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
-    if (branchId && c.branch_id !== branchId) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (c.count_number || '').toLowerCase().includes(q)
@@ -242,11 +241,11 @@ export function StockCountsPage() {
   return (
     <DesignSurface testId="stock-counts-page">
       <DesignPageHeader title={t('stockCounts')} subtitle={isAr ? 'جرد المنتجات والخامات مع اعتماد وتطبيق الأرصدة' : 'Product and raw-material physical counts with approval and stock adjustment'} actions={can('inventory.count.create') ? <Button size="sm" onClick={openCreate}><ClipboardCheck className="w-4 h-4" /> {t('newStockCount')}</Button> : undefined} />
-      <DesignPanel testId="stock-counts-search-panel"><div className="flex flex-col sm:flex-row gap-3"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="stock-counts-search" /><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-44"><option value="all">{t('all')}</option>{statusOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</Select><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-48"><option value="">{t('allBranches')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select></div></DesignPanel>
+      <DesignPanel testId="stock-counts-search-panel"><div className="flex flex-col sm:flex-row gap-3"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="stock-counts-search" /><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-44"><option value="all">{t('all')}</option>{statusOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</Select></div></DesignPanel>
       <DesignPanel testId="stock-counts-table-panel"><DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={counts.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('newStockCount')} size="lg"><div className="space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select><Select label={isAr ? 'نوع الجرد' : 'Count items'} value={form.item_kind} onChange={(e) => { setForm({ ...form, item_kind: e.target.value as CountItemKind }); resetCreateLines(); }}><option value="product">{isAr ? 'منتجات' : 'Products'}</option><option value="raw_material">{isAr ? 'خامات' : 'Raw materials'}</option></Select></div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div><label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label><div className="rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((br) => br.id === form.branch_id)?.name || '-'}</div></div><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select><Select label={isAr ? 'نوع الجرد' : 'Count items'} value={form.item_kind} onChange={(e) => { setForm({ ...form, item_kind: e.target.value as CountItemKind }); resetCreateLines(); }}><option value="product">{isAr ? 'منتجات' : 'Products'}</option><option value="raw_material">{isAr ? 'خامات' : 'Raw materials'}</option></Select></div>
         {form.item_kind === 'raw_material' && <p className="text-xs text-ui-subtle">{isAr ? 'رصيد الخامات الحالي محسوب على مستوى الفرع حسب عقد قاعدة البيانات الحالي.' : 'Raw-material stock is currently branch-scoped by the database contract.'}</p>}
         <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} />
         <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (form.item_kind === 'product' ? t('product') : (isAr ? 'الخامة' : 'Raw material')) : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{form.item_kind === 'product' ? t('product') : (isAr ? 'اختر الخامة' : 'Choose raw material')}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>

@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel } from '@/components/design';
@@ -42,7 +41,6 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function PurchaseRequestsPage() {
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const { show } = useToast();
   const can = useCan();
@@ -75,20 +73,20 @@ export function PurchaseRequestsPage() {
 
   async function loadMeta() {
     const [s, pr, rm] = await Promise.all([
-      supabase.from('suppliers').select('*').order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
+      supabase.from('suppliers').select('*').eq('branch_id', branchFilter).order('name'),
+      supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
+      supabase.from('raw_materials').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
     ]);
     setSuppliers((s.data as Supplier[]) || []);
     setProducts((pr.data as Product[]) || []);
     setRawMaterials((rm.data as RawMaterial[]) || []);
   }
-  useEffect(() => { loadMeta(); }, []);
+  useEffect(() => { if (branchFilter) void loadMeta(); else { setSuppliers([]); setProducts([]); setRawMaterials([]); } }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = items.filter((r) => !search || r.request_number.toLowerCase().includes(search.toLowerCase()) || (r.supplier?.name || '').toLowerCase().includes(search.toLowerCase()));
 
   const openAdd = () => {
-    setForm({ branch_id: user?.branch_id || '', supplier_id: '', priority: 'normal', expected_date: '', notes: '' });
+    setForm({ branch_id: branchFilter || '', supplier_id: '', priority: 'normal', expected_date: '', notes: '' });
     setLineItems([{ ...EMPTY_LINE }]);
     setModalOpen(true);
   };
@@ -98,13 +96,13 @@ export function PurchaseRequestsPage() {
   const removeLine = (i: number) => setLineItems(lineItems.filter((_, idx) => idx !== i));
 
   const save = async () => {
-    if (!form.branch_id) { show(t('required') + ': ' + t('branch'), 'error'); return; }
+    if (!branchFilter) { show(t('required') + ': ' + t('branch'), 'error'); return; }
     const validItems = lineItems.filter((l) => (l.line_type === 'product' ? l.product_id : l.raw_material_id) && l.quantity > 0);
     if (validItems.length === 0) { show(t('required') + ': ' + t('addItem'), 'error'); return; }
 
     setSaving(true);
     const { data, error: err } = await api.procurement.createPurchaseRequest({
-      p_branch_id: form.branch_id,
+      p_branch_id: branchFilter,
       p_supplier_id: form.supplier_id || null,
       p_priority: form.priority,
       p_expected_date: form.expected_date || null,
@@ -199,10 +197,10 @@ export function PurchaseRequestsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t('createRequest')} size="xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })} required>
-              <option value="">--</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
+            <div>
+              <label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label>
+              <div className="rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === branchFilter)?.name || '-'}</div>
+            </div>
             <Select label={t('supplier')} value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
               <option value="">--</option>
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

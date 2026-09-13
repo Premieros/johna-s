@@ -4,7 +4,6 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { useAuth } from '@/context/AuthContext';
 import { DesignSurface, DesignPageHeader, DesignPanel, DesignPagination } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -15,9 +14,7 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
-import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
-import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { TreasuryAccount, TreasuryBalance, TreasuryTransaction } from '@/lib/types';
 
@@ -26,27 +23,14 @@ type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
 export function TreasuryPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const { effectiveSettings } = useSettings();
-  const { branches } = useBranches();
-  const isAr = lang === 'ar';
 
   const [balances, setBalances] = useState<TreasuryBalance[]>([]);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adminBranchFilter, setAdminBranchFilter] = useState('');
-
-  useEffect(() => {
-    if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
-    const preferred = user?.branch_id && branches.some((b) => b.id === user.branch_id)
-      ? user.branch_id
-      : branches[0].id;
-    setAdminBranchFilter(preferred);
-  }, [user?.role, user?.branch_id, branches, adminBranchFilter]);
-
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const { rows: transactions, loading: txLoading, error: txError, total: txTotal, hasMore: txHasMore, loadMore: loadMoreTx, loadingMore: loadingMoreTx, refresh: reloadTx } = usePaginatedRows<TreasuryTransaction>({
     table: 'treasury_transactions',
@@ -175,18 +159,6 @@ export function TreasuryPage() {
         <StatCard title={t('treasuryAccounts')} value={String(balances.length)} icon={<PiggyBank className="w-5 h-5" />} color="purple" />
       </div>
 
-      {isAdminRole(user?.role) && branches.length > 0 && (
-        <DesignPanel testId="treasury-branch-panel">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm font-medium text-ui-muted">{t('filterByBranch')}</label>
-            <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}
-              className="min-w-0 flex-1 sm:flex-none px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-              <option value="" disabled>{t('filterByBranch')}</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-            </select>
-          </div>
-        </DesignPanel>
-      )}
 
       <DesignPanel title={t('treasuryBalances')} testId="treasury-balances-panel">
         <DataTable columns={balanceColumns} data={balances} loading={loading} error={txError} emptyMessage={t('noData')} />

@@ -1,10 +1,9 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
@@ -35,12 +34,11 @@ export function LowStockAlertsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [branchId, setBranchId] = useState(branchFilter || '');
+  const branchId = branchFilter || '';
   const [warehouseId, setWarehouseId] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const { user } = useAuth();
   const can = useCan();
   const navigate = useNavigate();
 
@@ -64,15 +62,14 @@ export function LowStockAlertsPage() {
     const [br, wh, sp] = await Promise.all([
       supabase.from('branches').select('id, name').eq('is_active', true).order('name'),
       supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-      supabase.from('suppliers').select('*').order('name'),
+      supabase.from('suppliers').select('*').eq('branch_id', branchId).order('name'),
     ]);
     if (br.error) { setError(br.error.message); setLoading(false); show(br.error.message, 'error'); return; }
     const b = (br.data as { id: string; name: string }[] | null) || [];
     setBranches(b);
     setWarehouses((wh.data as Warehouse[]) || []);
     setSuppliers((sp.data as Supplier[]) || []);
-    let effBranch = branchId;
-    if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }
+    const effBranch = branchId;
 
     const [alerts, sum] = await Promise.all([
       api.inventory.getLowStockAlerts({ p_branch_id: effBranch || null, p_warehouse_id: warehouseId || null }),
@@ -97,8 +94,6 @@ export function LowStockAlertsPage() {
       || (r.barcode || '').toLowerCase().includes(q)
       || (r.warehouse_name || '').toLowerCase().includes(q);
   });
-
-  const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
 
   const handleExport = () => {
     exportToExcel(filtered.map((r) => ({
@@ -151,19 +146,13 @@ export function LowStockAlertsPage() {
   }, []);
 
   const openReorder = () => {
-    const effBranch = branchId || user?.branch_id || branches[0]?.id || '';
+    const effBranch = branchId;
     if (!effBranch) { show(t('required') + ': ' + t('branch'), 'error'); return; }
     setReorderForm({ branch_id: effBranch, supplier_id: '', priority: 'normal', expected_date: '', notes: '' });
     setReorderOpen(true);
     loadReorder(effBranch);
   };
 
-  const changeReorderBranch = (next: string) => {
-    setReorderForm((f) => ({ ...f, branch_id: next, supplier_id: '' }));
-    setReorderItems([]);
-    setQtyOverride({});
-    if (next) loadReorder(next);
-  };
 
   const updateQty = (key: string, value: number) => setQtyOverride((prev) => ({ ...prev, [key]: value }));
 
@@ -269,10 +258,6 @@ export function LowStockAlertsPage() {
             <option value="out">{t('statusOut')}</option>
             <option value="low">{t('statusLow')}</option>
           </Select>
-          <Select value={branchId} onChange={(e) => { setBranchId(e.target.value); setWarehouseId(''); }} className="sm:w-44">
-            <option value="">{t('allBranches')}</option>
-            {visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </Select>
           <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="sm:w-44">
             <option value="">{t('all')} - {t('warehouses')}</option>
             {warehouses.filter((w) => !branchId || w.branch_id === branchId).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -287,10 +272,10 @@ export function LowStockAlertsPage() {
       <Modal open={reorderOpen} onClose={() => setReorderOpen(false)} title={`${t('reorder')} — ${t('createRequest')}`} size="2xl">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <Select label={t('branch')} value={reorderForm.branch_id} onChange={(e) => changeReorderBranch(e.target.value)}>
-              <option value="">--</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
+            <div>
+              <label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label>
+              <div className="rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === reorderForm.branch_id)?.name || '-'}</div>
+            </div>
             <Select label={t('supplier')} value={reorderForm.supplier_id} onChange={(e) => setReorderForm({ ...reorderForm, supplier_id: e.target.value })}>
               <option value="">{t('all')}</option>
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

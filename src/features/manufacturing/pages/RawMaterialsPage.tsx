@@ -59,7 +59,6 @@ export function RawMaterialsPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [stockBranch, setStockBranch] = useState(branchFilter || '');
 
   const [form, setForm] = useState<MaterialForm>(EMPTY_FORM);
   const [modalOpen, setModalOpen] = useState(false);
@@ -96,8 +95,8 @@ export function RawMaterialsPage() {
     return m.name.toLowerCase().includes(q) || (m.code || '').toLowerCase().includes(q) || (m.category || '').toLowerCase().includes(q);
   });
 
-  const filteredStock = inventory.filter((i) => !stockBranch || i.branch_id === stockBranch);
-  const filteredBatches = batches.filter((b) => !stockBranch || b.branch_id === stockBranch);
+  const filteredStock = inventory.filter((i) => !branchFilter || i.branch_id === branchFilter);
+  const filteredBatches = batches.filter((b) => !branchFilter || b.branch_id === branchFilter);
 
   const openAdd = () => { setForm({ ...EMPTY_FORM, branch_id: branchFilter || '' }); setModalOpen(true); };
   const openEdit = (m: RawMaterial) => {
@@ -123,7 +122,7 @@ export function RawMaterialsPage() {
       min_stock: form.min_stock,
       default_cost: form.default_cost,
       description: form.description.trim() || null,
-      branch_id: form.branch_id || branchFilter || null,
+      branch_id: branchFilter || form.branch_id || null,
       is_active: form.is_active,
     };
     if (form.id) {
@@ -233,7 +232,6 @@ export function RawMaterialsPage() {
 
       <div className="flex flex-wrap gap-2 mb-4">{tabs.map((tb) => <button key={tb.key} onClick={() => setTab(tb.key)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${tab === tb.key ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]' : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'}`}>{tb.icon}{tb.label}</button>)}</div>
 
-      {tab !== 'materials' && <DesignPanel testId="raw-materials-branch-panel"><div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center"><Select value={stockBranch} onChange={(e) => setStockBranch(e.target.value)} label={t('branch')} className="sm:w-64"><option value="">{t('all')} - {t('branches')}</option>{branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select></div></DesignPanel>}
       {tab === 'materials' && <DesignPanel testId="raw-materials-search-panel"><DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="raw-materials-search" /></DesignPanel>}
 
       <DesignPanel testId="raw-materials-table-panel">

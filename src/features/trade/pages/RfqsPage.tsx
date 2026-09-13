@@ -3,7 +3,6 @@ import { Plus, Trash2, Eye, Send, X, BadgeCheck, Scale, Check } from 'lucide-rea
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel } from '@/components/design';
@@ -50,7 +49,6 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function RfqsPage() {
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const { show } = useToast();
   const can = useCan();
@@ -93,22 +91,22 @@ export function RfqsPage() {
 
   async function loadMeta() {
     const [s, pr, rm, rq] = await Promise.all([
-      supabase.from('suppliers').select('*').order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
-      supabase.from('purchase_requests').select('*').eq('status', 'approved').order('request_number', { ascending: false }),
+      supabase.from('suppliers').select('*').eq('branch_id', branchFilter).order('name'),
+      supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
+      supabase.from('raw_materials').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
+      supabase.from('purchase_requests').select('*').eq('branch_id', branchFilter).eq('status', 'approved').order('request_number', { ascending: false }),
     ]);
     setSuppliers((s.data as Supplier[]) || []);
     setProducts((pr.data as Product[]) || []);
     setRawMaterials((rm.data as RawMaterial[]) || []);
     setRequests((rq.data as PurchaseRequestRow[]) || []);
   }
-  useEffect(() => { loadMeta(); }, []);
+  useEffect(() => { if (branchFilter) void loadMeta(); else { setSuppliers([]); setProducts([]); setRawMaterials([]); setRequests([]); } }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = items.filter((r) => !search || r.rfq_number.toLowerCase().includes(search.toLowerCase()));
 
   const openAdd = () => {
-    setForm({ branch_id: user?.branch_id || '', request_id: '', due_date: '', notes: '' });
+    setForm({ branch_id: branchFilter || '', request_id: '', due_date: '', notes: '' });
     setLineItems([{ ...EMPTY_LINE }]);
     setModalOpen(true);
   };
@@ -118,13 +116,13 @@ export function RfqsPage() {
   const removeLine = (i: number) => setLineItems(lineItems.filter((_, idx) => idx !== i));
 
   const save = async () => {
-    if (!form.branch_id) { show(t('required') + ': ' + t('branch'), 'error'); return; }
+    if (!branchFilter) { show(t('required') + ': ' + t('branch'), 'error'); return; }
     const validItems = lineItems.filter((l) => (l.line_type === 'product' ? l.product_id : l.raw_material_id) && l.quantity > 0);
     if (!form.request_id && validItems.length === 0) { show(t('required') + ': ' + t('addItem'), 'error'); return; }
 
     setSaving(true);
     const { data, error: err } = await api.procurement.createRfq({
-      p_branch_id: form.branch_id,
+      p_branch_id: branchFilter,
       p_request_id: form.request_id || null,
       p_due_date: form.due_date || null,
       p_notes: form.notes || null,
@@ -257,10 +255,10 @@ export function RfqsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t('createRfq')} size="xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })} required>
-              <option value="">--</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
+            <div>
+              <label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label>
+              <div className="rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === branchFilter)?.name || '-'}</div>
+            </div>
             <Select label={t('createRfqFromRequest')} value={form.request_id} onChange={(e) => setForm({ ...form, request_id: e.target.value })}>
               <option value="">--</option>
               {requests.map((r) => <option key={r.id} value={r.id}>{r.request_number}</option>)}

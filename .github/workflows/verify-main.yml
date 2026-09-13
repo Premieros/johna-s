@@ -1,193 +1,126 @@
-name: Guarded global branch completion
+name: Verify main
 
 on:
   push:
-    branches:
-      - development/global-branch-context-completion
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
+  VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'dummy_anon_key_for_ci_build' }}
 
 jobs:
-  apply-and-verify:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: development/global-branch-context-completion
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Apply guarded branch-context fixes
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          def rd(p): return Path(p).read_text(encoding='utf-8-sig')
-          def wr(p,s): Path(p).write_text(s, encoding='utf-8')
-          def rep(p,a,b):
-              s=rd(p); n=s.count(a)
-              if n != 1: raise SystemExit(f'{p}: expected 1 exact match, got {n}: {a[:80]!r}')
-              wr(p,s.replace(a,b,1))
-          def sub(p,pat,repl,flags=0):
-              s=rd(p); t,n=re.subn(pat,repl,s,count=1,flags=flags)
-              if n != 1: raise SystemExit(f'{p}: expected 1 regex match, got {n}: {pat[:80]!r}')
-              wr(p,t)
-
-          p='src/features/trade/pages/PurchaseRequestsPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,"      supabase.from('suppliers').select('*').order('name'),\n","      supabase.from('suppliers').select('*').eq('branch_id', branchFilter).order('name'),\n")
-          rep(p,"      supabase.from('products').select('*').eq('is_active', true).order('name'),\n","      supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),\n")
-          rep(p,"      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),\n","      supabase.from('raw_materials').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),\n")
-          rep(p,'  useEffect(() => { loadMeta(); }, []);\n',"  useEffect(() => { if (branchFilter) void loadMeta(); else { setSuppliers([]); setProducts([]); setRawMaterials([]); } }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps\n")
-          rep(p,"    setForm({ branch_id: user?.branch_id || '', supplier_id: '', priority: 'normal', expected_date: '', notes: '' });\n","    setForm({ branch_id: branchFilter || '', supplier_id: '', priority: 'normal', expected_date: '', notes: '' });\n")
-          rep(p,"    if (!form.branch_id) { show(t('required') + ': ' + t('branch'), 'error'); return; }\n","    if (!branchFilter) { show(t('required') + ': ' + t('branch'), 'error'); return; }\n")
-          rep(p,'      p_branch_id: form.branch_id,\n','      p_branch_id: branchFilter,\n')
-          sub(p,r'''            <Select label=\{t\('branch'\)\} value=\{form\.branch_id\} onChange=\{\(e\) => setForm\(\{ \.\.\.form, branch_id: e\.target\.value \}\)\} required>\n              <option value="">--</option>\n              \{branches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n            </Select>\n''',"            <div>\n              <label className=\"block text-sm font-medium text-ui-muted mb-1\">{t('branch')}</label>\n              <div className=\"rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === branchFilter)?.name || '-'}</div>\n            </div>\n")
-
-          p='src/features/trade/pages/RfqsPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,"      supabase.from('suppliers').select('*').order('name'),\n","      supabase.from('suppliers').select('*').eq('branch_id', branchFilter).order('name'),\n")
-          rep(p,"      supabase.from('products').select('*').eq('is_active', true).order('name'),\n","      supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),\n")
-          rep(p,"      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),\n","      supabase.from('raw_materials').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),\n")
-          rep(p,"      supabase.from('purchase_requests').select('*').eq('status', 'approved').order('request_number', { ascending: false }),\n","      supabase.from('purchase_requests').select('*').eq('branch_id', branchFilter).eq('status', 'approved').order('request_number', { ascending: false }),\n")
-          rep(p,'  useEffect(() => { loadMeta(); }, []);\n',"  useEffect(() => { if (branchFilter) void loadMeta(); else { setSuppliers([]); setProducts([]); setRawMaterials([]); setRequests([]); } }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps\n")
-          rep(p,"    setForm({ branch_id: user?.branch_id || '', request_id: '', due_date: '', notes: '' });\n","    setForm({ branch_id: branchFilter || '', request_id: '', due_date: '', notes: '' });\n")
-          rep(p,"    if (!form.branch_id) { show(t('required') + ': ' + t('branch'), 'error'); return; }\n","    if (!branchFilter) { show(t('required') + ': ' + t('branch'), 'error'); return; }\n")
-          rep(p,'      p_branch_id: form.branch_id,\n','      p_branch_id: branchFilter,\n')
-          sub(p,r'''            <Select label=\{t\('branch'\)\} value=\{form\.branch_id\} onChange=\{\(e\) => setForm\(\{ \.\.\.form, branch_id: e\.target\.value \}\)\} required>\n              <option value="">--</option>\n              \{branches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n            </Select>\n''',"            <div>\n              <label className=\"block text-sm font-medium text-ui-muted mb-1\">{t('branch')}</label>\n              <div className=\"rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === branchFilter)?.name || '-'}</div>\n            </div>\n")
-
-          p='src/features/trade/pages/PurchasesPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,"      branch_id: branchFilter || user?.branch_id || branches[0]?.id || '',\n","      branch_id: branchFilter || '',\n")
-          rep(p,"    if (!form.branch_id) {\n      show(lang === 'ar' ? 'حدد الفرع أولًا' : 'Select the branch first', 'error');\n","    if (!branchFilter) {\n      show(lang === 'ar' ? 'حدد الفرع أولًا' : 'Select the branch first', 'error');\n")
-          rep(p,'      branch_id: form.branch_id,\n','      branch_id: branchFilter,\n')
-          rep(p,'      p_branch_id: form.branch_id || null,\n','      p_branch_id: branchFilter,\n')
-          sub(p,r'''            <Select label=\{t\('branch'\)\} value=\{form\.branch_id\} onChange=\{\(e\) => setForm\(\{ \.\.\.form, branch_id: e\.target\.value \}\)\} disabled=\{!!editingPurchase\}>\n              <option value="">--</option>\n              \{branches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n            </Select>\n''',"            <div>\n              <label className=\"block text-sm font-medium text-ui-muted mb-1\">{t('branch')}</label>\n              <div className=\"rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === branchFilter)?.name || '-'}</div>\n            </div>\n")
-
-          p='src/features/inventory/pages/InventoryLedgerPage.tsx'
-          rep(p,"    order: { column: 'created_at', ascending: false },\n    pageSize: 100,\n","    order: { column: 'created_at', ascending: false },\n    branch_id: branchFilter,\n    pageSize: 100,\n")
-          rep(p,"  const [branchId, setBranchId] = useState(branchFilter || '');\n",'')
-          rep(p,'    if (branchId && e.branch_id !== branchId) return false;\n','')
-          sub(p,r'''          <Select value=\{branchId\} onChange=\{\(e\) => setBranchId\(e\.target\.value\)\} className="sm:w-48">\n            <option value="">\{t\('allBranches'\)\}</option>\n            \{branches\.map\(\(br\) => <option key=\{br\.id\} value=\{br\.id\}>\{br\.name\}</option>\)\}\n          </Select>\n''','')
-
-          p='src/features/inventory/pages/RawMaterialsPage.tsx'
-          rep(p,"  const [stockBranch, setStockBranch] = useState(branchFilter || '');\n",'')
-          rep(p,"  const filteredStock = inventory.filter((i) => !stockBranch || i.branch_id === stockBranch);\n  const filteredBatches = batches.filter((b) => !stockBranch || b.branch_id === stockBranch);\n","  const filteredStock = inventory.filter((i) => !branchFilter || i.branch_id === branchFilter);\n  const filteredBatches = batches.filter((b) => !branchFilter || b.branch_id === branchFilter);\n")
-          rep(p,'      branch_id: form.branch_id || branchFilter || null,\n','      branch_id: branchFilter || form.branch_id || null,\n')
-          sub(p,r'''\n      \{tab !== 'materials' && <DesignPanel testId="raw-materials-branch-panel">.*?</DesignPanel>\}\n''','\n',re.S)
-
-          p='src/features/inventory/pages/StockCountsPage.tsx'
-          rep(p,"    order: { column: 'created_at', ascending: false },\n    pageSize: 100,\n","    order: { column: 'created_at', ascending: false },\n    branch_id: branchFilter,\n    pageSize: 100,\n")
-          rep(p,"  const [branchId, setBranchId] = useState(branchFilter || '');\n",'')
-          rep(p,"      const nextBranchId = current.branch_id || branchFilter || (candidateBranches.length === 1 ? candidateBranches[0].id : '');\n","      const nextBranchId = branchFilter || (candidateBranches.length === 1 ? candidateBranches[0].id : '');\n")
-          rep(p,'    if (branchId && c.branch_id !== branchId) return false;\n','')
-          sub(p,r'''<Select value=\{branchId\} onChange=\{\(e\) => setBranchId\(e\.target\.value\)\} className="sm:w-48"><option value="">\{t\('allBranches'\)\}</option>\{visibleBranches\.map\(\(br\) => <option key=\{br\.id\} value=\{br\.id\}>\{br\.name\}</option>\)\}</Select>''','')
-          sub(p,r'''<Select label=\{t\('branch'\)\} value=\{form\.branch_id\} onChange=\{\(e\) => \{ const nextBranchId = e\.target\.value; const branchWarehouses = warehouses\.filter\(\(w\) => w\.branch_id === nextBranchId\); setForm\(\{ \.\.\.form, branch_id: nextBranchId, warehouse_id: branchWarehouses\.length === 1 \? branchWarehouses\[0\]\.id : '' \}\); resetCreateLines\(\); \}\}><option value="">\{t\('branch'\)\}</option>\{visibleBranches\.map\(\(br\) => <option key=\{br\.id\} value=\{br\.id\}>\{br\.name\}</option>\)\}</Select>''',"<div><label className=\"block text-sm font-medium text-ui-muted mb-1\">{t('branch')}</label><div className=\"rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((br) => br.id === form.branch_id)?.name || '-'}</div></div>")
-
-          p='src/features/inventory/pages/InventoryBatchesPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,"    order: { column: 'expiry_date', ascending: true },\n    pageSize: 100,\n","    order: { column: 'expiry_date', ascending: true },\n    branch_id: branchFilter,\n    pageSize: 100,\n")
-          rep(p,"  const [branchId, setBranchId] = useState(branchFilter || '');\n",'')
-          rep(p,'  const visibleBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;\n','')
-          rep(p,'    if (branchId && batch.branch_id !== branchId) return false;\n','')
-          rep(p,"    setForm({ ...EMPTY_FORM, branch_id: user?.branch_id || branchFilter || '' });\n","    setForm({ ...EMPTY_FORM, branch_id: branchFilter || '' });\n")
-          sub(p,r'''<Select value=\{branchId\} onChange=\{\(event\) => \{ setBranchId\(event\.target\.value\); setWarehouseId\(''\); \}\} className="sm:w-44"><option value="">\{t\('allBranches'\)\}</option>\{visibleBranches\.map\(\(branch\) => <option key=\{branch\.id\} value=\{branch\.id\}>\{branch\.name\}</option>\)\}</Select>''','')
-          rep(p,"{warehouses.filter((warehouse) => !branchId || warehouse.branch_id === branchId).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}","{warehouses.filter((warehouse) => !branchFilter || warehouse.branch_id === branchFilter).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}")
-          sub(p,r'''<Select label=\{t\('branch'\)\} value=\{form\.branch_id\} onChange=\{\(event\) => setForm\(\{ \.\.\.form, branch_id: event\.target\.value, warehouse_id: '' \}\)\}><option value="">\{t\('branch'\)\}</option>\{visibleBranches\.map\(\(branch\) => <option key=\{branch\.id\} value=\{branch\.id\}>\{branch\.name\}</option>\)\}</Select>''',"<div><label className=\"block text-sm font-medium text-ui-muted mb-1\">{t('branch')}</label><div className=\"rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((branch) => branch.id === form.branch_id)?.name || '-'}</div></div>")
-
-          p='src/features/inventory/pages/StockValuationPage.tsx'
-          rep(p,"  const [branchId, setBranchId] = useState(branchFilter || '');\n","  const branchId = branchFilter || '';\n")
-          rep(p,"    if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }\n",'')
-          rep(p,'  const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;\n\n','')
-          sub(p,r'''          <Select value=\{branchId\} onChange=\{\(e\) => \{ setBranchId\(e\.target\.value\); setWarehouseId\(''\); \}\} className="sm:w-44">\n            <option value="">\{t\('allBranches'\)\}</option>\n            \{visibleBranches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n          </Select>\n''',"          <div className=\"sm:w-44 rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === branchId)?.name || '-'}</div>\n")
-
-          p='src/features/inventory/pages/LowStockAlertsPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,"  const [branchId, setBranchId] = useState(branchFilter || '');\n","  const branchId = branchFilter || '';\n")
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,"      supabase.from('suppliers').select('*').order('name'),\n","      supabase.from('suppliers').select('*').eq('branch_id', branchId).order('name'),\n")
-          rep(p,"    if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }\n",'')
-          rep(p,'  const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;\n\n','')
-          rep(p,"    const effBranch = branchId || user?.branch_id || branches[0]?.id || '';\n","    const effBranch = branchId;\n")
-          sub(p,r'''\n  const changeReorderBranch = \(next: string\) => \{.*?\n  \};\n''','\n',re.S)
-          sub(p,r'''          <Select value=\{branchId\} onChange=\{\(e\) => \{ setBranchId\(e\.target\.value\); setWarehouseId\(''\); \}\} className="sm:w-44">\n            <option value="">\{t\('allBranches'\)\}</option>\n            \{visibleBranches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n          </Select>\n''','')
-          sub(p,r'''            <Select label=\{t\('branch'\)\} value=\{reorderForm\.branch_id\} onChange=\{\(e\) => changeReorderBranch\(e\.target\.value\)\}>\n              <option value="">--</option>\n              \{branches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n            </Select>\n''',"            <div>\n              <label className=\"block text-sm font-medium text-ui-muted mb-1\">{t('branch')}</label>\n              <div className=\"rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === reorderForm.branch_id)?.name || '-'}</div>\n            </div>\n")
-
-          p='src/features/costing/pages/CostingCenterPage.tsx'
-          rep(p,"  const [branchId, setBranchId] = useState(branchFilter || '');\n","  const branchId = branchFilter || '';\n")
-          rep(p,'    if (!branchId && b.length === 1) { setBranchId(b[0].id); }\n','')
-          rep(p,"    const sp = await supabase.from('suppliers').select('id, name').order('name');\n","    const sp = branchId ? await supabase.from('suppliers').select('id, name').eq('branch_id', branchId).order('name') : { data: [], error: null };\n")
-          rep(p,"  }, [show]);\n\n  const effBranch = useMemo(() => branchId || null, [branchId]);\n","  }, [branchId, show]);\n\n  const effBranch = useMemo(() => branchFilter, [branchFilter]);\n")
-          rep(p,'  const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;\n\n','')
-          sub(p,r'''              <Select value=\{branchId\} onChange=\{\(e\) => setBranchId\(e\.target\.value\)\} className="sm:w-44">\n                <option value="">\{t\('allBranches'\)\}</option>\n                \{visibleBranches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n              </Select>\n''',"              <div className=\"sm:w-44 rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === branchId)?.name || '-'}</div>\n")
-          sub(p,r'''            <Select value=\{branchId\} onChange=\{\(e\) => setBranchId\(e\.target\.value\)\} className="sm:w-44">\n              <option value="">\{t\('allBranches'\)\}</option>\n              \{visibleBranches\.map\(\(b\) => <option key=\{b\.id\} value=\{b\.id\}>\{b\.name\}</option>\)\}\n            </Select>\n''',"            <div className=\"sm:w-44 rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text\">{branches.find((b) => b.id === branchId)?.name || '-'}</div>\n")
-
-          p='src/features/accounting/pages/JournalPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,"import { useBranches } from '@/hooks/useBranches';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,'  const { branches } = useBranches();\n','')
-          rep(p,"  const [selectedBranchFilter, setSelectedBranchFilter] = useState('');\n",'')
-          sub(p,r'''  const primaryBranchId = user\?\.branch_id.*?  const effectiveBranchFilter = selectedBranchFilter\n    \|\| branchFilter\n    \|\| primaryBranchId\n    \|\| \(branches\.length === 1 \? branches\[0\]\.id : null\);\n''','  const effectiveBranchFilter = branchFilter;\n',re.S)
-          sub(p,r'''            \{branches\.length > 1 && \(.*?            \)\}\n''','',re.S)
-
-          p='src/features/accounting/pages/TreasuryPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,"import { isAdminRole } from '@/lib/permissions';\n",'')
-          rep(p,"import { useBranches } from '@/hooks/useBranches';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,'  const { branches } = useBranches();\n','')
-          rep(p,"  const isAr = lang === 'ar';\n",'')
-          sub(p,r'''  const \[adminBranchFilter, setAdminBranchFilter\] = useState\(''\);\n\n  useEffect\(\(\) => \{.*?\n  \}, \[user\?\.role, user\?\.branch_id, branches, adminBranchFilter\]\);\n\n  const effectiveBranchFilter = isAdminRole\(user\?\.role\) \? \(adminBranchFilter \|\| null\) : branchFilter;\n''','  const effectiveBranchFilter = branchFilter;\n',re.S)
-          sub(p,r'''\n      \{isAdminRole\(user\?\.role\) && branches\.length > 0 && \(\n        <DesignPanel testId="treasury-branch-panel">.*?</DesignPanel>\n      \)\}\n''','\n',re.S)
-
-          p='src/features/accounting/pages/ReconciliationPage.tsx'
-          rep(p,"import { useAuth } from '@/context/AuthContext';\n",'')
-          rep(p,"import { isAdminRole } from '@/lib/permissions';\n",'')
-          rep(p,"import { useBranches } from '@/hooks/useBranches';\n",'')
-          rep(p,'  const { user } = useAuth();\n','')
-          rep(p,'  const { branches } = useBranches();\n','')
-          rep(p,"  const isAr = lang === 'ar';\n",'')
-          rep(p,"  const [adminBranchFilter, setAdminBranchFilter] = useState('');\n  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;\n",'  const effectiveBranchFilter = branchFilter;\n')
-          sub(p,r'''\n      \{isAdminRole\(user\?\.role\) && branches\.length > 0 && \(\n        <DesignPanel testId="reconciliation-branch-panel">.*?</DesignPanel>\n      \)\}\n''','\n',re.S)
-
-          p='src/features/trade/pages/SalesPage.tsx'
-          rep(p,"    const { data: customersRes } = await supabase.from('customers').select('*').order('name');\n","    if (!branchFilter) { setCustomers([]); return; }\n    const { data: customersRes } = await supabase.from('customers').select('*').eq('branch_id', branchFilter).order('name');\n")
-          rep(p,'  useEffect(() => { loadMeta(); }, []);\n',"  useEffect(() => { void loadMeta(); }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps\n")
-
-          # Cross-branch transfer controls are business inputs and must remain explicit.
-          tr=rd('src/features/inventory/pages/TransfersPage.tsx')
-          for tok in ['source_branch_id','destination_branch_id','from_warehouse_id','to_warehouse_id','to_branch_id.eq.${branchFilter}']:
-              if tok not in tr: raise SystemExit(f'TransfersPage lost required token: {tok}')
-          PY
-      - name: Install
-        run: npm ci
-      - name: Typecheck all
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify locked Supabase project identity
+        run: node scripts/db/verify-database-identity.js
+      - name: Verify frontend API contract is current
+        run: node scripts/db/gen-contract.js --check
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Typecheck application and test suites
         run: npm run typecheck:all
-      - name: Lint
-        run: npm run lint
-      - name: Unit tests
-        run: npm run test:unit
-      - name: Restore normal workflow and commit verified changes
+      - run: npm run test:unit
+      - run: npm run build
+
+  db:
+    needs: verify
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
+      VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+      SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify locked Supabase project identity
+        run: node scripts/db/verify-database-identity.js
+      - name: Apply auth stub (CI only, never on real Supabase)
+        run: node scripts/db/apply-migration.js --file supabase/ci/stub_auth.sql
+      - name: Apply canonical migrations
+        run: node scripts/db/apply-migration.js --dir supabase/migrations
+      - name: Verify schema
+        run: node scripts/db/verify-schema.js
+      - name: Isolate subscription guard for order integration fixtures
+        run: node scripts/db/apply-migration.js --file supabase/ci/disable_subscription_guard.sql
+      - name: Seed raw-material branch helper (CI only, never on real Supabase)
+        run: node scripts/db/apply-migration.js --file supabase/ci/seed_raw_material_branch.sql
+      - name: Seed explicit Permission-First role capabilities (CI only)
+        run: node scripts/db/apply-migration.js --file supabase/ci/permission_first_role_fixture.sql
+      - name: Run integration and security/RLS regression tests
         shell: bash
         run: |
-          git fetch origin main
-          git checkout origin/main -- .github/workflows/verify-main.yml
-          git config user.name "Premier"
-          git config user.email "sayed3la2@gmail.com"
-          git add src tests/unit/global_branch_context.test.ts .github/workflows/verify-main.yml
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 1
-          fi
-          git commit -m "fix(branch): complete shared operational branch context"
-          git push origin HEAD:development/global-branch-context-completion
+          set -o pipefail
+          npm run test:integration 2>&1 | tee integration-test.log
+      - name: Upload integration failure log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-integration-log
+          path: integration-test.log
+          retention-days: 3
+
+  browser-smoke:
+    needs: [verify, db]
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
+      VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify locked Supabase project identity
+        run: node scripts/db/verify-database-identity.js
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build application
+        run: npm run build
+      - name: Run Playwright smoke tests
+        run: npx playwright test --project=chromium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-playwright-report
+          path: playwright-report/
+          retention-days: 7

@@ -4,7 +4,6 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { useAuth } from '@/context/AuthContext';
 import { DesignSurface, DesignPageHeader, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
@@ -14,9 +13,7 @@ import { formatCurrency, formatDateTime, todayISO } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
-import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
-import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type {
   BankReconciliation, ReconciliationDetail,
@@ -26,16 +23,12 @@ import type {
 export function ReconciliationPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const { effectiveSettings } = useSettings();
-  const { branches } = useBranches();
-  const isAr = lang === 'ar';
 
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
-  const [adminBranchFilter, setAdminBranchFilter] = useState('');
-  const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
+  const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadRecon } = usePaginatedRows<BankReconciliation>({
     table: 'bank_reconciliations',
@@ -181,18 +174,6 @@ export function ReconciliationPage() {
         )}
       />
 
-      {isAdminRole(user?.role) && branches.length > 0 && (
-        <DesignPanel testId="reconciliation-branch-panel">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-ui-muted">{t('filterByBranch')}</label>
-            <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-              <option value="">{t('allBranches')}</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-            </select>
-          </div>
-        </DesignPanel>
-      )}
 
       <DesignPanel testId="reconciliation-table-panel">
         <DataTable columns={columns} data={items} loading={loading} error={error} emptyMessage={t('noData')} />

@@ -3,7 +3,6 @@ import { Eye, Scale, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
@@ -16,7 +15,6 @@ import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
-import { useBranches } from '@/hooks/useBranches';
 import type { JournalDto, ChartOfAccount } from '@/lib/types';
 
 interface ManualLine {
@@ -47,27 +45,18 @@ const REF_TYPE_KEYS: Record<string, string> = {
 
 export function JournalPage() {
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const { effectiveSettings } = useSettings();
-  const { branches } = useBranches();
   const [items, setItems] = useState<JournalDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [refType, setRefType] = useState('');
   const [viewing, setViewing] = useState<JournalDto | null>(null);
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const primaryBranchId = user?.branch_id && branches.some((branch) => branch.id === user.branch_id)
-    ? user.branch_id
-    : null;
-  const effectiveBranchFilter = selectedBranchFilter
-    || branchFilter
-    || primaryBranchId
-    || (branches.length === 1 ? branches[0].id : null);
+  const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const isAr = lang === 'ar';
 
@@ -204,15 +193,6 @@ export function JournalPage() {
             </Select>
             <Input label={t('from')} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             <Input label={t('to')} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            {branches.length > 1 && (
-              <div>
-                <label className="block text-sm font-medium text-ui-muted mb-1">{t('filterByBranch')}</label>
-                <select value={selectedBranchFilter || effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
-                  className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
-                  {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
-                </select>
-              </div>
-            )}
           </div>
         </div>
       </DesignPanel>

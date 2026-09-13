@@ -36,7 +36,7 @@ export function CostingCenterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [branchId, setBranchId] = useState(branchFilter || '');
+  const branchId = branchFilter || '';
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [supplierId, setSupplierId] = useState('');
@@ -51,18 +51,17 @@ export function CostingCenterPage() {
     if (br.error) { show(br.error.message, 'error'); return; }
     const b = (br.data as { id: string; name: string }[] | null) || [];
     setBranches(b);
-    if (!branchId && b.length === 1) { setBranchId(b[0].id); }
-  }, [branchId, show]);
+  }, [show]);
 
   const loadSuppliers = useCallback(async () => {
-    const sp = await supabase.from('suppliers').select('id, name').order('name');
+    const sp = branchId ? await supabase.from('suppliers').select('id, name').eq('branch_id', branchId).order('name') : { data: [], error: null };
     if (sp.error) { show(sp.error.message, 'error'); return; }
     const s = (sp.data as { id: string; name: string }[] | null) || [];
     setSuppliers(s);
     if (s.length > 0) setSupplierId(s[0].id);
-  }, [show]);
+  }, [branchId, show]);
 
-  const effBranch = useMemo(() => branchId || null, [branchId]);
+  const effBranch = useMemo(() => branchFilter, [branchFilter]);
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
@@ -148,8 +147,6 @@ export function CostingCenterPage() {
     }, null);
     return { count, avg, worst };
   }, [filteredOverview]);
-
-  const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
 
   const money = (v: number | undefined | null) => formatCurrency(Number(v || 0), 'EGP', lang);
 
@@ -311,10 +308,7 @@ export function CostingCenterPage() {
           <DesignPanel testId="costing-search-panel">
             <div className="flex flex-col sm:flex-row gap-3">
               <DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="costing-search" />
-              <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44">
-                <option value="">{t('allBranches')}</option>
-                {visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </Select>
+              <div className="sm:w-44 rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === branchId)?.name || '-'}</div>
             </div>
           </DesignPanel>
 
@@ -346,10 +340,7 @@ export function CostingCenterPage() {
               onChange={(e) => setToDate(e.target.value)}
               className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm"
             />
-            <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44">
-              <option value="">{t('allBranches')}</option>
-              {visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
+            <div className="sm:w-44 rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === branchId)?.name || '-'}</div>
             <Button size="sm" onClick={loadOrders}>{t('search')}</Button>
           </div>
           <DataTable

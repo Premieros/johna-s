@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpenText } from 'lucide-react';
 import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -25,11 +25,11 @@ export function InventoryLedgerPage() {
     table: 'inventory_ledger',
     select: '*, product:products(*), raw_material:raw_materials(*), warehouse:warehouses(*)',
     order: { column: 'created_at', ascending: false },
+    branch_id: branchFilter,
     pageSize: 100,
   });
   const rows = useMemo<LedgerRow[]>(() => rawRows.map((entry) => ({ id: String(entry.id), entry })), [rawRows]);
   const [entryType, setEntryType] = useState('all');
-  const [branchId, setBranchId] = useState(branchFilter || '');
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [search, setSearch] = useState('');
 
@@ -55,7 +55,6 @@ export function InventoryLedgerPage() {
   const filtered = rows.filter((r) => {
     const e = r.entry;
     if (entryType !== 'all' && e.entry_type !== entryType) return false;
-    if (branchId && e.branch_id !== branchId) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (e.reference_number || '').toLowerCase().includes(q)
@@ -143,10 +142,6 @@ export function InventoryLedgerPage() {
           <Select value={entryType} onChange={(e) => setEntryType(e.target.value)} className="sm:w-48">
             <option value="all">{t('all')}</option>
             {entryTypes.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-          </Select>
-          <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-48">
-            <option value="">{t('allBranches')}</option>
-            {branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}
           </Select>
         </div>
       </DesignPanel>

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -23,7 +23,7 @@ export function StockValuationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [branchId, setBranchId] = useState(branchFilter || '');
+  const branchId = branchFilter || '';
   const [warehouseId, setWarehouseId] = useState('');
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -39,8 +39,7 @@ export function StockValuationPage() {
     const b = (br.data as { id: string; name: string }[] | null) || [];
     setBranches(b);
     setWarehouses((wh.data as Warehouse[]) || []);
-    let effBranch = branchId;
-    if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }
+    const effBranch = branchId;
 
     const [v, s] = await Promise.all([
       api.inventory.getStockValuation({ p_branch_id: effBranch || null, p_warehouse_id: warehouseId || null }),
@@ -64,8 +63,6 @@ export function StockValuationPage() {
       || (r.barcode || '').toLowerCase().includes(q)
       || (r.warehouse_name || '').toLowerCase().includes(q);
   });
-
-  const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
 
   const grandTotal = rows.reduce((s, r) => s + Number(r.total_value), 0);
   const grandQty = rows.reduce((s, r) => s + Number(r.quantity), 0);
@@ -134,10 +131,7 @@ export function StockValuationPage() {
       <DesignPanel testId="valuation-search-panel">
         <div className="flex flex-col sm:flex-row gap-3">
           <DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="valuation-search" />
-          <Select value={branchId} onChange={(e) => { setBranchId(e.target.value); setWarehouseId(''); }} className="sm:w-44">
-            <option value="">{t('allBranches')}</option>
-            {visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </Select>
+          <div className="sm:w-44 rounded-md border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-text">{branches.find((b) => b.id === branchId)?.name || '-'}</div>
           <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="sm:w-44">
             <option value="">{t('all')} - {t('warehouses')}</option>
             {warehouses.filter((w) => !branchId || w.branch_id === branchId).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
