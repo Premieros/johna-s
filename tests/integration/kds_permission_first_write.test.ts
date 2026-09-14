@@ -86,7 +86,10 @@ describe.skipIf(skip)('KDS permission-first write boundary', () => {
     const stations = await client.query<{ id: string; code: string }>(
       `SELECT id, code
        FROM public.kitchen_stations
-       WHERE code IN ('grill','salad') AND is_active = true`,
+       WHERE branch_id = $1
+         AND code IN ('grill','salad')
+         AND is_active = true`,
+      [branchA],
     );
     grillStation = stations.rows.find((row) => row.code === 'grill')?.id ?? '';
     saladStation = stations.rows.find((row) => row.code === 'salad')?.id ?? '';
