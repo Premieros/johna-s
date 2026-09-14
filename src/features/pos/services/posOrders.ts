@@ -15,6 +15,15 @@ type PosOrderOperatorLabel = {
   operator_name: string | null;
 };
 
+type PosOrderAccessResult = {
+  success?: boolean;
+  error?: string;
+  order_id?: string;
+  branch_id?: string;
+  cashier_id?: string | null;
+  managed_other?: boolean;
+};
+
 export type MyActiveTableOrderResolution = {
   success?: boolean;
   error?: string;
@@ -64,15 +73,31 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
 }
 
 export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: Order | null; items: OrderItem[]; products: Product[] }> {
-  const { data: o } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+  // Opening an order is a server-authorized operation. Branch visibility alone
+  // is intentionally not enough because the floor plan may show other users'
+  // occupied tables without granting access to their operational workspace.
+  const { data: accessData, error: accessError } = await supabase.rpc('authorize_pos_order_access', {
+    p_order_id: orderId,
+  });
+  if (accessError) throw accessError;
+  const access = (accessData as PosOrderAccessResult | null) || null;
+  if (!access?.success) {
+    throw new Error(access?.error || 'ORDER_OPERATOR_REQUIRED');
+  }
+
+  const { data: o, error: orderError } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+  if (orderError) throw orderError;
   const order = (o as Order | null) || null;
   if (!order) return { order: null, items: [], products: [] };
-  const { data: items } = await supabase.from('order_items').select('*').eq('order_id', orderId);
+
+  const { data: items, error: itemsError } = await supabase.from('order_items').select('*').eq('order_id', orderId);
+  if (itemsError) throw itemsError;
   const itemRows = (items as OrderItem[]) || [];
   const ids = itemRows.map((i) => i.product_id).filter(Boolean) as string[];
   let products: Product[] = [];
   if (ids.length > 0) {
-    const { data: prods } = await supabase.from('products').select('*').in('id', ids).eq('branch_id', order.branch_id);
+    const { data: prods, error: productsError } = await supabase.from('products').select('*').in('id', ids).eq('branch_id', order.branch_id);
+    if (productsError) throw productsError;
     products = (prods as Product[]) || [];
   }
   return { order, items: itemRows, products };
