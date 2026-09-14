@@ -151,7 +151,7 @@ test.describe('POS action-level', () => {
 
     const mobileCartBackdrop = page.locator('div.lg\\:hidden.fixed.inset-0.z-40 > div.absolute.inset-0.bg-black\\/50');
     await expect(mobileCartBackdrop).toBeVisible();
-    await mobileCartBackdrop.click({ position: { x: 8, y: 8 } });
+    await mobileCartBackdrop.click({ position: { x: 8, y: 96 } });
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
