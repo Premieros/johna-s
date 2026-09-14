@@ -146,8 +146,8 @@ test.describe('POS action-level', () => {
     const productCard = page.getByTestId(`pos-product-card-${PRODUCT_ID}`);
     await productCard.getByRole('button', { name: /^(إضافة|Add)$/i }).click();
     await page.getByRole('button', { name: /عرض السلة|View Cart/i }).click();
-    await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('1');
-    await expect(page.getByTestId('pos-total-value')).toContainText('100');
+    await expect(page.locator(`[data-testid="pos-cart-qty-${PRODUCT_ID}"]:visible`)).toHaveText('1');
+    await expect(page.locator('[data-testid="pos-total-value"]:visible')).toContainText('100');
 
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
