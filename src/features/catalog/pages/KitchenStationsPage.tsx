@@ -22,6 +22,7 @@ interface StationForm {
 }
 
 interface AssignmentStation extends KitchenStation {
+  branch_id?: string;
   user_ids: string[];
   category_ids: string[];
 }
@@ -91,6 +92,7 @@ export function KitchenStationsPage() {
 
   const loadAssignments = useCallback(async () => {
     if (!selectedBranchId || !can('settings.manage')) {
+      setStations([]);
       setAssignments({});
       return;
     }
@@ -98,14 +100,14 @@ export function KitchenStationsPage() {
     if (error) throw error;
     const res = data as { success?: boolean; error?: string; stations?: AssignmentStation[] } | null;
     if (!res?.success) throw new Error(res?.error || 'ASSIGNMENTS_LOAD_FAILED');
-    setAssignments(Object.fromEntries((res.stations || []).map((s) => [s.id, s])));
+    const branchStations = res.stations || [];
+    setStations(branchStations);
+    setAssignments(Object.fromEntries(branchStations.map((s) => [s.id, s])));
   }, [selectedBranchId, can]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await catalog.listKitchenStations();
-      setStations((data ?? []) as KitchenStation[]);
       await loadAssignments();
     } catch (err) {
       show(String((err as Error).message ?? err), 'error');
@@ -117,8 +119,16 @@ export function KitchenStationsPage() {
   useEffect(() => { void load(); }, [load]);
 
   const handleSave = async () => {
+    if (!selectedBranchId) {
+      show(ar ? 'اختر الفرع أولًا' : 'Select a branch first', 'warning');
+      return;
+    }
     if (!form.code.trim() || !form.name_ar.trim()) {
       show(ar ? 'أكمل الحقول المطلوبة' : 'Fill required fields', 'error');
+      return;
+    }
+    if (form.code.trim().toLowerCase() === 'cashier') {
+      show(ar ? 'cashier محجوز لطباعة الفاتورة والدفع فقط' : 'cashier is reserved for receipt/payment printing only', 'error');
       return;
     }
     try {
@@ -129,12 +139,14 @@ export function KitchenStationsPage() {
           sort_order: form.sort_order,
         });
       } else {
-        await catalog.createKitchenStation({
+        const stationInput = {
+          branch_id: selectedBranchId,
           code: form.code.trim().toLowerCase(),
           name_ar: form.name_ar,
           name_en: form.name_en,
           sort_order: form.sort_order,
-        });
+        };
+        await catalog.createKitchenStation(stationInput);
       }
       show(ar ? 'تم الحفظ' : 'Saved', 'success');
       setShowForm(false);
@@ -316,16 +328,19 @@ export function KitchenStationsPage() {
           <div className="rounded-xl bg-ui-page-alt px-3 py-2 text-xs leading-5 text-ui-muted">
             {selectedBranch
               ? (ar
-                ? `التعيينات المعروضة الآن تخص فرع: ${selectedBranch.name}. تعريف المحطة نفسه مركزي، أما المستخدمون والفئات فتُحفظ لكل فرع بشكل مستقل.`
-                : `Assignments shown now belong to ${selectedBranch.name}. Station definitions are shared, while users and categories are stored per branch.`)
+                ? `المحطات والتعيينات المعروضة تخص فرع: ${selectedBranch.name}. نفس كود المحطة يمكن استخدامه في فرع آخر بدون مشاركة التعيينات.`
+                : `Stations and assignments shown belong to ${selectedBranch.name}. The same station code may exist in another branch without sharing assignments.`)
               : (ar
-                ? 'اختر فرعًا لعرض وتعديل المستخدمين وفئات المنتجات الخاصة به.'
-                : 'Select a branch to view and edit its users and product categories.')}
+                ? 'اختر فرعًا لعرض وتعديل محطاته ومستخدميه وفئات المنتجات الخاصة به.'
+                : 'Select a branch to view and edit its stations, users, and product categories.')}
           </div>
         </div>
 
         {can('settings.manage') && (
-          <Button onClick={() => { setEditingId(null); setForm(EMPTY_FORM); setShowForm(true); }}>
+          <Button
+            disabled={!selectedBranchId}
+            onClick={() => { setEditingId(null); setForm(EMPTY_FORM); setShowForm(true); }}
+          >
             <Plus className="h-4 w-4" /> {ar ? 'إضافة محطة' : 'Add Station'}
           </Button>
         )}
