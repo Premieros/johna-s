@@ -1,14 +1,15 @@
-# Stabilization Work Log — Live
+# Stabilization Work Log — Live Timeline Only
 
-Date: 2026-09-13
+Date: 2026-09-15
 Repository: `Premieros/johna-s`
 Production branch: `main`
 Production Supabase ONLY: `azzdesuowpdcoflmyezn`
-Source of Truth: `docs/CURRENT_WORK_PLAN.md`
+Authoritative execution source: `docs/CURRENT_WORK_PLAN.md`
+Branch registry: `docs/BRANCH_STATUS_REGISTRY.md`
 
-> The previous long-form stabilization history is preserved verbatim at `docs/archive/STABILIZATION_WORK_LOG_PRE_PR5_2026-09-13.md`. Detailed same-day checkpoints remain in `docs/STABILIZATION_WORK_LOG_2026-09-13_ADDENDUM.md`.
+> هذا الملف **سجل زمني فقط** وليس خطة تنفيذ مستقلة. أي تعليمات أو NEXT ACTION قديمة في ملفات السجل أو الـaddenda أو closures تعتبر تاريخية ما لم يعاد تفعيلها صراحة في `CURRENT_WORK_PLAN.md`.
 
-## Permanent execution guardrails
+## Permanent guardrails
 
 - No direct writes to `main`; no Force Push.
 - Never use another repository or Supabase project.
@@ -16,96 +17,54 @@ Source of Truth: `docs/CURRENT_WORK_PLAN.md`
 - No weakening RLS/tests.
 - No deletion/reset/reseed/rewrite of user data, balances, settings, invoices, stock, or working models for convenience.
 - Migrations are forward-only / append-only.
-- No Production migration before Full Verify Green.
-- Before each write/merge: fetch current `main`, current work branch/PR, and check newer work.
+- No Production migration before Full Verify Green + explicit separate approval.
+- Before each write/merge: fetch current `main`, active work branch/PR, and check newer work.
 - Standard gate: `Baseline -> Root cause -> Small change -> Focused tests -> Integration/Regression -> Full Verify -> Merge -> Verify main -> Deploy`.
-- Mandatory UX Acceptance Gate applies to every touched surface without broad redesign or authorization/business-rule drift.
+- Preservation First: working behavior stays unchanged unless a proven regression requires a minimal fix.
 
-## Program closure status
+## Historical program status
 
-- PR1 Architecture / Simplification Map ✅ merged.
-- PR2 Inventory Contracts ✅ merged.
-- PR3 Catalog 6A/6B/6C/6D ✅ closed.
-- PR4 Purchases End-to-End — PR #98 ✅ merged.
-  - post-merge `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca`
-  - Verify main #1245 Full Green ✅
-  - Deploy #625 Green ✅
-  - Production API parity ✅
-  - Browser Smoke ✅
-  - Production manual writes: NONE.
+- Architecture / simplification work: historical/merged evidence retained.
+- Inventory contracts: historical/merged evidence retained.
+- Catalog simplification 6A/6B/6C/6D: historical evidence retained.
+- Purchases, Sales/POS/Kitchen, Shift/Finance/Reports and later stabilization packages: historical evidence retained in their closure/report files.
+- Old PR/branch-specific NEXT ACTION blocks are superseded by `CURRENT_WORK_PLAN.md`.
 
-## PR5 — Sales / POS / Tables / Kitchen / Payments
+## Current baseline
 
-Status: **CLOSEOUT / FINAL VERIFY REQUIRED ON DOCUMENTATION-COMPLETE HEAD**
-Branch: `development/pr5-sales-pos-kitchen`
-PR: #99
-Baseline: `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca`
-Detailed evidence: `docs/PR5_SALES_POS_KITCHEN_CLOSURE.md`
+- `main@5ec2e6267eae07cab4cd2283ebd5b95b90935293`
+- PR #125 merged: branch-scoped kitchen station hardening.
+- Full Verify #1370 was Green before PR #125 merge.
+- Production migration was **not** executed by that merge.
 
-### Audit result
+## Current active work
 
-Existing behavior was inspected before modification. Confirmed contracts include:
+### PR #126 — ACTIVE / DRAFT
 
-- granular Permission-First POS permissions; no new role-name authorization;
-- `send_to_kitchen` owns Kitchen inventory consumption and uses an order-row `FOR UPDATE` serialization point;
-- positive delta only; retry with no new quantity is a no-op;
-- order warehouse pinning and settlement mismatch protection; no silent cross-warehouse switch for an existing order;
-- normal/split settlement do not re-deduct Kitchen-consumed stock;
-- split payment atomicity;
-- offline/reconciliation ambiguity safeguards and cashier/idempotency preservation;
-- occupied-table/order ownership and operator identity remain scoped.
+- Branch: `development/kds-branch-fixture-stabilization`
+- HEAD at this checkpoint: `5f05954a7eea2a190469ffee522affd8c9ad8fb2`
+- Reason: post-merge Verify exposed a KDS station authorization regression after stations became branch-scoped.
+- Scope is intentionally narrow and does not redesign printing, inventory, payments, or Production data.
+- Verify #1373 was in progress at this checkpoint.
+- Do not merge until Full Verify is fully Green, including DB and Browser Smoke.
 
-### Proven coverage gap
+## Branch cleanup decision
 
-The existing suite did not explicitly prove two simultaneous PostgreSQL sessions calling `send_to_kitchen` against the same order while the first transaction still held the row lock.
+- `docs/BRANCH_STATUS_REGISTRY.md` is the canonical branch-status list.
+- Only branches explicitly marked ACTIVE are allowed to participate in current execution.
+- All other `development/*` branches are **INACTIVE/HISTORICAL / DO NOT MERGE** unless `CURRENT_WORK_PLAN.md` is updated first.
+- Keeping an old branch on GitHub is not authorization to merge it.
+- Branch deletion is not required for safety once it is explicitly classified inactive; deletion can be done later as a separate housekeeping action if desired.
 
-### Change
+## Next stabilization phase after current merge
 
-Added only:
+The next phase is a preservation-first audit from the simplification plan through the current main state:
 
-`tests/integration/kitchen_send_concurrency.test.ts`
+1. freeze post-merge main baseline;
+2. verify module boundaries without refactor-first behavior;
+3. sweep regressions across branch context, catalog, inventory, POS/tables/orders, Kitchen/KDS, approvals, shifts/reports and printing contracts;
+4. run complete Full Verify;
+5. audit Production migration parity separately;
+6. apply no Production migration without explicit approval.
 
-The regression proves:
-
-1. first session sends successfully and retains the order lock until commit;
-2. second session blocks behind that lock;
-3. after the first commit, the second completes as a successful no-op (`items_sent_count = 0`);
-4. stock is reduced exactly once;
-5. KDS / `order_kitchen_sends` is written exactly once;
-6. no duplicate send row exists.
-
-The regression passed. Therefore no runtime SQL, migration, Kitchen rule, payment rule, or user-data change was made.
-
-### UX Acceptance Gate
-
-POS/Kitchen/Payments/Tables were reviewed for missing actions, duplicate controls, unclear labels/status/help, prerequisite routing, dangerous actions, Arabic-first/RTL, and unnecessary steps. No proven UX regression required a change, so no cosmetic redesign was added merely to expand scope.
-
-### Verification
-
-Implementation commit: `e025de3ca641e3e611b41086c4ae32861cbb306b`
-Verify #1246: **FULL GREEN** ✅
-
-- repository identity ✅
-- frontend API parity ✅
-- lint ✅
-- application typecheck ✅
-- test-suite typecheck ✅
-- unit ✅
-- build ✅
-- Fresh DB canonical migrations ✅
-- schema ✅
-- Permission-First CI checks ✅
-- integration/security/RLS ✅
-- true two-session Kitchen concurrency regression ✅
-- Browser Smoke ✅
-
-Closure documentation changes the PR HEAD, so a new Full Verify on that exact documentation-complete HEAD is still mandatory before merge.
-
-Production Supabase writes during PR5: **NONE**.
-
-## Next action
-
-1. Run Full Verify on the documentation-complete PR #99 HEAD.
-2. If Full Green, confirm `main` and PR HEAD did not move, mark Ready, and merge using expected-head protection.
-3. Verify post-merge `main` and Deploy.
-4. Only then start PR6 Shift / Finance / Reports.
+For exact current actions and precedence rules, use `docs/CURRENT_WORK_PLAN.md` only.
