@@ -170,8 +170,8 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
     expect(definition).toContain("current_setting('role', true)");
     expect(definition).toContain("can_permission('production.manage')");
     expect(definition).toContain('user_may_access_branch(p_branch_id)');
-    expect(definition).toContain('w.branch_id = p_branch_id');
-    expect(definition).toContain('w.is_active = true');
+    expect(definition).toMatch(/w\.branch_id\s*=\s*p_branch_id/);
+    expect(definition).toMatch(/w\.is_active\s*=\s*true/);
     expect(definition).not.toContain('is_pos_admin()');
     expect(definition).not.toMatch(/role\s*(?:=|IN)\s*['(]/i);
   });
