@@ -3,12 +3,17 @@ import { expect, test, type Page } from '@playwright/test';
 const SUPABASE_ORIGIN = process.env.VITE_SUPABASE_URL || 'https://azzdesuowpdcoflmyezn.supabase.co';
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
 const BRANCH_ID = '00000000-0000-0000-0000-000000000010';
+const SECOND_BRANCH_ID = '00000000-0000-0000-0000-000000000011';
 const PRODUCT_ID = '00000000-0000-0000-0000-000000000020';
 const WAREHOUSE_ID = '00000000-0000-0000-0000-000000000030';
 const TABLE_ID = '00000000-0000-0000-0000-000000000040';
 const SHIFT_ID = '00000000-0000-0000-0000-000000000050';
 
 const fakeUser = { id: TEST_USER_ID, email: 'e2e@example.test', full_name: 'E2E Admin', role: 'super_admin', is_active: true, branch_id: BRANCH_ID, created_at: new Date().toISOString() };
+const branches = [
+  { id: BRANCH_ID, name: 'E2E Branch', name_en: 'E2E Branch', is_active: true },
+  { id: SECOND_BRANCH_ID, name: 'Second Branch', name_en: 'Second Branch', is_active: true },
+];
 const product = { id: PRODUCT_ID, branch_id: BRANCH_ID, name: 'E2E Burger', name_en: 'E2E Burger', sku: 'E2E-001', barcode: '628000000020', sale_price: 100, product_type: 'simple', category_id: null, is_active: true, low_stock_threshold: 5 };
 const diningTable = { id: TABLE_ID, branch_id: BRANCH_ID, area_id: null, name: 'Table 1', capacity: 4, status: 'vacant', shape: 'square', layout: { x: 0, y: 0, w: 120, h: 120 }, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
@@ -36,7 +41,7 @@ async function mockPosBackend(page: Page) {
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/products**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([product]) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/customers**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/categories**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route(`${SUPABASE_ORIGIN}/rest/v1/branches**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: BRANCH_ID, name: 'E2E Branch', name_en: 'E2E Branch', is_active: true }]) }));
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/branches**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(branches) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/settings**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currency: 'EGP', tax_enabled: false, tax_rate: 0 }) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/warehouses**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: WAREHOUSE_ID, branch_id: BRANCH_ID, is_active: true }]) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/inventory**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, quantity: 20 }]) }));
@@ -132,6 +137,50 @@ test.describe('POS action-level', () => {
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
+  });
+
+  test('keeps cart, totals, payment method, and confirmation usable on a small phone', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.getByTestId('pos-start-quick-order').click();
+
+    const productCard = page.getByTestId(`pos-product-card-${PRODUCT_ID}`);
+    await productCard.getByRole('button', { name: /^(إضافة|Add)$/i }).click();
+    await page.getByRole('button', { name: /عرض السلة|View Cart/i }).click();
+    await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('1');
+    await expect(page.getByTestId('pos-total-value')).toContainText('100');
+
+    await page.getByTestId('pos-action-pay').click();
+    await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
+    await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
+
+    const checkoutBounds = await page.getByTestId('pos-payment-confirm').boundingBox();
+    expect(checkoutBounds).not.toBeNull();
+    expect(checkoutBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(checkoutBounds!.x + checkoutBounds!.width).toBeLessThanOrEqual(361);
+    const widths = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth }));
+    expect(widths.document).toBeLessThanOrEqual(widths.viewport + 1);
+
+    await page.getByTestId('pos-payment-method-cash').click();
+    await page.getByTestId('pos-payment-confirm').click();
+    await expect.poll(() => rpcCalls.includes('process_sale'), { timeout: 10000 }).toBe(true);
+  });
+
+  test('shares the active branch between fullscreen POS and the global header selector', async ({ page }) => {
+    await page.getByLabel(/المزيد|More/i).click();
+    const posBranchSelector = page.locator('select').filter({ has: page.locator(`option[value="${SECOND_BRANCH_ID}"]`) });
+    await expect(posBranchSelector).toHaveValue(BRANCH_ID);
+    await posBranchSelector.selectOption(SECOND_BRANCH_ID);
+
+    await page.goto('/#/dashboard');
+    await expect(page.getByTestId('branch-indicator')).toContainText('Second Branch');
+    await page.getByTestId('branch-indicator').click();
+    await page.getByTestId(`branch-option-${BRANCH_ID}`).click();
+    await expect(page.getByTestId('branch-indicator')).toContainText('E2E Branch');
+
+    await page.getByRole('link', { name: /نقطة البيع|POS/i }).first().click();
+    await expect(page).toHaveURL(/#\/pos$/);
+    await page.getByLabel(/المزيد|More/i).click();
+    await expect(page.locator('select').filter({ has: page.locator(`option[value="${SECOND_BRANCH_ID}"]`) })).toHaveValue(BRANCH_ID);
   });
 
   test('vacant table starts a dine-in order directly from the landing floor', async ({ page }) => {
