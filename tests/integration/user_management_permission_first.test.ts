@@ -61,7 +61,10 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     // Prove that the legacy Branch Manager label by itself grants nothing.
     await client.query(`UPDATE public.roles SET permissions='[]'::jsonb WHERE role='branch_manager'`);
 
-    await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
+    // Keep fixture bypass local to this DB session/transaction. ALTER TABLE ...
+    // DISABLE TRIGGER takes a table-level DDL lock and can deadlock with other
+    // integration suites running against public.users in parallel.
+    await client.query(`SET LOCAL session_replication_role = 'replica'`);
     await client.query(
       `INSERT INTO public.users(id,email,username,full_name,role,branch_id,is_active)
        VALUES
@@ -76,7 +79,7 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
         outOfScopeTargetId, `${randomUUID()}@test.local`, `oo_${randomUUID().slice(0, 8)}`, targetRole, branchB,
       ],
     );
-    await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
+    await client.query(`SET LOCAL session_replication_role = 'origin'`);
   });
 
   afterAll(async () => {
