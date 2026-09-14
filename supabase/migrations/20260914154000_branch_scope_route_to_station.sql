@@ -24,7 +24,7 @@ BEGIN
 
   IF auth.uid() IS NULL
      OR NOT public.user_may_access_branch(v_branch_id)
-     OR NOT public.can_permission('pos.kds_view') THEN
+     OR NOT public.can_permission('pos.kds_update') THEN
     RAISE EXCEPTION 'PERMISSION_DENIED';
   END IF;
 
