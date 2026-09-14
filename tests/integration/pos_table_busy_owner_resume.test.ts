@@ -14,7 +14,7 @@ type ResolverResult = {
   order_id?: string;
 };
 
-describe.skipIf(skip)('TABLE_BUSY owner-only resume resolver', () => {
+describe.skipIf(skip)('TABLE_BUSY owner or explicit-manager resume resolver', () => {
   let client: pg.Client;
   let ids: RlsIds;
   let impersonationAvailable = false;
@@ -50,9 +50,14 @@ describe.skipIf(skip)('TABLE_BUSY owner-only resume resolver', () => {
       WHERE role IN ('cashier', 'branch_manager')
     `);
 
-    // Reuse the same valid ready-product fixture pattern as the protected
-    // POS ownership release gate. This suite tests resolver privacy, not the
-    // create_order empty-cart contract.
+    // Deliberate contract change: direct management of another operator's active
+    // order requires the complete explicit permission set, never a role label.
+    await client.query(`
+      UPDATE public.roles
+      SET permissions = permissions || '["pos.order.edit","pos.order.transfer","users.manage"]'::jsonb
+      WHERE role = 'branch_manager'
+    `);
+
     await client.query(
       `UPDATE public.warehouses
           SET is_default = (id = $1::uuid)
@@ -94,7 +99,7 @@ describe.skipIf(skip)('TABLE_BUSY owner-only resume resolver', () => {
     await client.end();
   });
 
-  it('returns the open order id only to its current operator', async (ctx) => {
+  it('returns the open order id to its owner and an explicitly authorized same-branch manager only', async (ctx) => {
     if (!impersonationAvailable) return ctx.skip();
 
     const items = JSON.stringify([{
@@ -125,22 +130,20 @@ describe.skipIf(skip)('TABLE_BUSY owner-only resume resolver', () => {
     expect(owner.resumable).toBe(true);
     expect(owner.order_id).toBe(orderId);
 
-    const sameBranchPeer = await rpc(ids.users.branch_manager, tableA);
-    expect(sameBranchPeer.success).toBe(false);
-    expect(sameBranchPeer.error).toBe('TABLE_BUSY');
-    expect(sameBranchPeer.resumable).toBe(false);
-    expect(sameBranchPeer.order_id).toBeUndefined();
+    const sameBranchManager = await rpc(ids.users.branch_manager, tableA);
+    expect(sameBranchManager.success).toBe(true);
+    expect(sameBranchManager.resumable).toBe(true);
+    expect(sameBranchManager.order_id).toBe(orderId);
 
     const crossBranchUser = await rpc(ids.users.cashier_b, tableA);
     expect(crossBranchUser.success).toBe(false);
     expect(crossBranchUser.error).toBe('TABLE_NOT_FOUND');
     expect(crossBranchUser.order_id).toBeUndefined();
 
-    // Even Super Admin does not receive another operator's order id through
-    // this narrowly-scoped helper. Explicit transfer/admin flows remain separate.
+    // Super Admin remains the only implicit bypass via the canonical permission helper.
     const superAdmin = await rpc(ids.users.super_admin, tableA);
-    expect(superAdmin.success).toBe(false);
-    expect(superAdmin.error).toBe('TABLE_BUSY');
-    expect(superAdmin.order_id).toBeUndefined();
+    expect(superAdmin.success).toBe(true);
+    expect(superAdmin.resumable).toBe(true);
+    expect(superAdmin.order_id).toBe(orderId);
   });
 });
