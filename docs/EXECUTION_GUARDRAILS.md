@@ -1,93 +1,104 @@
-# Execution Guardrails — Remaining Program Stages
+# Execution Guardrails — Current Unified Rules
 
-Date: 2026-09-13
+Date: 2026-09-15
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Production branch: `main`
+Authoritative execution source: `docs/CURRENT_WORK_PLAN.md`
+Branch status source: `docs/BRANCH_STATUS_REGISTRY.md`
 
-This file records the user's standing approval to continue the remaining staged work without pausing for a new approval at every intermediate step, subject to the hard safety gates below.
+> هذا الملف يثبت الضوابط الدائمة فقط. لا يحتوي على خطة مراحل مستقلة ولا Standing Approval يسبق الحالة الحالية. أي ترتيب PR4/PR5/PR6/PR7 أو صلاحية دمج تاريخية في نسخة أقدم من هذا الملف تعتبر منتهية ويحل محلها `CURRENT_WORK_PLAN.md`.
 
-## 1. Non-negotiable data-preservation condition
+## 1. Preservation First — شرط غير قابل للتفاوض
 
-No stage may damage, reset, rewrite, reseed, migrate for convenience, or otherwise alter existing user business data, current configuration, or any working model merely to simplify or refactor the system.
+لا يجوز لأي مرحلة أن تتلف أو تعيد ضبط أو تعيد كتابة أو تعيد seed أو تغيّر بيانات المستخدم أو الإعدادات الحالية أو الأرصدة أو الفواتير أو المخزون أو أي نموذج شغال بغرض التبسيط أو الـrefactor.
 
-Before any write or migration:
-- fetch the latest `main` and the active branch/PR;
-- preserve existing production semantics unless the change is a proven defect correction;
-- use Fresh/Test DB for destructive or end-to-end test setup;
-- never use Production as a disposable test environment;
-- migrations must be forward-only and append-only;
-- no force push;
-- no RLS weakening;
-- no role-name authorization for non-Super-Admin users;
-- no cross-branch or cross-warehouse fallback;
-- no Production migration unless the corresponding Full Verify is Green.
+قبل أي write أو migration:
+- fetch أحدث `main` والفرع/PR النشط فقط؛
+- تأكد أن الفرع ACTIVE في `BRANCH_STATUS_REGISTRY.md`؛
+- حافظ على semantics الموجودة ما لم يوجد defect مثبت؛
+- استخدم Fresh/Test DB للاختبارات المدمرة أو E2E؛
+- Production ليست بيئة اختبار disposable؛
+- migrations forward-only / append-only؛
+- no Force Push؛
+- no RLS weakening؛
+- no role-name authorization لغير Super Admin؛
+- no cross-branch / cross-warehouse fallback؛
+- no Production migration قبل Full Verify Green + موافقة صريحة منفصلة.
 
-If a required change could mutate historical business data, change balances, or rewrite existing documents, stop that specific change and isolate it as a separate reviewed migration with an explicit mapping and rollback-safe proof.
+إذا كان التغيير قد يعدّل historical business data أو balances أو documents موجودة، يتوقف هذا التغيير ويُعزل كمهمة مستقلة بمراجعة واضحة.
 
-## 2. Standing approval for remaining stages
+## 2. لا توجد موافقة دمج مفتوحة للفروع التاريخية
 
-The user authorizes continuing the remaining planned stages in order, provided every stage passes its own regression and Full Verify gates and complies with this document.
+- وجود PR أو branch قديم أو نتيجة CI Green قديمة لا يمثل موافقة حالية.
+- الفروع النشطة فقط هي المذكورة ACTIVE في `docs/BRANCH_STATUS_REGISTRY.md`.
+- أي فرع آخر = INACTIVE/HISTORICAL / DO NOT MERGE.
+- كل Merge وظيفي يحتاج الحالة والشروط الحالية المحددة في `CURRENT_WORK_PLAN.md`.
+- Production migration لا تأتي تلقائيًا مع Merge ولا مع Deploy.
 
-Current remaining program order:
-1. PR4 — Purchases End-to-End
-2. PR5 — Sales / POS / Tables / Kitchen / Payments
-3. PR6 — Shift / Finance / Reports
-4. PR7 — Confirmed Legacy Cleanup
+## 3. Mandatory UX acceptance gate
 
-Printing / Offline / Mobile may continue as a separate controlled track, including the existing Premier Print Agent work, but it must not be merged into Production until its own verification and safety gates are Green.
+لكل surface تم لمسه فقط، راجع دون redesign واسع:
+- actions المطلوبة reachable؛
+- prerequisites موجهة للمستخدم بدل raw backend errors؛
+- duplicate controls لا تزال مبررة أو يتم توثيقها قبل أي حذف؛
+- Arabic-first labels/status واضح؛
+- non-blocking warnings لا تبدو fatal؛
+- blocked operation يوضح السبب والخطوة التالية؛
+- important actions touch-friendly؛
+- permission-first في العرض والتنفيذ؛
+- branch/warehouse/user context ظاهر حيث يمنع الخطأ؛
+- أي UX guard يحمي business behavior يملك regression coverage.
 
-## 3. Mandatory UX-improvement condition for every stage
+## 4. Module-boundary rule
 
-Every stage must include a focused user-experience review in addition to backend correctness. The review must improve clarity and completeness without changing working business logic unnecessarily.
+التنظيف القادم يبدأ Audit وليس Refactor:
+- افحص ownership والdependencies بين الموديولات أولًا؛
+- سجّل coupling المشكوك فيه قبل تغييره؛
+- لا تنقل ملفات أو تعيد تقسيم APIs أو database contracts لمجرد الشكل؛
+- أصلح فقط coupling مثبت بأنه يسبب regression/risk، وبأصغر change مع tests.
 
-For every touched screen, dialog, wizard, table, or workflow, verify:
-- required actions are actually reachable from the UI;
-- if a required action has no button or entry point, add one with the correct permission guard;
-- if the user must complete a prerequisite, guide them to it instead of showing a raw backend error;
-- if a screen has duplicate buttons, duplicated information, duplicated menu items, or repeated controls with the same purpose, remove or consolidate the duplication after proving there is no distinct behavior;
-- if a label, status, warning, field, or action is unclear, rewrite it to be explicit in Arabic-first wording;
-- if a warning is informational and does not block the workflow, it must not look like a fatal error;
-- if an operation is blocked, show the exact reason and next action the user can take;
-- keep important actions visible and touch-friendly;
-- do not hide a feature merely because the backend was simplified;
-- preserve permission-first behavior: hidden/disabled actions must reflect actual permissions, not role names;
-- preserve branch and warehouse context visibly where confusion could cause a wrong transaction;
-- add regression coverage for any UX guard that protects business behavior.
+الموديولات المرجعية الحالية: Auth/Permissions، Branch/Warehouse، Catalog، Inventory/Purchases/Transfers/Waste، POS/Tables/Orders/Payments/Shifts، Kitchen/KDS، Approvals، Reports/Finance، Printing، Settings.
 
-Examples of acceptable UX improvements:
-- add a missing Edit / Retry / Select Warehouse / Open Shift / Create Raw Material / Go to Setup button when the action is already supported by the business contract;
-- convert a red fatal-looking banner into a non-blocking warning when the backend contract allows continuation;
-- consolidate duplicated controls that trigger the same action;
-- clarify ambiguous Arabic labels and status messages;
-- show the acting user's name, branch, warehouse, document status, or source when that context helps prevent mistakes.
+## 5. Stage completion gate
 
-## 4. Stage completion gate
+لا يعتبر أي عمل مغلقًا حتى:
+- focused tests pass؛
+- permission/branch/warehouse isolation pass حيث يلزم؛
+- idempotency/concurrency checks pass حيث يلزم؛
+- UX acceptance للتغييرات الملموسة مكتمل؛
+- لا regression في flows الشغالة؛
+- Full Verify Green؛
+- changed files داخل Scope؛
+- post-merge main verification عند الدمج؛
+- Production data محفوظة.
 
-No stage is considered closed until all of the following are true:
-- focused functional tests pass;
-- permission / branch / warehouse isolation tests pass where applicable;
-- relevant idempotency tests pass;
-- UX review for touched surfaces is completed;
-- no regression in existing working flows;
-- Full Verify is Green;
-- the stage report records what changed, what was intentionally not changed, and any deferred risks;
-- Production data remains preserved.
+## 6. Full Verify definition
 
-## 5. Merge policy
+عندما نقول Full Verify في الخطة الحالية فهذا يشمل على الأقل:
+- repository + DB identity lock؛
+- lint؛
+- application/test typecheck؛
+- unit؛
+- build؛
+- fresh DB canonical migrations؛
+- schema verification؛
+- integration/security/RLS؛
+- Browser Smoke؛
+- scope/changed-files review.
 
-The user has authorized merge of completed remaining stages when their stage-specific Full Verify is Green and the diff remains within the approved scope and this safety policy.
+أي skip ناتج عن failure سابق يعني أن Full Verify ليس Green.
 
-This standing approval does not authorize:
-- weakening security or tests;
-- force push;
-- touching another repository or Supabase project;
-- rewriting existing business data for convenience;
-- merging a failed or incomplete stage;
-- applying an unverified Production migration.
+## 7. Production parity
 
-## 6. Product principle
+بعد Merge/Verify/Deploy يتم فحص Production migration parity كخطوة منفصلة:
+- Applied / Pending / Not-for-Production؛
+- لا افتراض أن كل migration في `main` مطبقة في Production؛
+- لا تشغيل Pending migrations بدون Full Green + impact review + موافقة صريحة؛
+- verification بعد التطبيق بدون reset/reseed/rewrite.
+
+## 8. Product principle
 
 **Simple inside. Same capabilities outside. Clearer for the user.**
 
-Backend simplification must reduce duplication and legacy risk while preserving user-facing capabilities. UX changes should make the system easier to understand and operate, not merely make the code cleaner.
+التبسيط يقلل duplication وlegacy risk مع الحفاظ على القدرات الشغالة. أي تعارض بين هذا الملف وخطة قديمة يُحسم لصالح `docs/CURRENT_WORK_PLAN.md`.
