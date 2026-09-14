@@ -39,14 +39,14 @@ Branch registry: `docs/BRANCH_STATUS_REGISTRY.md`
 
 ## Current active work
 
-### PR #126 — ACTIVE / DRAFT
+### PR #126 — ACTIVE / DRAFT / FULL VERIFY GREEN
 
 - Branch: `development/kds-branch-fixture-stabilization`
 - HEAD at this checkpoint: `5f05954a7eea2a190469ffee522affd8c9ad8fb2`
 - Reason: post-merge Verify exposed a KDS station authorization regression after stations became branch-scoped.
 - Scope is intentionally narrow and does not redesign printing, inventory, payments, or Production data.
-- Verify #1373 was in progress at this checkpoint.
-- Do not merge until Full Verify is fully Green, including DB and Browser Smoke.
+- Verify #1373: **SUCCESS / Full Green**.
+- Merge remains blocked until current `main` + HEAD are rechecked and explicit approval is given.
 
 ## Branch cleanup decision
 
