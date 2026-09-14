@@ -22,7 +22,8 @@ describe('kitchen category routing contract', () => {
 
   it('removes the silent main-station fallback', () => {
     const sql = read(migrationPath);
-    expect(sql).toContain("'station_code', ks.code");
+    expect(sql).toContain("'''station_code'', COALESCE(ks.code, ''main'')'");
+    expect(sql).toContain("'''station_code'', ks.code'");
     expect(sql).toContain('SEND_TO_KITCHEN_FALLBACK_STILL_PRESENT');
   });
 
@@ -33,7 +34,9 @@ describe('kitchen category routing contract', () => {
 
   it('keeps kitchen jobs grouped by station code in the web layer', () => {
     const cloudPrint = read('src/features/pos/services/cloudPrint.ts');
-    expect(cloudPrint).toContain('groupKitchenItemsByStation');
-    expect(cloudPrint).toContain('p_station_code: group.stationCode');
+    expect(cloudPrint).toContain('Object.entries(groupKitchenItemsByStation(params.items))');
+    expect(cloudPrint).toContain('([station, stationItems])');
+    expect(cloudPrint).toContain('p_station_code: station');
+    expect(cloudPrint).toContain('buildStationTicketText(station, stationItems');
   });
 });
