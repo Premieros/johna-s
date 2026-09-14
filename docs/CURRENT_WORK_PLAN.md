@@ -1,102 +1,129 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
-آخر تحديث: **2026-09-14 — POS / Branch / Catalog stabilization**
+آخر تحديث: **2026-09-15 — post PR #126 merge / registry unification**
 
-> هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة.
+> هذا الملف هو **المصدر التنفيذي الوحيد للحقيقة**. أي Plan/Report/Closure/Addendum/Work Log أقدم هو مرجع تاريخي فقط ما لم يُذكر صراحة هنا أنه ACTIVE.
 
 ## الهوية الثابتة
-
 - Repository الوحيد: `Premieros/johna-s`
 - Production Supabase الوحيد: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Published site: `https://premieros.github.io/johna-s/`
-- ممنوع لمس أي Repository أو قاعدة أخرى.
-- ممنوع استخدام `scpovyrqmsbiduanykod`.
+- ممنوع لمس أي Repository أو قاعدة أخرى، أو استخدام `scpovyrqmsbiduanykod`.
 - ممنوع تعديل `main` مباشرة أو Force Push.
-- Super Admin فقط implicit bypass؛ باقي الأدوار Authorization = Permission-First + branch/RLS.
-- ممنوع تخفيف RLS أو الاختبارات.
-- ممنوع reset/reseed/rewrite لبيانات المستخدم أو الإعدادات أو الأرصدة لتسهيل الاختبار أو refactor.
-- أي Migration: forward-only + append-only؛ لا تعديل Migration مطبقة.
-- لا Production migration قبل Full Verify Green وموافقة صريحة.
-- قبل كل write/merge: اجلب أحدث `main` والفرع/PR وافحص أي عمل أحدث أو متوازٍ.
-
-## Baseline الحالي
-
-- `main@b5f4169299ea57a5287b013430013e0c568ea28e`
-- PR #114 — reusable modifier groups + manufactured-item migration: **MERGED**.
-- Full Verify #1322 على PR #114: **Full Green** بما في ذلك Browser Smoke.
-- فرع التثبيت الحالي: `development/stabilize-pos-mobile-branch-catalog`.
-- الطباعة الحالية تعمل ومجمّدة خارج Scope هذه الحزمة؛ ممنوع تعديل Print Agent / printer routing / queues / printer settings في هذا العمل.
-
-## Scope التثبيت الحالي
-
-تم إثبات الأسباب التالية وتنفيذ إصلاحات صغيرة فقط على فرع التطوير:
-
-1. **تبديل الفروع للمستخدم متعدد الفروع**
-   - السبب: RLS القراءة على `branches` لم يستخدم عقد الوصول canonical `user_may_access_branch(id)`.
-   - الإصلاح: `20260914010500_branch_access_select_rls.sql` يضيف canonical branch access مع الحفاظ على قواعد platform/organization الحالية وبدون role-name bypass.
-
-2. **POS kitchen deduction يفشل مع manufactured auto-production وخامة ناقصة**
-   - السبب: raw مباشر في POS يسمح بالسالب، لكن `produce_inventory_unit` في مسار `AUTO_SALE_PRODUCTION` كان يستدعي FIFO strict.
-   - الإصلاح: `20260914010600_pos_auto_production_negative_raw.sql` يسمح بالسالب فقط عندما `p_notes = 'AUTO_SALE_PRODUCTION'`؛ التصنيع اليدوي يظل strict ويرفض النقص.
-
-3. **Modifier UX غير واضح بعد PR #114**
-   - صفحة الـModifier Groups موجودة group-first بالفعل.
-   - تم تغيير اسم القائمة إلى `مجموعات الموديفاير / Modifier Groups` لتمييز التصميم الجديد بوضوح.
-
-4. **صفحة مكونات القديمة**
-   - تمت إزالة `ComponentsPage.tsx` من الواجهة والقائمة.
-   - `/components` أصبح legacy redirect إلى `/products`.
-   - لم يتم حذف `product_components` أو العقود الداخلية التي لا تزال الوصفات تحتاجها.
-
-5. **الدفع من الهاتف / تنظيم Checkout**
-   - السبب المثبت: `handlePay` يغلق mobile cart بينما checkout موجود في right panel المخفي تحت `lg`، فيصبح الدفع غير ظاهر على الهاتف.
-   - الإصلاح الحالي في طبقة Mobile CSS: عند وجود `pos-payment-confirm` يتم تحويل hidden checkout wrapper إلى full-viewport mobile checkout، مع `100dvh` وSafe Area، وجعل split payment responsive.
-
-6. **حذف سجل المبيعات التجريبي**
-   - Production audit قبل الحذف: 11 orders + 4 sales فقط، مع 2 `sale_print_events` و11 `cloud_print_jobs` مرتبطة بالتجارب.
-   - محاولة الحذف عبر أداة Production مُنعت بواسطة destructive-action protection؛ لم يتم تجاوز الحماية ولم يتم حذف أي سجل حتى الآن.
-   - لا يتم اعتبار هذه النقطة منتهية حتى يتم الحذف عبر مسار إداري مسموح ثم التحقق من العدادات، بدون إعادة كتابة أرصدة المخزون.
-
-## Regression gate لهذه الحزمة
-
-- `tests/unit/stabilizationPosBranchCatalogContract.test.ts` يثبت:
-  - canonical multi-branch RLS.
-  - negative raw فقط لـPOS auto-production وليس manual production.
-  - إزالة Components page من المنتج المدعوم وإظهار Modifier Groups.
-  - mobile checkout full viewport + safe area + responsive split payment.
-- يجب تشغيل Full Verify كامل قبل الدمج: lint + typecheck + unit + build + fresh DB + schema + integration/security/RLS + Browser Smoke.
-- يجب مراجعة changed files والتأكد أن أي ملفات طباعة لم تُمس.
-- لا Merge قبل موافقة صريحة.
-- لا Production migration قبل Full Green وموافقة صريحة منفصلة.
-
-## عقود ثابتة لا يعاد فتحها بلا Regression مثبت
-
 - Permission-First؛ Super Admin فقط implicit bypass.
-- granular POS permissions تشمل view/create/edit/pay/split/transfer/receipt/send-kitchen.
-- `send_to_kitchen` هو authority لاستهلاك المخزون؛ first send مرة ثم delta، وretry لا يكرر الاستهلاك.
-- configured POS products تباع حتى مع نقص raw؛ raw debt مسموح في kitchen send حسب العقد المثبت.
+- ممنوع تخفيف RLS أو الاختبارات أو reset/reseed/rewrite لبيانات المستخدم.
+- migrations forward-only + append-only.
+- لا Production migration قبل Full Verify Green + موافقة صريحة منفصلة.
+
+## Current baseline
+- `main@8784e7b7102e946377a8ccd72073e01fbf929ef5`
+- PR #126: **MERGED** — branch-scope KDS station authorization.
+- PR #126 Full Verify #1373: **Green** قبل الدمج.
+- post-merge Verify main #1375: **in progress** وقت هذا التحديث.
+- Deploy #647: **in progress** وقت هذا التحديث.
+- لم يتم تنفيذ Production migration ضمن Merge #126.
+
+## العمل النشط الآن
+لا يوجد functional development branch نشط بعد دمج PR #126.
+
+الفرع الإداري الوحيد النشط مؤقتًا:
+- `development/status-registry-unification-v2` — **DOCS ONLY** لتوحيد السجلات وحالة الفروع؛ ممنوع أي runtime/business/database change عليه.
+
+## Branch governance
+- السجل الرسمي: `docs/BRANCH_STATUS_REGISTRY.md`.
+- أي `development/*` غير مذكور هناك كـACTIVE = **INACTIVE/HISTORICAL / DO NOT MERGE**.
+- وجود branch قديم أو CI Green قديم لا يعطي صلاحية دمج.
+- إعادة تفعيل أي فرع تتطلب تحديث هذا الملف أولًا مع السبب والـscope والـbaseline والـregression evidence.
+
+## Preservation First
+المرحلة التالية هي **Stabilization/Cleanup Audit** وليست إعادة بناء:
+1. تثبيت post-merge `main` بعد نجاح Verify/Deploy.
+2. مراجعة كل الإصلاحات من بداية خطة التبسيط حتى الوضع الحالي.
+3. لا تغيير لأي Business Logic شغال لمجرد التنظيف.
+4. لا حذف Legacy/wrapper/route/migration إلا بعد إثبات عدم الاستخدام + Regression coverage.
+5. كل إصلاح صغير ومعزول ومبني على Root Cause مثبت.
+6. الطباعة لا يعاد تصميمها ضمن التنظيف.
+7. Production وبيانات المستخدم خارج الاختبار والتنظيف.
+
+## خطة التثبيت والتنظيف
+### Phase A — Freeze & Evidence
+- التقاط HEAD بعد اكتمال Verify/Deploy.
+- جرد migrations/RPC/routes/modules التي تغيرت منذ خطة التبسيط.
+- جرد Production migration parity؛ لا نفترض أن Merge = Production application.
+
+### Phase B — Module Boundary Audit
+تدقيق الحدود دون Refactor أولي:
+- Auth / Users / Permissions
+- Branch / Warehouse
+- Catalog: products / raw materials / manufactured items / modifier groups
+- Inventory / Purchases / Transfers / Waste
+- POS / Tables / Orders / Payments / Shifts
+- Kitchen / KDS
+- Approvals
+- Reports / Finance
+- Printing / Print Agent
+- Settings
+
+أي coupling مشكوك فيه يُسجل أولًا ولا يُعدل إلا إذا ثبت خطره أو Regression.
+
+### Phase C — Regression sweep
+- branch switching / scoped data
+- catalog / recipes / availability / modifiers
+- POS mobile مقابل desktop
+- order/table ownership + transfer/reassignment permissions
+- `send_to_kitchen` first-send + delta + idempotency + stock deduction
+- KDS branch/station isolation
+- payments/split/hold/resume
+- approvals
+- shifts/reports
+- printing contracts بدون redesign
+
+### Phase D — Full Verify Gate
+- repository/database identity locks
+- lint
+- application + tests typecheck
+- unit
+- build
+- fresh DB canonical migrations
+- schema verification
+- integration/security/RLS
+- Browser Smoke
+- changed-files/scope review
+
+أي skipped stage بسبب failure سابق = Full Verify ليس Green.
+
+### Phase E — Production parity audit
+- مقارنة migrations في `main` بما طُبق فعليًا على `azzdesuowpdcoflmyezn`.
+- تصنيف: Applied / Pending / Not-for-Production.
+- لا تطبيق تلقائي بعد Merge أو Deploy.
+- Pending يحتاج Full Green + impact review + موافقة صريحة منفصلة.
+
+## عقود ثابتة
+- granular POS permissions: view/create/edit/pay/split/transfer/receipt/send-kitchen.
+- المستخدم العادي لا يفتح/يعدل طلبًا أو طاولة لا تخصه بدون الصلاحية المناسبة؛ اسم الدور ليس Authorization.
+- username يظهر على الطاولة المشغولة وما يخص المستخدم حيث يلزم.
+- `send_to_kitchen` authority للاستهلاك؛ first send ثم delta؛ retry لا يكرر الاستهلاك.
 - branch + warehouse isolation وRLS لا يتم تخفيفها.
 - approval system enforced.
-- username يظهر على الطاولة المشغولة وما يخص المستخدم حيث يلزم.
 - printer management فقط لصاحب صلاحية الإعدادات.
-- print once + controlled reprint، ولا physical print success كاذب.
+- print once + controlled reprint؛ لا physical print success كاذب.
 - لا network/offline ambiguity تتحول إلى sale/payment success وهمي.
 - Reports compact/tabular + filters + Excel export.
-- guided prerequisite routing بدل raw errors حيث أمكن.
 - Production ليست test environment.
 
+## أولوية الوثائق
+- `docs/STABILIZATION_WORK_LOG.md`: timeline فقط، ليس خطة مستقلة.
+- `docs/EXECUTION_GUARDRAILS.md`: ضوابط دائمة فقط.
+- `docs/BRANCH_STATUS_REGISTRY.md`: حالة الفروع.
+- أي `*_PLAN.md`, `*_REPORT.md`, `*_CLOSURE.md`, addendum أو archive آخر = تاريخ/أدلة فقط ما لم يُفعّل هنا.
+- عند التعارض: **هذا الملف يفوز**.
+
 ## NEXT ACTION
+1. انتظر اكتمال post-merge Verify #1375 وDeploy #647.
+2. بعد Green، ثبّت baseline النهائي.
+3. أغلق docs-only registry PR بأمان.
+4. ابدأ Phase A على فرع جديد من أحدث `main`؛ لا تعيد استخدام أي فرع تاريخي.
+5. Production parity audit مستقل؛ لا migration تلقائيًا.
 
-1. افتح PR لحزمة التثبيت الحالية فقط.
-2. شغّل Full Verify كامل بما في ذلك Browser Smoke ومراجعة mobile checkout.
-3. أصلح فقط أي Regression مثبت بدون توسيع Scope وبدون لمس الطباعة.
-4. بعد Full Green: اعرض الحالة للمراجعة؛ لا Merge إلا بموافقة صريحة.
-5. بعد الدمج وVerify main فقط، يمكن طلب موافقة منفصلة لتطبيق migrations على Production.
-6. حذف سجل المبيعات التجريبي يبقى خطوة Production مستقلة عبر مسار يسمح بالـdestructive action ثم verify للعدادات.
-
-## التنفيذ القياسي
-
-`Baseline -> Root Cause -> Small Change -> Focused Tests -> Integration/Regression -> Full Verify -> PR -> Merge only when allowed -> Verify main -> Deploy`
-
-لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ، ولا يُحذف Legacy إلا بعد إثبات الاستخدام/الاستبدال/التغطية ثم Full Verify.
+`Baseline -> Root Cause -> Small Change -> Focused Tests -> Integration/Regression -> Full Verify -> PR -> Merge -> Verify main -> Deploy -> Production parity audit -> Production change only with explicit approval`
