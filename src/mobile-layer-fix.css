@@ -7,6 +7,159 @@
     z-index: 65 !important;
   }
 
+  /* Mobile POS is intentionally a presentation layer only. Desktop keeps the
+   * existing layout at lg and above; all rules below reuse the mounted POS
+   * controls and handlers instead of introducing a second ordering flow. */
+  header:has([data-testid="pos-top-counters"]) {
+    min-height: 3.5rem !important;
+    gap: 0.375rem !important;
+    padding-inline: 0.625rem !important;
+    padding-block: 0.375rem !important;
+    background: color-mix(in srgb, var(--ui-surface) 96%, transparent) !important;
+    backdrop-filter: blur(16px);
+    flex-wrap: wrap !important;
+  }
+
+  header:has([data-testid="pos-top-counters"]) > div:first-child {
+    gap: 0.375rem !important;
+  }
+
+  [data-testid="pos-action-new-order"] {
+    min-height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    padding-inline: 0.7rem !important;
+    border-radius: 0.9rem !important;
+  }
+
+  [data-testid="pos-shift-button"] {
+    min-height: 2.5rem !important;
+    padding-inline: 0.7rem !important;
+    border-radius: 0.9rem !important;
+  }
+
+  /* Reuse the existing permission-gated desktop counter actions on phones.
+   * Kitchen remains conditional on canViewKitchen in React, so CSS cannot
+   * expose an action the current user is not authorized to use. */
+  [data-testid="pos-top-counters"] {
+    display: flex !important;
+    order: 20 !important;
+    width: 100% !important;
+    gap: 0.4rem !important;
+    overflow-x: auto !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.1rem !important;
+    scrollbar-width: none;
+  }
+
+  [data-testid="pos-top-counters"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-testid^="pos-counter-"] {
+    min-height: 2.35rem !important;
+    flex: 0 0 auto !important;
+    border-radius: 999px !important;
+    padding-inline: 0.65rem !important;
+    gap: 0.35rem !important;
+  }
+
+  [data-testid="pos-tables-workspace"] {
+    background: var(--ui-page) !important;
+  }
+
+  [data-testid="pos-tables-workspace"] > div:first-child {
+    background: var(--ui-surface) !important;
+    padding: 0.85rem !important;
+  }
+
+  [data-testid="pos-tables-landing-actions"] {
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  [data-testid="pos-tables-landing-actions"] button {
+    min-height: 3.25rem !important;
+    border-radius: 1rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  [data-testid="pos-table-filters"] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  [data-testid="pos-product-browser"] {
+    background: var(--ui-page) !important;
+  }
+
+  [data-testid="pos-product-browser"] > div:first-child {
+    padding: 0.7rem 0.75rem 0.55rem !important;
+    background: color-mix(in srgb, var(--ui-surface) 96%, transparent) !important;
+    backdrop-filter: blur(16px);
+  }
+
+  [data-testid="pos-product-browser"] > div:first-child input {
+    height: 2.9rem !important;
+    border-radius: 1rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  [data-testid="pos-category-strip"] {
+    margin-top: 0.6rem !important;
+    gap: 0.45rem !important;
+    scroll-snap-type: x proximity;
+  }
+
+  [data-testid="pos-category-strip"] > button {
+    min-height: 2.6rem !important;
+    padding-inline: 0.9rem !important;
+    border-radius: 999px !important;
+    font-size: 0.72rem !important;
+    scroll-snap-align: start;
+  }
+
+  [data-testid="pos-product-grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.7rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] {
+    min-height: 13rem !important;
+    border-radius: 1.2rem !important;
+    box-shadow: 0 7px 22px color-mix(in srgb, var(--ui-text) 8%, transparent) !important;
+  }
+
+  [data-testid^="pos-product-card-"] > button:first-of-type {
+    height: 8.2rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child {
+    padding: 0.65rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > p:first-child {
+    min-height: 2.2rem !important;
+    font-size: 0.78rem !important;
+    line-height: 1.05rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > div:last-child {
+    padding-top: 0.5rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > div:last-child button {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    border-radius: 0.8rem !important;
+  }
+
+  /* Keep the existing mobile cart sheet above the POS header. This changes
+   * stacking only; the same close handler, cart state and payment flow remain
+   * untouched. */
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) {
+    z-index: 55 !important;
+  }
+
   /*
    * The desktop POS checkout panel is always mounted, but Tailwind hides its
    * wrapper below lg. handlePay intentionally closes the mobile cart drawer,
@@ -44,6 +197,25 @@
   }
 }
 
+@media (max-width: 639px) {
+  header:has([data-testid="pos-top-counters"]) > div:first-child > div:nth-child(2) {
+    display: none !important;
+  }
+
+  [data-testid="pos-product-browser"] > div:last-child {
+    padding: 0.7rem 0.7rem calc(5.4rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="pos-tables-workspace"] > div:last-child {
+    padding: 0.75rem !important;
+  }
+
+  [data-testid="pos-tables-workspace"] > div:last-child > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+}
+
 @media (max-width: 479px) {
   [data-testid="app-header"] {
     gap: 0.25rem !important;
@@ -67,5 +239,17 @@
 
   [data-testid="user-menu-button"] {
     padding-inline-end: 0.375rem !important;
+  }
+
+  [data-testid="pos-product-grid"] {
+    gap: 0.55rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] {
+    min-height: 12.2rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > button:first-of-type {
+    height: 7.25rem !important;
   }
 }
