@@ -13,12 +13,15 @@ describe('stabilization contracts', () => {
   });
 
   it('allows negative raw material only for POS auto-production while manual production remains strict', () => {
-    const migration = read('supabase/migrations/20260914010600_pos_auto_production_negative_raw.sql');
+    const migration = read('supabase/migrations/20260914010700_harden_pos_auto_production.sql');
 
-    expect(migration).toContain("COALESCE(p_notes, '') = 'AUTO_SALE_PRODUCTION'");
-    expect(migration).toContain('v_allow_negative_raw');
+    expect(migration).toContain("'AUTO_SALE_PRODUCTION',true");
+    expect(migration).toContain('p_unit_id,p_quantity,p_warehouse_id,p_branch_id,p_notes,false');
+    expect(migration).toContain('_produce_inventory_unit_internal');
+    expect(migration).toContain('FROM PUBLIC, anon, authenticated');
     expect(migration).toContain("RAISE EXCEPTION 'INSUFFICIENT_RAW_MATERIAL_STOCK");
-    expect(migration).not.toContain('v_allow_negative_raw boolean := true');
+    expect(migration).not.toContain("COALESCE(p_notes, '') = 'AUTO_SALE_PRODUCTION'");
+    expect(migration).toContain("COALESCE(v_error,'')='INSUFFICIENT_RAW_MATERIAL_STOCK'");
   });
 
   it('retires the legacy Components page and surfaces reusable modifier groups', () => {

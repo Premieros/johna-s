@@ -15,6 +15,9 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
   const noPermUser = randomUUID();
   const inactiveUser = randomUUID();
   const producerUser = randomUUID();
+  const measurementUnit = randomUUID();
+  const rawMaterial = randomUUID();
+  const manufacturedUnit = randomUUID();
   const noPermRole = `qa_prod_none_${randomUUID().slice(0, 8)}`;
   const producerRole = `qa_prod_manage_${randomUUID().slice(0, 8)}`;
 
@@ -60,6 +63,26 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
        ($1,'QA Production WH A',$3,true),
        ($2,'QA Production WH B',$4,true)`,
       [warehouseA, warehouseB, branchA, branchB],
+    );
+    await client.query(
+      `INSERT INTO public.measurement_units(id,code,name,symbol,is_active)
+       VALUES($1,$2,'QA Production Kilogram','kg',true)`,
+      [measurementUnit, `QA-KG-${randomUUID().slice(0, 8)}`],
+    );
+    await client.query(
+      `INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost,is_active)
+       VALUES($1,$2,'QA Empty Raw',$3,$4,1,true)`,
+      [rawMaterial, `QA-RM-${randomUUID().slice(0, 8)}`, branchA, measurementUnit],
+    );
+    await client.query(
+      `INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,is_active)
+       VALUES($1,$2,'QA Manufactured Unit','manufactured',$3,true)`,
+      [manufacturedUnit, `QA-MU-${randomUUID().slice(0, 8)}`, branchA],
+    );
+    await client.query(
+      `INSERT INTO public.inventory_unit_recipes(unit_id,raw_material_id,quantity,wastage_percent)
+       VALUES($1,$2,1,0)`,
+      [manufacturedUnit, rawMaterial],
     );
     await client.query(
       `INSERT INTO public.roles (role,name_ar,name_en,permissions,scope,is_active) VALUES
@@ -111,6 +134,29 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
     expect(row.rows[0].config ?? []).toContain('search_path=public, pg_temp');
     expect(row.rows[0].authenticated_execute).toBe(true);
     expect(row.rows[0].service_role_execute).toBe(true);
+    expect(row.rows[0].anon_execute).toBe(false);
+  });
+
+  it('keeps the negative-production primitive private to trusted sale internals', async () => {
+    const row = await client.query<{
+      authenticated_execute: boolean;
+      service_role_execute: boolean;
+      postgres_execute: boolean;
+      anon_execute: boolean;
+    }>(`
+      SELECT has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_execute,
+             has_function_privilege('service_role', p.oid, 'EXECUTE') AS service_role_execute,
+             has_function_privilege('postgres', p.oid, 'EXECUTE') AS postgres_execute,
+             has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_execute
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public'
+        AND p.oid='public._produce_inventory_unit_internal(uuid,numeric,uuid,uuid,text,boolean)'::regprocedure
+    `);
+
+    expect(row.rows).toHaveLength(1);
+    expect(row.rows[0].authenticated_execute).toBe(false);
+    expect(row.rows[0].service_role_execute).toBe(true);
+    expect(row.rows[0].postgres_execute).toBe(true);
     expect(row.rows[0].anon_execute).toBe(false);
   });
 
@@ -174,5 +220,27 @@ describe.skipIf(!dbUrl)('produce_inventory_unit security boundary', () => {
         client.query(`SELECT public.produce_inventory_unit($1,1,$2,$3,NULL)`, [randomUUID(), warehouseA, branchA]),
       ),
     ).rejects.toThrow(/is not a manufactured active inventory unit/);
+  });
+
+  it('does not let a manual caller turn a note into a negative-stock bypass', async () => {
+    const before = await productionRowCount(branchA);
+
+    await expect(
+      asUser(producerUser, () =>
+        client.query(
+          `SELECT public.produce_inventory_unit($1,1,$2,$3,'AUTO_SALE_PRODUCTION')`,
+          [manufacturedUnit, warehouseA, branchA],
+        ),
+      ),
+    ).rejects.toThrow(/INSUFFICIENT_RAW_MATERIAL_STOCK/);
+
+    expect(await productionRowCount(branchA)).toBe(before);
+    const debt = await client.query<{ quantity: string }>(
+      `SELECT COALESCE(SUM(quantity),0)::text AS quantity
+       FROM public.raw_material_batches
+       WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3`,
+      [rawMaterial, branchA, warehouseA],
+    );
+    expect(Number(debt.rows[0].quantity)).toBe(0);
   });
 });
