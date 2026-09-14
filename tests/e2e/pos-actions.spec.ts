@@ -149,9 +149,13 @@ test.describe('POS action-level', () => {
     await expect(page.locator(`[data-testid="pos-cart-qty-${PRODUCT_ID}"]:visible`)).toHaveText('1');
     await expect(page.locator('[data-testid="pos-total-value"]:visible')).toContainText('100');
 
-    const mobileCartBackdrop = page.locator('div.lg\\:hidden.fixed.inset-0.z-40 > div.absolute.inset-0.bg-black\\/50');
-    await expect(mobileCartBackdrop).toBeVisible();
-    await mobileCartBackdrop.click({ position: { x: 8, y: 96 } });
+    const mobileCart = page.locator('div.lg\\:hidden.fixed.inset-0.z-40');
+    await expect(mobileCart).toBeVisible();
+    const mobileCartClose = mobileCart.locator('> div.relative > div:first-child > button').first();
+    await expect(mobileCartClose).toBeVisible();
+    await mobileCartClose.click();
+    await expect(mobileCart).toBeHidden();
+
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();

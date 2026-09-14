@@ -132,85 +132,91 @@
     background: var(--ui-page) !important;
   }
 
-  [data-testid="pos-product-browser"] > div:first-child {
-    z-index: 20 !important;
-    padding: 0.6rem 0.65rem 0.5rem !important;
-    background: color-mix(in srgb, var(--ui-surface) 97%, transparent) !important;
-    backdrop-filter: blur(18px);
-  }
-
-  [data-testid="pos-product-browser"] > div:first-child input {
-    height: 2.75rem !important;
-    border-radius: 999px !important;
-    background: var(--ui-surface) !important;
-    font-size: 0.8rem !important;
-    box-shadow: 0 2px 10px color-mix(in srgb, var(--ui-text) 5%, transparent) !important;
-  }
-
   [data-testid="pos-category-strip"] {
-    margin-top: 0.5rem !important;
-    gap: 0.4rem !important;
     scroll-snap-type: x proximity;
   }
 
   [data-testid="pos-category-strip"] > button {
-    min-height: 2.35rem !important;
-    padding-inline: 0.8rem !important;
-    border-radius: 999px !important;
-    font-size: 0.68rem !important;
     scroll-snap-align: start;
   }
 
   [data-testid="pos-product-grid"] {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 0.65rem !important;
+    gap: 0.7rem !important;
   }
 
   [data-testid^="pos-product-card-"] {
-    min-height: 12.4rem !important;
-    border-radius: 1.15rem !important;
+    min-height: 13.25rem !important;
+    border-radius: 1.35rem !important;
     background: var(--ui-surface) !important;
-    box-shadow: 0 7px 22px color-mix(in srgb, var(--ui-text) 7%, transparent) !important;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--ui-text) 7%, transparent) !important;
   }
 
   [data-testid^="pos-product-card-"] > button:first-of-type {
-    height: 7.4rem !important;
+    height: 8rem !important;
     background: var(--ui-page-alt) !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child {
-    padding: 0.65rem 0.7rem 0.7rem !important;
+    padding: 0.75rem !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child > p:first-child {
-    min-height: 2rem !important;
-    font-size: 0.79rem !important;
-    line-height: 1rem !important;
+    min-height: 2.25rem !important;
+    font-size: 0.87rem !important;
+    line-height: 1.1rem !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child > p:nth-child(2) {
     margin-top: 0.15rem !important;
-    font-size: 0.64rem !important;
+    font-size: 0.69rem !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child > div:last-child {
-    padding-top: 0.45rem !important;
+    padding-top: 0.55rem !important;
     align-items: center !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child > div:last-child > span {
-    font-size: 0.9rem !important;
+    font-size: 0.95rem !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child > div:last-child button {
-    width: 2.15rem !important;
-    height: 2.15rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
     border-radius: 999px !important;
   }
 
-  /* Preserve the existing mobile cart stacking and checkout behavior. */
+  /* The phone cart is a real full-screen ordering step, while reusing the
+   * existing CurrentOrderPanel and handlers. No duplicate cart/payment logic. */
   div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) {
     z-index: 55 !important;
+    align-items: stretch !important;
+    background: var(--ui-page) !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.absolute.inset-0.bg-black\/50 {
+    display: none !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative {
+    width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: var(--ui-page) !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child {
+    min-height: 3.75rem !important;
+    padding-top: max(0.65rem, env(safe-area-inset-top)) !important;
+    padding-inline: 1rem !important;
+    background: var(--ui-surface) !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:last-child {
+    padding-bottom: env(safe-area-inset-bottom) !important;
   }
 
   .hidden:has([data-testid="pos-payment-confirm"]) {
@@ -270,7 +276,7 @@
 
 @media (max-width: 639px) {
   [data-testid="pos-product-browser"] > div:last-child {
-    padding: 0.6rem 0.6rem calc(5.7rem + env(safe-area-inset-bottom)) !important;
+    padding: 0.7rem 0.7rem calc(5.9rem + env(safe-area-inset-bottom)) !important;
   }
 
   [data-testid="pos-tables-workspace"] > div:last-child {
@@ -313,18 +319,18 @@
   }
 
   [data-testid="pos-product-grid"] {
-    gap: 0.5rem !important;
+    gap: 0.55rem !important;
   }
 
   [data-testid^="pos-product-card-"] {
-    min-height: 11.7rem !important;
+    min-height: 12.6rem !important;
   }
 
   [data-testid^="pos-product-card-"] > button:first-of-type {
-    height: 6.8rem !important;
+    height: 7.35rem !important;
   }
 
   [data-testid^="pos-product-card-"] > div:last-child {
-    padding: 0.55rem 0.6rem 0.6rem !important;
+    padding: 0.65rem !important;
   }
 }
