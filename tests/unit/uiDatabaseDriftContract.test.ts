@@ -13,11 +13,12 @@ describe('UI and production database drift guards', () => {
     expect(source).toContain('materialCosts[item.raw_material_id]');
   });
 
-  it('loads component products from the active branch without the removed manufactured-only filter', () => {
-    const source = read('src/features/catalog/pages/ComponentsPage.tsx');
-    expect(source).not.toContain("product_type === 'manufactured'");
-    expect(source).not.toContain(".eq('product_type', 'manufactured')");
-    expect(source).toContain("productQuery = productQuery.eq('branch_id', branchFilter)");
+  it('does not expose the retired Components page from current navigation surfaces', () => {
+    const menu = read('src/core/navigation/menu.config.ts');
+    const manufacturingCenter = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
+
+    expect(menu).not.toContain("id: 'components'");
+    expect(manufacturingCenter).not.toContain("route: APP_ROUTES.components");
   });
 
   it('fails production parity when the kitchen inventory schema sentinel is absent or false', () => {
