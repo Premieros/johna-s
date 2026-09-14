@@ -85,12 +85,18 @@ describe.skipIf(skip)('kitchen station branch isolation', () => {
   });
 
   it('database trigger rejects a direct cross-branch category station link', async () => {
-    await expect(
-      client.query(
-        'UPDATE public.categories SET kitchen_station_id = $1::uuid WHERE id = $2::uuid',
-        [stationB, ids.catA],
-      ),
-    ).rejects.toThrow(/KITCHEN_STATION_BRANCH_MISMATCH/);
+    await client.query('SAVEPOINT kitchen_cross_branch_probe');
+    try {
+      await expect(
+        client.query(
+          'UPDATE public.categories SET kitchen_station_id = $1::uuid WHERE id = $2::uuid',
+          [stationB, ids.catA],
+        ),
+      ).rejects.toThrow(/KITCHEN_STATION_BRANCH_MISMATCH/);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT kitchen_cross_branch_probe');
+      await client.query('RELEASE SAVEPOINT kitchen_cross_branch_probe');
+    }
   });
 
   guarded('cashier code cannot be created as a kitchen station', async () => {
