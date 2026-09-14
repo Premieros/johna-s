@@ -29,15 +29,15 @@
 
 ## العمل النشط الوحيد الآن
 
-### PR #126 — ACTIVE / DRAFT
+### PR #126 — ACTIVE / DRAFT / FULL VERIFY GREEN
 
 - Branch: `development/kds-branch-fixture-stabilization`
 - HEAD وقت تحديث السجل: `5f05954a7eea2a190469ffee522affd8c9ad8fb2`
 - الهدف: إصلاح regression محدد في KDS station authorization بعد branch-scoping.
 - Scope الحالي ضيق: fixture branch scoping + append-only compatibility migration للـstation resolution داخل branch الطلب.
 - مجمّد وغير مسموح لمسه ضمن هذا PR: Print Agent/IPC/queues، `send_to_kitchen`، inventory deduction، pricing/payment، station-code format، Production DB.
-- Verify #1373 قيد التنفيذ وقت كتابة هذا السجل.
-- **ممنوع دمجه قبل Full Verify Green كامل بما فيه DB + Browser Smoke.**
+- Verify #1373: **SUCCESS / Full Green**.
+- **لا Merge إلا بعد مراجعة HEAD وعدم تحرك `main` وموافقة صريحة.**
 
 ## Branch governance — منع الدمج الخطأ
 
@@ -147,11 +147,10 @@
 
 ## NEXT ACTION
 
-1. انتظر نتيجة Full Verify للـPR #126 ولا توسّع Scope أثناء تشغيله.
-2. إذا أصبح Full Green: راجع HEAD وعدم تحرك `main` ثم الدمج فقط بعد موافقة صريحة.
-3. Verify `main` + Deploy بعد الدمج.
-4. بعدها يبدأ Audit التثبيت والتنظيف من Phase A بدون تغيير أي شيء شغال بلا Regression مثبت.
-5. Audit Production parity خطوة مستقلة؛ لا Production migration تلقائيًا.
+1. PR #126 أصبح Full Green؛ راجع HEAD وعدم تحرك `main` ثم الدمج فقط بعد موافقة صريحة.
+2. Verify `main` + Deploy بعد الدمج.
+3. بعدها يبدأ Audit التثبيت والتنظيف من Phase A بدون تغيير أي شيء شغال بلا Regression مثبت.
+4. Audit Production parity خطوة مستقلة؛ لا Production migration تلقائيًا.
 
 ## التنفيذ القياسي
 
