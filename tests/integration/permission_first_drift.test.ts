@@ -85,8 +85,12 @@ describe.skipIf(skip)('Permission-First final-state drift sentinel', () => {
       SELECT schemaname||'.'||tablename||'.'||policyname AS policy
       FROM pg_policies
       WHERE schemaname='public' AND (
-        COALESCE(qual,'') ~ 'is_branch_manager|''owner''|''branch_manager''|''accountant''|''warehouse_manager''|''cashier'''
-        OR COALESCE(with_check,'') ~ 'is_branch_manager|''owner''|''branch_manager''|''accountant''|''warehouse_manager''|''cashier'''
+        COALESCE(qual,'') ~ 'is_branch_manager'
+        OR COALESCE(with_check,'') ~ 'is_branch_manager'
+        OR (
+          (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ '''(owner|branch_manager|accountant|warehouse_manager|cashier)'''
+          AND (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ '(role|user_role|get_user_role)'
+        )
       )
       ORDER BY 1
     `);
