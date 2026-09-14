@@ -42,4 +42,11 @@ describe('global operational branch contract', () => {
     expect(pos).toContain('setActiveBranchId(v)');
     expect(pos).not.toContain('setSelectedBranch(v)');
   });
+
+  it('keeps the V2 provider subscribed to the same global branch store', () => {
+    const provider = source('src/v2/context/V2BranchContext.tsx');
+    expect(provider).toContain('useActiveBranchId()');
+    expect(provider).not.toContain('premier:v2:selected-branch');
+    expect(provider).not.toContain('window.localStorage');
+  });
 });
