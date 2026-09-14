@@ -153,6 +153,13 @@
     border-radius: 0.8rem !important;
   }
 
+  /* Keep the existing mobile cart sheet above the POS header. This changes
+   * stacking only; the same close handler, cart state and payment flow remain
+   * untouched. */
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) {
+    z-index: 55 !important;
+  }
+
   /*
    * The desktop POS checkout panel is always mounted, but Tailwind hides its
    * wrapper below lg. handlePay intentionally closes the mobile cart drawer,
