@@ -18,7 +18,6 @@ const ProductsPage = lazy(() => import('../features/catalog/pages/ProductsPage')
 const ProductSetupWizardPage = lazy(() => import('../features/catalog/pages/ProductSetupWizardPage').then(m => ({ default: m.ProductSetupWizardPage })));
 const ProductModifiersPage = lazy(() => import('../features/catalog/pages/ProductModifiersPage').then(m => ({ default: m.ProductModifiersPage })));
 const CategoriesPage = lazy(() => import('../features/catalog/pages/CategoriesPage').then(m => ({ default: m.CategoriesPage })));
-const ComponentsPage = lazy(() => import('../features/catalog/pages/ComponentsPage').then(m => ({ default: m.ComponentsPage })));
 const InventoryPage = lazy(() => import('../features/inventory/pages/InventoryPage').then(m => ({ default: m.InventoryPage })));
 const WarehousesPage = lazy(() => import('../features/inventory/pages/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
 const RawMaterialsPage = lazy(() => import('../features/manufacturing/pages/RawMaterialsPage').then(m => ({ default: m.RawMaterialsPage })));
@@ -73,7 +72,7 @@ function resolveLandingRoute(can: (permission: Permission) => boolean, role?: st
   const candidates: Array<[Permission, string]> = [
     ['pos.view', APP_ROUTES.pos], ['pos.kds_view', APP_ROUTES.kitchenDisplay], ['floor_plan.view', APP_ROUTES.floorPlan],
     ['approvals.review', APP_ROUTES.approvals], ['waste.view', APP_ROUTES.wasteCenter],
-    ['products.view', APP_ROUTES.products], ['categories.view', APP_ROUTES.categories], ['components.view', APP_ROUTES.components],
+    ['products.view', APP_ROUTES.products], ['categories.view', APP_ROUTES.categories],
     ['raw_materials.view', APP_ROUTES.rawMaterials], ['recipes.view', APP_ROUTES.recipes], ['inventory.view', APP_ROUTES.inventory],
     ['warehouses.view', APP_ROUTES.warehouses], ['inventory.ledger.view', APP_ROUTES.inventoryLedger],
     ['purchases.view', APP_ROUTES.purchases], ['customers.view', APP_ROUTES.customers], ['suppliers.view', APP_ROUTES.suppliers],
@@ -145,7 +144,7 @@ export function AppRoutes() {
         <Route path={`${APP_ROUTES.products}/setup`} element={<ProtectedRoute permission="products.create"><ProductSetupWizardPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.productModifiers} element={<ProtectedRoute permission="products.modifiers.manage"><ProductModifiersPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.categories} element={<ProtectedRoute permission="categories.view"><CategoriesPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.components} element={<ProtectedRoute permission="components.view"><ComponentsPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.components} element={<Navigate to={APP_ROUTES.products} replace />} />
         <Route path={APP_ROUTES.inventoryUnits} element={<ProtectedRoute permission="raw_materials.view"><InventoryUnitsPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.wasteCenter} element={<ProtectedRoute permission="waste.view"><WasteCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.kitchenDisplay} element={<ProtectedRoute permission="pos.kds_view"><KitchenDisplayPage /></ProtectedRoute>} />

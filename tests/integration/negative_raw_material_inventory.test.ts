@@ -501,7 +501,7 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     expect(await oversoldBatches(rawM)).toEqual([]);
   });
 
-  it('keeps manufactured-unit products strictly unavailable (never raw_shortage_only)', async () => {
+  it('auto-produces manufactured units into raw debt without blocking the sale', async () => {
     const rows = await q<{ product_id: string; available_quantity: string; is_available: boolean; raw_shortage_only: boolean }>(
       `SELECT product_id, available_quantity::text, is_available, raw_shortage_only
        FROM public.get_pos_product_availability($1,$2,100)
@@ -511,15 +511,30 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
     expect(rows).toHaveLength(1);
     expect(rows[0].is_available).toBe(false);
     expect(num(rows[0].available_quantity)).toBe(0);
-    expect(rows[0].raw_shortage_only).toBe(false);
+    expect(rows[0].raw_shortage_only).toBe(true);
 
     const sale = await q<{ r: CoreRpc }>(
       `SELECT public._deduct_sale_inventory_with_modifiers_core($1,$2,$3::jsonb,$4,$5) AS r`,
       [branchA, whA1, JSON.stringify([{ product_id: prodMfg, quantity: 1 }]), randomUUID(), 'SALE-MFG'],
     );
-    expect(sale[0].r).toMatchObject({ success: false, error: 'SALE_INVENTORY_DEDUCTION_FAILED' });
-    expect(await warehouseBalance(rawU, branchA, whA1)).toBe(0);
+    expect(sale[0].r.success).toBe(true);
+    expect(await warehouseBalance(rawU, branchA, whA1)).toBe(-1);
     expect(await oversoldBatches(rawU)).toEqual([]);
+    const productionDebt = await q<BatchRow>(
+      `SELECT batch_number,quantity::text,source_type,warehouse_id
+       FROM public.raw_material_batches
+       WHERE raw_material_id=$1 AND source_type='production_oversold'`,
+      [rawU],
+    );
+    expect(productionDebt).toHaveLength(1);
+    expect(num(productionDebt[0].quantity)).toBe(-1);
+    const unitBalance = await q<{ quantity: string }>(
+      `SELECT COALESCE(SUM(quantity),0)::text AS quantity
+       FROM public.inventory_unit_batches
+       WHERE unit_id=$1 AND branch_id=$2 AND warehouse_id=$3`,
+      [unitMfg, branchA, whA1],
+    );
+    expect(num(unitBalance[0].quantity)).toBe(0);
   });
 
   it('never exposes an inactive product through POS availability', async () => {

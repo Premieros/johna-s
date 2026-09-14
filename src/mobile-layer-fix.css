@@ -6,6 +6,42 @@
   [data-testid="mobile-sidebar-backdrop"] {
     z-index: 65 !important;
   }
+
+  /*
+   * The desktop POS checkout panel is always mounted, but Tailwind hides its
+   * wrapper below lg. handlePay intentionally closes the mobile cart drawer,
+   * so without this rule checkout becomes invisible on phones. Promote only
+   * the hidden wrapper that currently contains the payment confirmation into
+   * a full-viewport mobile checkout surface.
+   */
+  .hidden:has([data-testid="pos-payment-confirm"]) {
+    display: flex !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 60 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    border: 0 !important;
+  }
+
+  .hidden:has([data-testid="pos-payment-confirm"]) > * {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  [data-testid="pos-payment-confirm"] {
+    margin-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+
+  [data-testid="pos-split-payment-editor"] > div:has(input[data-testid^="pos-split-payment-"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+  }
+
+  [data-testid^="pos-split-payment-"] {
+    width: 100% !important;
+  }
 }
 
 @media (max-width: 479px) {
