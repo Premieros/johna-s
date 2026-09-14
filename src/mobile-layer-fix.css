@@ -187,32 +187,60 @@
     border-radius: 999px !important;
   }
 
-  /* The phone cart is a real full-screen ordering step, while reusing the
-   * existing CurrentOrderPanel and handlers. No duplicate cart/payment logic. */
+  /* The phone cart is a near-full-screen sheet reusing the existing cart.
+   * Keeping a visible backdrop and large close control makes exiting obvious. */
   div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) {
-    z-index: 55 !important;
-    align-items: stretch !important;
-    background: var(--ui-page) !important;
+    z-index: 45 !important;
+    align-items: flex-end !important;
+    background: transparent !important;
   }
 
   div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.absolute.inset-0.bg-black\/50 {
-    display: none !important;
+    display: block !important;
+    background: rgb(0 0 0 / 42%) !important;
   }
 
   div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative {
     width: 100% !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
+    height: min(92dvh, 760px) !important;
+    max-height: 92dvh !important;
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+    box-shadow: 0 -12px 36px rgb(0 0 0 / 18%) !important;
     background: var(--ui-page) !important;
   }
 
   div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child {
-    min-height: 3.75rem !important;
-    padding-top: max(0.65rem, env(safe-area-inset-top)) !important;
-    padding-inline: 1rem !important;
+    min-height: 3.4rem !important;
+    padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
+    padding-inline: 0.75rem !important;
     background: var(--ui-surface) !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 2 !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child > button:first-child {
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--ui-border) !important;
+    background: var(--ui-page-alt) !important;
+    color: var(--ui-text) !important;
+    padding: 0 !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child > button:first-child svg {
+    display: none !important;
+  }
+
+  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child > button:first-child::after {
+    content: '×';
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
   }
 
   div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:last-child {
@@ -276,7 +304,47 @@
 
 @media (max-width: 639px) {
   [data-testid="pos-product-browser"] > div:last-child {
-    padding: 0.7rem 0.7rem calc(5.9rem + env(safe-area-inset-bottom)) !important;
+    padding: 0.55rem 0.55rem calc(5.4rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="pos-product-grid"] {
+    gap: 0.5rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] {
+    min-height: 11.4rem !important;
+    border-radius: 1rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > button:first-of-type {
+    height: 6.45rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child {
+    padding: 0.55rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > p:first-child {
+    min-height: 1.9rem !important;
+    font-size: 0.8rem !important;
+    line-height: 0.98rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > p:nth-child(2) {
+    font-size: 0.62rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > div:last-child {
+    padding-top: 0.35rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > div:last-child > span {
+    font-size: 0.86rem !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > div:last-child button {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
   }
 
   [data-testid="pos-tables-workspace"] > div:last-child {
@@ -317,20 +385,23 @@
   [data-testid="pos-top-action-bar"] {
     padding-inline: 0.5rem !important;
   }
+}
 
-  [data-testid="pos-product-grid"] {
-    gap: 0.55rem !important;
+@media (max-width: 1023px) and (max-height: 620px) {
+  [data-testid="pos-product-browser"] > div:first-child > div:first-child {
+    display: none !important;
   }
 
-  [data-testid^="pos-product-card-"] {
-    min-height: 12.6rem !important;
+  [data-testid="pos-product-browser"] > div:first-child {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
   }
 
-  [data-testid^="pos-product-card-"] > button:first-of-type {
-    height: 7.35rem !important;
+  [data-testid="pos-product-browser"] > div:first-child input {
+    height: 2.55rem !important;
   }
 
-  [data-testid^="pos-product-card-"] > div:last-child {
-    padding: 0.65rem !important;
+  [data-testid="pos-product-browser"] > div:first-child > div:last-child {
+    margin-top: 0.4rem !important;
   }
 }
