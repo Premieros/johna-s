@@ -1,103 +1,44 @@
-# Mobile Delivery App — implementation plan
+# Mobile Waiter Implementation Plan
 
-## Scope
+Status: Android waiter workstream on PR #132.
 
-Build an Android-first mobile experience for two surfaces:
+## Approved product direction
 
-- Customer: browse branch catalog, configure items, cart, address, submit order, track order.
-- Captain: view assigned delivery orders, accept, pick up, mark out-for-delivery, complete delivery.
+`Captain` means dining-room waiter. Delivery-driver maps/routes and customer mode are not part of this slice.
 
-The mobile UI is intentionally different from the POS UI. It must look and behave like a delivery application while reusing the canonical POS/ERP business rules.
+The Android app is a mobile client of the existing Johna S POS domain, not a second POS engine. Existing authenticated users sign in, and the UI is capability-driven from the current Permission-First model.
 
-## Fixed project identity
+## Implemented Android slice
 
-- Repository: `Premieros/johna-s`
-- Production branch: `main`
-- Production Supabase: `azzdesuowpdcoflmyezn`
-- Mobile branch: `development/mobile-delivery-app`
-- Printing is frozen and out of scope.
-- No direct changes to `main`.
-- No Production migration before Full Verify Green and explicit approval.
+- Existing username/PIN authentication.
+- RLS-visible branch selection.
+- Dining area/table browsing.
+- Occupied-table responsible waiter display.
+- Live products/categories and image fallback.
+- Canonical modifier groups and price deltas.
+- New dine-in order via `create_order`.
+- Active order edit/delta via `update_order`.
+- Kitchen submission via `send_to_kitchen`.
+- My Orders and Kitchen/status visibility.
+- Permission screen for supported mobile capabilities.
+- Persisted Supabase Auth session using the public anon key only.
 
-## Proven reusable backend surface
+## Binding safety rules
 
-Production already contains the canonical entities required for the first mobile integration: `branches`, `branch_settings`, `products`, `customers`, `orders`, and `order_items`. `orders.service_details` can carry service-specific metadata while the delivery schema is being finalized.
+- No `service_role` in Android.
+- No mobile-specific Production migration.
+- No direct inventory mutation from Android.
+- No printer/Print Agent changes.
+- No role-name authorization; Super Admin only implicit bypass.
+- Server/RLS checks remain authoritative even when buttons are hidden by the UI.
+- Customer application remains deferred.
 
-The mobile implementation must not create a parallel order engine. The existing order lifecycle, pricing, modifiers, branch isolation, payment state, kitchen state, and inventory authority remain canonical.
+## Later slices, not claimed complete here
 
-## Security boundary
+Financial payment, split bill, order transfer/merge and approval-center execution must reuse their exact canonical server contracts and receive separate regression verification. Their granted permissions can be displayed in the app, but this waiter MVP does not execute those operations yet.
 
-The public Android client must never contain a `service_role` key or any privileged secret. Mobile operations will go through a deliberately narrow gateway/RPC surface with explicit branch/ownership checks and RLS-compatible authorization.
+## Gate
 
-Customer identity must not be implemented by weakening the employee/user authorization model. Captain actions remain Permission-First and branch-scoped.
+`TypeScript -> Android prebuild -> Release APK -> artifact upload -> targeted live acceptance with a test waiter account`.
 
-## Planned gateway contract
-
-1. `get_mobile_catalog(branch_id)`
-2. `create_customer_order(payload)`
-3. `get_customer_order_status(order_id, access_token)`
-4. `get_captain_orders()`
-5. `accept_delivery_order(order_id)`
-6. `update_delivery_status(order_id, status)`
-
-Names are provisional until the repository's existing RPC/API patterns are fully matched. Any database addition will be append-only and covered by regression tests before Production.
-
-## Delivery data additions expected
-
-The existing schema has customer address text but no dedicated delivery assignment model. The likely minimal extension is an append-only delivery record linked to `orders`, containing:
-
-- order_id
-- branch_id
-- assigned_captain_id
-- delivery address snapshot
-- latitude / longitude (optional)
-- delivery fee
-- delivery status
-- accepted / picked_up / delivered timestamps
-- collection/payment notes
-
-This is not approved for Production yet; it is the target schema for a later migration after tests and explicit approval.
-
-## Build phases
-
-### Phase 1 — completed foundation
-
-- Create isolated Expo/React Native workspace under `mobile/`.
-- Add customer/captain entry experience.
-- Define typed gateway contracts.
-- Keep Production untouched.
-
-### Phase 2 — customer MVP
-
-- Branch selector.
-- Catalog/categories/products from canonical backend.
-- Product modifiers.
-- Cart and totals.
-- Customer/contact/address capture.
-- Safe order submission.
-- Order tracking.
-
-### Phase 3 — captain MVP
-
-- Employee sign-in using existing auth boundary.
-- Permission check for delivery actions.
-- Assigned/new delivery queue.
-- Accept/pickup/out-for-delivery/delivered transitions.
-- Cash collection state without bypassing canonical payment logic.
-
-### Phase 4 — integration
-
-- POS receives mobile orders in the same order domain.
-- `send_to_kitchen` remains the inventory authority.
-- Existing printer routing is reused unchanged.
-- Realtime/push notifications are added after the order contract is stable.
-
-### Phase 5 — verification and release
-
-- Mobile typecheck/build.
-- Repository lint/typecheck/unit/build.
-- Fresh DB + schema + integration/security/RLS.
-- Android smoke tests for customer and captain flows.
-- Draft PR review.
-- No merge without explicit approval.
-- No Production migration without separate explicit approval.
+No merge to `main` without explicit approval.
