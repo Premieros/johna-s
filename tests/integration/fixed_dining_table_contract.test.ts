@@ -67,7 +67,7 @@ describe.skipIf(!dbUrl)('fixed dining table contract', () => {
       expect(row.anon_exec).toBe(false);
       expect(row.definition).toContain("public.can_permission('floor_plan.manage')");
       expect(row.definition).toContain('public.user_may_access_branch');
-      expect(row.definition).not.toMatch(/role\s*=\s*['\"](?:manager|branch_manager|admin)['\"]/i);
+      expect(row.definition).not.toMatch(/role\s*=\s*['"](?:manager|branch_manager|admin)['"]/i);
     }
   });
 
