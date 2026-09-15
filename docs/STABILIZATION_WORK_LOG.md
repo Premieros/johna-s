@@ -144,3 +144,42 @@ Current repository baseline observed at checkpoint:
 5. Because `main` moved repeatedly on 2026-09-15, every new workstream must refresh `main` and inspect open PRs/branches before writing.
 
 No Production write was performed for this checkpoint. No mobile branch code was modified from this documentation workstream.
+
+---
+
+## 2026-09-16 checkpoint — PR #141 Employee Receivables
+
+Branch: `development/employee-receivables`
+PR: #141
+Baseline at branch creation: `main@3cdea821c0c3a2105ae389db4c6b6d1f3ba9403b`
+
+### Implemented scope
+
+- Added a dedicated Finance page for employee receivables.
+- Employee receivable accounts are modeled as rows in `customers` with `customer_type = 'employee'`; they are not system/auth users and do not receive login credentials or permissions.
+- Reused canonical customer AR aging (`get_ar_aging`) and generic customer receipt (`receive_payment`), so no parallel receivable balance was introduced.
+- Added employee customer creation under existing `customers.manage` authority.
+- Employee receivable settlement uses existing `sales.payment.receive` authority.
+- Removed the legacy employee-credit panel from Customers because it depended on `employee_user_id -> users` linking.
+- Added forward-only migration `20260916000000_employee_customer_classification.sql` to add `customers.customer_type`, preserve historical linked rows as employees, and index `(branch_id, customer_type)`.
+- No inventory/FIFO/printing/POS stock movement logic was touched.
+- No Production migration or Production data write was performed.
+
+### Verification on implementation head
+
+Workflow: Verify main #1456 / run `35024776511` — **FULL GREEN** ✅
+
+- repository identity ✅
+- frontend API contract ✅
+- lint ✅
+- application typecheck ✅
+- test-suite typecheck ✅
+- unit ✅
+- build ✅
+- Fresh DB canonical migrations ✅
+- schema verification ✅
+- Permission-First CI setup ✅
+- integration/security/RLS regression ✅
+- Browser Smoke ✅
+
+This documentation commit changes the PR HEAD, therefore Full Verify must run again on the new exact head before merge. Production migration remains blocked until a separate explicit approval after final Full Green.
