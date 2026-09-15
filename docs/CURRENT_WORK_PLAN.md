@@ -1,6 +1,6 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
-آخر تحديث: **2026-09-14 — POS / Branch / Catalog stabilization**
+آخر تحديث: **2026-09-15 — workstream ownership + pending work checkpoint**
 
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة.
 
@@ -22,53 +22,52 @@
 
 ## Baseline الحالي
 
-- `main@b5f4169299ea57a5287b013430013e0c568ea28e`
-- PR #114 — reusable modifier groups + manufactured-item migration: **MERGED**.
-- Full Verify #1322 على PR #114: **Full Green** بما في ذلك Browser Smoke.
-- فرع التثبيت الحالي: `development/stabilize-pos-mobile-branch-catalog`.
-- الطباعة الحالية تعمل ومجمّدة خارج Scope هذه الحزمة؛ ممنوع تعديل Print Agent / printer routing / queues / printer settings في هذا العمل.
+- `main@0919ddd171890852b03e712d45b18891ea31f821`
+- آخر دمج مثبت على `main`: PR #133 — manufacturing completion RPC authority.
+- رسالة الدمج تؤكد Full Verify #1402 Green على exact head، بدون DB migration أو Production data write أو تغيير للطباعة/POS/KDS/pricing/payment.
+- الطباعة الحالية تعمل ومجمّدة خارج Scope؛ ممنوع تعديل Print Agent / printer routing / queues / printer settings دون Scope وموافقة منفصلين.
 
-## Scope التثبيت الحالي
+## فصل مسارات العمل — إلزامي
 
-تم إثبات الأسباب التالية وتنفيذ إصلاحات صغيرة فقط على فرع التطوير:
+### A) تطبيق الهاتف — مملوك لمسار/نموذج آخر
 
-1. **تبديل الفروع للمستخدم متعدد الفروع**
-   - السبب: RLS القراءة على `branches` لم يستخدم عقد الوصول canonical `user_may_access_branch(id)`.
-   - الإصلاح: `20260914010500_branch_access_select_rls.sql` يضيف canonical branch access مع الحفاظ على قواعد platform/organization الحالية وبدون role-name bypass.
+- الفرع: `development/mobile-delivery-app`
+- PR: #132 — **Draft / Open**.
+- هذا الفرع تحت عمل نموذج آخر حاليًا؛ **ممنوع تعديله أو دفع commits إليه من أي مسار آخر**.
+- الاتجاه المعتمد حاليًا: تطبيق Android لنادل الصالة/الكابتن داخل المطعم، وليس كابتن توصيل.
+- العميل مؤجل لمرحلة لاحقة.
+- نفس التطبيق يجب أن يعرض الوظائف حسب صلاحيات المستخدم الفعلية عند الربط؛ المدير يرى فقط ما يملكه، والنادل كذلك.
+- Permission-First فقط؛ لا Authorization بأسماء الأدوار.
+- لا تعديل للنظام الحالي أو Production أو الطباعة أو Business Logic من مسار الموبايل إلا بموافقة منفصلة صريحة.
+- `send_to_kitchen` يظل authority الحالي للمخزون، والطباعة تظل مجمّدة.
+- لا Merge لـPR #132 حتى يصبح scope النهائي واضحًا ويكتمل verification المطلوب وموافقة صريحة.
 
-2. **POS kitchen deduction يفشل مع manufactured auto-production وخامة ناقصة**
-   - السبب: raw مباشر في POS يسمح بالسالب، لكن `produce_inventory_unit` في مسار `AUTO_SALE_PRODUCTION` كان يستدعي FIFO strict.
-   - الإصلاح: `20260914010600_pos_auto_production_negative_raw.sql` يسمح بالسالب فقط عندما `p_notes = 'AUTO_SALE_PRODUCTION'`؛ التصنيع اليدوي يظل strict ويرفض النقص.
+### B) النظام الأساسي / Production stabilization
 
-3. **Modifier UX غير واضح بعد PR #114**
-   - صفحة الـModifier Groups موجودة group-first بالفعل.
-   - تم تغيير اسم القائمة إلى `مجموعات الموديفاير / Modifier Groups` لتمييز التصميم الجديد بوضوح.
+لا يتم خلطه مع فرع الموبايل. أي إصلاح أو تغيير جديد للنظام الأساسي يبدأ من أحدث `main` على فرع مستقل بعد فحص الأعمال المتوازية.
 
-4. **صفحة مكونات القديمة**
-   - تمت إزالة `ComponentsPage.tsx` من الواجهة والقائمة.
-   - `/components` أصبح legacy redirect إلى `/products`.
-   - لم يتم حذف `product_components` أو العقود الداخلية التي لا تزال الوصفات تحتاجها.
+## العمل العالق المؤكد
 
-5. **الدفع من الهاتف / تنظيم Checkout**
-   - السبب المثبت: `handlePay` يغلق mobile cart بينما checkout موجود في right panel المخفي تحت `lg`، فيصبح الدفع غير ظاهر على الهاتف.
-   - الإصلاح الحالي في طبقة Mobile CSS: عند وجود `pos-payment-confirm` يتم تحويل hidden checkout wrapper إلى full-viewport mobile checkout، مع `100dvh` وSafe Area، وجعل split payment responsive.
+1. **PR #132 — تطبيق النادل Android**
+   - مستمر عند النموذج الآخر فقط.
+   - المطلوب قبل اعتباره جاهزًا: إكمال التصميم/الوظائف المعتمدة، ربط آمن لاحقًا بدون تعديل غير مصرح للنظام، Full Verify المناسب، ثم مراجعة مستقلة قبل الدمج.
 
-6. **حذف سجل المبيعات التجريبي**
-   - Production audit قبل الحذف: 11 orders + 4 sales فقط، مع 2 `sale_print_events` و11 `cloud_print_jobs` مرتبطة بالتجارب.
-   - محاولة الحذف عبر أداة Production مُنعت بواسطة destructive-action protection؛ لم يتم تجاوز الحماية ولم يتم حذف أي سجل حتى الآن.
-   - لا يتم اعتبار هذه النقطة منتهية حتى يتم الحذف عبر مسار إداري مسموح ثم التحقق من العدادات، بدون إعادة كتابة أرصدة المخزون.
+2. **حذف سجل المبيعات التجريبي من Production**
+   - التدقيق السابق أثبت وجود بيانات تجريبية محدودة.
+   - محاولة الحذف السابقة مُنعت بواسطة destructive-action protection ولم يتم تجاوزها.
+   - ما زالت خطوة مستقلة معلقة، ولا تنفذ إلا عبر مسار إداري مسموح ثم verify للعدادات، بدون إعادة كتابة أرصدة المخزون.
 
-## Regression gate لهذه الحزمة
+3. **أي Production migrations غير مطبقة**
+   - لا يتم تطبيق أي Migration على Production اعتمادًا على سجل قديم.
+   - يجب أولًا تحديد migrations المطلوبة من أحدث `main`/PR المعني، Full Verify Green، ثم موافقة صريحة منفصلة قبل التطبيق.
 
-- `tests/unit/stabilizationPosBranchCatalogContract.test.ts` يثبت:
-  - canonical multi-branch RLS.
-  - negative raw فقط لـPOS auto-production وليس manual production.
-  - إزالة Components page من المنتج المدعوم وإظهار Modifier Groups.
-  - mobile checkout full viewport + safe area + responsive split payment.
-- يجب تشغيل Full Verify كامل قبل الدمج: lint + typecheck + unit + build + fresh DB + schema + integration/security/RLS + Browser Smoke.
-- يجب مراجعة changed files والتأكد أن أي ملفات طباعة لم تُمس.
-- لا Merge قبل موافقة صريحة.
-- لا Production migration قبل Full Green وموافقة صريحة منفصلة.
+4. **Regression / handover verification النهائي**
+   - قبل أي handover نهائي: lint + typecheck + unit + build + fresh DB + schema + integration/security/RLS + Browser Smoke حيث ينطبق.
+   - يجب التأكد أن Permission-First وbranch/warehouse isolation وsend_to_kitchen والapprovals والطباعة لم يحدث لها Regression.
+
+5. **مراجعة الأعمال المفتوحة/المتوازية قبل أي كتابة جديدة**
+   - `main` تحرك عدة مرات يوم 2026-09-15؛ لا يُستخدم baseline قديم.
+   - قبل كل تغيير جديد يجب جلب current `main` وفحص PRs المفتوحة لتجنب التعارض أو إعادة تنفيذ عمل موجود.
 
 ## عقود ثابتة لا يعاد فتحها بلا Regression مثبت
 
@@ -88,12 +87,11 @@
 
 ## NEXT ACTION
 
-1. افتح PR لحزمة التثبيت الحالية فقط.
-2. شغّل Full Verify كامل بما في ذلك Browser Smoke ومراجعة mobile checkout.
-3. أصلح فقط أي Regression مثبت بدون توسيع Scope وبدون لمس الطباعة.
-4. بعد Full Green: اعرض الحالة للمراجعة؛ لا Merge إلا بموافقة صريحة.
-5. بعد الدمج وVerify main فقط، يمكن طلب موافقة منفصلة لتطبيق migrations على Production.
-6. حذف سجل المبيعات التجريبي يبقى خطوة Production مستقلة عبر مسار يسمح بالـdestructive action ثم verify للعدادات.
+1. عدم لمس `development/mobile-delivery-app` أو PR #132 من هذا المسار؛ النموذج الآخر يكمل تطبيق الهاتف.
+2. أي عمل جديد على النظام الأساسي يبدأ من أحدث `main` فقط وعلى فرع مستقل جديد.
+3. قبل أي write جديد: افحص PRs/branches المتوازية وحدد overlap.
+4. أبقِ حذف بيانات المبيعات التجريبية كخطوة Production مستقلة معلقة حتى مسار إداري مسموح وموافقة صريحة.
+5. لا Merge ولا Production migration بدون Full Verify Green والموافقة المطلوبة لكل خطوة.
 
 ## التنفيذ القياسي
 
