@@ -124,6 +124,8 @@ export function InventoryLedgerPage() {
         {r.entry.quantity >= 0 ? '+' : ''}{formatNumber(Number(r.entry.quantity))}
       </span>
     )},
+    { key: 'before_qty', header: lang === 'ar' ? 'الرصيد قبل' : 'Before', render: (r) => r.entry.before_qty == null ? '-' : formatNumber(Number(r.entry.before_qty)) },
+    { key: 'after_qty', header: lang === 'ar' ? 'الرصيد بعد' : 'After', render: (r) => r.entry.after_qty == null ? '-' : formatNumber(Number(r.entry.after_qty)) },
     { key: 'unit_cost', header: t('unitCost'), render: (r) => formatNumber(Number(r.entry.unit_cost), 2) },
     { key: 'total_cost', header: t('totalCost'), render: (r) => formatNumber(Number(r.entry.total_cost), 2) },
     { key: 'reference', header: t('referenceNumber'), render: (r) => r.entry.reference_number || '-' },
