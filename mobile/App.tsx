@@ -64,7 +64,8 @@ const initialOrders: CaptainOrder[] = [
 
 function nextStatus(status: DeliveryStatus): DeliveryStatus | null {
   const index = statuses.findIndex((item) => item.key === status);
-  return index >= 0 && index < statuses.length - 1 ? statuses[index + 1].key : null;
+  if (index < 0) return null;
+  return statuses[index + 1]?.key ?? null;
 }
 
 export default function App() {
