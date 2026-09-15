@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Johna S Delivery",
+    "slug": "johna-s-delivery",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.premieros.johnas.delivery"
+    }
+  }
+}
