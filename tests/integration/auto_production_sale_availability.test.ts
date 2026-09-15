@@ -112,23 +112,46 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
         [unitId, branchId],
       );
       expect(productions[0].count).toBe(1);
-
-      const availAfter = await q<{ available_quantity: string }>(
-        `SELECT available_quantity::text FROM public.get_pos_product_availability($1,$2,100) WHERE product_id=$3`,
-        [branchId, warehouseId, productId],
-      );
-      expect(Number(availAfter[0].available_quantity)).toBe(3);
     });
   });
 
-  it('refuses quantities above ingredient capacity before producing anything', async () => {
+  it('keeps selling beyond stock, records raw-material debt, then purchase stock offsets the debt', async () => {
     await asAdmin(async () => {
-      const check = await q<{ r: { success: boolean; error?: string } }>(
+      const informationalCheck = await q<{ r: { success: boolean; error?: string } }>(
         `SELECT public.check_product_availability($1,$2,$3,6) AS r`,
         [productId, branchId, warehouseId],
       );
-      expect(check[0].r.success).toBe(false);
-      expect(check[0].r.error).toBe('INSUFFICIENT_RAW_MATERIAL_STOCK');
+      expect(informationalCheck[0].r.success).toBe(false);
+      expect(informationalCheck[0].r.error).toBe('INSUFFICIENT_RAW_MATERIAL_STOCK');
+
+      const sale = await q<{ r: { success: boolean; sale_id?: string; error?: string; detail?: string } }>(
+        `SELECT public.process_sale($1,$2,$3,NULL,NULL,120,0,'amount',0,0,120,120,'cash','completed',$4::jsonb,NULL,'takeaway',NULL,NULL,NULL) AS r`,
+        [
+          `AUTO-NEG-${Date.now()}-${randomUUID()}`,
+          branchId,
+          warehouseId,
+          JSON.stringify([{ product_id: productId, unit_name: 'piece', quantity: 6, unit_price: 20, discount_amount: 0, bonus_quantity: 0, total: 120 }]),
+        ],
+      );
+      expect(sale[0].r.success).toBe(true);
+      if (!sale[0].r.success) throw new Error(JSON.stringify(sale[0].r));
+
+      const debt = await q<{ quantity: string }>(
+        `SELECT quantity::text FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,
+        [rawId, branchId],
+      );
+      expect(Number(debt[0].quantity)).toBe(-3);
+
+      await q(
+        `SELECT public._raw_add($1,$2,$3,10,4,$4,current_date,NULL,'purchase','purchase',NULL,'TEST-PURCHASE',$5)`,
+        [rawId, branchId, warehouseId, `PUR-${randomUUID()}`, userId],
+      );
+
+      const recovered = await q<{ quantity: string }>(
+        `SELECT quantity::text FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,
+        [rawId, branchId],
+      );
+      expect(Number(recovered[0].quantity)).toBe(7);
     });
   });
 });
