@@ -1,0 +1,34 @@
+name: Regenerate API Contract V2
+
+on:
+  push:
+    branches:
+      - development/manufacturing-rpc-authority-v2
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: contains(github.event.head_commit.message, '[regen-contract]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development/manufacturing-rpc-authority-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Regenerate contract
+        run: node scripts/db/gen-contract.js
+      - name: Commit generated contract
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/api-contract.json
+          if git diff --cached --quiet; then
+            echo "No contract change"
+            exit 0
+          fi
+          git commit -m "chore(db): regenerate API contract"
+          git push origin HEAD:development/manufacturing-rpc-authority-v2
