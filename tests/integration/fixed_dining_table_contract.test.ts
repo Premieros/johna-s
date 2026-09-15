@@ -16,7 +16,25 @@ describe.skipIf(!dbUrl)('fixed dining table contract', () => {
     if (client) await client.end().catch(() => {});
   });
 
-  it('seeds baseline tables 1..50 for every newly-created branch', async () => {
+  it('keeps the existing canonical provisioner as the single 50-table seed path', async () => {
+    const trigger = await client.query<{ trigger_name: string; definition: string }>(
+      `SELECT t.tgname AS trigger_name, pg_get_triggerdef(t.oid) AS definition
+       FROM pg_trigger t
+       JOIN pg_class c ON c.oid = t.tgrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+         AND c.relname = 'branches'
+         AND NOT t.tgisinternal
+         AND t.tgname LIKE '%dining_tables%'
+       ORDER BY t.tgname`,
+    );
+
+    expect(trigger.rows).toHaveLength(1);
+    expect(trigger.rows[0].trigger_name).toBe('trg_provision_default_dining_tables');
+    expect(trigger.rows[0].definition).toContain('private.provision_default_dining_tables_on_branch_insert()');
+  });
+
+  it('seeds exactly canonical tables 01..50 for every newly-created branch', async () => {
     await client.query('BEGIN');
     try {
       const branch = await client.query<{ id: string }>(
@@ -31,16 +49,15 @@ describe.skipIf(!dbUrl)('fixed dining table contract', () => {
         `SELECT name
          FROM public.dining_tables
          WHERE branch_id = $1
-           AND name ~ '^[0-9]+$'
-           AND name::integer BETWEEN 1 AND 50
-         ORDER BY name::integer`,
+         ORDER BY name`,
         [branchId],
       );
 
       expect(tables.rows).toHaveLength(50);
       expect(tables.rows.map((row) => row.name)).toEqual(
-        Array.from({ length: 50 }, (_, index) => String(index + 1)),
+        Array.from({ length: 50 }, (_, index) => `طاولة ${String(index + 1).padStart(2, '0')}`),
       );
+      expect(tables.rows.some((row) => /^\d+$/.test(row.name))).toBe(false);
     } finally {
       await client.query('ROLLBACK');
     }
