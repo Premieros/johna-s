@@ -45,6 +45,7 @@ export const MENU_ITEMS: MenuItemConfig[] = [
   { id: 'expenses', route: APP_ROUTES.expenses, icon: 'expenses', labelKey: 'expenses', permission: 'expenses.view', group: 'finance' },
   { id: 'costing-center', route: APP_ROUTES.costingCenter, icon: 'costingCenter', labelKey: 'costingCenter', permission: 'reports.costing', group: 'finance' },
   { id: 'accounts', route: APP_ROUTES.accounts, icon: 'accounts', labelKey: 'chartOfAccounts', permission: 'accounts.view', group: 'finance' },
+  { id: 'employee-receivables', route: APP_ROUTES.employeeReceivables, icon: 'customers', labelKey: 'customers', label: { ar: 'ذمم الموظفين', en: 'Employee Receivables' }, permission: 'accounts.view', group: 'finance' },
   { id: 'payments', route: APP_ROUTES.payments, icon: 'payments', labelKey: 'receivePayment', permission: 'accounts.view', group: 'finance' },
   { id: 'journal', route: APP_ROUTES.journal, icon: 'journal', labelKey: 'journalEntries', permission: 'accounts.view', group: 'finance' },
   { id: 'treasury', route: APP_ROUTES.treasury, icon: 'treasury', labelKey: 'treasury', permission: 'accounts.view', group: 'finance' },
