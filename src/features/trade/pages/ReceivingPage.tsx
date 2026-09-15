@@ -155,10 +155,12 @@ export function ReceivingPage() {
     { key: 'supplier_name', header: t('supplier'), render: (r) => r.supplier_name },
     { key: 'branch', header: t('branch'), render: (r) => <BranchBadge name={branchName(r.branch_id)} /> },
     { key: 'item_name', header: t('item'), render: (r) => r.item_name },
+    { key: 'unit_name', header: lang === 'ar' ? 'الوحدة' : 'Unit', render: (r) => r.unit_name || '-' },
     { key: 'ordered_quantity', header: t('orderedQty'), render: (r) => r.ordered_quantity },
     { key: 'received_quantity', header: t('receivedQty'), render: (r) => r.received_quantity },
     { key: 'remaining', header: t('remainingQty'), render: (r) => <span className="font-semibold text-ui-danger">{r.remaining}</span> },
     { key: 'unit_cost', header: t('unitCost'), render: (r) => formatCurrency(r.unit_cost, currency, lang) },
+    { key: 'remaining_value', header: lang === 'ar' ? 'قيمة المتبقي' : 'Remaining Value', render: (r) => formatCurrency(Number(r.remaining || 0) * Number(r.unit_cost || 0), currency, lang) },
     { key: 'actions', header: t('actions'), render: (r) => can('purchases.receiving') ? (
       <Button size="sm" onClick={() => openReceive(r)}><PackageOpen className="w-4 h-4" /> {t('receive')}</Button>
     ) : null },
@@ -221,23 +223,32 @@ export function ReceivingPage() {
             <table className="w-full text-sm">
               <thead><tr className="border-b border-ui-border">
                 <th className="text-start py-2 font-semibold text-ui-muted">{t('item')}</th>
+                <th className="text-center py-2 font-semibold text-ui-muted">{lang === 'ar' ? 'الوحدة' : 'Unit'}</th>
                 <th className="text-center py-2 font-semibold text-ui-muted">{t('orderedQty')}</th>
                 <th className="text-center py-2 font-semibold text-ui-muted">{t('receivedQty')}</th>
                 <th className="text-center py-2 font-semibold text-ui-muted">{t('remainingQty')}</th>
+                <th className="text-center py-2 font-semibold text-ui-muted">{t('unitCost')}</th>
                 <th className="text-center py-2 font-semibold text-ui-muted">{t('receive')}</th>
+                <th className="text-end py-2 font-semibold text-ui-muted">{lang === 'ar' ? 'قيمة الاستلام' : 'Receipt Value'}</th>
               </tr></thead>
               <tbody>
-                {lines.map((l, i) => (
-                  <tr key={l.purchase_item_id} className="border-b border-ui-border">
-                    <td className="py-2 text-ui-text">{l.name}</td>
-                    <td className="py-2 text-center text-ui-text">{l.ordered}</td>
-                    <td className="py-2 text-center text-ui-text">{l.received}</td>
-                    <td className="py-2 text-center font-semibold text-ui-danger">{l.ordered - l.received}</td>
-                    <td className="py-2 text-center">
-                      <input type="number" min="0" max={l.ordered - l.received} step="0.01" value={l.qty} placeholder="0" onChange={(e) => updateQty(i, e.target.value)} className="w-24 rounded-md border border-ui-border bg-ui-surface px-2 py-1 text-sm" />
-                    </td>
-                  </tr>
-                ))}
+                {lines.map((l, i) => {
+                  const receiptQty = parseFloat(l.qty) || 0;
+                  return (
+                    <tr key={l.purchase_item_id} className="border-b border-ui-border">
+                      <td className="py-2 text-ui-text">{l.name}</td>
+                      <td className="py-2 text-center text-ui-text">{l.unit_name || '-'}</td>
+                      <td className="py-2 text-center text-ui-text">{l.ordered}</td>
+                      <td className="py-2 text-center text-ui-text">{l.received}</td>
+                      <td className="py-2 text-center font-semibold text-ui-danger">{l.ordered - l.received}</td>
+                      <td className="py-2 text-center text-ui-text">{formatCurrency(l.unit_cost, currency, lang)}</td>
+                      <td className="py-2 text-center">
+                        <input type="number" min="0" max={l.ordered - l.received} step="0.01" value={l.qty} placeholder="0" onChange={(e) => updateQty(i, e.target.value)} className="w-24 rounded-md border border-ui-border bg-ui-surface px-2 py-1 text-sm" />
+                      </td>
+                      <td className="py-2 text-end font-medium text-ui-text">{formatCurrency(receiptQty * Number(l.unit_cost || 0), currency, lang)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             <div className="flex justify-end gap-2 pt-2 border-t border-ui-border">
