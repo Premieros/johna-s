@@ -6,6 +6,11 @@ const migration = readFileSync(
   'utf8',
 );
 
+const readyScopeMigration = readFileSync(
+  'supabase/migrations/20260915091500_pos_ready_stock_authority_scope.sql',
+  'utf8',
+);
+
 describe('POS unconditional component sell-through contract', () => {
   it('removes stock availability as a sale authorization gate', () => {
     expect(migration).toContain('stock availability is informational and never blocks the sale path');
@@ -41,5 +46,15 @@ describe('POS unconditional component sell-through contract', () => {
     expect(migration).toContain('p_warehouse_id,v_link.required_qty');
     expect(migration).toContain('auth.uid(),true');
     expect(migration).toContain('RAW_NEGATIVE_CONSUMPTION_CONTRACT_MISSING');
+  });
+
+  it('uses finished-product stock only when the product actually has finished stock in the active branch warehouse', () => {
+    expect(readyScopeMigration).toContain("v_product_type = ''ready'' AND EXISTS");
+    expect(readyScopeMigration).toContain('public.inventory_batches ib');
+    expect(readyScopeMigration).toContain('ib.product_id=v_product_id');
+    expect(readyScopeMigration).toContain('ib.branch_id=p_branch_id');
+    expect(readyScopeMigration).toContain('ib.warehouse_id=p_warehouse_id');
+    expect(readyScopeMigration).toContain('READY_STOCK_AUTHORITY_SCOPE_MISSING');
+    expect(readyScopeMigration).not.toContain('public.check_product_availability(');
   });
 });
