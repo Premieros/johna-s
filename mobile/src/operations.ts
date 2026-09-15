@@ -23,11 +23,25 @@ export type MobileActiveShift = {
   expectedAmount: number;
 };
 
+export type MobileProductSummary = {
+  name: string;
+  quantity: number;
+};
+
+export type MobilePaymentSummary = {
+  method: string;
+  amount: number;
+  count: number;
+};
+
 export type MobileMyShiftSummary = {
   shift: MobileActiveShift | null;
   orderCount: number;
   openOrderCount: number;
   totalOrderValue: number;
+  paidSalesTotal: number;
+  soldProducts: MobileProductSummary[];
+  paymentMethods: MobilePaymentSummary[];
 };
 
 const requireSessionUserId = async (): Promise<string> => {
@@ -86,24 +100,75 @@ export async function getMyShiftSummary(branchId: string): Promise<MobileMyShift
     getActiveShift(branchId),
   ]);
 
-  let query = supabase
+  let orderQuery = supabase
     .from('orders')
     .select('id,total,status,shift_id')
     .eq('branch_id', branchId)
     .eq('cashier_id', userId);
 
-  if (shift?.id) query = query.eq('shift_id', shift.id);
-  else query = query.in('status', ['open', 'held']);
+  if (shift?.id) orderQuery = orderQuery.eq('shift_id', shift.id);
+  else orderQuery = orderQuery.in('status', ['open', 'held']);
 
-  const { data, error } = await query;
-  if (error) throw error;
+  const { data: orderData, error: orderError } = await orderQuery;
+  if (orderError) throw orderError;
 
-  const rows = (data || []) as Array<{ total?: number | string | null; status?: string | null }>;
+  const orderRows = (orderData || []) as Array<{ total?: number | string | null; status?: string | null }>;
+
+  let paidSalesTotal = 0;
+  const productTotals = new Map<string, number>();
+  const paymentTotals = new Map<string, { amount: number; count: number }>();
+
+  if (shift?.openedAt) {
+    const { data: salesData, error: salesError } = await supabase
+      .from('sales')
+      .select('id,total,paid_amount,payment_method,created_at,sale_items(quantity,product:products(name))')
+      .eq('branch_id', branchId)
+      .eq('salesperson_id', userId)
+      .gte('created_at', shift.openedAt)
+      .order('created_at', { ascending: false });
+
+    if (salesError) throw salesError;
+
+    type SaleItemRow = {
+      quantity?: number | string | null;
+      product?: { name?: string | null } | { name?: string | null }[] | null;
+    };
+    type SaleRow = {
+      total?: number | string | null;
+      paid_amount?: number | string | null;
+      payment_method?: string | null;
+      sale_items?: SaleItemRow[] | null;
+    };
+
+    for (const sale of (salesData || []) as SaleRow[]) {
+      const paidAmount = Number(sale.paid_amount || sale.total || 0);
+      paidSalesTotal += paidAmount;
+      const method = sale.payment_method || 'unknown';
+      const currentPayment = paymentTotals.get(method) || { amount: 0, count: 0 };
+      currentPayment.amount += paidAmount;
+      currentPayment.count += 1;
+      paymentTotals.set(method, currentPayment);
+
+      for (const item of sale.sale_items || []) {
+        const product = Array.isArray(item.product) ? item.product[0] : item.product;
+        const name = product?.name || 'صنف';
+        productTotals.set(name, (productTotals.get(name) || 0) + Number(item.quantity || 0));
+      }
+    }
+  }
+
   return {
     shift,
-    orderCount: rows.length,
-    openOrderCount: rows.filter((row) => row.status === 'open' || row.status === 'held').length,
-    totalOrderValue: rows.reduce((sum, row) => sum + Number(row.total || 0), 0),
+    orderCount: orderRows.length,
+    openOrderCount: orderRows.filter((row) => row.status === 'open' || row.status === 'held').length,
+    totalOrderValue: orderRows.reduce((sum, row) => sum + Number(row.total || 0), 0),
+    paidSalesTotal,
+    soldProducts: [...productTotals.entries()]
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity),
+    paymentMethods: [...paymentTotals.entries()]
+      .map(([method, value]) => ({ method, amount: value.amount, count: value.count }))
+      .sort((a, b) => b.amount - a.amount),
   };
 }
 
