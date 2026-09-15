@@ -80,21 +80,27 @@ describe.skipIf(skip)('order-lifecycle guards (047 H1/H3/H4/M9/L2)', () => {
     const res = await settle(`INV-${randomUUID()}`, { tableId: t, orderId: first.rows[0].id, orderType: 'dine_in' });
     expect(res.success).toBe(true); expect(await tableStatus(t)).toBe('occupied');
   });
-  it('table occupancy follows effective item lifecycle', async () => {
+  it('table occupancy follows effective item and order lifecycle', async () => {
     const t = await makeTable();
     const order = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 0, 0, 0, 0) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
     expect(await tableStatus(t)).toBe('vacant');
 
-    const item = await client.query<{ id: string }>(`INSERT INTO public.order_items (order_id, product_id, unit_name, quantity, unit_price, total) VALUES ($1, $2, 'piece', 1, 100, 100) RETURNING id`, [order.rows[0].id, prodId]);
+    const firstItem = await client.query<{ id: string }>(`INSERT INTO public.order_items (order_id, product_id, unit_name, quantity, unit_price, total) VALUES ($1, $2, 'piece', 1, 100, 100) RETURNING id`, [order.rows[0].id, prodId]);
     expect(await tableStatus(t)).toBe('occupied');
 
-    await client.query(`UPDATE public.order_items SET quantity = 0 WHERE id = $1`, [item.rows[0].id]);
+    await client.query(`DELETE FROM public.order_items WHERE id = $1`, [firstItem.rows[0].id]);
     expect(await tableStatus(t)).toBe('vacant');
 
-    await client.query(`UPDATE public.order_items SET quantity = 1 WHERE id = $1`, [item.rows[0].id]);
+    const secondItem = await client.query<{ id: string }>(`INSERT INTO public.order_items (order_id, product_id, unit_name, quantity, unit_price, total) VALUES ($1, $2, 'piece', 1, 100, 100) RETURNING id`, [order.rows[0].id, prodId]);
     expect(await tableStatus(t)).toBe('occupied');
 
-    await client.query(`DELETE FROM public.order_items WHERE id = $1`, [item.rows[0].id]);
+    await client.query(`UPDATE public.orders SET status = 'cancelled' WHERE id = $1`, [order.rows[0].id]);
+    expect(await tableStatus(t)).toBe('vacant');
+
+    await client.query(`UPDATE public.orders SET status = 'open' WHERE id = $1`, [order.rows[0].id]);
+    expect(await tableStatus(t)).toBe('occupied');
+
+    await client.query(`DELETE FROM public.order_items WHERE id = $1`, [secondItem.rows[0].id]);
     expect(await tableStatus(t)).toBe('vacant');
   });
   it('CHECK constraints reject impossible status/type values (L2)', async () => {
