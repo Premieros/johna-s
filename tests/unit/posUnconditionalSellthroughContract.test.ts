@@ -13,9 +13,19 @@ describe('POS unconditional component sell-through contract', () => {
     expect(migration).toContain('v_base_ready := false');
   });
 
-  it('does not invent finished-product stock requirements for unconfigured products', () => {
-    expect(migration).toContain('No configured component source: sell without a stock gate');
-    expect(migration).toContain('SALE_READY_FALLBACK_PATCH_MARKER_MISSING');
+  it('materializes an unconfigured sold product as a raw-material output', () => {
+    expect(migration).toContain('public._ensure_pos_fallback_product_raw');
+    expect(migration).toContain("'AUTO-PROD-' || replace(p_product_id::text,'-','')");
+    expect(migration).toContain("'AUTO_POS_FALLBACK'");
+    expect(migration).toContain('UNCONFIGURED_PRODUCT_OUTPUT_FALLBACK_MISSING');
+  });
+
+  it('materializes a priced modifier without a positive inventory effect as a raw-material output', () => {
+    expect(migration).toContain('public._ensure_pos_fallback_modifier_raw');
+    expect(migration).toContain("'AUTO-MOD-' || replace(p_option_id::text,'-','')");
+    expect(migration).toContain('o.price_delta>0');
+    expect(migration).toContain('e.quantity_delta>0');
+    expect(migration).toContain('PRICED_MODIFIER_OUTPUT_FALLBACK_MISSING');
   });
 
   it('deducts inventory effects from reusable modifier groups linked to the sold product', () => {
