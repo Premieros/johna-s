@@ -48,6 +48,13 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
         [`occupancy-empty-${Date.now()}`],
       );
       const branchId = branch.rows[0].id;
+      const product = await client.query<{ id: string }>(
+        `INSERT INTO public.products(name, branch_id, sale_price, cost_price, is_active)
+         VALUES ($1, $2, 10, 5, true)
+         RETURNING id`,
+        [`occupancy-product-${Date.now()}`, branchId],
+      );
+      const productId = product.rows[0].id;
       const tables = await client.query<{ id: string; name: string }>(
         `SELECT id, name
          FROM public.dining_tables
@@ -73,10 +80,10 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table1.id])).rows[0].status).toBe('vacant');
 
       const item = await client.query<{ id: string }>(
-        `INSERT INTO public.order_items(order_id, unit_name, quantity, unit_price, discount_amount, bonus_quantity, total)
-         VALUES ($1, 'piece', 1, 10, 0, 0, 10)
+        `INSERT INTO public.order_items(order_id, product_id, unit_name, quantity, unit_price, discount_amount, bonus_quantity, total)
+         VALUES ($1, $2, 'piece', 1, 10, 0, 0, 10)
          RETURNING id`,
-        [orderId],
+        [orderId, productId],
       );
       const itemId = item.rows[0].id;
 
@@ -117,6 +124,13 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
         [`occupancy-close-${Date.now()}`],
       );
       const branchId = branch.rows[0].id;
+      const product = await client.query<{ id: string }>(
+        `INSERT INTO public.products(name, branch_id, sale_price, cost_price, is_active)
+         VALUES ($1, $2, 10, 5, true)
+         RETURNING id`,
+        [`occupancy-close-product-${Date.now()}`, branchId],
+      );
+      const productId = product.rows[0].id;
       const table = await client.query<{ id: string }>(
         `SELECT id FROM public.dining_tables WHERE branch_id=$1 AND name='طاولة 01'`,
         [branchId],
@@ -131,9 +145,9 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
       );
       const orderId = order.rows[0].id;
       await client.query(
-        `INSERT INTO public.order_items(order_id, unit_name, quantity, unit_price, discount_amount, bonus_quantity, total)
-         VALUES ($1, 'piece', 1, 10, 0, 0, 10)`,
-        [orderId],
+        `INSERT INTO public.order_items(order_id, product_id, unit_name, quantity, unit_price, discount_amount, bonus_quantity, total)
+         VALUES ($1, $2, 'piece', 1, 10, 0, 0, 10)`,
+        [orderId, productId],
       );
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [tableId])).rows[0].status).toBe('occupied');
 
