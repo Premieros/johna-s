@@ -8,9 +8,10 @@ const migration = readFileSync(
 
 describe('POS unconditional component sell-through contract', () => {
   it('removes stock availability as a sale authorization gate', () => {
-    expect(migration).toContain('POS is sell-through: availability never blocks configured consumption');
+    expect(migration).toContain('stock availability is informational and never blocks the sale path');
     expect(migration).toContain('SALE_STOCK_GATE_STILL_PRESENT');
-    expect(migration).toContain('v_base_ready := false');
+    expect(migration).not.toContain('public.check_product_availability(');
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public._deduct_sale_inventory_with_modifiers_core');
   });
 
   it('materializes an unconfigured sold product as a raw-material output', () => {
@@ -37,6 +38,8 @@ describe('POS unconditional component sell-through contract', () => {
 
   it('preserves the raw negative-consumption authority', () => {
     expect(migration).toContain('public._raw_remove_fifo');
+    expect(migration).toContain('p_warehouse_id,v_link.required_qty');
+    expect(migration).toContain('auth.uid(),true');
     expect(migration).toContain('RAW_NEGATIVE_CONSUMPTION_CONTRACT_MISSING');
   });
 });
