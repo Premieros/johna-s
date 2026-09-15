@@ -1,75 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  ActivityIndicator, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
 } from 'react-native';
 import {
-  createTableOrder,
-  getBranches,
-  getBranchPosConfig,
-  getCatalog,
-  getDiningTables,
-  getMyOrders,
-  getOrderDetails,
-  getProductModifiers,
-  getSessionProfile,
-  hasSession,
-  sendToKitchen,
-  signIn,
-  signOut,
-  updateTableOrder,
+  createTableOrder, getBranches, getBranchPosConfig, getCatalog, getDiningTables,
+  getMyOrders, getOrderDetails, getProductModifiers, getSessionProfile, hasSession,
+  sendToKitchen, signIn, signOut, updateTableOrder,
 } from './src/gateway';
 import { mobileConfigReady } from './src/supabase';
 import type {
-  BranchPosConfig,
-  DiningTableSummary,
-  MobileBranch,
-  MobilePermission,
-  MobileSessionProfile,
-  ModifierGroup,
-  WaiterCartItemInput,
-  WaiterCatalogProduct,
-  WaiterOrderSummary,
+  BranchPosConfig, DiningTableSummary, MobileBranch, MobileSessionProfile, ModifierGroup,
+  WaiterCartItemInput, WaiterCatalogProduct, WaiterOrderSummary,
 } from './src/contracts';
 
 type Screen = 'login' | 'branches' | 'tables' | 'menu' | 'cart' | 'orders' | 'permissions';
+type ProductDraft = { product: WaiterCatalogProduct; quantity: number; notes: string; groups: ModifierGroup[]; selectedOptionIds: string[] };
 
-type ProductDraft = {
-  product: WaiterCatalogProduct;
-  quantity: number;
-  notes: string;
-  groups: ModifierGroup[];
-  selectedOptionIds: string[];
+const permissionLabels: Record<string, string> = {
+  'pos.view': 'عرض نقطة البيع', 'pos.order.create': 'إنشاء طلب', 'pos.order.edit': 'تعديل الطلب',
+  'pos.send_kitchen': 'إرسال الطلب للمطبخ', 'pos.payment.take': 'تحصيل / دفع',
+  'pos.order.split': 'تقسيم الفاتورة', 'pos.order.transfer': 'نقل / دمج الطلب',
+  'pos.void': 'إلغاء صنف', 'pos.discount': 'الخصومات', 'pos.change_price': 'تغيير السعر',
+  'pos.hold': 'تعليق الطلب', 'pos.cancel_order': 'إلغاء الطلب', 'pos.refund': 'المرتجعات',
+  'pos.kds_view': 'عرض المطبخ', 'pos.print_kitchen': 'طباعة المطبخ', 'pos.receipt.print': 'طباعة الإيصال',
+  'pos.change_branch': 'تغيير الفرع', 'shifts.open': 'فتح شفت', 'shifts.close': 'إغلاق شفت',
+  'settings.manage': 'إدارة الإعدادات', 'users.manage': 'إدارة المستخدمين', 'customers.manage': 'إدارة العملاء',
+  'approvals.review': 'مراجعة الموافقات', 'approvals.override': 'تجاوز الموافقات', 'approvals.policy.manage': 'إدارة سياسة الموافقات',
 };
-
-const permissionLabels: Record<MobilePermission, string> = {
-  'pos.view': 'عرض نقطة البيع',
-  'pos.order.create': 'إنشاء طلب',
-  'pos.order.edit': 'تعديل الطلب',
-  'pos.send_kitchen': 'إرسال الطلب للمطبخ',
-  'pos.payment.take': 'تحصيل / دفع',
-  'pos.order.split': 'تقسيم الفاتورة',
-  'pos.order.transfer': 'نقل / دمج الطلب',
-  'approvals.review': 'مراجعة الموافقات',
-  'approvals.override': 'تجاوز الموافقات المسموح بها',
-};
-
+const mobileActionPermissions = ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.send_kitchen', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer'];
 const money = (value: number, currency: string) => `${value.toFixed(2)} ${currency}`;
-
-const messageForError = (error: unknown) => {
+const errorMessage = (error: unknown) => {
   const text = error instanceof Error ? error.message : String(error || 'حدث خطأ');
   if (text.includes('Invalid login credentials')) return 'اسم المستخدم أو الرقم السري غير صحيح';
   if (text.includes('USERNAME_AND_PIN_REQUIRED')) return 'أدخل اسم المستخدم والرقم السري';
   if (text.includes('APPLICATION_PROFILE_REQUIRED')) return 'الحساب غير مرتبط بمستخدم نشط في النظام';
   if (text.includes('SESSION_REQUIRED')) return 'انتهت الجلسة، سجل الدخول مرة أخرى';
-  if (text.includes('permission') || text.includes('PERMISSION')) return 'ليس لديك الصلاحية المطلوبة';
+  if (text.toLowerCase().includes('permission')) return 'ليس لديك الصلاحية المطلوبة';
   if (text.includes('TABLE_BUSY')) return 'الطاولة مرتبطة بطلب مستخدم آخر';
   return text;
 };
@@ -99,619 +66,225 @@ export default function App() {
   const [orders, setOrders] = useState<WaiterOrderSummary[]>([]);
   const [draft, setDraft] = useState<ProductDraft | null>(null);
 
-  const can = (permission: MobilePermission) => profile?.isSuperAdmin || profile?.permissions.includes(permission) || false;
+  const can = (permission: string) => Boolean(profile?.isSuperAdmin || profile?.permissions.includes(permission));
+  const displayedPermissions = useMemo(() => {
+    const values = new Set<string>([...mobileActionPermissions, ...(profile?.permissions || [])]);
+    return [...values].sort();
+  }, [profile?.permissions]);
+
+  const chooseBranch = async (nextBranch: MobileBranch, effectiveProfile = profile) => {
+    if (effectiveProfile && effectiveProfile.branchIds.length > 0 && !effectiveProfile.branchIds.includes(nextBranch.id) && !effectiveProfile.isSuperAdmin) throw new Error('ليس لديك وصول لهذا الفرع');
+    setBusy(true); setErrorText('');
+    try {
+      const [nextConfig, nextTables, nextCatalog] = await Promise.all([
+        getBranchPosConfig(nextBranch.id), getDiningTables(nextBranch.id), getCatalog(nextBranch.id),
+      ]);
+      setBranch(nextBranch); setConfig(nextConfig); setTables(nextTables); setCatalog(nextCatalog);
+      setArea('الكل'); setCategory('الكل'); setCart([]); setSelectedTable(null);
+      setActiveOrderId(null); setActiveOrderNumber(null); setScreen('tables');
+    } finally { setBusy(false); }
+  };
 
   const loadIdentity = async () => {
     const nextProfile = await getSessionProfile();
     const nextBranches = await getBranches();
-    setProfile(nextProfile);
-    setBranches(nextBranches);
+    setProfile(nextProfile); setBranches(nextBranches);
     const preferred = nextBranches.find((item) => item.id === nextProfile.primaryBranchId) || nextBranches[0] || null;
-    if (preferred) {
-      await selectBranch(preferred, nextProfile);
-    } else {
-      setBranch(null);
-      setScreen('branches');
-    }
-  };
-
-  const selectBranch = async (nextBranch: MobileBranch, effectiveProfile = profile) => {
-    if (effectiveProfile && effectiveProfile.branchIds.length > 0 && !effectiveProfile.branchIds.includes(nextBranch.id) && !effectiveProfile.isSuperAdmin) {
-      throw new Error('ليس لديك وصول لهذا الفرع');
-    }
-    setBusy(true);
-    setErrorText('');
-    try {
-      const [nextConfig, nextTables, nextCatalog] = await Promise.all([
-        getBranchPosConfig(nextBranch.id),
-        getDiningTables(nextBranch.id),
-        getCatalog(nextBranch.id),
-      ]);
-      setBranch(nextBranch);
-      setConfig(nextConfig);
-      setTables(nextTables);
-      setCatalog(nextCatalog);
-      setArea('الكل');
-      setCategory('الكل');
-      setCart([]);
-      setSelectedTable(null);
-      setActiveOrderId(null);
-      setActiveOrderNumber(null);
-      setScreen('tables');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const refreshTables = async () => {
-    if (!branch) return;
-    const next = await getDiningTables(branch.id);
-    setTables(next);
-  };
-
-  const refreshOrders = async () => {
-    if (!branch) return;
-    setOrders(await getMyOrders(branch.id));
+    if (preferred) await chooseBranch(preferred, nextProfile); else setScreen('branches');
   };
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
-      try {
-        if (mobileConfigReady && await hasSession()) {
-          await loadIdentity();
-        }
-      } catch {
-        await signOut().catch(() => undefined);
-      } finally {
-        if (mounted) setBooting(false);
-      }
+      try { if (mobileConfigReady && await hasSession()) await loadIdentity(); }
+      catch { await signOut().catch(() => undefined); }
+      finally { if (mounted) setBooting(false); }
     })();
     return () => { mounted = false; };
   }, []);
 
-  const areas = useMemo(() => ['الكل', ...Array.from(new Set(tables.map((table) => table.areaName || 'بدون صالة')))], [tables]);
+  const areas = useMemo(() => ['الكل', ...new Set(tables.map((table) => table.areaName || 'بدون صالة'))], [tables]);
   const visibleTables = useMemo(() => tables.filter((table) => area === 'الكل' || (table.areaName || 'بدون صالة') === area), [tables, area]);
-  const categories = useMemo(() => ['الكل', ...Array.from(new Set(catalog.map((item) => item.categoryName || 'بدون تصنيف')))], [catalog]);
+  const categories = useMemo(() => ['الكل', ...new Set(catalog.map((item) => item.categoryName || 'بدون تصنيف'))], [catalog]);
   const visibleCatalog = useMemo(() => catalog.filter((item) => {
-    const matchesCategory = category === 'الكل' || (item.categoryName || 'بدون تصنيف') === category;
-    const q = search.trim();
-    const matchesSearch = !q || item.name.includes(q) || (item.nameEn || '').toLowerCase().includes(q.toLowerCase());
-    return matchesCategory && matchesSearch;
+    const q = search.trim().toLowerCase();
+    return (category === 'الكل' || (item.categoryName || 'بدون تصنيف') === category) && (!q || item.name.toLowerCase().includes(q) || (item.nameEn || '').toLowerCase().includes(q));
   }), [catalog, category, search]);
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const taxAmount = config.taxEnabled ? subtotal * (config.taxRate / 100) : 0;
   const total = subtotal + taxAmount;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleLogin = async () => {
-    setBusy(true);
-    setErrorText('');
-    try {
-      await signIn(username, pin);
-      await loadIdentity();
-      setPin('');
-    } catch (error) {
-      setErrorText(messageForError(error));
-    } finally {
-      setBusy(false);
-      setBooting(false);
-    }
+  const login = async () => {
+    setBusy(true); setErrorText('');
+    try { await signIn(username, pin); await loadIdentity(); setPin(''); }
+    catch (error) { setErrorText(errorMessage(error)); }
+    finally { setBusy(false); setBooting(false); }
   };
-
-  const handleLogout = async () => {
-    await signOut();
-    setProfile(null);
-    setBranches([]);
-    setBranch(null);
-    setTables([]);
-    setCatalog([]);
-    setCart([]);
-    setSelectedTable(null);
-    setActiveOrderId(null);
-    setActiveOrderNumber(null);
-    setScreen('login');
+  const logout = async () => {
+    await signOut(); setProfile(null); setBranches([]); setBranch(null); setTables([]); setCatalog([]);
+    setCart([]); setSelectedTable(null); setActiveOrderId(null); setActiveOrderNumber(null); setScreen('login');
+  };
+  const refreshTables = async () => { if (branch) setTables(await getDiningTables(branch.id)); };
+  const refreshOrders = async () => { if (branch) setOrders(await getMyOrders(branch.id)); };
+  const openOrders = async () => {
+    setBusy(true); setErrorText('');
+    try { await refreshOrders(); setScreen('orders'); }
+    catch (error) { setErrorText(errorMessage(error)); }
+    finally { setBusy(false); }
   };
 
   const openTable = async (table: DiningTableSummary) => {
-    setErrorText('');
-    setNotice('');
-    if (!can('pos.view')) {
-      setErrorText('لا تملك صلاحية عرض نقطة البيع');
-      return;
-    }
+    setErrorText(''); setNotice('');
+    if (!can('pos.view')) return setErrorText('لا تملك صلاحية عرض نقطة البيع');
     setBusy(true);
     try {
-      setSelectedTable(table);
-      setGuestCount(table.guestCount || table.capacity || 2);
+      setSelectedTable(table); setGuestCount(table.guestCount || table.capacity || 2);
       if (table.activeOrderId) {
         if (!can('pos.order.edit')) throw new Error('هذه الطاولة مشغولة ولا تملك صلاحية تعديل الطلب');
         const details = await getOrderDetails(table.activeOrderId);
-        setCart(details.items);
-        setGuestCount(details.guestCount || table.guestCount || 2);
-        setActiveOrderId(details.orderId);
-        setActiveOrderNumber(details.orderNumber);
+        setCart(details.items); setGuestCount(details.guestCount || table.guestCount || 2);
+        setActiveOrderId(details.orderId); setActiveOrderNumber(details.orderNumber);
       } else {
         if (!can('pos.order.create')) throw new Error('لا تملك صلاحية إنشاء طلب');
-        setCart([]);
-        setActiveOrderId(null);
-        setActiveOrderNumber(null);
+        setCart([]); setActiveOrderId(null); setActiveOrderNumber(null);
       }
       setScreen('menu');
-    } catch (error) {
-      setErrorText(messageForError(error));
-    } finally {
-      setBusy(false);
-    }
+    } catch (error) { setErrorText(errorMessage(error)); }
+    finally { setBusy(false); }
   };
 
   const openProduct = async (product: WaiterCatalogProduct) => {
     if (activeOrderId ? !can('pos.order.edit') : !can('pos.order.create')) return;
-    setBusy(true);
-    setErrorText('');
+    setBusy(true); setErrorText('');
     try {
       const groups = await getProductModifiers(product.id);
-      const defaults = groups.flatMap((group) => group.options.filter((option) => option.isDefault).slice(0, group.maxSelections).map((option) => option.id));
-      setDraft({ product, quantity: 1, notes: '', groups, selectedOptionIds: defaults });
-    } catch (error) {
-      setErrorText(messageForError(error));
-    } finally {
-      setBusy(false);
-    }
+      const selectedOptionIds = groups.flatMap((group) => group.options.filter((option) => option.isDefault).slice(0, group.maxSelections).map((option) => option.id));
+      setDraft({ product, quantity: 1, notes: '', groups, selectedOptionIds });
+    } catch (error) { setErrorText(errorMessage(error)); }
+    finally { setBusy(false); }
   };
-
-  const toggleModifier = (group: ModifierGroup, optionId: string) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const groupIds = new Set(group.options.map((option) => option.id));
-      const selectedInGroup = current.selectedOptionIds.filter((id) => groupIds.has(id));
-      let next = current.selectedOptionIds;
-      if (next.includes(optionId)) next = next.filter((id) => id !== optionId);
-      else if (group.maxSelections === 1) next = [...next.filter((id) => !groupIds.has(id)), optionId];
-      else if (selectedInGroup.length < group.maxSelections) next = [...next, optionId];
-      return { ...current, selectedOptionIds: next };
-    });
-  };
-
+  const toggleModifier = (group: ModifierGroup, optionId: string) => setDraft((current) => {
+    if (!current) return current;
+    const groupIds = new Set(group.options.map((option) => option.id));
+    const selected = current.selectedOptionIds.filter((id) => groupIds.has(id));
+    let next = current.selectedOptionIds;
+    if (next.includes(optionId)) next = next.filter((id) => id !== optionId);
+    else if (group.maxSelections === 1) next = [...next.filter((id) => !groupIds.has(id)), optionId];
+    else if (selected.length < group.maxSelections) next = [...next, optionId];
+    return { ...current, selectedOptionIds: next };
+  });
   const addDraft = () => {
     if (!draft) return;
     for (const group of draft.groups) {
-      const groupIds = new Set(group.options.map((option) => option.id));
-      const count = draft.selectedOptionIds.filter((id) => groupIds.has(id)).length;
-      if (count < group.minSelections) {
-        setErrorText(`اختر ${group.minSelections} على الأقل من ${group.name}`);
-        return;
-      }
+      const ids = new Set(group.options.map((option) => option.id));
+      if (draft.selectedOptionIds.filter((id) => ids.has(id)).length < group.minSelections) return setErrorText(`اختر ${group.minSelections} على الأقل من ${group.name}`);
     }
-    const priceDelta = draft.groups.flatMap((group) => group.options)
-      .filter((option) => draft.selectedOptionIds.includes(option.id))
-      .reduce((sum, option) => sum + option.priceDelta, 0);
-    setCart((current) => [...current, {
-      productId: draft.product.id,
-      name: draft.product.name,
-      unitPrice: Math.max(0, draft.product.salePrice + priceDelta),
-      quantity: draft.quantity,
-      modifierOptionIds: draft.selectedOptionIds,
-      notes: draft.notes.trim() || undefined,
-    }]);
-    setDraft(null);
-    setErrorText('');
+    const delta = draft.groups.flatMap((group) => group.options).filter((option) => draft.selectedOptionIds.includes(option.id)).reduce((sum, option) => sum + option.priceDelta, 0);
+    setCart((current) => [...current, { productId: draft.product.id, name: draft.product.name, unitPrice: Math.max(0, draft.product.salePrice + delta), quantity: draft.quantity, modifierOptionIds: draft.selectedOptionIds, notes: draft.notes.trim() || undefined }]);
+    setDraft(null); setErrorText('');
   };
+  const changeQty = (index: number, delta: number) => setCart((current) => current.map((item, i) => i === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0));
 
-  const changeCartQty = (index: number, delta: number) => {
-    if (!can('pos.order.edit') && activeOrderId) return;
-    setCart((current) => current
-      .map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item)
-      .filter((item) => item.quantity > 0));
-  };
-
-  const handleSend = async () => {
+  const sendOrder = async () => {
     if (!branch || !selectedTable || cart.length === 0) return;
-    if (!can('pos.send_kitchen')) {
-      setErrorText('لا تملك صلاحية الإرسال للمطبخ');
-      return;
-    }
-    setBusy(true);
-    setErrorText('');
-    setNotice('');
+    if (!can('pos.send_kitchen')) return setErrorText('لا تملك صلاحية الإرسال للمطبخ');
+    setBusy(true); setErrorText(''); setNotice('');
     try {
-      let orderId = activeOrderId;
-      let orderNumber = activeOrderNumber;
-      if (orderId) {
-        await updateTableOrder(orderId, cart, config);
-      } else {
-        const created = await createTableOrder({
-          branchId: branch.id,
-          tableId: selectedTable.id,
-          guestCount,
-          items: cart,
-          taxEnabled: config.taxEnabled,
-          taxRate: config.taxRate,
-        });
-        orderId = created.orderId;
-        orderNumber = created.orderNumber;
-        setActiveOrderId(created.orderId);
-        setActiveOrderNumber(created.orderNumber);
+      let orderId = activeOrderId; let orderNumber = activeOrderNumber;
+      if (orderId) await updateTableOrder(orderId, cart, config);
+      else {
+        const created = await createTableOrder({ branchId: branch.id, tableId: selectedTable.id, guestCount, items: cart, taxEnabled: config.taxEnabled, taxRate: config.taxRate });
+        orderId = created.orderId; orderNumber = created.orderNumber; setActiveOrderId(orderId); setActiveOrderNumber(orderNumber);
       }
-      const sentCount = await sendToKitchen(orderId);
-      setNotice(sentCount > 0 ? `تم إرسال ${sentCount} صنف/سطر للمطبخ بنجاح` : 'كل الأصناف الحالية مرسلة للمطبخ بالفعل');
-      setActiveOrderNumber(orderNumber);
-      await refreshTables();
-      await refreshOrders();
-      setScreen('orders');
-    } catch (error) {
-      setErrorText(messageForError(error));
-    } finally {
-      setBusy(false);
-    }
+      const count = await sendToKitchen(orderId);
+      setNotice(count > 0 ? `تم إرسال ${count} صنف/سطر للمطبخ بنجاح` : 'كل الأصناف الحالية مرسلة للمطبخ بالفعل');
+      setActiveOrderNumber(orderNumber); await refreshTables(); await refreshOrders(); setScreen('orders');
+    } catch (error) { setErrorText(errorMessage(error)); }
+    finally { setBusy(false); }
   };
 
-  const openOrders = async () => {
-    setBusy(true);
-    setErrorText('');
-    try {
-      await refreshOrders();
-      setScreen('orders');
-    } catch (error) {
-      setErrorText(messageForError(error));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const Header = ({ title }: { title: string }) => <View style={s.header}>
+    <View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={s.title}>{title}</Text><Text style={s.sub}>{branch?.name || 'Johna S'} · {profile?.displayName || ''}</Text></View>
+    <TouchableOpacity style={s.avatar} onPress={() => setScreen('permissions')}><Text style={s.avatarText}>{profile?.displayName?.charAt(0) || 'J'}</Text></TouchableOpacity>
+  </View>;
+  const Nav = () => <View style={s.nav}>
+    <TouchableOpacity onPress={() => setScreen('tables')}><Text style={s.navText}>الطاولات</Text></TouchableOpacity>
+    <TouchableOpacity onPress={openOrders}><Text style={s.navText}>طلباتي</Text></TouchableOpacity>
+    <TouchableOpacity onPress={() => setScreen('permissions')}><Text style={s.navText}>صلاحياتي</Text></TouchableOpacity>
+  </View>;
+  const Error = () => errorText ? <View style={s.error}><Text style={s.errorText}>{errorText}</Text></View> : null;
 
-  const Header = ({ title }: { title: string }) => (
-    <View style={styles.header}>
-      <View style={styles.headerTitleWrap}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <Text style={styles.headerSub}>{branch?.name || 'Johna S'} · {profile?.displayName || ''}</Text>
-      </View>
-      <TouchableOpacity style={styles.avatar} onPress={() => setScreen('permissions')}>
-        <Text style={styles.avatarText}>{profile?.displayName?.charAt(0) || 'J'}</Text>
-      </TouchableOpacity>
+  if (booting) return <SafeAreaView style={s.center}><ActivityIndicator size="large" /><Text>جاري تشغيل التطبيق...</Text></SafeAreaView>;
+  if (screen === 'login') return <SafeAreaView style={s.login}><View style={s.loginWrap}>
+    <Text style={s.logo}>Johna S</Text><Text style={s.loginTitle}>طلبات نادل الصالة</Text><Text style={s.loginHint}>نفس حساب وصلاحيات النظام الحالي</Text>
+    {!mobileConfigReady && <View style={s.error}><Text style={s.errorText}>نسخة البناء لا تحتوي مفتاح الاتصال العام.</Text></View>}
+    <View style={s.card}><Text style={s.label}>اسم المستخدم</Text><TextInput style={s.input} value={username} onChangeText={setUsername} autoCapitalize="none" textAlign="right" />
+      <Text style={s.label}>الرقم السري / PIN</Text><TextInput style={s.input} value={pin} onChangeText={setPin} secureTextEntry textAlign="right" /><Error />
+      <TouchableOpacity style={[s.primary, busy && s.disabled]} disabled={busy || !mobileConfigReady} onPress={login}>{busy ? <ActivityIndicator /> : <Text style={s.primaryText}>تسجيل الدخول</Text>}</TouchableOpacity>
     </View>
-  );
+  </View></SafeAreaView>;
 
-  const BottomNav = () => (
-    <View style={styles.bottomNav}>
-      <TouchableOpacity onPress={() => setScreen('tables')}><Text style={styles.navText}>الطاولات</Text></TouchableOpacity>
-      <TouchableOpacity onPress={openOrders}><Text style={styles.navText}>طلباتي</Text></TouchableOpacity>
-      <TouchableOpacity onPress={() => setScreen('permissions')}><Text style={styles.navText}>صلاحياتي</Text></TouchableOpacity>
-    </View>
-  );
+  if (screen === 'branches') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="اختيار الفرع" />
+    {branches.map((item) => <TouchableOpacity key={item.id} style={s.list} onPress={() => void chooseBranch(item)}><Text style={s.listTitle}>{item.name}</Text><Text style={s.muted}>فتح الفرع</Text></TouchableOpacity>)}
+    <TouchableOpacity style={s.secondary} onPress={logout}><Text style={s.secondaryText}>تسجيل الخروج</Text></TouchableOpacity></ScrollView></SafeAreaView>;
 
-  if (booting) {
-    return <SafeAreaView style={styles.center}><ActivityIndicator size="large" /><Text style={styles.loadingText}>جاري تشغيل التطبيق...</Text></SafeAreaView>;
-  }
+  if (screen === 'permissions') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="صلاحياتي" />
+    <View style={s.hero}><Text style={s.heroTitle}>{profile?.displayName}</Text><Text style={s.heroText}>{profile?.isSuperAdmin ? 'Super Admin' : profile?.role || 'مستخدم'} · {profile?.permissions.length || 0} صلاحية مسجلة</Text></View>
+    {displayedPermissions.map((permission) => <View key={permission} style={s.permission}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={s.permissionName}>{permissionLabels[permission] || permission}</Text><Text style={s.code}>{permission}</Text></View><Text style={[s.state, can(permission) ? s.allowed : s.denied]}>{can(permission) ? 'مسموح' : 'غير مسموح'}</Text></View>)}
+    {branches.length > 1 && <TouchableOpacity style={s.secondary} onPress={() => setScreen('branches')}><Text style={s.secondaryText}>تغيير الفرع</Text></TouchableOpacity>}
+    <TouchableOpacity style={s.secondary} onPress={logout}><Text style={s.secondaryText}>تسجيل الخروج</Text></TouchableOpacity><Nav />
+  </ScrollView></SafeAreaView>;
 
-  if (screen === 'login') {
-    return (
-      <SafeAreaView style={styles.loginSafe}>
-        <View style={styles.loginWrap}>
-          <Text style={styles.logo}>Johna S</Text>
-          <Text style={styles.loginTitle}>طلبات نادل الصالة</Text>
-          <Text style={styles.loginHint}>نفس حساب وصلاحيات النظام الحالي</Text>
-          {!mobileConfigReady && <View style={styles.errorBox}><Text style={styles.errorText}>نسخة البناء لا تحتوي مفتاح الاتصال العام. أعد بناء APK من GitHub Actions بعد ضبط VITE_SUPABASE_ANON_KEY.</Text></View>}
-          <View style={styles.card}>
-            <Text style={styles.label}>اسم المستخدم</Text>
-            <TextInput value={username} onChangeText={setUsername} autoCapitalize="none" textAlign="right" style={styles.input} placeholder="username" />
-            <Text style={styles.label}>الرقم السري / PIN</Text>
-            <TextInput value={pin} onChangeText={setPin} secureTextEntry textAlign="right" style={styles.input} placeholder="••••••" />
-            {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
-            <TouchableOpacity style={[styles.primaryButton, busy && styles.disabled]} onPress={handleLogin} disabled={busy || !mobileConfigReady}>
-              {busy ? <ActivityIndicator /> : <Text style={styles.primaryButtonText}>تسجيل الدخول</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  if (screen === 'tables') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="اختيار الطاولة" /><Error />
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{areas.map((item) => <TouchableOpacity key={item} style={[s.chip, area === item && s.chipOn]} onPress={() => setArea(item)}><Text style={[s.chipText, area === item && s.chipTextOn]}>{item}</Text></TouchableOpacity>)}</ScrollView>
+    <View style={s.grid}>{visibleTables.map((table) => <TouchableOpacity key={table.id} style={[s.table, table.status === 'occupied' && s.occupied]} onPress={() => void openTable(table)}><Text style={s.tableName}>{table.name}</Text><Text style={s.gold}>{table.status === 'occupied' ? 'مشغولة' : 'متاحة'}</Text>{table.activeWaiterName && <Text style={s.muted}>النادل: {table.activeWaiterName}</Text>}{table.guestCount ? <Text style={s.muted}>{table.guestCount} ضيوف</Text> : null}</TouchableOpacity>)}</View>
+    <TouchableOpacity style={s.secondary} onPress={() => void refreshTables()}><Text style={s.secondaryText}>تحديث الطاولات</Text></TouchableOpacity><Nav />
+  </ScrollView></SafeAreaView>;
 
-  if (screen === 'branches') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.container}>
-          <Header title="اختيار الفرع" />
-          {branches.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.listCard} onPress={() => void selectBranch(item)}>
-              <Text style={styles.listTitle}>{item.name}</Text>
-              <Text style={styles.muted}>فتح فرع</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleLogout}><Text style={styles.secondaryButtonText}>تسجيل الخروج</Text></TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+  if (screen === 'menu') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title={selectedTable?.name || 'المنيو'} /><Error />
+    <View style={s.context}><Text style={s.listTitle}>{activeOrderNumber ? `الطلب #${activeOrderNumber}` : 'طلب جديد'}</Text><View style={s.qtyRow}><TouchableOpacity style={s.qty} onPress={() => setGuestCount((v) => Math.max(1, v - 1))}><Text>−</Text></TouchableOpacity><Text style={s.bold}>{guestCount} ضيوف</Text><TouchableOpacity style={s.qty} onPress={() => setGuestCount((v) => v + 1)}><Text>+</Text></TouchableOpacity></View></View>
+    <TextInput style={s.input} value={search} onChangeText={setSearch} textAlign="right" placeholder="ابحث عن صنف..." />
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{categories.map((item) => <TouchableOpacity key={item} style={[s.chip, category === item && s.chipOn]} onPress={() => setCategory(item)}><Text style={[s.chipText, category === item && s.chipTextOn]}>{item}</Text></TouchableOpacity>)}</ScrollView>
+    <View style={s.grid}>{visibleCatalog.map((product) => <TouchableOpacity key={product.id} style={s.product} onPress={() => void openProduct(product)}>{product.imageUrl ? <Image source={{ uri: product.imageUrl }} style={s.image} /> : <View style={s.placeholder}><Text style={s.bold}>{product.categoryName || product.name}</Text></View>}<Text style={s.productName}>{product.name}</Text><Text style={s.gold}>{money(product.salePrice, config.currency)}</Text></TouchableOpacity>)}</View>
+    <TouchableOpacity style={s.cartBar} onPress={() => setScreen('cart')}><Text style={s.goldLight}>{money(total, config.currency)}</Text><Text style={s.primaryText}>السلة · {itemCount}</Text></TouchableOpacity><Nav />
+    {draft && <View style={s.backdrop}><View style={s.sheet}><ScrollView><Text style={s.title}>{draft.product.name}</Text><Text style={s.gold}>{money(draft.product.salePrice, config.currency)}</Text>
+      <View style={s.qtyRow}><TouchableOpacity style={s.qty} onPress={() => setDraft((d) => d ? { ...d, quantity: Math.max(1, d.quantity - 1) } : d)}><Text>−</Text></TouchableOpacity><Text style={s.bold}>الكمية {draft.quantity}</Text><TouchableOpacity style={s.qty} onPress={() => setDraft((d) => d ? { ...d, quantity: d.quantity + 1 } : d)}><Text>+</Text></TouchableOpacity></View>
+      {draft.groups.map((group) => <View key={group.id} style={s.mod}><Text style={s.bold}>{group.name} · {group.minSelections > 0 ? 'مطلوب' : 'اختياري'}</Text>{group.options.map((option) => { const on = draft.selectedOptionIds.includes(option.id); return <TouchableOpacity key={option.id} style={[s.modOption, on && s.modOn]} onPress={() => toggleModifier(group, option.id)}><Text style={s.right}>{on ? '✓ ' : ''}{option.name}{option.priceDelta ? ` (+${money(option.priceDelta, config.currency)})` : ''}</Text></TouchableOpacity>; })}</View>)}
+      <TextInput style={[s.input, { minHeight: 80 }]} multiline value={draft.notes} onChangeText={(v) => setDraft((d) => d ? { ...d, notes: v } : d)} textAlign="right" placeholder="ملاحظات الصنف..." /><Error />
+      <TouchableOpacity style={s.primary} onPress={addDraft}><Text style={s.primaryText}>إضافة إلى الطلب</Text></TouchableOpacity><TouchableOpacity style={s.secondary} onPress={() => { setDraft(null); setErrorText(''); }}><Text style={s.secondaryText}>إلغاء</Text></TouchableOpacity>
+    </ScrollView></View></View>}
+  </ScrollView></SafeAreaView>;
 
-  if (screen === 'permissions') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.container}>
-          <Header title="صلاحياتي" />
-          <View style={styles.hero}>
-            <Text style={styles.heroTitle}>{profile?.displayName}</Text>
-            <Text style={styles.heroText}>{profile?.isSuperAdmin ? 'Super Admin' : profile?.role || 'مستخدم'} · الصلاحيات مأخوذة من النظام الحالي</Text>
-          </View>
-          {(Object.keys(permissionLabels) as MobilePermission[]).map((permission) => (
-            <View key={permission} style={styles.permissionRow}>
-              <Text style={[styles.permissionState, can(permission) ? styles.allowed : styles.denied]}>{can(permission) ? 'مسموح' : 'غير مسموح'}</Text>
-              <View style={styles.permissionCopy}><Text style={styles.permissionName}>{permissionLabels[permission]}</Text><Text style={styles.permissionCode}>{permission}</Text></View>
-            </View>
-          ))}
-          {branches.length > 1 && <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen('branches')}><Text style={styles.secondaryButtonText}>تغيير الفرع</Text></TouchableOpacity>}
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleLogout}><Text style={styles.secondaryButtonText}>تسجيل الخروج</Text></TouchableOpacity>
-          <BottomNav />
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+  if (screen === 'cart') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="مراجعة الطلب" /><Error />
+    {cart.map((item, index) => <View key={`${item.productId}-${index}`} style={s.cartLine}><View style={s.qtyRow}><TouchableOpacity style={s.qty} onPress={() => changeQty(index, -1)}><Text>−</Text></TouchableOpacity><Text style={s.bold}>{item.quantity}</Text><TouchableOpacity style={s.qty} onPress={() => changeQty(index, 1)}><Text>+</Text></TouchableOpacity></View><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={s.listTitle}>{item.name}</Text>{item.notes && <Text style={s.muted}>{item.notes}</Text>}<Text style={s.gold}>{money(item.unitPrice * item.quantity, config.currency)}</Text></View></View>)}
+    <View style={s.total}><Text style={s.right}>الإجمالي قبل الضريبة: {money(subtotal, config.currency)}</Text>{config.taxEnabled && <Text style={s.right}>الضريبة ({config.taxRate}%): {money(taxAmount, config.currency)}</Text>}<Text style={s.totalText}>الإجمالي: {money(total, config.currency)}</Text></View>
+    <TouchableOpacity style={[s.primary, (!can('pos.send_kitchen') || busy || !cart.length) && s.disabled]} disabled={!can('pos.send_kitchen') || busy || !cart.length} onPress={sendOrder}>{busy ? <ActivityIndicator /> : <Text style={s.primaryText}>حفظ وإرسال للمطبخ</Text>}</TouchableOpacity>
+    {!can('pos.send_kitchen') && <Text style={s.errorText}>لا تملك صلاحية الإرسال للمطبخ</Text>}<TouchableOpacity style={s.secondary} onPress={() => setScreen('menu')}><Text style={s.secondaryText}>إضافة أصناف أخرى</Text></TouchableOpacity><Nav />
+  </ScrollView></SafeAreaView>;
 
-  if (screen === 'tables') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.container}>
-          <Header title="اختيار الطاولة" />
-          {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {areas.map((item) => <TouchableOpacity key={item} style={[styles.chip, area === item && styles.chipActive]} onPress={() => setArea(item)}><Text style={[styles.chipText, area === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}
-          </ScrollView>
-          <View style={styles.tableGrid}>
-            {visibleTables.map((table) => (
-              <TouchableOpacity key={table.id} style={[styles.tableCard, table.status === 'occupied' && styles.tableOccupied]} onPress={() => void openTable(table)}>
-                <Text style={styles.tableName}>{table.name}</Text>
-                <Text style={styles.tableStatus}>{table.status === 'occupied' ? 'مشغولة' : 'متاحة'}</Text>
-                {table.activeWaiterName && <Text style={styles.waiterName}>النادل: {table.activeWaiterName}</Text>}
-                {table.guestCount ? <Text style={styles.muted}>{table.guestCount} ضيوف</Text> : null}
-              </TouchableOpacity>
-            ))}
-          </View>
-          {visibleTables.length === 0 && <View style={styles.empty}><Text style={styles.emptyTitle}>لا توجد طاولات في هذا الاختيار</Text></View>}
-          <TouchableOpacity style={styles.refreshButton} onPress={() => void refreshTables()}><Text style={styles.secondaryButtonText}>تحديث الطاولات</Text></TouchableOpacity>
-          <BottomNav />
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'menu') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.container}>
-          <Header title={selectedTable?.name || 'المنيو'} />
-          <View style={styles.orderContext}>
-            <Text style={styles.orderContextTitle}>{activeOrderNumber ? `الطلب #${activeOrderNumber}` : 'طلب جديد'}</Text>
-            <View style={styles.guestRow}>
-              <TouchableOpacity style={styles.qtyButton} onPress={() => setGuestCount((value) => Math.max(1, value - 1))}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
-              <Text style={styles.guestCount}>{guestCount} ضيوف</Text>
-              <TouchableOpacity style={styles.qtyButton} onPress={() => setGuestCount((value) => value + 1)}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
-            </View>
-          </View>
-          {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
-          <TextInput style={styles.input} value={search} onChangeText={setSearch} textAlign="right" placeholder="ابحث عن صنف..." />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {categories.map((item) => <TouchableOpacity key={item} style={[styles.chip, category === item && styles.chipActive]} onPress={() => setCategory(item)}><Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}
-          </ScrollView>
-          <View style={styles.productGrid}>
-            {visibleCatalog.map((product) => (
-              <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => void openProduct(product)}>
-                {product.imageUrl ? <Image source={{ uri: product.imageUrl }} style={styles.productImage} /> : <View style={styles.productPlaceholder}><Text style={styles.productPlaceholderText}>{product.categoryName || product.name}</Text></View>}
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productPrice}>{money(product.salePrice, config.currency)}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity style={styles.cartBar} onPress={() => setScreen('cart')}>
-            <Text style={styles.cartBarValue}>{money(total, config.currency)}</Text>
-            <Text style={styles.cartBarText}>السلة · {itemCount}</Text>
-          </TouchableOpacity>
-          <BottomNav />
-        </ScrollView>
-        {draft && (
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <ScrollView>
-                <Text style={styles.modalTitle}>{draft.product.name}</Text>
-                <Text style={styles.productPrice}>{money(draft.product.salePrice, config.currency)}</Text>
-                <View style={styles.guestRow}>
-                  <TouchableOpacity style={styles.qtyButton} onPress={() => setDraft((current) => current ? { ...current, quantity: Math.max(1, current.quantity - 1) } : current)}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
-                  <Text style={styles.guestCount}>الكمية {draft.quantity}</Text>
-                  <TouchableOpacity style={styles.qtyButton} onPress={() => setDraft((current) => current ? { ...current, quantity: current.quantity + 1 } : current)}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
-                </View>
-                {draft.groups.map((group) => (
-                  <View key={group.id} style={styles.modGroup}>
-                    <Text style={styles.modTitle}>{group.name} · {group.minSelections > 0 ? 'مطلوب' : 'اختياري'}</Text>
-                    {group.options.map((option) => {
-                      const active = draft.selectedOptionIds.includes(option.id);
-                      return <TouchableOpacity key={option.id} style={[styles.modOption, active && styles.modOptionActive]} onPress={() => toggleModifier(group, option.id)}><Text style={styles.modOptionText}>{active ? '✓ ' : ''}{option.name} {option.priceDelta ? `(+${money(option.priceDelta, config.currency)})` : ''}</Text></TouchableOpacity>;
-                    })}
-                  </View>
-                ))}
-                <TextInput style={[styles.input, styles.notesInput]} value={draft.notes} onChangeText={(value) => setDraft((current) => current ? { ...current, notes: value } : current)} multiline textAlign="right" placeholder="ملاحظات الصنف..." />
-                {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
-                <TouchableOpacity style={styles.primaryButton} onPress={addDraft}><Text style={styles.primaryButtonText}>إضافة إلى الطلب</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => { setDraft(null); setErrorText(''); }}><Text style={styles.secondaryButtonText}>إلغاء</Text></TouchableOpacity>
-              </ScrollView>
-            </View>
-          </View>
-        )}
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'cart') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.container}>
-          <Header title="مراجعة الطلب" />
-          {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
-          {cart.map((item, index) => (
-            <View key={`${item.productId}-${index}`} style={styles.cartLine}>
-              <View style={styles.qtyControls}>
-                <TouchableOpacity style={styles.qtyButton} onPress={() => changeCartQty(index, -1)}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
-                <Text style={styles.qtyText}>{item.quantity}</Text>
-                <TouchableOpacity style={styles.qtyButton} onPress={() => changeCartQty(index, 1)}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
-              </View>
-              <View style={styles.cartCopy}>
-                <Text style={styles.cartName}>{item.name}</Text>
-                {!!item.notes && <Text style={styles.muted}>{item.notes}</Text>}
-                <Text style={styles.productPrice}>{money(item.unitPrice * item.quantity, config.currency)}</Text>
-              </View>
-            </View>
-          ))}
-          {cart.length === 0 && <View style={styles.empty}><Text style={styles.emptyTitle}>السلة فارغة</Text></View>}
-          <View style={styles.totalCard}>
-            <Text style={styles.totalRow}>الإجمالي قبل الضريبة: {money(subtotal, config.currency)}</Text>
-            {config.taxEnabled && <Text style={styles.totalRow}>الضريبة ({config.taxRate}%): {money(taxAmount, config.currency)}</Text>}
-            <Text style={styles.totalMain}>الإجمالي: {money(total, config.currency)}</Text>
-          </View>
-          <TouchableOpacity style={[styles.primaryButton, (busy || cart.length === 0 || !can('pos.send_kitchen')) && styles.disabled]} disabled={busy || cart.length === 0 || !can('pos.send_kitchen')} onPress={handleSend}>
-            {busy ? <ActivityIndicator /> : <Text style={styles.primaryButtonText}>حفظ وإرسال للمطبخ</Text>}
-          </TouchableOpacity>
-          {!can('pos.send_kitchen') && <Text style={styles.deniedHint}>لا تملك صلاحية الإرسال للمطبخ</Text>}
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen('menu')}><Text style={styles.secondaryButtonText}>إضافة أصناف أخرى</Text></TouchableOpacity>
-          <BottomNav />
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Header title="طلباتي" />
-        {!!notice && <View style={styles.successBox}><Text style={styles.successText}>{notice}</Text></View>}
-        {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
-        {orders.map((order) => (
-          <TouchableOpacity key={order.orderId} style={styles.orderCard} onPress={async () => {
-            setBusy(true);
-            try {
-              const details = await getOrderDetails(order.orderId);
-              if (details.tableId) {
-                const table = tables.find((item) => item.id === details.tableId) || null;
-                setSelectedTable(table);
-              }
-              setCart(details.items);
-              setGuestCount(details.guestCount || 2);
-              setActiveOrderId(details.orderId);
-              setActiveOrderNumber(details.orderNumber);
-              if (details.status === 'open' || details.status === 'held') setScreen('menu');
-            } catch (error) {
-              setErrorText(messageForError(error));
-            } finally {
-              setBusy(false);
-            }
-          }}>
-            <View>
-              <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
-              <Text style={styles.muted}>{order.tableName} · {order.waiterName}</Text>
-            </View>
-            <View style={styles.orderStatusWrap}>
-              <Text style={styles.orderStatus}>{order.kitchenStatus || order.status}</Text>
-              <Text style={styles.productPrice}>{money(order.total, config.currency)}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-        {orders.length === 0 && <View style={styles.empty}><Text style={styles.emptyTitle}>لا توجد طلبات لك في هذا الفرع</Text></View>}
-        <TouchableOpacity style={styles.refreshButton} onPress={openOrders}><Text style={styles.secondaryButtonText}>تحديث الطلبات</Text></TouchableOpacity>
-        <BottomNav />
-      </ScrollView>
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="طلباتي" />{notice ? <View style={s.success}><Text style={s.successText}>{notice}</Text></View> : null}<Error />
+    {orders.map((order) => <TouchableOpacity key={order.orderId} style={s.order} onPress={async () => { setBusy(true); try { const d = await getOrderDetails(order.orderId); setSelectedTable(d.tableId ? tables.find((t) => t.id === d.tableId) || null : null); setCart(d.items); setGuestCount(d.guestCount || 2); setActiveOrderId(d.orderId); setActiveOrderNumber(d.orderNumber); if (d.status === 'open' || d.status === 'held') setScreen('menu'); } catch (error) { setErrorText(errorMessage(error)); } finally { setBusy(false); } }}><View><Text style={s.listTitle}>#{order.orderNumber}</Text><Text style={s.muted}>{order.tableName} · {order.waiterName}</Text></View><View><Text style={s.status}>{order.kitchenStatus || order.status}</Text><Text style={s.gold}>{money(order.total, config.currency)}</Text></View></TouchableOpacity>)}
+    {!orders.length && <View style={s.card}><Text style={s.muted}>لا توجد طلبات لك في هذا الفرع</Text></View>}<TouchableOpacity style={s.secondary} onPress={openOrders}><Text style={s.secondaryText}>تحديث الطلبات</Text></TouchableOpacity><Nav />
+  </ScrollView></SafeAreaView>;
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F6F2E9' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, backgroundColor: '#F6F2E9' },
-  loadingText: { color: '#173B2D', fontWeight: '800' },
-  container: { padding: 16, paddingBottom: 110, gap: 12 },
-  loginSafe: { flex: 1, backgroundColor: '#123B2D' },
-  loginWrap: { flex: 1, justifyContent: 'center', padding: 22, gap: 10 },
-  logo: { color: '#D9B45B', fontSize: 38, fontWeight: '900', textAlign: 'center' },
-  loginTitle: { color: '#FFFFFF', fontSize: 24, fontWeight: '900', textAlign: 'center' },
-  loginHint: { color: '#D7E4DE', textAlign: 'center', marginBottom: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 18, gap: 10 },
-  label: { color: '#173B2D', fontWeight: '900', textAlign: 'right' },
-  input: { minHeight: 48, borderWidth: 1, borderColor: '#DDD5C3', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 14, color: '#173B2D' },
-  notesInput: { minHeight: 82, textAlignVertical: 'top', paddingTop: 12 },
-  primaryButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#173B2D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
-  secondaryButton: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: '#B7AA8C', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
-  secondaryButtonText: { color: '#173B2D', fontWeight: '900' },
-  refreshButton: { minHeight: 44, borderRadius: 12, backgroundColor: '#EFE8D9', alignItems: 'center', justifyContent: 'center' },
-  disabled: { opacity: 0.45 },
-  errorBox: { backgroundColor: '#FDECEC', borderRadius: 12, padding: 11, borderWidth: 1, borderColor: '#F0BABA' },
-  errorText: { color: '#9C2525', textAlign: 'right', fontWeight: '700' },
-  successBox: { backgroundColor: '#E8F5EE', borderRadius: 12, padding: 11, borderWidth: 1, borderColor: '#A9D8BD' },
-  successText: { color: '#17643D', textAlign: 'right', fontWeight: '800' },
-  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  headerTitleWrap: { alignItems: 'flex-end', flex: 1 },
-  headerTitle: { color: '#173B2D', fontSize: 24, fontWeight: '900' },
-  headerSub: { color: '#6D766F', fontSize: 12, marginTop: 2 },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#D9B45B', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#173B2D', fontWeight: '900', fontSize: 18 },
-  hero: { backgroundColor: '#173B2D', borderRadius: 18, padding: 16 },
-  heroTitle: { color: '#FFFFFF', textAlign: 'right', fontSize: 19, fontWeight: '900' },
-  heroText: { color: '#D7E4DE', textAlign: 'right', marginTop: 4 },
-  listCard: { minHeight: 68, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  listTitle: { color: '#173B2D', fontSize: 17, fontWeight: '900' },
-  muted: { color: '#737B76', fontSize: 12 },
-  permissionRow: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  permissionCopy: { alignItems: 'flex-end', flex: 1 },
-  permissionName: { color: '#173B2D', fontWeight: '900', textAlign: 'right' },
-  permissionCode: { color: '#8B918D', fontSize: 10, marginTop: 2 },
-  permissionState: { fontSize: 11, fontWeight: '900', borderRadius: 10, paddingHorizontal: 9, paddingVertical: 5, overflow: 'hidden' },
-  allowed: { color: '#17643D', backgroundColor: '#E8F5EE' },
-  denied: { color: '#9C2525', backgroundColor: '#FDECEC' },
-  chips: { gap: 8, paddingVertical: 2 },
-  chip: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#ECE5D6' },
-  chipActive: { backgroundColor: '#173B2D' },
-  chipText: { color: '#173B2D', fontWeight: '800' },
-  chipTextActive: { color: '#FFFFFF' },
-  tableGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  tableCard: { width: '48%', minHeight: 128, borderRadius: 18, backgroundColor: '#FFFFFF', padding: 14, justifyContent: 'center', alignItems: 'flex-end', borderWidth: 1, borderColor: '#E2DCCF' },
-  tableOccupied: { backgroundColor: '#F8E9E4', borderColor: '#D79A87' },
-  tableName: { color: '#173B2D', fontSize: 19, fontWeight: '900' },
-  tableStatus: { color: '#8B6B2B', fontWeight: '900', marginTop: 6 },
-  waiterName: { color: '#5A625E', fontSize: 11, marginTop: 5, textAlign: 'right' },
-  empty: { minHeight: 100, borderRadius: 16, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 18 },
-  emptyTitle: { color: '#737B76', fontWeight: '800' },
-  orderContext: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 13, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  orderContextTitle: { color: '#173B2D', fontWeight: '900' },
-  guestRow: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginVertical: 8 },
-  qtyButton: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EFE8D9', justifyContent: 'center', alignItems: 'center' },
-  qtyButtonText: { color: '#173B2D', fontSize: 20, fontWeight: '900' },
-  guestCount: { color: '#173B2D', fontWeight: '900', minWidth: 68, textAlign: 'center' },
-  productGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  productCard: { width: '48%', borderRadius: 16, backgroundColor: '#FFFFFF', overflow: 'hidden', paddingBottom: 11 },
-  productImage: { width: '100%', height: 115, backgroundColor: '#E9E3D5' },
-  productPlaceholder: { height: 115, backgroundColor: '#E9E3D5', alignItems: 'center', justifyContent: 'center', padding: 10 },
-  productPlaceholderText: { color: '#7A6E54', fontWeight: '900', textAlign: 'center' },
-  productName: { color: '#173B2D', fontWeight: '900', fontSize: 15, textAlign: 'right', paddingHorizontal: 10, marginTop: 8 },
-  productPrice: { color: '#9A762B', fontWeight: '900', textAlign: 'right', paddingHorizontal: 10, marginTop: 3 },
-  cartBar: { minHeight: 56, borderRadius: 17, backgroundColor: '#173B2D', paddingHorizontal: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cartBarValue: { color: '#D9B45B', fontWeight: '900' },
-  cartBarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
-  modalBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 50 },
-  modalCard: { maxHeight: '88%', backgroundColor: '#F6F2E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18 },
-  modalTitle: { color: '#173B2D', textAlign: 'right', fontSize: 23, fontWeight: '900' },
-  modGroup: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 11, marginVertical: 6 },
-  modTitle: { color: '#173B2D', textAlign: 'right', fontWeight: '900', marginBottom: 8 },
-  modOption: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#DDD5C3', marginTop: 6, paddingHorizontal: 10, justifyContent: 'center' },
-  modOptionActive: { borderColor: '#173B2D', backgroundColor: '#E8F0EC' },
-  modOptionText: { textAlign: 'right', color: '#173B2D', fontWeight: '700' },
-  cartLine: { backgroundColor: '#FFFFFF', borderRadius: 15, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  qtyText: { color: '#173B2D', fontWeight: '900', minWidth: 20, textAlign: 'center' },
-  cartCopy: { flex: 1, alignItems: 'flex-end' },
-  cartName: { color: '#173B2D', fontWeight: '900', fontSize: 16 },
-  totalCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, gap: 5 },
-  totalRow: { color: '#6D766F', textAlign: 'right', fontWeight: '700' },
-  totalMain: { color: '#173B2D', textAlign: 'right', fontSize: 19, fontWeight: '900', marginTop: 5 },
-  deniedHint: { color: '#9C2525', fontWeight: '800', textAlign: 'center' },
-  orderCard: { minHeight: 78, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 13, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  orderNumber: { color: '#173B2D', fontSize: 18, fontWeight: '900', textAlign: 'right' },
-  orderStatusWrap: { alignItems: 'flex-start' },
-  orderStatus: { color: '#17643D', backgroundColor: '#E8F5EE', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, overflow: 'hidden', fontWeight: '900', fontSize: 11 },
-  bottomNav: { marginTop: 10, minHeight: 58, borderRadius: 17, backgroundColor: '#FFFFFF', flexDirection: 'row-reverse', justifyContent: 'space-around', alignItems: 'center', borderWidth: 1, borderColor: '#E2DCCF' },
-  navText: { color: '#173B2D', fontWeight: '900' },
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#F6F2E9' }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#F6F2E9' },
+  container: { padding: 16, paddingBottom: 100, gap: 12 }, login: { flex: 1, backgroundColor: '#123B2D' }, loginWrap: { flex: 1, justifyContent: 'center', padding: 22, gap: 10 },
+  logo: { color: '#D9B45B', fontSize: 38, fontWeight: '900', textAlign: 'center' }, loginTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', textAlign: 'center' }, loginHint: { color: '#D7E4DE', textAlign: 'center' },
+  header: { flexDirection: 'row-reverse', gap: 10, alignItems: 'center' }, title: { color: '#173B2D', fontSize: 23, fontWeight: '900', textAlign: 'right' }, sub: { color: '#6D766F', fontSize: 11 }, avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#D9B45B', alignItems: 'center', justifyContent: 'center' }, avatarText: { color: '#173B2D', fontSize: 18, fontWeight: '900' },
+  card: { backgroundColor: '#FFF', borderRadius: 18, padding: 15, gap: 10 }, hero: { backgroundColor: '#173B2D', borderRadius: 18, padding: 16 }, heroTitle: { color: '#FFF', fontSize: 19, fontWeight: '900', textAlign: 'right' }, heroText: { color: '#D7E4DE', textAlign: 'right' },
+  label: { color: '#173B2D', fontWeight: '900', textAlign: 'right' }, input: { minHeight: 48, borderWidth: 1, borderColor: '#DDD5C3', borderRadius: 14, backgroundColor: '#FFF', paddingHorizontal: 14, color: '#173B2D' },
+  primary: { minHeight: 52, borderRadius: 15, backgroundColor: '#173B2D', alignItems: 'center', justifyContent: 'center', padding: 12 }, primaryText: { color: '#FFF', fontWeight: '900', fontSize: 15 }, secondary: { minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#B7AA8C', backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', padding: 10 }, secondaryText: { color: '#173B2D', fontWeight: '900' }, disabled: { opacity: 0.45 },
+  error: { backgroundColor: '#FDECEC', borderRadius: 12, padding: 10 }, errorText: { color: '#9C2525', textAlign: 'right', fontWeight: '800' }, success: { backgroundColor: '#E8F5EE', borderRadius: 12, padding: 10 }, successText: { color: '#17643D', textAlign: 'right', fontWeight: '800' },
+  list: { backgroundColor: '#FFF', minHeight: 66, borderRadius: 15, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, listTitle: { color: '#173B2D', fontSize: 16, fontWeight: '900', textAlign: 'right' }, muted: { color: '#737B76', fontSize: 11, textAlign: 'right' }, bold: { color: '#173B2D', fontWeight: '900' }, right: { color: '#173B2D', textAlign: 'right' },
+  permission: { backgroundColor: '#FFF', borderRadius: 14, padding: 12, flexDirection: 'row-reverse', gap: 10, alignItems: 'center' }, permissionName: { color: '#173B2D', fontWeight: '900', textAlign: 'right' }, code: { color: '#8B918D', fontSize: 10 }, state: { fontSize: 10, fontWeight: '900', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden' }, allowed: { color: '#17643D', backgroundColor: '#E8F5EE' }, denied: { color: '#9C2525', backgroundColor: '#FDECEC' },
+  chips: { gap: 8 }, chip: { backgroundColor: '#ECE5D6', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 }, chipOn: { backgroundColor: '#173B2D' }, chipText: { color: '#173B2D', fontWeight: '800' }, chipTextOn: { color: '#FFF' },
+  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }, table: { width: '48%', minHeight: 120, backgroundColor: '#FFF', borderRadius: 17, padding: 13, alignItems: 'flex-end', justifyContent: 'center', borderWidth: 1, borderColor: '#E2DCCF' }, occupied: { backgroundColor: '#F8E9E4', borderColor: '#D79A87' }, tableName: { color: '#173B2D', fontSize: 19, fontWeight: '900' },
+  product: { width: '48%', backgroundColor: '#FFF', borderRadius: 16, overflow: 'hidden', paddingBottom: 10 }, image: { width: '100%', height: 110 }, placeholder: { height: 110, backgroundColor: '#E9E3D5', alignItems: 'center', justifyContent: 'center', padding: 8 }, productName: { color: '#173B2D', fontWeight: '900', textAlign: 'right', paddingHorizontal: 9, marginTop: 7 }, gold: { color: '#9A762B', fontWeight: '900', textAlign: 'right', marginTop: 3 }, goldLight: { color: '#D9B45B', fontWeight: '900' },
+  context: { backgroundColor: '#FFF', borderRadius: 15, padding: 12, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 7 }, qty: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#EFE8D9', alignItems: 'center', justifyContent: 'center' },
+  cartBar: { minHeight: 54, borderRadius: 16, backgroundColor: '#173B2D', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16 }, backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 50 }, sheet: { maxHeight: '88%', backgroundColor: '#F6F2E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 17 }, mod: { backgroundColor: '#FFF', borderRadius: 13, padding: 10, marginVertical: 6 }, modOption: { minHeight: 40, borderWidth: 1, borderColor: '#DDD5C3', borderRadius: 10, padding: 9, marginTop: 6 }, modOn: { backgroundColor: '#E8F0EC', borderColor: '#173B2D' },
+  cartLine: { backgroundColor: '#FFF', borderRadius: 14, padding: 12, flexDirection: 'row', gap: 10, alignItems: 'center' }, total: { backgroundColor: '#FFF', borderRadius: 15, padding: 13, gap: 5 }, totalText: { color: '#173B2D', fontSize: 18, fontWeight: '900', textAlign: 'right' }, order: { backgroundColor: '#FFF', minHeight: 74, borderRadius: 15, padding: 12, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, status: { color: '#17643D', backgroundColor: '#E8F5EE', borderRadius: 9, padding: 5, fontWeight: '900', overflow: 'hidden' },
+  nav: { minHeight: 56, backgroundColor: '#FFF', borderRadius: 16, flexDirection: 'row-reverse', justifyContent: 'space-around', alignItems: 'center', borderWidth: 1, borderColor: '#E2DCCF', marginTop: 8 }, navText: { color: '#173B2D', fontWeight: '900' },
 });
