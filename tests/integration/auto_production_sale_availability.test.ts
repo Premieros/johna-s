@@ -14,6 +14,9 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
   const rawId = randomUUID();
   const unitId = randomUUID();
   const productId = randomUUID();
+  const unconfiguredProductId = randomUUID();
+  const modifierGroupId = randomUUID();
+  const modifierOptionId = randomUUID();
 
   const q = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> =>
     (await client.query(sql, params)).rows as T[];
@@ -64,10 +67,24 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
     await client.query(`INSERT INTO public.inventory_unit_recipes (unit_id,raw_material_id,quantity,wastage_percent) VALUES ($1,$2,1,0)`, [unitId, rawId]);
     await client.query(
       `INSERT INTO public.products (id,name,branch_id,product_type,sale_price,cost_price,is_active)
-       VALUES ($1,'Auto Burger',$2,'ready',20,0,true)`,
-      [productId, branchId],
+       VALUES ($1,'Auto Burger',$2,'ready',20,0,true),($3,'Empty Box Product',$2,'ready',15,0,true)`,
+      [productId, branchId, unconfiguredProductId],
     );
     await client.query(`INSERT INTO public.product_unit_links (product_id,unit_id,quantity) VALUES ($1,$2,1)`, [productId, unitId]);
+    await client.query(
+      `INSERT INTO public.product_modifier_groups (id,branch_id,product_id,name,min_selections,max_selections,is_active)
+       VALUES ($1,$2,NULL,'Paid Extras',0,1,true)`,
+      [modifierGroupId, branchId],
+    );
+    await client.query(
+      `INSERT INTO public.product_modifier_group_products (group_id,product_id,branch_id) VALUES ($1,$2,$3)`,
+      [modifierGroupId, productId, branchId],
+    );
+    await client.query(
+      `INSERT INTO public.product_modifier_options (id,branch_id,group_id,name,price_delta,is_active)
+       VALUES ($1,$2,$3,'Empty Box Extra',5,true)`,
+      [modifierOptionId, branchId, modifierGroupId],
+    );
     await client.query(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]);
     await client.query(`SELECT public.seed_account_mappings($1)`, [branchId]);
     await client.query(`UPDATE public.settings SET tax_enabled=false`);
@@ -112,23 +129,108 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
         [unitId, branchId],
       );
       expect(productions[0].count).toBe(1);
-
-      const availAfter = await q<{ available_quantity: string }>(
-        `SELECT available_quantity::text FROM public.get_pos_product_availability($1,$2,100) WHERE product_id=$3`,
-        [branchId, warehouseId, productId],
-      );
-      expect(Number(availAfter[0].available_quantity)).toBe(3);
     });
   });
 
-  it('refuses quantities above ingredient capacity before producing anything', async () => {
+  it('keeps selling beyond stock, records raw-material debt, then purchase stock offsets the debt', async () => {
     await asAdmin(async () => {
-      const check = await q<{ r: { success: boolean; error?: string } }>(
+      const informationalCheck = await q<{ r: { success: boolean; error?: string } }>(
         `SELECT public.check_product_availability($1,$2,$3,6) AS r`,
         [productId, branchId, warehouseId],
       );
-      expect(check[0].r.success).toBe(false);
-      expect(check[0].r.error).toBe('INSUFFICIENT_RAW_MATERIAL_STOCK');
+      expect(informationalCheck[0].r.success).toBe(false);
+      expect(informationalCheck[0].r.error).toBe('INSUFFICIENT_RAW_MATERIAL_STOCK');
+
+      const sale = await q<{ r: { success: boolean; sale_id?: string; error?: string; detail?: string } }>(
+        `SELECT public.process_sale($1,$2,$3,NULL,NULL,120,0,'amount',0,0,120,120,'cash','completed',$4::jsonb,NULL,'takeaway',NULL,NULL,NULL) AS r`,
+        [
+          `AUTO-NEG-${Date.now()}-${randomUUID()}`,
+          branchId,
+          warehouseId,
+          JSON.stringify([{ product_id: productId, unit_name: 'piece', quantity: 6, unit_price: 20, discount_amount: 0, bonus_quantity: 0, total: 120 }]),
+        ],
+      );
+      expect(sale[0].r.success).toBe(true);
+      if (!sale[0].r.success) throw new Error(JSON.stringify(sale[0].r));
+
+      const debt = await q<{ quantity: string }>(
+        `SELECT quantity::text FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,
+        [rawId, branchId],
+      );
+      expect(Number(debt[0].quantity)).toBe(-3);
+
+      await q(
+        `SELECT public._raw_add($1,$2,$3,10,4,$4,current_date,NULL,'purchase','purchase',NULL,'TEST-PURCHASE',$5)`,
+        [rawId, branchId, warehouseId, `PUR-${randomUUID()}`, userId],
+      );
+
+      const recovered = await q<{ quantity: string }>(
+        `SELECT quantity::text FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,
+        [rawId, branchId],
+      );
+      expect(Number(recovered[0].quantity)).toBe(7);
+    });
+  });
+
+  it('creates and deducts a raw material when an unconfigured product is sold', async () => {
+    await asAdmin(async () => {
+      const sale = await q<{ r: { success: boolean; error?: string; detail?: string } }>(
+        `SELECT public.process_sale($1,$2,$3,NULL,NULL,30,0,'amount',0,0,30,30,'cash','completed',$4::jsonb,NULL,'takeaway',NULL,NULL,NULL) AS r`,
+        [
+          `AUTO-FALLBACK-PROD-${Date.now()}-${randomUUID()}`,
+          branchId,
+          warehouseId,
+          JSON.stringify([{ product_id: unconfiguredProductId, unit_name: 'piece', quantity: 2, unit_price: 15, discount_amount: 0, bonus_quantity: 0, total: 30 }]),
+        ],
+      );
+      expect(sale[0].r.success).toBe(true);
+      if (!sale[0].r.success) throw new Error(JSON.stringify(sale[0].r));
+
+      const code = `AUTO-PROD-${unconfiguredProductId.replace(/-/g, '')}`;
+      const rows = await q<{ name: string; quantity: string; recipe_items: number }>(
+        `SELECT rm.name,
+                COALESCE(rmi.quantity,0)::text AS quantity,
+                (SELECT count(*)::int FROM public.recipes r JOIN public.recipe_items ri ON ri.recipe_id=r.id WHERE r.product_id=$1 AND r.branch_id=$2 AND ri.raw_material_id=rm.id) AS recipe_items
+         FROM public.raw_materials rm
+         LEFT JOIN public.raw_material_inventory rmi ON rmi.raw_material_id=rm.id AND rmi.branch_id=rm.branch_id
+         WHERE rm.code=$3 AND rm.branch_id=$2`,
+        [unconfiguredProductId, branchId, code],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].name).toBe('Empty Box Product');
+      expect(Number(rows[0].quantity)).toBe(-2);
+      expect(rows[0].recipe_items).toBe(1);
+    });
+  });
+
+  it('creates and deducts a raw material for a priced modifier with no inventory effect', async () => {
+    await asAdmin(async () => {
+      const sale = await q<{ r: { success: boolean; error?: string; detail?: string } }>(
+        `SELECT public.process_sale($1,$2,$3,NULL,NULL,25,0,'amount',0,0,25,25,'cash','completed',$4::jsonb,NULL,'takeaway',NULL,NULL,NULL) AS r`,
+        [
+          `AUTO-FALLBACK-MOD-${Date.now()}-${randomUUID()}`,
+          branchId,
+          warehouseId,
+          JSON.stringify([{ product_id: productId, unit_name: 'piece', quantity: 1, unit_price: 25, discount_amount: 0, bonus_quantity: 0, total: 25, modifier_option_ids: [modifierOptionId] }]),
+        ],
+      );
+      expect(sale[0].r.success).toBe(true);
+      if (!sale[0].r.success) throw new Error(JSON.stringify(sale[0].r));
+
+      const code = `AUTO-MOD-${modifierOptionId.replace(/-/g, '')}`;
+      const rows = await q<{ name: string; quantity: string; effects: number }>(
+        `SELECT rm.name,
+                COALESCE(rmi.quantity,0)::text AS quantity,
+                (SELECT count(*)::int FROM public.product_modifier_inventory_effects e WHERE e.option_id=$1 AND e.raw_material_id=rm.id AND e.quantity_delta>0) AS effects
+         FROM public.raw_materials rm
+         LEFT JOIN public.raw_material_inventory rmi ON rmi.raw_material_id=rm.id AND rmi.branch_id=rm.branch_id
+         WHERE rm.code=$2 AND rm.branch_id=$3`,
+        [modifierOptionId, code, branchId],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].name).toBe('Empty Box Extra');
+      expect(Number(rows[0].quantity)).toBe(-1);
+      expect(rows[0].effects).toBe(1);
     });
   });
 });
