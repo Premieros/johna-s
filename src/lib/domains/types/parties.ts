@@ -1,3 +1,5 @@
+export type CustomerType = 'customer' | 'employee';
+
 export interface Customer {
   id: string;
   name: string;
@@ -9,6 +11,7 @@ export interface Customer {
   balance: number;
   notes: string | null;
   branch_id: string;
+  customer_type: CustomerType;
   created_at: string;
 }
 
