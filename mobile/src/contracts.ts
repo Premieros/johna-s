@@ -6,23 +6,55 @@ export type MobilePermission =
   | 'pos.payment.take'
   | 'pos.order.split'
   | 'pos.order.transfer'
-  | 'approvals.view';
+  | 'approvals.review'
+  | 'approvals.override';
+
+export const MOBILE_PERMISSIONS: MobilePermission[] = [
+  'pos.view',
+  'pos.order.create',
+  'pos.order.edit',
+  'pos.send_kitchen',
+  'pos.payment.take',
+  'pos.order.split',
+  'pos.order.transfer',
+  'approvals.review',
+  'approvals.override',
+];
 
 export interface MobileSessionProfile {
   userId: string;
   displayName: string;
+  username: string;
+  role: string;
+  primaryBranchId: string | null;
   branchIds: string[];
   permissions: MobilePermission[];
+  isSuperAdmin: boolean;
+}
+
+export interface MobileBranch {
+  id: string;
+  name: string;
+  nameEn?: string | null;
+}
+
+export interface BranchPosConfig {
+  taxEnabled: boolean;
+  taxRate: number;
+  currency: string;
 }
 
 export interface DiningTableSummary {
   id: string;
   branchId: string;
-  floorId?: string | null;
+  areaId?: string | null;
+  areaName?: string | null;
   name: string;
   status: 'available' | 'occupied';
   guestCount?: number | null;
+  capacity?: number | null;
   activeOrderId?: string | null;
+  activeOrderNumber?: string | null;
   activeWaiterName?: string | null;
 }
 
@@ -30,17 +62,36 @@ export interface WaiterCatalogProduct {
   id: string;
   branchId: string;
   categoryId: string | null;
+  categoryName?: string | null;
   name: string;
   nameEn?: string | null;
   description?: string | null;
   imageUrl?: string | null;
   salePrice: number;
   isActive: boolean;
-  isAvailable: boolean;
+}
+
+export interface ModifierOption {
+  id: string;
+  name: string;
+  nameEn?: string | null;
+  priceDelta: number;
+  isDefault: boolean;
+}
+
+export interface ModifierGroup {
+  id: string;
+  name: string;
+  nameEn?: string | null;
+  minSelections: number;
+  maxSelections: number;
+  options: ModifierOption[];
 }
 
 export interface WaiterCartItemInput {
   productId: string;
+  name: string;
+  unitPrice: number;
   quantity: number;
   modifierOptionIds: string[];
   notes?: string;
@@ -51,6 +102,8 @@ export interface CreateTableOrderInput {
   tableId: string;
   guestCount: number;
   items: WaiterCartItemInput[];
+  taxEnabled: boolean;
+  taxRate: number;
   notes?: string;
 }
 
@@ -58,23 +111,17 @@ export interface WaiterOrderSummary {
   orderId: string;
   orderNumber: string;
   branchId: string;
-  tableId: string;
+  tableId: string | null;
   tableName: string;
   waiterName: string;
   total: number;
   status: string;
+  kitchenStatus?: string | null;
   sentToKitchenAt?: string | null;
 }
 
-export interface WaiterMobileGateway {
-  getSessionProfile(): Promise<MobileSessionProfile>;
-  getDiningTables(branchId: string): Promise<DiningTableSummary[]>;
-  getCatalog(branchId: string): Promise<WaiterCatalogProduct[]>;
-  createTableOrder(input: CreateTableOrderInput): Promise<{ orderId: string; orderNumber: string }>;
-  updateTableOrder(orderId: string, items: WaiterCartItemInput[]): Promise<void>;
-  sendToKitchen(orderId: string): Promise<void>;
-  takePayment(orderId: string): Promise<void>;
-  splitOrder(orderId: string): Promise<void>;
-  transferOrder(orderId: string, targetTableId: string): Promise<void>;
-  getMyOrders(): Promise<WaiterOrderSummary[]>;
+export interface WaiterOrderDetails extends WaiterOrderSummary {
+  guestCount: number | null;
+  notes: string | null;
+  items: WaiterCartItemInput[];
 }
