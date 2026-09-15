@@ -77,7 +77,7 @@ export function EmployeeReceivablesPage() {
         .eq('branch_id', effectiveBranchId)
         .eq('customer_type', 'employee')
         .order('name'),
-      api.accounting.getArAging({ p_branch_id: effectiveBranchId, p_as_of: new Date().toISOString().slice(0, 10) }),
+      api.accounting.getEmployeeReceivableBalances({ p_branch_id: effectiveBranchId, p_as_of: new Date().toISOString().slice(0, 10) }),
     ]);
     if (customersRes.error) {
       show(customersRes.error.message, 'error');
@@ -156,12 +156,11 @@ export function EmployeeReceivablesPage() {
       return;
     }
     setSaving(true);
-    const { data, error } = await api.accounting.receivePayment({
+    const { data, error } = await api.accounting.receiveEmployeeReceivablePayment({
       p_customer_id: settling.id,
       p_branch_id: effectiveBranchId,
       p_amount: amount,
       p_payment_method: settleForm.payment_method,
-      p_sale_id: null,
       p_notes: settleForm.notes || null,
     });
     setSaving(false);
