@@ -42,7 +42,7 @@ const labels = {
   ar: {
     menu: 'القائمة', title: 'حساب النادل', myShift: 'ملخصي في الشفت', refresh: 'تحديث', noShift: 'لا يوجد شفت مفتوح حاليًا',
     orders: 'طلباتي', openOrders: 'طلبات مفتوحة', sales: 'قيمة طلباتي', openTables: 'طاولاتي المفتوحة', branch: 'الفرع',
-    language: 'اللغة', permissions: 'إجراءاتي المتاحة', payment: 'الدفع', discount: 'الخصم', transfer: 'النقل / الدمج', split: 'تقسيم الفاتورة',
+    language: 'اللغة', permissions: 'إجراءاتي المتاحة', discount: 'الخصم', transfer: 'النقل / الدمج', split: 'تقسيم الفاتورة',
     receipt: 'طباعة إيصال الكاشير', approvals: 'مراجعة الموافقات', allowed: 'مسموح', denied: 'غير مسموح', loading: 'جاري تحميل بياناتك...',
     emptyOrders: 'لا توجد طلبات مفتوحة تخصك', waiter: 'المستخدم', closing: 'تفاصيل إغلاقي', invoices: 'الفواتير المدفوعة', netSales: 'صافي المبيعات',
     discounts: 'الخصومات', refunds: 'المرتجعات', payments: 'طرق الدفع', products: 'المنتجات المباعة', quantity: 'الكمية', count: 'عدد العمليات', noPaidSales: 'لا توجد مبيعات مدفوعة لك في الشفت الحالي',
@@ -50,7 +50,7 @@ const labels = {
   en: {
     menu: 'Menu', title: 'Waiter account', myShift: 'My shift summary', refresh: 'Refresh', noShift: 'No open shift right now',
     orders: 'My orders', openOrders: 'Open orders', sales: 'My order value', openTables: 'My open tables', branch: 'Branch',
-    language: 'Language', permissions: 'Available actions', payment: 'Payment', discount: 'Discount', transfer: 'Transfer / merge', split: 'Split bill',
+    language: 'Language', permissions: 'Available actions', discount: 'Discount', transfer: 'Transfer / merge', split: 'Split bill',
     receipt: 'Cashier receipt', approvals: 'Review approvals', allowed: 'Allowed', denied: 'Not allowed', loading: 'Loading your data...',
     emptyOrders: 'You have no open orders', waiter: 'User', closing: 'My closing details', invoices: 'Paid invoices', netSales: 'Net sales',
     discounts: 'Discounts', refunds: 'Refunds', payments: 'Payment methods', products: 'Sold products', quantity: 'Qty', count: 'Transactions', noPaidSales: 'No paid sales for you in the current shift',
@@ -134,7 +134,6 @@ export default function AppShell() {
   const myOpenTables = useMemo(() => tables.filter((table) => openOrderTableIds.has(table.id)), [tables, openOrderTableIds]);
 
   const actions = [
-    { key: 'payment', label: t.payment, allowed: can('pos.payment.take') },
     { key: 'discount', label: t.discount, allowed: can('pos.discount') },
     { key: 'transfer', label: t.transfer, allowed: can('pos.order.transfer') },
     { key: 'split', label: t.split, allowed: can('pos.order.split') },
