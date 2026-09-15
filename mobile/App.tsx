@@ -29,6 +29,7 @@ const permissionLabels: Record<string, string> = {
   'approvals.review': 'مراجعة الموافقات', 'approvals.override': 'تجاوز الموافقات', 'approvals.policy.manage': 'إدارة سياسة الموافقات',
 };
 const mobileActionPermissions = ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.send_kitchen', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer'];
+const unique = (values: string[]) => values.filter((value, index) => values.indexOf(value) === index);
 const money = (value: number, currency: string) => `${value.toFixed(2)} ${currency}`;
 const errorMessage = (error: unknown) => {
   const text = error instanceof Error ? error.message : String(error || 'حدث خطأ');
@@ -67,10 +68,7 @@ export default function App() {
   const [draft, setDraft] = useState<ProductDraft | null>(null);
 
   const can = (permission: string) => Boolean(profile?.isSuperAdmin || profile?.permissions.includes(permission));
-  const displayedPermissions = useMemo(() => {
-    const values = new Set<string>([...mobileActionPermissions, ...(profile?.permissions || [])]);
-    return [...values].sort();
-  }, [profile?.permissions]);
+  const displayedPermissions = useMemo(() => unique([...mobileActionPermissions, ...(profile?.permissions || [])]).sort(), [profile?.permissions]);
 
   const chooseBranch = async (nextBranch: MobileBranch, effectiveProfile = profile) => {
     if (effectiveProfile && effectiveProfile.branchIds.length > 0 && !effectiveProfile.branchIds.includes(nextBranch.id) && !effectiveProfile.isSuperAdmin) throw new Error('ليس لديك وصول لهذا الفرع');
@@ -103,9 +101,9 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
 
-  const areas = useMemo(() => ['الكل', ...new Set(tables.map((table) => table.areaName || 'بدون صالة'))], [tables]);
+  const areas = useMemo(() => ['الكل', ...unique(tables.map((table) => table.areaName || 'بدون صالة'))], [tables]);
   const visibleTables = useMemo(() => tables.filter((table) => area === 'الكل' || (table.areaName || 'بدون صالة') === area), [tables, area]);
-  const categories = useMemo(() => ['الكل', ...new Set(catalog.map((item) => item.categoryName || 'بدون تصنيف'))], [catalog]);
+  const categories = useMemo(() => ['الكل', ...unique(catalog.map((item) => item.categoryName || 'بدون تصنيف'))], [catalog]);
   const visibleCatalog = useMemo(() => catalog.filter((item) => {
     const q = search.trim().toLowerCase();
     return (category === 'الكل' || (item.categoryName || 'بدون تصنيف') === category) && (!q || item.name.toLowerCase().includes(q) || (item.nameEn || '').toLowerCase().includes(q));
@@ -166,19 +164,19 @@ export default function App() {
   };
   const toggleModifier = (group: ModifierGroup, optionId: string) => setDraft((current) => {
     if (!current) return current;
-    const groupIds = new Set(group.options.map((option) => option.id));
-    const selected = current.selectedOptionIds.filter((id) => groupIds.has(id));
+    const groupIds = group.options.map((option) => option.id);
+    const selected = current.selectedOptionIds.filter((id) => groupIds.includes(id));
     let next = current.selectedOptionIds;
     if (next.includes(optionId)) next = next.filter((id) => id !== optionId);
-    else if (group.maxSelections === 1) next = [...next.filter((id) => !groupIds.has(id)), optionId];
+    else if (group.maxSelections === 1) next = [...next.filter((id) => !groupIds.includes(id)), optionId];
     else if (selected.length < group.maxSelections) next = [...next, optionId];
     return { ...current, selectedOptionIds: next };
   });
   const addDraft = () => {
     if (!draft) return;
     for (const group of draft.groups) {
-      const ids = new Set(group.options.map((option) => option.id));
-      if (draft.selectedOptionIds.filter((id) => ids.has(id)).length < group.minSelections) return setErrorText(`اختر ${group.minSelections} على الأقل من ${group.name}`);
+      const ids = group.options.map((option) => option.id);
+      if (draft.selectedOptionIds.filter((id) => ids.includes(id)).length < group.minSelections) return setErrorText(`اختر ${group.minSelections} على الأقل من ${group.name}`);
     }
     const delta = draft.groups.flatMap((group) => group.options).filter((option) => draft.selectedOptionIds.includes(option.id)).reduce((sum, option) => sum + option.priceDelta, 0);
     setCart((current) => [...current, { productId: draft.product.id, name: draft.product.name, unitPrice: Math.max(0, draft.product.salePrice + delta), quantity: draft.quantity, modifierOptionIds: draft.selectedOptionIds, notes: draft.notes.trim() || undefined }]);
