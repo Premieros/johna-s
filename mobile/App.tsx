@@ -102,7 +102,7 @@ const permissionLabels: Record<Permission, string> = {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
-  const [profile, setProfile] = useState<StaffProfile>(profiles[0]);
+  const [profile, setProfile] = useState<StaffProfile>(profiles[0]!);
   const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [query, setQuery] = useState('');
