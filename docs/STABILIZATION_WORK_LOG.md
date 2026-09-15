@@ -109,3 +109,38 @@ Production Supabase writes during PR5: **NONE**.
 2. If Full Green, confirm `main` and PR HEAD did not move, mark Ready, and merge using expected-head protection.
 3. Verify post-merge `main` and Deploy.
 4. Only then start PR6 Shift / Finance / Reports.
+
+---
+
+## 2026-09-15 checkpoint — parallel mobile ownership and pending work
+
+Current repository baseline observed at checkpoint:
+
+- `main@0919ddd171890852b03e712d45b18891ea31f821`
+- latest observed merge: PR #133 — manufacturing completion RPC authority.
+- merge message records Full Verify #1402 Green on exact head and states no DB migration, Production data, printing, POS, KDS, pricing, or payment change.
+
+### Parallel mobile workstream
+
+- Branch: `development/mobile-delivery-app`
+- PR: #132 — Draft / Open.
+- Ownership: another model is actively working this branch.
+- Rule: this stabilization/documentation workstream must not edit or push to that branch.
+- Approved product direction now documented on PR #132:
+  - Android app is for dining-room waiter/captain, not delivery captain;
+  - customer mode is deferred;
+  - the app later reflects the authenticated user's existing system permissions dynamically;
+  - manager and waiter use the same app surface but see only granted capabilities;
+  - Permission-First remains mandatory; no role-name authorization;
+  - existing POS, Production DB, printing, and core business logic are not to be modified from mobile work without separate explicit approval;
+  - existing `send_to_kitchen` authority and frozen printing remain unchanged.
+
+### Pending work at this checkpoint
+
+1. PR #132 mobile waiter app remains active under the other model; no cross-editing.
+2. Production trial-sales deletion remains unresolved because destructive-action protection blocked the prior attempt; requires an allowed administrative path plus post-delete count verification, without stock rewrites.
+3. Any Production migration must be re-evaluated from the current `main`/relevant PR, then pass Full Verify and receive explicit Production approval.
+4. Final handover still requires full regression verification on the exact handover head, including Permission-First, branch/warehouse isolation, RLS/security, Kitchen stock authority, approvals, and Browser Smoke where applicable.
+5. Because `main` moved repeatedly on 2026-09-15, every new workstream must refresh `main` and inspect open PRs/branches before writing.
+
+No Production write was performed for this checkpoint. No mobile branch code was modified from this documentation workstream.
