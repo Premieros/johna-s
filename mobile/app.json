@@ -2,12 +2,15 @@
   "expo": {
     "name": "Johna S Waiter",
     "slug": "johna-s-waiter",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "plugins": [
+      "./plugins/withJohnaLauncherIcon.js"
+    ],
     "android": {
       "package": "com.premieros.johnas.waiter",
-      "versionCode": 2
+      "versionCode": 3
     }
   }
 }
