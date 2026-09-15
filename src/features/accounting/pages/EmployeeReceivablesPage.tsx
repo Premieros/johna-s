@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HandCoins, Plus, UserRound } from 'lucide-react';
-import * as api from '@/api';
 import { supabase } from '@/api';
 import { Button } from '@/components/Button';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -36,6 +35,12 @@ type EmployeeReceivableRow = EmployeeCustomer & {
   bucket_31_60: number;
   bucket_61_90: number;
   bucket_90_plus: number;
+};
+
+type EmployeePaymentResult = {
+  success?: boolean;
+  error?: string;
+  detail?: string;
 };
 
 const emptyForm = { name: '', name_en: '', phone: '', email: '', address: '', notes: '', branch_id: '' };
@@ -77,7 +82,10 @@ export function EmployeeReceivablesPage() {
         .eq('branch_id', effectiveBranchId)
         .eq('customer_type', 'employee')
         .order('name'),
-      api.accounting.getEmployeeReceivableBalances({ p_branch_id: effectiveBranchId, p_as_of: new Date().toISOString().slice(0, 10) }),
+      supabase.rpc('get_employee_receivable_balances', {
+        p_branch_id: effectiveBranchId,
+        p_as_of: new Date().toISOString().slice(0, 10),
+      }),
     ]);
     if (customersRes.error) {
       show(customersRes.error.message, 'error');
@@ -91,7 +99,8 @@ export function EmployeeReceivablesPage() {
       setLoading(false);
       return;
     }
-    const agingByCustomer = new Map((agingRes.data || []).map((row: ArAgingRow) => [row.customer_id, row]));
+    const agingRows = (agingRes.data || []) as ArAgingRow[];
+    const agingByCustomer = new Map(agingRows.map((row) => [row.customer_id, row]));
     const employeeRows = ((customersRes.data || []) as EmployeeCustomer[]).map((customer) => {
       const aging = agingByCustomer.get(customer.id);
       return {
@@ -156,7 +165,7 @@ export function EmployeeReceivablesPage() {
       return;
     }
     setSaving(true);
-    const { data, error } = await api.accounting.receiveEmployeeReceivablePayment({
+    const { data, error } = await supabase.rpc('receive_employee_receivable_payment', {
       p_customer_id: settling.id,
       p_branch_id: effectiveBranchId,
       p_amount: amount,
@@ -164,8 +173,9 @@ export function EmployeeReceivablesPage() {
       p_notes: settleForm.notes || null,
     });
     setSaving(false);
-    if (error || !data?.success) {
-      show(error?.message || data?.detail || data?.error || (ar ? 'تعذر تسجيل السداد' : 'Could not record payment'), 'error');
+    const result = (data || {}) as EmployeePaymentResult;
+    if (error || !result.success) {
+      show(error?.message || result.detail || result.error || (ar ? 'تعذر تسجيل السداد' : 'Could not record payment'), 'error');
       return;
     }
     show(ar ? 'تم تسجيل سداد ذمة الموظف' : 'Employee receivable payment recorded', 'success');
