@@ -61,14 +61,14 @@ describe.skipIf(skip)('order-lifecycle guards (047 H1/H3/H4/M9/L2)', () => {
   it('process_sale does NOT free a table that still has another open order (H4)', async () => {
     const t = await makeTable();
     const first = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
-    await client.query(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100)`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
+    const second = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
     await client.query(
       `INSERT INTO public.order_items
          (order_id, product_id, unit_name, quantity, unit_price, total)
-       VALUES ($1, $2, 'piece', 1, 100, 100)`,
-      [first.rows[0].id, prodId],
+       VALUES ($1, $2, 'piece', 1, 100, 100), ($3, $2, 'piece', 1, 100, 100)`,
+      [first.rows[0].id, prodId, second.rows[0].id],
     );
-    await client.query(`UPDATE public.dining_tables SET status = 'occupied' WHERE id = $1`, [t]);
+    expect(await tableStatus(t)).toBe('occupied');
 
     const sent = await asUser(async () => {
       const r = await client.query(`SELECT public.send_to_kitchen($1) AS r`, [first.rows[0].id]);
@@ -79,6 +79,23 @@ describe.skipIf(skip)('order-lifecycle guards (047 H1/H3/H4/M9/L2)', () => {
 
     const res = await settle(`INV-${randomUUID()}`, { tableId: t, orderId: first.rows[0].id, orderType: 'dine_in' });
     expect(res.success).toBe(true); expect(await tableStatus(t)).toBe('occupied');
+  });
+  it('table occupancy follows effective item lifecycle', async () => {
+    const t = await makeTable();
+    const order = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 0, 0, 0, 0) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
+    expect(await tableStatus(t)).toBe('vacant');
+
+    const item = await client.query<{ id: string }>(`INSERT INTO public.order_items (order_id, product_id, unit_name, quantity, unit_price, total) VALUES ($1, $2, 'piece', 1, 100, 100) RETURNING id`, [order.rows[0].id, prodId]);
+    expect(await tableStatus(t)).toBe('occupied');
+
+    await client.query(`UPDATE public.order_items SET quantity = 0 WHERE id = $1`, [item.rows[0].id]);
+    expect(await tableStatus(t)).toBe('vacant');
+
+    await client.query(`UPDATE public.order_items SET quantity = 1 WHERE id = $1`, [item.rows[0].id]);
+    expect(await tableStatus(t)).toBe('occupied');
+
+    await client.query(`DELETE FROM public.order_items WHERE id = $1`, [item.rows[0].id]);
+    expect(await tableStatus(t)).toBe('vacant');
   });
   it('CHECK constraints reject impossible status/type values (L2)', async () => {
     const badStatus = async () => { await client.query('SAVEPOINT l2_status'); try { await client.query(`INSERT INTO public.orders (order_number, branch_id, order_type, status, subtotal, discount_amount, tax_amount, total) VALUES ('ORD-X', $1, 'dine_in', 'ghost_status', 0, 0, 0, 0)`, [branchId]); return null; } catch (e: unknown) { return (e as Error).message; } finally { await client.query('ROLLBACK TO SAVEPOINT l2_status').catch(() => {}); await client.query('RELEASE SAVEPOINT l2_status').catch(() => {}); } };
