@@ -5,7 +5,6 @@ export const MOBILE_ACTION_PERMISSIONS = [
   'pos.order.create',
   'pos.order.edit',
   'pos.send_kitchen',
-  'pos.payment.take',
   'pos.order.split',
   'pos.order.transfer',
   'approvals.review',
