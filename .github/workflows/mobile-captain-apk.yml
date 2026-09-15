@@ -7,6 +7,10 @@ on:
       - '.github/workflows/mobile-captain-apk.yml'
   workflow_dispatch:
 
+env:
+  EXPO_PUBLIC_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'dummy_anon_key_for_ci_build' }}
+
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
