@@ -29,15 +29,13 @@ This audit is **Preservation First**. It does not authorize refactor-first work.
 
 ## Parallel work guard
 
-At audit start, PR #128 (`development/status-registry-unification-v2`) remains an open **docs-only** governance PR based on the same main baseline. This audit must not copy runtime code from it or merge around it. If #128 moves or merges, refresh `main` before any runtime change.
+PR #128 (`development/status-registry-unification-v2`) is docs-only governance work based on the same baseline. Before any runtime write, re-check latest `main`; if it moves, refresh/rebase this audit before changing application code.
 
 ## Phase A — Freeze & Evidence
 
-Status: **STARTED**.
+Status: **COMPLETE FOR APPLICATION-STRUCTURE BASELINE**.
 
-### Application structure observed
-
-The repository already has a primary feature-oriented structure under `src/features/`, including:
+The repository already has a feature-oriented primary implementation under `src/features/`:
 
 - `auth`
 - `admin`
@@ -54,60 +52,160 @@ The repository already has a primary feature-oriented structure under `src/featu
 - `dashboard`
 - `import-export`
 
-Shared/application layers also exist under `src/api`, `src/app`, `src/components`, `src/context`, `src/core`, `src/hooks`, and `src/lib`.
+Shared/application layers exist under `src/api`, `src/app`, `src/components`, `src/context`, `src/core`, `src/hooks`, and `src/lib`.
 
-### Structural items requiring audit — no edits yet
+No structural file has been moved or deleted.
 
-1. **Parallel `src/v2` tree still exists.**
-   - `src/v2/context`
-   - `src/v2/core`
-   - `src/v2/pages`
-   - `src/app/routes.tsx` still imports `V2GatewayPage`.
-   - This is not automatically wrong, but it means module separation cannot yet be declared fully clean until active usage and ownership are mapped.
+## Phase B — Module Boundary Audit
 
-2. **Routing is centrally composed in a large `src/app/routes.tsx`.**
-   - Feature pages are mostly separated correctly, but route/authorization composition remains centralized.
-   - Do not split it merely for style; first prove whether this creates real coupling/regression risk.
+Classification values: `CLEAN`, `SHARED-BY-DESIGN`, `LEGACY-REFERENCED`, `COUPLING-DEFECT`, `NEEDS-MORE-EVIDENCE`.
 
-3. **Permission-First routing requires a focused audit.**
-   - Current route code contains explicit role-aware landing/guard logic in addition to permission checks (for example cashier landing and admin-role helper paths).
-   - Standing contract remains: Super Admin may be implicit bypass; non-Super-Admin authorization should be Permission-First.
-   - No change is made at this stage because each role-aware use must first be classified as display/landing behavior vs actual authorization boundary and covered by regression tests before any edit.
+### 1. Auth / Users / Permissions — `SHARED-BY-DESIGN`
 
-4. **Manufacturing naming/ownership remains a boundary to verify.**
-   - `src/features/manufacturing` remains present while product/catalog simplification redirects some old manufacturing routes.
-   - This may be valid because raw materials/recipes still need a domain home; audit will classify supported modules vs legacy route names before deletion or relocation.
+Evidence:
 
-## Phase B — Module Boundary Audit checklist
+- canonical UI authorization resolves via `useCan(permission)`;
+- Super Admin is the only implicit bypass in the canonical permission checker;
+- all other roles resolve permissions from the DB-backed permission map;
+- route protection generally receives explicit permission names.
 
-Each domain will be classified as `CLEAN`, `SHARED-BY-DESIGN`, `LEGACY-REFERENCED`, or `COUPLING-DEFECT` before any fix:
+Risk requiring focused regression before any change:
 
-1. Auth / Users / Permissions
-2. Branch / Warehouse context
-3. Catalog / Raw Materials / Manufactured Items / Modifier Groups
-4. Inventory / Purchases / Transfers / Waste
-5. POS / Tables / Orders / Payments / Shifts
-6. Kitchen / KDS
-7. Approvals
-8. Reports / Finance
-9. Printing / Print Agent
-10. Settings
+- `src/app/routes.tsx` still contains role-aware navigation/landing behavior (`cashier` landing and `ownerOnly` / `isAdminRole` paths).
+- These are not yet classified as an authorization defect because landing/navigation behavior is not automatically a security boundary.
+- Before changing them, prove whether any protected capability can actually be reached without the required permission at UI + server/RLS boundaries.
 
-## Regression sweep required before cleanup changes
+Decision: **no runtime edit**.
 
-The audit must prove existing behavior for:
+### 2. Branch / Warehouse context — `SHARED-BY-DESIGN`
 
-- global branch switching and branch-scoped data;
-- product/raw/manufactured availability and recipes;
-- modifier groups and legacy component redirects;
-- mobile POS vs desktop POS;
-- order/table ownership and reassignment/transfer permissions;
-- `send_to_kitchen` first send, delta, retry idempotency, and inventory deduction;
-- KDS branch/station isolation;
-- hold/resume, payment and split payment;
-- approvals;
-- shifts/reports;
-- print-once/reprint and Print Agent contracts without redesign.
+Evidence:
+
+- active branch has a single shared storage/state primitive in `src/lib/activeBranch.ts`;
+- the V2 gateway consumes that same primitive rather than maintaining an independent branch ID;
+- `V2BranchProvider` validates the selected ID against accessible branches before changing it.
+
+This means the V2 branch selector is a wrapper over the canonical active-branch state, not a separate branch model.
+
+Warehouse isolation remains a backend/data-contract concern and will be regression-tested separately.
+
+Decision: **no consolidation change**.
+
+### 3. `src/v2` — `SHARED-BY-DESIGN` with compatibility surface to monitor
+
+Earlier concern that `src/v2` might be a second operational implementation is **not supported by current evidence**.
+
+Evidence:
+
+- `src/v2/pages` currently contains the gateway page rather than a second POS/application page tree;
+- the V2 capability registry explicitly maps each module to canonical production routes;
+- it states that V2 is a permission-aware gateway and must not maintain a second POS, shift, inventory, procurement, or reporting flow;
+- module cards are filtered by canonical permissions and link to canonical routes.
+
+Therefore `src/v2` must **not** be deleted as generic legacy code during cleanup.
+
+Remaining check: dormant compatibility files under `src/v2/core` / `src/v2/context` may be removable only if exact references + regression coverage prove them unused.
+
+Decision: **preserve**.
+
+### 4. Catalog / Raw Materials / Manufactured Items / Modifier Groups — `SHARED-BY-DESIGN` + `LEGACY-REFERENCED`
+
+Evidence from routing and current simplification contracts:
+
+- products/categories/modifiers are owned by catalog surfaces;
+- raw materials and recipes remain in the manufacturing feature area;
+- old `/components` is a redirect to products;
+- old production/manufacturing route names redirect to supported recipe/catalog flows rather than exposing a second implementation.
+
+This is a naming/legacy-route situation, not enough evidence for file deletion or domain relocation.
+
+Decision: **do not move raw materials/recipes just to make folder names prettier**.
+
+### 5. POS / Tables / Orders / Payments / Shifts — `CLEAN AT ROUTE/FEATURE BOUNDARY`, regression sweep pending
+
+Evidence:
+
+- POS pages are owned by `src/features/pos`;
+- canonical POS route requires `pos.view`;
+- shifts have their own permission and canonical route;
+- mobile work changed presentation while desktop/canonical business handlers remained shared.
+
+High-risk behavior to preserve in regression sweep:
+
+- order/table ownership;
+- partial item transfer to another/new table;
+- operator reassignment permissions;
+- hold/resume;
+- normal + split payment;
+- mobile vs desktop parity of business actions.
+
+Decision: **no cleanup edit until regression proof**.
+
+### 6. Kitchen / KDS — `SHARED-BY-DESIGN`, recently stabilized
+
+Evidence:
+
+- PR #125 established branch-scoped kitchen stations while preserving Print Agent contract;
+- PR #126 fixed branch-scoped KDS station authorization compatibility;
+- Full Verify #1373 and post-merge Verify main #1375 are Green.
+
+Frozen contracts:
+
+- `send_to_kitchen` remains stock-consumption authority;
+- single first-send + positive delta only;
+- retry cannot duplicate stock/KDS send;
+- Print Agent/IPC/queues remain outside cleanup scope.
+
+Decision: **treat as frozen unless a new regression is reproduced**.
+
+### 7. Approvals — `CLEAN AT PERMISSION/ROUTE BOUNDARY`, workflow regression pending
+
+The canonical route is permission-gated and the V2 registry points to the same approval workspace. No evidence of a parallel implementation was found in this pass.
+
+Decision: **regression test before any cleanup**.
+
+### 8. Reports / Finance — `CLEAN AT TOP-LEVEL FEATURE BOUNDARY`, internal coupling audit pending
+
+Accounting and reporting have separate feature homes and canonical permissions/routes. No reason to merge these folders purely for structure.
+
+Decision: inspect data/RPC dependencies later; no runtime edit now.
+
+### 9. Printing / Print Agent — `FROZEN / SHARED-BY-DESIGN`
+
+Recent kitchen/KDS work explicitly preserved Print Agent, IPC, queues and receipt/kitchen station-code contracts.
+
+Decision: **excluded from generic cleanup**. Only a reproduced printing regression can open this scope.
+
+### 10. Settings / Admin — `SHARED-BY-DESIGN`, permission regression pending
+
+Admin owns branches/users/settings/approval administration surfaces; printer/station management remains permission-gated by settings/admin capabilities.
+
+Decision: no relocation/refactor in stabilization pass.
+
+## Current structural conclusion
+
+**The project is already substantially modular. A broad module rewrite is NOT justified.**
+
+The correct stabilization strategy is now:
+
+1. preserve current feature folders;
+2. prove regressions and cross-module coupling through tests/search before edits;
+3. remove only confirmed dead compatibility code;
+4. keep centralized routing unless a real defect is shown;
+5. keep V2 gateway because current evidence shows it routes to canonical implementations rather than duplicating them.
+
+## Next evidence sweep
+
+Priority order:
+
+1. Permission-First regression: classify all role-name checks as navigation-only vs authorization.
+2. Global branch switch regression across representative modules.
+3. Catalog/availability/recipe/modifier regressions.
+4. POS ownership/transfer/reassignment/payment regressions.
+5. Kitchen/KDS idempotency + station isolation (confirmation only, no redesign).
+6. Approvals / shifts / reports.
+7. Printing contract confirmation without modifying Print Agent.
+8. Dead-code/reference audit only after the above.
 
 ## Full Verify gate
 
@@ -132,4 +230,4 @@ Every migration must be classified as `Applied`, `Pending`, or `Not-for-Producti
 
 ## Current decision
 
-Do **not** refactor or delete anything yet. Continue evidence collection and module-boundary classification first. The first allowed runtime change will only address a proven coupling/regression with a focused test and a small isolated diff.
+No runtime cleanup change is justified yet. Continue regression/evidence collection. The first runtime diff, if any, must be a small fix for a proven defect with focused regression coverage.
