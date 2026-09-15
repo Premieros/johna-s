@@ -74,9 +74,20 @@ describe.skipIf(!dbUrl)('subscription runtime SECURITY DEFINER hardening', () =>
 
     expect(byName.get('review_instapay_payment')).toContain('public.is_super_admin()');
     expect(byName.get('subscription_settings_get')).toContain('public.is_super_admin()');
-    expect(byName.get('subscription_expired')).toContain('public.subscription_status(p_branch_id)');
+
+    const subscriptionExpired = byName.get('subscription_expired') ?? '';
+    expect(subscriptionExpired).toContain('SELECT false');
+    expect(subscriptionExpired).not.toContain('public.subscription_status(p_branch_id)');
 
     const removeOverride = byName.get('super_admin_remove_branch_override') ?? '';
     expect(removeOverride).toMatch(/(?:public\.)?is_super_admin\(\)/);
+  });
+
+  it('keeps the retired legacy subscription gate non-blocking', async () => {
+    const result = await client.query<{ expired: boolean }>(
+      `SELECT public.subscription_expired('00000000-0000-0000-0000-000000000001'::uuid) AS expired`,
+    );
+
+    expect(result.rows).toEqual([{ expired: false }]);
   });
 });
