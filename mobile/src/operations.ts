@@ -39,6 +39,12 @@ export type MobileMyShiftSummary = {
   orderCount: number;
   openOrderCount: number;
   totalOrderValue: number;
+  invoiceCount: number;
+  grossSales: number;
+  discounts: number;
+  taxes: number;
+  netSales: number;
+  refundedAmount: number;
   paidSalesTotal: number;
   soldProducts: MobileProductSummary[];
   paymentMethods: MobilePaymentSummary[];
@@ -111,22 +117,50 @@ export async function getMyShiftSummary(branchId: string): Promise<MobileMyShift
 
   const { data: orderData, error: orderError } = await orderQuery;
   if (orderError) throw orderError;
-
   const orderRows = (orderData || []) as Array<{ total?: number | string | null; status?: string | null }>;
 
+  let invoiceCount = 0;
+  let grossSales = 0;
+  let discounts = 0;
+  let taxes = 0;
+  let netSales = 0;
+  let refundedAmount = 0;
   let paidSalesTotal = 0;
   const productTotals = new Map<string, number>();
   const paymentTotals = new Map<string, { amount: number; count: number }>();
 
   if (shift?.openedAt) {
+    const rangeTo = new Date().toISOString();
+    const closing = await supabase.rpc('get_user_closing_report', {
+      p_user_id: userId,
+      p_from: shift.openedAt,
+      p_to: rangeTo,
+      p_branch_id: branchId,
+    });
+    if (closing.error) throw closing.error;
+    const report = (closing.data || {}) as {
+      invoice_count?: number | string | null;
+      gross_sales?: number | string | null;
+      discounts?: number | string | null;
+      taxes?: number | string | null;
+      net_sales?: number | string | null;
+      refunded_amount?: number | string | null;
+    };
+    invoiceCount = Number(report.invoice_count || 0);
+    grossSales = Number(report.gross_sales || 0);
+    discounts = Number(report.discounts || 0);
+    taxes = Number(report.taxes || 0);
+    netSales = Number(report.net_sales || 0);
+    refundedAmount = Number(report.refunded_amount || 0);
+
     const { data: salesData, error: salesError } = await supabase
       .from('sales')
       .select('id,total,paid_amount,payment_method,created_at,sale_items(quantity,product:products(name))')
       .eq('branch_id', branchId)
-      .eq('salesperson_id', userId)
+      .or(`cashier_id.eq.${userId},salesperson_id.eq.${userId}`)
       .gte('created_at', shift.openedAt)
+      .lt('created_at', rangeTo)
       .order('created_at', { ascending: false });
-
     if (salesError) throw salesError;
 
     type SaleItemRow = {
@@ -162,6 +196,12 @@ export async function getMyShiftSummary(branchId: string): Promise<MobileMyShift
     orderCount: orderRows.length,
     openOrderCount: orderRows.filter((row) => row.status === 'open' || row.status === 'held').length,
     totalOrderValue: orderRows.reduce((sum, row) => sum + Number(row.total || 0), 0),
+    invoiceCount,
+    grossSales,
+    discounts,
+    taxes,
+    netSales,
+    refundedAmount,
     paidSalesTotal,
     soldProducts: [...productTotals.entries()]
       .map(([name, quantity]) => ({ name, quantity }))
