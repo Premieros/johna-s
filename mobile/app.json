@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Johna S Captain",
-    "slug": "johna-s-captain",
-    "version": "0.1.0",
+    "name": "Johna S Waiter",
+    "slug": "johna-s-waiter",
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
-      "package": "com.premieros.johnas.captain",
-      "versionCode": 1
+      "package": "com.premieros.johnas.waiter",
+      "versionCode": 2
     }
   }
 }
