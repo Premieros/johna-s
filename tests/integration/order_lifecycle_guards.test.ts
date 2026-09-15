@@ -61,12 +61,12 @@ describe.skipIf(skip)('order-lifecycle guards (047 H1/H3/H4/M9/L2)', () => {
   it('process_sale does NOT free a table that still has another open order (H4)', async () => {
     const t = await makeTable();
     const first = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
-    await client.query(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100)`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
+    const second = await client.query<{ id: string }>(`INSERT INTO public.orders (order_number, branch_id, order_type, status, table_id, cashier_id, subtotal, discount_amount, tax_amount, total) VALUES ($1, $2, 'dine_in', 'open', $3, $4, 100, 0, 0, 100) RETURNING id`, [`ORD-${randomUUID()}`, branchId, t, cashierId]);
     await client.query(
       `INSERT INTO public.order_items
          (order_id, product_id, unit_name, quantity, unit_price, total)
-       VALUES ($1, $2, 'piece', 1, 100, 100)`,
-      [first.rows[0].id, prodId],
+       VALUES ($1, $2, 'piece', 1, 100, 100), ($3, $2, 'piece', 1, 100, 100)`,
+      [first.rows[0].id, prodId, second.rows[0].id],
     );
     await client.query(`UPDATE public.dining_tables SET status = 'occupied' WHERE id = $1`, [t]);
 
