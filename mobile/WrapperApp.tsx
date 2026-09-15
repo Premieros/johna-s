@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -9,20 +9,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { WebView, type WebViewNavigation } from 'react-native-webview';
+import WebView from 'react-native-webview';
 
 const SYSTEM_URL = 'https://premieros.github.io/johna-s/';
 const ACCENT = '#CC6600';
+const WebViewComponent: any = WebView;
 
 export default function WrapperApp() {
-  const webRef = useRef<WebView>(null);
+  const webRef = useRef<any>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const onNavigationStateChange = useCallback((nav: WebViewNavigation) => {
-    setCanGoBack(nav.canGoBack);
-  }, []);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -58,7 +55,7 @@ export default function WrapperApp() {
       </View>
 
       <View style={styles.webWrap}>
-        <WebView
+        <WebViewComponent
           ref={webRef}
           source={{ uri: SYSTEM_URL }}
           originWhitelist={['https://*']}
@@ -68,15 +65,15 @@ export default function WrapperApp() {
           thirdPartyCookiesEnabled
           pullToRefreshEnabled
           setSupportMultipleWindows={false}
-          onNavigationStateChange={onNavigationStateChange}
+          onNavigationStateChange={(nav: { canGoBack?: boolean }) => setCanGoBack(Boolean(nav.canGoBack))}
           onLoadStart={() => {
             setLoading(true);
             setError(null);
           }}
           onLoadEnd={() => setLoading(false)}
-          onError={(event) => {
+          onError={(event: { nativeEvent?: { description?: string } }) => {
             setLoading(false);
-            setError(event.nativeEvent.description || 'تعذر تحميل النظام');
+            setError(event.nativeEvent?.description || 'تعذر تحميل النظام');
           }}
         />
 
@@ -100,6 +97,14 @@ export default function WrapperApp() {
     </SafeAreaView>
   );
 }
+
+const overlay = {
+  position: 'absolute' as const,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+};
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#FFF8F1' },
@@ -131,14 +136,14 @@ const styles = StyleSheet.create({
   reloadText: { fontSize: 22, color: ACCENT },
   webWrap: { flex: 1, backgroundColor: '#FFFFFF' },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...overlay,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.94)',
   },
   loadingText: { marginTop: 12, fontSize: 14, color: '#6B5545' },
   errorOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...overlay,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
