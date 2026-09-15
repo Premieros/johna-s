@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
   cartBar: { minHeight: 56, borderRadius: 17, backgroundColor: '#173B2D', paddingHorizontal: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cartBarValue: { color: '#D9B45B', fontWeight: '900' },
   cartBarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 50 },
+  modalBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 50 },
   modalCard: { maxHeight: '88%', backgroundColor: '#F6F2E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18 },
   modalTitle: { color: '#173B2D', textAlign: 'right', fontSize: 23, fontWeight: '900' },
   modGroup: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 11, marginVertical: 6 },
