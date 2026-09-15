@@ -16,34 +16,38 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
     if (client) await client.end().catch(() => {});
   });
 
-  it('installs one central orders trigger for occupancy reconciliation', async () => {
-    const trigger = await client.query<{ name: string; definition: string }>(
-      `SELECT t.tgname AS name, pg_get_triggerdef(t.oid) AS definition
+  it('installs central orders and order-items triggers for occupancy reconciliation', async () => {
+    const triggers = await client.query<{ name: string; table_name: string; definition: string }>(
+      `SELECT t.tgname AS name,
+              c.relname AS table_name,
+              pg_get_triggerdef(t.oid) AS definition
        FROM pg_trigger t
        JOIN pg_class c ON c.oid = t.tgrelid
        JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = 'public'
-         AND c.relname = 'orders'
-         AND t.tgname = 'trg_reconcile_dining_table_occupancy'
-         AND NOT t.tgisinternal`,
+         AND t.tgname IN (
+           'trg_reconcile_dining_table_occupancy',
+           'trg_reconcile_dining_table_occupancy_from_item'
+         )
+         AND NOT t.tgisinternal
+       ORDER BY t.tgname`,
     );
 
-    expect(trigger.rows).toHaveLength(1);
-    expect(trigger.rows[0].definition).toContain('AFTER INSERT OR DELETE OR UPDATE OF table_id, status');
-    expect(trigger.rows[0].definition).toContain('private.reconcile_dining_table_occupancy_from_order()');
+    expect(triggers.rows).toHaveLength(2);
+    expect(triggers.rows.some((r) => r.table_name === 'orders' && r.definition.includes('private.reconcile_dining_table_occupancy_from_order()'))).toBe(true);
+    expect(triggers.rows.some((r) => r.table_name === 'order_items' && r.definition.includes('private.reconcile_dining_table_occupancy_from_order_item()'))).toBe(true);
   });
 
-  it('occupies on active order, frees on move/close, and preserves empty reserved/closed states', async () => {
+  it('does not occupy for an empty order, occupies after first item, and frees after last item is removed', async () => {
     await client.query('BEGIN');
     try {
       const branch = await client.query<{ id: string }>(
         `INSERT INTO public.branches(name, is_active)
          VALUES ($1, true)
          RETURNING id`,
-        [`occupancy-${Date.now()}`],
+        [`occupancy-empty-${Date.now()}`],
       );
       const branchId = branch.rows[0].id;
-
       const tables = await client.query<{ id: string; name: string }>(
         `SELECT id, name
          FROM public.dining_tables
@@ -66,6 +70,16 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
       );
       const orderId = order.rows[0].id;
 
+      expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table1.id])).rows[0].status).toBe('vacant');
+
+      const item = await client.query<{ id: string }>(
+        `INSERT INTO public.order_items(order_id, unit_name, quantity, unit_price, discount_amount, bonus_quantity, total)
+         VALUES ($1, 'piece', 1, 10, 0, 0, 10)
+         RETURNING id`,
+        [orderId],
+      );
+      const itemId = item.rows[0].id;
+
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table1.id])).rows[0].status).toBe('occupied');
 
       await client.query(`UPDATE public.orders SET table_id=$1 WHERE id=$2`, [table2.id, orderId]);
@@ -75,7 +89,13 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
       await client.query(`UPDATE public.orders SET status='held' WHERE id=$1`, [orderId]);
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table2.id])).rows[0].status).toBe('occupied');
 
-      await client.query(`UPDATE public.orders SET status='cancelled' WHERE id=$1`, [orderId]);
+      await client.query(`UPDATE public.order_items SET quantity=0 WHERE id=$1`, [itemId]);
+      expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table2.id])).rows[0].status).toBe('vacant');
+
+      await client.query(`UPDATE public.order_items SET quantity=1 WHERE id=$1`, [itemId]);
+      expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table2.id])).rows[0].status).toBe('occupied');
+
+      await client.query(`DELETE FROM public.order_items WHERE id=$1`, [itemId]);
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [table2.id])).rows[0].status).toBe('vacant');
 
       await client.query(`SELECT private.reconcile_dining_table_occupancy($1)`, [table3.id]);
@@ -87,14 +107,14 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
     }
   });
 
-  it('repairs stale occupied state when an order row is deleted', async () => {
+  it('frees an occupied table when its final active order is cancelled or deleted', async () => {
     await client.query('BEGIN');
     try {
       const branch = await client.query<{ id: string }>(
         `INSERT INTO public.branches(name, is_active)
          VALUES ($1, true)
          RETURNING id`,
-        [`occupancy-delete-${Date.now()}`],
+        [`occupancy-close-${Date.now()}`],
       );
       const branchId = branch.rows[0].id;
       const table = await client.query<{ id: string }>(
@@ -105,13 +125,25 @@ describe.skipIf(!dbUrl)('dining table occupancy reconciliation', () => {
 
       const order = await client.query<{ id: string }>(
         `INSERT INTO public.orders(order_number, branch_id, order_type, status, table_id, subtotal, discount_amount, discount_type, tax_amount, total)
-         VALUES ($1, $2, 'dine_in', 'open', $3, 0, 0, 'amount', 0, 0)
+         VALUES ($1, $2, 'dine_in', 'open', $3, 10, 0, 'amount', 0, 10)
          RETURNING id`,
-        [`OCC-DEL-${Date.now()}`, branchId, tableId],
+        [`OCC-CLOSE-${Date.now()}`, branchId, tableId],
       );
-
+      const orderId = order.rows[0].id;
+      await client.query(
+        `INSERT INTO public.order_items(order_id, unit_name, quantity, unit_price, discount_amount, bonus_quantity, total)
+         VALUES ($1, 'piece', 1, 10, 0, 0, 10)`,
+        [orderId],
+      );
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [tableId])).rows[0].status).toBe('occupied');
-      await client.query(`DELETE FROM public.orders WHERE id=$1`, [order.rows[0].id]);
+
+      await client.query(`UPDATE public.orders SET status='cancelled' WHERE id=$1`, [orderId]);
+      expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [tableId])).rows[0].status).toBe('vacant');
+
+      await client.query(`UPDATE public.orders SET status='open' WHERE id=$1`, [orderId]);
+      expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [tableId])).rows[0].status).toBe('occupied');
+
+      await client.query(`DELETE FROM public.orders WHERE id=$1`, [orderId]);
       expect((await client.query<{ status: string }>(`SELECT status FROM public.dining_tables WHERE id=$1`, [tableId])).rows[0].status).toBe('vacant');
     } finally {
       await client.query('ROLLBACK');
