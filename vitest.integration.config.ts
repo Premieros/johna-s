@@ -17,5 +17,10 @@ export default defineConfig({
     exclude: ['node_modules', 'dist'],
     testTimeout: 30000,
     hookTimeout: 30000,
+    // All integration files share one PostgreSQL database. Running files in
+    // parallel can deadlock when separate transactional fixtures touch the
+    // same global tables (for example public.users / public.roles). Keep test
+    // files serial while preserving every assertion and RLS/security check.
+    fileParallelism: false,
   },
 });
