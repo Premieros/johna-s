@@ -45,4 +45,8 @@ EXPO_PUBLIC_SUPABASE_URL=https://azzdesuowpdcoflmyezn.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<public anon key>
 ```
 
-GitHub Actions injects the existing repository public anon-key secret into the APK build. SDK baseline: Expo 57 / React Native 0.86 / React 19.2.3.
+GitHub Actions injects the repository public anon-key secret into the APK build. SDK baseline: Expo 57 / React Native 0.86 / React 19.2.3.
+
+## Release gate
+
+The APK is accepted only after `TypeScript -> Expo Android prebuild -> Gradle release -> artifact upload` are all green on the current mobile head. No merge to `main` is implied by a successful APK build.
