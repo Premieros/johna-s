@@ -15,6 +15,12 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/integration/**/*.test.{ts,ts}'],
     exclude: ['node_modules', 'dist'],
+    // These suites share one Postgres instance and several fixtures intentionally
+    // keep transactions open until afterAll. Running files in parallel can create
+    // cross-suite table/row lock cycles (notably on public.users), producing
+    // PostgreSQL 40P01 deadlocks before assertions execute. Serializing files keeps
+    // the exact same tests and RLS coverage while making the DB regression gate deterministic.
+    fileParallelism: false,
     testTimeout: 30000,
     hookTimeout: 30000,
   },
