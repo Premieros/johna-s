@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-12T17:14:12.570Z",
+  "generated_at": "2026-09-15T10:03:09.185Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -999,7 +999,6 @@
     "product_unit_links",
     "product_units",
     "production_orders",
-    "production_waste",
     "products",
     "purchase_items",
     "purchase_request_items",
@@ -1007,7 +1006,6 @@
     "purchases",
     "raw_material_batches",
     "raw_material_inventory",
-    "raw_material_movements",
     "raw_materials",
     "recipe_items",
     "recipes",
