@@ -181,7 +181,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
     { name: 'sales', key: 'sales', mode: 'rpcOnlyHeader', ins: (c) => `INSERT INTO public.sales (invoice_number, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status) VALUES ('${uniq('INV')}', '${c.branch}', '${c.wh}', 0, 0, 0, 0, 0, 'cash', 'completed')`, upd: () => `SET payment_method = 'cash'`, noDel: 'cashier' },
     { name: 'purchases', key: 'purchases', mode: 'full', ins: (c) => `INSERT INTO public.purchases (invoice_number, supplier_id, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status) VALUES ('${uniq('PINV')}', '${c.supp}', '${c.branch}', '${c.wh}', 0, 0, 0, 0, 0, 'cash', 'completed')`, upd: () => `SET payment_method = 'cash'`, noDel: 'cashier' },
     { name: 'warehouse_transfers', key: 'warehouse_transfers', mode: 'rpcOnlyTransfer', ins: (c) => `INSERT INTO public.warehouse_transfers (transfer_number, from_warehouse_id, to_warehouse_id, branch_id, to_branch_id, status) VALUES ('${uniq('WT')}', '${c.wh}', '${c.whOther}', '${c.branch}', '${c.branch === ids.branchA ? ids.branchB : ids.branchA}', 'pending')`, upd: () => `SET notes = 'probe'`, noDel: 'all' },
-    { name: 'dining_tables', key: 'dining_tables', mode: 'full', ins: (c) => `INSERT INTO public.dining_tables (name, branch_id, capacity, status) VALUES ('Probe', '${c.branch}', 4, 'vacant')`, upd: () => `SET name = 'probe'`, noDel: 'all' },
+    { name: 'dining_tables', key: 'dining_tables', mode: 'rpcOnlyTransfer', ins: (c) => `INSERT INTO public.dining_tables (name, branch_id, capacity, status) VALUES ('Probe', '${c.branch}', 4, 'vacant')`, upd: () => `SET name = 'probe'`, noDel: 'all' },
     { name: 'orders', key: 'orders', mode: 'full', ins: (c) => `INSERT INTO public.orders (order_number, branch_id, order_type, status) VALUES ('${uniq('ORD')}', '${c.branch}', 'dine_in', 'open')`, upd: () => `SET notes = 'probe'`, noDel: 'all' },
 
     // 044 `*.manage` write gating: admin OR can_permission('<module>.manage') AND own
@@ -509,9 +509,6 @@ describe.skipIf(skip)('RLS branch isolation', () => {
     const other = () => ids.rows.branch_settings.other;
     const ins = (branch: string) => `INSERT INTO public.branch_settings (branch_id, receipt_header) VALUES ('${branch}', 'H')`;
 
-    // branch_settings keys on branch_id (PK), and branch A/B already own seeded
-    // rows, so INSERT probes target throwaway branches created by the session
-    // role (bypasses RLS; all discarded at the final ROLLBACK).
     const tmpBranch = async () => {
       const orgId = (await client.query<{ organization_id: string }>(
         `SELECT organization_id FROM public.branches WHERE id = $1`, [ids.branchB],
@@ -550,13 +547,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
     });
 
     t('settings.manage: own-branch writes allowed, other branch denied', async () => {
-      // Grant the permission as the session role (bypasses RLS); the whole
-      // fixture is rolled back with the outer transaction.
       await client.query(`UPDATE public.roles SET permissions = permissions || '["settings.manage"]'::jsonb WHERE role = 'branch_manager'`);
-
-      // INSERT probes: the row is discarded by runProbe's savepoint rollback,
-      // so own-branch INSERT needs the PK row cleared first, and UPDATE/DELETE
-      // probes re-seed their target rows through the session role below.
       await client.query(`DELETE FROM public.branch_settings WHERE branch_id = $1`, [own()]);
       await runProbe(client, 'branch_settings INSERT bm own branch', bmId(), ins(ctxA.branch), 'ok');
       await runProbe(client, 'branch_settings INSERT bm other branch', bmId(), ins(await tmpBranch()), 'denied');
@@ -597,8 +588,6 @@ describe.skipIf(skip)('RLS branch isolation', () => {
 
     const CHILDREN: ChildSpec[] = [
       {
-        // Sale lines are append-only for authenticated callers after checkout;
-        // corrections/refunds must go through controlled RPCs, never raw DML.
         name: 'sale_items', key: 'sale_items', parent: 'sales', fk: 'sale_id', mode: 'rpcOnlySaleItem',
         ins: () => ({ sql: `INSERT INTO public.sale_items (sale_id, product_id, unit_name, quantity, unit_price, total) VALUES ($1, $2, 'piece', 1, 20, 20)`, paramsA: [ids.saleA, ids.prodA], paramsB: [ids.saleB, ids.prodB] }),
       },
