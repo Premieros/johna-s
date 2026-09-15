@@ -1,7 +1,7 @@
--- Keep dining_tables.status derived from the real active-order state.
--- A table with any open/held order is occupied. A table with no active order
--- must not remain stale-occupied. Reserved/closed states are preserved when
--- there is no active order.
+-- Keep dining_tables.status derived from the real effective active-order state.
+-- A table is occupied only when an open/held order has at least one positive-quantity
+-- order item. Empty open/held orders must not keep a table stale-occupied.
+-- Reserved/closed states are preserved when there is no effective active order.
 
 CREATE OR REPLACE FUNCTION private.reconcile_dining_table_occupancy(p_table_id uuid)
 RETURNS void
@@ -19,6 +19,12 @@ BEGIN
     FROM public.orders o
     WHERE o.table_id = p_table_id
       AND o.status IN ('open', 'held')
+      AND EXISTS (
+        SELECT 1
+        FROM public.order_items oi
+        WHERE oi.order_id = o.id
+          AND oi.quantity > 0
+      )
   ) THEN
     UPDATE public.dining_tables
     SET status = 'occupied',
@@ -56,12 +62,54 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION private.reconcile_dining_table_occupancy_from_order_item()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_old_table_id uuid;
+  v_new_table_id uuid;
+BEGIN
+  IF TG_OP IN ('UPDATE', 'DELETE') THEN
+    SELECT o.table_id INTO v_old_table_id
+    FROM public.orders o
+    WHERE o.id = OLD.order_id;
+  END IF;
+
+  IF TG_OP IN ('INSERT', 'UPDATE') THEN
+    SELECT o.table_id INTO v_new_table_id
+    FROM public.orders o
+    WHERE o.id = NEW.order_id;
+  END IF;
+
+  IF v_old_table_id IS NOT NULL THEN
+    PERFORM private.reconcile_dining_table_occupancy(v_old_table_id);
+  END IF;
+
+  IF v_new_table_id IS NOT NULL
+     AND v_new_table_id IS DISTINCT FROM v_old_table_id THEN
+    PERFORM private.reconcile_dining_table_occupancy(v_new_table_id);
+  END IF;
+
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$function$;
+
 DROP TRIGGER IF EXISTS trg_reconcile_dining_table_occupancy ON public.orders;
 CREATE TRIGGER trg_reconcile_dining_table_occupancy
 AFTER INSERT OR DELETE OR UPDATE OF table_id, status
 ON public.orders
 FOR EACH ROW
 EXECUTE FUNCTION private.reconcile_dining_table_occupancy_from_order();
+
+DROP TRIGGER IF EXISTS trg_reconcile_dining_table_occupancy_from_item ON public.order_items;
+CREATE TRIGGER trg_reconcile_dining_table_occupancy_from_item
+AFTER INSERT OR DELETE OR UPDATE OF order_id, quantity
+ON public.order_items
+FOR EACH ROW
+EXECUTE FUNCTION private.reconcile_dining_table_occupancy_from_order_item();
 
 -- One-time repair for data that predates the invariant.
 UPDATE public.dining_tables t
@@ -72,6 +120,12 @@ WHERE EXISTS (
   FROM public.orders o
   WHERE o.table_id = t.id
     AND o.status IN ('open', 'held')
+    AND EXISTS (
+      SELECT 1
+      FROM public.order_items oi
+      WHERE oi.order_id = o.id
+        AND oi.quantity > 0
+    )
 )
   AND t.status IS DISTINCT FROM 'occupied';
 
@@ -84,7 +138,13 @@ WHERE t.status = 'occupied'
     FROM public.orders o
     WHERE o.table_id = t.id
       AND o.status IN ('open', 'held')
+      AND EXISTS (
+        SELECT 1
+        FROM public.order_items oi
+        WHERE oi.order_id = o.id
+          AND oi.quantity > 0
+      )
   );
 
 COMMENT ON FUNCTION private.reconcile_dining_table_occupancy(uuid) IS
-  'Keeps table occupied/vacant state consistent with open or held orders without overwriting reserved/closed empty tables.';
+  'Keeps table occupied/vacant state consistent with effective open/held orders that contain positive-quantity items; empty orders do not occupy tables.';
