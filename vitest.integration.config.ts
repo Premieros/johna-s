@@ -15,6 +15,11 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/integration/**/*.test.{ts,ts}'],
     exclude: ['node_modules', 'dist'],
+    // Integration suites share one PostgreSQL CI database. Keep test files
+    // serial so long-lived transactional fixtures cannot deadlock on shared
+    // tables such as public.users/public.roles; assertions and RLS coverage
+    // remain unchanged.
+    fileParallelism: false,
     testTimeout: 30000,
     hookTimeout: 30000,
   },
