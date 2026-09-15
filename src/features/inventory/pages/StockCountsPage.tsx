@@ -25,6 +25,7 @@ interface EditLine {
 
 type CountItemKind = 'product' | 'raw_material';
 type CreateLine = { item_id: string; counted_quantity: string; reason: string };
+type StockCountItemWithCost = StockCountItem & { unit_cost?: number | string | null };
 
 export function StockCountsPage() {
   const { t, lang } = useLanguage();
@@ -228,10 +229,16 @@ export function StockCountsPage() {
     }},
   ];
 
+  const getItemUnitCost = (item: StockCountItem) => Number((item as StockCountItemWithCost).unit_cost || 0);
+  const getCountedValue = (item: StockCountItem) => Number(item.counted_quantity || 0) * getItemUnitCost(item);
+  const viewTotalValue = (viewTarget?.items || []).reduce((sum, item) => sum + getCountedValue(item), 0);
+
   const itemColumns: Column<StockCountItem>[] = [
     { key: 'item', header: isAr ? 'الصنف / الخامة' : 'Item / Raw Material', render: (i) => { const product = i.product as Product | undefined; const rawMaterial = i.raw_material as RawMaterial | undefined; const name = product?.name || rawMaterial?.name || '-'; const sub = product?.barcode || (rawMaterial ? (isAr ? 'خامة' : 'Raw material') : ''); return <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{name[0] || '?'}</div><div><p className="font-medium text-ui-text">{name}</p><p className="text-xs text-ui-subtle">{sub}</p></div></div>; } },
     { key: 'system', header: t('systemQuantity'), render: (i) => formatNumber(Number(i.system_quantity)) },
     { key: 'counted', header: t('countedQuantity'), render: (i) => formatNumber(Number(i.counted_quantity)) },
+    { key: 'unit_cost', header: isAr ? 'سعر الوحدة' : 'Unit Cost', render: (i) => formatNumber(getItemUnitCost(i), 2) },
+    { key: 'counted_value', header: isAr ? 'قيمة الجرد' : 'Count Value', render: (i) => <span className="font-semibold text-ui-text">{formatNumber(getCountedValue(i), 2)}</span> },
     { key: 'variance', header: t('varianceQuantity'), render: (i) => <span className={`font-semibold ${Number(i.variance_quantity) >= 0 ? 'text-ui-success' : 'text-ui-danger'}`}>{Number(i.variance_quantity) >= 0 ? '+' : ''}{formatNumber(Number(i.variance_quantity))}</span> },
     { key: 'variance_value', header: t('varianceValue'), render: (i) => formatNumber(Number(i.variance_value), 2) },
     { key: 'reason', header: t('reason'), render: (i) => i.reason || '-' },
@@ -253,7 +260,7 @@ export function StockCountsPage() {
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{t('save')}</Button></div>
       </div></Modal>
 
-      <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} />}</Modal>
+      <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <div className="space-y-3"><div className="flex items-center justify-between rounded-lg bg-ui-page-alt px-4 py-3"><span className="text-sm text-ui-muted">{isAr ? 'إجمالي قيمة الجرد' : 'Total Count Value'}</span><span className="text-lg font-bold text-ui-text">{formatNumber(viewTotalValue, 2)}</span></div><DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} /></div>}</Modal>
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={t('editCountItem')} size="lg">{editTarget && <div className="space-y-4"><div className="flex items-center justify-between"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addEditLine}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{editLines.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? t('product') : undefined} value={l.product_id} onChange={(e) => updateEditLine(idx, 'product_id', e.target.value)}><option value="">{t('product')}</option>{editProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateEditLine(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateEditLine(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeEditLine(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setEditTarget(null)}>{t('cancel')}</Button><Button onClick={saveEdit}>{t('save')}</Button></div></div>}</Modal>
       <ConfirmDialog open={!!confirmTarget && confirmTarget.action !== 'reject'} onClose={() => setConfirmTarget(null)} onConfirm={() => confirmTarget && runWorkflow(confirmTarget.action)} title={confirmTarget?.action ? t(confirmTarget.action === 'submit' ? 'submitCount' : confirmTarget.action === 'approve' ? 'approveCount' : 'applyCount') : ''} message={confirmTarget?.action ? (confirmTarget.action === 'submit' ? t('submitCountConfirm') : confirmTarget.action === 'approve' ? t('approveCountConfirm') : t('applyCountConfirm')) : ''} confirmLabel={t('save')} cancelLabel={t('cancel')} />
       <Modal open={!!confirmTarget && confirmTarget.action === 'reject'} onClose={() => setConfirmTarget(null)} title={t('rejectCount')} size="sm"><div className="space-y-4"><p className="text-sm text-ui-subtle">{t('rejectCountConfirm')}</p><Input label={t('reason')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder={isAr ? 'سبب الرفض' : 'Rejection reason'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmTarget(null)}>{t('cancel')}</Button><Button variant="danger" onClick={() => runWorkflow('reject')}>{t('rejectCount')}</Button></div></div></Modal>
