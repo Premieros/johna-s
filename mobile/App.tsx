@@ -211,14 +211,14 @@ export default function App() {
     <TouchableOpacity onPress={openOrders}><Text style={s.navText}>طلباتي</Text></TouchableOpacity>
     <TouchableOpacity onPress={() => setScreen('permissions')}><Text style={s.navText}>صلاحياتي</Text></TouchableOpacity>
   </View>;
-  const Error = () => errorText ? <View style={s.error}><Text style={s.errorText}>{errorText}</Text></View> : null;
+  const ErrorBox = () => errorText ? <View style={s.error}><Text style={s.errorText}>{errorText}</Text></View> : null;
 
   if (booting) return <SafeAreaView style={s.center}><ActivityIndicator size="large" /><Text>جاري تشغيل التطبيق...</Text></SafeAreaView>;
   if (screen === 'login') return <SafeAreaView style={s.login}><View style={s.loginWrap}>
     <Text style={s.logo}>Johna S</Text><Text style={s.loginTitle}>طلبات نادل الصالة</Text><Text style={s.loginHint}>نفس حساب وصلاحيات النظام الحالي</Text>
     {!mobileConfigReady && <View style={s.error}><Text style={s.errorText}>نسخة البناء لا تحتوي مفتاح الاتصال العام.</Text></View>}
     <View style={s.card}><Text style={s.label}>اسم المستخدم</Text><TextInput style={s.input} value={username} onChangeText={setUsername} autoCapitalize="none" textAlign="right" />
-      <Text style={s.label}>الرقم السري / PIN</Text><TextInput style={s.input} value={pin} onChangeText={setPin} secureTextEntry textAlign="right" /><Error />
+      <Text style={s.label}>الرقم السري / PIN</Text><TextInput style={s.input} value={pin} onChangeText={setPin} secureTextEntry textAlign="right" /><ErrorBox />
       <TouchableOpacity style={[s.primary, busy && s.disabled]} disabled={busy || !mobileConfigReady} onPress={login}>{busy ? <ActivityIndicator /> : <Text style={s.primaryText}>تسجيل الدخول</Text>}</TouchableOpacity>
     </View>
   </View></SafeAreaView>;
@@ -234,13 +234,13 @@ export default function App() {
     <TouchableOpacity style={s.secondary} onPress={logout}><Text style={s.secondaryText}>تسجيل الخروج</Text></TouchableOpacity><Nav />
   </ScrollView></SafeAreaView>;
 
-  if (screen === 'tables') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="اختيار الطاولة" /><Error />
+  if (screen === 'tables') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="اختيار الطاولة" /><ErrorBox />
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{areas.map((item) => <TouchableOpacity key={item} style={[s.chip, area === item && s.chipOn]} onPress={() => setArea(item)}><Text style={[s.chipText, area === item && s.chipTextOn]}>{item}</Text></TouchableOpacity>)}</ScrollView>
     <View style={s.grid}>{visibleTables.map((table) => <TouchableOpacity key={table.id} style={[s.table, table.status === 'occupied' && s.occupied]} onPress={() => void openTable(table)}><Text style={s.tableName}>{table.name}</Text><Text style={s.gold}>{table.status === 'occupied' ? 'مشغولة' : 'متاحة'}</Text>{table.activeWaiterName && <Text style={s.muted}>النادل: {table.activeWaiterName}</Text>}{table.guestCount ? <Text style={s.muted}>{table.guestCount} ضيوف</Text> : null}</TouchableOpacity>)}</View>
     <TouchableOpacity style={s.secondary} onPress={() => void refreshTables()}><Text style={s.secondaryText}>تحديث الطاولات</Text></TouchableOpacity><Nav />
   </ScrollView></SafeAreaView>;
 
-  if (screen === 'menu') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title={selectedTable?.name || 'المنيو'} /><Error />
+  if (screen === 'menu') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title={selectedTable?.name || 'المنيو'} /><ErrorBox />
     <View style={s.context}><Text style={s.listTitle}>{activeOrderNumber ? `الطلب #${activeOrderNumber}` : 'طلب جديد'}</Text><View style={s.qtyRow}><TouchableOpacity style={s.qty} onPress={() => setGuestCount((v) => Math.max(1, v - 1))}><Text>−</Text></TouchableOpacity><Text style={s.bold}>{guestCount} ضيوف</Text><TouchableOpacity style={s.qty} onPress={() => setGuestCount((v) => v + 1)}><Text>+</Text></TouchableOpacity></View></View>
     <TextInput style={s.input} value={search} onChangeText={setSearch} textAlign="right" placeholder="ابحث عن صنف..." />
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{categories.map((item) => <TouchableOpacity key={item} style={[s.chip, category === item && s.chipOn]} onPress={() => setCategory(item)}><Text style={[s.chipText, category === item && s.chipTextOn]}>{item}</Text></TouchableOpacity>)}</ScrollView>
@@ -249,19 +249,19 @@ export default function App() {
     {draft && <View style={s.backdrop}><View style={s.sheet}><ScrollView><Text style={s.title}>{draft.product.name}</Text><Text style={s.gold}>{money(draft.product.salePrice, config.currency)}</Text>
       <View style={s.qtyRow}><TouchableOpacity style={s.qty} onPress={() => setDraft((d) => d ? { ...d, quantity: Math.max(1, d.quantity - 1) } : d)}><Text>−</Text></TouchableOpacity><Text style={s.bold}>الكمية {draft.quantity}</Text><TouchableOpacity style={s.qty} onPress={() => setDraft((d) => d ? { ...d, quantity: d.quantity + 1 } : d)}><Text>+</Text></TouchableOpacity></View>
       {draft.groups.map((group) => <View key={group.id} style={s.mod}><Text style={s.bold}>{group.name} · {group.minSelections > 0 ? 'مطلوب' : 'اختياري'}</Text>{group.options.map((option) => { const on = draft.selectedOptionIds.includes(option.id); return <TouchableOpacity key={option.id} style={[s.modOption, on && s.modOn]} onPress={() => toggleModifier(group, option.id)}><Text style={s.right}>{on ? '✓ ' : ''}{option.name}{option.priceDelta ? ` (+${money(option.priceDelta, config.currency)})` : ''}</Text></TouchableOpacity>; })}</View>)}
-      <TextInput style={[s.input, { minHeight: 80 }]} multiline value={draft.notes} onChangeText={(v) => setDraft((d) => d ? { ...d, notes: v } : d)} textAlign="right" placeholder="ملاحظات الصنف..." /><Error />
+      <TextInput style={[s.input, { minHeight: 80 }]} multiline value={draft.notes} onChangeText={(v) => setDraft((d) => d ? { ...d, notes: v } : d)} textAlign="right" placeholder="ملاحظات الصنف..." /><ErrorBox />
       <TouchableOpacity style={s.primary} onPress={addDraft}><Text style={s.primaryText}>إضافة إلى الطلب</Text></TouchableOpacity><TouchableOpacity style={s.secondary} onPress={() => { setDraft(null); setErrorText(''); }}><Text style={s.secondaryText}>إلغاء</Text></TouchableOpacity>
     </ScrollView></View></View>}
   </ScrollView></SafeAreaView>;
 
-  if (screen === 'cart') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="مراجعة الطلب" /><Error />
+  if (screen === 'cart') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="مراجعة الطلب" /><ErrorBox />
     {cart.map((item, index) => <View key={`${item.productId}-${index}`} style={s.cartLine}><View style={s.qtyRow}><TouchableOpacity style={s.qty} onPress={() => changeQty(index, -1)}><Text>−</Text></TouchableOpacity><Text style={s.bold}>{item.quantity}</Text><TouchableOpacity style={s.qty} onPress={() => changeQty(index, 1)}><Text>+</Text></TouchableOpacity></View><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={s.listTitle}>{item.name}</Text>{item.notes && <Text style={s.muted}>{item.notes}</Text>}<Text style={s.gold}>{money(item.unitPrice * item.quantity, config.currency)}</Text></View></View>)}
     <View style={s.total}><Text style={s.right}>الإجمالي قبل الضريبة: {money(subtotal, config.currency)}</Text>{config.taxEnabled && <Text style={s.right}>الضريبة ({config.taxRate}%): {money(taxAmount, config.currency)}</Text>}<Text style={s.totalText}>الإجمالي: {money(total, config.currency)}</Text></View>
     <TouchableOpacity style={[s.primary, (!can('pos.send_kitchen') || busy || !cart.length) && s.disabled]} disabled={!can('pos.send_kitchen') || busy || !cart.length} onPress={sendOrder}>{busy ? <ActivityIndicator /> : <Text style={s.primaryText}>حفظ وإرسال للمطبخ</Text>}</TouchableOpacity>
     {!can('pos.send_kitchen') && <Text style={s.errorText}>لا تملك صلاحية الإرسال للمطبخ</Text>}<TouchableOpacity style={s.secondary} onPress={() => setScreen('menu')}><Text style={s.secondaryText}>إضافة أصناف أخرى</Text></TouchableOpacity><Nav />
   </ScrollView></SafeAreaView>;
 
-  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="طلباتي" />{notice ? <View style={s.success}><Text style={s.successText}>{notice}</Text></View> : null}<Error />
+  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Header title="طلباتي" />{notice ? <View style={s.success}><Text style={s.successText}>{notice}</Text></View> : null}<ErrorBox />
     {orders.map((order) => <TouchableOpacity key={order.orderId} style={s.order} onPress={async () => { setBusy(true); try { const d = await getOrderDetails(order.orderId); setSelectedTable(d.tableId ? tables.find((t) => t.id === d.tableId) || null : null); setCart(d.items); setGuestCount(d.guestCount || 2); setActiveOrderId(d.orderId); setActiveOrderNumber(d.orderNumber); if (d.status === 'open' || d.status === 'held') setScreen('menu'); } catch (error) { setErrorText(errorMessage(error)); } finally { setBusy(false); } }}><View><Text style={s.listTitle}>#{order.orderNumber}</Text><Text style={s.muted}>{order.tableName} · {order.waiterName}</Text></View><View><Text style={s.status}>{order.kitchenStatus || order.status}</Text><Text style={s.gold}>{money(order.total, config.currency)}</Text></View></TouchableOpacity>)}
     {!orders.length && <View style={s.card}><Text style={s.muted}>لا توجد طلبات لك في هذا الفرع</Text></View>}<TouchableOpacity style={s.secondary} onPress={openOrders}><Text style={s.secondaryText}>تحديث الطلبات</Text></TouchableOpacity><Nav />
   </ScrollView></SafeAreaView>;
