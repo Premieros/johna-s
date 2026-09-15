@@ -363,11 +363,13 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
   const showTax = s.receipt_show_tax !== false;
   const showQr = s.receipt_show_qr !== false;
   const currency = s.currency || 'EGP';
-  const sidePaddingMm = compact ? 2 : 3;
-  const bodyFontPx = compact ? 11 : 12;
-  const smallFontPx = compact ? 9 : 10;
-  const itemFontPx = compact ? 11 : 12;
-  const totalFontPx = compact ? 15 : 16;
+  // Visual-only receipt profile: identical typography scale for Arabic and English.
+  // Routing, authorization, queueing, printer selection and Print Agent behavior stay unchanged.
+  const sidePaddingMm = compact ? 2.4 : 3.2;
+  const bodyFontPx = compact ? 12 : 13;
+  const smallFontPx = compact ? 10 : 11;
+  const itemFontPx = compact ? 12 : 13;
+  const totalFontPx = compact ? 16 : 18;
   const logoWidthMm = compact ? 28 : 36;
   const qrWidthMm = compact ? 18 : 22;
 
@@ -433,9 +435,13 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
           max-width: ${width}mm;
           background: #fff;
           color: #000;
-          font-family: Tahoma, Arial, "Segoe UI", sans-serif;
+          font-family: Arial, Tahoma, "Segoe UI", sans-serif;
           font-size: ${bodyFontPx}px;
-          line-height: 1.35;
+          line-height: 1.45;
+          font-weight: 600;
+          letter-spacing: 0;
+          text-rendering: optimizeLegibility;
+          font-synthesis: none;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
@@ -443,7 +449,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
         .receipt-page {
           width: ${width}mm;
           min-height: 0;
-          padding: 2.5mm ${sidePaddingMm}mm 4mm;
+          padding: 3mm ${sidePaddingMm}mm 4mm;
           background: #fff;
           color: #000;
           page-break-after: always;
@@ -463,15 +469,15 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
         }
         .header {
           margin: 0 0 1mm;
-          font-size: ${compact ? 15 : 17}px;
-          line-height: 1.2;
+          font-size: ${compact ? 16 : 18}px;
+          line-height: 1.3;
           font-weight: 800;
           overflow-wrap: anywhere;
         }
         .sub {
           margin: .5mm 0;
           font-size: ${smallFontPx}px;
-          line-height: 1.35;
+          line-height: 1.45;
           overflow-wrap: anywhere;
         }
         .branch-name { font-weight: 700; }
@@ -485,8 +491,9 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
         .divider.strong { border-top-style: solid; border-top-width: .45mm; }
         .meta-row {
           display: block;
-          margin: .65mm 0;
+          margin: .8mm 0;
           min-width: 0;
+          line-height: 1.4;
         }
         .meta-value { display: block; overflow-wrap: anywhere; }
         .items-head,
@@ -505,25 +512,26 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
           padding-bottom: .7mm;
         }
         .item-row {
-          padding: 1.3mm 0;
+          padding: 1.5mm 0;
           border-bottom: .2mm dotted #777;
           break-inside: avoid;
           page-break-inside: avoid;
         }
         .item-row:last-of-type { border-bottom: 0; }
         .item-name {
-          margin-bottom: .6mm;
+          margin-bottom: .7mm;
           font-size: ${itemFontPx}px;
-          line-height: 1.3;
+          line-height: 1.4;
           font-weight: 800;
           overflow-wrap: anywhere;
           word-break: normal;
         }
-        .item-detail { font-size: ${smallFontPx}px; }
+        .item-detail { font-size: ${smallFontPx}px; line-height: 1.4; font-weight: 600; }
         .qty-price { overflow-wrap: anywhere; }
         .money-row {
-          margin: .8mm 0;
+          margin: 1mm 0;
           font-size: ${bodyFontPx}px;
+          line-height: 1.4;
           font-weight: 600;
         }
         .amount {
@@ -551,7 +559,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
           margin-top: 1.5mm;
           text-align: center;
           font-size: ${smallFontPx}px;
-          line-height: 1.4;
+          line-height: 1.5;
           overflow-wrap: anywhere;
         }
         .thank-you { margin-top: 2mm; font-weight: 800; }
