@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,153 +10,395 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  createTableOrder,
+  getBranches,
+  getBranchPosConfig,
+  getCatalog,
+  getDiningTables,
+  getMyOrders,
+  getOrderDetails,
+  getProductModifiers,
+  getSessionProfile,
+  hasSession,
+  sendToKitchen,
+  signIn,
+  signOut,
+  updateTableOrder,
+} from './src/gateway';
+import { mobileConfigReady } from './src/supabase';
+import type {
+  BranchPosConfig,
+  DiningTableSummary,
+  MobileBranch,
+  MobilePermission,
+  MobileSessionProfile,
+  ModifierGroup,
+  WaiterCartItemInput,
+  WaiterCatalogProduct,
+  WaiterOrderSummary,
+} from './src/contracts';
 
-type Permission =
-  | 'pos.view'
-  | 'pos.order.create'
-  | 'pos.order.edit'
-  | 'pos.send_kitchen'
-  | 'pos.payment.take'
-  | 'pos.order.split'
-  | 'pos.order.transfer'
-  | 'approvals.view';
+type Screen = 'login' | 'branches' | 'tables' | 'menu' | 'cart' | 'orders' | 'permissions';
 
-type Screen = 'login' | 'tables' | 'menu' | 'cart' | 'orders' | 'permissions';
-type TableStatus = 'available' | 'occupied';
-
-type DiningTable = {
-  id: number;
-  name: string;
-  area: string;
-  status: TableStatus;
-  guestCount?: number;
-  waiterName?: string;
+type ProductDraft = {
+  product: WaiterCatalogProduct;
+  quantity: number;
+  notes: string;
+  groups: ModifierGroup[];
+  selectedOptionIds: string[];
 };
 
-type MenuItem = {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  description: string;
-};
-
-type CartLine = MenuItem & { quantity: number; notes?: string };
-
-type StaffProfile = {
-  name: string;
-  title: string;
-  permissions: Permission[];
-};
-
-const profiles: StaffProfile[] = [
-  {
-    name: 'أحمد محمد',
-    title: 'نادل الصالة',
-    permissions: ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.send_kitchen'],
-  },
-  {
-    name: 'محمد علي',
-    title: 'مدير الفرع',
-    permissions: [
-      'pos.view',
-      'pos.order.create',
-      'pos.order.edit',
-      'pos.send_kitchen',
-      'pos.payment.take',
-      'pos.order.split',
-      'pos.order.transfer',
-      'approvals.view',
-    ],
-  },
-];
-
-const tables: DiningTable[] = [
-  { id: 1, name: 'طاولة 1', area: 'الصالة الرئيسية', status: 'available' },
-  { id: 2, name: 'طاولة 2', area: 'الصالة الرئيسية', status: 'occupied', guestCount: 3, waiterName: 'أحمد محمد' },
-  { id: 3, name: 'طاولة 3', area: 'الصالة الرئيسية', status: 'available' },
-  { id: 4, name: 'طاولة 4', area: 'الصالة الرئيسية', status: 'available' },
-  { id: 5, name: 'طاولة 5', area: 'الصالة الرئيسية', status: 'occupied', guestCount: 2, waiterName: 'محمود حسن' },
-  { id: 6, name: 'طاولة 6', area: 'الصالة الرئيسية', status: 'available' },
-  { id: 7, name: 'طاولة 7', area: 'الصالة الرئيسية', status: 'available' },
-  { id: 8, name: 'طاولة 8', area: 'الصالة الرئيسية', status: 'available' },
-  { id: 9, name: 'طاولة 9', area: 'الصالة الرئيسية', status: 'occupied', guestCount: 4, waiterName: 'أحمد محمد' },
-];
-
-const menuItems: MenuItem[] = [
-  { id: 'p1', name: 'برجر كلاسيك', category: 'البرجر', price: 165, description: 'برجر لحم، جبنة، خس وصوص خاص' },
-  { id: 'p2', name: 'تشيكن كريسبي', category: 'الدجاج', price: 145, description: 'دجاج مقرمش مع صوص Johna S' },
-  { id: 'p3', name: 'بطاطس', category: 'الإضافات', price: 55, description: 'بطاطس مقلية مقرمشة' },
-  { id: 'p4', name: 'كولا', category: 'المشروبات', price: 35, description: 'مشروب غازي' },
-  { id: 'p5', name: 'عصير برتقال', category: 'المشروبات', price: 60, description: 'عصير برتقال طازج' },
-];
-
-const permissionLabels: Record<Permission, string> = {
+const permissionLabels: Record<MobilePermission, string> = {
   'pos.view': 'عرض نقطة البيع',
   'pos.order.create': 'إنشاء طلب',
   'pos.order.edit': 'تعديل الطلب',
-  'pos.send_kitchen': 'إرسال للمطبخ',
+  'pos.send_kitchen': 'إرسال الطلب للمطبخ',
   'pos.payment.take': 'تحصيل / دفع',
   'pos.order.split': 'تقسيم الفاتورة',
-  'pos.order.transfer': 'نقل الطلب / الطاولة',
-  'approvals.view': 'عرض الموافقات',
+  'pos.order.transfer': 'نقل / دمج الطلب',
+  'approvals.review': 'مراجعة الموافقات',
+  'approvals.override': 'تجاوز الموافقات المسموح بها',
+};
+
+const money = (value: number, currency: string) => `${value.toFixed(2)} ${currency}`;
+
+const messageForError = (error: unknown) => {
+  const text = error instanceof Error ? error.message : String(error || 'حدث خطأ');
+  if (text.includes('Invalid login credentials')) return 'اسم المستخدم أو الرقم السري غير صحيح';
+  if (text.includes('USERNAME_AND_PIN_REQUIRED')) return 'أدخل اسم المستخدم والرقم السري';
+  if (text.includes('APPLICATION_PROFILE_REQUIRED')) return 'الحساب غير مرتبط بمستخدم نشط في النظام';
+  if (text.includes('SESSION_REQUIRED')) return 'انتهت الجلسة، سجل الدخول مرة أخرى';
+  if (text.includes('permission') || text.includes('PERMISSION')) return 'ليس لديك الصلاحية المطلوبة';
+  if (text.includes('TABLE_BUSY')) return 'الطاولة مرتبطة بطلب مستخدم آخر';
+  return text;
 };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
-  const [profile, setProfile] = useState<StaffProfile>(profiles[0]!);
-  const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null);
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [query, setQuery] = useState('');
+  const [booting, setBooting] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [errorText, setErrorText] = useState('');
+  const [notice, setNotice] = useState('');
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [profile, setProfile] = useState<MobileSessionProfile | null>(null);
+  const [branches, setBranches] = useState<MobileBranch[]>([]);
+  const [branch, setBranch] = useState<MobileBranch | null>(null);
+  const [config, setConfig] = useState<BranchPosConfig>({ taxEnabled: false, taxRate: 0, currency: 'EGP' });
+  const [tables, setTables] = useState<DiningTableSummary[]>([]);
+  const [area, setArea] = useState('الكل');
+  const [selectedTable, setSelectedTable] = useState<DiningTableSummary | null>(null);
+  const [guestCount, setGuestCount] = useState(2);
+  const [catalog, setCatalog] = useState<WaiterCatalogProduct[]>([]);
+  const [category, setCategory] = useState('الكل');
+  const [search, setSearch] = useState('');
+  const [cart, setCart] = useState<WaiterCartItemInput[]>([]);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [activeOrderNumber, setActiveOrderNumber] = useState<string | null>(null);
+  const [orders, setOrders] = useState<WaiterOrderSummary[]>([]);
+  const [draft, setDraft] = useState<ProductDraft | null>(null);
 
-  const can = (permission: Permission) => profile.permissions.includes(permission);
-  const total = cart.reduce((sum, line) => sum + line.price * line.quantity, 0);
-  const filteredMenu = useMemo(
-    () => menuItems.filter((item) => item.name.includes(query) || item.category.includes(query)),
-    [query],
-  );
+  const can = (permission: MobilePermission) => profile?.isSuperAdmin || profile?.permissions.includes(permission) || false;
 
-  const addItem = (item: MenuItem) => {
-    if (!can('pos.order.create')) return;
-    setCart((current) => {
-      const existing = current.find((line) => line.id === item.id);
-      if (existing) return current.map((line) => line.id === item.id ? { ...line, quantity: line.quantity + 1 } : line);
-      return [...current, { ...item, quantity: 1 }];
+  const loadIdentity = async () => {
+    const nextProfile = await getSessionProfile();
+    const nextBranches = await getBranches();
+    setProfile(nextProfile);
+    setBranches(nextBranches);
+    const preferred = nextBranches.find((item) => item.id === nextProfile.primaryBranchId) || nextBranches[0] || null;
+    if (preferred) {
+      await selectBranch(preferred, nextProfile);
+    } else {
+      setBranch(null);
+      setScreen('branches');
+    }
+  };
+
+  const selectBranch = async (nextBranch: MobileBranch, effectiveProfile = profile) => {
+    if (effectiveProfile && effectiveProfile.branchIds.length > 0 && !effectiveProfile.branchIds.includes(nextBranch.id) && !effectiveProfile.isSuperAdmin) {
+      throw new Error('ليس لديك وصول لهذا الفرع');
+    }
+    setBusy(true);
+    setErrorText('');
+    try {
+      const [nextConfig, nextTables, nextCatalog] = await Promise.all([
+        getBranchPosConfig(nextBranch.id),
+        getDiningTables(nextBranch.id),
+        getCatalog(nextBranch.id),
+      ]);
+      setBranch(nextBranch);
+      setConfig(nextConfig);
+      setTables(nextTables);
+      setCatalog(nextCatalog);
+      setArea('الكل');
+      setCategory('الكل');
+      setCart([]);
+      setSelectedTable(null);
+      setActiveOrderId(null);
+      setActiveOrderNumber(null);
+      setScreen('tables');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshTables = async () => {
+    if (!branch) return;
+    const next = await getDiningTables(branch.id);
+    setTables(next);
+  };
+
+  const refreshOrders = async () => {
+    if (!branch) return;
+    setOrders(await getMyOrders(branch.id));
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        if (mobileConfigReady && await hasSession()) {
+          await loadIdentity();
+        }
+      } catch {
+        await signOut().catch(() => undefined);
+      } finally {
+        if (mounted) setBooting(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const areas = useMemo(() => ['الكل', ...Array.from(new Set(tables.map((table) => table.areaName || 'بدون صالة')))], [tables]);
+  const visibleTables = useMemo(() => tables.filter((table) => area === 'الكل' || (table.areaName || 'بدون صالة') === area), [tables, area]);
+  const categories = useMemo(() => ['الكل', ...Array.from(new Set(catalog.map((item) => item.categoryName || 'بدون تصنيف')))], [catalog]);
+  const visibleCatalog = useMemo(() => catalog.filter((item) => {
+    const matchesCategory = category === 'الكل' || (item.categoryName || 'بدون تصنيف') === category;
+    const q = search.trim();
+    const matchesSearch = !q || item.name.includes(q) || (item.nameEn || '').toLowerCase().includes(q.toLowerCase());
+    return matchesCategory && matchesSearch;
+  }), [catalog, category, search]);
+  const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const taxAmount = config.taxEnabled ? subtotal * (config.taxRate / 100) : 0;
+  const total = subtotal + taxAmount;
+  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleLogin = async () => {
+    setBusy(true);
+    setErrorText('');
+    try {
+      await signIn(username, pin);
+      await loadIdentity();
+      setPin('');
+    } catch (error) {
+      setErrorText(messageForError(error));
+    } finally {
+      setBusy(false);
+      setBooting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    setProfile(null);
+    setBranches([]);
+    setBranch(null);
+    setTables([]);
+    setCatalog([]);
+    setCart([]);
+    setSelectedTable(null);
+    setActiveOrderId(null);
+    setActiveOrderNumber(null);
+    setScreen('login');
+  };
+
+  const openTable = async (table: DiningTableSummary) => {
+    setErrorText('');
+    setNotice('');
+    if (!can('pos.view')) {
+      setErrorText('لا تملك صلاحية عرض نقطة البيع');
+      return;
+    }
+    setBusy(true);
+    try {
+      setSelectedTable(table);
+      setGuestCount(table.guestCount || table.capacity || 2);
+      if (table.activeOrderId) {
+        if (!can('pos.order.edit')) throw new Error('هذه الطاولة مشغولة ولا تملك صلاحية تعديل الطلب');
+        const details = await getOrderDetails(table.activeOrderId);
+        setCart(details.items);
+        setGuestCount(details.guestCount || table.guestCount || 2);
+        setActiveOrderId(details.orderId);
+        setActiveOrderNumber(details.orderNumber);
+      } else {
+        if (!can('pos.order.create')) throw new Error('لا تملك صلاحية إنشاء طلب');
+        setCart([]);
+        setActiveOrderId(null);
+        setActiveOrderNumber(null);
+      }
+      setScreen('menu');
+    } catch (error) {
+      setErrorText(messageForError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openProduct = async (product: WaiterCatalogProduct) => {
+    if (activeOrderId ? !can('pos.order.edit') : !can('pos.order.create')) return;
+    setBusy(true);
+    setErrorText('');
+    try {
+      const groups = await getProductModifiers(product.id);
+      const defaults = groups.flatMap((group) => group.options.filter((option) => option.isDefault).slice(0, group.maxSelections).map((option) => option.id));
+      setDraft({ product, quantity: 1, notes: '', groups, selectedOptionIds: defaults });
+    } catch (error) {
+      setErrorText(messageForError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleModifier = (group: ModifierGroup, optionId: string) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const groupIds = new Set(group.options.map((option) => option.id));
+      const selectedInGroup = current.selectedOptionIds.filter((id) => groupIds.has(id));
+      let next = current.selectedOptionIds;
+      if (next.includes(optionId)) next = next.filter((id) => id !== optionId);
+      else if (group.maxSelections === 1) next = [...next.filter((id) => !groupIds.has(id)), optionId];
+      else if (selectedInGroup.length < group.maxSelections) next = [...next, optionId];
+      return { ...current, selectedOptionIds: next };
     });
   };
 
-  const updateQty = (id: string, delta: number) => {
-    if (!can('pos.order.edit')) return;
-    setCart((current) => current
-      .map((line) => line.id === id ? { ...line, quantity: Math.max(0, line.quantity + delta) } : line)
-      .filter((line) => line.quantity > 0));
+  const addDraft = () => {
+    if (!draft) return;
+    for (const group of draft.groups) {
+      const groupIds = new Set(group.options.map((option) => option.id));
+      const count = draft.selectedOptionIds.filter((id) => groupIds.has(id)).length;
+      if (count < group.minSelections) {
+        setErrorText(`اختر ${group.minSelections} على الأقل من ${group.name}`);
+        return;
+      }
+    }
+    const priceDelta = draft.groups.flatMap((group) => group.options)
+      .filter((option) => draft.selectedOptionIds.includes(option.id))
+      .reduce((sum, option) => sum + option.priceDelta, 0);
+    setCart((current) => [...current, {
+      productId: draft.product.id,
+      name: draft.product.name,
+      unitPrice: Math.max(0, draft.product.salePrice + priceDelta),
+      quantity: draft.quantity,
+      modifierOptionIds: draft.selectedOptionIds,
+      notes: draft.notes.trim() || undefined,
+    }]);
+    setDraft(null);
+    setErrorText('');
   };
+
+  const changeCartQty = (index: number, delta: number) => {
+    if (!can('pos.order.edit') && activeOrderId) return;
+    setCart((current) => current
+      .map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item)
+      .filter((item) => item.quantity > 0));
+  };
+
+  const handleSend = async () => {
+    if (!branch || !selectedTable || cart.length === 0) return;
+    if (!can('pos.send_kitchen')) {
+      setErrorText('لا تملك صلاحية الإرسال للمطبخ');
+      return;
+    }
+    setBusy(true);
+    setErrorText('');
+    setNotice('');
+    try {
+      let orderId = activeOrderId;
+      let orderNumber = activeOrderNumber;
+      if (orderId) {
+        await updateTableOrder(orderId, cart, config);
+      } else {
+        const created = await createTableOrder({
+          branchId: branch.id,
+          tableId: selectedTable.id,
+          guestCount,
+          items: cart,
+          taxEnabled: config.taxEnabled,
+          taxRate: config.taxRate,
+        });
+        orderId = created.orderId;
+        orderNumber = created.orderNumber;
+        setActiveOrderId(created.orderId);
+        setActiveOrderNumber(created.orderNumber);
+      }
+      const sentCount = await sendToKitchen(orderId);
+      setNotice(sentCount > 0 ? `تم إرسال ${sentCount} صنف/سطر للمطبخ بنجاح` : 'كل الأصناف الحالية مرسلة للمطبخ بالفعل');
+      setActiveOrderNumber(orderNumber);
+      await refreshTables();
+      await refreshOrders();
+      setScreen('orders');
+    } catch (error) {
+      setErrorText(messageForError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openOrders = async () => {
+    setBusy(true);
+    setErrorText('');
+    try {
+      await refreshOrders();
+      setScreen('orders');
+    } catch (error) {
+      setErrorText(messageForError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const Header = ({ title }: { title: string }) => (
+    <View style={styles.header}>
+      <View style={styles.headerTitleWrap}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        <Text style={styles.headerSub}>{branch?.name || 'Johna S'} · {profile?.displayName || ''}</Text>
+      </View>
+      <TouchableOpacity style={styles.avatar} onPress={() => setScreen('permissions')}>
+        <Text style={styles.avatarText}>{profile?.displayName?.charAt(0) || 'J'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const BottomNav = () => (
+    <View style={styles.bottomNav}>
+      <TouchableOpacity onPress={() => setScreen('tables')}><Text style={styles.navText}>الطاولات</Text></TouchableOpacity>
+      <TouchableOpacity onPress={openOrders}><Text style={styles.navText}>طلباتي</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => setScreen('permissions')}><Text style={styles.navText}>صلاحياتي</Text></TouchableOpacity>
+    </View>
+  );
+
+  if (booting) {
+    return <SafeAreaView style={styles.center}><ActivityIndicator size="large" /><Text style={styles.loadingText}>جاري تشغيل التطبيق...</Text></SafeAreaView>;
+  }
 
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.loginSafe}>
         <View style={styles.loginWrap}>
           <Text style={styles.logo}>Johna S</Text>
-          <Text style={styles.loginTitle}>نظام طلبات نادل الصالة</Text>
-          <Text style={styles.loginHint}>نسخة تصميم مستقلة — لا تتصل بالنظام أو قاعدة البيانات حاليًا</Text>
-
-          <View style={styles.loginCard}>
-            <Text style={styles.label}>اختر مستخدم المعاينة</Text>
-            {profiles.map((item) => (
-              <TouchableOpacity
-                key={item.title}
-                style={[styles.profileOption, profile.title === item.title && styles.profileOptionActive]}
-                onPress={() => setProfile(item)}
-              >
-                <View>
-                  <Text style={styles.profileName}>{item.name}</Text>
-                  <Text style={styles.profileTitle}>{item.title}</Text>
-                </View>
-                <Text style={styles.permissionCount}>{item.permissions.length} صلاحيات</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={styles.goldButton} onPress={() => setScreen('tables')}>
-              <Text style={styles.goldButtonText}>دخول التطبيق</Text>
+          <Text style={styles.loginTitle}>طلبات نادل الصالة</Text>
+          <Text style={styles.loginHint}>نفس حساب وصلاحيات النظام الحالي</Text>
+          {!mobileConfigReady && <View style={styles.errorBox}><Text style={styles.errorText}>نسخة البناء لا تحتوي مفتاح الاتصال العام. أعد بناء APK من GitHub Actions بعد ضبط VITE_SUPABASE_ANON_KEY.</Text></View>}
+          <View style={styles.card}>
+            <Text style={styles.label}>اسم المستخدم</Text>
+            <TextInput value={username} onChangeText={setUsername} autoCapitalize="none" textAlign="right" style={styles.input} placeholder="username" />
+            <Text style={styles.label}>الرقم السري / PIN</Text>
+            <TextInput value={pin} onChangeText={setPin} secureTextEntry textAlign="right" style={styles.input} placeholder="••••••" />
+            {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
+            <TouchableOpacity style={[styles.primaryButton, busy && styles.disabled]} onPress={handleLogin} disabled={busy || !mobileConfigReady}>
+              {busy ? <ActivityIndicator /> : <Text style={styles.primaryButtonText}>تسجيل الدخول</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -162,45 +406,68 @@ export default function App() {
     );
   }
 
-  const Header = ({ title }: { title: string }) => (
-    <View style={styles.header}>
-      <View style={styles.userBlock}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{profile.name.charAt(0)}</Text></View>
-        <View>
-          <Text style={styles.headerUser}>{profile.name}</Text>
-          <Text style={styles.headerRole}>{profile.title}</Text>
-        </View>
-      </View>
-      <View style={styles.titleBlock}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <Text style={styles.online}>● متصل</Text>
-      </View>
-    </View>
-  );
+  if (screen === 'branches') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.container}>
+          <Header title="اختيار الفرع" />
+          {branches.map((item) => (
+            <TouchableOpacity key={item.id} style={styles.listCard} onPress={() => void selectBranch(item)}>
+              <Text style={styles.listTitle}>{item.name}</Text>
+              <Text style={styles.muted}>فتح فرع</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.secondaryButton} onPress={handleLogout}><Text style={styles.secondaryButtonText}>تسجيل الخروج</Text></TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   if (screen === 'permissions') {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.container}>
           <Header title="صلاحياتي" />
-          <View style={styles.permissionHero}>
-            <Text style={styles.permissionHeroTitle}>{profile.title}</Text>
-            <Text style={styles.permissionHeroText}>التطبيق يعرض الوظائف حسب الصلاحيات الفعلية للمستخدم عند الربط لاحقًا.</Text>
+          <View style={styles.hero}>
+            <Text style={styles.heroTitle}>{profile?.displayName}</Text>
+            <Text style={styles.heroText}>{profile?.isSuperAdmin ? 'Super Admin' : profile?.role || 'مستخدم'} · الصلاحيات مأخوذة من النظام الحالي</Text>
           </View>
-          <View style={styles.permissionList}>
-            {(Object.keys(permissionLabels) as Permission[]).map((permission) => {
-              const enabled = can(permission);
-              return (
-                <View key={permission} style={styles.permissionRow}>
-                  <Text style={[styles.permissionState, enabled ? styles.allowed : styles.denied]}>{enabled ? 'مسموح' : 'غير مسموح'}</Text>
-                  <Text style={styles.permissionText}>{permissionLabels[permission]}</Text>
-                </View>
-              );
-            })}
+          {(Object.keys(permissionLabels) as MobilePermission[]).map((permission) => (
+            <View key={permission} style={styles.permissionRow}>
+              <Text style={[styles.permissionState, can(permission) ? styles.allowed : styles.denied]}>{can(permission) ? 'مسموح' : 'غير مسموح'}</Text>
+              <View style={styles.permissionCopy}><Text style={styles.permissionName}>{permissionLabels[permission]}</Text><Text style={styles.permissionCode}>{permission}</Text></View>
+            </View>
+          ))}
+          {branches.length > 1 && <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen('branches')}><Text style={styles.secondaryButtonText}>تغيير الفرع</Text></TouchableOpacity>}
+          <TouchableOpacity style={styles.secondaryButton} onPress={handleLogout}><Text style={styles.secondaryButtonText}>تسجيل الخروج</Text></TouchableOpacity>
+          <BottomNav />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'tables') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.container}>
+          <Header title="اختيار الطاولة" />
+          {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {areas.map((item) => <TouchableOpacity key={item} style={[styles.chip, area === item && styles.chipActive]} onPress={() => setArea(item)}><Text style={[styles.chipText, area === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}
+          </ScrollView>
+          <View style={styles.tableGrid}>
+            {visibleTables.map((table) => (
+              <TouchableOpacity key={table.id} style={[styles.tableCard, table.status === 'occupied' && styles.tableOccupied]} onPress={() => void openTable(table)}>
+                <Text style={styles.tableName}>{table.name}</Text>
+                <Text style={styles.tableStatus}>{table.status === 'occupied' ? 'مشغولة' : 'متاحة'}</Text>
+                {table.activeWaiterName && <Text style={styles.waiterName}>النادل: {table.activeWaiterName}</Text>}
+                {table.guestCount ? <Text style={styles.muted}>{table.guestCount} ضيوف</Text> : null}
+              </TouchableOpacity>
+            ))}
           </View>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen('tables')}>
-            <Text style={styles.secondaryButtonText}>العودة للطاولات</Text>
-          </TouchableOpacity>
+          {visibleTables.length === 0 && <View style={styles.empty}><Text style={styles.emptyTitle}>لا توجد طاولات في هذا الاختيار</Text></View>}
+          <TouchableOpacity style={styles.refreshButton} onPress={() => void refreshTables()}><Text style={styles.secondaryButtonText}>تحديث الطاولات</Text></TouchableOpacity>
+          <BottomNav />
         </ScrollView>
       </SafeAreaView>
     );
@@ -210,37 +477,63 @@ export default function App() {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.container}>
-          <Header title={selectedTable?.name ?? 'المنيو'} />
-          <View style={styles.tableContext}>
-            <Text style={styles.tableContextMain}>{selectedTable?.name}</Text>
-            <Text style={styles.tableContextSub}>{selectedTable?.area}</Text>
+          <Header title={selectedTable?.name || 'المنيو'} />
+          <View style={styles.orderContext}>
+            <Text style={styles.orderContextTitle}>{activeOrderNumber ? `الطلب #${activeOrderNumber}` : 'طلب جديد'}</Text>
+            <View style={styles.guestRow}>
+              <TouchableOpacity style={styles.qtyButton} onPress={() => setGuestCount((value) => Math.max(1, value - 1))}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
+              <Text style={styles.guestCount}>{guestCount} ضيوف</Text>
+              <TouchableOpacity style={styles.qtyButton} onPress={() => setGuestCount((value) => value + 1)}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
+            </View>
           </View>
-          <TextInput
-            style={styles.search}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="ابحث عن صنف..."
-            textAlign="right"
-          />
-          <View style={styles.menuList}>
-            {filteredMenu.map((item) => (
-              <View key={item.id} style={styles.menuCard}>
-                <TouchableOpacity style={styles.addButton} onPress={() => addItem(item)} disabled={!can('pos.order.create')}>
-                  <Text style={styles.addButtonText}>{can('pos.order.create') ? '+' : '×'}</Text>
-                </TouchableOpacity>
-                <View style={styles.menuInfo}>
-                  <Text style={styles.menuName}>{item.name}</Text>
-                  <Text style={styles.menuDesc}>{item.description}</Text>
-                  <Text style={styles.menuPrice}>{item.price} ج.م</Text>
-                </View>
-              </View>
+          {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
+          <TextInput style={styles.input} value={search} onChangeText={setSearch} textAlign="right" placeholder="ابحث عن صنف..." />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {categories.map((item) => <TouchableOpacity key={item} style={[styles.chip, category === item && styles.chipActive]} onPress={() => setCategory(item)}><Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}
+          </ScrollView>
+          <View style={styles.productGrid}>
+            {visibleCatalog.map((product) => (
+              <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => void openProduct(product)}>
+                {product.imageUrl ? <Image source={{ uri: product.imageUrl }} style={styles.productImage} /> : <View style={styles.productPlaceholder}><Text style={styles.productPlaceholderText}>{product.categoryName || product.name}</Text></View>}
+                <Text style={styles.productName}>{product.name}</Text>
+                <Text style={styles.productPrice}>{money(product.salePrice, config.currency)}</Text>
+              </TouchableOpacity>
             ))}
           </View>
           <TouchableOpacity style={styles.cartBar} onPress={() => setScreen('cart')}>
-            <Text style={styles.cartBarTotal}>{total} ج.م</Text>
-            <Text style={styles.cartBarText}>السلة ({cart.reduce((n, line) => n + line.quantity, 0)})</Text>
+            <Text style={styles.cartBarValue}>{money(total, config.currency)}</Text>
+            <Text style={styles.cartBarText}>السلة · {itemCount}</Text>
           </TouchableOpacity>
+          <BottomNav />
         </ScrollView>
+        {draft && (
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <ScrollView>
+                <Text style={styles.modalTitle}>{draft.product.name}</Text>
+                <Text style={styles.productPrice}>{money(draft.product.salePrice, config.currency)}</Text>
+                <View style={styles.guestRow}>
+                  <TouchableOpacity style={styles.qtyButton} onPress={() => setDraft((current) => current ? { ...current, quantity: Math.max(1, current.quantity - 1) } : current)}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
+                  <Text style={styles.guestCount}>الكمية {draft.quantity}</Text>
+                  <TouchableOpacity style={styles.qtyButton} onPress={() => setDraft((current) => current ? { ...current, quantity: current.quantity + 1 } : current)}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
+                </View>
+                {draft.groups.map((group) => (
+                  <View key={group.id} style={styles.modGroup}>
+                    <Text style={styles.modTitle}>{group.name} · {group.minSelections > 0 ? 'مطلوب' : 'اختياري'}</Text>
+                    {group.options.map((option) => {
+                      const active = draft.selectedOptionIds.includes(option.id);
+                      return <TouchableOpacity key={option.id} style={[styles.modOption, active && styles.modOptionActive]} onPress={() => toggleModifier(group, option.id)}><Text style={styles.modOptionText}>{active ? '✓ ' : ''}{option.name} {option.priceDelta ? `(+${money(option.priceDelta, config.currency)})` : ''}</Text></TouchableOpacity>;
+                    })}
+                  </View>
+                ))}
+                <TextInput style={[styles.input, styles.notesInput]} value={draft.notes} onChangeText={(value) => setDraft((current) => current ? { ...current, notes: value } : current)} multiline textAlign="right" placeholder="ملاحظات الصنف..." />
+                {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
+                <TouchableOpacity style={styles.primaryButton} onPress={addDraft}><Text style={styles.primaryButtonText}>إضافة إلى الطلب</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => { setDraft(null); setErrorText(''); }}><Text style={styles.secondaryButtonText}>إلغاء</Text></TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -250,70 +543,33 @@ export default function App() {
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.container}>
           <Header title="مراجعة الطلب" />
-          <View style={styles.tableContext}>
-            <Text style={styles.tableContextMain}>{selectedTable?.name}</Text>
-            <Text style={styles.tableContextSub}>طلب جديد</Text>
-          </View>
-          {cart.length === 0 ? (
-            <View style={styles.empty}><Text style={styles.emptyTitle}>السلة فارغة</Text></View>
-          ) : cart.map((line) => (
-            <View key={line.id} style={styles.cartLine}>
+          {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
+          {cart.map((item, index) => (
+            <View key={`${item.productId}-${index}`} style={styles.cartLine}>
               <View style={styles.qtyControls}>
-                <TouchableOpacity style={styles.qtyButton} onPress={() => updateQty(line.id, -1)}><Text>−</Text></TouchableOpacity>
-                <Text style={styles.qtyText}>{line.quantity}</Text>
-                <TouchableOpacity style={styles.qtyButton} onPress={() => updateQty(line.id, 1)}><Text>+</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.qtyButton} onPress={() => changeCartQty(index, -1)}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
+                <Text style={styles.qtyText}>{item.quantity}</Text>
+                <TouchableOpacity style={styles.qtyButton} onPress={() => changeCartQty(index, 1)}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
               </View>
-              <View style={styles.cartInfo}>
-                <Text style={styles.cartName}>{line.name}</Text>
-                <Text style={styles.cartPrice}>{line.price * line.quantity} ج.م</Text>
+              <View style={styles.cartCopy}>
+                <Text style={styles.cartName}>{item.name}</Text>
+                {!!item.notes && <Text style={styles.muted}>{item.notes}</Text>}
+                <Text style={styles.productPrice}>{money(item.unitPrice * item.quantity, config.currency)}</Text>
               </View>
             </View>
           ))}
+          {cart.length === 0 && <View style={styles.empty}><Text style={styles.emptyTitle}>السلة فارغة</Text></View>}
           <View style={styles.totalCard}>
-            <Text style={styles.totalValue}>{total} ج.م</Text>
-            <Text style={styles.totalLabel}>إجمالي الطلب</Text>
+            <Text style={styles.totalRow}>الإجمالي قبل الضريبة: {money(subtotal, config.currency)}</Text>
+            {config.taxEnabled && <Text style={styles.totalRow}>الضريبة ({config.taxRate}%): {money(taxAmount, config.currency)}</Text>}
+            <Text style={styles.totalMain}>الإجمالي: {money(total, config.currency)}</Text>
           </View>
-          {can('pos.send_kitchen') ? (
-            <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('orders')} disabled={cart.length === 0}>
-              <Text style={styles.primaryButtonText}>إرسال الطلب للمطبخ</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.blockedBox}><Text style={styles.blockedText}>لا تملك صلاحية الإرسال للمطبخ</Text></View>
-          )}
-          {can('pos.payment.take') && (
-            <TouchableOpacity style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>تحصيل / دفع</Text></TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => setScreen('menu')}><Text style={styles.textLink}>إضافة أصناف أخرى</Text></TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'orders') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.container}>
-          <Header title="طلباتي" />
-          <View style={styles.orderSuccess}>
-            <Text style={styles.successMark}>✓</Text>
-            <Text style={styles.successTitle}>تم إرسال الطلب للمطبخ</Text>
-            <Text style={styles.successOrder}>#1024</Text>
-            <Text style={styles.successSub}>{selectedTable?.name} • باسم {profile.name}</Text>
-          </View>
-          <View style={styles.orderCard}>
-            <Text style={styles.orderStatus}>قيد التحضير</Text>
-            <Text style={styles.orderNumber}>#1024</Text>
-            <Text style={styles.orderMeta}>{selectedTable?.name} • {cart.reduce((n, line) => n + line.quantity, 0)} أصناف</Text>
-            <Text style={styles.orderOwner}>النادل: {profile.name}</Text>
-          </View>
-          <View style={styles.managerActions}>
-            {can('pos.order.transfer') && <TouchableOpacity style={styles.smallAction}><Text style={styles.smallActionText}>نقل الطاولة</Text></TouchableOpacity>}
-            {can('pos.order.split') && <TouchableOpacity style={styles.smallAction}><Text style={styles.smallActionText}>تقسيم الفاتورة</Text></TouchableOpacity>}
-            {can('approvals.view') && <TouchableOpacity style={styles.smallAction}><Text style={styles.smallActionText}>الموافقات</Text></TouchableOpacity>}
-          </View>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => { setCart([]); setSelectedTable(null); setScreen('tables'); }}>
-            <Text style={styles.primaryButtonText}>العودة للطاولات</Text>
+          <TouchableOpacity style={[styles.primaryButton, (busy || cart.length === 0 || !can('pos.send_kitchen')) && styles.disabled]} disabled={busy || cart.length === 0 || !can('pos.send_kitchen')} onPress={handleSend}>
+            {busy ? <ActivityIndicator /> : <Text style={styles.primaryButtonText}>حفظ وإرسال للمطبخ</Text>}
           </TouchableOpacity>
+          {!can('pos.send_kitchen') && <Text style={styles.deniedHint}>لا تملك صلاحية الإرسال للمطبخ</Text>}
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen('menu')}><Text style={styles.secondaryButtonText}>إضافة أصناف أخرى</Text></TouchableOpacity>
+          <BottomNav />
         </ScrollView>
       </SafeAreaView>
     );
@@ -322,157 +578,140 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Header title="اختيار الطاولة" />
-        <View style={styles.toolbar}>
-          <TouchableOpacity style={styles.permissionsButton} onPress={() => setScreen('permissions')}>
-            <Text style={styles.permissionsButtonText}>صلاحياتي ({profile.permissions.length})</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutButton} onPress={() => setScreen('login')}>
-            <Text style={styles.logoutText}>تغيير المستخدم</Text>
-          </TouchableOpacity>
-        </View>
-        {!can('pos.view') ? (
-          <View style={styles.blockedBox}><Text style={styles.blockedText}>هذا المستخدم لا يملك صلاحية عرض نقطة البيع.</Text></View>
-        ) : (
-          <>
-            <View style={styles.areaTabs}>
-              <View style={styles.areaTabActive}><Text style={styles.areaTabActiveText}>الصالة الرئيسية</Text></View>
-              <View style={styles.areaTab}><Text style={styles.areaTabText}>الصالة الخارجية</Text></View>
-              <View style={styles.areaTab}><Text style={styles.areaTabText}>VIP</Text></View>
+        <Header title="طلباتي" />
+        {!!notice && <View style={styles.successBox}><Text style={styles.successText}>{notice}</Text></View>}
+        {!!errorText && <View style={styles.errorBox}><Text style={styles.errorText}>{errorText}</Text></View>}
+        {orders.map((order) => (
+          <TouchableOpacity key={order.orderId} style={styles.orderCard} onPress={async () => {
+            setBusy(true);
+            try {
+              const details = await getOrderDetails(order.orderId);
+              if (details.tableId) {
+                const table = tables.find((item) => item.id === details.tableId) || null;
+                setSelectedTable(table);
+              }
+              setCart(details.items);
+              setGuestCount(details.guestCount || 2);
+              setActiveOrderId(details.orderId);
+              setActiveOrderNumber(details.orderNumber);
+              if (details.status === 'open' || details.status === 'held') setScreen('menu');
+            } catch (error) {
+              setErrorText(messageForError(error));
+            } finally {
+              setBusy(false);
+            }
+          }}>
+            <View>
+              <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
+              <Text style={styles.muted}>{order.tableName} · {order.waiterName}</Text>
             </View>
-            <View style={styles.tableGrid}>
-              {tables.map((table) => (
-                <TouchableOpacity
-                  key={table.id}
-                  style={[styles.tableCard, table.status === 'occupied' && styles.tableOccupied]}
-                  onPress={() => {
-                    if (!can('pos.order.create')) return;
-                    setSelectedTable(table);
-                    setCart([]);
-                    setScreen('menu');
-                  }}
-                >
-                  <Text style={styles.tableIcon}>◉</Text>
-                  <Text style={styles.tableNumber}>{table.id}</Text>
-                  <Text style={[styles.tableStatus, table.status === 'occupied' && styles.tableStatusOccupied]}>
-                    {table.status === 'available' ? 'متاحة' : 'مشغولة'}
-                  </Text>
-                  {table.waiterName && <Text style={styles.tableOwner}>{table.waiterName}</Text>}
-                  {table.guestCount && <Text style={styles.guestCount}>{table.guestCount} ضيوف</Text>}
-                </TouchableOpacity>
-              ))}
+            <View style={styles.orderStatusWrap}>
+              <Text style={styles.orderStatus}>{order.kitchenStatus || order.status}</Text>
+              <Text style={styles.productPrice}>{money(order.total, config.currency)}</Text>
             </View>
-          </>
-        )}
+          </TouchableOpacity>
+        ))}
+        {orders.length === 0 && <View style={styles.empty}><Text style={styles.emptyTitle}>لا توجد طلبات لك في هذا الفرع</Text></View>}
+        <TouchableOpacity style={styles.refreshButton} onPress={openOrders}><Text style={styles.secondaryButtonText}>تحديث الطلبات</Text></TouchableOpacity>
+        <BottomNav />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const green = '#0c5b3d';
-const darkGreen = '#06452f';
-const cream = '#f7f3ea';
-const gold = '#e8c76b';
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: cream },
-  loginSafe: { flex: 1, backgroundColor: darkGreen },
-  loginWrap: { flex: 1, padding: 24, justifyContent: 'center', gap: 12 },
-  logo: { color: gold, fontSize: 44, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
-  loginTitle: { color: '#fff', fontSize: 24, fontWeight: '900', textAlign: 'center' },
-  loginHint: { color: '#d6e4dc', textAlign: 'center', lineHeight: 22, marginBottom: 12 },
-  loginCard: { backgroundColor: '#fff', borderRadius: 28, padding: 18, gap: 12 },
-  label: { textAlign: 'right', fontWeight: '900', color: '#1f2937' },
-  profileOption: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 18, padding: 15, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  profileOptionActive: { borderColor: green, backgroundColor: '#eef8f3' },
-  profileName: { textAlign: 'right', fontWeight: '900', fontSize: 16 },
-  profileTitle: { textAlign: 'right', color: '#667085', marginTop: 3 },
-  permissionCount: { color: green, fontWeight: '800' },
-  goldButton: { backgroundColor: gold, borderRadius: 16, paddingVertical: 15, marginTop: 6 },
-  goldButtonText: { color: '#1f2937', textAlign: 'center', fontWeight: '900', fontSize: 16 },
-  container: { padding: 18, gap: 14, paddingBottom: 40 },
-  header: { backgroundColor: darkGreen, borderRadius: 22, padding: 16, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  userBlock: { flexDirection: 'row-reverse', gap: 10, alignItems: 'center' },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#e6f0ea', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: green, fontWeight: '900', fontSize: 20 },
-  headerUser: { color: '#fff', fontWeight: '900', textAlign: 'right' },
-  headerRole: { color: '#c9ded4', textAlign: 'right', fontSize: 12 },
-  titleBlock: { alignItems: 'flex-start' },
-  headerTitle: { color: '#fff', fontWeight: '900', fontSize: 19, textAlign: 'right' },
-  online: { color: '#8ae0b1', fontSize: 12, marginTop: 4 },
-  toolbar: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 10 },
-  permissionsButton: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 12 },
-  permissionsButtonText: { color: green, textAlign: 'center', fontWeight: '900' },
-  logoutButton: { backgroundColor: '#fff', borderRadius: 14, padding: 12 },
-  logoutText: { color: '#667085', fontWeight: '800' },
-  areaTabs: { flexDirection: 'row-reverse', gap: 8 },
-  areaTabActive: { backgroundColor: green, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 10 },
-  areaTabActiveText: { color: '#fff', fontWeight: '900' },
-  areaTab: { backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 10 },
-  areaTabText: { color: '#667085', fontWeight: '800' },
+  safe: { flex: 1, backgroundColor: '#F6F2E9' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, backgroundColor: '#F6F2E9' },
+  loadingText: { color: '#173B2D', fontWeight: '800' },
+  container: { padding: 16, paddingBottom: 110, gap: 12 },
+  loginSafe: { flex: 1, backgroundColor: '#123B2D' },
+  loginWrap: { flex: 1, justifyContent: 'center', padding: 22, gap: 10 },
+  logo: { color: '#D9B45B', fontSize: 38, fontWeight: '900', textAlign: 'center' },
+  loginTitle: { color: '#FFFFFF', fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  loginHint: { color: '#D7E4DE', textAlign: 'center', marginBottom: 12 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 18, gap: 10 },
+  label: { color: '#173B2D', fontWeight: '900', textAlign: 'right' },
+  input: { minHeight: 48, borderWidth: 1, borderColor: '#DDD5C3', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 14, color: '#173B2D' },
+  notesInput: { minHeight: 82, textAlignVertical: 'top', paddingTop: 12 },
+  primaryButton: { minHeight: 52, borderRadius: 15, backgroundColor: '#173B2D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
+  secondaryButton: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: '#B7AA8C', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
+  secondaryButtonText: { color: '#173B2D', fontWeight: '900' },
+  refreshButton: { minHeight: 44, borderRadius: 12, backgroundColor: '#EFE8D9', alignItems: 'center', justifyContent: 'center' },
+  disabled: { opacity: 0.45 },
+  errorBox: { backgroundColor: '#FDECEC', borderRadius: 12, padding: 11, borderWidth: 1, borderColor: '#F0BABA' },
+  errorText: { color: '#9C2525', textAlign: 'right', fontWeight: '700' },
+  successBox: { backgroundColor: '#E8F5EE', borderRadius: 12, padding: 11, borderWidth: 1, borderColor: '#A9D8BD' },
+  successText: { color: '#17643D', textAlign: 'right', fontWeight: '800' },
+  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  headerTitleWrap: { alignItems: 'flex-end', flex: 1 },
+  headerTitle: { color: '#173B2D', fontSize: 24, fontWeight: '900' },
+  headerSub: { color: '#6D766F', fontSize: 12, marginTop: 2 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#D9B45B', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#173B2D', fontWeight: '900', fontSize: 18 },
+  hero: { backgroundColor: '#173B2D', borderRadius: 18, padding: 16 },
+  heroTitle: { color: '#FFFFFF', textAlign: 'right', fontSize: 19, fontWeight: '900' },
+  heroText: { color: '#D7E4DE', textAlign: 'right', marginTop: 4 },
+  listCard: { minHeight: 68, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  listTitle: { color: '#173B2D', fontSize: 17, fontWeight: '900' },
+  muted: { color: '#737B76', fontSize: 12 },
+  permissionRow: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  permissionCopy: { alignItems: 'flex-end', flex: 1 },
+  permissionName: { color: '#173B2D', fontWeight: '900', textAlign: 'right' },
+  permissionCode: { color: '#8B918D', fontSize: 10, marginTop: 2 },
+  permissionState: { fontSize: 11, fontWeight: '900', borderRadius: 10, paddingHorizontal: 9, paddingVertical: 5, overflow: 'hidden' },
+  allowed: { color: '#17643D', backgroundColor: '#E8F5EE' },
+  denied: { color: '#9C2525', backgroundColor: '#FDECEC' },
+  chips: { gap: 8, paddingVertical: 2 },
+  chip: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#ECE5D6' },
+  chipActive: { backgroundColor: '#173B2D' },
+  chipText: { color: '#173B2D', fontWeight: '800' },
+  chipTextActive: { color: '#FFFFFF' },
   tableGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  tableCard: { width: '31%', minHeight: 142, backgroundColor: '#fff', borderRadius: 20, padding: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#dfe7e2' },
-  tableOccupied: { backgroundColor: '#fff0ef', borderColor: '#efb4ae' },
-  tableIcon: { color: green, fontSize: 22, fontWeight: '900' },
-  tableNumber: { fontSize: 25, fontWeight: '900', marginTop: 4 },
-  tableStatus: { color: green, fontWeight: '900', marginTop: 4 },
-  tableStatusOccupied: { color: '#c24135' },
-  tableOwner: { fontSize: 10, color: '#667085', marginTop: 5, textAlign: 'center' },
-  guestCount: { fontSize: 10, color: '#667085', marginTop: 2 },
-  tableContext: { backgroundColor: '#fff', borderRadius: 18, padding: 15 },
-  tableContextMain: { textAlign: 'right', fontSize: 21, fontWeight: '900' },
-  tableContextSub: { textAlign: 'right', color: '#667085', marginTop: 3 },
-  search: { backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15 },
-  menuList: { gap: 10 },
-  menuCard: { backgroundColor: '#fff', borderRadius: 20, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  addButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: green, alignItems: 'center', justifyContent: 'center' },
-  addButtonText: { color: '#fff', fontSize: 25, fontWeight: '900' },
-  menuInfo: { flex: 1 },
-  menuName: { textAlign: 'right', fontWeight: '900', fontSize: 17 },
-  menuDesc: { textAlign: 'right', color: '#667085', marginTop: 4, lineHeight: 19 },
-  menuPrice: { textAlign: 'right', color: green, fontWeight: '900', marginTop: 5 },
-  cartBar: { backgroundColor: green, borderRadius: 18, padding: 16, flexDirection: 'row', justifyContent: 'space-between' },
-  cartBarText: { color: '#fff', fontWeight: '900', fontSize: 16 },
-  cartBarTotal: { color: '#fff', fontWeight: '900', fontSize: 16 },
-  cartLine: { backgroundColor: '#fff', borderRadius: 18, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#eef4f0', alignItems: 'center', justifyContent: 'center' },
-  qtyText: { minWidth: 20, textAlign: 'center', fontWeight: '900' },
-  cartInfo: { flex: 1, marginLeft: 12 },
-  cartName: { textAlign: 'right', fontWeight: '900', fontSize: 16 },
-  cartPrice: { textAlign: 'right', color: green, marginTop: 4, fontWeight: '800' },
-  totalCard: { backgroundColor: '#fff', borderRadius: 18, padding: 18, flexDirection: 'row', justifyContent: 'space-between' },
-  totalValue: { fontWeight: '900', fontSize: 24, color: green },
-  totalLabel: { fontWeight: '900', fontSize: 18 },
-  primaryButton: { backgroundColor: green, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 16 },
-  primaryButtonText: { color: '#fff', textAlign: 'center', fontWeight: '900', fontSize: 16 },
-  secondaryButton: { backgroundColor: '#fff', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: '#cfd9d3' },
-  secondaryButtonText: { color: green, textAlign: 'center', fontWeight: '900' },
-  textLink: { color: green, textAlign: 'center', fontWeight: '800', padding: 6 },
-  blockedBox: { backgroundColor: '#fff3cd', borderRadius: 16, padding: 16 },
-  blockedText: { color: '#7a5b00', textAlign: 'right', fontWeight: '800' },
-  empty: { backgroundColor: '#fff', borderRadius: 18, padding: 24 },
-  emptyTitle: { textAlign: 'center', fontWeight: '900' },
-  orderSuccess: { backgroundColor: '#fff', borderRadius: 24, padding: 24, alignItems: 'center', gap: 6 },
-  successMark: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#e7f5ed', color: green, textAlign: 'center', textAlignVertical: 'center', fontSize: 34, fontWeight: '900' },
-  successTitle: { fontWeight: '900', fontSize: 20, marginTop: 8 },
-  successOrder: { fontWeight: '900', fontSize: 28, color: green },
-  successSub: { color: '#667085', textAlign: 'center' },
-  orderCard: { backgroundColor: '#fff', borderRadius: 20, padding: 18, gap: 6 },
-  orderStatus: { color: '#b7791f', backgroundColor: '#fff8e7', alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, fontWeight: '900' },
-  orderNumber: { textAlign: 'right', fontSize: 22, fontWeight: '900' },
-  orderMeta: { textAlign: 'right', color: '#667085' },
-  orderOwner: { textAlign: 'right', color: green, fontWeight: '800' },
-  managerActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
-  smallAction: { backgroundColor: '#fff', borderRadius: 14, paddingVertical: 11, paddingHorizontal: 13 },
-  smallActionText: { color: green, fontWeight: '900' },
-  permissionHero: { backgroundColor: darkGreen, borderRadius: 22, padding: 20 },
-  permissionHeroTitle: { color: '#fff', textAlign: 'right', fontSize: 23, fontWeight: '900' },
-  permissionHeroText: { color: '#d8e7df', textAlign: 'right', lineHeight: 22, marginTop: 6 },
-  permissionList: { gap: 9 },
-  permissionRow: { backgroundColor: '#fff', borderRadius: 16, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  permissionText: { fontWeight: '800', textAlign: 'right' },
-  permissionState: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, fontWeight: '900', fontSize: 12 },
-  allowed: { backgroundColor: '#e8f7ef', color: '#137044' },
-  denied: { backgroundColor: '#f2f4f7', color: '#98a2b3' },
+  tableCard: { width: '48%', minHeight: 128, borderRadius: 18, backgroundColor: '#FFFFFF', padding: 14, justifyContent: 'center', alignItems: 'flex-end', borderWidth: 1, borderColor: '#E2DCCF' },
+  tableOccupied: { backgroundColor: '#F8E9E4', borderColor: '#D79A87' },
+  tableName: { color: '#173B2D', fontSize: 19, fontWeight: '900' },
+  tableStatus: { color: '#8B6B2B', fontWeight: '900', marginTop: 6 },
+  waiterName: { color: '#5A625E', fontSize: 11, marginTop: 5, textAlign: 'right' },
+  empty: { minHeight: 100, borderRadius: 16, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 18 },
+  emptyTitle: { color: '#737B76', fontWeight: '800' },
+  orderContext: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 13, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  orderContextTitle: { color: '#173B2D', fontWeight: '900' },
+  guestRow: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginVertical: 8 },
+  qtyButton: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EFE8D9', justifyContent: 'center', alignItems: 'center' },
+  qtyButtonText: { color: '#173B2D', fontSize: 20, fontWeight: '900' },
+  guestCount: { color: '#173B2D', fontWeight: '900', minWidth: 68, textAlign: 'center' },
+  productGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
+  productCard: { width: '48%', borderRadius: 16, backgroundColor: '#FFFFFF', overflow: 'hidden', paddingBottom: 11 },
+  productImage: { width: '100%', height: 115, backgroundColor: '#E9E3D5' },
+  productPlaceholder: { height: 115, backgroundColor: '#E9E3D5', alignItems: 'center', justifyContent: 'center', padding: 10 },
+  productPlaceholderText: { color: '#7A6E54', fontWeight: '900', textAlign: 'center' },
+  productName: { color: '#173B2D', fontWeight: '900', fontSize: 15, textAlign: 'right', paddingHorizontal: 10, marginTop: 8 },
+  productPrice: { color: '#9A762B', fontWeight: '900', textAlign: 'right', paddingHorizontal: 10, marginTop: 3 },
+  cartBar: { minHeight: 56, borderRadius: 17, backgroundColor: '#173B2D', paddingHorizontal: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cartBarValue: { color: '#D9B45B', fontWeight: '900' },
+  cartBarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 50 },
+  modalCard: { maxHeight: '88%', backgroundColor: '#F6F2E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18 },
+  modalTitle: { color: '#173B2D', textAlign: 'right', fontSize: 23, fontWeight: '900' },
+  modGroup: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 11, marginVertical: 6 },
+  modTitle: { color: '#173B2D', textAlign: 'right', fontWeight: '900', marginBottom: 8 },
+  modOption: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#DDD5C3', marginTop: 6, paddingHorizontal: 10, justifyContent: 'center' },
+  modOptionActive: { borderColor: '#173B2D', backgroundColor: '#E8F0EC' },
+  modOptionText: { textAlign: 'right', color: '#173B2D', fontWeight: '700' },
+  cartLine: { backgroundColor: '#FFFFFF', borderRadius: 15, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  qtyText: { color: '#173B2D', fontWeight: '900', minWidth: 20, textAlign: 'center' },
+  cartCopy: { flex: 1, alignItems: 'flex-end' },
+  cartName: { color: '#173B2D', fontWeight: '900', fontSize: 16 },
+  totalCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, gap: 5 },
+  totalRow: { color: '#6D766F', textAlign: 'right', fontWeight: '700' },
+  totalMain: { color: '#173B2D', textAlign: 'right', fontSize: 19, fontWeight: '900', marginTop: 5 },
+  deniedHint: { color: '#9C2525', fontWeight: '800', textAlign: 'center' },
+  orderCard: { minHeight: 78, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 13, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  orderNumber: { color: '#173B2D', fontSize: 18, fontWeight: '900', textAlign: 'right' },
+  orderStatusWrap: { alignItems: 'flex-start' },
+  orderStatus: { color: '#17643D', backgroundColor: '#E8F5EE', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, overflow: 'hidden', fontWeight: '900', fontSize: 11 },
+  bottomNav: { marginTop: 10, minHeight: 58, borderRadius: 17, backgroundColor: '#FFFFFF', flexDirection: 'row-reverse', justifyContent: 'space-around', alignItems: 'center', borderWidth: 1, borderColor: '#E2DCCF' },
+  navText: { color: '#173B2D', fontWeight: '900' },
 });
