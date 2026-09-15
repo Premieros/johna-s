@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type RefAttributes } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -9,14 +9,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import WebView from 'react-native-webview';
+import WebView, { type WebViewProps } from 'react-native-webview';
 
 const SYSTEM_URL = 'https://premieros.github.io/johna-s/';
 const ACCENT = '#CC6600';
-const WebViewComponent: any = WebView;
+
+type WebViewHandle = {
+  goBack: () => void;
+  reload: () => void;
+};
+
+const WebViewComponent = WebView as unknown as ComponentType<WebViewProps & RefAttributes<WebViewHandle>>;
 
 export default function WrapperApp() {
-  const webRef = useRef<any>(null);
+  const webRef = useRef<WebViewHandle | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,15 +71,15 @@ export default function WrapperApp() {
           thirdPartyCookiesEnabled
           pullToRefreshEnabled
           setSupportMultipleWindows={false}
-          onNavigationStateChange={(nav: { canGoBack?: boolean }) => setCanGoBack(Boolean(nav.canGoBack))}
+          onNavigationStateChange={(nav) => setCanGoBack(Boolean(nav.canGoBack))}
           onLoadStart={() => {
             setLoading(true);
             setError(null);
           }}
           onLoadEnd={() => setLoading(false)}
-          onError={(event: { nativeEvent?: { description?: string } }) => {
+          onError={(event) => {
             setLoading(false);
-            setError(event.nativeEvent?.description || 'تعذر تحميل النظام');
+            setError(event.nativeEvent.description || 'تعذر تحميل النظام');
           }}
         />
 
