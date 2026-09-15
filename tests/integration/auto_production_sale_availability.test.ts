@@ -186,7 +186,7 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
       expect(sale[0].r.success).toBe(true);
       if (!sale[0].r.success) throw new Error(JSON.stringify(sale[0].r));
 
-      const code = `AUTO-PROD-${unconfiguredProductId.replaceAll('-', '')}`;
+      const code = `AUTO-PROD-${unconfiguredProductId.replace(/-/g, '')}`;
       const rows = await q<{ name: string; quantity: string; recipe_items: number }>(
         `SELECT rm.name,
                 COALESCE(rmi.quantity,0)::text AS quantity,
@@ -217,7 +217,7 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
       expect(sale[0].r.success).toBe(true);
       if (!sale[0].r.success) throw new Error(JSON.stringify(sale[0].r));
 
-      const code = `AUTO-MOD-${modifierOptionId.replaceAll('-', '')}`;
+      const code = `AUTO-MOD-${modifierOptionId.replace(/-/g, '')}`;
       const rows = await q<{ name: string; quantity: string; effects: number }>(
         `SELECT rm.name,
                 COALESCE(rmi.quantity,0)::text AS quantity,
