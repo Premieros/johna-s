@@ -3,7 +3,7 @@ name: Build Johns Print Agent Samouha
 on:
   pull_request:
     paths:
-      - 'local-print-agent/standalone/agent-samouha-213.cjs'
+      - 'local-print-agent/standalone/agent-samouha-214.cjs'
       - 'local-print-agent/standalone/installer-samouha.iss'
       - 'local-print-agent/standalone/run-hidden-samouha.vbs'
       - 'local-print-agent/standalone/open-settings-samouha.vbs'
@@ -28,22 +28,23 @@ jobs:
 
       - name: Validate agent syntax
         shell: pwsh
-        run: node --check local-print-agent/standalone/agent-samouha-213.cjs
+        run: node --check local-print-agent/standalone/agent-samouha-214.cjs
 
-      - name: Verify PowerShell special printer-name transport
+      - name: Verify PrintDocument availability
         shell: pwsh
         run: |
-          $env:JOHNS_PRINTER = 'XP-80C (copy 1)'
-          $value = powershell.exe -NoProfile -NonInteractive -Command '$env:JOHNS_PRINTER'
-          if ($value.Trim() -ne 'XP-80C (copy 1)') { throw "Printer name was corrupted: $value" }
+          Add-Type -AssemblyName System.Drawing
+          $doc = New-Object System.Drawing.Printing.PrintDocument
+          if ($null -eq $doc) { throw 'PrintDocument unavailable' }
+          $doc.Dispose()
 
       - name: Build standalone EXE
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build-samouha | Out-Null
-          pkg local-print-agent/standalone/agent-samouha-213.cjs --targets node22-win-x64 --output build-samouha/JohnsPrintAgent-Samouha.exe
+          pkg local-print-agent/standalone/agent-samouha-214.cjs --targets node22-win-x64 --output build-samouha/JohnsPrintAgent-Samouha.exe
 
-      - name: Smoke test Samouha stations
+      - name: Smoke test Samouha service
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "$env:GITHUB_WORKSPACE\build-samouha\JohnsPrintAgent-Samouha.exe" -PassThru -WindowStyle Hidden
@@ -52,7 +53,8 @@ jobs:
             $health = Invoke-RestMethod -Uri 'http://127.0.0.1:17654/health' -TimeoutSec 10
             if (-not $health.ok) { throw 'Health endpoint returned not-ok' }
             if ($health.branch -ne 'Samouha') { throw "Unexpected branch: $($health.branch)" }
-            if ($health.version -ne '2.1.3-samouha') { throw "Unexpected version: $($health.version)" }
+            if ($health.version -ne '2.1.4-samouha') { throw "Unexpected version: $($health.version)" }
+            if ($health.printEngine -ne 'PrintDocument') { throw "Unexpected print engine: $($health.printEngine)" }
             $stations = @($health.stations)
             if ($stations.Count -ne 3) { throw "Unexpected station count: $($stations.Count)" }
             foreach ($s in @('cashier','main','drinks')) { if ($stations -notcontains $s) { throw "Missing station: $s" } }
@@ -73,14 +75,14 @@ jobs:
         shell: pwsh
         run: |
           Get-FileHash build-samouha\JohnsPrintAgent-Samouha.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Samouha.exe" } | Set-Content build-samouha\SHA256SUMS.txt
-          Get-FileHash build-samouha\JohnsPrintAgent-Samouha-Setup-2.1.3.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Samouha-Setup-2.1.3.exe" } | Add-Content build-samouha\SHA256SUMS.txt
+          Get-FileHash build-samouha\JohnsPrintAgent-Samouha-Setup-2.1.4.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Samouha-Setup-2.1.4.exe" } | Add-Content build-samouha\SHA256SUMS.txt
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JohnsPrintAgent-Samouha-2.1.3-Windows
+          name: JohnsPrintAgent-Samouha-2.1.4-Windows
           path: |
-            build-samouha/JohnsPrintAgent-Samouha-Setup-2.1.3.exe
+            build-samouha/JohnsPrintAgent-Samouha-Setup-2.1.4.exe
             build-samouha/JohnsPrintAgent-Samouha.exe
             build-samouha/SHA256SUMS.txt
           if-no-files-found: error
