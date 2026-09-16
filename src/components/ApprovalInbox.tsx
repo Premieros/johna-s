@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Bell, Check, CheckCircle2, Printer, X } from 'lucide-react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
@@ -90,7 +90,8 @@ function printAlertText(item: PrintAlert, ar: boolean) {
 
 export function ApprovalInbox({ ar }: { ar: boolean }) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [items, setItems] = useState<ApprovalRequest[]>([]);
   const [printAlerts, setPrintAlerts] = useState<PrintAlert[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -162,107 +163,132 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
     }
   };
 
-  const activePrintAlerts = useMemo(
-    () => printAlerts.filter((item) => item.status === 'failed').length,
-    [printAlerts],
-  );
-  const bellCount = items.length + activePrintAlerts;
-
   if (!allowed) return null;
 
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        data-testid="approval-inbox-button"
-        onClick={() => setOpen((v) => !v)}
-        className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text"
-        aria-label={ar ? 'الموافقات والتنبيهات' : 'Approvals and alerts'}
-      >
-        <Bell className="h-5 w-5" />
-        {bellCount > 0 && (
-          <span data-testid="approval-inbox-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">
-            {bellCount}
-          </span>
-        )}
-      </button>
+  const activePrintAlerts = printAlerts.filter((item) => item.status === 'failed').length;
 
-      {open && (
-        <div data-testid="approval-inbox-panel" className="absolute end-0 top-full z-[80] mt-2 w-[min(92vw,390px)] overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-ui-lg">
-          <div className="border-b border-ui-border px-4 py-3">
-            <p className="font-semibold text-ui-text">{ar ? 'الموافقات والتنبيهات' : 'Approvals and alerts'}</p>
-            <p className="text-xs text-ui-muted">{ar ? 'طلبات الموافقة وحالة مشاكل الطباعة المهمة' : 'Approval requests and important printing issues'}</p>
-          </div>
-          <div className="max-h-96 overflow-y-auto p-2">
-            {printAlerts.length > 0 && (
-              <div className="mb-3">
-                <p className="px-2 pb-2 text-xs font-semibold text-ui-muted">{ar ? 'تنبيهات النظام' : 'System alerts'}</p>
-                {printAlerts.map((item) => {
-                  const alert = printAlertText(item, ar);
-                  return (
-                    <div key={`print-${item.id}`} className="mb-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 last:mb-0">
-                      <div className="flex items-start gap-2.5">
-                        {alert.resolved ? (
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ui-success" />
-                        ) : item.attempts < 5 ? (
-                          <Printer className="mt-0.5 h-4 w-4 shrink-0 text-ui-warning" />
-                        ) : (
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-ui-danger" />
+  return (
+    <div className="flex items-center gap-1">
+      <div className="relative">
+        <button
+          type="button"
+          data-testid="approval-inbox-button"
+          onClick={() => {
+            setApprovalOpen((v) => !v);
+            setAlertsOpen(false);
+          }}
+          className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text"
+          aria-label={ar ? 'طلبات الموافقة' : 'Approval requests'}
+        >
+          <Bell className="h-5 w-5" />
+          {items.length > 0 && (
+            <span data-testid="approval-inbox-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">
+              {items.length}
+            </span>
+          )}
+        </button>
+
+        {approvalOpen && (
+          <div data-testid="approval-inbox-panel" className="absolute end-0 top-full z-[80] mt-2 w-[min(92vw,390px)] overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-ui-lg">
+            <div className="border-b border-ui-border px-4 py-3">
+              <p className="font-semibold text-ui-text">{ar ? 'طلبات الموافقة' : 'Approval requests'}</p>
+              <p className="text-xs text-ui-muted">{ar ? 'الطلبات المعلقة التي تحتاج قرارًا' : 'Pending requests that need a decision'}</p>
+            </div>
+            <div className="max-h-96 overflow-y-auto p-2">
+              {items.length === 0 ? (
+                <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p>
+              ) : items.map((item) => {
+                const label = labels[item.action_type];
+                return (
+                  <div key={item.id} className="mb-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 last:mb-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-ui-text">{label ? (ar ? label.ar : label.en) : item.action_type}</p>
+                        <p className="mt-1 text-sm text-ui-muted">{item.reason}</p>
+                        {item.action_type === 'discount' && (
+                          <p className="mt-1 text-xs text-ui-subtle">
+                            {ar ? 'قيمة الخصم: ' : 'Discount: '}
+                            {String(item.payload.discount_amount ?? '')}
+                          </p>
                         )}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="font-semibold text-ui-text">{alert.title}</p>
-                            <span className="shrink-0 text-[10px] text-ui-subtle">
-                              {new Date(item.updated_at).toLocaleTimeString(ar ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-sm text-ui-muted">{alert.detail}</p>
+                      </div>
+                      <span className="shrink-0 text-[10px] text-ui-subtle">
+                        {new Date(item.created_at).toLocaleTimeString(ar ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" disabled={busy === item.id} onClick={() => void decide(item.id, true)} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-ui-success px-3 py-2 text-sm font-semibold text-ui-primary-fg disabled:opacity-50">
+                        <Check className="h-4 w-4" />{ar ? 'موافقة' : 'Approve'}
+                      </button>
+                      <button type="button" disabled={busy === item.id} onClick={() => void decide(item.id, false)} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-ui-danger px-3 py-2 text-sm font-semibold text-ui-primary-fg disabled:opacity-50">
+                        <X className="h-4 w-4" />{ar ? 'رفض' : 'Reject'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <button
+          type="button"
+          data-testid="system-alerts-button"
+          onClick={() => {
+            setAlertsOpen((v) => !v);
+            setApprovalOpen(false);
+          }}
+          className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text"
+          aria-label={ar ? 'إشعارات النظام' : 'System notifications'}
+        >
+          <AlertTriangle className="h-5 w-5" />
+          {activePrintAlerts > 0 && (
+            <span data-testid="system-alerts-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-warning px-1 text-[9px] font-bold text-ui-primary-fg">
+              {activePrintAlerts}
+            </span>
+          )}
+        </button>
+
+        {alertsOpen && (
+          <div data-testid="system-alerts-panel" className="absolute end-0 top-full z-[80] mt-2 w-[min(92vw,390px)] overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-ui-lg">
+            <div className="border-b border-ui-border px-4 py-3">
+              <p className="font-semibold text-ui-text">{ar ? 'إشعارات النظام' : 'System notifications'}</p>
+              <p className="text-xs text-ui-muted">{ar ? 'مشاكل الطباعة والأحداث التشغيلية المهمة' : 'Important printing and operational events'}</p>
+            </div>
+            <div className="max-h-96 overflow-y-auto p-2">
+              {printAlerts.length === 0 ? (
+                <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد إشعارات مهمة' : 'No important notifications'}</p>
+              ) : printAlerts.map((item) => {
+                const alert = printAlertText(item, ar);
+                return (
+                  <div key={`print-${item.id}`} className="mb-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 last:mb-0">
+                    <div className="flex items-start gap-2.5">
+                      {alert.resolved ? (
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ui-success" />
+                      ) : item.attempts < 5 ? (
+                        <Printer className="mt-0.5 h-4 w-4 shrink-0 text-ui-warning" />
+                      ) : (
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-ui-danger" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-semibold text-ui-text">{alert.title}</p>
+                          <span className="shrink-0 text-[10px] text-ui-subtle">
+                            {new Date(item.updated_at).toLocaleTimeString(ar ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
+                        <p className="mt-1 text-sm text-ui-muted">{alert.detail}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {items.length > 0 && (
-              <p className="px-2 pb-2 text-xs font-semibold text-ui-muted">{ar ? 'طلبات الموافقة' : 'Approval requests'}</p>
-            )}
-            {items.length === 0 && printAlerts.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد طلبات أو تنبيهات' : 'No pending requests or alerts'}</p>
-            ) : items.map((item) => {
-              const label = labels[item.action_type];
-              return (
-                <div key={item.id} className="mb-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 last:mb-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-ui-text">{label ? (ar ? label.ar : label.en) : item.action_type}</p>
-                      <p className="mt-1 text-sm text-ui-muted">{item.reason}</p>
-                      {item.action_type === 'discount' && (
-                        <p className="mt-1 text-xs text-ui-subtle">
-                          {ar ? 'قيمة الخصم: ' : 'Discount: '}
-                          {String(item.payload.discount_amount ?? '')}
-                        </p>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-[10px] text-ui-subtle">
-                      {new Date(item.created_at).toLocaleTimeString(ar ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <button type="button" disabled={busy === item.id} onClick={() => void decide(item.id, true)} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-ui-success px-3 py-2 text-sm font-semibold text-ui-primary-fg disabled:opacity-50">
-                      <Check className="h-4 w-4" />{ar ? 'موافقة' : 'Approve'}
-                    </button>
-                    <button type="button" disabled={busy === item.id} onClick={() => void decide(item.id, false)} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-ui-danger px-3 py-2 text-sm font-semibold text-ui-primary-fg disabled:opacity-50">
-                      <X className="h-4 w-4" />{ar ? 'رفض' : 'Reject'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
