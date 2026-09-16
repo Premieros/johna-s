@@ -1,0 +1,73 @@
+name: Build Johns Print Agent Installer
+
+on:
+  pull_request:
+    paths:
+      - 'local-print-agent/standalone/**'
+      - '.github/workflows/build-print-agent.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install packager
+        shell: pwsh
+        run: npm install -g @yao-pkg/pkg@6.22.0
+
+      - name: Validate agent syntax
+        shell: pwsh
+        run: node --check local-print-agent/standalone/agent-v2.cjs
+
+      - name: Build standalone EXE
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          pkg local-print-agent/standalone/agent-v2.cjs --targets node20-win-x64 --output build/JohnsPrintAgent.exe
+
+      - name: Smoke test health endpoint
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "$env:GITHUB_WORKSPACE\build\JohnsPrintAgent.exe" -PassThru -WindowStyle Hidden
+          try {
+            Start-Sleep -Seconds 3
+            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:17654/health' -TimeoutSec 10
+            if (-not $health.ok) { throw 'Health endpoint returned not-ok' }
+            if ($health.version -ne '2.1.0') { throw "Unexpected agent version: $($health.version)" }
+          }
+          finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "local-print-agent\standalone\installer.iss"
+
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          Get-FileHash build\JohnsPrintAgent.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent.exe" } | Set-Content build\SHA256SUMS.txt
+          Get-FileHash build\JohnsPrintAgent-Setup-2.1.0.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Setup-2.1.0.exe" } | Add-Content build\SHA256SUMS.txt
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JohnsPrintAgent-2.1.0-Windows
+          path: |
+            build/JohnsPrintAgent-Setup-2.1.0.exe
+            build/JohnsPrintAgent.exe
+            build/SHA256SUMS.txt
+          if-no-files-found: error
