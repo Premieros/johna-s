@@ -234,7 +234,7 @@ export function DataTable<T extends { id?: string }>({
     });
   };
 
-  const toggleAllColumnValues = (key: string, allValues: string[], checked: boolean) => {
+  const toggleAllColumnValues = (key: string, checked: boolean) => {
     setFilters((prev) => {
       const current = prev[key] ?? { query: '', selectedValues: null };
       return {
@@ -327,7 +327,7 @@ export function DataTable<T extends { id?: string }>({
               <input
                 type="checkbox"
                 checked={allChecked}
-                onChange={(event) => toggleAllColumnValues(col.key, allValues, event.target.checked)}
+                onChange={(event) => toggleAllColumnValues(col.key, event.target.checked)}
                 className="h-4 w-4 rounded border-ui-border-strong text-ui-primary focus:ring-ui-ring"
               />
               <span>{labels.selectAll}</span>
