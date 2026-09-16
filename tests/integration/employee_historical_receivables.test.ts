@@ -94,7 +94,8 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     );
     expect(summary.error).toBeUndefined();
     const totalFromRows = agingRows.reduce((sum, row) => sum + Number(row.open_amount || 0), 0);
-    expect(Number(summary.rows[0]?.result?.ar_open)).toBe(totalFromRows);
+    const summaryResult = (summary.rows[0]?.result || {}) as { ar_open?: number | string };
+    expect(Number(summaryResult.ar_open)).toBe(totalFromRows);
 
     const payment = await runAsPersist(
       client,
