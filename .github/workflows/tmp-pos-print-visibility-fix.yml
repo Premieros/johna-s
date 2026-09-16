@@ -1,0 +1,71 @@
+name: Temporary POS receipt print visibility fix
+
+on:
+  push:
+    branches:
+      - fix/pos-receipt-print-button-visibility-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/pos-receipt-print-button-visibility-20260916
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply targeted patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          header = Path('src/features/pos/components/order/PosOrderHeaderBar.tsx')
+          text = header.read_text()
+          old = """        {perms.canPrint && canPrintReceipt && (\n          <button\n            data-testid=\"pos-action-print\"\n            type=\"button\"\n            onClick={onPrint}\n            className=\"flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs\"\n          >"""
+          new = """        {perms.canPrint && (\n          <button\n            data-testid=\"pos-action-print\"\n            type=\"button\"\n            onClick={onPrint}\n            disabled={!canPrintReceipt}\n            title={!canPrintReceipt ? (isAr ? 'لا يوجد إيصال بيع جاهز للطباعة' : 'No sale receipt is ready to print') : undefined}\n            className=\"flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40\"\n          >"""
+          assert old in text, 'print button block not found'
+          header.write_text(text.replace(old, new, 1))
+
+          defs = Path('src/lib/permissionDefs.ts')
+          text = defs.read_text()
+          old = "'pos.receipt.print': { ar: 'طباعة إيصال البيع أول مرة', en: 'Print First Sale Receipt' },"
+          new = "'pos.receipt.print': { ar: 'إظهار زر طباعة إيصال البيع (أول مرة)', en: 'Show Sale Receipt Print Button (First Print)' },"
+          assert old in text, 'permission label not found'
+          defs.write_text(text.replace(old, new, 1))
+
+          test = Path('tests/components/pos-customer-receipt-print-contract.test.ts')
+          text = test.read_text()
+          text = text.replace(
+            "    expect(header).toContain('perms.canPrint && canPrintReceipt');\n",
+            "    expect(header).toContain('{perms.canPrint && (');\n    expect(header).toContain('disabled={!canPrintReceipt}');\n    expect(header).not.toContain('perms.canPrint && canPrintReceipt');\n",
+            1,
+          )
+          insert = """\n  it('exposes an explicit permission checkbox label for the sale receipt print button', () => {\n    const defs = fs.readFileSync(path.join(root, 'src/lib/permissionDefs.ts'), 'utf8');\n    expect(defs).toContain(\"'pos.receipt.print'\");\n    expect(defs).toContain('إظهار زر طباعة إيصال البيع (أول مرة)');\n    expect(defs).toContain(\"permissions: ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print'\");\n  });\n"""
+          marker = "\n  it('keeps the existing single-print and manager-approved reprint authorization'"
+          assert marker in text, 'test insertion marker not found'
+          text = text.replace(marker, insert + marker, 1)
+          test.write_text(text)
+          PY
+      - name: Verify targeted change
+        shell: bash
+        run: |
+          npm ci
+          npm run typecheck
+          npx vitest run tests/components/pos-customer-receipt-print-contract.test.ts
+          npm run build
+      - name: Commit fix
+        shell: bash
+        run: |
+          rm .github/workflows/tmp-pos-print-visibility-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/pos/components/order/PosOrderHeaderBar.tsx src/lib/permissionDefs.ts tests/components/pos-customer-receipt-print-contract.test.ts .github/workflows/tmp-pos-print-visibility-fix.yml
+          git commit -m "fix(pos): keep receipt print action visible by permission"
+          git push origin HEAD:fix/pos-receipt-print-button-visibility-20260916
