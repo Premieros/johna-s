@@ -1,0 +1,728 @@
+name: Apply sent-only settlement hardening
+
+on:
+  push:
+    branches:
+      - development/pos-hardening-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development/pos-hardening-20260916
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Create migration and patch POS
+        shell: bash
+        run: |
+          set -euo pipefail
+          before=$(find supabase/migrations -maxdepth 1 -type f | sort)
+          npx --yes supabase@2 migration new sent_only_order_settlement >/tmp/migration.out
+          after=$(find supabase/migrations -maxdepth 1 -type f | sort)
+          migration=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | tail -n1)
+          test -n "$migration"
+          cat > "$migration" <<'SQL'
+          -- Sent-only POS settlement.
+          -- Kitchen send remains the only physical stock deduction boundary.
+          -- Payment settles only unvoided kitchen-send inventory events that have
+          -- not already been linked to a sale. Unsent additions stay on the order.
+
+          CREATE OR REPLACE FUNCTION public._build_order_settlement_preview(p_order_id uuid)
+          RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path TO 'public', 'pg_temp'
+          AS $function$
+          DECLARE
+            v_order public.orders%ROWTYPE;
+            v_items jsonb := '[]'::jsonb;
+            v_subtotal numeric(14,2) := 0;
+            v_discount numeric(14,2) := 0;
+            v_previous_discount numeric(14,2) := 0;
+            v_tax numeric(14,2) := 0;
+            v_total numeric(14,2) := 0;
+            v_tax_enabled boolean := false;
+            v_tax_rate numeric(14,2) := 0;
+            v_pending numeric(14,6) := 0;
+            v_unsent numeric(14,6) := 0;
+          BEGIN
+            SELECT * INTO v_order FROM public.orders WHERE id = p_order_id;
+            IF v_order.id IS NULL THEN
+              RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND');
+            END IF;
+            IF v_order.status NOT IN ('open','held') THEN
+              RETURN jsonb_build_object('success',false,'error','ORDER_NOT_EDITABLE');
+            END IF;
+
+            WITH pending AS (
+              SELECT oi.id AS order_item_id,
+                     oi.product_id,
+                     COALESCE(oi.unit_name,'piece') AS unit_name,
+                     oi.quantity AS order_quantity,
+                     COALESCE(oi.discount_amount,0) AS order_line_discount,
+                     COALESCE(oi.bonus_quantity,0) AS bonus_quantity,
+                     COALESCE(oi.modifier_option_ids,'{}'::uuid[]) AS modifier_option_ids,
+                     oi.notes,
+                     sum(e.sent_quantity - e.voided_quantity)::numeric(14,6) AS quantity
+              FROM public.order_items oi
+              JOIN public.order_kitchen_inventory_events e
+                ON e.order_item_id = oi.id
+               AND e.order_id = oi.order_id
+               AND e.settled_sale_id IS NULL
+               AND e.sent_quantity > e.voided_quantity
+              WHERE oi.order_id = p_order_id
+              GROUP BY oi.id,oi.product_id,oi.unit_name,oi.quantity,oi.discount_amount,
+                       oi.bonus_quantity,oi.modifier_option_ids,oi.notes
+            ), priced AS (
+              SELECT pnd.*,
+                     GREATEST(COALESCE(p.sale_price,0) + COALESCE((r.mod->>'price_delta')::numeric,0),0)::numeric(14,2) AS unit_price,
+                     r.mod
+              FROM pending pnd
+              JOIN public.products p ON p.id=pnd.product_id AND p.branch_id=v_order.branch_id AND p.is_active=true
+              CROSS JOIN LATERAL (
+                SELECT public.resolve_product_modifiers(
+                  pnd.product_id,
+                  v_order.branch_id,
+                  to_jsonb(pnd.modifier_option_ids)
+                ) AS mod
+              ) r
+              WHERE COALESCE((r.mod->>'success')::boolean,false) IS TRUE
+            ), shaped AS (
+              SELECT jsonb_build_object(
+                       'product_id',product_id,
+                       'unit_name',unit_name,
+                       'quantity',quantity,
+                       'unit_price',unit_price,
+                       'discount_amount',ROUND(LEAST(
+                         GREATEST(CASE WHEN order_quantity>0 THEN order_line_discount*quantity/order_quantity ELSE 0 END,0),
+                         quantity*unit_price
+                       ),2),
+                       'bonus_quantity',0,
+                       'total',ROUND(quantity*unit_price-LEAST(
+                         GREATEST(CASE WHEN order_quantity>0 THEN order_line_discount*quantity/order_quantity ELSE 0 END,0),
+                         quantity*unit_price
+                       ),2),
+                       'modifier_option_ids',to_jsonb(modifier_option_ids),
+                       'notes',notes,
+                       'order_item_id',order_item_id
+                     ) AS item,
+                     ROUND(quantity*unit_price-LEAST(
+                       GREATEST(CASE WHEN order_quantity>0 THEN order_line_discount*quantity/order_quantity ELSE 0 END,0),
+                       quantity*unit_price
+                     ),2) AS line_subtotal,
+                     quantity
+              FROM priced
+            )
+            SELECT COALESCE(jsonb_agg(item ORDER BY item->>'order_item_id'),'[]'::jsonb),
+                   COALESCE(ROUND(sum(line_subtotal),2),0),
+                   COALESCE(sum(quantity),0)
+            INTO v_items,v_subtotal,v_pending
+            FROM shaped;
+
+            SELECT COALESCE(sum(s.discount_amount),0)
+            INTO v_previous_discount
+            FROM public.sales s
+            WHERE s.id IN (
+              SELECT DISTINCT e.settled_sale_id
+              FROM public.order_kitchen_inventory_events e
+              WHERE e.order_id=p_order_id AND e.settled_sale_id IS NOT NULL
+            );
+
+            v_discount := ROUND(LEAST(GREATEST(COALESCE(v_order.discount_amount,0)-v_previous_discount,0),v_subtotal),2);
+            SELECT t.tax_enabled,t.tax_rate
+            INTO v_tax_enabled,v_tax_rate
+            FROM public._effective_branch_tax(v_order.branch_id) t;
+            v_tax := CASE WHEN COALESCE(v_tax_enabled,false)
+                     THEN ROUND((v_subtotal-v_discount)*COALESCE(v_tax_rate,0)/100,2)
+                     ELSE 0 END;
+            v_total := ROUND(v_subtotal-v_discount+v_tax,2);
+
+            SELECT COALESCE(sum(GREATEST(oi.quantity-COALESCE(s.sent_quantity,0),0)),0)
+            INTO v_unsent
+            FROM public.order_items oi
+            LEFT JOIN public.order_kitchen_sends s ON s.order_item_id=oi.id
+            WHERE oi.order_id=p_order_id;
+
+            RETURN jsonb_build_object(
+              'success',true,
+              'order_id',v_order.id,
+              'branch_id',v_order.branch_id,
+              'warehouse_id',v_order.inventory_warehouse_id,
+              'order_status',v_order.status,
+              'items',v_items,
+              'subtotal',v_subtotal,
+              'discount_amount',v_discount,
+              'discount_type','amount',
+              'tax_amount',v_tax,
+              'total',v_total,
+              'pending_quantity',v_pending,
+              'unsent_quantity',v_unsent,
+              'has_payable_items',v_pending>0
+            );
+          END;
+          $function$;
+
+          REVOKE ALL ON FUNCTION public._build_order_settlement_preview(uuid) FROM PUBLIC;
+
+          CREATE OR REPLACE FUNCTION public.get_order_settlement_preview(p_order_id uuid)
+          RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path TO 'public', 'pg_temp'
+          AS $function$
+          DECLARE
+            v_uid uuid := auth.uid();
+            v_order public.orders%ROWTYPE;
+          BEGIN
+            IF v_uid IS NULL THEN RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED'); END IF;
+            IF NOT public.can_permission('pos.payment.take') THEN
+              RETURN jsonb_build_object('success',false,'error','PERMISSION_DENIED','permission','pos.payment.take');
+            END IF;
+            SELECT * INTO v_order FROM public.orders WHERE id=p_order_id;
+            IF v_order.id IS NULL THEN RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND'); END IF;
+            IF NOT public.user_may_access_branch(v_order.branch_id) THEN
+              RETURN jsonb_build_object('success',false,'error','BRANCH_MISMATCH');
+            END IF;
+            IF v_order.cashier_id IS DISTINCT FROM v_uid AND NOT public.can_manage_other_pos_orders() THEN
+              RETURN jsonb_build_object('success',false,'error','ORDER_OPERATOR_REQUIRED');
+            END IF;
+            RETURN public._build_order_settlement_preview(p_order_id);
+          END;
+          $function$;
+
+          REVOKE ALL ON FUNCTION public.get_order_settlement_preview(uuid) FROM PUBLIC;
+          GRANT EXECUTE ON FUNCTION public.get_order_settlement_preview(uuid) TO authenticated;
+
+          CREATE OR REPLACE FUNCTION public._prepare_kitchen_sale_settlement(
+            p_order_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_items jsonb
+          ) RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path TO 'public','pg_temp'
+          AS $function$
+          DECLARE
+            v_order public.orders%ROWTYPE;
+            v_preview jsonb;
+            v_items jsonb;
+          BEGIN
+            SELECT * INTO v_order FROM public.orders WHERE id=p_order_id FOR UPDATE;
+            IF v_order.id IS NULL THEN RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND'); END IF;
+            IF v_order.branch_id IS DISTINCT FROM p_branch_id OR NOT public.user_may_access_branch(v_order.branch_id) THEN
+              RETURN jsonb_build_object('success',false,'error','BRANCH_MISMATCH');
+            END IF;
+            IF v_order.status NOT IN ('open','held') THEN RETURN jsonb_build_object('success',false,'error','ORDER_NOT_EDITABLE'); END IF;
+            IF p_warehouse_id IS NULL OR v_order.inventory_warehouse_id IS DISTINCT FROM p_warehouse_id THEN
+              RETURN jsonb_build_object('success',false,'error','KITCHEN_WAREHOUSE_MISMATCH','expected_warehouse_id',v_order.inventory_warehouse_id);
+            END IF;
+
+            v_preview := public._build_order_settlement_preview(p_order_id);
+            IF COALESCE((v_preview->>'success')::boolean,false) IS NOT TRUE THEN RETURN v_preview; END IF;
+            IF COALESCE((v_preview->>'pending_quantity')::numeric,0) <= 0 THEN
+              RETURN jsonb_build_object('success',false,'error','NO_SENT_ITEMS_TO_SETTLE');
+            END IF;
+            v_items := COALESCE(v_preview->'items','[]'::jsonb);
+
+            CREATE TEMP TABLE IF NOT EXISTS pg_temp.kitchen_settlement_queue (
+              seq bigint GENERATED ALWAYS AS IDENTITY,
+              order_id uuid NOT NULL,
+              order_item_id uuid NOT NULL,
+              product_id uuid NOT NULL,
+              unit_name text NOT NULL,
+              quantity numeric(14,6) NOT NULL,
+              modifier_option_ids uuid[] NOT NULL,
+              original_order_status text NOT NULL,
+              consumed boolean NOT NULL DEFAULT false,
+              PRIMARY KEY(seq)
+            ) ON COMMIT DROP;
+            TRUNCATE pg_temp.kitchen_settlement_queue RESTART IDENTITY;
+
+            INSERT INTO pg_temp.kitchen_settlement_queue(
+              order_id,order_item_id,product_id,unit_name,quantity,modifier_option_ids,original_order_status
+            )
+            SELECT oi.order_id,oi.id,oi.product_id,COALESCE(oi.unit_name,'piece'),
+                   sum(e.sent_quantity-e.voided_quantity),COALESCE(oi.modifier_option_ids,'{}'::uuid[]),v_order.status
+            FROM public.order_items oi
+            JOIN public.order_kitchen_inventory_events e
+              ON e.order_item_id=oi.id AND e.order_id=oi.order_id
+             AND e.settled_sale_id IS NULL AND e.sent_quantity>e.voided_quantity
+            WHERE oi.order_id=p_order_id
+            GROUP BY oi.order_id,oi.id,oi.product_id,oi.unit_name,oi.modifier_option_ids;
+
+            PERFORM set_config('app.kitchen_inventory_settlement','on',true);
+            PERFORM set_config('app.kitchen_inventory_order_id',p_order_id::text,true);
+            RETURN v_preview || jsonb_build_object('items',v_items);
+          END;
+          $function$;
+
+          CREATE OR REPLACE FUNCTION public._consume_kitchen_sale_settlement(
+            p_branch_id uuid,p_warehouse_id uuid,p_items jsonb,p_sale_id uuid,p_reference_number text
+          ) RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path TO 'public','pg_temp'
+          AS $function$
+          DECLARE
+            v_item jsonb;
+            v_queue record;
+            v_event_qty numeric(14,6);
+            v_units jsonb := '[]'::jsonb;
+            v_raws jsonb := '[]'::jsonb;
+            v_products jsonb := '[]'::jsonb;
+            v_total_cost numeric(18,6) := 0;
+          BEGIN
+            IF to_regclass('pg_temp.kitchen_settlement_queue') IS NULL OR p_items IS NULL OR jsonb_array_length(p_items)<>1 THEN
+              RETURN jsonb_build_object('success',false,'error','KITCHEN_SETTLEMENT_CONTEXT_MISSING');
+            END IF;
+            v_item:=p_items->0;
+            SELECT q.* INTO v_queue
+            FROM pg_temp.kitchen_settlement_queue q
+            WHERE NOT q.consumed
+              AND q.product_id=NULLIF(v_item->>'product_id','')::uuid
+              AND q.unit_name=COALESCE(NULLIF(v_item->>'unit_name',''),'piece')
+              AND abs(q.quantity-COALESCE((v_item->>'quantity')::numeric,0))<0.000001
+              AND ARRAY(SELECT u.id FROM unnest(q.modifier_option_ids) u(id) ORDER BY u.id)
+                  = ARRAY(SELECT j.id::uuid FROM jsonb_array_elements_text(COALESCE(v_item->'modifier_option_ids','[]'::jsonb)) j(id) ORDER BY j.id::uuid)
+            ORDER BY q.seq LIMIT 1 FOR UPDATE;
+            IF v_queue.order_item_id IS NULL THEN RETURN jsonb_build_object('success',false,'error','ORDER_ITEMS_MISMATCH'); END IF;
+
+            SELECT COALESCE(sum(e.sent_quantity-e.voided_quantity),0)
+            INTO v_event_qty
+            FROM public.order_kitchen_inventory_events e
+            WHERE e.order_id=v_queue.order_id AND e.order_item_id=v_queue.order_item_id
+              AND e.settled_sale_id IS NULL AND e.sent_quantity>e.voided_quantity;
+            IF abs(v_event_qty-v_queue.quantity)>0.000001 THEN
+              RETURN jsonb_build_object('success',false,'error','KITCHEN_INVENTORY_EVENT_MISMATCH');
+            END IF;
+
+            SELECT
+              COALESCE(jsonb_agg(jsonb_build_object('unit_id',z.target_id,'quantity',z.quantity) ORDER BY z.target_id) FILTER(WHERE z.target_type='inventory_unit'),'[]'::jsonb),
+              COALESCE(jsonb_agg(jsonb_build_object('raw_material_id',z.target_id,'quantity',z.quantity,'total_cost',z.total_cost) ORDER BY z.target_id) FILTER(WHERE z.target_type='raw_material'),'[]'::jsonb),
+              COALESCE(jsonb_agg(jsonb_build_object('product_id',z.target_id,'quantity',z.quantity,'total_cost',z.total_cost) ORDER BY z.target_id) FILTER(WHERE z.target_type='product'),'[]'::jsonb),
+              COALESCE(sum(z.total_cost),0)
+            INTO v_units,v_raws,v_products,v_total_cost
+            FROM (
+              SELECT ef.target_type,ef.target_id,
+                     sum(ef.quantity*(ev.sent_quantity-ev.voided_quantity)/ev.sent_quantity) AS quantity,
+                     sum(ef.total_cost*(ev.sent_quantity-ev.voided_quantity)/ev.sent_quantity) AS total_cost
+              FROM public.order_kitchen_inventory_events ev
+              JOIN public.order_kitchen_inventory_effects ef ON ef.event_id=ev.id
+              WHERE ev.order_id=v_queue.order_id AND ev.order_item_id=v_queue.order_item_id
+                AND ev.settled_sale_id IS NULL AND ev.sent_quantity>ev.voided_quantity
+              GROUP BY ef.target_type,ef.target_id
+            ) z;
+
+            UPDATE pg_temp.kitchen_settlement_queue SET consumed=true WHERE seq=v_queue.seq;
+            RETURN jsonb_build_object('success',true,'units_deducted',v_units,'raw_materials_deducted',v_raws,
+              'ready_products_deducted',v_products,'total_cost',v_total_cost,'errors','[]'::jsonb);
+          END;
+          $function$;
+
+          CREATE OR REPLACE FUNCTION public._finalize_kitchen_sale_settlement(p_sale_id uuid)
+          RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path TO 'public','pg_temp'
+          AS $function$
+          DECLARE
+            v_order_id uuid;
+            v_table_id uuid;
+            v_original_status text;
+            v_unsent numeric(14,6):=0;
+            v_unsettled numeric(14,6):=0;
+            v_completed boolean:=false;
+          BEGIN
+            IF to_regclass('pg_temp.kitchen_settlement_queue') IS NULL OR EXISTS(SELECT 1 FROM pg_temp.kitchen_settlement_queue WHERE NOT consumed) THEN
+              RAISE EXCEPTION 'KITCHEN_SETTLEMENT_INCOMPLETE';
+            END IF;
+            SELECT min(order_id),min(original_order_status) INTO v_order_id,v_original_status FROM pg_temp.kitchen_settlement_queue;
+            IF v_order_id IS NULL THEN RAISE EXCEPTION 'KITCHEN_SETTLEMENT_CONTEXT_MISSING'; END IF;
+
+            UPDATE public.order_kitchen_inventory_events e
+            SET settled_sale_id=p_sale_id
+            WHERE e.order_id=v_order_id AND e.settled_sale_id IS NULL
+              AND EXISTS(SELECT 1 FROM pg_temp.kitchen_settlement_queue q WHERE q.order_item_id=e.order_item_id);
+
+            SELECT COALESCE(sum(GREATEST(oi.quantity-COALESCE(s.sent_quantity,0),0)),0)
+            INTO v_unsent
+            FROM public.order_items oi LEFT JOIN public.order_kitchen_sends s ON s.order_item_id=oi.id
+            WHERE oi.order_id=v_order_id;
+            SELECT COALESCE(sum(e.sent_quantity-e.voided_quantity),0)
+            INTO v_unsettled
+            FROM public.order_kitchen_inventory_events e
+            WHERE e.order_id=v_order_id AND e.settled_sale_id IS NULL AND e.sent_quantity>e.voided_quantity;
+
+            v_completed := v_unsent<=0.000001 AND v_unsettled<=0.000001;
+            SELECT table_id INTO v_table_id FROM public.orders WHERE id=v_order_id;
+
+            IF v_completed THEN
+              UPDATE public.orders SET status='completed',completed_at=COALESCE(completed_at,now()),payment_status='paid',payment_at=now(),updated_at=now()
+              WHERE id=v_order_id;
+              IF v_table_id IS NOT NULL AND NOT EXISTS(
+                SELECT 1 FROM public.orders WHERE table_id=v_table_id AND status IN('open','held') AND id<>v_order_id
+              ) THEN
+                UPDATE public.dining_tables SET status='vacant',updated_at=now() WHERE id=v_table_id;
+              END IF;
+            ELSE
+              UPDATE public.orders SET status=CASE WHEN v_original_status='held' THEN 'held' ELSE 'open' END,
+                completed_at=NULL,payment_status='partial',payment_at=now(),updated_at=now()
+              WHERE id=v_order_id;
+              IF v_table_id IS NOT NULL THEN
+                UPDATE public.dining_tables SET status='occupied',updated_at=now() WHERE id=v_table_id;
+              END IF;
+            END IF;
+
+            PERFORM set_config('app.kitchen_inventory_settlement','off',true);
+            RETURN jsonb_build_object('success',true,'order_id',v_order_id,'order_completed',v_completed,
+              'remaining_unsent_quantity',v_unsent,'remaining_unsettled_quantity',v_unsettled);
+          END;
+          $function$;
+
+          CREATE OR REPLACE FUNCTION public.process_sale(
+            p_invoice_number text,p_branch_id uuid,p_warehouse_id uuid,p_customer_id uuid,p_salesperson_id uuid,
+            p_subtotal numeric,p_discount_amount numeric,p_discount_type text,p_tax_amount numeric,p_bonus_amount numeric,
+            p_total numeric,p_paid_amount numeric,p_payment_method text,p_status text,p_items jsonb,p_shift_id uuid DEFAULT NULL::uuid,
+            p_order_type text DEFAULT 'takeaway'::text,p_table_id uuid DEFAULT NULL::uuid,p_order_id uuid DEFAULT NULL::uuid,
+            p_guest_count integer DEFAULT NULL::integer
+          ) RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path TO 'public','pg_temp'
+          AS $function$
+          DECLARE
+            v_req_id uuid; v_result jsonb; v_email text; v_item jsonb; v_product_id uuid; v_qty numeric; v_price numeric;
+            v_mod jsonb; v_line_discount numeric; v_server_subtotal numeric(14,2):=0; v_sale_id uuid;
+            v_tax_enabled boolean; v_tax_rate numeric(14,2); v_due numeric(14,2); v_header_discount numeric(14,2);
+          BEGIN
+            IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED'); END IF;
+            IF NOT public.can_permission('pos.payment.take') THEN RETURN jsonb_build_object('success',false,'error','PERMISSION_DENIED','permission','pos.payment.take'); END IF;
+            IF NOT public.user_may_access_branch(p_branch_id) THEN RETURN jsonb_build_object('success',false,'error','BRANCH_MISMATCH'); END IF;
+            IF p_shift_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.shifts s WHERE s.id=p_shift_id AND s.branch_id=p_branch_id AND s.status='open') THEN
+              RETURN jsonb_build_object('success',false,'error','NO_OPEN_SHIFT','detail','The supplied shift must be open and belong to the sale branch.');
+            END IF;
+
+            IF p_order_id IS NOT NULL THEN
+              v_result:=public._prepare_kitchen_sale_settlement(p_order_id,p_branch_id,p_warehouse_id,p_items);
+              IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN RETURN v_result; END IF;
+              p_items:=COALESCE(v_result->'items','[]'::jsonb);
+              p_discount_amount:=COALESCE((v_result->>'discount_amount')::numeric,0);
+              p_discount_type:='amount';
+            END IF;
+            IF p_items IS NULL OR jsonb_array_length(p_items)=0 THEN RETURN jsonb_build_object('success',false,'error','EMPTY_CART'); END IF;
+
+            FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+              v_product_id:=NULLIF(v_item->>'product_id','')::uuid; v_qty:=COALESCE((v_item->>'quantity')::numeric,0);
+              IF v_product_id IS NULL THEN RETURN jsonb_build_object('success',false,'error','INVALID_PRODUCT'); END IF;
+              IF v_qty<=0 THEN RETURN jsonb_build_object('success',false,'error','INVALID_QUANTITY'); END IF;
+              SELECT sale_price INTO v_price FROM public.products WHERE id=v_product_id AND branch_id=p_branch_id AND is_active=true;
+              IF NOT FOUND THEN RETURN jsonb_build_object('success',false,'error','PRODUCT_NOT_IN_BRANCH','product_id',v_product_id); END IF;
+              v_mod:=public.resolve_product_modifiers(v_product_id,p_branch_id,COALESCE(v_item->'modifier_option_ids','[]'::jsonb));
+              IF COALESCE((v_mod->>'success')::boolean,false) IS NOT TRUE THEN RETURN v_mod; END IF;
+              v_price:=GREATEST(COALESCE(v_price,0)+COALESCE((v_mod->>'price_delta')::numeric,0),0);
+              v_line_discount:=ROUND(LEAST(GREATEST(COALESCE((v_item->>'discount_amount')::numeric,0),0),v_qty*v_price),2);
+              IF v_line_discount>0 AND NOT public.can_permission('pos.discount') THEN
+                RETURN jsonb_build_object('success',false,'error','MANAGER_APPROVAL_REQUIRED','action','discount','scope','line');
+              END IF;
+              v_server_subtotal:=v_server_subtotal+ROUND(v_qty*v_price-v_line_discount,2);
+            END LOOP;
+            v_server_subtotal:=ROUND(v_server_subtotal,2);
+            v_header_discount:=LEAST(GREATEST(COALESCE(p_discount_amount,0),0),v_server_subtotal);
+            SELECT t.tax_enabled,t.tax_rate INTO v_tax_enabled,v_tax_rate FROM public._effective_branch_tax(p_branch_id)t;
+            v_due:=ROUND(v_server_subtotal-v_header_discount+CASE WHEN COALESCE(v_tax_enabled,false) THEN ROUND((v_server_subtotal-v_header_discount)*COALESCE(v_tax_rate,0)/100,2) ELSE 0 END,2);
+            IF p_order_id IS NOT NULL AND lower(COALESCE(p_payment_method,''))<>'credit'
+               AND ROUND(GREATEST(COALESCE(p_paid_amount,0),0),2)<v_due THEN
+              RETURN jsonb_build_object('success',false,'error','FULL_PAYMENT_REQUIRED_TO_CLOSE_ORDER','total_due',v_due,'paid_amount',ROUND(GREATEST(COALESCE(p_paid_amount,0),0),2));
+            END IF;
+
+            IF COALESCE(p_discount_amount,0)>0 AND NOT public.can_permission('pos.discount') THEN
+              SELECT id INTO v_req_id FROM public.approval_requests
+              WHERE requester_id=auth.uid() AND branch_id=p_branch_id AND action_type='discount' AND status='approved' AND expires_at>now()
+                AND (entity_id IS NULL OR entity_id IS NOT DISTINCT FROM p_order_id)
+                AND COALESCE(payload->>'discount_type','amount')=COALESCE(p_discount_type,'amount')
+                AND abs(COALESCE((payload->>'discount_amount')::numeric,-1)-p_discount_amount)<0.0001
+                AND abs(COALESCE((payload->>'subtotal')::numeric,-1)-v_server_subtotal)<0.0001
+              ORDER BY decided_at DESC NULLS LAST,created_at DESC LIMIT 1 FOR UPDATE;
+              IF v_req_id IS NULL THEN RETURN jsonb_build_object('success',false,'error','MANAGER_APPROVAL_REQUIRED','action','discount'); END IF;
+              UPDATE public.approval_requests SET status='consumed',consumed_at=now() WHERE id=v_req_id;
+              SELECT email INTO v_email FROM public.users WHERE id=auth.uid();
+              INSERT INTO public.audit_log(user_id,user_email,action,entity,entity_id,details,branch_id)
+              VALUES(auth.uid(),v_email,'APPROVAL_CONSUMED','approval_request',v_req_id,
+                jsonb_build_object('action_type','discount','discount_amount',p_discount_amount,'discount_type',p_discount_type,'server_subtotal',v_server_subtotal,'order_id',p_order_id),p_branch_id);
+            END IF;
+
+            v_result:=public._process_sale_core(p_invoice_number,p_branch_id,p_warehouse_id,p_customer_id,p_salesperson_id,
+              v_server_subtotal,p_discount_amount,p_discount_type,0,p_bonus_amount,0,p_paid_amount,p_payment_method,p_status,p_items,
+              p_shift_id,p_order_type,p_table_id,p_order_id,p_guest_count);
+
+            IF COALESCE((v_result->>'success')::boolean,false) IS TRUE AND p_shift_id IS NOT NULL THEN
+              v_sale_id:=NULLIF(v_result->>'sale_id','')::uuid;
+              INSERT INTO public.shift_operations(shift_id,operation_type,amount,payment_method,reference_type,reference_id,created_by)
+              SELECT p_shift_id,'sale',s.paid_amount,s.payment_method,'sale',s.id,auth.uid() FROM public.sales s
+              WHERE s.id=v_sale_id AND s.branch_id=p_branch_id AND NOT EXISTS(
+                SELECT 1 FROM public.shift_operations so WHERE so.reference_type='sale' AND so.reference_id=s.id);
+            END IF;
+
+            IF p_order_id IS NOT NULL THEN
+              PERFORM set_config('app.kitchen_inventory_settlement','off',true);
+              IF COALESCE((v_result->>'success')::boolean,false) IS TRUE THEN
+                v_result:=v_result||public._finalize_kitchen_sale_settlement(NULLIF(v_result->>'sale_id','')::uuid);
+              END IF;
+            END IF;
+            RETURN v_result;
+          END;
+          $function$;
+          SQL
+
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          payment = Path('src/features/pos/services/payment.ts')
+          s = payment.read_text()
+          marker = "export type ProcessSaleResult = RpcResult & {\n  offline?: boolean;\n  pending_sync?: boolean;\n};"
+          replacement = """export type ProcessSaleResult = RpcResult & {
+            offline?: boolean;
+            pending_sync?: boolean;
+            order_completed?: boolean;
+            remaining_unsent_quantity?: number;
+            remaining_unsettled_quantity?: number;
+          };
+
+          export type OrderSettlementPreview = {
+            success: boolean;
+            error?: string;
+            detail?: string;
+            order_id?: string;
+            items: ItemPayload[];
+            subtotal: number;
+            discount_amount: number;
+            discount_type: 'amount';
+            tax_amount: number;
+            total: number;
+            pending_quantity: number;
+            unsent_quantity: number;
+            has_payable_items: boolean;
+          };
+
+          export async function fetchOrderSettlementPreview(orderId: string): Promise<{ preview: OrderSettlementPreview | null; error: string | null }> {
+            try {
+              const { data, error } = await supabase.rpc('get_order_settlement_preview', { p_order_id: orderId });
+              const raw = data as unknown as Partial<OrderSettlementPreview> | null;
+              if (error) return { preview: null, error: error.message };
+              if (!raw?.success) return { preview: raw as OrderSettlementPreview | null, error: raw?.detail || raw?.error || 'No sent items are ready for payment.' };
+              return {
+                preview: {
+                  success: true,
+                  items: Array.isArray(raw.items) ? raw.items as ItemPayload[] : [],
+                  subtotal: Number(raw.subtotal || 0),
+                  discount_amount: Number(raw.discount_amount || 0),
+                  discount_type: 'amount',
+                  tax_amount: Number(raw.tax_amount || 0),
+                  total: Number(raw.total || 0),
+                  pending_quantity: Number(raw.pending_quantity || 0),
+                  unsent_quantity: Number(raw.unsent_quantity || 0),
+                  has_payable_items: !!raw.has_payable_items,
+                  order_id: raw.order_id,
+                },
+                error: null,
+              };
+            } catch (err) {
+              return { preview: null, error: err instanceof Error ? err.message : 'Could not load sent items for payment.' };
+            }
+          }"""
+          if marker not in s:
+              raise SystemExit('payment marker not found')
+          s = s.replace(marker, replacement, 1)
+          payment.write_text(s)
+
+          hook = Path('src/features/pos/hooks/usePosOrderBase.ts')
+          s = hook.read_text()
+          s = s.replace(
+              "import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';",
+              "import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId, fetchOrderSettlementPreview } from '../services/payment';",
+              1,
+          )
+          old = """      const warehouseId = await fetchBranchWarehouseId(branchId, activeOrderId);
+                const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
+                const itemsPayload = cartToItems(cart);
+                const paidAmountToUse = paymentMethod === 'credit' ? 0 : paidAmount || total;
+          """
+          # indentation in source is six spaces; use regex so formatting changes do not block the patch.
+          pattern = re.compile(r"      const warehouseId = await fetchBranchWarehouseId\(branchId, activeOrderId\);\n      const invoiceNumber = \(await nextInvoiceNumber\(\)\) \|\| `INV-\$\{Date\.now\(\)\}`;\n      const itemsPayload = cartToItems\(cart\);\n      const paidAmountToUse = paymentMethod === 'credit' \? 0 : paidAmount \|\| total;\n")
+          repl = """      const warehouseId = await fetchBranchWarehouseId(branchId, activeOrderId);
+                const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
+                const settlement = activeOrderId ? await fetchOrderSettlementPreview(activeOrderId) : { preview: null, error: null };
+                if (activeOrderId && (settlement.error || !settlement.preview?.has_payable_items)) {
+                  show(settlement.error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for payment'), 'error');
+                  return false;
+                }
+                const settlementPreview = settlement.preview;
+                const itemsPayload = settlementPreview?.items ?? cartToItems(cart);
+                const saleSubtotal = settlementPreview?.subtotal ?? subtotal;
+                const saleDiscount = settlementPreview?.discount_amount ?? discountValue;
+                const saleTax = settlementPreview?.tax_amount ?? taxAmount;
+                const saleTotal = settlementPreview?.total ?? total;
+                const paidAmountToUse = paymentMethod === 'credit' ? 0 : paidAmount || saleTotal;
+          """
+          s, n = pattern.subn(repl, s, count=1)
+          if n != 1: raise SystemExit('completeSale payload marker not found')
+          s = s.replace('        p_subtotal: subtotal,\n        p_discount_amount: discountValue,\n        p_discount_type: discountType === \'percent\' ? \'percent\' : \'amount\',\n        p_tax_amount: taxAmount,',
+                        "        p_subtotal: saleSubtotal,\n        p_discount_amount: saleDiscount,\n        p_discount_type: settlementPreview ? 'amount' : (discountType === 'percent' ? 'percent' : 'amount'),\n        p_tax_amount: saleTax,", 1)
+          s = s.replace('        p_total: total,\n        p_paid_amount: paidAmountToUse,', '        p_total: saleTotal,\n        p_paid_amount: paidAmountToUse,', 1)
+          s = s.replace("      await logAudit('create', 'sales', saleId, { invoice: invoiceNumber, total });",
+                        "      await logAudit('create', 'sales', saleId, { invoice: invoiceNumber, total: saleTotal });", 1)
+          old_receipt = """        items: cart.map((i) => ({ name: [i.product.name, i.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — '), qty: i.quantity, price: i.unit_price, total: i.quantity * i.unit_price - i.discount_amount })),
+                subtotal, discount: discountValue, tax: taxAmount, total,
+                paid: paidAmountToUse, change, date: new Date().toISOString(),"""
+          new_receipt = """        items: itemsPayload.map((item) => {
+                  const source = cart.find((i) => i.product.id === item.product_id);
+                  return {
+                    name: source ? [source.product.name, source.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — ') : item.product_id,
+                    qty: item.quantity,
+                    price: item.unit_price,
+                    total: item.total,
+                  };
+                }),
+                subtotal: saleSubtotal, discount: saleDiscount, tax: saleTax, total: saleTotal,
+                paid: paidAmountToUse, change: Math.max(paidAmountToUse - saleTotal, 0), date: new Date().toISOString(),"""
+          if old_receipt not in s: raise SystemExit('receipt marker not found')
+          s = s.replace(old_receipt, new_receipt, 1)
+          partial_marker = """      setReceiptSaleId(saleId);
+                setCheckoutOpen(false);
+                setCart(EMPTY_CART);"""
+          partial_repl = """      setReceiptSaleId(saleId);
+                setCheckoutOpen(false);
+                if (activeOrderId && result.order_completed === false) {
+                  const refreshed = await fetchOrderForWorkspace(activeOrderId);
+                  if (refreshed.order) {
+                    setCart(orderItemsToCart(refreshed.items, refreshed.products));
+                    setActiveOrderId(refreshed.order.id);
+                    setActiveOrderNumber(refreshed.order.order_number);
+                    setTableId(refreshed.order.table_id);
+                  }
+                  setPaidAmount(0);
+                  onInventoryChanged?.();
+                  show(isAr ? 'تم تحصيل الأصناف المرسلة فقط، والإضافات غير المرسلة ما زالت مفتوحة' : 'Only sent items were settled; unsent additions remain open.', 'success');
+                  return true;
+                }
+                setCart(EMPTY_CART);"""
+          if partial_marker not in s: raise SystemExit('partial cleanup marker not found')
+          s = s.replace(partial_marker, partial_repl, 1)
+          hook.write_text(s)
+
+          page = Path('src/features/pos/pages/PosWorkspacePage.tsx')
+          s = page.read_text()
+          import_anchor = "import { usePosOrder } from '../hooks/usePosOrder';"
+          s = s.replace(import_anchor, import_anchor + "\nimport { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/payment';", 1)
+          state_anchor = "  const [voidSentQty, setVoidSentQty] = useState(1);"
+          s = s.replace(state_anchor, state_anchor + "\n  const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);", 1)
+          old_handle = """  const handlePay = useCallback(() => {
+              if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
+              const allowed = guardPos({
+                productsCount: products.length,
+                activeShiftId: activeShift?.id || null,
+                formData: { cart: pos.cart, orderType: pos.orderType },
+              });
+              if (!allowed) return;
+              pos.setPaymentMethod('cash');
+              pos.setPaidAmount(pos.total);
+              pos.setCheckoutOpen(true);
+              setMobileOrderOpen(false);
+            }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id]);"""
+          new_handle = """  const handlePay = useCallback(async () => {
+              if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
+              const allowed = guardPos({
+                productsCount: products.length,
+                activeShiftId: activeShift?.id || null,
+                formData: { cart: pos.cart, orderType: pos.orderType },
+              });
+              if (!allowed) return;
+              let payableTotal = pos.total;
+              if (pos.activeOrderId) {
+                const { preview, error } = await fetchOrderSettlementPreview(pos.activeOrderId);
+                if (error || !preview?.has_payable_items) {
+                  show(error || (isAr ? 'أرسل الأصناف للمطبخ أولاً قبل التحصيل' : 'Send items to the kitchen before payment.'), 'error');
+                  return;
+                }
+                setSettlementPreview(preview);
+                payableTotal = preview.total;
+              } else {
+                setSettlementPreview(null);
+              }
+              pos.setPaymentMethod('cash');
+              pos.setPaidAmount(payableTotal);
+              pos.setCheckoutOpen(true);
+              setMobileOrderOpen(false);
+            }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id, show, isAr]);"""
+          if old_handle not in s: raise SystemExit('handlePay marker not found')
+          s = s.replace(old_handle, new_handle, 1)
+          s = s.replace('      subtotal={pos.subtotal}\n      discountValue={pos.discountValue}\n      taxAmount={pos.taxAmount}\n      total={pos.total}\n      change={pos.change}',
+                        "      subtotal={settlementPreview && pos.activeOrderId ? settlementPreview.subtotal : pos.subtotal}\n      discountValue={settlementPreview && pos.activeOrderId ? settlementPreview.discount_amount : pos.discountValue}\n      taxAmount={settlementPreview && pos.activeOrderId ? settlementPreview.tax_amount : pos.taxAmount}\n      total={settlementPreview && pos.activeOrderId ? settlementPreview.total : pos.total}\n      change={settlementPreview && pos.activeOrderId ? Math.max(pos.paidAmount - settlementPreview.total, 0) : pos.change}", 1)
+          # Prevent stale preview from surviving an order switch or closed checkout.
+          effect_anchor = "  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;"
+          s = s.replace(effect_anchor, effect_anchor + "\n\n  useEffect(() => {\n    if (!pos.checkoutOpen) setSettlementPreview(null);\n  }, [pos.checkoutOpen, pos.activeOrderId]);", 1)
+          page.write_text(s)
+
+          test = Path('tests/components/pos-sent-only-settlement-contract.test.ts')
+          test.write_text("""import { readFileSync, readdirSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { describe, expect, it } from 'vitest';
+
+          const migrationDir = join(process.cwd(), 'supabase', 'migrations');
+          const migration = readdirSync(migrationDir).filter((f) => f.endsWith('_sent_only_order_settlement.sql')).sort().at(-1);
+          const sql = migration ? readFileSync(join(migrationDir, migration), 'utf8') : '';
+          const hook = readFileSync(join(process.cwd(), 'src/features/pos/hooks/usePosOrderBase.ts'), 'utf8');
+          const page = readFileSync(join(process.cwd(), 'src/features/pos/pages/PosWorkspacePage.tsx'), 'utf8');
+
+          describe('sent-only settlement contract', () => {
+            it('settles only unvoided, previously-unsettled kitchen events', () => {
+              expect(sql).toContain('e.settled_sale_id IS NULL');
+              expect(sql).toContain('e.sent_quantity>e.voided_quantity');
+              expect(sql).toContain('NO_SENT_ITEMS_TO_SETTLE');
+              expect(sql).toContain('KITCHEN_INVENTORY_EVENT_MISMATCH');
+            });
+            it('does not call the physical inventory deduction core from settlement consumption', () => {
+              const consume = sql.split('CREATE OR REPLACE FUNCTION public._consume_kitchen_sale_settlement')[1]?.split('CREATE OR REPLACE FUNCTION public._finalize_kitchen_sale_settlement')[0] || '';
+              expect(consume).not.toContain('_deduct_sale_inventory_with_modifiers_core');
+            });
+            it('keeps an order/table open while unsent or unsettled quantities remain', () => {
+              expect(sql).toContain("payment_status='partial'");
+              expect(sql).toContain("status=CASE WHEN v_original_status='held' THEN 'held' ELSE 'open' END");
+              expect(sql).toContain("status='occupied'");
+              expect(sql).toContain("'order_completed',v_completed");
+            });
+            it('uses the server settlement preview for checkout and sale payload', () => {
+              expect(page).toContain('fetchOrderSettlementPreview(pos.activeOrderId)');
+              expect(page).toContain('settlementPreview.total');
+              expect(hook).toContain('fetchOrderSettlementPreview(activeOrderId)');
+              expect(hook).toContain('itemsPayload = settlementPreview?.items ?? cartToItems(cart)');
+              expect(hook).toContain('result.order_completed === false');
+            });
+          });
+          """)
+          PY
+
+      - name: Verify
+        run: |
+          npm ci
+          npm run typecheck
+          npx vitest run tests/components/pos-sent-only-settlement-contract.test.ts tests/components/pos-customer-receipt-print-contract.test.ts
+          npm run build
+      - name: Commit result and remove helper workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-pos-sent-only-fix.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(pos): settle only sent kitchen quantities"
+          git push origin HEAD:development/pos-hardening-20260916
