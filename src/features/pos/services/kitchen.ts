@@ -2,7 +2,7 @@ import type { KitchenSendItem, KitchenSendResult } from '../types';
 import { rpc } from '@/api/rpc';
 import { supabase } from '@/api';
 import { enqueueCloudKitchenPrintJobs } from './cloudPrint';
-import { printKitchenStationsLocally, suppressNextKitchenBrowserPopup } from './localPrintAgent';
+import { groupKitchenItemsByStation, printKitchenStationsLocally, suppressNextKitchenBrowserPopup } from './localPrintAgent';
 
 const activeSendLocks = new Set<string>();
 
@@ -45,22 +45,44 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
         isAr: document.documentElement.dir === 'rtl' || document.documentElement.lang?.startsWith('ar'),
       };
 
-      let cloudQueuedStations = 0;
+      const stationGroups = groupKitchenItemsByStation(rawSentItems);
+      const allStations = Object.keys(stationGroups);
+      const groupedItemCount = Object.values(stationGroups).reduce((count, items) => count + items.length, 0);
+      if (groupedItemCount !== rawSentItems.length) {
+        console.error('[kitchen-print] sent item missing station_code; item will not be silently rerouted', {
+          orderId,
+          missingStationItems: rawSentItems.length - groupedItemCount,
+        });
+      }
+
+      const cloudQueuedStations = new Set<string>();
       try {
         const { data: orderRow } = await supabase.from('orders').select('branch_id').eq('id', orderId).maybeSingle();
         const branchId = (orderRow as { branch_id?: string } | null)?.branch_id || '';
         if (branchId) {
           const cloud = await enqueueCloudKitchenPrintJobs({ branchId, items: rawSentItems, context });
-          cloudQueuedStations = cloud.queuedStations.length;
-          if (cloudQueuedStations > 0) suppressNextKitchenBrowserPopup();
+          for (const station of cloud.queuedStations) cloudQueuedStations.add(station);
+          if (cloudQueuedStations.size > 0) suppressNextKitchenBrowserPopup();
         }
       } catch (error) {
-        console.warn('[cloud-print] kitchen queue unavailable; using compatibility print path', error);
+        console.warn('[cloud-print] kitchen queue unavailable; using station-level compatibility print path', error);
       }
 
-      if (cloudQueuedStations === 0) {
-        const localPrinted = await printKitchenStationsLocally(rawSentItems, context);
-        if (localPrinted) suppressNextKitchenBrowserPopup();
+      const fallbackStations = allStations.filter((station) => !cloudQueuedStations.has(station));
+      if (fallbackStations.length > 0) {
+        const localResults = await Promise.all(fallbackStations.map(async (station) => ({
+          station,
+          printed: await printKitchenStationsLocally(stationGroups[station] || [], context),
+        })));
+        const locallyPrintedStations = localResults.filter((entry) => entry.printed).map((entry) => entry.station);
+        const locallyFailedStations = localResults.filter((entry) => !entry.printed).map((entry) => entry.station);
+        if (locallyPrintedStations.length > 0) suppressNextKitchenBrowserPopup();
+        if (locallyFailedStations.length > 0) {
+          console.warn('[kitchen-print] local fallback failed for stations', {
+            orderId,
+            stations: locallyFailedStations,
+          });
+        }
       }
     }
 
