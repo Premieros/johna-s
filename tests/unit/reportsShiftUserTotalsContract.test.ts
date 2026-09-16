@@ -5,13 +5,13 @@ import { resolve } from 'node:path';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('shift and user sales reporting contract', () => {
-  it('groups user sales from the authoritative sale cashier identity', () => {
+  it('groups user sales from the authoritative sale cashier identity using net sales', () => {
     const reports = read('src/features/reporting/pages/ReportsPage.tsx');
 
     expect(reports).toContain("reportType === 'sales_by_employee'");
-    expect(reports).toContain("select('branch_id, cashier_id, total, users:users!fk_sales_cashier(full_name, email)')");
-    expect(reports).toContain('String(s.cashier_id || name)');
-    expect(reports).toContain('total: existing.total + Number(s.total)');
+    expect(reports).toContain("select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)')");
+    expect(reports).toContain('String(sale.cashier_id || name)');
+    expect(reports).toContain('existing.total += netSaleAmount(sale)');
   });
 
   it('derives shift sales from trusted shift-operation sale references without double-counting split tenders', () => {
