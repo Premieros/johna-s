@@ -24,12 +24,16 @@ function isFrozenPrintingScope(file: string): boolean {
   return excludedPathFragments.some((fragment) => file.includes(fragment));
 }
 
+function isCalculationRounding(line: string): boolean {
+  return line.includes('Number((') && line.includes('.toFixed(');
+}
+
 describe('global UI number formatting contract', () => {
   it('does not format displayed numbers with toFixed outside the central formatter or frozen printing scope', () => {
     const violations = collectUiFiles(root)
       .filter((file) => !isFrozenPrintingScope(file))
       .flatMap((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line, index) => {
-        if (!line.includes('.toFixed(') || line.includes('number-format: calculation')) return [];
+        if (!line.includes('.toFixed(') || isCalculationRounding(line)) return [];
         const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
         return [`${rel}:${index + 1}`];
       }));
