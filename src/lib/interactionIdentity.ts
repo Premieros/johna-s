@@ -29,8 +29,6 @@ export const INTERACTION_CONTRACTS: InteractionContract[] = [
   { testId: 'sidebar-open', file: 'src/components/Layout.tsx', label: 'Open sidebar on mobile', marker: 'data-testid="sidebar-open"' },
   { testId: 'mobile-sidebar-backdrop', file: 'src/components/Layout.tsx', label: 'Mobile sidebar backdrop closes the menu', marker: 'data-testid="mobile-sidebar-backdrop"' },
   { testId: 'app-header', file: 'src/components/Layout.tsx', label: 'Top app header', marker: 'data-testid="app-header"' },
-  { testId: 'top-navigation', file: 'src/components/Layout.tsx', label: 'Top navigation rail', marker: 'data-testid="top-navigation"' },
-  { testId: 'top-tab-{key}', file: 'src/components/Layout.tsx', label: 'Top navigation tab', marker: 'data-testid={`top-tab-${tab.key}`}' },
   { testId: 'active-orders-button', file: 'src/components/Layout.tsx', label: 'Active orders shortcut navigates to floor plan', marker: "data-testid=\"active-orders-button\" type=\"button\" onClick={() => navigate('/floor-plan')}" },
   { testId: 'active-orders-count', file: 'src/components/Layout.tsx', label: 'Active orders count badge', marker: 'data-testid="active-orders-count"' },
   { testId: 'user-menu-button', file: 'src/components/Layout.tsx', label: 'User menu opens settings', marker: 'data-testid="user-menu-button"' },
