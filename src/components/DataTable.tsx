@@ -1,4 +1,5 @@
-import { type ReactNode, isValidElement, useMemo, useState } from 'react';
+import { type ChangeEvent, type ReactNode, isValidElement, useMemo, useRef, useState } from 'react';
+import { downloadTemplate, exportToExcel } from '@/lib/excel';
 
 export interface Column<T> {
   key: string;
@@ -7,6 +8,7 @@ export interface Column<T> {
   className?: string;
   filterable?: boolean;
   filterValue?: (row: T) => unknown;
+  exportValue?: (row: T) => unknown;
   hiddenByDefault?: boolean;
 }
 
@@ -23,6 +25,12 @@ interface DataTableProps<T> {
   tableId?: string;
   enableColumnFilters?: boolean;
   enableColumnVisibility?: boolean;
+  enableExport?: boolean;
+  enableTemplate?: boolean;
+  exportFilename?: string;
+  templateFilename?: string;
+  onImportFile?: (file: File) => void | Promise<void>;
+  importAccept?: string;
 }
 
 function textFromUnknown(value: unknown): string {
@@ -61,9 +69,16 @@ export function DataTable<T extends { id?: string }>({
   tableId,
   enableColumnFilters = true,
   enableColumnVisibility = true,
+  enableExport = true,
+  enableTemplate = true,
+  exportFilename,
+  templateFilename,
+  onImportFile,
+  importAccept = '.xlsx,.xls,.csv',
 }: DataTableProps<T>) {
   const storageKey = tableId ? `datatable:${tableId}:hidden-columns` : null;
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const importRef = useRef<HTMLInputElement>(null);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
     const defaults = new Set(columns.filter((col) => col.hiddenByDefault).map((col) => col.key));
     if (!storageKey || typeof window === 'undefined') return defaults;
@@ -77,8 +92,8 @@ export function DataTable<T extends { id?: string }>({
 
   const isRtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
   const labels = isRtl
-    ? { filter: 'فلتر', columns: 'الأعمدة', clear: 'مسح الفلاتر', noData: 'لا توجد بيانات مطابقة' }
-    : { filter: 'Filter', columns: 'Columns', clear: 'Clear filters', noData: 'No matching data' };
+    ? { filter: 'فلتر', columns: 'الأعمدة', clear: 'مسح الفلاتر', noData: 'لا توجد بيانات مطابقة', import: 'استيراد', export: 'تصدير', template: 'القالب' }
+    : { filter: 'Filter', columns: 'Columns', clear: 'Clear filters', noData: 'No matching data', import: 'Import', export: 'Export', template: 'Template' };
 
   const visibleColumns = useMemo(
     () => columns.filter((col) => !hiddenColumns.has(col.key)),
@@ -100,6 +115,43 @@ export function DataTable<T extends { id?: string }>({
       return normalizeFilterText(value).includes(normalizeFilterText(query));
     }));
   }, [columns, data, enableColumnFilters, filters]);
+
+  const exportColumns = useMemo(
+    () => visibleColumns.filter((col) => col.key !== 'actions'),
+    [visibleColumns],
+  );
+
+  const buildExportRows = () => filteredData.map((row) => {
+    const out: Record<string, unknown> = {};
+    exportColumns.forEach((col) => {
+      const explicit = col.exportValue?.(row) ?? col.filterValue?.(row);
+      const direct = (row as Record<string, unknown>)[col.key];
+      const rendered = col.render?.(row);
+      const raw = explicit ?? direct ?? rendered;
+      out[col.header] = typeof raw === 'number' || typeof raw === 'boolean' ? raw : textFromUnknown(raw);
+    });
+    return out;
+  });
+
+  const handleExport = async () => {
+    const fallback = tableId || 'table-export';
+    await exportToExcel(buildExportRows(), exportFilename || fallback);
+  };
+
+  const handleTemplate = async () => {
+    const fallback = tableId || 'table-template';
+    await downloadTemplate(exportColumns.map((col) => col.header), templateFilename || `${fallback}-template`);
+  };
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onImportFile) return;
+    try {
+      await onImportFile(file);
+    } finally {
+      event.target.value = '';
+    }
+  };
 
   const updateHiddenColumns = (next: Set<string>) => {
     setHiddenColumns(next);
@@ -158,11 +210,43 @@ export function DataTable<T extends { id?: string }>({
     col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as ReactNode;
 
   const hasActiveFilters = Object.values(filters).some((value) => value.trim());
+  const hasDataTools = !!onImportFile || enableExport || enableTemplate;
 
   return (
     <div data-testid="data-table" className="min-w-0 max-w-full">
-      {(enableColumnVisibility || hasActiveFilters) && (
+      {(hasDataTools || enableColumnVisibility || hasActiveFilters) && (
         <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {onImportFile && (
+            <>
+              <input ref={importRef} type="file" accept={importAccept} className="hidden" onChange={handleImport} />
+              <button
+                type="button"
+                onClick={() => importRef.current?.click()}
+                className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt"
+              >
+                {labels.import}
+              </button>
+            </>
+          )}
+          {enableExport && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={filteredData.length === 0}
+              className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {labels.export}
+            </button>
+          )}
+          {enableTemplate && exportColumns.length > 0 && (
+            <button
+              type="button"
+              onClick={handleTemplate}
+              className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt"
+            >
+              {labels.template}
+            </button>
+          )}
           {hasActiveFilters && (
             <button
               type="button"
