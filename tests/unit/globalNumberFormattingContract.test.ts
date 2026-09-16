@@ -29,15 +29,17 @@ function isCalculationRounding(line: string): boolean {
 }
 
 describe('global UI number formatting contract', () => {
-  it('does not format displayed numbers with toFixed outside the central formatter or frozen printing scope', () => {
+  it('routes displayed number formatting through the central formatter', () => {
     const violations = collectUiFiles(root)
       .filter((file) => !isFrozenPrintingScope(file))
       .flatMap((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line, index) => {
-        if (!line.includes('.toFixed(') || isCalculationRounding(line)) return [];
+        const directFixed = line.includes('.toFixed(') && !isCalculationRounding(line);
+        const directLocale = line.includes('.toLocaleString(');
+        if (!directFixed && !directLocale) return [];
         const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
         return [`${rel}:${index + 1}`];
       }));
 
-    expect(violations, `Use src/lib/format.ts helpers instead of direct toFixed() in UI:\n${violations.join('\n')}`).toEqual([]);
+    expect(violations, `Use src/lib/format.ts helpers for displayed numbers:\n${violations.join('\n')}`).toEqual([]);
   });
 });
