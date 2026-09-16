@@ -8,7 +8,7 @@ import { DashboardExecutiveInsightsV2 } from './DashboardExecutiveInsightsV2';
  */
 export function DashboardEnhancedPage() {
   return (
-    <div className="space-y-8">
+    <div className="dashboard-compact-cleanup space-y-8">
       <VisualDashboardPage />
       <DashboardExecutiveInsightsV2 />
     </div>
