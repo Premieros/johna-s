@@ -8,6 +8,17 @@ const HOST = '127.0.0.1';
 const PORT = Number(process.env.JOHNS_PRINT_PORT || 17654);
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
 const MAX_BODY = 256 * 1024;
+const POWERSHELL_TIMEOUT_MS = Number(process.env.JOHNS_PRINT_PS_TIMEOUT_MS || 15000);
+const PRINTER_CACHE_TTL_MS = Number(process.env.JOHNS_PRINT_PRINTER_CACHE_TTL_MS || 5000);
+const RETRY_ATTEMPTS = Math.max(1, Number(process.env.JOHNS_PRINT_RETRY_ATTEMPTS || 3));
+const RETRY_BASE_DELAY_MS = Math.max(50, Number(process.env.JOHNS_PRINT_RETRY_DELAY_MS || 350));
+const DEDUPE_TTL_MS = Math.max(60000, Number(process.env.JOHNS_PRINT_DEDUPE_TTL_MS || 10 * 60 * 1000));
+const MAX_DEDUPE_ENTRIES = 1000;
+
+const printerQueues = new Map();
+const inFlightJobs = new Map();
+const completedJobs = new Map();
+let printerCache = { value: [], expiresAt: 0 };
 
 function originAllowed(origin) {
   if (!origin) return true;
@@ -53,25 +64,49 @@ function saveConfig(routes) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify({ routes }, null, 2) + '\n', 'utf8');
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function ps(script, args = []) {
   return new Promise((resolve, reject) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script, ...args], { windowsHide: true }, (err, stdout, stderr) => {
-      if (err) return reject(new Error((stderr || err.message || '').trim()));
-      resolve(stdout);
-    });
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script, ...args],
+      { windowsHide: true, timeout: POWERSHELL_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+      (err, stdout, stderr) => {
+        if (err) {
+          const detail = String(stderr || err.message || '').trim();
+          if (err.killed || err.signal) return reject(new Error(`POWERSHELL_TIMEOUT${detail ? `: ${detail}` : ''}`));
+          return reject(new Error(detail || 'POWERSHELL_FAILED'));
+        }
+        resolve(stdout);
+      },
+    );
   });
 }
 
-async function listPrinters() {
+async function listPrinters(force = false) {
+  const now = Date.now();
+  if (!force && printerCache.expiresAt > now) return printerCache.value;
   const out = await ps("Get-Printer | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress");
   const parsed = JSON.parse(String(out || '[]').trim() || '[]');
-  if (Array.isArray(parsed)) return parsed.map(String).sort();
-  return parsed ? [String(parsed)] : [];
+  const printers = Array.isArray(parsed) ? parsed.map(String).sort() : (parsed ? [String(parsed)] : []);
+  printerCache = { value: printers, expiresAt: now + PRINTER_CACHE_TTL_MS };
+  return printers;
 }
 
-async function printText(printerName, text) {
-  const printers = await listPrinters();
+function invalidatePrinterCache() {
+  printerCache = { value: [], expiresAt: 0 };
+}
+
+async function assertPrinterInstalled(printerName, force = false) {
+  const printers = await listPrinters(force);
   if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
+}
+
+async function printTextOnce(printerName, text) {
+  await assertPrinterInstalled(printerName);
   const tmp = path.join(os.tmpdir(), `johns-ticket-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
   fs.writeFileSync(tmp, text, 'utf8');
   try {
@@ -82,9 +117,8 @@ async function printText(printerName, text) {
   }
 }
 
-async function kickDrawer(printerName) {
-  const printers = await listPrinters();
-  if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
+async function kickDrawerOnce(printerName) {
+  await assertPrinterInstalled(printerName);
   const tmp = path.join(os.tmpdir(), `johns-drawer-${Date.now()}-${Math.random().toString(16).slice(2)}.bin`);
   fs.writeFileSync(tmp, Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]));
   try {
@@ -93,6 +127,74 @@ async function kickDrawer(printerName) {
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
+}
+
+async function withRetry(operation) {
+  let lastError;
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation(attempt);
+    } catch (err) {
+      lastError = err;
+      invalidatePrinterCache();
+      if (attempt >= RETRY_ATTEMPTS) break;
+      await sleep(RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
+  throw lastError || new Error('PRINT_FAILED');
+}
+
+function enqueuePrinter(printerName, operation) {
+  const previous = printerQueues.get(printerName) || Promise.resolve();
+  const current = previous.catch(() => {}).then(operation);
+  printerQueues.set(printerName, current);
+  current.finally(() => {
+    if (printerQueues.get(printerName) === current) printerQueues.delete(printerName);
+  }).catch(() => {});
+  return current;
+}
+
+function cleanupDedupe() {
+  const now = Date.now();
+  for (const [jobId, expiresAt] of completedJobs.entries()) {
+    if (expiresAt <= now) completedJobs.delete(jobId);
+  }
+  while (completedJobs.size > MAX_DEDUPE_ENTRIES) {
+    const oldest = completedJobs.keys().next().value;
+    if (!oldest) break;
+    completedJobs.delete(oldest);
+  }
+}
+
+function normalizeJobId(body) {
+  const raw = body.jobId ?? body.job_id ?? null;
+  if (raw == null || raw === '') return null;
+  const jobId = String(raw).trim();
+  if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(jobId)) throw new Error('INVALID_JOB_ID');
+  return jobId;
+}
+
+async function runPrintJob({ jobId, printer, text }) {
+  cleanupDedupe();
+  if (jobId && completedJobs.has(jobId)) return { deduplicated: true };
+  if (jobId && inFlightJobs.has(jobId)) {
+    await inFlightJobs.get(jobId);
+    return { deduplicated: true };
+  }
+
+  const task = enqueuePrinter(printer, () => withRetry(() => printTextOnce(printer, text)));
+  if (jobId) inFlightJobs.set(jobId, task);
+  try {
+    await task;
+    if (jobId) completedJobs.set(jobId, Date.now() + DEDUPE_TTL_MS);
+    return { deduplicated: false };
+  } finally {
+    if (jobId && inFlightJobs.get(jobId) === task) inFlightJobs.delete(jobId);
+  }
+}
+
+async function runDrawerJob(printer) {
+  return enqueuePrinter(printer, () => withRetry(() => kickDrawerOnce(printer)));
 }
 
 function readBody(req) {
@@ -133,7 +235,7 @@ async function load(){const p=await fetch('/printers').then(r=>r.json());const c
 function esc(s){return String(s).replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function render(){document.getElementById('status').innerHTML='<span class="ok">الخدمة متصلة</span> — '+printers.length+' طابعة';const extra=Object.keys(config.routes||{}).filter(x=>!stations.includes(x));stations=[...stations,...extra];document.getElementById('routes').innerHTML=stations.map(s=>'<label>'+esc(s)+'</label><select data-st="'+esc(s)+'"><option value="">بدون طابعة / استخدم fallback</option>'+printers.map(p=>'<option '+((config.routes||{})[s]===p?'selected':'')+'>'+esc(p)+'</option>').join('')+'</select>').join('');}
 async function save(){const routes={};document.querySelectorAll('select[data-st]').forEach(x=>{if(x.value)routes[x.dataset.st]=x.value});const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({routes})});config=await r.json();alert('تم الحفظ');}
-async function testPrint(){const s=document.querySelector('select[data-st]');if(!s||!s.value)return alert('اختر طابعة أولاً');const r=await fetch('/print',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({station:s.dataset.st,printer:s.value,text:'JOHNS PRINT TEST\\nStation: '+s.dataset.st+'\\nPrinter: '+s.value+'\\n'+new Date().toLocaleString()+'\\n\\n'})}).then(r=>r.json());alert(r.success?'تم إرسال الاختبار للطابعة':(r.error||'فشل الطباعة'));}
+async function testPrint(){const s=document.querySelector('select[data-st]');if(!s||!s.value)return alert('اختر طابعة أولاً');const r=await fetch('/print',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({station:s.dataset.st,printer:s.value,jobId:'test-'+Date.now(),text:'JOHNS PRINT TEST\\nStation: '+s.dataset.st+'\\nPrinter: '+s.value+'\\n'+new Date().toLocaleString()+'\\n\\n'})}).then(r=>r.json());alert(r.success?'تم إرسال الاختبار للطابعة':(r.error||'فشل الطباعة'));}
 load().catch(e=>document.getElementById('status').textContent='خطأ: '+e.message);
 </script></body></html>`;
 }
@@ -153,12 +255,22 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
     if (req.method === 'GET' && url.pathname === '/') return html(res, configPage());
-    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 1 });
+    if (req.method === 'GET' && url.pathname === '/health') {
+      cleanupDedupe();
+      return json(res, 200, {
+        ok: true,
+        service: 'johns-print-agent',
+        version: 2,
+        activePrinterQueues: printerQueues.size,
+        inFlightJobs: inFlightJobs.size,
+        dedupeEntries: completedJobs.size,
+      });
+    }
     if (req.method === 'GET' && url.pathname === '/printers') return json(res, 200, { printers: await listPrinters() });
     if (req.method === 'GET' && url.pathname === '/config') return json(res, 200, readConfig());
     if (req.method === 'POST' && url.pathname === '/config') {
       const body = await readBody(req);
-      const printers = await listPrinters();
+      const printers = await listPrinters(true);
       const routes = {};
       for (const [station, printer] of Object.entries(body.routes || {})) {
         if (!/^[a-zA-Z0-9_-]{1,64}$/.test(station)) return json(res, 400, { success: false, error: 'INVALID_STATION' });
@@ -174,18 +286,21 @@ const server = http.createServer(async (req, res) => {
       const text = String(body.text || '');
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(station)) return json(res, 400, { success: false, error: 'INVALID_STATION' });
       if (!text || text.length > 200000) return json(res, 400, { success: false, error: 'INVALID_TEXT' });
+      let jobId;
+      try { jobId = normalizeJobId(body); }
+      catch (err) { return json(res, 400, { success: false, error: err.message }); }
       const config = readConfig();
       const printer = body.printer ? String(body.printer) : config.routes[station];
       if (!printer) return json(res, 409, { success: false, error: 'STATION_NOT_CONFIGURED', station });
-      await printText(printer, text);
-      return json(res, 200, { success: true, station, printer });
+      const result = await runPrintJob({ jobId, printer, text });
+      return json(res, 200, { success: true, station, printer, jobId, deduplicated: result.deduplicated });
     }
     if (req.method === 'POST' && url.pathname === '/drawer') {
       const body = await readBody(req);
       const config = readConfig();
       const printer = body.printer ? String(body.printer).trim() : String(config.routes.cashier || config.routes.receipt || config.routes.main || '').trim();
       if (!printer) return json(res, 409, { success: false, error: 'DRAWER_PRINTER_NOT_CONFIGURED' });
-      await kickDrawer(printer);
+      await runDrawerJob(printer);
       return json(res, 200, { success: true, printer });
     }
     return json(res, 404, { error: 'NOT_FOUND' });
@@ -195,6 +310,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Johns Print Service: http://${HOST}:${PORT}`);
+  console.log(`Johns Print Service v2: http://${HOST}:${PORT}`);
   console.log(`Printer setup: http://${HOST}:${PORT}/`);
 });
