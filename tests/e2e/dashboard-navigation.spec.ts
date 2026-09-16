@@ -108,12 +108,12 @@ test.describe('dashboard and navigation actions', () => {
     await expect(page.locator('main').first()).toBeVisible();
     await expect(page.locator(`a[href="#/dashboard"]`).first()).toBeVisible();
     await expect(page.locator(`a[href="#/pos"]`).first()).toBeVisible();
-    await expect(page.locator(`a[href="#/inventory"]`).first()).toBeVisible();
+    await expect(page.locator(`a[href="#/inventory-center"]`).first()).toBeVisible();
     expect(consoleErrors).toEqual([]);
   });
 
-  test('top navigation actions keep stable route targets', async ({ page }) => {
-    const cases = ['/branches', '/inventory', '/pos'];
+  test('sidebar navigation actions keep stable route targets', async ({ page }) => {
+    const cases = ['/branches', '/inventory-center', '/pos'];
     for (const route of cases) {
       await clickRouteLink(page, route);
       await expect(page).toHaveURL(new RegExp(`#${route}$`));
