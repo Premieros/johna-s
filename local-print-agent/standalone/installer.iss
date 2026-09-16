@@ -1,5 +1,5 @@
 #define MyAppName "Johns Print Agent"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.1.1"
 #define MyAppExeName "JohnsPrintAgent.exe"
 
 [Setup]
@@ -11,7 +11,7 @@ DefaultDirName={localappdata}\Programs\JohnsPrintAgent
 DefaultGroupName=Johns Print Agent
 PrivilegesRequired=lowest
 OutputDir=..\..\build
-OutputBaseFilename=JohnsPrintAgent-Setup-2.1.0
+OutputBaseFilename=JohnsPrintAgent-Setup-2.1.1
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
