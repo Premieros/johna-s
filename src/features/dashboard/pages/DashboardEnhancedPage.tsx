@@ -1,3 +1,4 @@
+import '../dashboardCompact.css';
 import { VisualDashboardPage } from './VisualDashboardPage';
 import { DashboardExecutiveInsightsV2 } from './DashboardExecutiveInsightsV2';
 
