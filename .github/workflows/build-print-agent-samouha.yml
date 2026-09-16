@@ -6,6 +6,7 @@ on:
       - 'local-print-agent/standalone/agent-samouha.cjs'
       - 'local-print-agent/standalone/installer-samouha.iss'
       - 'local-print-agent/standalone/run-hidden-samouha.vbs'
+      - 'local-print-agent/standalone/open-settings-samouha.vbs'
       - '.github/workflows/build-print-agent-samouha.yml'
   workflow_dispatch:
 
@@ -64,14 +65,14 @@ jobs:
         shell: pwsh
         run: |
           Get-FileHash build-samouha\JohnsPrintAgent-Samouha.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Samouha.exe" } | Set-Content build-samouha\SHA256SUMS.txt
-          Get-FileHash build-samouha\JohnsPrintAgent-Samouha-Setup-2.1.1.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Samouha-Setup-2.1.1.exe" } | Add-Content build-samouha\SHA256SUMS.txt
+          Get-FileHash build-samouha\JohnsPrintAgent-Samouha-Setup-2.1.2.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Samouha-Setup-2.1.2.exe" } | Add-Content build-samouha\SHA256SUMS.txt
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JohnsPrintAgent-Samouha-2.1.1-Windows
+          name: JohnsPrintAgent-Samouha-2.1.2-Windows
           path: |
-            build-samouha/JohnsPrintAgent-Samouha-Setup-2.1.1.exe
+            build-samouha/JohnsPrintAgent-Samouha-Setup-2.1.2.exe
             build-samouha/JohnsPrintAgent-Samouha.exe
             build-samouha/SHA256SUMS.txt
           if-no-files-found: error
