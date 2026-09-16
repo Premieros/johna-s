@@ -97,7 +97,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'pos.payment.take': { ar: 'تحصيل مدفوعات نقطة البيع', en: 'Take POS Payments' },
   'pos.order.split': { ar: 'فصل الطلب', en: 'Split POS Orders' },
   'pos.order.transfer': { ar: 'نقل أو دمج الطلب', en: 'Transfer or Merge POS Orders' },
-  'pos.receipt.print': { ar: 'طباعة إيصال البيع أول مرة', en: 'Print First Sale Receipt' },
+  'pos.receipt.print': { ar: 'إظهار زر طباعة إيصال البيع (أول مرة)', en: 'Show Sale Receipt Print Button (First Print)' },
   'pos.discount': { ar: 'منح خصومات من نقطة البيع', en: 'Give POS Discounts' },
   'pos.change_price': { ar: 'تغيير سعر البيع من نقطة البيع', en: 'Change Sale Price in POS' },
   'pos.reprint': { ar: 'إعادة طباعة فاتورة بدون موافقة', en: 'Reprint Receipt Without Approval' },

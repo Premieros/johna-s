@@ -15,10 +15,19 @@ describe('POS customer receipt print contract', () => {
   });
 
   it('gates the visible print action with pos.receipt.print', () => {
-    expect(header).toContain('perms.canPrint && canPrintReceipt');
+    expect(header).toContain('{perms.canPrint && (');
+    expect(header).toContain('disabled={!canPrintReceipt}');
+    expect(header).not.toContain('perms.canPrint && canPrintReceipt');
     expect(header).not.toContain('perms.canPrintKitchen && itemsCount > 0');
     expect(workspace).toContain('data-testid="pos-receipt-print"');
     expect(workspace).toContain('{perms.canPrint && (');
+  });
+
+  it('exposes an explicit permission checkbox label for the sale receipt print button', () => {
+    const defs = fs.readFileSync(path.join(root, 'src/lib/permissionDefs.ts'), 'utf8');
+    expect(defs).toContain("'pos.receipt.print'");
+    expect(defs).toContain('إظهار زر طباعة إيصال البيع (أول مرة)');
+    expect(defs).toContain("permissions: ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print'");
   });
 
   it('keeps the existing single-print and manager-approved reprint authorization', () => {
