@@ -4,6 +4,7 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
+import { formatNumber } from '@/lib/format';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import type { InventoryUnit, Product } from '@/lib/types';
@@ -337,7 +338,7 @@ export function ProductModifiersPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <ChevronDown className="w-4 h-4 shrink-0" />
                         <span className="font-bold truncate">{option.name || (isAr ? 'اختيار جديد' : 'New option')}</span>
-                        {option.price_delta !== 0 && <span className="text-xs text-ui-muted">({Number(option.price_delta).toFixed(2)})</span>}
+                        {option.price_delta !== 0 && <span className="text-xs text-ui-muted">({formatNumber(Number(option.price_delta), 1)})</span>}
                       </div>
                       <button type="button" onClick={(e) => { e.preventDefault(); updateGroup(gi, { options: group.options.filter((_, index) => index !== oi) }); }} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
                     </summary>
