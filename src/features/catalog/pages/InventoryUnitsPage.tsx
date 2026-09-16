@@ -12,6 +12,7 @@ import { Input, Textarea } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { logAudit } from '@/lib/audit';
+import { formatNumber } from '@/lib/format';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
@@ -177,8 +178,8 @@ export function InventoryUnitsPage() {
   const columns: Column<InventoryUnit>[] = [
     { key: 'code', header: t('code'), render: (unit) => <span className="font-mono text-sm">{unit.code}</span> },
     { key: 'name', header: isAr ? 'اسم المصنع' : 'Manufactured item', render: (unit) => <span className="font-medium text-ui-text">{unit.name}</span> },
-    { key: 'cost_price', header: t('costPrice'), render: (unit) => <span className="text-sm">{Number(unit.cost_price).toFixed(2)}</span> },
-    { key: 'sale_price', header: t('salePrice'), render: (unit) => <span className="text-sm">{Number(unit.sale_price).toFixed(2)}</span> },
+    { key: 'cost_price', header: t('costPrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.cost_price), 1)}</span> },
+    { key: 'sale_price', header: t('salePrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.sale_price), 1)}</span> },
     { key: 'actions', header: t('actions'), render: (unit) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
       {unit.unit_type === 'manufactured' && can('production.manage') && <button onClick={() => openRecipe(unit)} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={isAr ? 'وصفة المصنع' : 'Manufactured item recipe'}><Beaker className="w-4 h-4" /></button>}
       {can('raw_materials.manage') && <button onClick={() => openEdit(unit)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>}
