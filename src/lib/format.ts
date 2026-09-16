@@ -1,7 +1,12 @@
 import type { Language } from './types';
 
 export function formatCurrency(amount: number, currency = 'EGP', lang: Language = 'ar'): string {
-  const value = Number(amount || 0).toFixed(2);
+  const numeric = Number(amount || 0);
+  if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.0000001) return '-';
+  const value = numeric.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  });
   const symbolMap: Record<string, { ar: string; en: string }> = {
     EGP: { ar: 'ج.م', en: 'EGP' },
     SAR: { ar: 'ر.س', en: 'SAR' },
@@ -13,7 +18,9 @@ export function formatCurrency(amount: number, currency = 'EGP', lang: Language 
 }
 
 export function formatNumber(value: number, decimals = 2): string {
-  return Number(value || 0).toLocaleString('en-US', {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.0000001) return '-';
+  return numeric.toLocaleString('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   });
