@@ -271,7 +271,18 @@ export function DataTable<T extends { id?: string }>({
     const active = isColumnFiltered(col.key);
 
     return (
-      <details className="relative" onClick={(event) => event.stopPropagation()}>
+      <details
+        data-column-filter="true"
+        className="relative"
+        onToggle={(event) => {
+          if (!event.currentTarget.open) return;
+          const table = event.currentTarget.closest('[data-testid="data-table"]');
+          table?.querySelectorAll('details[data-column-filter="true"][open]').forEach((node) => {
+            if (node !== event.currentTarget) (node as HTMLDetailsElement).open = false;
+          });
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
         <summary
           className={`flex cursor-pointer list-none items-center justify-center rounded-md border p-1 transition-colors ${active ? 'border-ui-primary bg-ui-primary-soft text-ui-primary' : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-surface'}`}
           aria-label={isRtl ? 'خيارات فلتر العمود' : 'Column filter options'}
@@ -281,7 +292,7 @@ export function DataTable<T extends { id?: string }>({
             <path fillRule="evenodd" d="M3.25 5.5a.75.75 0 01.75-.75h12a.75.75 0 01.53 1.28l-4.78 4.78v3.94a.75.75 0 01-.42.67l-2 1A.75.75 0 018.25 15v-4.19L3.47 6.03a.75.75 0 01-.22-.53z" clipRule="evenodd" />
           </svg>
         </summary>
-        <div className={`absolute z-50 mt-1 w-72 rounded-xl border border-ui-border bg-ui-surface p-2 text-start normal-case tracking-normal shadow-xl ${isRtl ? 'end-0' : 'start-0'}`}>
+        <div className="absolute start-0 z-50 mt-1 w-72 rounded-xl border border-ui-border bg-ui-surface p-2 text-start normal-case tracking-normal shadow-xl">
           <div className="grid gap-1 border-b border-ui-border pb-2">
             <button
               type="button"
