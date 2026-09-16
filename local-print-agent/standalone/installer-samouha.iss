@@ -1,5 +1,5 @@
 #define MyAppName "Johns Print Agent - Samouha"
-#define MyAppVersion "2.1.1"
+#define MyAppVersion "2.1.2"
 #define MyAppExeName "JohnsPrintAgent-Samouha.exe"
 
 [Setup]
@@ -11,7 +11,7 @@ DefaultDirName={localappdata}\Programs\JohnsPrintAgentSamouha
 DefaultGroupName=Johns Print Agent - Samouha
 PrivilegesRequired=lowest
 OutputDir=..\..\build-samouha
-OutputBaseFilename=JohnsPrintAgent-Samouha-Setup-2.1.1
+OutputBaseFilename=JohnsPrintAgent-Samouha-Setup-2.1.2
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -24,14 +24,16 @@ ArchitecturesInstallIn64BitMode=x64compatible
 [Files]
 Source: "..\..\build-samouha\JohnsPrintAgent-Samouha.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "run-hidden-samouha.vbs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "open-settings-samouha.vbs"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\إعداد طابعات فرع سموحة"; Filename: "{cmd}"; Parameters: "/c start "" http://127.0.0.1:17654/"; WorkingDir: "{app}"
+Name: "{group}\إعداد طابعات فرع سموحة"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\open-settings-samouha.vbs"""; WorkingDir: "{app}"
+Name: "{userdesktop}\إعداد طابعات فرع سموحة"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\open-settings-samouha.vbs"""; WorkingDir: "{app}"
 Name: "{userstartup}\Johns Print Agent - Samouha"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\run-hidden-samouha.vbs"""; WorkingDir: "{app}"
 
 [Run]
 Filename: "{sys}\wscript.exe"; Parameters: """{app}\run-hidden-samouha.vbs"""; Description: "تشغيل خدمة طباعة فرع سموحة"; Flags: nowait postinstall skipifsilent
-Filename: "{cmd}"; Parameters: "/c timeout /t 2 /nobreak >nul & start "" http://127.0.0.1:17654/"; Description: "فتح إعداد طابعات سموحة"; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\open-settings-samouha.vbs"""; Description: "فتح إعداد طابعات سموحة"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/c taskkill /IM JohnsPrintAgent-Samouha.exe /F >nul 2>nul"; Flags: runhidden; RunOnceId: "StopSamouhaAgent"
