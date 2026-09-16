@@ -1,17 +1,14 @@
 import '../dashboardCompact.css';
-import { VisualDashboardPage } from './VisualDashboardPage';
-import { DashboardExecutiveInsightsV2 } from './DashboardExecutiveInsightsV2';
+import { DashboardDataPage } from './DashboardDataPage';
 
 /**
- * 6H visual rebuild entry point.
- * Business/data concerns remain isolated in the existing hooks/API layer;
- * this component owns the dashboard surface and executive management panel.
+ * Unified dashboard entry point.
+ * All visible business numbers are loaded from the same period/branch-aware data surface.
  */
 export function DashboardEnhancedPage() {
   return (
-    <div className="dashboard-compact-cleanup space-y-8">
-      <VisualDashboardPage />
-      <DashboardExecutiveInsightsV2 />
+    <div className="dashboard-compact-cleanup">
+      <DashboardDataPage />
     </div>
   );
 }
