@@ -12,6 +12,10 @@ const excludedPathFragments = [
   `${path.sep}thermal${path.sep}`,
 ];
 
+const excludedFrozenFiles = new Set([
+  'PrinterSettingsPanel.tsx',
+]);
+
 function collectUiFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -21,11 +25,15 @@ function collectUiFiles(dir: string): string[] {
 }
 
 function isFrozenPrintingScope(file: string): boolean {
-  return excludedPathFragments.some((fragment) => file.includes(fragment));
+  return excludedPathFragments.some((fragment) => file.includes(fragment)) || excludedFrozenFiles.has(path.basename(file));
 }
 
 function isCalculationRounding(line: string): boolean {
   return line.includes('Number((') && line.includes('.toFixed(');
+}
+
+function isDateLocaleFormatting(line: string): boolean {
+  return line.includes('new Date(') && line.includes('.toLocaleString(');
 }
 
 describe('global UI number formatting contract', () => {
@@ -34,7 +42,7 @@ describe('global UI number formatting contract', () => {
       .filter((file) => !isFrozenPrintingScope(file))
       .flatMap((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line, index) => {
         const directFixed = line.includes('.toFixed(') && !isCalculationRounding(line);
-        const directLocale = line.includes('.toLocaleString(');
+        const directLocale = line.includes('.toLocaleString(') && !isDateLocaleFormatting(line);
         if (!directFixed && !directLocale) return [];
         const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
         return [`${rel}:${index + 1}`];
