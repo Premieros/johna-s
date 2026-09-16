@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { Plus, Edit2, Trash2, Download, Upload } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -15,7 +15,7 @@ import { Modal } from '@/components/Modal';
 import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatCurrency } from '@/lib/format';
-import { exportToExcel, importFromExcel } from '@/lib/excel';
+import { importFromExcel } from '@/lib/excel';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
@@ -41,7 +41,6 @@ export function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openBalances, setOpenBalances] = useState<Record<string, number>>({});
-  const fileRef = useRef<HTMLInputElement | null>(null);
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
@@ -99,11 +98,7 @@ export function CustomersPage() {
     reloadCustomers();
   };
 
-  const handleExport = () => exportToExcel(items.map((c) => ({ Name: c.name, Branch: branches.find((b) => b.id === c.branch_id)?.name || '', Phone: c.phone || '', Email: c.email || '', Address: c.address || '', TaxNumber: c.tax_number || '', Balance: balanceFor(c) })), 'customers');
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImport = async (file: File) => {
     try {
       const rows = await importFromExcel(file);
       const payload = rows.map((r) => ({ name: String(r.Name || r.name || ''), phone: String(r.Phone || r.phone || ''), email: String(r.Email || r.email || ''), address: String(r.Address || r.address || ''), tax_number: String(r.TaxNumber || ''), balance: 0, branch_id: branchFilter || branches[0]?.id || null })).filter((r) => r.name);
@@ -115,15 +110,15 @@ export function CustomersPage() {
 
   const columns: Column<Customer>[] = [
     { key: 'name', header: t('name'), render: (c) => <span className="font-medium text-ui-text">{c.name}</span> },
-    { key: 'branch', header: t('branch'), render: (c) => <BranchBadge name={branches.find((b) => b.id === c.branch_id)?.name || '-'} /> },
+    { key: 'branch', header: t('branch'), filterValue: (c) => branches.find((b) => b.id === c.branch_id)?.name || '', exportValue: (c) => branches.find((b) => b.id === c.branch_id)?.name || '', render: (c) => <BranchBadge name={branches.find((b) => b.id === c.branch_id)?.name || '-'} /> },
     { key: 'phone', header: t('phone'), render: (c) => c.phone || '-' },
     { key: 'email', header: t('emailField'), render: (c) => c.email || '-' },
     { key: 'address', header: t('address'), render: (c) => c.address || '-' },
-    { key: 'balance', header: t('amount'), render: (c) => {
+    { key: 'balance', header: t('amount'), filterValue: balanceFor, exportValue: balanceFor, render: (c) => {
       const balance = balanceFor(c);
       return <span className={balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(balance, currency, lang)}</span>;
     } },
-    { key: 'actions', header: t('actions'), render: (c) => (
+    { key: 'actions', header: t('actions'), filterable: false, render: (c) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         {can('customers.manage') && (
           <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
@@ -137,27 +132,24 @@ export function CustomersPage() {
 
   return (
     <DesignSurface testId="customers-page">
-      <DesignPageHeader title={t('customers')} actions={
-        <>
-          {can('customers.manage') && (
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} data-testid="customers-import" />
-          )}
-          {can('customers.manage') && (
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} data-testid="customers-import-button"><Upload className="w-4 h-4" /> {t('importExcel')}</Button>
-          )}
-          {can('customers.manage') && (
-            <Button variant="outline" size="sm" onClick={handleExport} data-testid="customers-export"><Download className="w-4 h-4" /> {t('exportExcel')}</Button>
-          )}
-          {can('customers.manage') && (
-            <Button size="sm" onClick={openAdd} data-testid="customers-add"><Plus className="w-4 h-4" /> {t('add')}</Button>
-          )}
-        </>
-      } />
+      <DesignPageHeader title={t('customers')} actions={can('customers.manage') ? <Button size="sm" onClick={openAdd} data-testid="customers-add"><Plus className="w-4 h-4" /> {t('add')}</Button> : undefined} />
       <DesignPanel testId="customers-search-panel">
         <DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="customers-search" />
       </DesignPanel>
       <DesignPanel testId="customers-table-panel">
-        <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} onRowClick={openEdit} />
+        <DataTable
+          tableId="customers"
+          columns={columns}
+          data={filtered}
+          loading={loading}
+          emptyMessage={t('noData')}
+          onRowClick={can('customers.manage') ? openEdit : undefined}
+          enableExport={can('customers.export')}
+          enableTemplate={can('customers.manage')}
+          onImportFile={can('customers.manage') ? handleImport : undefined}
+          exportFilename="customers"
+          templateFilename="customers-template"
+        />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('edit') : t('add')}>
