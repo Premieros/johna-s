@@ -691,7 +691,8 @@ export function usePosOrder(input: UsePosOrderInput) {
             tableName: activeTable?.name || null,
             orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
             guestCount,
-            items: (res.sent || []).map((i) => ({ name: i.product_name || '—', qty: Number(i.quantity), unit_name: i.unit_name })),
+            orderNote: orderNotes || null,
+            items: (res.sent || []).map((i) => ({ name: i.product_name || '—', qty: Number(i.quantity), unit_name: i.unit_name, note: i.notes || null })),
             s: effSettings,
             isAr,
           });
@@ -704,7 +705,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setKitchenSending(false);
     }
-  }, [cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, t, isAr, onInventoryChanged, show]);
+  }, [cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, orderNotes, t, isAr, onInventoryChanged, show]);
 
   const printKitchenTicket = useCallback(() => {
     if (cart.length === 0 || !effSettings) return;
@@ -713,12 +714,13 @@ export function usePosOrder(input: UsePosOrderInput) {
       tableName: activeTable?.name || null,
       orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
       guestCount,
-      items: cart.map((i) => ({ name: i.product.name, qty: i.quantity, unit_name: i.unit_name })),
+      orderNote: orderNotes || null,
+      items: cart.map((i) => ({ name: i.product.name, qty: i.quantity, unit_name: i.unit_name, note: i.item_note || null })),
       s: effSettings,
       isAr,
     });
     openPrintWindow(html, effSettings.receipt_width_mm || 80);
-  }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, t, isAr]);
+  }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, orderNotes, t, isAr]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
     if (cart.length === 0 || completing) return false;
