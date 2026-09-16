@@ -10,6 +10,7 @@ import { timeAgo } from '../../utils/timeAgo';
 import { OrderTypePill } from '../order/OrderTypePill';
 import { OrderStageBadge } from '../order/OrderStageBadge';
 import { orderOperatorName } from '../../utils/operatorName';
+import { usePosPermissions } from '../../hooks/usePosPermissions';
 
 interface ActiveOrdersDrawerProps {
   open: boolean;
@@ -35,6 +36,7 @@ export function ActiveOrdersDrawer({
 }: ActiveOrdersDrawerProps) {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
+  const perms = usePosPermissions();
   const [category, setCategory] = useState<ActiveCategory>('all');
   const [query, setQuery] = useState('');
 
@@ -164,6 +166,7 @@ export function ActiveOrdersDrawer({
               const ctx = orderContextText(order, tableById, customerById);
               const ready = stage === 'ready';
               const operatorName = orderOperatorName(order);
+              const hasKitchenSend = (kitchenSendsByOrder[order.id]?.length || 0) > 0;
               return (
                 <div key={order.id} className="p-3 rounded-xl border border-ui-border bg-ui-page-alt hover:border-ui-accent transition-colors">
                   <div className="flex items-center justify-between gap-2">
@@ -194,17 +197,17 @@ export function ActiveOrdersDrawer({
 
                   <div className="flex items-center gap-1.5 mt-2">
                     <button
-                      onClick={() => (ready ? onPay(order) : onResume(order))}
+                      onClick={() => (ready && perms.canPay && hasKitchenSend ? onPay(order) : onResume(order))}
                       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all active:scale-95 ${
-                        ready
+                        ready && perms.canPay && hasKitchenSend
                           ? 'bg-ui-success text-ui-primary-fg'
                           : 'bg-ui-primary text-ui-primary-fg'
                       }`}
                     >
-                      {ready ? <Banknote className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                      {ready ? t('payOrder') : t('resumeOrder')}
+                      {ready && perms.canPay && hasKitchenSend ? <Banknote className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      {ready && perms.canPay && hasKitchenSend ? t('payOrder') : t('resumeOrder')}
                     </button>
-                    {!ready && (
+                    {!ready && perms.canPay && hasKitchenSend && (
                       <button
                         onClick={() => onPay(order)}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-ui-success text-ui-primary-fg text-[11px] font-bold transition-all active:scale-95"
@@ -213,7 +216,7 @@ export function ActiveOrdersDrawer({
                         {t('payOrder')}
                       </button>
                     )}
-                    {order.status === 'held' && (
+                    {order.status === 'held' && perms.canCancelOrder && (
                       <button
                         onClick={() => onCancel(order)}
                         className="ms-auto p-1.5 rounded-lg text-ui-subtle hover:text-ui-danger hover:bg-ui-danger/10 transition-colors"
