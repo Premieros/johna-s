@@ -1,0 +1,100 @@
+name: Temporary kitchen ticket fix
+
+on:
+  push:
+    branches:
+      - fix/kitchen-ticket-notes-paper-height-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/kitchen-ticket-notes-paper-height-20260916
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply targeted kitchen ticket changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          printing = Path('src/features/pos/utils/printing.ts')
+          text = printing.read_text()
+          text = text.replace(
+            "  items: { name: string; qty: number; unit_name?: string | null }[];\n  s: Settings;",
+            "  items: { name: string; qty: number; unit_name?: string | null; note?: string | null }[];\n  orderNote?: string | null;\n  s: Settings;",
+            1,
+          )
+          text = text.replace(
+            "  const { orderNumber, tableName, orderTypeLabel, guestCount, items, isAr } = params;",
+            "  const { orderNumber, tableName, orderTypeLabel, guestCount, items, orderNote, isAr } = params;",
+            1,
+          )
+          old = """  const estimatedItemMm = items.reduce((sum, item) => {\n    const wrapAt = compact ? 16 : 24;\n    const nameLines = Math.max(1, Math.ceil(String(item.name || '').length / wrapAt));\n    return sum + 12 + (nameLines * 5.5);\n  }, 0);\n  const pageHeightMm = Math.max(80, Math.ceil(38 + (metaRows * 6) + estimatedItemMm + 14));\n  const rows = items\n    .map((i) => `<section class=\\\"item-row\\\"><div class=\\\"item-line\\\"><strong class=\\\"qty-badge\\\">${escapeHtml(i.qty)}×</strong><div class=\\\"item-name\\\">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class=\\\"unit\\\">(${escapeHtml(i.unit_name)})</span>` : ''}</div></div><div class=\\\"qty-caption\\\">${isAr ? 'الكمية' : 'Qty'}: <strong>${escapeHtml(i.qty)}</strong></div></section>`)\n    .join('');"""
+          new = """  const estimateLines = (value: unknown, wrapAt: number) => {\n    const normalized = String(value || '').trim();\n    if (!normalized) return 0;\n    return normalized.split(/\\r?\\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / wrapAt)), 0);\n  };\n  const estimatedItemMm = items.reduce((sum, item) => {\n    const wrapAt = compact ? 16 : 24;\n    const nameLines = Math.max(1, estimateLines(item.name, wrapAt));\n    const noteLines = estimateLines(item.note, compact ? 20 : 28);\n    return sum + 7.5 + (nameLines * 4.8) + (noteLines * 4.2);\n  }, 0);\n  const orderNoteLines = estimateLines(orderNote, compact ? 22 : 30);\n  const pageHeightMm = Math.max(45, Math.ceil(25 + (metaRows * 5) + (orderNoteLines * 4.2) + estimatedItemMm + 9));\n  const rows = items\n    .map((i) => `<section class=\\\"item-row\\\"><div class=\\\"item-line\\\"><strong class=\\\"qty-badge\\\">${escapeHtml(i.qty)}×</strong><div class=\\\"item-name\\\">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class=\\\"unit\\\">(${escapeHtml(i.unit_name)})</span>` : ''}</div></div><div class=\\\"qty-caption\\\">${isAr ? 'الكمية' : 'Qty'}: <strong>${escapeHtml(i.qty)}</strong></div>${i.note ? `<div class=\\\"item-note\\\"><strong>${isAr ? 'ملاحظة' : 'Note'}:</strong> ${escapeHtml(i.note)}</div>` : ''}</section>`)\n    .join('');"""
+          if old not in text:
+            raise SystemExit('kitchen estimate block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+            "        .unit { font-size: .72em; font-weight: 700; }\n        .qty-caption {",
+            "        .unit { font-size: .72em; font-weight: 700; }\n        .item-note { margin-top: 1.2mm; padding: 1.2mm 1.5mm; border: .3mm solid #000; font-size: ${metaFontPx}px; line-height: 1.35; font-weight: 800; white-space: pre-wrap; overflow-wrap: anywhere; }\n        .order-note { margin: 1.5mm 0; padding: 1.5mm; border: .4mm solid #000; font-size: ${metaFontPx}px; line-height: 1.35; font-weight: 900; white-space: pre-wrap; overflow-wrap: anywhere; }\n        .qty-caption {",
+            1,
+          )
+          text = text.replace(
+            "        ${guestCount ? `<div class=\\\"meta-row\\\">${isAr ? 'الضيوف' : 'Guests'}: ${guestCount}</div>` : ''}\n        <div class=\\\"divider\\\"></div>\n        ${rows}",
+            "        ${guestCount ? `<div class=\\\"meta-row\\\">${isAr ? 'الضيوف' : 'Guests'}: ${guestCount}</div>` : ''}\n        ${orderNote ? `<div class=\\\"order-note\\\"><strong>${isAr ? 'ملاحظات الطلب' : 'Order notes'}:</strong> ${escapeHtml(orderNote)}</div>` : ''}\n        <div class=\\\"divider\\\"></div>\n        ${rows}",
+            1,
+          )
+          printing.write_text(text)
+
+          hook = Path('src/features/pos/hooks/usePosOrderBase.ts')
+          text = hook.read_text()
+          text = text.replace(
+            "            guestCount,\n            items: (res.sent || []).map((i) => ({ name: i.product_name || '—', qty: Number(i.quantity), unit_name: i.unit_name })),\n            s: effSettings,",
+            "            guestCount,\n            orderNote: orderNotes || null,\n            items: (res.sent || []).map((i) => ({ name: i.product_name || '—', qty: Number(i.quantity), unit_name: i.unit_name, note: i.notes || null })),\n            s: effSettings,",
+            1,
+          )
+          text = text.replace(
+            "      guestCount,\n      items: cart.map((i) => ({ name: i.product.name, qty: i.quantity, unit_name: i.unit_name })),\n      s: effSettings,",
+            "      guestCount,\n      orderNote: orderNotes || null,\n      items: cart.map((i) => ({ name: i.product.name, qty: i.quantity, unit_name: i.unit_name, note: i.item_note || null })),\n      s: effSettings,",
+            1,
+          )
+          text = text.replace(
+            "  }, [cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, t, isAr, onInventoryChanged, show]);",
+            "  }, [cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, orderNotes, t, isAr, onInventoryChanged, show]);",
+            1,
+          )
+          text = text.replace(
+            "  }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, t, isAr]);",
+            "  }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, orderNotes, t, isAr]);",
+            1,
+          )
+          hook.write_text(text)
+
+          test = Path('tests/components/kitchen-ticket-notes-paper-height.test.ts')
+          test.write_text("""import { describe, expect, it } from 'vitest';\nimport fs from 'node:fs';\nimport path from 'node:path';\n\nconst root = process.cwd();\nconst printing = fs.readFileSync(path.join(root, 'src/features/pos/utils/printing.ts'), 'utf8');\nconst hook = fs.readFileSync(path.join(root, 'src/features/pos/hooks/usePosOrderBase.ts'), 'utf8');\n\ndescribe('kitchen ticket notes and paper height', () => {\n  it('prints order and item notes in the kitchen ticket', () => {\n    expect(printing).toContain('orderNote?: string | null');\n    expect(printing).toContain('item-note');\n    expect(printing).toContain('order-note');\n    expect(hook).toContain('orderNote: orderNotes || null');\n    expect(hook).toContain('note: i.notes || null');\n    expect(hook).toContain('note: i.item_note || null');\n  });\n\n  it('uses compact content-based paper height instead of an 80mm minimum', () => {\n    expect(printing).toContain('Math.max(45, Math.ceil(');\n    expect(printing).not.toContain('Math.max(80, Math.ceil(');\n    expect(printing).toContain('orderNoteLines');\n    expect(printing).toContain('noteLines');\n  });\n});\n""")
+          PY
+      - name: Verify targeted tests and build
+        shell: bash
+        run: |
+          npm ci
+          npm run typecheck
+          npx vitest run tests/components/kitchen-ticket-notes-paper-height.test.ts
+          npm run build
+      - name: Remove temporary workflow and commit fix
+        shell: bash
+        run: |
+          rm .github/workflows/tmp-kitchen-ticket-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/pos/utils/printing.ts src/features/pos/hooks/usePosOrderBase.ts tests/components/kitchen-ticket-notes-paper-height.test.ts .github/workflows/tmp-kitchen-ticket-fix.yml
+          git commit -m "fix(pos): show kitchen notes and trim ticket paper"
+          git push origin HEAD:fix/kitchen-ticket-notes-paper-height-20260916
