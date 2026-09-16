@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HandCoins, Plus, UserRound } from 'lucide-react';
+import { FileText, HandCoins, Plus, UserRound } from 'lucide-react';
 import { supabase } from '@/api';
 import { Button } from '@/components/Button';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -16,6 +16,7 @@ import { formatCurrency } from '@/lib/format';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import type { ArAgingRow } from '@/lib/types';
+import { EmployeeReceivableDetailPage } from './EmployeeReceivableDetailPage';
 
 type EmployeeCustomer = {
   id: string;
@@ -59,6 +60,7 @@ export function EmployeeReceivablesPage() {
   const [rows, setRows] = useState<EmployeeReceivableRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [settling, setSettling] = useState<EmployeeReceivableRow | null>(null);
@@ -185,14 +187,18 @@ export function EmployeeReceivablesPage() {
   };
 
   const columns: Column<EmployeeReceivableRow>[] = [
-    { key: 'employee', header: ar ? 'الموظف' : 'Employee', render: (row) => <div><p className="font-bold text-ui-text">{row.name}</p><p className="text-xs text-ui-subtle">{row.phone || row.email || '-'}</p></div> },
+    { key: 'employee', header: ar ? 'الموظف' : 'Employee', render: (row) => <button type="button" className="text-start" onClick={() => setSelectedEmployeeId(row.id)}><p className="font-bold text-ui-primary underline-offset-4 hover:underline">{row.name}</p><p className="text-xs text-ui-subtle">{row.phone || row.email || '-'}</p></button> },
     { key: 'open', header: ar ? 'الرصيد المستحق' : 'Open Balance', render: (row) => <span className={row.open_amount > 0 ? 'font-black text-ui-danger' : 'font-medium text-ui-text'}>{formatCurrency(row.open_amount, currency, lang)}</span> },
     { key: '0_30', header: '0–30', render: (row) => formatCurrency(row.bucket_0_30, currency, lang) },
     { key: '31_60', header: '31–60', render: (row) => formatCurrency(row.bucket_31_60, currency, lang) },
     { key: '61_90', header: '61–90', render: (row) => formatCurrency(row.bucket_61_90, currency, lang) },
     { key: '90_plus', header: '90+', render: (row) => formatCurrency(row.bucket_90_plus, currency, lang) },
-    { key: 'actions', header: ar ? 'إجراء' : 'Action', render: (row) => row.open_amount > 0 && can('sales.payment.receive') ? <Button size="sm" onClick={() => { setSettling(row); setSettleForm({ amount: String(row.open_amount), payment_method: 'cash', notes: '' }); }}><HandCoins className="h-4 w-4" />{ar ? 'سداد' : 'Settle'}</Button> : null },
+    { key: 'actions', header: ar ? 'إجراء' : 'Action', render: (row) => <div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" onClick={() => setSelectedEmployeeId(row.id)}><FileText className="h-4 w-4" />{ar ? 'كشف الحساب' : 'Statement'}</Button>{row.open_amount > 0 && can('sales.payment.receive') ? <Button size="sm" onClick={() => { setSettling(row); setSettleForm({ amount: String(row.open_amount), payment_method: 'cash', notes: '' }); }}><HandCoins className="h-4 w-4" />{ar ? 'سداد' : 'Settle'}</Button> : null}</div> },
   ];
+
+  if (selectedEmployeeId) {
+    return <EmployeeReceivableDetailPage customerId={selectedEmployeeId} onBack={() => setSelectedEmployeeId(null)} />;
+  }
 
   return (
     <DesignSurface testId="employee-receivables-page">
