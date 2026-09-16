@@ -501,7 +501,7 @@ export function VisualDashboardPage() {
                   {wasteRows.slice(0, 6).map((r, i) => (
                     <div key={i} className="rounded-xl bg-ui-surface p-2.5 shadow-ui-sm text-sm">
                       <p className="font-semibold truncate text-ui-text">{r.waste_category}</p>
-                      <p className="text-ui-danger text-xs mt-0.5">{Number(r.total_quantity).toLocaleString()} — {money(Number(r.total_cost))}</p>
+                      <p className="text-ui-danger text-xs mt-0.5">{formatNumber(Number(r.total_quantity), 3)} — {money(Number(r.total_cost))}</p>
                     </div>
                   ))}
                 </div>
