@@ -29,6 +29,7 @@ export interface ReceiptData {
   orderTypeLabel?: string;
   guestCount?: number | null;
   operatorName?: string | null;
+  isOpenOrder?: boolean;
 }
 
 type PrintAuthorizationResult = {
@@ -348,14 +349,24 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
   return true;
 }
 
-export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: Language, isAr: boolean): Promise<string> {
-  const authorization = await authorizeReceiptPrint(receipt);
-  const printToken = newPrintToken();
-  pendingReceiptPrints.set(printToken, {
-    authorization,
-    plainText: buildReceiptPlainText(receipt, s, lang, isAr),
-  });
-  window.setTimeout(() => pendingReceiptPrints.delete(printToken), 60_000);
+export async function buildReceiptHtml(
+  receipt: ReceiptData,
+  s: Settings,
+  lang: Language,
+  isAr: boolean,
+  options?: { authorize?: boolean },
+): Promise<string> {
+  let printToken: string | null = null;
+  if (options?.authorize !== false) {
+    const authorization = await authorizeReceiptPrint(receipt);
+    printToken = newPrintToken();
+    pendingReceiptPrints.set(printToken, {
+      authorization,
+      plainText: buildReceiptPlainText(receipt, s, lang, isAr),
+    });
+    const tokenToDelete = printToken;
+    window.setTimeout(() => pendingReceiptPrints.delete(tokenToDelete), 60_000);
+  }
 
   const width = receiptWidthMm(s.receipt_width_mm || 80);
   const compact = isCompactThermalWidth(width);
@@ -392,7 +403,8 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
     ${s.receipt_header ? `<div class="center sub pre-wrap">${escapeHtml(s.receipt_header)}</div>` : ''}
     <div class="center sub branch-name">${isAr ? 'الفرع' : 'Branch'}: ${escapeHtml(receipt.branchName)}</div>
     <div class="divider"></div>
-    <div class="meta-row"><span class="meta-value">${isAr ? 'الفاتورة' : 'Invoice'}: ${escapeHtml(receipt.invoice)}</span></div>
+    ${receipt.isOpenOrder ? `<div class="center open-order-label">${isAr ? 'حساب مبدئي – غير مدفوع' : 'OPEN CHECK – NOT PAID'}</div>` : ''}
+    <div class="meta-row"><span class="meta-value">${receipt.isOpenOrder ? (isAr ? 'الطلب' : 'Order') : (isAr ? 'الفاتورة' : 'Invoice')}: ${escapeHtml(receipt.invoice)}</span></div>
     <div class="meta-row"><span class="meta-value">${isAr ? 'التاريخ' : 'Date'}: ${escapeHtml(new Date(receipt.date).toLocaleString(isAr ? 'ar-EG' : 'en-US'))}</span></div>
     ${receipt.orderTypeLabel ? `<div class="meta-row"><span class="meta-value">${isAr ? 'النوع' : 'Type'}: ${escapeHtml(receipt.orderTypeLabel)}</span></div>` : ''}
     ${receipt.orderNumber ? `<div class="meta-row"><span class="meta-value">${isAr ? 'الطلب' : 'Order'}: ${escapeHtml(receipt.orderNumber)}</span></div>` : ''}
@@ -409,8 +421,8 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
     ${showTax && receipt.tax > 0 ? `<div class="money-row"><span>${isAr ? 'الضريبة' : 'Tax'} (${escapeHtml(s.tax_rate ?? 0)}%)</span><span class="amount">${formatCurrency(receipt.tax, currency, lang)}</span></div>` : ''}
     <div class="divider strong"></div>
     <div class="money-row total-row"><span>${isAr ? 'الإجمالي' : 'Total'}</span><span class="amount">${formatCurrency(receipt.total, currency, lang)}</span></div>
-    <div class="money-row"><span>${isAr ? 'المدفوع' : 'Paid'}</span><span class="amount">${formatCurrency(receipt.paid, currency, lang)}</span></div>
-    ${receipt.change > 0 ? `<div class="money-row"><span>${isAr ? 'الباقي' : 'Change'}</span><span class="amount">${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
+    ${receipt.isOpenOrder ? '' : `<div class="money-row"><span>${isAr ? 'المدفوع' : 'Paid'}</span><span class="amount">${formatCurrency(receipt.paid, currency, lang)}</span></div>`}
+    ${!receipt.isOpenOrder && receipt.change > 0 ? `<div class="money-row"><span>${isAr ? 'الباقي' : 'Change'}</span><span class="amount">${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
     ${qrImg ? `<div class="center qr-wrap"><img src="${qrImg}" class="receipt-qr" alt="QR" /></div>` : ''}
     <div class="divider"></div>
     ${s.receipt_footer ? `<div class="footer pre-wrap">${escapeHtml(s.receipt_footer)}</div>` : ''}
@@ -423,7 +435,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>${escapeHtml(receipt.invoice)}</title>
-      <meta name="johns-print-auth" content="${escapeHtml(printToken)}">
+      ${printToken ? `<meta name="johns-print-auth" content="${escapeHtml(printToken)}">` : ''}
       <style>
         :root { color-scheme: light only; }
         * { box-sizing: border-box; }
@@ -481,6 +493,7 @@ export async function buildReceiptHtml(receipt: ReceiptData, s: Settings, lang: 
           overflow-wrap: anywhere;
         }
         .branch-name { font-weight: 700; }
+        .open-order-label { margin: 1mm 0 1.5mm; font-size: ${compact ? 12 : 13}px; font-weight: 900; border: .3mm solid #000; padding: 1mm; }
         .pre-wrap { white-space: pre-wrap; }
         .divider {
           width: 100%;

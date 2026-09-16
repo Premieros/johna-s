@@ -17,6 +17,7 @@ describe('POS customer receipt print contract', () => {
   it('gates the visible print action with pos.receipt.print', () => {
     expect(header).toContain('{perms.canPrint && (');
     expect(header).toContain('disabled={!canPrintReceipt}');
+    expect(workspace).toContain('canPrintReceipt={pos.cart.length > 0 || !!pos.lastReceipt}');
     expect(header).not.toContain('perms.canPrint && canPrintReceipt');
     expect(header).not.toContain('perms.canPrintKitchen && itemsCount > 0');
     expect(workspace).toContain('data-testid="pos-receipt-print"');
@@ -28,6 +29,15 @@ describe('POS customer receipt print contract', () => {
     expect(defs).toContain("'pos.receipt.print'");
     expect(defs).toContain('إظهار زر طباعة إيصال البيع (أول مرة)');
     expect(defs).toContain("permissions: ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print'");
+  });
+
+  it('prints the current open table order as a customer check before payment', () => {
+    const hook = fs.readFileSync(path.join(root, 'src/features/pos/hooks/usePosOrderBase.ts'), 'utf8');
+    expect(hook).toContain('if (cart.length > 0)');
+    expect(hook).toContain('isOpenOrder: true');
+    expect(hook).toContain('buildReceiptHtml(openOrderReceipt, effSettings, lang, isAr, { authorize: false })');
+    expect(printing).toContain('options?: { authorize?: boolean }');
+    expect(printing).toContain('حساب مبدئي – غير مدفوع');
   });
 
   it('keeps the existing single-print and manager-approved reprint authorization', () => {

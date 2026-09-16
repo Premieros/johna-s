@@ -818,14 +818,44 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
 
   const printReceipt = useCallback(async () => {
-    if (!lastReceipt || !effSettings) return;
+    if (!effSettings) return;
     try {
+      if (cart.length > 0) {
+        const openOrderReceipt: ReceiptData = {
+          invoice: activeOrderNumber || `ORDER-${Date.now()}`,
+          branchName,
+          items: cart.map((i) => ({
+            name: [i.product.name, i.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — '),
+            qty: i.quantity,
+            price: i.unit_price,
+            total: i.quantity * i.unit_price - i.discount_amount,
+          })),
+          subtotal,
+          discount: discountValue,
+          tax: taxAmount,
+          total,
+          paid: 0,
+          change: 0,
+          date: new Date().toISOString(),
+          customerName: customers.find((c) => c.id === customerId)?.name || '',
+          orderNumber: activeOrderNumber || undefined,
+          tableName: activeTable?.name || undefined,
+          orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
+          guestCount: guestCount || undefined,
+          operatorName: user?.full_name || user?.username || user?.email || null,
+          isOpenOrder: true,
+        };
+        const html = await buildReceiptHtml(openOrderReceipt, effSettings, lang, isAr, { authorize: false });
+        openPrintWindow(html, effSettings.receipt_width_mm || 80);
+        return;
+      }
+      if (!lastReceipt) return;
       const html = await buildReceiptHtml(lastReceipt, effSettings, lang, isAr);
       openPrintWindow(html, effSettings.receipt_width_mm || 80);
     } catch (error) {
       showReceiptPrintError(error);
     }
-  }, [lastReceipt, effSettings, lang, isAr, showReceiptPrintError]);
+  }, [cart, lastReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError]);
 
   const closeReceipt = useCallback(() => setReceiptSaleId(null), []);
 
