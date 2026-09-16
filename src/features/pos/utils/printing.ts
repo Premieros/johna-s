@@ -592,7 +592,8 @@ export function buildKitchenTicketHtml(params: {
   tableName: string | null;
   orderTypeLabel: string;
   guestCount: number | null;
-  items: { name: string; qty: number; unit_name?: string | null }[];
+  items: { name: string; qty: number; unit_name?: string | null; note?: string | null }[];
+  orderNote?: string | null;
   s: Settings;
   isAr: boolean;
 }): string {
@@ -604,17 +605,24 @@ export function buildKitchenTicketHtml(params: {
   const metaFontPx = compact ? 14 : 16;
   const itemFontPx = compact ? 19 : 22;
   const qtyFontPx = compact ? 20 : 24;
-  const { orderNumber, tableName, orderTypeLabel, guestCount, items, isAr } = params;
+  const { orderNumber, tableName, orderTypeLabel, guestCount, items, orderNote, isAr } = params;
   const now = new Date().toLocaleString(isAr ? 'ar-EG' : 'en-US');
   const metaRows = 2 + (orderNumber ? 1 : 0) + (tableName ? 1 : 0) + (guestCount ? 1 : 0);
+  const estimateLines = (value: unknown, wrapAt: number) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return 0;
+    return normalized.split(/\r?\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / wrapAt)), 0);
+  };
   const estimatedItemMm = items.reduce((sum, item) => {
     const wrapAt = compact ? 16 : 24;
-    const nameLines = Math.max(1, Math.ceil(String(item.name || '').length / wrapAt));
-    return sum + 12 + (nameLines * 5.5);
+    const nameLines = Math.max(1, estimateLines(item.name, wrapAt));
+    const noteLines = estimateLines(item.note, compact ? 20 : 28);
+    return sum + 7.5 + (nameLines * 4.8) + (noteLines * 4.2);
   }, 0);
-  const pageHeightMm = Math.max(80, Math.ceil(38 + (metaRows * 6) + estimatedItemMm + 14));
+  const orderNoteLines = estimateLines(orderNote, compact ? 22 : 30);
+  const pageHeightMm = Math.max(45, Math.ceil(25 + (metaRows * 5) + (orderNoteLines * 4.2) + estimatedItemMm + 9));
   const rows = items
-    .map((i) => `<section class="item-row"><div class="item-line"><strong class="qty-badge">${escapeHtml(i.qty)}×</strong><div class="item-name">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class="unit">(${escapeHtml(i.unit_name)})</span>` : ''}</div></div><div class="qty-caption">${isAr ? 'الكمية' : 'Qty'}: <strong>${escapeHtml(i.qty)}</strong></div></section>`)
+    .map((i) => `<section class="item-row"><div class="item-line"><strong class="qty-badge">${escapeHtml(i.qty)}×</strong><div class="item-name">${escapeHtml(i.name)}${i.unit_name && i.unit_name !== 'piece' ? ` <span class="unit">(${escapeHtml(i.unit_name)})</span>` : ''}</div></div><div class="qty-caption">${isAr ? 'الكمية' : 'Qty'}: <strong>${escapeHtml(i.qty)}</strong></div>${i.note ? `<div class="item-note"><strong>${isAr ? 'ملاحظة' : 'Note'}:</strong> ${escapeHtml(i.note)}</div>` : ''}</section>`)
     .join('');
 
   return `<!DOCTYPE html>
@@ -708,6 +716,8 @@ export function buildKitchenTicketHtml(params: {
           overflow-wrap: anywhere;
         }
         .unit { font-size: .72em; font-weight: 700; }
+        .item-note { margin-top: 1.2mm; padding: 1.2mm 1.5mm; border: .3mm solid #000; font-size: ${metaFontPx}px; line-height: 1.35; font-weight: 800; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .order-note { margin: 1.5mm 0; padding: 1.5mm; border: .4mm solid #000; font-size: ${metaFontPx}px; line-height: 1.35; font-weight: 900; white-space: pre-wrap; overflow-wrap: anywhere; }
         .qty-caption {
           margin-top: 1.2mm;
           font-size: ${metaFontPx}px;
@@ -760,6 +770,7 @@ export function buildKitchenTicketHtml(params: {
         ${orderNumber ? `<div class="meta-row">${isAr ? 'الطلب' : 'Order'}: ${escapeHtml(orderNumber)}</div>` : ''}
         ${tableName ? `<div class="meta-row">${isAr ? 'طاولة' : 'Table'}: ${escapeHtml(tableName)}</div>` : ''}
         ${guestCount ? `<div class="meta-row">${isAr ? 'الضيوف' : 'Guests'}: ${guestCount}</div>` : ''}
+        ${orderNote ? `<div class="order-note"><strong>${isAr ? 'ملاحظات الطلب' : 'Order notes'}:</strong> ${escapeHtml(orderNote)}</div>` : ''}
         <div class="divider"></div>
         ${rows}
         <div class="divider"></div>
