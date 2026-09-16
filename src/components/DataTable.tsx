@@ -33,6 +33,16 @@ interface DataTableProps<T> {
   importAccept?: string;
 }
 
+type ColumnFilterState = {
+  query: string;
+  selectedValues: string[] | null;
+};
+
+type SortState = {
+  key: string;
+  direction: 'asc' | 'desc';
+} | null;
+
 function textFromUnknown(value: unknown): string {
   if (value == null || typeof value === 'boolean') return value === true ? 'true' : value === false ? 'false' : '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') return String(value);
@@ -56,6 +66,13 @@ function normalizeFilterText(value: unknown): string {
   return textFromUnknown(value).trim().toLocaleLowerCase();
 }
 
+function filterValueForRow<T>(row: T, column: Column<T>): string {
+  const explicit = column.filterValue?.(row);
+  const direct = (row as Record<string, unknown>)[column.key];
+  const rendered = column.render?.(row);
+  return textFromUnknown(explicit ?? direct ?? rendered).trim();
+}
+
 export function DataTable<T extends { id?: string }>({
   columns,
   data,
@@ -77,7 +94,9 @@ export function DataTable<T extends { id?: string }>({
   importAccept = '.xlsx,.xls,.csv',
 }: DataTableProps<T>) {
   const storageKey = tableId ? `datatable:${tableId}:hidden-columns` : null;
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, ColumnFilterState>>({});
+  const [filterSearches, setFilterSearches] = useState<Record<string, string>>({});
+  const [sortState, setSortState] = useState<SortState>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
     const defaults = new Set(columns.filter((col) => col.hiddenByDefault).map((col) => col.key));
@@ -92,36 +111,69 @@ export function DataTable<T extends { id?: string }>({
 
   const isRtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
   const labels = isRtl
-    ? { filter: 'فلتر', columns: 'الأعمدة', clear: 'مسح الفلاتر', noData: 'لا توجد بيانات مطابقة', import: 'استيراد', export: 'تصدير', template: 'القالب' }
-    : { filter: 'Filter', columns: 'Columns', clear: 'Clear filters', noData: 'No matching data', import: 'Import', export: 'Export', template: 'Template' };
+    ? {
+        filter: 'فلتر', columns: 'الأعمدة', clear: 'مسح كل الفلاتر', clearColumn: 'مسح فلتر العمود',
+        noData: 'لا توجد بيانات مطابقة', import: 'استيراد', export: 'تصدير', template: 'القالب',
+        search: 'بحث', selectAll: 'تحديد الكل', blanks: '(فارغ)', sortAsc: 'فرز تصاعدي',
+        sortDesc: 'فرز تنازلي', values: 'القيم', contains: 'يحتوي على',
+      }
+    : {
+        filter: 'Filter', columns: 'Columns', clear: 'Clear all filters', clearColumn: 'Clear column filter',
+        noData: 'No matching data', import: 'Import', export: 'Export', template: 'Template',
+        search: 'Search', selectAll: 'Select all', blanks: '(Blanks)', sortAsc: 'Sort ascending',
+        sortDesc: 'Sort descending', values: 'Values', contains: 'Contains',
+      };
 
   const visibleColumns = useMemo(
     () => columns.filter((col) => !hiddenColumns.has(col.key)),
     [columns, hiddenColumns],
   );
 
+  const uniqueValuesByColumn = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    columns.forEach((column) => {
+      if (column.filterable === false || column.key === 'actions') return;
+      const values = new Set<string>();
+      data.forEach((row) => values.add(filterValueForRow(row, column)));
+      result[column.key] = [...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    });
+    return result;
+  }, [columns, data]);
+
   const filteredData = useMemo(() => {
     if (!enableColumnFilters) return data;
-    const activeFilters = Object.entries(filters).filter(([, value]) => value.trim());
+    const activeFilters = Object.entries(filters).filter(([, state]) => state.query.trim() || state.selectedValues !== null);
     if (activeFilters.length === 0) return data;
 
-    return data.filter((row) => activeFilters.every(([key, query]) => {
+    return data.filter((row) => activeFilters.every(([key, state]) => {
       const column = columns.find((col) => col.key === key);
       if (!column || column.filterable === false || column.key === 'actions') return true;
-      const explicit = column.filterValue?.(row);
-      const direct = (row as Record<string, unknown>)[column.key];
-      const rendered = column.render?.(row);
-      const value = explicit ?? direct ?? rendered;
-      return normalizeFilterText(value).includes(normalizeFilterText(query));
+      const value = filterValueForRow(row, column);
+      const normalizedValue = normalizeFilterText(value);
+      const matchesQuery = !state.query.trim() || normalizedValue.includes(normalizeFilterText(state.query));
+      const matchesSelected = state.selectedValues === null || state.selectedValues.includes(value);
+      return matchesQuery && matchesSelected;
     }));
   }, [columns, data, enableColumnFilters, filters]);
+
+  const displayData = useMemo(() => {
+    if (!sortState) return filteredData;
+    const column = columns.find((col) => col.key === sortState.key);
+    if (!column) return filteredData;
+    return [...filteredData].sort((a, b) => {
+      const left = filterValueForRow(a, column);
+      const right = filterValueForRow(b, column);
+      const comparison = left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+      return sortState.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [columns, filteredData, sortState]);
 
   const exportColumns = useMemo(
     () => visibleColumns.filter((col) => col.key !== 'actions'),
     [visibleColumns],
   );
 
-  const buildExportRows = () => filteredData.map((row) => {
+  const buildExportRows = () => displayData.map((row) => {
     const out: Record<string, unknown> = {};
     exportColumns.forEach((col) => {
       const explicit = col.exportValue?.(row) ?? col.filterValue?.(row);
@@ -160,6 +212,154 @@ export function DataTable<T extends { id?: string }>({
     }
   };
 
+  const setColumnQuery = (key: string, query: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: { query, selectedValues: prev[key]?.selectedValues ?? null },
+    }));
+  };
+
+  const toggleColumnValue = (key: string, value: string, allValues: string[]) => {
+    setFilters((prev) => {
+      const current = prev[key] ?? { query: '', selectedValues: null };
+      const selected = current.selectedValues === null ? [...allValues] : [...current.selectedValues];
+      const nextSelected = selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value];
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          selectedValues: nextSelected.length === allValues.length ? null : nextSelected,
+        },
+      };
+    });
+  };
+
+  const toggleAllColumnValues = (key: string, allValues: string[], checked: boolean) => {
+    setFilters((prev) => {
+      const current = prev[key] ?? { query: '', selectedValues: null };
+      return {
+        ...prev,
+        [key]: { ...current, selectedValues: checked ? null : [] },
+      };
+    });
+  };
+
+  const clearColumnFilter = (key: string) => {
+    setFilters((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setFilterSearches((prev) => ({ ...prev, [key]: '' }));
+  };
+
+  const isColumnFiltered = (key: string) => {
+    const state = filters[key];
+    return !!state && (!!state.query.trim() || state.selectedValues !== null);
+  };
+
+  const renderFilterMenu = (col: Column<T>, compact = false) => {
+    if (!enableColumnFilters || col.filterable === false || col.key === 'actions') return null;
+    const allValues = uniqueValuesByColumn[col.key] ?? [];
+    const state = filters[col.key] ?? { query: '', selectedValues: null };
+    const valueSearch = filterSearches[col.key] ?? '';
+    const shownValues = valueSearch.trim()
+      ? allValues.filter((value) => normalizeFilterText(value || labels.blanks).includes(normalizeFilterText(valueSearch)))
+      : allValues;
+    const selectedValues = state.selectedValues;
+    const allChecked = selectedValues === null || selectedValues.length === allValues.length;
+    const active = isColumnFiltered(col.key);
+
+    return (
+      <details className="relative" onClick={(event) => event.stopPropagation()}>
+        <summary
+          className={`flex cursor-pointer list-none items-center justify-center rounded-md border p-1 transition-colors ${active ? 'border-ui-primary bg-ui-primary-soft text-ui-primary' : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-surface'}`}
+          aria-label={isRtl ? 'خيارات فلتر العمود' : 'Column filter options'}
+          title={`${labels.filter}: ${col.header}`}
+        >
+          <svg className={compact ? 'h-4 w-4' : 'h-3.5 w-3.5'} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M3.25 5.5a.75.75 0 01.75-.75h12a.75.75 0 01.53 1.28l-4.78 4.78v3.94a.75.75 0 01-.42.67l-2 1A.75.75 0 018.25 15v-4.19L3.47 6.03a.75.75 0 01-.22-.53z" clipRule="evenodd" />
+          </svg>
+        </summary>
+        <div className={`absolute z-50 mt-1 w-72 rounded-xl border border-ui-border bg-ui-surface p-2 text-start normal-case tracking-normal shadow-xl ${isRtl ? 'end-0' : 'start-0'}`}>
+          <div className="grid gap-1 border-b border-ui-border pb-2">
+            <button
+              type="button"
+              onClick={() => setSortState({ key: col.key, direction: 'asc' })}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium hover:bg-ui-page-alt ${sortState?.key === col.key && sortState.direction === 'asc' ? 'text-ui-primary' : 'text-ui-text'}`}
+            >
+              <span aria-hidden="true">↑</span>{labels.sortAsc}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortState({ key: col.key, direction: 'desc' })}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium hover:bg-ui-page-alt ${sortState?.key === col.key && sortState.direction === 'desc' ? 'text-ui-primary' : 'text-ui-text'}`}
+            >
+              <span aria-hidden="true">↓</span>{labels.sortDesc}
+            </button>
+          </div>
+
+          <div className="grid gap-2 py-2">
+            <label className="grid gap-1">
+              <span className="text-[11px] font-semibold text-ui-muted">{labels.contains}</span>
+              <input
+                value={state.query}
+                onChange={(event) => setColumnQuery(col.key, event.target.value)}
+                placeholder={`${labels.search}…`}
+                aria-label={isRtl ? 'بحث نصي داخل العمود' : 'Text filter in column'}
+                className="w-full rounded-lg border border-ui-border bg-ui-page px-2.5 py-2 text-sm font-normal text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-ring/30"
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-[11px] font-semibold text-ui-muted">{labels.values}</span>
+              <input
+                value={valueSearch}
+                onChange={(event) => setFilterSearches((prev) => ({ ...prev, [col.key]: event.target.value }))}
+                placeholder={`${labels.search}…`}
+                aria-label={isRtl ? 'بحث في قائمة القيم' : 'Search value list'}
+                className="w-full rounded-lg border border-ui-border bg-ui-page px-2.5 py-2 text-sm font-normal text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-ring/30"
+              />
+            </label>
+          </div>
+
+          <div className="max-h-52 overflow-y-auto border-y border-ui-border py-1">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-ui-text hover:bg-ui-page-alt">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={(event) => toggleAllColumnValues(col.key, allValues, event.target.checked)}
+                className="h-4 w-4 rounded border-ui-border-strong text-ui-primary focus:ring-ui-ring"
+              />
+              <span>{labels.selectAll}</span>
+            </label>
+            {shownValues.map((value) => (
+              <label key={value || '__blank__'} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ui-text hover:bg-ui-page-alt">
+                <input
+                  type="checkbox"
+                  checked={selectedValues === null || selectedValues.includes(value)}
+                  onChange={() => toggleColumnValue(col.key, value, allValues)}
+                  className="h-4 w-4 rounded border-ui-border-strong text-ui-primary focus:ring-ui-ring"
+                />
+                <span className="min-w-0 flex-1 truncate" title={value || labels.blanks}>{value || labels.blanks}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => clearColumnFilter(col.key)}
+              disabled={!active}
+              className="w-full rounded-lg border border-ui-border px-2.5 py-2 text-sm font-medium text-ui-muted hover:bg-ui-page-alt disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {labels.clearColumn}
+            </button>
+          </div>
+        </div>
+      </details>
+    );
+  };
+
   if (loading) {
     return (
       <div data-testid="table-loading" className="flex items-center justify-center py-16">
@@ -184,17 +384,17 @@ export function DataTable<T extends { id?: string }>({
     );
   }
 
-  const allSelected = showCheckbox && selectedIds && filteredData.length > 0 && filteredData.every((r) => r.id && selectedIds.has(r.id));
+  const allSelected = showCheckbox && selectedIds && displayData.length > 0 && displayData.every((r) => r.id && selectedIds.has(r.id));
 
   const toggleAll = () => {
     if (!onSelectionChange || !selectedIds) return;
     if (allSelected) {
       const next = new Set(selectedIds);
-      filteredData.forEach((row) => row.id && next.delete(row.id));
+      displayData.forEach((row) => row.id && next.delete(row.id));
       onSelectionChange(next);
     } else {
       const next = new Set(selectedIds);
-      filteredData.forEach((row) => row.id && next.add(row.id));
+      displayData.forEach((row) => row.id && next.add(row.id));
       onSelectionChange(next);
     }
   };
@@ -209,7 +409,7 @@ export function DataTable<T extends { id?: string }>({
   const renderCell = (row: T, col: Column<T>) =>
     col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as ReactNode;
 
-  const hasActiveFilters = Object.values(filters).some((value) => value.trim());
+  const hasActiveFilters = Object.keys(filters).some(isColumnFiltered);
   const hasDataTools = !!onImportFile || enableExport || enableTemplate;
 
   return (
@@ -232,7 +432,7 @@ export function DataTable<T extends { id?: string }>({
             <button
               type="button"
               onClick={handleExport}
-              disabled={filteredData.length === 0}
+              disabled={displayData.length === 0}
               className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt disabled:cursor-not-allowed disabled:opacity-50"
             >
               {labels.export}
@@ -250,7 +450,10 @@ export function DataTable<T extends { id?: string }>({
           {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => setFilters({})}
+              onClick={() => {
+                setFilters({});
+                setFilterSearches({});
+              }}
               className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt"
             >
               {labels.clear}
@@ -261,7 +464,7 @@ export function DataTable<T extends { id?: string }>({
               <summary className="cursor-pointer list-none rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt">
                 {labels.columns}
               </summary>
-              <div className="absolute end-0 z-30 mt-2 min-w-52 rounded-xl border border-ui-border bg-ui-surface p-2 shadow-lg">
+              <div className="absolute end-0 z-40 mt-2 min-w-52 rounded-xl border border-ui-border bg-ui-surface p-2 shadow-lg">
                 {columns.map((col) => (
                   <label key={col.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ui-text hover:bg-ui-page-alt">
                     <input
@@ -285,23 +488,17 @@ export function DataTable<T extends { id?: string }>({
 
       <div className="space-y-3 sm:hidden">
         {enableColumnFilters && visibleColumns.some((col) => col.filterable !== false && col.key !== 'actions') && (
-          <div className="grid grid-cols-1 gap-2 rounded-xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm">
             {visibleColumns.filter((col) => col.filterable !== false && col.key !== 'actions').map((col) => (
-              <label key={col.key} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-2">
-                <span className="text-xs font-semibold text-ui-muted">{col.header}</span>
-                <input
-                  value={filters[col.key] || ''}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, [col.key]: event.target.value }))}
-                  placeholder={`${labels.filter}…`}
-                  aria-label={`${labels.filter}: ${col.header}`}
-                  className="min-w-0 rounded-lg border border-ui-border bg-ui-page px-2.5 py-2 text-sm text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-ring/30"
-                />
-              </label>
+              <div key={col.key} className="flex items-center gap-1 rounded-lg border border-ui-border bg-ui-page px-2 py-1">
+                <span className="max-w-32 truncate text-xs font-semibold text-ui-muted">{col.header}</span>
+                {renderFilterMenu(col, true)}
+              </div>
             ))}
           </div>
         )}
 
-        {showCheckbox && filteredData.length > 0 && (
+        {showCheckbox && displayData.length > 0 && (
           <div className="flex items-center rounded-xl border border-ui-border bg-ui-surface px-3 py-2 shadow-ui-sm">
             <input
               type="checkbox"
@@ -313,11 +510,11 @@ export function DataTable<T extends { id?: string }>({
           </div>
         )}
 
-        {filteredData.length === 0 ? (
+        {displayData.length === 0 ? (
           <div data-testid="table-empty" className="flex flex-col items-center justify-center py-12 text-ui-muted">
             <p className="text-sm font-medium text-ui-text">{hasActiveFilters ? labels.noData : (emptyMessage || 'No data')}</p>
           </div>
-        ) : filteredData.map((row, i) => (
+        ) : displayData.map((row, i) => (
           <div
             key={row.id || i}
             onClick={(e) => {
@@ -370,31 +567,16 @@ export function DataTable<T extends { id?: string }>({
                   key={col.key}
                   className={`whitespace-nowrap px-4 py-3 text-start text-xs font-semibold uppercase tracking-wider text-ui-muted ${col.className || ''}`}
                 >
-                  {col.header}
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{col.header}</span>
+                    {renderFilterMenu(col)}
+                  </div>
                 </th>
               ))}
             </tr>
-            {enableColumnFilters && (
-              <tr className="border-b border-ui-border bg-ui-surface">
-                {showCheckbox && <th className="w-10 px-2 py-2" />}
-                {visibleColumns.map((col) => (
-                  <th key={col.key} className="px-2 py-2 align-top">
-                    {col.filterable === false || col.key === 'actions' ? null : (
-                      <input
-                        value={filters[col.key] || ''}
-                        onChange={(event) => setFilters((prev) => ({ ...prev, [col.key]: event.target.value }))}
-                        placeholder={`${labels.filter}…`}
-                        aria-label={`${labels.filter}: ${col.header}`}
-                        className="w-full min-w-24 rounded-lg border border-ui-border bg-ui-page px-2.5 py-1.5 text-xs font-normal normal-case tracking-normal text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-ring/30"
-                      />
-                    )}
-                  </th>
-                ))}
-              </tr>
-            )}
           </thead>
           <tbody className="divide-y divide-ui-border">
-            {filteredData.length === 0 ? (
+            {displayData.length === 0 ? (
               <tr>
                 <td colSpan={visibleColumns.length + (showCheckbox ? 1 : 0)}>
                   <div data-testid="table-empty" className="flex flex-col items-center justify-center py-12 text-ui-muted">
@@ -402,7 +584,7 @@ export function DataTable<T extends { id?: string }>({
                   </div>
                 </td>
               </tr>
-            ) : filteredData.map((row, i) => (
+            ) : displayData.map((row, i) => (
               <tr
                 key={row.id || i}
                 onClick={(e) => {
