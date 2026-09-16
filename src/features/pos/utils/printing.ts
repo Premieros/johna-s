@@ -376,13 +376,14 @@ export async function buildReceiptHtml(
   const currency = s.currency || 'EGP';
   // Visual-only receipt profile: identical typography scale for Arabic and English.
   // Routing, authorization, queueing, printer selection and Print Agent behavior stay unchanged.
-  const sidePaddingMm = compact ? 2.4 : 3.2;
-  const bodyFontPx = compact ? 12 : 13;
-  const smallFontPx = compact ? 10 : 11;
-  const itemFontPx = compact ? 12 : 13;
-  const totalFontPx = compact ? 16 : 18;
-  const logoWidthMm = compact ? 28 : 36;
-  const qrWidthMm = compact ? 18 : 22;
+  const safeContentWidthMm = Math.max(46, width - (compact ? 4 : 6));
+  const sidePaddingMm = compact ? 1.4 : 1.8;
+  const bodyFontPx = compact ? 11 : 12;
+  const smallFontPx = compact ? 9 : 10;
+  const itemFontPx = compact ? 11 : 12;
+  const totalFontPx = compact ? 15 : 17;
+  const logoWidthMm = compact ? 24 : 32;
+  const qrWidthMm = compact ? 16 : 20;
 
   let qrImg = '';
   if (showQr) {
@@ -449,7 +450,7 @@ export async function buildReceiptHtml(
           color: #000;
           font-family: Arial, Tahoma, "Segoe UI", sans-serif;
           font-size: ${bodyFontPx}px;
-          line-height: 1.45;
+          line-height: 1.35;
           font-weight: 600;
           letter-spacing: 0;
           text-rendering: optimizeLegibility;
@@ -459,9 +460,11 @@ export async function buildReceiptHtml(
         }
         body { overflow: visible; }
         .receipt-page {
-          width: ${width}mm;
+          width: ${safeContentWidthMm}mm;
+          max-width: ${safeContentWidthMm}mm;
           min-height: 0;
-          padding: 3mm ${sidePaddingMm}mm 4mm;
+          margin: 0 auto;
+          padding: 2mm ${sidePaddingMm}mm 3mm;
           background: #fff;
           color: #000;
           page-break-after: always;
@@ -514,7 +517,7 @@ export async function buildReceiptHtml(
         .money-row {
           display: grid;
           grid-template-columns: minmax(0, 1fr) auto;
-          column-gap: 2mm;
+          column-gap: 1.2mm;
           align-items: baseline;
         }
         .items-head {
@@ -525,7 +528,7 @@ export async function buildReceiptHtml(
           padding-bottom: .7mm;
         }
         .item-row {
-          padding: 1.5mm 0;
+          padding: 1.1mm 0;
           border-bottom: .2mm dotted #777;
           break-inside: avoid;
           page-break-inside: avoid;
@@ -534,17 +537,17 @@ export async function buildReceiptHtml(
         .item-name {
           margin-bottom: .7mm;
           font-size: ${itemFontPx}px;
-          line-height: 1.4;
+          line-height: 1.3;
           font-weight: 800;
           overflow-wrap: anywhere;
           word-break: normal;
         }
-        .item-detail { font-size: ${smallFontPx}px; line-height: 1.4; font-weight: 600; }
+        .item-detail { font-size: ${smallFontPx}px; line-height: 1.3; font-weight: 600; min-width: 0; }
         .qty-price { overflow-wrap: anywhere; }
         .money-row {
-          margin: 1mm 0;
+          margin: .8mm 0;
           font-size: ${bodyFontPx}px;
-          line-height: 1.4;
+          line-height: 1.3;
           font-weight: 600;
         }
         .amount {
@@ -589,8 +592,9 @@ export async function buildReceiptHtml(
             color: #000 !important;
           }
           .receipt-page {
-            width: ${width}mm !important;
-            margin: 0 !important;
+            width: ${safeContentWidthMm}mm !important;
+            max-width: ${safeContentWidthMm}mm !important;
+            margin: 0 auto !important;
             box-shadow: none !important;
           }
         }
