@@ -1,12 +1,33 @@
 import type { Language } from './types';
 
-export function formatCurrency(amount: number, currency = 'EGP', lang: Language = 'ar'): string {
-  const numeric = Number(amount || 0);
-  if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.0000001) return '-';
-  const value = numeric.toLocaleString('en-US', {
+const DISPLAY_LOCALE = 'en-US';
+const ZERO_EPSILON = 0.0000001;
+
+function numericOrZero(value: number | null | undefined): number {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+export function formatDisplayNumber(
+  value: number | null | undefined,
+  maximumFractionDigits = 1,
+): string {
+  const numeric = numericOrZero(value);
+  if (Math.abs(numeric) < ZERO_EPSILON) return '-';
+  return numeric.toLocaleString(DISPLAY_LOCALE, {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
+    maximumFractionDigits,
   });
+}
+
+export function formatCurrency(
+  amount: number | null | undefined,
+  currency = 'EGP',
+  lang: Language = 'ar',
+): string {
+  const numeric = numericOrZero(amount);
+  if (Math.abs(numeric) < ZERO_EPSILON) return '-';
+
   const symbolMap: Record<string, { ar: string; en: string }> = {
     EGP: { ar: 'ج.م', en: 'EGP' },
     SAR: { ar: 'ر.س', en: 'SAR' },
@@ -14,16 +35,22 @@ export function formatCurrency(amount: number, currency = 'EGP', lang: Language 
     AED: { ar: 'د.إ', en: 'AED' },
   };
   const symbol = symbolMap[currency]?.[lang] || currency;
-  return `${value} ${symbol}`;
+  return `${formatDisplayNumber(numeric, 1)} ${symbol}`;
 }
 
-export function formatNumber(value: number, decimals = 2): string {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.0000001) return '-';
-  return numeric.toLocaleString('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  });
+/** General UI numbers: thousands separators, one decimal max, zero as dash. */
+export function formatNumber(value: number | null | undefined, decimals = 1): string {
+  return formatDisplayNumber(value, decimals);
+}
+
+/** Inventory/recipe quantities can require more precision than general UI values. */
+export function formatQuantity(value: number | null | undefined, decimals = 3): string {
+  return formatDisplayNumber(value, decimals);
+}
+
+export function formatPercent(value: number | null | undefined, decimals = 1): string {
+  const formatted = formatDisplayNumber(value, decimals);
+  return formatted === '-' ? '-' : `${formatted}%`;
 }
 
 export function formatDate(date: string | Date, lang: Language = 'ar'): string {
@@ -68,6 +95,6 @@ export function escapeHtml(value: unknown): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/\"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
