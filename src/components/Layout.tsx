@@ -66,6 +66,13 @@ const ICONS: Record<MenuIcon, ReactNode> = {
   importExport: <FileSpreadsheet className="h-5 w-5" />,
 };
 
+const TOP_TABS = [
+  { key: 'general', label: ['عام', 'General'], route: APP_ROUTES.dashboard },
+  { key: 'branches', label: ['الفروع', 'Branches'], route: APP_ROUTES.branches },
+  { key: 'inventory', label: ['المخزون', 'Inventory'], route: APP_ROUTES.inventory },
+  { key: 'kitchen', label: ['المطبخ', 'Kitchen'], route: APP_ROUTES.kitchenDisplay },
+] as const;
+
 export function Layout({ children }: { children: ReactNode }) {
   const { t, lang, setLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -120,6 +127,16 @@ export function Layout({ children }: { children: ReactNode }) {
     return acc;
   }, {} as Record<MenuGroup, typeof visibleItems>), [visibleItems]);
 
+  const activeTop = location.pathname === APP_ROUTES.dashboard
+    ? 'general'
+    : location.pathname.startsWith(APP_ROUTES.branches)
+      ? 'branches'
+      : location.pathname.startsWith(APP_ROUTES.inventory) || location.pathname.startsWith(APP_ROUTES.warehouses)
+        ? 'inventory'
+        : location.pathname.startsWith(APP_ROUTES.kitchenDisplay)
+          ? 'kitchen'
+          : '';
+
   return (
     <div dir={ar ? 'rtl' : 'ltr'} className="min-h-screen bg-ui-page text-ui-text overflow-x-hidden" data-testid="app-shell">
       <header data-testid="app-header" className={`fixed top-0 start-0 end-0 ${ar ? 'lg:start-[260px]' : 'lg:end-[260px]'} z-[60] flex h-[64px] items-center justify-between gap-3 liquid-glass-header px-4 shadow-ui-sm sm:px-6`}>
@@ -144,6 +161,33 @@ export function Layout({ children }: { children: ReactNode }) {
             </button>
           )}
           <CommandPaletteTrigger />
+          <div className="hidden h-6 w-px bg-ui-border lg:block" />
+          <div data-testid="top-navigation" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+            {TOP_TABS.map((tab) => {
+              const allowed = tab.key === 'general'
+                ? can('dashboard.view')
+                : tab.key === 'kitchen'
+                  ? can('pos.kds_view')
+                  : tab.key === 'branches'
+                    ? can('branches.manage')
+                    : can('inventory.view');
+              if (!allowed) return null;
+              return (
+                <NavLink
+                  data-testid={`top-tab-${tab.key}`}
+                  key={tab.key}
+                  to={tab.route}
+                  className={`relative whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    activeTop === tab.key
+                      ? 'bg-ui-primary-soft text-ui-primary'
+                      : 'text-ui-muted hover:bg-ui-page-alt hover:text-ui-text'
+                  }`}
+                >
+                  {tab.label[ar ? 0 : 1]}
+                </NavLink>
+              );
+            })}
+          </div>
         </div>
 
         <div className="relative flex items-center gap-1.5 sm:gap-2" ref={branchMenuRef}>
