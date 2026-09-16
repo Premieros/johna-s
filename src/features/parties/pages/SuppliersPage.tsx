@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, Download, Trophy, FileText } from 'lucide-react';
+import { Plus, Edit2, Trash2, Trophy, FileText } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -15,7 +15,6 @@ import { Modal } from '@/components/Modal';
 import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatDate, formatCurrency } from '@/lib/format';
-import { exportToExcel } from '@/lib/excel';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
@@ -109,8 +108,6 @@ export function SuppliersPage() {
     reloadSuppliers();
   };
 
-  const handleExport = () => exportToExcel(items.map((s) => ({ Name: s.name, Branch: branches.find((b) => b.id === s.branch_id)?.name || '', Phone: s.phone || '', Email: s.email || '', Address: s.address || '', TaxNumber: s.tax_number || '', Balance: balanceFor(s) })), 'suppliers');
-
   const loadEvaluation = async () => {
     setEvLoading(true);
     const { data } = await api.procurement.getSupplierEvaluation({ p_branch_id: branchFilter || null });
@@ -126,15 +123,15 @@ export function SuppliersPage() {
 
   const columns: Column<Supplier>[] = [
     { key: 'name', header: t('name'), render: (s) => <span className="font-medium text-ui-text">{s.name}</span> },
-    { key: 'branch', header: t('branch'), render: (s) => <BranchBadge name={branches.find((b) => b.id === s.branch_id)?.name || '-'} /> },
+    { key: 'branch', header: t('branch'), filterValue: (s) => branches.find((b) => b.id === s.branch_id)?.name || '', exportValue: (s) => branches.find((b) => b.id === s.branch_id)?.name || '', render: (s) => <BranchBadge name={branches.find((b) => b.id === s.branch_id)?.name || '-'} /> },
     { key: 'phone', header: t('phone'), render: (s) => s.phone || '-' },
     { key: 'email', header: t('emailField'), render: (s) => s.email || '-' },
     { key: 'address', header: t('address'), render: (s) => s.address || '-' },
-    { key: 'balance', header: t('amount'), render: (s) => {
+    { key: 'balance', header: t('amount'), filterValue: balanceFor, exportValue: balanceFor, render: (s) => {
       const balance = balanceFor(s);
       return <span className={balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(balance, currency, lang)}</span>;
     } },
-    { key: 'actions', header: t('actions'), render: (s) => (
+    { key: 'actions', header: t('actions'), filterable: false, render: (s) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => setStatementSupplier(s)}
@@ -167,9 +164,6 @@ export function SuppliersPage() {
     <DesignSurface testId="suppliers-page">
       <DesignPageHeader title={t('suppliers')} actions={
         <>
-          {can('suppliers.manage') && (
-            <Button variant="outline" size="sm" onClick={handleExport} data-testid="suppliers-export"><Download className="w-4 h-4" /> {t('exportExcel')}</Button>
-          )}
           {can('purchases.evaluation') && (
             <Button variant="outline" size="sm" onClick={toggleEvaluation} data-testid="suppliers-evaluation"><Trophy className="w-4 h-4" /> {t('supplierEvaluation')}</Button>
           )}
@@ -180,7 +174,7 @@ export function SuppliersPage() {
       } />
       {showEvaluation ? (
         <DesignPanel testId="suppliers-evaluation-panel">
-          <DataTable columns={evaluationColumns} data={evaluation} loading={evLoading} emptyMessage={t('noData')} />
+          <DataTable tableId="supplier-evaluation" columns={evaluationColumns} data={evaluation} loading={evLoading} emptyMessage={t('noData')} enableExport={can('purchases.evaluation')} exportFilename="supplier-evaluation" />
         </DesignPanel>
       ) : (
         <>
@@ -188,7 +182,18 @@ export function SuppliersPage() {
             <DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="suppliers-search" />
           </DesignPanel>
           <DesignPanel testId="suppliers-table-panel">
-            <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} onRowClick={can('suppliers.manage') ? openEdit : undefined} />
+            <DataTable
+              tableId="suppliers"
+              columns={columns}
+              data={filtered}
+              loading={loading}
+              emptyMessage={t('noData')}
+              onRowClick={can('suppliers.manage') ? openEdit : undefined}
+              enableExport={can('suppliers.manage')}
+              enableTemplate={can('suppliers.manage')}
+              exportFilename="suppliers"
+              templateFilename="suppliers-template"
+            />
             <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
           </DesignPanel>
         </>
