@@ -25,6 +25,7 @@ interface PosOrderHeaderBarProps {
   activeTable: DiningTable | null;
   orderType: OrderType;
   itemsCount: number;
+  canPrintReceipt: boolean;
   total: number;
   currency: string;
   createdAt: string | null;
@@ -48,6 +49,7 @@ export function PosOrderHeaderBar({
   activeTable,
   orderType,
   itemsCount,
+  canPrintReceipt,
   total,
   currency,
   createdAt,
@@ -132,7 +134,7 @@ export function PosOrderHeaderBar({
           </button>
         )}
 
-        {perms.canPrintKitchen && itemsCount > 0 && (
+        {perms.canPrint && canPrintReceipt && (
           <button
             data-testid="pos-action-print"
             type="button"

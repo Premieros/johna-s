@@ -277,7 +277,7 @@ export function PosWorkspacePage() {
     },
     onProceedToPay: handlePay,
     onPrintReceipt: () => {
-      if (perms.canPrintKitchen && pos.cart.length > 0) pos.printKitchenTicket();
+      if (perms.canPrint && pos.lastReceipt && pos.cart.length === 0) void pos.printReceipt();
     },
     onEscape: () => {
       if (configProduct) setConfigProduct(null);
@@ -702,7 +702,7 @@ export function PosWorkspacePage() {
       onSetItemDiscount={pos.setItemDiscount}
       onHold={() => void pos.holdOrder()}
       onSendKitchen={() => void pos.sendToKitchen()}
-      onPrint={pos.printKitchenTicket}
+      onPrint={() => void pos.printReceipt()}
       onPay={handlePay}
       onAddItem={() => barcodeRef.current?.focus()}
       onConfigureItem={(item) => setConfigItem(item)}
@@ -823,6 +823,7 @@ export function PosWorkspacePage() {
             activeTable={pos.activeTable}
             orderType={pos.orderType}
             itemsCount={pos.cart.reduce((s, it) => s + it.quantity, 0)}
+            canPrintReceipt={!!pos.lastReceipt && pos.cart.length === 0}
             total={pos.total}
             currency={pos.effCurrency}
             createdAt={activeOrderCreatedAt}
@@ -851,7 +852,7 @@ export function PosWorkspacePage() {
             onOpenCustomer={() => setCustomerModalOpen(true)}
             onHoldOrder={() => void pos.holdOrder()}
             onSendKitchen={() => void pos.sendToKitchen()}
-            onPrint={pos.printKitchenTicket}
+            onPrint={() => void pos.printReceipt()}
             onPay={handlePay}
           />
 
@@ -1091,12 +1092,15 @@ export function PosWorkspacePage() {
               <p className="text-base font-semibold text-ui-text">{t('saleCompleted')}</p>
               <p className="text-sm text-ui-muted mt-1">{pos.lastReceipt.invoice}</p>
             </div>
-            <button
-              onClick={() => void pos.printReceipt()}
-              className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
-            >
-              <Printer className="w-5 h-5" /> {t('printReceipt')}
-            </button>
+            {perms.canPrint && (
+              <button
+                data-testid="pos-receipt-print"
+                onClick={() => void pos.printReceipt()}
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
+              >
+                <Printer className="w-5 h-5" /> {t('printReceipt')}
+              </button>
+            )}
           </div>
         )}
       </Modal>
