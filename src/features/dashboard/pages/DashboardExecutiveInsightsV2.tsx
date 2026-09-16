@@ -9,13 +9,23 @@ import { useActiveBranchId } from '@/lib/activeBranch';
 import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { formatCurrency, formatNumber } from '@/lib/format';
+import { aggregatePaymentMethods, netSaleAmount, type SalePaymentLike } from '@/features/reporting/numericIntegrity';
 
-type Sale = { id: string; total: number | null; paid_amount: number | null; payment_method: string | null; order_type: string | null; branch_id: string | null; created_at: string };
-type Stock = { quantity: number | null; branch_id: string | null };
+type Sale = {
+  id: string;
+  total: number | null;
+  paid_amount: number | null;
+  refunded_amount: number | null;
+  payment_method: string | null;
+  order_type: string | null;
+  branch_id: string | null;
+  created_at: string;
+};
+type Stock = { quantity: number | null; branch_id: string | null; product: { low_stock_threshold: number | null }[] | null };
 type Range = 'today' | 'week' | 'month';
 
 const rangeLabels: Record<Range, [string, string]> = { today: ['اليوم', 'Today'], week: ['7 أيام', '7 days'], month: ['30 يوم', '30 days'] };
-const paymentLabels: Record<string, [string, string]> = { cash: ['نقدي', 'Cash'], card: ['بطاقة', 'Card'], visa: ['فيزا / ماستركارد', 'Visa / Mastercard'], bank: ['تحويل بنكي', 'Bank transfer'], wallet: ['محفظة', 'Wallet'], instapay: ['InstaPay', 'InstaPay'], other: ['أخرى', 'Other'] };
+const paymentLabels: Record<string, [string, string]> = { cash: ['نقدي', 'Cash'], card: ['بطاقة', 'Card'], visa: ['فيزا / ماستركارد', 'Visa / Mastercard'], bank: ['تحويل بنكي', 'Bank transfer'], wallet: ['محفظة', 'Wallet'], instapay: ['InstaPay', 'InstaPay'], split: ['مختلط غير موزع', 'Unallocated split'], other: ['أخرى', 'Other'] };
 const orderLabels: Record<string, [string, string]> = { dine_in: ['الصالة', 'Dine-in'], takeaway: ['تيك أواي', 'Takeaway'], delivery: ['دليفري', 'Delivery'], car: ['سيارة', 'Car'], quick: ['سريع', 'Quick'], other: ['أخرى', 'Other'] };
 
 function Card({ children, className = '' }: { children: ReactNode; className?: string }) { return <section className={`rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${className}`}>{children}</section>; }
@@ -34,6 +44,7 @@ export function DashboardExecutiveInsightsV2() {
   const money = useCallback((value: number) => formatCurrency(value, settings?.currency || 'EGP', lang), [settings?.currency, lang]);
   const [range, setRange] = useState<Range>('today');
   const [sales, setSales] = useState<Sale[]>([]);
+  const [salePayments, setSalePayments] = useState<SalePaymentLike[]>([]);
   const [stock, setStock] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,33 +56,37 @@ export function DashboardExecutiveInsightsV2() {
       if (range === 'today') start.setHours(0, 0, 0, 0);
       if (range === 'week') start.setDate(start.getDate() - 6);
       if (range === 'month') start.setDate(start.getDate() - 29);
-      let salesQuery = supabase.from('sales').select('id,total,paid_amount,payment_method,order_type,branch_id,created_at').gte('created_at', start.toISOString()).lte('created_at', end.toISOString()).order('created_at', { ascending: false }).limit(5000);
-      let inventoryQuery = supabase.from('inventory').select('quantity,branch_id').limit(5000);
+      let salesQuery = supabase.from('sales').select('id,total,paid_amount,refunded_amount,payment_method,order_type,branch_id,created_at').gte('created_at', start.toISOString()).lte('created_at', end.toISOString()).order('created_at', { ascending: false }).limit(5000);
+      let inventoryQuery = supabase.from('inventory').select('quantity,branch_id,product:products(low_stock_threshold)').limit(5000);
       if (branchId) { salesQuery = salesQuery.eq('branch_id', branchId); inventoryQuery = inventoryQuery.eq('branch_id', branchId); }
       const [salesResult, inventoryResult] = await Promise.all([salesQuery, inventoryQuery]);
       if (salesResult.error) throw salesResult.error;
       if (inventoryResult.error) throw inventoryResult.error;
-      setSales((salesResult.data || []) as Sale[]);
-      setStock((inventoryResult.data || []) as Stock[]);
+      const saleRows = (salesResult.data || []) as Sale[];
+      setSales(saleRows);
+      setStock((inventoryResult.data || []) as unknown as Stock[]);
+      if (saleRows.length) {
+        const paymentResult = await supabase.from('sale_payments').select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id', saleRows.map((sale) => sale.id)).limit(10000);
+        setSalePayments(paymentResult.error ? [] : ((paymentResult.data || []) as SalePaymentLike[]));
+      } else {
+        setSalePayments([]);
+      }
     } catch (error) {
       console.error('Executive dashboard load failed', error);
-      setSales([]); setStock([]);
+      setSales([]); setSalePayments([]); setStock([]);
     } finally { setLoading(false); }
   }, [branchId, range]);
 
   useEffect(() => { void load(); }, [load]);
 
+  const paymentMix = useMemo(() => aggregatePaymentMethods(sales, salePayments), [sales, salePayments]);
   const stats = useMemo(() => {
-    const gross = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-    const collected = sales.reduce((sum, sale) => sum + Number(sale.paid_amount ?? sale.total ?? 0), 0);
-    return { gross, collected, orders: sales.length, average: sales.length ? gross / sales.length : 0 };
-  }, [sales]);
+    const netSales = sales.reduce((sum, sale) => sum + netSaleAmount(sale), 0);
+    const collected = paymentMix.reduce((sum, row) => sum + row.total, 0);
+    return { netSales, collected, orders: sales.length, average: sales.length ? netSales / sales.length : 0 };
+  }, [sales, paymentMix]);
 
-  const payments = useMemo(() => {
-    const totals = new Map<string, number>();
-    sales.forEach((sale) => { const key = (sale.payment_method || 'other').toLowerCase(); totals.set(key, (totals.get(key) || 0) + Number(sale.paid_amount ?? sale.total ?? 0)); });
-    return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [sales]);
+  const payments = useMemo(() => paymentMix.slice(0, 5).map((row) => [row.method, row.total] as const), [paymentMix]);
 
   const orderTypes = useMemo(() => {
     const totals = new Map<string, number>();
@@ -79,15 +94,15 @@ export function DashboardExecutiveInsightsV2() {
     return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [sales]);
 
-  const lowStockCount = useMemo(() => {
-    const threshold = Number(settings?.low_stock_threshold ?? 5);
-    return stock.filter((item) => Number(item.quantity || 0) <= threshold).length;
-  }, [settings?.low_stock_threshold, stock]);
+  const lowStockCount = useMemo(() => stock.filter((item) => {
+    const threshold = Number(item.product?.[0]?.low_stock_threshold ?? settings?.low_stock_threshold ?? 5);
+    return Number(item.quantity || 0) <= threshold;
+  }).length, [settings?.low_stock_threshold, stock]);
 
   const metrics: Array<{ title: string; value: string; Icon: typeof ShoppingCart; href: string }> = [
-    { title: ar ? 'إجمالي المبيعات' : 'Gross sales', value: money(stats.gross), Icon: ShoppingCart, href: '/reports' },
-    { title: ar ? 'التحصيل' : 'Collected', value: money(stats.collected), Icon: Wallet, href: '/accounting' },
-    { title: ar ? 'متوسط الطلب' : 'Average ticket', value: money(stats.average), Icon: CreditCard, href: '/pos' },
+    { title: ar ? 'صافي المبيعات' : 'Net sales', value: money(stats.netSales), Icon: ShoppingCart, href: '/reports?reportType=sales' },
+    { title: ar ? 'صافي التحصيل' : 'Net collected', value: money(stats.collected), Icon: Wallet, href: '/reports?reportType=sales_by_payment' },
+    { title: ar ? 'متوسط الطلب' : 'Average ticket', value: money(stats.average), Icon: CreditCard, href: '/reports?reportType=detailed_invoices' },
     { title: ar ? 'عدد الطلبات' : 'Orders', value: formatNumber(stats.orders), Icon: ShoppingCart, href: '/reports' },
   ];
 

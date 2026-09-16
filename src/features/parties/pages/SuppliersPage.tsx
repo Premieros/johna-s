@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Download, Trophy, FileText } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -24,7 +24,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useGuidedWorkflow } from '@/core/guard';
 import { SupplierStatementModal } from '../components/SupplierStatementModal';
-import type { Supplier, SupplierEvaluationRow } from '@/lib/types';
+import type { ApAgingRow, Supplier, SupplierEvaluationRow } from '@/lib/types';
 
 export function SuppliersPage() {
   const { t, lang } = useLanguage();
@@ -47,11 +47,34 @@ export function SuppliersPage() {
   const [showEvaluation, setShowEvaluation] = useState(false);
   const [evaluation, setEvaluation] = useState<SupplierEvaluationRow[]>([]);
   const [evLoading, setEvLoading] = useState(false);
+  const [openBalances, setOpenBalances] = useState<Record<string, number>>({});
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [form, setForm] = useState({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: '' });
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadOpenBalances = async () => {
+      const branchIds = branchFilter ? [branchFilter] : branches.map((branch) => branch.id);
+      if (!branchIds.length) {
+        if (!cancelled) setOpenBalances({});
+        return;
+      }
+      const results = await Promise.all(
+        branchIds.map((branchId) => api.accounting.getApAging({ p_branch_id: branchId, p_as_of: new Date().toISOString().slice(0, 10) })),
+      );
+      const next: Record<string, number> = {};
+      results.forEach(({ data }) => {
+        ((data as ApAgingRow[]) || []).forEach((row) => { next[row.supplier_id] = Number(row.open_amount || 0); });
+      });
+      if (!cancelled) setOpenBalances(next);
+    };
+    void loadOpenBalances();
+    return () => { cancelled = true; };
+  }, [branchFilter, branches]);
+
+  const balanceFor = (supplier: Supplier) => Number(openBalances[supplier.id] || 0);
   const filtered = items.filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.phone?.includes(search));
   const openAdd = () => { setEditing(null); setForm({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: branchFilter || '' }); setModalOpen(true); };
   const openEdit = (s: Supplier) => { setEditing(s); setForm({ name: s.name, name_en: s.name_en || '', phone: s.phone || '', email: s.email || '', address: s.address || '', tax_number: s.tax_number || '', balance: s.balance, notes: s.notes || '', branch_id: s.branch_id || branchFilter || '' }); setModalOpen(true); };
@@ -86,7 +109,7 @@ export function SuppliersPage() {
     reloadSuppliers();
   };
 
-  const handleExport = () => exportToExcel(items.map((s) => ({ Name: s.name, Branch: branches.find((b) => b.id === s.branch_id)?.name || '', Phone: s.phone || '', Email: s.email || '', Address: s.address || '', TaxNumber: s.tax_number || '', Balance: s.balance })), 'suppliers');
+  const handleExport = () => exportToExcel(items.map((s) => ({ Name: s.name, Branch: branches.find((b) => b.id === s.branch_id)?.name || '', Phone: s.phone || '', Email: s.email || '', Address: s.address || '', TaxNumber: s.tax_number || '', Balance: balanceFor(s) })), 'suppliers');
 
   const loadEvaluation = async () => {
     setEvLoading(true);
@@ -107,7 +130,10 @@ export function SuppliersPage() {
     { key: 'phone', header: t('phone'), render: (s) => s.phone || '-' },
     { key: 'email', header: t('emailField'), render: (s) => s.email || '-' },
     { key: 'address', header: t('address'), render: (s) => s.address || '-' },
-    { key: 'balance', header: t('amount'), render: (s) => <span className={s.balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(s.balance, currency, lang)}</span> },
+    { key: 'balance', header: t('amount'), render: (s) => {
+      const balance = balanceFor(s);
+      return <span className={balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(balance, currency, lang)}</span>;
+    } },
     { key: 'actions', header: t('actions'), render: (s) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         <button

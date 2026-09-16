@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Plus, Edit2, Trash2, Download, Upload } from 'lucide-react';
 import { supabase } from '@/api';
+import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
@@ -21,7 +22,7 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { Customer } from '@/lib/types';
+import type { ArAgingRow, Customer } from '@/lib/types';
 
 export function CustomersPage() {
   const { t, lang } = useLanguage();
@@ -39,12 +40,35 @@ export function CustomersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [openBalances, setOpenBalances] = useState<Record<string, number>>({});
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [form, setForm] = useState({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: '' });
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadOpenBalances = async () => {
+      const branchIds = branchFilter ? [branchFilter] : branches.map((branch) => branch.id);
+      if (!branchIds.length) {
+        if (!cancelled) setOpenBalances({});
+        return;
+      }
+      const results = await Promise.all(
+        branchIds.map((branchId) => api.accounting.getArAging({ p_branch_id: branchId, p_as_of: new Date().toISOString().slice(0, 10) })),
+      );
+      const next: Record<string, number> = {};
+      results.forEach(({ data }) => {
+        ((data as ArAgingRow[]) || []).forEach((row) => { next[row.customer_id] = Number(row.open_amount || 0); });
+      });
+      if (!cancelled) setOpenBalances(next);
+    };
+    void loadOpenBalances();
+    return () => { cancelled = true; };
+  }, [branchFilter, branches]);
+
+  const balanceFor = (customer: Customer) => Number(openBalances[customer.id] || 0);
   const filtered = items.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone?.includes(search));
   const openAdd = () => { setEditing(null); setForm({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: branchFilter || '' }); setModalOpen(true); };
   const openEdit = (c: Customer) => { setEditing(c); setForm({ name: c.name, name_en: c.name_en || '', phone: c.phone || '', email: c.email || '', address: c.address || '', tax_number: c.tax_number || '', balance: c.balance, notes: c.notes || '', branch_id: c.branch_id || branchFilter || '' }); setModalOpen(true); };
@@ -75,14 +99,14 @@ export function CustomersPage() {
     reloadCustomers();
   };
 
-  const handleExport = () => exportToExcel(items.map((c) => ({ Name: c.name, Branch: branches.find((b) => b.id === c.branch_id)?.name || '', Phone: c.phone || '', Email: c.email || '', Address: c.address || '', TaxNumber: c.tax_number || '', Balance: c.balance })), 'customers');
+  const handleExport = () => exportToExcel(items.map((c) => ({ Name: c.name, Branch: branches.find((b) => b.id === c.branch_id)?.name || '', Phone: c.phone || '', Email: c.email || '', Address: c.address || '', TaxNumber: c.tax_number || '', Balance: balanceFor(c) })), 'customers');
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const rows = await importFromExcel(file);
-      const payload = rows.map((r) => ({ name: String(r.Name || r.name || ''), phone: String(r.Phone || r.phone || ''), email: String(r.Email || r.email || ''), address: String(r.Address || r.address || ''), tax_number: String(r.TaxNumber || ''), balance: Number(r.Balance || 0), branch_id: branchFilter || branches[0]?.id || null })).filter((r) => r.name);
+      const payload = rows.map((r) => ({ name: String(r.Name || r.name || ''), phone: String(r.Phone || r.phone || ''), email: String(r.Email || r.email || ''), address: String(r.Address || r.address || ''), tax_number: String(r.TaxNumber || ''), balance: 0, branch_id: branchFilter || branches[0]?.id || null })).filter((r) => r.name);
       const { error } = await supabase.from('customers').insert(payload);
       if (error) show(error.message, 'error');
       else { show(`${payload.length} ${t('import')} OK`, 'success'); reloadCustomers(); }
@@ -95,7 +119,10 @@ export function CustomersPage() {
     { key: 'phone', header: t('phone'), render: (c) => c.phone || '-' },
     { key: 'email', header: t('emailField'), render: (c) => c.email || '-' },
     { key: 'address', header: t('address'), render: (c) => c.address || '-' },
-    { key: 'balance', header: t('amount'), render: (c) => <span className={c.balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(c.balance, currency, lang)}</span> },
+    { key: 'balance', header: t('amount'), render: (c) => {
+      const balance = balanceFor(c);
+      return <span className={balance > 0 ? 'text-ui-danger font-medium' : ''}>{formatCurrency(balance, currency, lang)}</span>;
+    } },
     { key: 'actions', header: t('actions'), render: (c) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         {can('customers.manage') && (

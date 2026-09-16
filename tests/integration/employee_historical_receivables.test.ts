@@ -40,14 +40,14 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
       await fn();
     });
 
-  guarded('combines historical debt with future credit sales and settles historical debt first', async () => {
+  guarded('combines opening/historical debt with future credit sales in all aging views and settles it first through aggregate collection', async () => {
     const historicalId = randomUUID();
     const saleId = randomUUID();
 
     await client.query(
       `INSERT INTO public.employee_receivable_entries
         (id, branch_id, customer_id, occurred_at, reference_number, entry_type, amount, notes)
-       VALUES ($1,$2,$3,now() - interval '40 days','LEGACY-1001','historical_charge',125,'legacy import fixture')`,
+       VALUES ($1,$2,$3,now() - interval '40 days','LEGACY-1001','opening_balance',125,'legacy import fixture')`,
       [historicalId, ids.branchA, ids.custA],
     );
 
@@ -72,10 +72,35 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     expect(Number(employee?.bucket_0_30)).toBe(75);
     expect(Number(employee?.bucket_31_60)).toBe(125);
 
+    const aging = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_ar_aging($1, current_date) AS result`,
+      [ids.branchA],
+    );
+    expect(aging.error).toBeUndefined();
+    const agingRows = (aging.rows[0]?.result || []) as Array<Record<string, unknown>>;
+    const agingEmployee = agingRows.find((row) => row.customer_id === ids.custA);
+    expect(agingEmployee).toBeTruthy();
+    expect(Number(agingEmployee?.open_amount)).toBe(200);
+    expect(Number(agingEmployee?.bucket_0_30)).toBe(75);
+    expect(Number(agingEmployee?.bucket_31_60)).toBe(125);
+
+    const summary = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_aging_summary($1, current_date) AS result`,
+      [ids.branchA],
+    );
+    expect(summary.error).toBeUndefined();
+    const totalFromRows = agingRows.reduce((sum, row) => sum + Number(row.open_amount || 0), 0);
+    const summaryResult = (summary.rows[0]?.result || {}) as { ar_open?: number | string };
+    expect(Number(summaryResult.ar_open)).toBe(totalFromRows);
+
     const payment = await runAsPersist(
       client,
       ids.users.branch_manager,
-      `SELECT public.receive_employee_receivable_payment($1,$2,150,'cash','fixture settlement') AS result`,
+      `SELECT public.receive_payment($1,$2,150,'cash',NULL,'fixture aggregate settlement') AS result`,
       [ids.custA, ids.branchA],
     );
     expect(payment.error).toBeUndefined();

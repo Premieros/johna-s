@@ -73,14 +73,19 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
   detailed_invoices: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'table', 'status'],
   purchases: ['supplier', 'buyer', 'warehouse', 'status'],
   expenses: ['payment_method', 'category'],
-  profit: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
+  // Accounting profit is sourced from the journal-based income statement.
+  // Transaction dimensions (payment/cashier/order type) cannot be applied to
+  // COGS and operating expenses without producing a misleading pseudo-profit.
+  profit: [],
   inventory: ['warehouse', 'product', 'category'],
   component_consumption: ['warehouse', 'product', 'category'],
   recipe_costs: ['product', 'category'],
   top_consumed_components: ['warehouse', 'product', 'category'],
   top_consumed_products: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category'],
   low_stock: ['warehouse', 'product', 'category'],
-  cashier_performance: ['warehouse', 'cashier'],
+  // The cashier report currently has a cashier-level query contract only.
+  // Do not expose a warehouse filter that would silently return misleading rows.
+  cashier_performance: ['cashier'],
   returns: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
   production_waste: ['warehouse', 'product'],
 };
@@ -92,18 +97,15 @@ export const DATE_DRIVEN_REPORTS = new Set<ReportType>([
 ]);
 
 export const ORDER_TYPE_OPTIONS: readonly string[] = ['dine_in', 'takeaway', 'delivery', 'drive_thru'];
-
 export const PAYMENT_METHOD_OPTIONS: readonly string[] = ['cash', 'card', 'transfer', 'credit'];
 
-export const SALE_STATUS_OPTIONS: readonly string[] = ['completed', 'refunded', 'cancelled', 'pending'];
+// `returned` is the persisted state used by the current return workflow.
+// Keep legacy states visible for older rows/imports.
+export const SALE_STATUS_OPTIONS: readonly string[] = ['completed', 'returned', 'refunded', 'cancelled', 'pending'];
 
-export function emptyFilters(): ReportFilters {
-  return {};
-}
+export function emptyFilters(): ReportFilters { return {}; }
 
-export interface EqBuilder {
-  eq(column: string, value: unknown): EqBuilder;
-}
+export interface EqBuilder { eq(column: string, value: unknown): EqBuilder; }
 
 export function applySalesFilters<Q extends EqBuilder>(q: Q, f: ReportFilters): Q {
   let result: Q = q;
