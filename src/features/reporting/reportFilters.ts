@@ -73,7 +73,10 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
   detailed_invoices: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'table', 'status'],
   purchases: ['supplier', 'buyer', 'warehouse', 'status'],
   expenses: ['payment_method', 'category'],
-  profit: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
+  // Accounting profit is sourced from the journal-based income statement.
+  // Transaction dimensions (payment/cashier/order type) cannot be applied to
+  // COGS and operating expenses without producing a misleading pseudo-profit.
+  profit: [],
   inventory: ['warehouse', 'product', 'category'],
   component_consumption: ['warehouse', 'product', 'category'],
   recipe_costs: ['product', 'category'],
@@ -95,7 +98,9 @@ export const ORDER_TYPE_OPTIONS: readonly string[] = ['dine_in', 'takeaway', 'de
 
 export const PAYMENT_METHOD_OPTIONS: readonly string[] = ['cash', 'card', 'transfer', 'credit'];
 
-export const SALE_STATUS_OPTIONS: readonly string[] = ['completed', 'refunded', 'cancelled', 'pending'];
+// `returned` is the persisted state used by the current return workflow.
+// Keep legacy states visible for older rows/imports.
+export const SALE_STATUS_OPTIONS: readonly string[] = ['completed', 'returned', 'refunded', 'cancelled', 'pending'];
 
 export function emptyFilters(): ReportFilters {
   return {};
