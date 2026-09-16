@@ -34,7 +34,7 @@ describe('global UI number formatting contract', () => {
     const violations = collect(root)
       .filter((file) => !isExcluded(file))
       .filter((file) => fs.readFileSync(file, 'utf8').includes('.toFixed('))
-      .map((file) => path.relative(process.cwd(), file).replaceAll('\\', '/'));
+      .map((file) => path.relative(process.cwd(), file).replace(/\\/g, '/'));
 
     expect(violations, `Use src/lib/format.ts helpers instead of direct toFixed() in UI:\n${violations.join('\n')}`).toEqual([]);
   });
