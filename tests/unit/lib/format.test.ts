@@ -4,27 +4,58 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatDisplayNumber,
   formatNumber,
+  formatPercent,
+  formatQuantity,
   generateBarcode,
   generateInvoiceNumber,
   todayISO,
 } from '@/lib/format';
 
-describe('formatCurrency', () => {
-  it('formats EGP with Arabic symbol by default', () => {
-    expect(formatCurrency(12.5)).toBe('12.50 ج.م');
+describe('unified display number contract', () => {
+  it('uses thousands separators and at most one decimal for general display', () => {
+    expect(formatDisplayNumber(1234567.5)).toBe('1,234,567.5');
+    expect(formatDisplayNumber(1234567)).toBe('1,234,567');
+    expect(formatNumber(1234.56)).toBe('1,234.6');
   });
 
-  it('formats SAR with English label', () => {
-    expect(formatCurrency(100, 'SAR', 'en')).toBe('100.00 SAR');
+  it('shows zero and non-finite values as a dash', () => {
+    expect(formatDisplayNumber(0)).toBe('-');
+    expect(formatNumber(undefined)).toBe('-');
+    expect(formatDisplayNumber(Number.NaN)).toBe('-');
+  });
+
+  it('keeps higher precision only for quantities that need it', () => {
+    expect(formatQuantity(0.12345)).toBe('0.123');
+    expect(formatQuantity(1250)).toBe('1,250');
+  });
+
+  it('formats percentages with one decimal max and zero as dash', () => {
+    expect(formatPercent(15.55)).toBe('15.6%');
+    expect(formatPercent(15)).toBe('15%');
+    expect(formatPercent(0)).toBe('-');
+  });
+});
+
+describe('formatCurrency', () => {
+  it('formats EGP with Arabic symbol by default', () => {
+    expect(formatCurrency(12.5)).toBe('12.5 ج.م');
+    expect(formatCurrency(1234567.5)).toBe('1,234,567.5 ج.م');
+  });
+
+  it('formats whole SAR values without forced decimals', () => {
+    expect(formatCurrency(100, 'SAR', 'en')).toBe('100 SAR');
   });
 
   it('falls back to the raw currency code when unknown', () => {
-    expect(formatCurrency(1, 'KWD', 'ar')).toBe('1.00 KWD');
+    expect(formatCurrency(1, 'KWD', 'ar')).toBe('1 KWD');
   });
 
-  it('handles null/undefined amounts', () => {
-    expect(formatCurrency(undefined as unknown as number)).toBe('0.00 ج.م');
+  it('shows null/undefined/zero amounts as dash', () => {
+    expect(formatCurrency(undefined)).toBe('-');
+    expect(formatCurrency(null)).toBe('-');
+    expect(formatCurrency(0)).toBe('-');
   });
 });
 
@@ -33,7 +64,7 @@ describe('formatNumber', () => {
     expect(formatNumber(1234.5)).toBe('1,234.5');
   });
 
-  it('respects decimal precision', () => {
+  it('respects explicit decimal precision', () => {
     expect(formatNumber(0.12345, 3)).toBe('0.123');
   });
 });
