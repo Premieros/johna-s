@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Bell, Check, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Bell, Check, CheckCircle2, Printer, X } from 'lucide-react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -15,6 +15,17 @@ type ApprovalRequest = {
   requester_id: string;
 };
 
+type PrintAlert = {
+  id: string;
+  kind: 'kitchen' | 'receipt' | 'test';
+  station_code: string | null;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const labels: Record<string, { ar: string; en: string }> = {
   discount: { ar: 'طلب خصم', en: 'Discount request' },
   reprint: { ar: 'إعادة طباعة', en: 'Reprint request' },
@@ -26,27 +37,96 @@ const labels: Record<string, { ar: string; en: string }> = {
   force_close_shift: { ar: 'إغلاق وردية إجباري', en: 'Force close shift' },
 };
 
+function stationLabel(code: string | null, ar: boolean) {
+  const normalized = (code ?? '').trim().toLowerCase();
+  if (normalized === 'kit') return ar ? 'المطبخ' : 'Kitchen';
+  if (normalized === 'cashier') return ar ? 'الكاشير' : 'Cashier';
+  if (normalized === 'بار') return ar ? 'البار' : 'Bar';
+  if (normalized === 'main') return ar ? 'المحطة الرئيسية' : 'Main station';
+  return code || (ar ? 'الطابعة' : 'Printer');
+}
+
+function printAlertText(item: PrintAlert, ar: boolean) {
+  const station = stationLabel(item.station_code, ar);
+  const error = item.last_error ?? '';
+
+  if (item.status === 'submitted' && item.attempts > 1) {
+    return {
+      title: ar ? `تمت استعادة الطباعة — ${station}` : `Printing recovered — ${station}`,
+      detail: ar
+        ? `نجحت الطباعة بعد ${item.attempts} محاولات.`
+        : `Printing succeeded after ${item.attempts} attempts.`,
+      resolved: true,
+    };
+  }
+
+  if (error.startsWith('PRINTER_ROUTE_MISSING:')) {
+    return {
+      title: ar ? `مسار الطابعة غير مضبوط — ${station}` : `Printer route missing — ${station}`,
+      detail: ar ? 'تحقق من ربط المحطة بالطابعة على جهاز الطباعة.' : 'Check the station-to-printer route on the print device.',
+      resolved: false,
+    };
+  }
+
+  if (error === 'INVALID_APPROVAL') {
+    return {
+      title: ar ? 'تعذر تنفيذ إعادة الطباعة' : 'Reprint could not be completed',
+      detail: ar ? 'الموافقة غير صالحة أو انتهت صلاحيتها.' : 'The approval is invalid or expired.',
+      resolved: false,
+    };
+  }
+
+  const retrying = item.attempts < 5;
+  return {
+    title: retrying
+      ? (ar ? `الطباعة في انتظار إعادة المحاولة — ${station}` : `Waiting to retry printing — ${station}`)
+      : (ar ? `فشلت الطباعة — ${station}` : `Printing failed — ${station}`),
+    detail: retrying
+      ? (ar ? `المحاولة ${item.attempts}/5 — سيحاول النظام تلقائيًا.` : `Attempt ${item.attempts}/5 — the system will retry automatically.`)
+      : (ar ? 'انتهت محاولات الطباعة التلقائية.' : 'Automatic print retries are exhausted.'),
+    resolved: false,
+  };
+}
+
 export function ApprovalInbox({ ar }: { ar: boolean }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ApprovalRequest[]>([]);
+  const [printAlerts, setPrintAlerts] = useState<PrintAlert[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
- const allowed =
-  user?.role === 'branch_manager' ||
-  user?.role === 'owner' ||
-  user?.role === 'super_admin';
+  const allowed =
+    user?.role === 'branch_manager' ||
+    user?.role === 'owner' ||
+    user?.role === 'super_admin';
 
   const load = useCallback(async () => {
     if (!allowed || !user?.branch_id) return;
-    const { data } = await supabase
-      .from('approval_requests')
-      .select('id,action_type,entity_type,entity_id,payload,reason,status,created_at,requester_id,expires_at')
-      .eq('branch_id', user.branch_id)
-      .eq('status', 'pending')
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(30);
-    setItems((data ?? []) as ApprovalRequest[]);
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [approvalsResult, printResult] = await Promise.all([
+      supabase
+        .from('approval_requests')
+        .select('id,action_type,entity_type,entity_id,payload,reason,status,created_at,requester_id,expires_at')
+        .eq('branch_id', user.branch_id)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase
+        .from('cloud_print_jobs')
+        .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at')
+        .eq('branch_id', user.branch_id)
+        .in('status', ['failed', 'submitted'])
+        .gte('updated_at', since)
+        .order('updated_at', { ascending: false })
+        .limit(40),
+    ]);
+
+    setItems((approvalsResult.data ?? []) as ApprovalRequest[]);
+    const recent = ((printResult.data ?? []) as PrintAlert[])
+      .filter((item) => item.status === 'failed' || (item.status === 'submitted' && item.attempts > 1))
+      .slice(0, 20);
+    setPrintAlerts(recent);
   }, [allowed, user?.branch_id]);
 
   useEffect(() => {
@@ -57,6 +137,11 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'approval_requests', filter: `branch_id=eq.${user.branch_id}` },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cloud_print_jobs', filter: `branch_id=eq.${user.branch_id}` },
         () => void load(),
       )
       .subscribe();
@@ -77,6 +162,12 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
     }
   };
 
+  const activePrintAlerts = useMemo(
+    () => printAlerts.filter((item) => item.status === 'failed').length,
+    [printAlerts],
+  );
+  const bellCount = items.length + activePrintAlerts;
+
   if (!allowed) return null;
 
   return (
@@ -86,12 +177,12 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
         data-testid="approval-inbox-button"
         onClick={() => setOpen((v) => !v)}
         className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text"
-        aria-label={ar ? 'طلبات الموافقة' : 'Approval requests'}
+        aria-label={ar ? 'الموافقات والتنبيهات' : 'Approvals and alerts'}
       >
         <Bell className="h-5 w-5" />
-        {items.length > 0 && (
+        {bellCount > 0 && (
           <span data-testid="approval-inbox-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">
-            {items.length}
+            {bellCount}
           </span>
         )}
       </button>
@@ -99,12 +190,46 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
       {open && (
         <div data-testid="approval-inbox-panel" className="absolute end-0 top-full z-[80] mt-2 w-[min(92vw,390px)] overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-ui-lg">
           <div className="border-b border-ui-border px-4 py-3">
-            <p className="font-semibold text-ui-text">{ar ? 'طلبات موافقة الكاشير' : 'Cashier approval requests'}</p>
-            <p className="text-xs text-ui-muted">{ar ? 'الطلبات تنتهي تلقائيًا بعد 10 دقائق' : 'Requests expire automatically after 10 minutes'}</p>
+            <p className="font-semibold text-ui-text">{ar ? 'الموافقات والتنبيهات' : 'Approvals and alerts'}</p>
+            <p className="text-xs text-ui-muted">{ar ? 'طلبات الموافقة وحالة مشاكل الطباعة المهمة' : 'Approval requests and important printing issues'}</p>
           </div>
           <div className="max-h-96 overflow-y-auto p-2">
-            {items.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد طلبات معلّقة' : 'No pending requests'}</p>
+            {printAlerts.length > 0 && (
+              <div className="mb-3">
+                <p className="px-2 pb-2 text-xs font-semibold text-ui-muted">{ar ? 'تنبيهات النظام' : 'System alerts'}</p>
+                {printAlerts.map((item) => {
+                  const alert = printAlertText(item, ar);
+                  return (
+                    <div key={`print-${item.id}`} className="mb-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 last:mb-0">
+                      <div className="flex items-start gap-2.5">
+                        {alert.resolved ? (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ui-success" />
+                        ) : item.attempts < 5 ? (
+                          <Printer className="mt-0.5 h-4 w-4 shrink-0 text-ui-warning" />
+                        ) : (
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-ui-danger" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="font-semibold text-ui-text">{alert.title}</p>
+                            <span className="shrink-0 text-[10px] text-ui-subtle">
+                              {new Date(item.updated_at).toLocaleTimeString(ar ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-ui-muted">{alert.detail}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {items.length > 0 && (
+              <p className="px-2 pb-2 text-xs font-semibold text-ui-muted">{ar ? 'طلبات الموافقة' : 'Approval requests'}</p>
+            )}
+            {items.length === 0 && printAlerts.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد طلبات أو تنبيهات' : 'No pending requests or alerts'}</p>
             ) : items.map((item) => {
               const label = labels[item.action_type];
               return (
