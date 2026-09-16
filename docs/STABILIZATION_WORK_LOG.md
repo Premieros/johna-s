@@ -1,12 +1,12 @@
 # Stabilization Work Log — Live
 
-Date: 2026-09-13
+Date: 2026-09-16
 Repository: `Premieros/johna-s`
 Production branch: `main`
 Production Supabase ONLY: `azzdesuowpdcoflmyezn`
 Source of Truth: `docs/CURRENT_WORK_PLAN.md`
 
-> The previous long-form stabilization history is preserved verbatim at `docs/archive/STABILIZATION_WORK_LOG_PRE_PR5_2026-09-13.md`. Detailed same-day checkpoints remain in `docs/STABILIZATION_WORK_LOG_2026-09-13_ADDENDUM.md`.
+> The previous long-form stabilization history is preserved verbatim at `docs/archive/STABILIZATION_WORK_LOG_PRE_PR5_2026-09-13.md`. Detailed same-day checkpoints remain in the dated/addendum logs. This live log keeps only the active guardrails plus the latest checkpoints needed to resume work safely.
 
 ## Permanent execution guardrails
 
@@ -16,170 +16,80 @@ Source of Truth: `docs/CURRENT_WORK_PLAN.md`
 - No weakening RLS/tests.
 - No deletion/reset/reseed/rewrite of user data, balances, settings, invoices, stock, or working models for convenience.
 - Migrations are forward-only / append-only.
-- No Production migration before Full Verify Green.
+- No Production migration before Full Verify Green and explicit approval.
 - Before each write/merge: fetch current `main`, current work branch/PR, and check newer work.
 - Standard gate: `Baseline -> Root cause -> Small change -> Focused tests -> Integration/Regression -> Full Verify -> Merge -> Verify main -> Deploy`.
 - Mandatory UX Acceptance Gate applies to every touched surface without broad redesign or authorization/business-rule drift.
+- Current printing/Print Agent/routing remains frozen unless separately scoped and approved.
 
-## Program closure status
+## Current synchronized baseline — 2026-09-16
 
-- PR1 Architecture / Simplification Map ✅ merged.
-- PR2 Inventory Contracts ✅ merged.
-- PR3 Catalog 6A/6B/6C/6D ✅ closed.
-- PR4 Purchases End-to-End — PR #98 ✅ merged.
-  - post-merge `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca`
-  - Verify main #1245 Full Green ✅
-  - Deploy #625 Green ✅
-  - Production API parity ✅
-  - Browser Smoke ✅
-  - Production manual writes: NONE.
+- Current `main`: `b88ba29e5aa071e7d10bd7a19f7c6eed2341f9dd`.
+- Latest merged PR: #152 — **Fix dashboard data display and default period**.
+- Merge commit message records **Full Verify #1523 Green** on the exact PR head before merge.
+- Current open PR inventory at this checkpoint: PR #132 only, **Draft/Open**, for the Android dining-room waiter app on `development/mobile-delivery-app`.
+- Mobile work remains isolated from core stabilization; do not cross-edit or push to that branch from the core workstream.
 
-## PR5 — Sales / POS / Tables / Kitchen / Payments
+## Recent merged work now reflected in `main`
 
-Status: **CLOSEOUT / FINAL VERIFY REQUIRED ON DOCUMENTATION-COMPLETE HEAD**
-Branch: `development/pr5-sales-pos-kitchen`
-PR: #99
-Baseline: `main@eaed1c4aee771d2f5ed3c5722e2f1daedcddd0ca`
-Detailed evidence: `docs/PR5_SALES_POS_KITCHEN_CLOSURE.md`
+### PR #148 — Dining table occupancy reconciliation
 
-### Audit result
+- Rebuilt from current main after superseding stale/failing PR #145.
+- Centralizes dining-table occupancy reconciliation from effective active orders/items.
+- Empty orders do not occupy a table; positive effective items do.
+- Removing/zeroing the final effective item frees the table.
+- Prevents stale vacancy when another effective active/held order still occupies the table.
+- No printing/KDS/inventory/accounting redesign.
 
-Existing behavior was inspected before modification. Confirmed contracts include:
+### PR #149 — Compact dashboard / numeric display cleanup
 
-- granular Permission-First POS permissions; no new role-name authorization;
-- `send_to_kitchen` owns Kitchen inventory consumption and uses an order-row `FOR UPDATE` serialization point;
-- positive delta only; retry with no new quantity is a no-op;
-- order warehouse pinning and settlement mismatch protection; no silent cross-warehouse switch for an existing order;
-- normal/split settlement do not re-deduct Kitchen-consumed stock;
-- split payment atomicity;
-- offline/reconciliation ambiguity safeguards and cashier/idempotency preservation;
-- occupied-table/order ownership and operator identity remain scoped.
+- UI-only dashboard cleanup.
+- Compact toolbar/quick actions.
+- Shared numeric formatting with thousands separators and cleaner zero/fraction display.
+- No database, RLS, POS, inventory, shift, KDS, or printing logic changes.
 
-### Proven coverage gap
+### PR #150 — Employee opening receivables + statements
 
-The existing suite did not explicitly prove two simultaneous PostgreSQL sessions calling `send_to_kitchen` against the same order while the first transaction still held the row lock.
+- Corrected the employee data model so owner-provided amounts are treated as opening balances, not synthetic transaction/payment history.
+- Added a dedicated full statement per employee receivable account.
+- Statement includes date, movement type, transaction/reference, description, method/source, debit, credit/paid, and running balance.
+- Opening state is exactly one `opening_balance` row per employee; future actual sales/payments continue through canonical flows.
+- No schema migration, inventory/POS/KDS/printing authority change, or Production data write was performed by the PR itself.
 
-### Change
+### PR #151 — Numeric integrity across balances, receivables, and reports
 
-Added only:
+- Customer list/export uses computed AR rather than stale stored balance.
+- Supplier list/export uses computed AP rather than stale stored balance.
+- AR aging/summary includes employee opening receivables.
+- Employee collection routes through the canonical settlement path.
+- Corrected numeric aggregation issues in reports/dashboard without weakening permissions/RLS.
 
-`tests/integration/kitchen_send_concurrency.test.ts`
+### PR #152 — Dashboard data display and default period
 
-The regression proves:
+- Replaced split dashboard surfaces with one period/branch-aware data surface.
+- Defaults to the current calendar month so existing monthly data is visible immediately.
+- Keeps today / 7 days / month / year controls.
+- Isolates optional sales/payment/inventory/sale-item source failures so one failing source cannot blank the full dashboard.
+- Uses canonical net-sale/payment/refund helpers and keeps accounting net profit sourced from `get_income_statement`.
+- No Production migration, RLS change, or printing change.
+- Merge commit confirms Full Verify #1523 Green before merge.
 
-1. first session sends successfully and retains the order lock until commit;
-2. second session blocks behind that lock;
-3. after the first commit, the second completes as a successful no-op (`items_sent_count = 0`);
-4. stock is reduced exactly once;
-5. KDS / `order_kitchen_sends` is written exactly once;
-6. no duplicate send row exists.
+## Parallel mobile workstream
 
-The regression passed. Therefore no runtime SQL, migration, Kitchen rule, payment rule, or user-data change was made.
-
-### UX Acceptance Gate
-
-POS/Kitchen/Payments/Tables were reviewed for missing actions, duplicate controls, unclear labels/status/help, prerequisite routing, dangerous actions, Arabic-first/RTL, and unnecessary steps. No proven UX regression required a change, so no cosmetic redesign was added merely to expand scope.
-
-### Verification
-
-Implementation commit: `e025de3ca641e3e611b41086c4ae32861cbb306b`
-Verify #1246: **FULL GREEN** ✅
-
-- repository identity ✅
-- frontend API parity ✅
-- lint ✅
-- application typecheck ✅
-- test-suite typecheck ✅
-- unit ✅
-- build ✅
-- Fresh DB canonical migrations ✅
-- schema ✅
-- Permission-First CI checks ✅
-- integration/security/RLS ✅
-- true two-session Kitchen concurrency regression ✅
-- Browser Smoke ✅
-
-Closure documentation changes the PR HEAD, so a new Full Verify on that exact documentation-complete HEAD is still mandatory before merge.
-
-Production Supabase writes during PR5: **NONE**.
-
-## Next action
-
-1. Run Full Verify on the documentation-complete PR #99 HEAD.
-2. If Full Green, confirm `main` and PR HEAD did not move, mark Ready, and merge using expected-head protection.
-3. Verify post-merge `main` and Deploy.
-4. Only then start PR6 Shift / Finance / Reports.
-
----
-
-## 2026-09-15 checkpoint — parallel mobile ownership and pending work
-
-Current repository baseline observed at checkpoint:
-
-- `main@0919ddd171890852b03e712d45b18891ea31f821`
-- latest observed merge: PR #133 — manufacturing completion RPC authority.
-- merge message records Full Verify #1402 Green on exact head and states no DB migration, Production data, printing, POS, KDS, pricing, or payment change.
-
-### Parallel mobile workstream
-
-- Branch: `development/mobile-delivery-app`
+- Branch: `development/mobile-delivery-app`.
 - PR: #132 — Draft / Open.
-- Ownership: another model is actively working this branch.
-- Rule: this stabilization/documentation workstream must not edit or push to that branch.
-- Approved product direction now documented on PR #132:
-  - Android app is for dining-room waiter/captain, not delivery captain;
-  - customer mode is deferred;
-  - the app later reflects the authenticated user's existing system permissions dynamically;
-  - manager and waiter use the same app surface but see only granted capabilities;
-  - Permission-First remains mandatory; no role-name authorization;
-  - existing POS, Production DB, printing, and core business logic are not to be modified from mobile work without separate explicit approval;
-  - existing `send_to_kitchen` authority and frozen printing remain unchanged.
+- Purpose: live Android app for dining-room waiter/captain using existing authentication, branch visibility, tables, catalog, modifiers, canonical order create/update, and `send_to_kitchen`.
+- No service-role key in Android, no mobile-specific DB migration/backend fork, no direct inventory writes, no Production changes, and no Print Agent changes.
+- Payment/split/transfer/approval execution remains in the existing POS until separately wired and regression-tested.
+- Do not merge without explicit approval.
 
-### Pending work at this checkpoint
+## Still pending / independently gated
 
-1. PR #132 mobile waiter app remains active under the other model; no cross-editing.
-2. Production trial-sales deletion remains unresolved because destructive-action protection blocked the prior attempt; requires an allowed administrative path plus post-delete count verification, without stock rewrites.
-3. Any Production migration must be re-evaluated from the current `main`/relevant PR, then pass Full Verify and receive explicit Production approval.
-4. Final handover still requires full regression verification on the exact handover head, including Permission-First, branch/warehouse isolation, RLS/security, Kitchen stock authority, approvals, and Browser Smoke where applicable.
-5. Because `main` moved repeatedly on 2026-09-15, every new workstream must refresh `main` and inspect open PRs/branches before writing.
+1. Production trial-sales cleanup remains a separate administrative task if still required; do not bypass destructive-action protection and do not rewrite stock to make counts match.
+2. Any unapplied Production migration must be determined from current `main`, pass the required Full Verify, and receive explicit Production approval.
+3. Final handover still requires regression verification on the exact handover head, including Permission-First, branch/warehouse isolation, RLS/security, Kitchen stock authority, approvals, and Browser Smoke where applicable.
+4. Every new core workstream must branch from the latest `main`, not from historical baselines recorded earlier in this log.
 
-No Production write was performed for this checkpoint. No mobile branch code was modified from this documentation workstream.
+## Resume point
 
----
-
-## 2026-09-16 checkpoint — PR #141 Employee Receivables
-
-Branch: `development/employee-receivables`
-PR: #141
-Baseline at branch creation: `main@3cdea821c0c3a2105ae389db4c6b6d1f3ba9403b`
-
-### Implemented scope
-
-- Added a dedicated Finance page for employee receivables.
-- Employee receivable accounts are modeled as rows in `customers` with `customer_type = 'employee'`; they are not system/auth users and do not receive login credentials or permissions.
-- Reused canonical customer AR aging (`get_ar_aging`) and generic customer receipt (`receive_payment`), so no parallel receivable balance was introduced.
-- Added employee customer creation under existing `customers.manage` authority.
-- Employee receivable settlement uses existing `sales.payment.receive` authority.
-- Removed the legacy employee-credit panel from Customers because it depended on `employee_user_id -> users` linking.
-- Added forward-only migration `20260916000000_employee_customer_classification.sql` to add `customers.customer_type`, preserve historical linked rows as employees, and index `(branch_id, customer_type)`.
-- No inventory/FIFO/printing/POS stock movement logic was touched.
-- No Production migration or Production data write was performed.
-
-### Verification on implementation head
-
-Workflow: Verify main #1456 / run `35024776511` — **FULL GREEN** ✅
-
-- repository identity ✅
-- frontend API contract ✅
-- lint ✅
-- application typecheck ✅
-- test-suite typecheck ✅
-- unit ✅
-- build ✅
-- Fresh DB canonical migrations ✅
-- schema verification ✅
-- Permission-First CI setup ✅
-- integration/security/RLS regression ✅
-- Browser Smoke ✅
-
-This documentation commit changes the PR HEAD, therefore Full Verify must run again on the new exact head before merge. Production migration remains blocked until a separate explicit approval after final Full Green.
+Core system work resumes from `main@b88ba29e5aa071e7d10bd7a19f7c6eed2341f9dd` or a later verified `main` if it moves. Re-check open PRs before writing. PR #132 remains isolated. Do not reopen completed work without a demonstrated regression.
