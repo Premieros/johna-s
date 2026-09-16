@@ -95,6 +95,6 @@ export function escapeHtml(value: unknown): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/[\x22]/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
