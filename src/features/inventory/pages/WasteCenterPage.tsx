@@ -9,6 +9,7 @@ import { Input, Select, Textarea } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { formatNumber, formatQuantity } from '@/lib/format';
 import { supabase } from '@/api';
 import type { WasteEntry, WasteCategory } from '@/lib/types';
 
@@ -195,9 +196,9 @@ export function WasteCenterPage() {
       const cat = (r as unknown as { waste_category?: { name?: string } }).waste_category;
       return cat?.name ?? '-';
     } },
-    { key: 'quantity', header: ar ? 'الكمية' : 'Qty' },
-    { key: 'unit_cost', header: ar ? 'تكلفة الوحدة' : 'Unit Cost', render: r => Number(r.unit_cost || 0).toLocaleString() },
-    { key: 'total_cost', header: ar ? 'الإجمالي' : 'Total', render: r => Number(r.total_cost || 0).toLocaleString() },
+    { key: 'quantity', header: ar ? 'الكمية' : 'Qty', render: r => formatQuantity(Number(r.quantity || 0), 3) },
+    { key: 'unit_cost', header: ar ? 'تكلفة الوحدة' : 'Unit Cost', render: r => formatNumber(Number(r.unit_cost || 0), 1) },
+    { key: 'total_cost', header: ar ? 'الإجمالي' : 'Total', render: r => formatNumber(Number(r.total_cost || 0), 1) },
     { key: 'reason', header: ar ? 'السبب' : 'Reason', render: r => r.reason ?? '-' },
     { key: 'status', header: ar ? 'الحالة' : 'Status', render: r => <span className={`font-bold ${statusColor(r.status)}`}>{r.status === 'approved' ? (ar ? 'معتمد' : 'Approved') : r.status === 'rejected' ? (ar ? 'مرفوض' : 'Rejected') : (ar ? 'قيد المراجعة' : 'Pending')}</span> },
   ];
@@ -317,9 +318,9 @@ function WasteReport({ ar, branchFilter }: { ar: boolean; branchFilter: string |
           <tr key={i} className="border-b border-ui-border">
             <td className="py-2">{String(r.waste_category)}</td>
             <td className="py-2">{String(r.waste_type)}</td>
-            <td className="py-2 text-end">{Number(r.total_quantity).toLocaleString()}</td>
-            <td className="py-2 text-end">{Number(r.total_cost).toLocaleString()}</td>
-            <td className="py-2 text-end">{String(r.entry_count)}</td>
+            <td className="py-2 text-end">{formatQuantity(Number(r.total_quantity), 3)}</td>
+            <td className="py-2 text-end">{formatNumber(Number(r.total_cost), 1)}</td>
+            <td className="py-2 text-end">{formatNumber(Number(r.entry_count), 0)}</td>
           </tr>
         ))}</tbody>
       </table>
