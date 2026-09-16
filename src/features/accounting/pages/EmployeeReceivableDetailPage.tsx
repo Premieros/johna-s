@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, HandCoins } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/api';
 import { Button } from '@/components/Button';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -9,7 +8,6 @@ import { DesignPanel } from '@/components/design/DesignPanel';
 import { useToast } from '@/components/Toast';
 import { useLanguage } from '@/context/LanguageContext';
 import { useSettings } from '@/context/SettingsContext';
-import { APP_ROUTES } from '@/core/navigation/routes';
 import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
 
@@ -34,13 +32,13 @@ type StatementRow = {
   balance: number;
 };
 
+type Props = { customerId: string; onBack: () => void };
+
 const dateText = (value: string, lang: string) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-GB', {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
 }).format(new Date(value));
 
-export function EmployeeReceivableDetailPage() {
-  const { customerId } = useParams<{ customerId: string }>();
-  const navigate = useNavigate();
+export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
   const can = useCan();
@@ -121,7 +119,7 @@ export function EmployeeReceivableDetailPage() {
   const BackIcon = ar ? ArrowRight : ArrowLeft;
   return (
     <DesignSurface testId="employee-receivable-detail-page">
-      <DesignPageHeader title={employee ? `${ar ? 'كشف حساب' : 'Statement'} — ${employee.name}` : (ar ? 'كشف حساب الموظف' : 'Employee Statement')} subtitle={employee ? [employee.phone, employee.email].filter(Boolean).join(' • ') : undefined} actions={<Button variant="secondary" size="sm" onClick={() => navigate(APP_ROUTES.employeeReceivables)}><BackIcon className="h-4 w-4" />{ar ? 'العودة لذمم الموظفين' : 'Back to receivables'}</Button>} />
+      <DesignPageHeader title={employee ? `${ar ? 'كشف حساب' : 'Statement'} — ${employee.name}` : (ar ? 'كشف حساب الموظف' : 'Employee Statement')} subtitle={employee ? [employee.phone, employee.email].filter(Boolean).join(' • ') : undefined} actions={<Button variant="secondary" size="sm" onClick={onBack}><BackIcon className="h-4 w-4" />{ar ? 'العودة لذمم الموظفين' : 'Back to receivables'}</Button>} />
       <div className="grid gap-3 md:grid-cols-3">
         <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'إجمالي المديونية' : 'Total Debit'}</p><p className="mt-1 text-xl font-black text-ui-danger">{formatCurrency(totals.debit, currency, lang)}</p></DesignPanel>
         <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'إجمالي المسدد' : 'Total Paid'}</p><p className="mt-1 text-xl font-black text-ui-success">{formatCurrency(totals.credit, currency, lang)}</p></DesignPanel>
