@@ -39,7 +39,6 @@ WITH source_rows AS (
     c.id AS customer_id,
     c.name,
     c.phone,
-    c.customer_type,
     round(SUM(sr.open_amount), 2) AS open_amount,
     round(SUM(CASE WHEN (p_as_of - sr.source_date) <= 30 THEN sr.open_amount ELSE 0 END), 2) AS bucket_0_30,
     round(SUM(CASE WHEN (p_as_of - sr.source_date) BETWEEN 31 AND 60 THEN sr.open_amount ELSE 0 END), 2) AS bucket_31_60,
@@ -48,7 +47,7 @@ WITH source_rows AS (
   FROM source_rows sr
   JOIN public.customers c ON c.id = sr.customer_id
   WHERE c.branch_id = p_branch_id
-  GROUP BY c.id, c.name, c.phone, c.customer_type
+  GROUP BY c.id, c.name, c.phone
 )
 SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.open_amount DESC, a.name), '[]'::jsonb)
 FROM aggregated a;
