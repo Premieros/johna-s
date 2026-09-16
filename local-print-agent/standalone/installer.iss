@@ -26,12 +26,12 @@ Source: "..\..\build\JohnsPrintAgent.exe"; DestDir: "{app}"; Flags: ignoreversio
 Source: "run-hidden.vbs"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\إعداد طابعات Johns"; Filename: "{cmd}"; Parameters: "/c start \"\" http://127.0.0.1:17654/"; WorkingDir: "{app}"
-Name: "{userstartup}\Johns Print Agent"; Filename: "{sys}\wscript.exe"; Parameters: "\"{app}\run-hidden.vbs\""; WorkingDir: "{app}"
+Name: "{group}\إعداد طابعات Johns"; Filename: "{cmd}"; Parameters: "/c start """" http://127.0.0.1:17654/"; WorkingDir: "{app}"
+Name: "{userstartup}\Johns Print Agent"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\run-hidden.vbs"""; WorkingDir: "{app}"
 
 [Run]
-Filename: "{sys}\wscript.exe"; Parameters: "\"{app}\run-hidden.vbs\""; Description: "تشغيل خدمة الطباعة"; Flags: nowait postinstall skipifsilent
-Filename: "{cmd}"; Parameters: "/c timeout /t 2 /nobreak >nul & start \"\" http://127.0.0.1:17654/"; Description: "فتح إعداد الطابعات"; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\run-hidden.vbs"""; Description: "تشغيل خدمة الطباعة"; Flags: nowait postinstall skipifsilent
+Filename: "{cmd}"; Parameters: "/c timeout /t 2 /nobreak >nul & start """" http://127.0.0.1:17654/"; Description: "فتح إعداد الطابعات"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/c taskkill /IM JohnsPrintAgent.exe /F >nul 2>nul"; Flags: runhidden; RunOnceId: "StopAgent"
