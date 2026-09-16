@@ -1,5 +1,5 @@
 #define MyAppName "Johns Print Agent - Samouha"
-#define MyAppVersion "2.1.2"
+#define MyAppVersion "2.1.3"
 #define MyAppExeName "JohnsPrintAgent-Samouha.exe"
 
 [Setup]
@@ -11,7 +11,7 @@ DefaultDirName={localappdata}\Programs\JohnsPrintAgentSamouha
 DefaultGroupName=Johns Print Agent - Samouha
 PrivilegesRequired=lowest
 OutputDir=..\..\build-samouha
-OutputBaseFilename=JohnsPrintAgent-Samouha-Setup-2.1.2
+OutputBaseFilename=JohnsPrintAgent-Samouha-Setup-2.1.3
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
