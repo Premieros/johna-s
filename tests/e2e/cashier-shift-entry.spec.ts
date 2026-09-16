@@ -152,7 +152,7 @@ test('cashier with no active shift gets a real open-shift workflow from POS', as
   await expect(openButton).toBeVisible();
   await openButton.click();
 
-  const openingInput = page.getByLabel(/المبلغ الافتتاحي|رصيد الافتتاح|Opening Amount/i);
+  const openingInput = page.getByRole('spinbutton', { name: /المبلغ الافتتاحي|رصيد الافتتاح|Opening Amount/i });
   await expect(openingInput).toBeVisible();
   await openingInput.fill('50');
 
