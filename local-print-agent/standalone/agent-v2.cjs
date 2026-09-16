@@ -5,7 +5,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 
 const SERVICE_NAME = 'johns-print-agent';
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.JOHNS_PRINT_PORT || 17654);
 const DATA_DIR = process.env.JOHNS_PRINT_DATA_DIR || path.join(process.env.LOCALAPPDATA || os.homedir(), 'JohnsPrintAgent');
@@ -77,12 +77,13 @@ function saveConfig(routes) {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-function ps(script, args = []) {
+function ps(script, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script, ...args], {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
       windowsHide: true,
       timeout: POWERSHELL_TIMEOUT_MS,
       maxBuffer: 1024 * 1024,
+      env: { ...process.env, ...extraEnv },
     }, (err, stdout, stderr) => {
       if (err) {
         const detail = String(stderr || err.message || '').trim();
@@ -116,8 +117,8 @@ async function printTextOnce(printerName, text) {
   const tmp = path.join(os.tmpdir(), `johns-ticket-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
   fs.writeFileSync(tmp, text, 'utf8');
   try {
-    const script = "$p=$args[0];$f=$args[1];Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p";
-    await ps(script, [printerName, tmp]);
+    const script = "$p=$env:JOHNS_PS_PRINTER;$f=$env:JOHNS_PS_FILE;Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p";
+    await ps(script, { JOHNS_PS_PRINTER: printerName, JOHNS_PS_FILE: tmp });
   } finally { try { fs.unlinkSync(tmp); } catch {} }
 }
 
@@ -126,8 +127,8 @@ async function kickDrawerOnce(printerName) {
   const tmp = path.join(os.tmpdir(), `johns-drawer-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.bin`);
   fs.writeFileSync(tmp, Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]));
   try {
-    const script = '$p=$args[0];$f=$args[1];Get-Content -LiteralPath $f -Encoding Byte -Raw | Out-Printer -Name $p';
-    await ps(script, [printerName, tmp]);
+    const script = '$p=$env:JOHNS_PS_PRINTER;$f=$env:JOHNS_PS_FILE;Get-Content -LiteralPath $f -Encoding Byte -Raw | Out-Printer -Name $p';
+    await ps(script, { JOHNS_PS_PRINTER: printerName, JOHNS_PS_FILE: tmp });
   } finally { try { fs.unlinkSync(tmp); } catch {} }
 }
 
@@ -221,7 +222,7 @@ function html(res, body) {
 function configPage() {
   return `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><title>Johns Print Agent</title>
 <style>body{font-family:Segoe UI,Tahoma,sans-serif;max-width:820px;margin:32px auto;padding:0 18px;background:#f6f7f9;color:#171717}h1{margin-bottom:4px}.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px;margin:16px 0}label{display:block;font-weight:700;margin:12px 0 5px}select,button{font:inherit;padding:10px;border-radius:9px;border:1px solid #bbb}select{min-width:320px}button{cursor:pointer;background:#111;color:#fff;border:0;margin:8px 4px}.ok{color:#087a37}.muted{color:#666;font-size:13px}</style>
-<body><h1>Johns Print Agent v${VERSION}</h1><div class="muted">خدمة طباعة مستقلة — إعدادات هذا الجهاز محفوظة محليًا ولا تعتمد على تحديثات النظام.</div>
+<body><h1>Johns Print Agent v${VERSION}</h1><div class="muted">خدمة طباعة مستقلة — تعمل مع Windows في الخلفية وتنتظر طلبات الطباعة.</div>
 <div class="card"><div id="status">جاري قراءة الطابعات…</div><div id="routes"></div><button onclick="save()">حفظ</button><button onclick="testPrint()">طباعة اختبار</button></div>
 <div class="card muted">main = المطبخ العام، drinks = المشروبات/الباريستا، cashier = الكاشير.</div>
 <script>
