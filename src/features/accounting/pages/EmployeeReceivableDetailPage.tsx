@@ -83,15 +83,26 @@ export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
       return;
     }
 
+    const payments = paymentsRes.data || [];
+    const linkedPaymentBySale = new Map<string, number>();
+    for (const payment of payments) {
+      if (!payment.sale_id) continue;
+      linkedPaymentBySale.set(payment.sale_id, (linkedPaymentBySale.get(payment.sale_id) || 0) + Number(payment.amount || 0));
+    }
+
     const movements: Omit<StatementRow, 'balance'>[] = [];
     for (const entry of entriesRes.data || []) {
       movements.push({ id: `entry-${entry.id}`, occurred_at: entry.occurred_at, kind: 'historical', reference: entry.reference_number, description: entry.notes || (entry.entry_type === 'opening_balance' ? (ar ? 'رصيد افتتاحي' : 'Opening balance') : (ar ? 'حركة ذمة تاريخية' : 'Historical receivable')), payment_method: null, debit: Number(entry.amount || 0), credit: 0 });
     }
     for (const sale of salesRes.data || []) {
       if (sale.status === 'returned') continue;
-      movements.push({ id: `sale-${sale.id}`, occurred_at: sale.created_at, kind: 'sale', reference: sale.invoice_number, description: sale.notes || (ar ? 'بيع آجل للموظف' : 'Employee credit sale'), payment_method: sale.payment_method, debit: Math.max(Number(sale.total || 0) - Number(sale.refunded_amount || 0), 0), credit: Math.max(Number(sale.paid_amount || 0), 0) });
+      const grossAfterRefund = Math.max(Number(sale.total || 0) - Number(sale.refunded_amount || 0), 0);
+      const paid = Math.max(Number(sale.paid_amount || 0), 0);
+      const laterReceivablePayments = linkedPaymentBySale.get(sale.id) || 0;
+      const paidAtSale = Math.max(paid - laterReceivablePayments, 0);
+      movements.push({ id: `sale-${sale.id}`, occurred_at: sale.created_at, kind: 'sale', reference: sale.invoice_number, description: sale.notes || (ar ? 'بيع آجل للموظف' : 'Employee credit sale'), payment_method: sale.payment_method, debit: grossAfterRefund, credit: Math.min(paidAtSale, grossAfterRefund) });
     }
-    for (const payment of paymentsRes.data || []) {
+    for (const payment of payments) {
       movements.push({ id: `payment-${payment.id}`, occurred_at: payment.created_at, kind: 'payment', reference: payment.reference_number, description: payment.notes || (ar ? 'سداد ذمة' : 'Receivable payment'), payment_method: payment.payment_method, debit: 0, credit: Number(payment.amount || 0) });
     }
 
