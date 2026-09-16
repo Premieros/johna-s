@@ -1,0 +1,284 @@
+name: Apply sent-only settlement hardening v2
+
+on:
+  push:
+    branches: [development/pos-hardening-20260916]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development/pos-hardening-20260916
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply sent-only patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          before=$(find supabase/migrations -maxdepth 1 -type f | sort)
+          npx --yes supabase@2 migration new sent_only_order_settlement >/dev/null
+          after=$(find supabase/migrations -maxdepth 1 -type f | sort)
+          migration=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | tail -n1)
+          export MIGRATION="$migration"
+          python <<'PY'
+          from pathlib import Path
+          import os, re
+
+          oldwf = Path('.github/workflows/zz-pos-sent-only-fix.yml').read_text()
+          m = re.search(r"cat > \"\$migration\" <<'SQL'\n(?P<sql>.*?)\n          SQL\n", oldwf, re.S)
+          if not m:
+              raise SystemExit('could not extract SQL from v1 helper')
+          sql = m.group('sql')
+          sql = '\n'.join(line[10:] if line.startswith('          ') else line for line in sql.splitlines()) + '\n'
+          # Fail closed if modifier/product resolution silently drops a payable kitchen event.
+          sql = sql.replace(
+              "v_pending numeric(14,6) := 0;\n  v_unsent numeric(14,6) := 0;",
+              "v_pending numeric(14,6) := 0;\n  v_event_pending numeric(14,6) := 0;\n  v_unsent numeric(14,6) := 0;",
+              1,
+          )
+          needle = """  WITH pending AS (
+    SELECT oi.id AS order_item_id,"""
+          replacement = """  SELECT COALESCE(sum(e.sent_quantity-e.voided_quantity),0)
+  INTO v_event_pending
+  FROM public.order_kitchen_inventory_events e
+  WHERE e.order_id=p_order_id AND e.settled_sale_id IS NULL AND e.sent_quantity>e.voided_quantity;
+
+  WITH pending AS (
+    SELECT oi.id AS order_item_id,"""
+          if needle not in sql:
+              raise SystemExit('preview pending marker not found')
+          sql = sql.replace(needle, replacement, 1)
+          needle = """  FROM shaped;
+
+  SELECT COALESCE(sum(s.discount_amount),0)"""
+          replacement = """  FROM shaped;
+
+  IF abs(v_pending-v_event_pending)>0.000001 THEN
+    RETURN jsonb_build_object('success',false,'error','ORDER_ITEM_CONFIGURATION_INVALID');
+  END IF;
+
+  SELECT COALESCE(sum(s.discount_amount),0)"""
+          if needle not in sql:
+              raise SystemExit('preview validation marker not found')
+          sql = sql.replace(needle, replacement, 1)
+          Path(os.environ['MIGRATION']).write_text(sql)
+
+          payment = Path('src/features/pos/services/payment.ts')
+          s = payment.read_text()
+          marker = """export type ProcessSaleResult = RpcResult & {
+  offline?: boolean;
+  pending_sync?: boolean;
+};"""
+          replacement = """export type ProcessSaleResult = RpcResult & {
+  offline?: boolean;
+  pending_sync?: boolean;
+  order_completed?: boolean;
+  remaining_unsent_quantity?: number;
+  remaining_unsettled_quantity?: number;
+};
+
+export type OrderSettlementPreview = {
+  success: boolean;
+  error?: string;
+  detail?: string;
+  order_id?: string;
+  items: ItemPayload[];
+  subtotal: number;
+  discount_amount: number;
+  discount_type: 'amount';
+  tax_amount: number;
+  total: number;
+  pending_quantity: number;
+  unsent_quantity: number;
+  has_payable_items: boolean;
+};
+
+export async function fetchOrderSettlementPreview(orderId: string): Promise<{ preview: OrderSettlementPreview | null; error: string | null }> {
+  try {
+    const { data, error } = await supabase.rpc('get_order_settlement_preview', { p_order_id: orderId });
+    const raw = data as unknown as Partial<OrderSettlementPreview> | null;
+    if (error) return { preview: null, error: error.message };
+    if (!raw?.success) return { preview: null, error: raw?.detail || raw?.error || 'No sent items are ready for payment.' };
+    return { preview: {
+      success: true,
+      items: Array.isArray(raw.items) ? raw.items as ItemPayload[] : [],
+      subtotal: Number(raw.subtotal || 0), discount_amount: Number(raw.discount_amount || 0), discount_type: 'amount',
+      tax_amount: Number(raw.tax_amount || 0), total: Number(raw.total || 0),
+      pending_quantity: Number(raw.pending_quantity || 0), unsent_quantity: Number(raw.unsent_quantity || 0),
+      has_payable_items: !!raw.has_payable_items, order_id: raw.order_id,
+    }, error: null };
+  } catch (err) {
+    return { preview: null, error: err instanceof Error ? err.message : 'Could not load sent items for payment.' };
+  }
+}"""
+          if marker not in s: raise SystemExit('payment type marker not found')
+          s = s.replace(marker, replacement, 1)
+          s = s.replace('return { result: data as RpcResult, error: null };', 'return { result: data as ProcessSaleResult, error: null };', 1)
+          payment.write_text(s)
+
+          hook = Path('src/features/pos/hooks/usePosOrderBase.ts')
+          s = hook.read_text()
+          s = s.replace(
+              "import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';",
+              "import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId, fetchOrderSettlementPreview } from '../services/payment';",
+              1,
+          )
+          payload_pat = re.compile(
+              r"      const warehouseId = await fetchBranchWarehouseId\(branchId, activeOrderId\);\n"
+              r"      const invoiceNumber = \(await nextInvoiceNumber\(\)\) \|\| `INV-\$\{Date\.now\(\)\}`;\n"
+              r"      const itemsPayload = cartToItems\(cart\);\n"
+              r"      const paidAmountToUse = paymentMethod === 'credit' \? 0 : paidAmount \|\| total;"
+          )
+          payload_repl = """      const warehouseId = await fetchBranchWarehouseId(branchId, activeOrderId);
+      const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
+      const settlement = activeOrderId ? await fetchOrderSettlementPreview(activeOrderId) : { preview: null, error: null };
+      if (activeOrderId && (settlement.error || !settlement.preview?.has_payable_items)) {
+        show(settlement.error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for payment'), 'error');
+        return false;
+      }
+      const settlementPreview = settlement.preview;
+      const itemsPayload = settlementPreview?.items ?? cartToItems(cart);
+      const saleSubtotal = settlementPreview?.subtotal ?? subtotal;
+      const saleDiscount = settlementPreview?.discount_amount ?? discountValue;
+      const saleTax = settlementPreview?.tax_amount ?? taxAmount;
+      const saleTotal = settlementPreview?.total ?? total;
+      const paidAmountToUse = paymentMethod === 'credit' ? 0 : paidAmount || saleTotal;"""
+          s, n = payload_pat.subn(payload_repl, s, count=1)
+          if n != 1: raise SystemExit('completeSale payload marker not found')
+          old = """        p_subtotal: subtotal,
+        p_discount_amount: discountValue,
+        p_discount_type: discountType === 'percent' ? 'percent' : 'amount',
+        p_tax_amount: taxAmount,"""
+          new = """        p_subtotal: saleSubtotal,
+        p_discount_amount: saleDiscount,
+        p_discount_type: settlementPreview ? 'amount' : (discountType === 'percent' ? 'percent' : 'amount'),
+        p_tax_amount: saleTax,"""
+          if old not in s: raise SystemExit('sale total payload marker not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('        p_total: total,\n        p_paid_amount: paidAmountToUse,', '        p_total: saleTotal,\n        p_paid_amount: paidAmountToUse,', 1)
+          s = s.replace("      await logAudit('create', 'sales', saleId, { invoice: invoiceNumber, total });", "      await logAudit('create', 'sales', saleId, { invoice: invoiceNumber, total: saleTotal });", 1)
+          receipt_pat = re.compile(
+              r"        items: cart\.map\(\(i\) => \(\{.*?\}\)\),\n"
+              r"        subtotal, discount: discountValue, tax: taxAmount, total,\n"
+              r"        paid: paidAmountToUse, change, date: new Date\(\)\.toISOString\(\),",
+              re.S,
+          )
+          receipt_repl = """        items: itemsPayload.map((item) => {
+          const source = cart.find((i) => i.product.id === item.product_id);
+          return { name: source ? [source.product.name, source.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — ') : item.product_id,
+            qty: item.quantity, price: item.unit_price, total: item.total };
+        }),
+        subtotal: saleSubtotal, discount: saleDiscount, tax: saleTax, total: saleTotal,
+        paid: paidAmountToUse, change: Math.max(paidAmountToUse - saleTotal, 0), date: new Date().toISOString(),"""
+          s, n = receipt_pat.subn(receipt_repl, s, count=1)
+          if n != 1: raise SystemExit('receipt regex marker not found')
+          cleanup = """      setReceiptSaleId(saleId);
+      setCheckoutOpen(false);
+      setCart(EMPTY_CART);"""
+          cleanup_repl = """      setReceiptSaleId(saleId);
+      setCheckoutOpen(false);
+      if (activeOrderId && result.order_completed === false) {
+        const refreshed = await fetchOrderForWorkspace(activeOrderId);
+        if (refreshed.order) {
+          setCart(orderItemsToCart(refreshed.items, refreshed.products));
+          setActiveOrderId(refreshed.order.id);
+          setActiveOrderNumber(refreshed.order.order_number);
+          setTableId(refreshed.order.table_id);
+        }
+        setPaidAmount(0);
+        show(isAr ? 'تم تحصيل الأصناف المرسلة فقط، والإضافات غير المرسلة ما زالت مفتوحة' : 'Only sent items were settled; unsent additions remain open.', 'success');
+        return true;
+      }
+      setCart(EMPTY_CART);"""
+          if cleanup not in s: raise SystemExit('partial cleanup marker not found')
+          s = s.replace(cleanup, cleanup_repl, 1)
+          hook.write_text(s)
+
+          page = Path('src/features/pos/pages/PosWorkspacePage.tsx')
+          s = page.read_text()
+          anchor = "import { usePosOrder } from '../hooks/usePosOrder';"
+          if anchor not in s: raise SystemExit('page import anchor not found')
+          s = s.replace(anchor, anchor + "\nimport { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/payment';", 1)
+          anchor = "  const [voidSentQty, setVoidSentQty] = useState(1);"
+          if anchor not in s: raise SystemExit('page state anchor not found')
+          s = s.replace(anchor, anchor + "\n  const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);", 1)
+          handle_pat = re.compile(r"  const handlePay = useCallback\(\(\) => \{.*?\n  \}, \[perms\.canPay, shiftChecked, pos, guardPos, products\.length, activeShift\?\.id\]\);", re.S)
+          handle_repl = """  const handlePay = useCallback(async () => {
+    if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
+    const allowed = guardPos({ productsCount: products.length, activeShiftId: activeShift?.id || null, formData: { cart: pos.cart, orderType: pos.orderType } });
+    if (!allowed) return;
+    let payableTotal = pos.total;
+    if (pos.activeOrderId) {
+      const { preview, error } = await fetchOrderSettlementPreview(pos.activeOrderId);
+      if (error || !preview?.has_payable_items) {
+        show(error || (isAr ? 'أرسل الأصناف للمطبخ أولاً قبل التحصيل' : 'Send items to the kitchen before payment.'), 'error');
+        return;
+      }
+      setSettlementPreview(preview);
+      payableTotal = preview.total;
+    } else setSettlementPreview(null);
+    pos.setPaymentMethod('cash');
+    pos.setPaidAmount(payableTotal);
+    pos.setCheckoutOpen(true);
+    setMobileOrderOpen(false);
+  }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id, show, isAr]);"""
+          s, n = handle_pat.subn(handle_repl, s, count=1)
+          if n != 1: raise SystemExit('handlePay marker not found')
+          totals = """      subtotal={pos.subtotal}
+      discountValue={pos.discountValue}
+      taxAmount={pos.taxAmount}
+      total={pos.total}
+      change={pos.change}"""
+          totals_repl = """      subtotal={settlementPreview && pos.activeOrderId ? settlementPreview.subtotal : pos.subtotal}
+      discountValue={settlementPreview && pos.activeOrderId ? settlementPreview.discount_amount : pos.discountValue}
+      taxAmount={settlementPreview && pos.activeOrderId ? settlementPreview.tax_amount : pos.taxAmount}
+      total={settlementPreview && pos.activeOrderId ? settlementPreview.total : pos.total}
+      change={settlementPreview && pos.activeOrderId ? Math.max(pos.paidAmount - settlementPreview.total, 0) : pos.change}"""
+          if totals not in s: raise SystemExit('payment panel totals marker not found')
+          s = s.replace(totals, totals_repl, 1)
+          anchor = "  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;"
+          s = s.replace(anchor, anchor + "\n\n  useEffect(() => { if (!pos.checkoutOpen) setSettlementPreview(null); }, [pos.checkoutOpen, pos.activeOrderId]);", 1)
+          page.write_text(s)
+
+          test = Path('tests/components/pos-sent-only-settlement-contract.test.ts')
+          test.write_text("""import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+const dir=join(process.cwd(),'supabase','migrations');
+const file=readdirSync(dir).filter(f=>f.endsWith('_sent_only_order_settlement.sql')).sort().at(-1);
+const sql=file?readFileSync(join(dir,file),'utf8'):'';
+const hook=readFileSync(join(process.cwd(),'src/features/pos/hooks/usePosOrderBase.ts'),'utf8');
+const page=readFileSync(join(process.cwd(),'src/features/pos/pages/PosWorkspacePage.tsx'),'utf8');
+describe('sent-only settlement contract',()=>{
+  it('uses only unvoided unsettled kitchen events',()=>{ expect(sql).toContain('e.settled_sale_id IS NULL'); expect(sql).toContain('e.sent_quantity>e.voided_quantity'); expect(sql).toContain('ORDER_ITEM_CONFIGURATION_INVALID'); });
+  it('never physically deducts stock during settlement consumption',()=>{ const x=sql.split('CREATE OR REPLACE FUNCTION public._consume_kitchen_sale_settlement')[1]?.split('CREATE OR REPLACE FUNCTION public._finalize_kitchen_sale_settlement')[0]||''; expect(x).not.toContain('_deduct_sale_inventory_with_modifiers_core'); });
+  it('keeps remainder open and table occupied',()=>{ expect(sql).toContain("payment_status='partial'"); expect(sql).toContain("status='occupied'"); expect(sql).toContain("'order_completed',v_completed"); });
+  it('uses server preview in checkout and sale',()=>{ expect(page).toContain('fetchOrderSettlementPreview(pos.activeOrderId)'); expect(page).toContain('settlementPreview.total'); expect(hook).toContain('fetchOrderSettlementPreview(activeOrderId)'); expect(hook).toContain('result.order_completed === false'); });
+});
+""")
+          PY
+      - name: Verify
+        run: |
+          npm ci
+          npm run typecheck
+          npx vitest run tests/components/pos-sent-only-settlement-contract.test.ts tests/components/pos-customer-receipt-print-contract.test.ts
+          npm run build
+      - name: Commit final fix and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-pos-sent-only-fix.yml .github/workflows/zz-pos-sent-only-fix-v2.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(pos): settle only sent kitchen quantities"
+          git push origin HEAD:development/pos-hardening-20260916
