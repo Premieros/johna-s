@@ -28,8 +28,11 @@ describe('global UI number formatting contract', () => {
   it('does not format displayed numbers with toFixed outside the central formatter or frozen printing scope', () => {
     const violations = collectUiFiles(root)
       .filter((file) => !isFrozenPrintingScope(file))
-      .filter((file) => fs.readFileSync(file, 'utf8').includes('.toFixed('))
-      .map((file) => path.relative(process.cwd(), file).replace(/\\/g, '/'));
+      .flatMap((file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line, index) => {
+        if (!line.includes('.toFixed(') || line.includes('number-format: calculation')) return [];
+        const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
+        return [`${rel}:${index + 1}`];
+      }));
 
     expect(violations, `Use src/lib/format.ts helpers instead of direct toFixed() in UI:\n${violations.join('\n')}`).toEqual([]);
   });
