@@ -47,7 +47,7 @@ describe('cloud print agent concurrency contract', () => {
     const printing = read('src/features/pos/utils/printing.ts');
     const kitchen = read('src/features/pos/services/kitchen.ts');
     const securityMigration = read('supabase/migrations/20260911232000_cloud_print_agent.sql');
-    const receiptRetry = read('supabase/migrations/20260912003000_cloud_print_receipt_retry_idempotency.sql');
+    const durableRetry = read('supabase/migrations/20260917001000_cloud_print_durable_retry.sql');
 
     expect(cloud).toContain("supabase.rpc('enqueue_cloud_kitchen_print'");
     expect(cloud).toContain("supabase.rpc('enqueue_cloud_receipt_print'");
@@ -60,9 +60,23 @@ describe('cloud print agent concurrency contract', () => {
     expect(kitchen.indexOf("('send_to_kitchen'")).toBeLessThan(kitchen.indexOf('await enqueueCloudKitchenPrintJobs'));
 
     for (const forbidden of ['send_to_kitchen(', 'process_sale', 'deduct_sale_unit_inventory(', 'payment_transactions']) {
-      expect(receiptRetry).not.toContain(forbidden);
+      expect(durableRetry).not.toContain(forbidden);
     }
     expect(securityMigration).toContain('UNIQUE (branch_id, idempotency_key)');
-    expect(receiptRetry).toContain("OR (status = 'failed' AND attempts < 5)");
+  });
+
+  it('keeps safe printer failures retryable without an attempt ceiling while ambiguous outcomes stay terminal', () => {
+    const durableRetry = read('supabase/migrations/20260917001000_cloud_print_durable_retry.sql');
+
+    expect(durableRetry).not.toContain('AND attempts < 5');
+    expect(durableRetry).toContain("status = 'pending'");
+    expect(durableRetry).toContain("status = 'failed'");
+    expect(durableRetry).toContain("'retryable', NOT v_ambiguous");
+    expect(durableRetry).toContain("last_error = 'PRINT_OUTCOME_UNKNOWN'");
+    expect(durableRetry).toContain("'PRINT_SEQUENCE_CHANGED'");
+    expect(durableRetry).toContain("'INVALID_APPROVAL'");
+    expect(durableRetry).toContain("upper(v_error) LIKE 'PRINT_CALLBACK_TIMEOUT%'");
+    expect(durableRetry).toContain("next_attempt_at = now()");
+    expect(durableRetry).toContain('FOR UPDATE SKIP LOCKED');
   });
 });
