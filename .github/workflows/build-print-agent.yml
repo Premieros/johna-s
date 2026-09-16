@@ -27,6 +27,14 @@ jobs:
         shell: pwsh
         run: node --check local-print-agent/standalone/agent-v2.cjs
 
+      - name: Validate special printer-name transport
+        shell: pwsh
+        run: |
+          $env:JOHNS_PS_PRINTER = 'XP-80C (copy 1)'
+          $env:JOHNS_PS_FILE = 'C:\Temp\ملف طباعة (1).txt'
+          $out = powershell.exe -NoProfile -NonInteractive -Command '$p=$env:JOHNS_PS_PRINTER;$f=$env:JOHNS_PS_FILE;Write-Output ($p + "|" + $f)'
+          if ($out -ne 'XP-80C (copy 1)|C:\Temp\ملف طباعة (1).txt') { throw "Unsafe PowerShell transport: $out" }
+
       - name: Build standalone EXE
         shell: pwsh
         run: |
@@ -41,7 +49,7 @@ jobs:
             Start-Sleep -Seconds 3
             $health = Invoke-RestMethod -Uri 'http://127.0.0.1:17654/health' -TimeoutSec 10
             if (-not $health.ok) { throw 'Health endpoint returned not-ok' }
-            if ($health.version -ne '2.1.0') { throw "Unexpected agent version: $($health.version)" }
+            if ($health.version -ne '2.1.1') { throw "Unexpected agent version: $($health.version)" }
           }
           finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
@@ -60,14 +68,14 @@ jobs:
         shell: pwsh
         run: |
           Get-FileHash build\JohnsPrintAgent.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent.exe" } | Set-Content build\SHA256SUMS.txt
-          Get-FileHash build\JohnsPrintAgent-Setup-2.1.0.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Setup-2.1.0.exe" } | Add-Content build\SHA256SUMS.txt
+          Get-FileHash build\JohnsPrintAgent-Setup-2.1.1.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  JohnsPrintAgent-Setup-2.1.1.exe" } | Add-Content build\SHA256SUMS.txt
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JohnsPrintAgent-2.1.0-Windows
+          name: JohnsPrintAgent-2.1.1-Windows
           path: |
-            build/JohnsPrintAgent-Setup-2.1.0.exe
+            build/JohnsPrintAgent-Setup-2.1.1.exe
             build/JohnsPrintAgent.exe
             build/SHA256SUMS.txt
           if-no-files-found: error
