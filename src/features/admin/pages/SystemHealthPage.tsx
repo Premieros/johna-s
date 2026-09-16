@@ -4,6 +4,7 @@ import { supabase } from '@/api';
 import { Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { useLanguage } from '@/context/LanguageContext';
+import { formatNumber } from '@/lib/format';
 import { AdminDataManagementPanel } from './AdminDataManagementPanel';
 
 type Status = 'ok' | 'warning' | 'error' | 'checking';
@@ -93,7 +94,7 @@ export function SystemHealthPage() {
             <div key={check.key} className="flex items-center gap-4 p-4">
               {icon(check.status)}
               <div className="min-w-0 flex-1"><div className="font-semibold">{ar ? check.ar : check.en}</div><div className="truncate text-xs text-ui-subtle">{check.detail}</div></div>
-              {check.status === 'ok' && typeof check.count === 'number' && <div className="rounded-lg bg-ui-page-alt px-3 py-1 text-sm font-semibold dark:bg-navy-800">{check.count.toLocaleString()}</div>}
+              {check.status === 'ok' && typeof check.count === 'number' && <div className="rounded-lg bg-ui-page-alt px-3 py-1 text-sm font-semibold dark:bg-navy-800">{formatNumber(check.count, 0)}</div>}
             </div>
           ))}
         </div>

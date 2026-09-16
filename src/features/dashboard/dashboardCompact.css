@@ -1,0 +1,71 @@
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: rgb(var(--ui-text)) !important;
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child > div:first-child {
+  display: none;
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child {
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child > div:last-child {
+  border: 1px solid rgb(var(--ui-border));
+  background: rgb(var(--ui-surface));
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child > div:last-child button,
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 > button,
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 > div > button {
+  border-color: rgb(var(--ui-border)) !important;
+  background: rgb(var(--ui-surface)) !important;
+  color: rgb(var(--ui-muted)) !important;
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child > div:last-child button:hover,
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 > button:hover,
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 > div > button:hover {
+  background: rgb(var(--ui-page-alt)) !important;
+  color: rgb(var(--ui-primary)) !important;
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 {
+  margin-top: 0.75rem;
+  justify-content: flex-end;
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child > a {
+  min-width: 7.5rem;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child {
+    width: 100%;
+  }
+
+  .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child > a {
+    min-width: 0;
+    padding-inline: 0.6rem;
+  }
+
+  .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child > div:last-child,
+  .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 {
+    width: 100%;
+    justify-content: center;
+  }
+}
