@@ -15,7 +15,8 @@ describe('VisualDashboardPage contract (6H-C)', () => {
   it('follows the single shared operational branch without a page-local picker', () => {
     expect(source).toContain('useBranchFilter');
     expect(source).toContain('const effectiveBranch = branchFilter;');
-    expect(source).toContain('}, [effectiveBranch]);');
+    expect(source).toContain('}, [range, effectiveBranch]);');
+    expect(source).toContain('}, [effectiveBranch, branches]);');
     expect(source).not.toContain('useActiveBranchId');
     expect(source).not.toContain('data-testid="dashboard-branch-filter"');
     expect(source).not.toContain('setActiveBranchId');
