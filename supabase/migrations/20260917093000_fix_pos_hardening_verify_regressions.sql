@@ -95,7 +95,7 @@ $new$;
 $old$;
   v_unsent_new text := $new$
       RETURN jsonb_build_object('success', false, 'error', 'ORDER_NOT_FULLY_SENT');
-$old$;
+$new$;
   v_discount_old text := $old$
     v_header_discount,
     'amount',
