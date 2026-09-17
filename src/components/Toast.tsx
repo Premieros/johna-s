@@ -15,12 +15,26 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
+const SENT_ITEM_GUARD_CODES = [
+  'SENT_ITEM_APPROVAL_REQUIRED',
+  'SENT_ITEM_CHANGE_REQUIRES_VOID',
+] as const;
+
+function normalizeToastMessage(message: string, type: ToastType): string {
+  const text = String(message || '').trim();
+  if (type === 'error' && SENT_ITEM_GUARD_CODES.some((code) => text.includes(code))) {
+    return 'هذا الصنف تم إرساله للمطبخ بالفعل. لا يمكن تعديل الكمية المرسلة مباشرة؛ استخدم إلغاء الصنف (Void) ليتم تنفيذ مسار الموافقة الصحيح.';
+  }
+  return text;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const show = useCallback((message: string, type: ToastType = 'success') => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    const normalizedMessage = normalizeToastMessage(message, type);
+    setToasts((prev) => [...prev, { id, message: normalizedMessage, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3500);
