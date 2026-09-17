@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
+import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { cartToItems } from '../utils/cart';
@@ -33,6 +34,43 @@ export function usePosOrder(input: UsePosOrderInput) {
   const isAr = lang === 'ar';
   const { show } = useToast();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
+
+  const transferOrderToTable = useCallback(async (
+    targetOrderId: string,
+    _fromTableId: string,
+    toTableId: string,
+  ): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.rpc('transfer_order_to_table', {
+        p_order_id: targetOrderId,
+        p_target_table_id: toTableId,
+      });
+
+      if (error) {
+        show(error.message, 'error');
+        return false;
+      }
+
+      const result = data as { success?: boolean; error?: string; detail?: string } | null;
+      if (!result?.success) {
+        const message = result?.error === 'TARGET_TABLE_OCCUPIED'
+          ? (isAr ? 'الطاولة المستهدفة عليها طلب نشط بالفعل.' : 'The target table already has an active order.')
+          : result?.detail || result?.error || (isAr ? 'تعذر تحويل الطلب' : 'Order transfer failed');
+        show(message, 'error');
+        return false;
+      }
+
+      if (base.activeOrderId === targetOrderId) {
+        base.setTableId(toTableId);
+      }
+
+      show(isAr ? 'تم تحويل الطلب إلى الطاولة الجديدة بنجاح' : 'Order transferred successfully', 'success');
+      return true;
+    } catch (error) {
+      show(error instanceof Error ? error.message : (isAr ? 'تعذر تحويل الطلب' : 'Order transfer failed'), 'error');
+      return false;
+    }
+  }, [base.activeOrderId, base.setTableId, isAr, show]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -113,6 +151,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   return {
     ...base,
     completing: base.completing || offlineCompleting,
+    transferOrderToTable,
     completeSale,
   };
 }
