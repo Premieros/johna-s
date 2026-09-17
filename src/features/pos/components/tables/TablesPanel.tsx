@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { formatCurrency } from '@/lib/format';
 import type { DiningTable, Order } from '@/lib/types';
 import { orderOperatorName } from '../../utils/operatorName';
+import { usePosPermissions } from '../../hooks/usePosPermissions';
 
 type TableFilter = 'all' | 'available' | 'occupied';
 
@@ -23,6 +24,7 @@ interface TablesPanelProps {
 export function TablesPanel({ open, onClose, tables, ordersByTable, currency, onResume, onPay, onStart }: TablesPanelProps) {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
+  const perms = usePosPermissions();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<TableFilter>('all');
   const [selected, setSelected] = useState<DiningTable | null>(null);
@@ -145,6 +147,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
           const order = tableOrders[0];
           const operatorName = order ? orderOperatorName(order) : null;
           if (order) {
+            const canPaySentOrder = perms.canPay && Boolean(order.kitchen_sent_at);
             return (
               <div className="space-y-3">
                 <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
@@ -154,13 +157,15 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
                   </div>
                   {operatorName && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-ui-muted"><Users className="h-3.5 w-3.5" />{isAr ? 'المستخدم:' : 'User:'} {operatorName}</p>}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid gap-2 ${canPaySentOrder ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   <Button variant="outline" onClick={() => { setSelected(null); onClose(); onResume(order); }}>
                     <UtensilsCrossed className="h-4 w-4" /> {isAr ? 'فتح الطلب' : 'Open order'}
                   </Button>
-                  <Button variant="success" onClick={() => { setSelected(null); onClose(); onPay(order); }}>
-                    <Banknote className="h-4 w-4" /> {isAr ? 'الدفع' : 'Pay'}
-                  </Button>
+                  {canPaySentOrder && (
+                    <Button variant="success" onClick={() => { setSelected(null); onClose(); onPay(order); }}>
+                      <Banknote className="h-4 w-4" /> {isAr ? 'الدفع' : 'Pay'}
+                    </Button>
+                  )}
                 </div>
               </div>
             );
