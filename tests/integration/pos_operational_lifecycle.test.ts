@@ -53,6 +53,15 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
     ids = await seedRlsFixture(client);
     impersonationAvailable = await canImpersonate(client);
 
+    // The shared RLS fixture intentionally carries an open order only for policy probes.
+    // Mark that unrelated probe settled so the lifecycle test exercises its own order.
+    await client.query(
+      `UPDATE public.orders
+          SET payment_status = 'paid', payment_at = now()
+        WHERE id = $1`,
+      [ids.rows.orders.own],
+    );
+
     // The shared RLS fixture also creates warehouse rows used only for policy
     // probes. Pin the real operational warehouse so kitchen inventory always
     // resolves to the warehouse where this release-gate stock is seeded.

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-15T10:03:09.185Z",
+  "generated_at": "2026-09-17T10:20:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {"name":"add_inventory_batch","params":["batch_number","branch_id","expiry_date","notes","product_id","production_date","quantity","source_type","unit_cost","warehouse_id"]},
@@ -16,6 +16,7 @@
     {"name":"bootstrap_initial_super_admin","params":["email","full_name","password","username"]},
     {"name":"cancel_production_order","params":["order_id","reason"]},
     {"name":"close_shift","params":["actual_amount","notes","shift_id"]},
+    {"name":"close_shift_with_open_orders","params":["actual_amount","notes","shift_id"]},
     {"name":"complete_bank_reconciliation","params":["reconciliation_id"]},
     {"name":"complete_production_order","params":["order_id","waste"]},
     {"name":"create_bank_reconciliation","params":["branch_id","statement_balance","statement_date","treasury_account_id"]},
