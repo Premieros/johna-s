@@ -15,7 +15,7 @@ import {
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/lib/format';
 import type { DiningTable, OrderType } from '@/lib/types';
-import type { OrderKitchenSend } from '../../types';
+import type { KitchenStationDispatchSummary, OrderKitchenSend } from '../../types';
 import { orderTypeLabel } from '../../utils/format';
 import { usePosPermissions } from '../../hooks/usePosPermissions';
 
@@ -33,6 +33,7 @@ interface PosOrderHeaderBarProps {
   kitchenSending: boolean;
   completing: boolean;
   hasUnsentItems: boolean;
+  kitchenDispatch?: KitchenStationDispatchSummary | null;
   customerName?: string | null;
   operatorName?: string | null;
   onOpenTransferModal?: () => void;
@@ -57,6 +58,7 @@ export function PosOrderHeaderBar({
   kitchenSending,
   completing,
   hasUnsentItems,
+  kitchenDispatch,
   customerName,
   operatorName,
   onOpenTransferModal,
@@ -107,6 +109,18 @@ export function PosOrderHeaderBar({
           <span className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-black border ${hasUnsentItems ? 'bg-amber-500/15 text-amber-700 border-amber-500/30 animate-pulse' : 'bg-sky-500/10 text-sky-600 border-sky-500/20'}`}>
             <ChefHat className="h-3 w-3" />
             {hasUnsentItems ? (isAr ? 'تعديلات جديدة' : 'New Additions') : (isAr ? 'تم الإرسال' : 'Sent to Kitchen')}
+          </span>
+        )}
+        {(kitchenDispatch?.status === 'partial' || kitchenDispatch?.status === 'failed') && (
+          <span
+            data-testid="pos-kitchen-dispatch-warning"
+            className="flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-black text-red-700"
+            title={kitchenDispatch.failed_stations.join(', ')}
+          >
+            <ChefHat className="h-3 w-3" />
+            {isAr
+              ? `محطة لم تستلم: ${kitchenDispatch.failed_stations.join('، ') || 'غير محددة'}`
+              : `Station failed: ${kitchenDispatch.failed_stations.join(', ') || 'unknown'}`}
           </span>
         )}
       </div>
@@ -175,7 +189,9 @@ export function PosOrderHeaderBar({
               : completing
                 ? (isAr ? 'جارٍ حفظ الطلب...' : 'Saving order...')
                 : hasSent
-                  ? (isAr ? 'إرسال الجديد' : 'Send New')
+                  ? hasUnsentItems
+                    ? (isAr ? 'إرسال التعديلات' : 'Send Changes')
+                    : (isAr ? 'تم الإرسال' : 'Sent')
                   : (isAr ? 'إرسال للمطبخ' : 'Kitchen')}</span>
           </button>
         )}

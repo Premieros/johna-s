@@ -90,6 +90,13 @@ export function KitchenStationsPage() {
     [branches, selectedBranchId],
   );
 
+  const stationHealth = useMemo(() => {
+    const active = stations.filter((station) => station.is_active).length;
+    const configured = stations.filter((station) => (assignments[station.id]?.category_ids?.length || 0) > 0).length;
+    const withoutCategories = stations.filter((station) => station.is_active && (assignments[station.id]?.category_ids?.length || 0) === 0).length;
+    return { total: stations.length, active, configured, withoutCategories };
+  }, [stations, assignments]);
+
   const loadAssignments = useCallback(async () => {
     if (!selectedBranchId || !can('settings.manage')) {
       setStations([]);
@@ -262,12 +269,26 @@ export function KitchenStationsPage() {
     {
       key: 'assignments',
       header: ar ? 'تعيينات الفرع المحدد' : 'Selected Branch Assignments',
-      render: (row) => (
-        <div className="flex flex-wrap gap-1 text-[11px] text-ui-muted">
-          <span className="inline-flex items-center gap-1 rounded-md bg-ui-page-alt px-1.5 py-1"><UsersRound className="h-3 w-3" /> {assignments[row.id]?.user_ids?.length || 0}</span>
-          <span className="inline-flex items-center gap-1 rounded-md bg-ui-page-alt px-1.5 py-1"><Tags className="h-3 w-3" /> {assignments[row.id]?.category_ids?.length || 0}</span>
-        </div>
-      ),
+      render: (row) => {
+        const categoryCount = assignments[row.id]?.category_ids?.length || 0;
+        const userCount = assignments[row.id]?.user_ids?.length || 0;
+        return (
+          <div className="flex flex-wrap items-center gap-1 text-[11px] text-ui-muted">
+            <span className="inline-flex items-center gap-1 rounded-md bg-ui-page-alt px-1.5 py-1"><UsersRound className="h-3 w-3" /> {userCount}</span>
+            <span className="inline-flex items-center gap-1 rounded-md bg-ui-page-alt px-1.5 py-1"><Tags className="h-3 w-3" /> {categoryCount}</span>
+            <span
+              data-testid={`kitchen-station-health-${row.code}`}
+              className={`rounded-md px-1.5 py-1 font-black ${!row.is_active ? 'bg-ui-page-alt text-ui-subtle' : categoryCount > 0 ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-danger-soft text-ui-danger'}`}
+            >
+              {!row.is_active
+                ? (ar ? 'متوقفة' : 'Inactive')
+                : categoryCount > 0
+                  ? (ar ? 'جاهزة' : 'Ready')
+                  : (ar ? 'بدون فئات' : 'No categories')}
+            </span>
+          </div>
+        );
+      },
     },
     {
       key: 'is_active',
@@ -335,6 +356,15 @@ export function KitchenStationsPage() {
                 : 'Select a branch to view and edit its stations, users, and product categories.')}
           </div>
         </div>
+
+        {selectedBranchId && (
+          <div data-testid="kitchen-station-health-summary" className="grid gap-2 sm:grid-cols-4">
+            <div className="rounded-xl border border-ui-border bg-ui-surface px-3 py-2 text-xs"><span className="text-ui-muted">{ar ? 'إجمالي المحطات' : 'Total stations'}</span><div className="text-lg font-black text-ui-text">{stationHealth.total}</div></div>
+            <div className="rounded-xl border border-ui-border bg-ui-surface px-3 py-2 text-xs"><span className="text-ui-muted">{ar ? 'نشطة' : 'Active'}</span><div className="text-lg font-black text-ui-text">{stationHealth.active}</div></div>
+            <div className="rounded-xl border border-ui-border bg-ui-surface px-3 py-2 text-xs"><span className="text-ui-muted">{ar ? 'مربوطة بفئات' : 'Configured'}</span><div className="text-lg font-black text-ui-text">{stationHealth.configured}</div></div>
+            <div className="rounded-xl border border-ui-border bg-ui-surface px-3 py-2 text-xs"><span className="text-ui-muted">{ar ? 'تحتاج إعداد' : 'Needs setup'}</span><div className="text-lg font-black text-ui-danger">{stationHealth.withoutCategories}</div></div>
+          </div>
+        )}
 
         {can('settings.manage') && (
           <Button

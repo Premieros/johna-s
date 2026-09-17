@@ -1,7 +1,6 @@
 import type { KitchenSendItem, KitchenSendResult } from '../types';
 import { rpc } from '@/api/rpc';
-import { enqueueCloudKitchenPrintJobs } from './cloudPrint';
-import { groupKitchenItemsByStation, printKitchenStationsLocally, suppressNextKitchenBrowserPopup } from './localPrintAgent';
+import { dispatchKitchenStations } from './kitchenDispatch';
 
 const activeSendLocks = new Set<string>();
 
@@ -35,6 +34,7 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
     if (!result?.success) return { success: false, error: result?.error || 'KITCHEN_SEND_FAILED', detail: result?.detail || result?.error || 'Kitchen send failed' };
 
     const rawSentItems = result.sent || [];
+    let dispatch;
     if (rawSentItems.length > 0 && typeof window !== 'undefined') {
       const context = {
         orderNumber: result.order_number || result.order_id || orderId,
@@ -43,54 +43,12 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
         guestCount: result.guest_count || null,
         isAr: document.documentElement.dir === 'rtl' || document.documentElement.lang?.startsWith('ar'),
       };
-
-      const stationGroups = groupKitchenItemsByStation(rawSentItems);
-      const allStations = Object.keys(stationGroups);
-      const groupedItemCount = Object.values(stationGroups).reduce((count, items) => count + items.length, 0);
-      if (groupedItemCount !== rawSentItems.length) {
-        console.error('[kitchen-print] sent item missing station_code; item will not be silently rerouted', {
-          orderId,
-          missingStationItems: rawSentItems.length - groupedItemCount,
-        });
-      }
-
-      const cloudQueuedStations = new Set<string>();
-      try {
-        const branchId = String(p.p_branch_id || '').trim();
-        if (!branchId) {
-          console.error('[cloud-print] kitchen dispatch skipped because branch id was not supplied by POS', { orderId });
-        } else {
-          const cloud = await enqueueCloudKitchenPrintJobs({ branchId, items: rawSentItems, context });
-          for (const station of cloud.queuedStations) cloudQueuedStations.add(station);
-          if (cloudQueuedStations.size > 0) suppressNextKitchenBrowserPopup();
-          if (!cloud.accepted) {
-            console.error('[cloud-print] one or more kitchen stations were not queued after retries', {
-              orderId,
-              branchId,
-              failedStations: cloud.failedStations,
-            });
-          }
-        }
-      } catch (error) {
-        console.warn('[cloud-print] kitchen queue unavailable; using station-level compatibility print path', error);
-      }
-
-      const fallbackStations = allStations.filter((station) => !cloudQueuedStations.has(station));
-      if (fallbackStations.length > 0) {
-        const localResults = await Promise.all(fallbackStations.map(async (station) => ({
-          station,
-          printed: await printKitchenStationsLocally(stationGroups[station] || [], context),
-        })));
-        const locallyPrintedStations = localResults.filter((entry) => entry.printed).map((entry) => entry.station);
-        const locallyFailedStations = localResults.filter((entry) => !entry.printed).map((entry) => entry.station);
-        if (locallyPrintedStations.length > 0) suppressNextKitchenBrowserPopup();
-        if (locallyFailedStations.length > 0) {
-          console.warn('[kitchen-print] local fallback failed for stations', {
-            orderId,
-            stations: locallyFailedStations,
-          });
-        }
-      }
+      dispatch = await dispatchKitchenStations({
+        orderId,
+        branchId: p.p_branch_id,
+        items: rawSentItems,
+        context,
+      });
     }
 
     const sentItems = rawSentItems.map(withKitchenInstructions);
@@ -104,6 +62,7 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
       sent: sentItems,
       items_sent_count: result.items_sent_count ?? result.items_processed ?? sentItems.length,
       all_sent: result.all_sent ?? true,
+      dispatch,
     };
   } catch (err) {
     return { success: false, error: 'KITCHEN_SEND_FAILED', detail: err instanceof Error ? err.message : 'Unknown error during kitchen send' };

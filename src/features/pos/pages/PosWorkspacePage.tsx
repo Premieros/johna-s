@@ -847,6 +847,7 @@ export function PosWorkspacePage() {
             kitchenSending={pos.kitchenSending}
             completing={pos.completing}
             hasUnsentItems={hasUnsentItems}
+            kitchenDispatch={pos.kitchenDispatch}
             customerName={pos.customerId ? customerById[pos.customerId]?.name || null : null}
             operatorName={activeOrderOperatorName}
             onOpenTransferModal={() => {
