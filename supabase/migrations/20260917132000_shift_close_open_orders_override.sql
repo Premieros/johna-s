@@ -68,17 +68,12 @@ BEGIN
   FROM public.orders o
   WHERE o.branch_id = v_shift.branch_id
     AND o.status IN ('open', 'held')
+    AND COALESCE(o.payment_status, 'unpaid') <> 'paid'
     AND EXISTS (
       SELECT 1
       FROM public.order_items oi
       WHERE oi.order_id = o.id
         AND oi.quantity > 0
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM public.sales s
-      WHERE s.order_id = o.id
-        AND s.status = 'completed'
     );
 
   IF v_open_order_count > 0 THEN
@@ -207,17 +202,12 @@ BEGIN
   FROM public.orders o
   WHERE o.branch_id = v_shift.branch_id
     AND o.status IN ('open', 'held')
+    AND COALESCE(o.payment_status, 'unpaid') <> 'paid'
     AND EXISTS (
       SELECT 1
       FROM public.order_items oi
       WHERE oi.order_id = o.id
         AND oi.quantity > 0
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM public.sales s
-      WHERE s.order_id = o.id
-        AND s.status = 'completed'
     );
 
   SELECT round(
