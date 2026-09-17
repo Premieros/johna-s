@@ -12,6 +12,7 @@ export function hasLockedLanguagePreference(): boolean {
 interface LanguageContextValue {
   lang: Language;
   setLang: (l: Language) => void;
+  applySystemLang: (l: Language) => void;
   t: (key: TranslationKey) => string;
   dir: 'rtl' | 'ltr';
 }
@@ -36,11 +37,16 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(LANGUAGE_PREFERENCE_LOCK_KEY, '1');
     setLangState(l);
   }, []);
+
+  const applySystemLang = useCallback((l: Language) => {
+    setLangState(l);
+  }, []);
+
   const t = useCallback((key: TranslationKey) => translate(lang, key), [lang]);
 
   const value = useMemo(
-    () => ({ lang, setLang, t, dir }),
-    [lang, setLang, t, dir]
+    () => ({ lang, setLang, applySystemLang, t, dir }),
+    [lang, setLang, applySystemLang, t, dir]
   );
 
   return (
