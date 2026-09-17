@@ -34,29 +34,46 @@ The project already contains Shift/Close coverage including:
 - `tests/integration/shift_live_expected_consistency.test.ts`
 - `tests/integration/shared_branch_shift.test.ts`
 
-Existing architecture already uses the server RPC `close_shift`; the UI is not expected to directly mark the shift closed.
+Existing architecture already uses the server RPC `close_shift`; the UI does not directly mark the shift closed.
 
-## Audit Focus
-The current hardening pass will inspect and, only where missing, enforce:
-- closing with open orders
-- closing with occupied/open table sessions
-- duplicate/concurrent close protection
-- transaction atomicity and idempotency
-- expected cash / declared cash / variance integrity
-- branch and user scope
-- Permission-First enforcement on the server
-- day-close safety and reconciliation
+## Approved Operational Decision
+Normal shift close and final financial day close are not the same action.
 
-## Progress
+1. Normal **Close Shift** fails closed when the branch still has an effective `open`/`held` order containing a positive-quantity line.
+2. A separate **Close Shift With Open Orders** action is available only with both `shifts.close` and `shifts.close_with_open_orders`.
+3. The override closes the drawer/shift only. It must not cancel, pay, complete, move, or otherwise mutate open orders, and it must not mark occupied tables vacant.
+4. Preserved orders/tables continue operationally into the next shift. Later payment is attributed through the then-open branch shift while the original order ownership remains intact.
+5. Final **Day Close** remains stricter and is not represented by the shift-close button.
+
+## Implementation
 ### 2026-09-17
-- Re-fetched current `main` and confirmed the dedicated development branch exists and initially matches `main`.
-- Re-read `docs/CURRENT_WORK_PLAN.md` from the current main revision before changing behavior.
-- Re-read the existing Shift/Close integration tests listed above.
-- Confirmed that permission and cash-movement consistency already have dedicated tests; these areas will not be redesigned without a proven defect.
-- Next implementation step: locate the latest effective `close_shift` database definition plus the actual order/table status fields, then add only the missing server-side guard(s) and regression tests.
+- `219494b780b2fa291bba61b57c8ec1aa80da873e`
+  - hardened `close_shift` to fail closed on effective open/held orders;
+  - added `close_shift_with_open_orders` server RPC;
+  - override preserves orders and dining-table occupancy;
+  - override writes an audit event.
+- `6b647e56caa49d6e390f5a1827a84b0f9e0a9c19`
+  - exposed the new server RPC through the typed shifts API domain.
+- `5138092bb015b2bee6bbf0910597f9d34e7bc18a`
+  - added canonical `shifts.close_with_open_orders` permission;
+  - added the permission to the Shifts permission group/checkbox list;
+  - did not grant it implicitly to cashier or branch-manager defaults.
+- `d18777a0a62e54c11ee0c6455ea6e2137b8a00a1`
+  - changed the UI wording from combined day/shift close to shift close;
+  - normal close displays open order/table counts when blocked;
+  - override button is only shown after the block and only with explicit permission;
+  - added explicit confirmation that orders/tables remain operational.
+- `4b9684dad607fe3bb27d7aaa5bc1e8a0aec1478b`
+  - tightened server authorization so override requires both `shifts.close` and `shifts.close_with_open_orders` for non-Super-Admin users.
+- `f9eac0af071166e3e396d99e860e1d5778235a19`
+  - added Integration regression coverage for normal-close blocking, permission enforcement, order/table preservation, retry safety, and branch isolation.
+
+## Validation State
+- Local/CI validation on the modified head has not yet been declared Green.
+- Next step: open PR, run Full Verify, inspect all frontend/DB/browser jobs, and fix only proven regressions before merge.
 
 ## Merge / Production State
 - Pull request: not opened yet.
-- Full Verify: not run on a modified Shift/Day Close head yet.
+- Full Verify: pending on the modified head.
 - Merged to `main`: no.
 - Production migration applied: no.
