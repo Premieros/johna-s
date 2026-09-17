@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { supabase } from '../lib/supabase';
 import { applyBrandColor, applyDefaultSurface, applySurfaceColor, brandFromSettingsValue } from '../lib/brandColor';
 import { findUiTheme } from '../lib/themes';
-import { useTheme } from './ThemeContext';
-import { useLanguage } from './LanguageContext';
+import { hasLockedThemePreference, useTheme } from './ThemeContext';
+import { hasLockedLanguagePreference, useLanguage } from './LanguageContext';
 import { useAuth } from './AuthContext';
 import type { Settings, BranchSettings } from '../lib/types';
 
@@ -68,8 +68,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         applyBrandColor(brand.hue, brand.sat);
         applyDefaultSurface();
       }
-      if (data.theme) setTheme(data.theme as 'light' | 'dark');
-      if (data.language) setLang(data.language as 'ar' | 'en');
+      if (data.theme && !hasLockedThemePreference()) setTheme(data.theme as 'light' | 'dark');
+      if (data.language && !hasLockedLanguagePreference()) setLang(data.language as 'ar' | 'en');
     }
     const bMap: Record<string, BranchSettings> = {};
     for (const row of (bRes.data as BranchSettings[]) || []) bMap[row.branch_id] = row;
