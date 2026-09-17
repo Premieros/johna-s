@@ -6,7 +6,9 @@ import {
   completeCloudPrintJob,
   getCloudPrintAgentBranchId,
   getCloudPrintAgentId,
+  heartbeatCloudPrintAgent,
   isCloudPrintAgentEnabled,
+  registerCloudPrintAgent,
   startCloudPrintJob,
   type CloudPrintJob,
 } from '../../services/cloudPrint';
@@ -18,6 +20,7 @@ import {
 } from '../../services/localPrintAgent';
 
 const POLL_INTERVAL_MS = 700;
+const HEARTBEAT_INTERVAL_MS = 10_000;
 
 function printRouteForStation(station: string, routes: Record<string, string>): string {
   const direct = routes[station];
@@ -83,14 +86,32 @@ export function CloudPrintAgent() {
   }, []);
 
   useEffect(() => {
-    if (!isRunningInElectron() || !user?.id || !can('settings.manage')) return;
+    if (!isRunningInElectron() || !user?.id) return;
     if (!isSilentPrintEnabled() || !isCloudPrintAgentEnabled()) return;
     const branchId = getCloudPrintAgentBranchId();
     if (!branchId) return;
 
     const agentId = getCloudPrintAgentId();
+    const mayRegister = can('settings.manage');
     let cancelled = false;
     let timer = 0;
+    let lastHeartbeatAt = 0;
+    let runtimeAuthorized = false;
+
+    const ensureRuntimeAuthorization = async (): Promise<boolean> => {
+      const now = Date.now();
+      if (runtimeAuthorized && now - lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) return true;
+
+      let heartbeat = await heartbeatCloudPrintAgent(agentId);
+      if (!heartbeat.success && mayRegister) {
+        const registered = await registerCloudPrintAgent(branchId, agentId);
+        if (registered) heartbeat = await heartbeatCloudPrintAgent(agentId);
+      }
+
+      runtimeAuthorized = heartbeat.success && (!heartbeat.branchId || heartbeat.branchId === branchId);
+      lastHeartbeatAt = now;
+      return runtimeAuthorized;
+    };
 
     const poll = async () => {
       if (cancelled) return;
@@ -100,9 +121,15 @@ export function CloudPrintAgent() {
       }
       busy.current = true;
       try {
+        const authorized = await ensureRuntimeAuthorization();
+        if (!authorized) {
+          if (mayRegister) console.warn('[cloud-print-agent] device registration or heartbeat failed');
+          return;
+        }
         const jobs = await claimCloudPrintJobs(branchId, agentId, 12);
         if (jobs.length > 0) await executeClaimedBatch(jobs, agentId);
       } catch (error) {
+        runtimeAuthorized = false;
         console.warn('[cloud-print-agent] poll failed', error);
       } finally {
         busy.current = false;
