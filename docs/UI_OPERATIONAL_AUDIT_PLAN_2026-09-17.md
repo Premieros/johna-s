@@ -25,74 +25,34 @@ Make the application shell and key operational UI fully permission-aware, direct
 ### Phase 0 — Baseline and documentation
 Status: COMPLETE
 
-- Freeze baseline SHA.
-- Create this plan and a separate execution log.
-- Record audit findings and acceptance criteria.
-
 ### Phase 1 — Permission-aware application shell
 Status: COMPLETE
-
-- Hide/disable Active Orders entry when `floor_plan.view` is unavailable.
-- Stop the user identity control from acting as an unconditional Settings shortcut.
-- Preserve existing route guards as defense in depth.
-- Add focused regression coverage where existing test structure permits.
-
-Acceptance:
-- UI does not advertise inaccessible shell actions.
-- No authorization logic is moved from server/RLS to UI.
-- Existing permitted users retain access.
 
 ### Phase 2 — RTL/LTR shell correctness
 Status: COMPLETE
 
-- Arabic sidebar remains right-aligned.
-- English sidebar becomes left-aligned.
-- Header desktop offset follows sidebar side.
-- Mobile drawer open/close transforms remain correct in both directions.
-
-Acceptance:
-- No overlap between fixed sidebar and fixed header at desktop sizes.
-- Mobile drawer enters/exits from the correct side.
-
 ### Phase 3 — Permission-aware dashboard navigation
 Status: COMPLETE
-
-- Audit clickable dashboard metrics/actions.
-- Do not present links to pages the current user cannot open.
-- Prefer non-clickable metric presentation over redirect loops.
-
-Acceptance:
-- A user with `dashboard.view` only never receives misleading CTA navigation.
 
 ### Phase 4 — POS operational state regression hardening
 Status: COMPLETE — FINDING DOCUMENTED / SOURCE CHANGE DEFERRED
 
-- Reviewed immediate Send-to-Kitchen -> Pay UI state.
-- Confirmed a memo dependency mismatch: `hasUnsentItems` reads `kitchenSendsForActive` but does not list it as a dependency.
-- The session-local fallback can therefore change before `hasUnsentItems` recomputes, until Realtime updates `kitchenSendsByOrder`.
-- No POS source file was changed in this branch to avoid overlapping with the separate active POS workstream.
-
-Required follow-up in the POS-owning workstream:
-- Change the dependency list to include `kitchenSendsForActive` (and remove the indirect `kitchenSendsByOrder` dependency if no longer directly read by the memo).
-- Add a regression test for Send-to-Kitchen success followed immediately by Pay before Realtime delivery.
-
-Acceptance result:
-- Root cause identified precisely.
+Confirmed finding:
+- `hasUnsentItems` reads `kitchenSendsForActive` without depending on it directly.
+- Runtime source fix is deferred to the POS-owning workstream to avoid branch overlap.
 - No stock deduction logic changed.
-- Runtime fix intentionally deferred to avoid branch overlap.
 
 ### Phase 5 — Navigation density / permission granularity audit output
-Status: IN PROGRESS
+Status: COMPLETE
 
-- Document menu-density recommendations separately from implementation.
-- Document finance permission-granularity gaps without changing authorization contracts in this branch.
-- Do not redesign information architecture without explicit approval.
-
-Acceptance:
-- Recommendations are actionable but no scope creep changes are introduced.
+Output:
+- `docs/UI_OPERATIONAL_AUDIT_RECOMMENDATIONS_2026-09-17.md`
+- Sidebar-density recommendations documented without route removal.
+- Finance permission-granularity gaps documented without changing the permission contract.
+- Mobile POS maintainability risks documented separately from operational logic.
 
 ### Phase 6 — Full verification and handoff
-Status: PENDING
+Status: IN PROGRESS
 
 - Review diff against baseline.
 - Run/inspect available CI checks.
