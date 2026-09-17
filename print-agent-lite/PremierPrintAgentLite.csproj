@@ -12,7 +12,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="AppConfig.cs;BuildConfig.cs;Properties\AssemblyInfo.cs" />
-    <Reference Include="System.ServiceProcess" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3537.50" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
