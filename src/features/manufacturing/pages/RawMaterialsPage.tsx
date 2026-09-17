@@ -13,7 +13,7 @@ import { Input, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { BranchBadge } from '@/components/BranchBadge';
-import { formatNumber, formatDate } from '@/lib/format';
+import { formatNumber, formatDate, formatRawMaterialQuantity, measurementUnitLabel } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { RawMaterial, RawMaterialInventory, RawMaterialBatch, Unit, Branch, RpcResult } from '@/lib/types';
@@ -88,7 +88,12 @@ export function RawMaterialsPage() {
   useEffect(() => { loadMeta(); }, []);
 
   const branchLabel = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
-  const unitLabel = (id: string | null | undefined) => units.find((u) => u.id === id)?.name || '-';
+  const unitForId = (id: string | null | undefined) => units.find((u) => u.id === id);
+  const unitForMaterial = (material: RawMaterial | null | undefined) => unitForId(material?.unit_id);
+  const unitLabel = (id: string | null | undefined) => {
+    const unit = unitForId(id);
+    return unit ? (measurementUnitLabel(unit) || unit.name) : '-';
+  };
 
   const filteredMaterials = materials.filter((m) => {
     if (!search) return true;
@@ -127,8 +132,6 @@ export function RawMaterialsPage() {
       is_active: form.is_active,
     };
     if (form.id) {
-      // Measurement unit is intentionally immutable after creation.
-      // Do not send unit_id on update, so a UI regression cannot change it accidentally.
       const { error } = await supabase.from('raw_materials').update(commonPayload).eq('id', form.id);
       if (error) { show(error.message, 'error'); return; }
       await logAudit('update', 'raw_materials', form.id);
@@ -188,13 +191,13 @@ export function RawMaterialsPage() {
     { key: 'name', header: t('materialName'), render: (m) => (
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-ui-success-soft flex items-center justify-center text-xs font-bold text-ui-success dark:text-ui-success">{m.name[0]}</div>
-        <div><p className="font-medium text-ui-text">{m.name}</p>{m.code && <p className="text-xs text-ui-subtle">{m.code}</p>}</div>
+        <div><p className="font-medium text-ui-text">{m.name}</p><p className="text-xs text-ui-subtle">{m.code || ''}{m.code ? ' · ' : ''}{unitLabel(m.unit_id)}</p></div>
       </div>
     )},
     { key: 'unit', header: isAr ? 'وحدة القياس' : 'Measurement unit', render: (m) => unitLabel(m.unit_id) },
     { key: 'category', header: t('category'), render: (m) => m.category || '-' },
     { key: 'branch', header: t('branch'), render: (m) => <BranchBadge name={branchLabel(m.branch_id)} /> },
-    { key: 'min_stock', header: t('minStock'), render: (m) => formatNumber(Number(m.min_stock)) },
+    { key: 'min_stock', header: t('minStock'), render: (m) => formatRawMaterialQuantity(Number(m.min_stock), unitForMaterial(m), { lang }) },
     { key: 'default_cost', header: t('defaultCost'), render: (m) => formatNumber(Number(m.default_cost), 2) },
     { key: 'is_active', header: t('status'), render: (m) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-subtle dark:text-ui-subtle'}`}>{m.is_active ? t('active') : t('inactive')}</span> },
     { key: 'actions', header: t('actions'), render: (m) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
@@ -204,18 +207,18 @@ export function RawMaterialsPage() {
   ];
 
   const stockColumns: Column<RawMaterialInventory>[] = [
-    { key: 'material', header: t('rawMaterial'), render: (i) => i.raw_material?.name || '-' },
+    { key: 'material', header: t('rawMaterial'), render: (i) => <div><p>{i.raw_material?.name || '-'}</p><p className="text-xs text-ui-subtle">{unitLabel(i.raw_material?.unit_id)}</p></div> },
     { key: 'branch', header: t('branch'), render: (i) => branchLabel(i.branch_id) },
-    { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatNumber(Number(i.quantity))}</span> },
+    { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(Number(i.quantity), unitForMaterial(i.raw_material), { lang })}</span> },
     { key: 'avg_cost', header: t('avgCost'), render: (i) => formatNumber(Number(i.avg_cost), 2) },
     { key: 'actions', header: t('actions'), render: (i) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('raw_materials.manage') && <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}><Edit2 className="w-4 h-4" /></button>}</div> },
   ];
 
   const batchColumns: Column<RawMaterialBatch>[] = [
-    { key: 'material', header: t('rawMaterial'), render: (b) => b.raw_material?.name || '-' },
+    { key: 'material', header: t('rawMaterial'), render: (b) => <div><p>{b.raw_material?.name || '-'}</p><p className="text-xs text-ui-subtle">{unitLabel(b.raw_material?.unit_id)}</p></div> },
     { key: 'branch', header: t('branch'), render: (b) => branchLabel(b.branch_id) },
     { key: 'batch_number', header: t('batchNumber'), render: (b) => b.batch_number || '-' },
-    { key: 'quantity', header: t('quantity'), render: (b) => formatNumber(Number(b.quantity)) },
+    { key: 'quantity', header: t('quantity'), render: (b) => formatRawMaterialQuantity(Number(b.quantity), unitForMaterial(b.raw_material), { lang }) },
     { key: 'unit_cost', header: t('unitCost'), render: (b) => formatNumber(Number(b.unit_cost), 2) },
     { key: 'expiry_date', header: t('expiryDate'), render: (b) => b.expiry_date ? formatDate(b.expiry_date, lang) : '-' },
     { key: 'source_type', header: t('sourceType'), render: (b) => b.source_type },
@@ -256,7 +259,7 @@ export function RawMaterialsPage() {
           )}
           <Input label={t('category')} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
           {branchFilter ? <div><label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label><div className="min-h-11 flex items-center"><BranchBadge name={branchLabel(form.branch_id || branchFilter)} /></div></div> : <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}><option value="">--</option>{branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select>}
-          <Input label={t('minStock')} type="number" step="0.0001" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: parseFloat(e.target.value) || 0 })} />
+          <Input label={`${t('minStock')} (${unitLabel(form.unit_id)})`} type="number" step="0.0001" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: parseFloat(e.target.value) || 0 })} />
           <Input label={t('defaultCost')} type="number" step="0.01" value={form.default_cost} onChange={(e) => setForm({ ...form, default_cost: parseFloat(e.target.value) || 0 })} />
           <div className="sm:col-span-2"><Input label={t('description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <label className="flex items-center gap-2 text-sm text-ui-muted"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded border-ui-border text-brand-600 focus:ring-brand-500" />{t('active')}</label>
@@ -265,7 +268,7 @@ export function RawMaterialsPage() {
       </Modal>
 
       <Modal open={!!adjustTarget} onClose={() => setAdjustTarget(null)} title={t('adjustRawStock')} size="sm">
-        {adjustTarget && <div className="space-y-4"><div><p className="text-sm text-ui-subtle">{t('rawMaterial')}</p><p className="font-medium text-ui-text">{adjustTarget.raw_material?.name}</p></div><div><p className="text-sm text-ui-subtle">{t('branch')}</p><p className="font-medium text-ui-text">{branchLabel(adjustTarget.branch_id)}</p></div><Input label={t('quantity')} type="number" step="0.0001" value={adjustQty} onChange={(e) => setAdjustQty(parseFloat(e.target.value) || 0)} /><Input label={t('reason')} value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder={isAr ? 'مثال: جرد، تالف، تصحيح' : 'e.g. count, damaged, correction'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAdjustTarget(null)}>{t('cancel')}</Button><Button onClick={saveAdjust}>{t('save')}</Button></div></div>}
+        {adjustTarget && <div className="space-y-4"><div><p className="text-sm text-ui-subtle">{t('rawMaterial')}</p><p className="font-medium text-ui-text">{adjustTarget.raw_material?.name} <span className="text-xs text-ui-subtle">({unitLabel(adjustTarget.raw_material?.unit_id)})</span></p></div><div><p className="text-sm text-ui-subtle">{t('branch')}</p><p className="font-medium text-ui-text">{branchLabel(adjustTarget.branch_id)}</p></div><Input label={`${t('quantity')} (${unitLabel(adjustTarget.raw_material?.unit_id)})`} type="number" step="0.0001" value={adjustQty} onChange={(e) => setAdjustQty(parseFloat(e.target.value) || 0)} /><Input label={t('reason')} value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder={isAr ? 'مثال: جرد، تالف، تصحيح' : 'e.g. count, damaged, correction'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAdjustTarget(null)}>{t('cancel')}</Button><Button onClick={saveAdjust}>{t('save')}</Button></div></div>}
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
