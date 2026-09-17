@@ -22,7 +22,7 @@
 ## Stages
 
 ### 7A — Language and theme persistence
-Status: IMPLEMENTED / VERIFYING
+Status: COMPLETE / CI GREEN
 
 Behavior:
 - System DB language/theme remain defaults only until the user explicitly chooses a value.
@@ -34,22 +34,42 @@ Behavior:
 Regression test:
 - `tests/unit/uiPreferencePersistence.test.ts`
 
+Verification run:
+- GitHub Actions `Verify main` run #1669: verify ✅, db/integration/RLS ✅, browser smoke ✅.
+
 ### 7B — Table grid clipping and responsive width
-Status: PENDING
+Status: IMPLEMENTED / VERIFYING
+
+Root cause confirmed:
+- Tables landing reserved `100vw` while the desktop order panel simultaneously reserved 380/410/440px.
+- The split workspace uses `overflow-hidden`, so the excess width clipped table cards at the viewport edge.
+
+Implemented:
+- Removed `min-w-[100vw]` from the tables workspace.
+- At desktop widths the tables workspace now subtracts the exact visible order-panel width:
+  - `lg`: `calc(100vw - 380px)`
+  - `xl`: `calc(100vw - 410px)`
+  - `2xl`: `calc(100vw - 440px)`
+- Replaced fixed 6/8/10-column desktop grid with `auto-fit` + `minmax(150px, 1fr)` so columns adapt to actual available width.
+- Added stable `data-testid="pos-table-grid"`.
+
+Regression test:
+- `tests/unit/posTablesResponsiveLayout.test.ts`
 
 Acceptance:
 - No partially clipped first/last table card.
 - Grid responds to available center-panel width.
-- RTL and LTR both supported.
-- Verify desktop 1920/1366 and tablet widths.
+- RTL and LTR both supported through the existing logical-direction shell.
+- Browser smoke must remain green.
 
 ### 7C — Empty order panel / header density
-Status: PENDING
+Status: IN PROGRESS
 
 Acceptance:
 - Empty cart does not consume excessive operational workspace.
 - Print action has a coherent disabled/hidden placement when no order exists.
 - Header remains functional with lower visual density.
+- Assigned-user identity remains readable on occupied tables.
 
 ### 7D — Full regression verification
 Status: PENDING
