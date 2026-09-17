@@ -21,6 +21,8 @@ export interface KitchenSendItem {
   station_code?: string | null;
   /** Delta quantity included in this specific send_to_kitchen call. */
   quantity: number;
+  /** Cumulative quantity sent for this order item after this delta. Used to distinguish incremental sends safely. */
+  current_quantity?: number;
   unit_price: number;
   discount_amount: number;
   bonus_quantity: number;
