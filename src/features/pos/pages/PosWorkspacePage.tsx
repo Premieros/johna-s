@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ShoppingCart, Printer, Barcode as BarcodeIcon } from 'lucide-react';
+import { ShoppingCart, Printer } from 'lucide-react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from '@/api';
 import * as api from '@/api';
