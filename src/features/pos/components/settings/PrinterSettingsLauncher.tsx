@@ -6,6 +6,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useCan } from '@/lib/permissions';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { PrinterSettingsPanel } from './PrinterSettingsPanel';
+import { PrintQueueMonitor } from './PrintQueueMonitor';
 
 export function PrinterSettingsLauncher() {
   const [open, setOpen] = useState(false);
@@ -34,7 +35,10 @@ export function PrinterSettingsLauncher() {
         title={isAr ? 'إدارة طابعات الجهاز' : 'Device Printer Settings'}
         size="xl"
       >
-        <PrinterSettingsPanel />
+        <div className="space-y-6">
+          <PrinterSettingsPanel />
+          <PrintQueueMonitor />
+        </div>
       </Modal>
     </>
   );
