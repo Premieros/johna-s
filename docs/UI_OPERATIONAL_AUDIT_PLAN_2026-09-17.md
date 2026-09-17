@@ -65,18 +65,24 @@ Acceptance:
 - A user with `dashboard.view` only never receives misleading CTA navigation.
 
 ### Phase 4 — POS operational state regression hardening
-Status: IN PROGRESS
+Status: COMPLETE — FINDING DOCUMENTED / SOURCE CHANGE DEFERRED
 
-- Review immediate Send-to-Kitchen -> Pay UI state.
-- Correct memo/dependency issues only if reproducible from code/test evidence.
-- Add regression test for session-local kitchen-send fallback if feasible.
+- Reviewed immediate Send-to-Kitchen -> Pay UI state.
+- Confirmed a memo dependency mismatch: `hasUnsentItems` reads `kitchenSendsForActive` but does not list it as a dependency.
+- The session-local fallback can therefore change before `hasUnsentItems` recomputes, until Realtime updates `kitchenSendsByOrder`.
+- No POS source file was changed in this branch to avoid overlapping with the separate active POS workstream.
 
-Acceptance:
-- Successful kitchen send can enable the next allowed action immediately without waiting for Realtime.
-- No stock deduction logic changes.
+Required follow-up in the POS-owning workstream:
+- Change the dependency list to include `kitchenSendsForActive` (and remove the indirect `kitchenSendsByOrder` dependency if no longer directly read by the memo).
+- Add a regression test for Send-to-Kitchen success followed immediately by Pay before Realtime delivery.
+
+Acceptance result:
+- Root cause identified precisely.
+- No stock deduction logic changed.
+- Runtime fix intentionally deferred to avoid branch overlap.
 
 ### Phase 5 — Navigation density / permission granularity audit output
-Status: PENDING
+Status: IN PROGRESS
 
 - Document menu-density recommendations separately from implementation.
 - Document finance permission-granularity gaps without changing authorization contracts in this branch.
