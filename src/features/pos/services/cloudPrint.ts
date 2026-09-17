@@ -7,12 +7,55 @@ const STORAGE_AGENT_BRANCH_KEY = 'johns_pos_cloud_print_agent_branch_id';
 const STORAGE_AGENT_ID_KEY = 'johns_pos_cloud_print_agent_id';
 
 export interface CloudPrintPayload { text?: string; html?: string; paperWidthMm?: number; copies?: number; }
+export type CloudPrintJobStatus = 'pending' | 'claimed' | 'printing' | 'submitted' | 'printed' | 'failed';
 export interface CloudPrintJob {
   id: string; branch_id: string; kind: 'kitchen' | 'receipt' | 'test'; station_code: string;
   payload: CloudPrintPayload; sale_id?: string | null; expected_print_number?: number | null;
   attempts: number; created_at: string;
 }
-type RpcResult = { success?: boolean; error?: string; detail?: string; job_id?: string; status?: string; jobs?: CloudPrintJob[] };
+export interface CloudPrintQueueJob {
+  id: string;
+  branch_id: string;
+  kind: 'kitchen' | 'receipt' | 'test';
+  station_code: string;
+  status: CloudPrintJobStatus;
+  attempts: number;
+  last_error?: string | null;
+  claimed_agent_id?: string | null;
+  claimed_at?: string | null;
+  lease_expires_at?: string | null;
+  next_attempt_at?: string | null;
+  submitted_at?: string | null;
+  printed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  sale_id?: string | null;
+  expected_print_number?: number | null;
+}
+export interface CloudPrintAgentState {
+  agent_id: string;
+  branch_id: string;
+  enabled: boolean;
+  label?: string | null;
+  registered_at: string;
+  last_seen_at?: string | null;
+  is_online: boolean;
+}
+export interface CloudPrintQueueSnapshot {
+  jobs: CloudPrintQueueJob[];
+  agents: CloudPrintAgentState[];
+}
+
+type RpcResult = {
+  success?: boolean;
+  error?: string;
+  detail?: string;
+  job_id?: string;
+  status?: string;
+  jobs?: CloudPrintJob[] | CloudPrintQueueJob[];
+  agents?: CloudPrintAgentState[];
+  branch_id?: string;
+};
 const safeText = (value: unknown) => String(value ?? '').trim();
 function randomId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -45,6 +88,38 @@ export function getCloudPrintAgentId(): string {
   const id = randomId();
   window.localStorage.setItem(STORAGE_AGENT_ID_KEY, id);
   return id;
+}
+
+export async function registerCloudPrintAgent(branchId: string, agentId: string, label?: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('register_cloud_print_agent', {
+    p_branch_id: safeText(branchId),
+    p_agent_id: safeText(agentId),
+    p_label: safeText(label) || null,
+  });
+  return !error && Boolean((data as RpcResult | null)?.success);
+}
+
+export async function heartbeatCloudPrintAgent(agentId: string): Promise<{ success: boolean; branchId?: string; error?: string }> {
+  const { data, error } = await supabase.rpc('heartbeat_cloud_print_agent', { p_agent_id: safeText(agentId) });
+  if (error) return { success: false, error: error.message };
+  const result = (data ?? {}) as RpcResult;
+  return result.success
+    ? { success: true, branchId: safeText(result.branch_id) || undefined }
+    : { success: false, error: result.error || result.detail || 'AGENT_HEARTBEAT_FAILED' };
+}
+
+export async function getCloudPrintQueue(branchId: string, limit = 100): Promise<CloudPrintQueueSnapshot> {
+  const { data, error } = await supabase.rpc('get_cloud_print_queue', {
+    p_branch_id: safeText(branchId),
+    p_limit: Math.max(1, Math.min(250, Number(limit || 100))),
+  });
+  if (error) throw error;
+  const result = (data ?? {}) as RpcResult;
+  if (!result.success) throw new Error(result.error || result.detail || 'PRINT_QUEUE_LOAD_FAILED');
+  return {
+    jobs: Array.isArray(result.jobs) ? result.jobs as CloudPrintQueueJob[] : [],
+    agents: Array.isArray(result.agents) ? result.agents : [],
+  };
 }
 
 export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; items: KitchenSendItem[]; context: LocalKitchenPrintContext; paperWidthMm?: number }) {
@@ -87,7 +162,7 @@ export async function claimCloudPrintJobs(branchId: string, agentId: string, lim
   if (error) throw error;
   const result = (data ?? {}) as RpcResult;
   if (!result.success) throw new Error(result.error || result.detail || 'CLOUD_PRINT_CLAIM_FAILED');
-  return Array.isArray(result.jobs) ? result.jobs : [];
+  return Array.isArray(result.jobs) ? result.jobs as CloudPrintJob[] : [];
 }
 export async function startCloudPrintJob(jobId: string, agentId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc('start_cloud_print_job', { p_job_id: jobId, p_agent_id: agentId });
