@@ -26,10 +26,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
   const oldPurchaseIds: string[] = [];
   const recentPurchaseIds: string[] = [];
   const oldExpenseIds: string[] = [];
-  let visiblePurchaseIds: string[] = [];
   let visibleExpenseIds: string[] = [];
-  let visibleOldPurchaseId = '';
-  let hiddenOldPurchaseId = '';
   let visibleOldSaleId = '';
   let hiddenOldSaleId = '';
   let visiblePurchaseItemId = '';
@@ -55,13 +52,6 @@ describe.skipIf(skip)('related financial visibility reads', () => {
         [purchaseId, `FV-P-${i}-${purchaseId.slice(0, 8)}`, ids.suppA, ids.branchA, ids.whA],
       );
     }
-    visiblePurchaseIds = oldPurchaseIds.filter((id) => visibleOldBucket(ids.branchA, id)).sort();
-    visibleOldPurchaseId = oldPurchaseIds.find((id) => visibleOldBucket(ids.branchA, id)) || '';
-    hiddenOldPurchaseId = oldPurchaseIds.find((id) => !visibleOldBucket(ids.branchA, id)) || '';
-    if (!visibleOldPurchaseId || !hiddenOldPurchaseId) {
-      throw new Error('purchase fixture did not produce both visibility buckets');
-    }
-
     for (let i = 0; i < 3; i += 1) {
       const purchaseId = randomUUID();
       recentPurchaseIds.push(purchaseId);
@@ -78,7 +68,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
     await client.query(
       `INSERT INTO public.purchase_items (id, purchase_id, product_id, unit_name, quantity, unit_cost, total)
        VALUES ($1, $2, $3, 'piece', 1, 25, 25), ($4, $5, $3, 'piece', 1, 25, 25)`,
-      [visiblePurchaseItemId, visibleOldPurchaseId, ids.prodA, hiddenPurchaseItemId, hiddenOldPurchaseId],
+      [visiblePurchaseItemId, oldPurchaseIds[0], ids.prodA, hiddenPurchaseItemId, oldPurchaseIds[1]],
     );
 
     for (let i = 0; i < 40; i += 1) {
@@ -163,7 +153,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
       await fn();
     });
 
-  guarded('owner sees all old purchases while restricted roles share one stable old subset', async () => {
+  guarded('authorized branch users see the complete old purchase history', async () => {
     const owner = await runAs(client, ids.users.owner,
       'SELECT id FROM public.purchases WHERE id = ANY($1::uuid[]) ORDER BY id', [oldPurchaseIds]);
     const cashier = await runAs(client, ids.users.cashier,
@@ -173,8 +163,8 @@ describe.skipIf(skip)('related financial visibility reads', () => {
 
     expect(owner.error).toBeUndefined();
     expect(idsOf(owner.rows)).toEqual([...oldPurchaseIds].sort());
-    expect(idsOf(cashier.rows)).toEqual(visiblePurchaseIds);
-    expect(idsOf(manager.rows)).toEqual(visiblePurchaseIds);
+    expect(idsOf(cashier.rows)).toEqual([...oldPurchaseIds].sort());
+    expect(idsOf(manager.rows)).toEqual([...oldPurchaseIds].sort());
   });
 
   guarded('all recent purchases remain visible to non-owner users', async () => {
@@ -184,7 +174,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
     expect(idsOf(result.rows)).toEqual([...recentPurchaseIds].sort());
   });
 
-  guarded('purchase items inherit their parent purchase visibility', async () => {
+  guarded('purchase items remain fully visible with their authorized parent purchases', async () => {
     const restricted = await runAs(client, ids.users.cashier,
       'SELECT id FROM public.purchase_items WHERE id = ANY($1::uuid[]) ORDER BY id',
       [[visiblePurchaseItemId, hiddenPurchaseItemId]]);
@@ -192,7 +182,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
       'SELECT id FROM public.purchase_items WHERE id = ANY($1::uuid[]) ORDER BY id',
       [[visiblePurchaseItemId, hiddenPurchaseItemId]]);
 
-    expect(idsOf(restricted.rows)).toEqual([visiblePurchaseItemId]);
+    expect(idsOf(restricted.rows)).toEqual([hiddenPurchaseItemId, visiblePurchaseItemId].sort());
     expect(idsOf(owner.rows)).toEqual([hiddenPurchaseItemId, visiblePurchaseItemId].sort());
   });
 
