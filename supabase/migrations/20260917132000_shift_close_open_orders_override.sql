@@ -161,11 +161,15 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'USER_NOT_FOUND');
   END IF;
 
-  IF NOT public.is_pos_admin() AND NOT public.can_permission('shifts.close_with_open_orders') THEN
+  IF NOT public.is_pos_admin()
+     AND (
+       NOT public.can_permission('shifts.close')
+       OR NOT public.can_permission('shifts.close_with_open_orders')
+     ) THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'SHIFT_CLOSE_OPEN_ORDERS_DENIED',
-      'detail', 'Closing a shift while open orders remain requires shifts.close_with_open_orders.'
+      'detail', 'Closing a shift while open orders remain requires shifts.close and shifts.close_with_open_orders.'
     );
   END IF;
 
