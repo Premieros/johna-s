@@ -20,7 +20,7 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import type { Shift, RpcResult } from '@/lib/types';
 import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
-import { fetchShiftClosingDetailsSafe } from '../services/shiftClosingFinancials';
+import { fetchShiftClosingReportServer } from '../services/shiftClosingFinancials';
 
 interface ShiftUserRow { id: string; full_name: string | null; email: string | null; }
 interface ActiveShiftPayload { open?: boolean; shift?: { id?: string; expected?: number }; }
@@ -222,7 +222,7 @@ export function ShiftsPage() {
   const handlePrintZReport = async (shift: Shift, format: 'thermal' | 'a4') => {
     setPrintingId(shift.id);
     try {
-      const summary = await fetchShiftClosingDetailsSafe(shift.id, shift.branch_id);
+      const summary = await fetchShiftClosingReportServer(shift.id);
       const html = format === 'thermal'
         ? buildThermalZReportHtml(summary, currency, lang)
         : buildA4ZReportHtml(summary, currency, lang);

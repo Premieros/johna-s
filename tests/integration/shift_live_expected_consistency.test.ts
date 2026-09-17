@@ -89,6 +89,12 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
     expect(Number(activeResult.shift?.cash_out)).toBe(35);
     expect(Number(activeResult.shift?.total_sales)).toBe(170);
 
+    await client.query(
+      `UPDATE public.orders SET status = 'completed', payment_status = 'paid'
+       WHERE branch_id = $1 AND status IN ('open', 'held')`,
+      [branchId],
+    );
+
     const closed = await runAsPersist(
       client,
       userId,

@@ -19,6 +19,10 @@ export interface ShiftClosingSummary {
   totalInvoices: number;
   grossSales: number;
   totalDiscounts: number;
+  returns: number;
+  voids: number;
+  expenses: number;
+  netRevenue: number;
   totalTaxes: number;
   netSales: number;
   avgTicket: number;
@@ -37,6 +41,24 @@ export interface ShiftClosingSummary {
     label: string;
     count: number;
     total: number;
+  }[];
+
+  userReports?: {
+    userId: string;
+    displayName: string;
+    salesTotal: number;
+    invoiceCount: number;
+    discounts: number;
+    returns: number;
+    expenses: number;
+    netContribution: number;
+  }[];
+
+  treasuryBalances?: {
+    accountId: string;
+    accountName: string;
+    openingBalance: number;
+    glBalance: number;
   }[];
 
   // Products sold
@@ -229,6 +251,10 @@ export async function fetchShiftClosingDetails(shiftId: string, branchId?: strin
     totalInvoices,
     grossSales,
     totalDiscounts,
+    returns: 0,
+    voids: 0,
+    expenses: 0,
+    netRevenue: netSales,
     totalTaxes,
     netSales,
     avgTicket,

@@ -48,6 +48,7 @@ export interface Shift {
   created_at: string;
   branch?: Branch;
   cashier?: AppUser;
+  daily_close_id?: string | null;
 }
 
 export interface ShiftOperation {

@@ -191,7 +191,7 @@ describe.skipIf(skip)('RLS branch isolation', () => {
     { name: 'categories', key: 'categories', mode: 'perm', ins: (c) => `INSERT INTO public.categories (name, branch_id) VALUES ('Ca', '${c.branch}')`, upd: () => `SET name = 'probe'` },
     { name: 'warehouses', key: 'warehouses', mode: 'perm', ins: (c) => `INSERT INTO public.warehouses (name, branch_id, is_active) VALUES ('W', '${c.branch}', true)`, upd: () => `SET name = 'probe'` },
     { name: 'inventory', key: 'inventory', mode: 'perm', ins: (c) => `INSERT INTO public.inventory (product_id, warehouse_id, branch_id, quantity) VALUES ('${c.invProd}', '${c.wh}', '${c.branch}', 1)`, upd: () => `SET quantity = 2` },
-    { name: 'expenses', key: 'expenses', mode: 'perm', ins: (c) => `INSERT INTO public.expenses (category, description, amount, branch_id, expense_date, payment_method) VALUES ('ops', 'x', 10, '${c.branch}', CURRENT_DATE, 'cash')`, upd: () => `SET amount = 11` },
+    { name: 'expenses', key: 'expenses', mode: 'rpcOnlyTransfer', ins: (c) => `INSERT INTO public.expenses (category, description, amount, branch_id, expense_date, payment_method) VALUES ('ops', 'x', 10, '${c.branch}', CURRENT_DATE, 'cash')`, upd: () => `SET amount = 11` },
 
     // production.manage write gating (production_manager holds the permission).
     { name: 'production_orders', key: 'production_orders', mode: 'permProduction', ins: (c) => `INSERT INTO public.production_orders (order_number, product_id, branch_id, warehouse_id, quantity) VALUES ('${uniq('PO')}', '${c.prod}', '${c.branch}', '${c.wh}', 1)`, upd: () => `SET notes = 'probe'`, noDel: 'all' },
