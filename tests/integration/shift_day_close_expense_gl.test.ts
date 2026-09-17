@@ -120,18 +120,32 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
 
     const blocked = await runAsPersist(client, ids.users.super_admin,
       `SELECT public.close_shift($1,0,'blocked') AS r`, [ids.shiftA]);
-    expect(blocked.rows[0].r).toMatchObject({ success: false, error: 'OPEN_ORDERS_REMAIN' });
+    expect(blocked.rows[0].r).toMatchObject({ success: false, error: 'OPEN_ORDERS_BLOCK_SHIFT_CLOSE' });
 
     await client.query(`UPDATE public.orders SET status='completed', payment_status='paid' WHERE branch_id=$1 AND status IN ('open','held')`, [ids.branchA]);
     const closed = await runAsPersist(client, ids.users.super_admin,
       `SELECT public.close_shift($1,0,'closed') AS r`, [ids.shiftA]);
     const closedResult = closed.rows[0].r as RpcPayload;
     expect(closedResult.success, JSON.stringify(closedResult)).toBe(true);
-    expect(closedResult.day_close?.success).toBe(true);
 
+    const dayClosed = await runAsPersist(client, ids.users.super_admin,
+      `SELECT public.day_close($1,CURRENT_DATE) AS r`, [ids.branchA]);
+    expect(dayClosed.rows[0].r).toMatchObject({ success: true, already_closed: false });
+
+    const beforeRetry = await client.query(
+      `SELECT status, closed_at, expected_amount, actual_amount, difference
+       FROM public.shifts WHERE id = $1`,
+      [ids.shiftA],
+    );
     const retry = await runAsPersist(client, ids.users.super_admin,
       `SELECT public.close_shift($1,0,'retry') AS r`, [ids.shiftA]);
-    expect(retry.rows[0].r).toMatchObject({ success: true, already_closed: true });
+    expect(retry.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_CLOSED' });
+    const afterRetry = await client.query(
+      `SELECT status, closed_at, expected_amount, actual_amount, difference
+       FROM public.shifts WHERE id = $1`,
+      [ids.shiftA],
+    );
+    expect(afterRetry.rows).toEqual(beforeRetry.rows);
 
     const day = await runAsPersist(client, ids.users.super_admin,
       `SELECT public.day_close($1,CURRENT_DATE) AS r`, [ids.branchA]);
