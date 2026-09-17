@@ -3,9 +3,17 @@ import type { Theme } from '../lib/types';
 import { applySurfaceColor } from '../lib/brandColor';
 import { DEFAULT_UI_THEME, findUiTheme, UI_THEME_STORAGE_KEY, applyUiThemePreset } from '../lib/themes';
 
+export const THEME_STORAGE_KEY = 'pos_theme';
+export const THEME_PREFERENCE_LOCK_KEY = 'pos_theme_preference_locked';
+
+export function hasLockedThemePreference(): boolean {
+  return localStorage.getItem(THEME_PREFERENCE_LOCK_KEY) === '1';
+}
+
 interface ThemeContextValue {
   theme: Theme;
   setTheme: (t: Theme) => void;
+  applySystemTheme: (t: Theme) => void;
   toggleTheme: () => void;
   uiTheme: string;
   setUiTheme: (key: string) => void;
@@ -15,7 +23,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem('pos_theme');
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
     return (saved as Theme) || 'light';
   });
   const [uiTheme, setUiThemeState] = useState<string>(() => {
@@ -25,7 +33,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('pos_theme', theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   // Restore the persisted surface tint on load. Accent + mode are driven by
@@ -35,21 +43,37 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (p) applySurfaceColor(p.surfaceHue, p.surfaceSat);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
-  const toggleTheme = useCallback(() => setThemeState((prev) => (prev === 'light' ? 'dark' : 'light')), []);
+  const lockThemePreference = useCallback(() => {
+    localStorage.setItem(THEME_PREFERENCE_LOCK_KEY, '1');
+  }, []);
+
+  const setTheme = useCallback((t: Theme) => {
+    lockThemePreference();
+    setThemeState(t);
+  }, [lockThemePreference]);
+
+  const applySystemTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    lockThemePreference();
+    setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
+  }, [lockThemePreference]);
 
   const setUiTheme = useCallback((key: string) => {
     const p = findUiTheme(key);
     if (!p) return;
+    lockThemePreference();
     setUiThemeState(key);
     localStorage.setItem(UI_THEME_STORAGE_KEY, key);
     applyUiThemePreset(p);
     setThemeState(p.mode);
-  }, []);
+  }, [lockThemePreference]);
 
   const value = useMemo(
-    () => ({ theme, setTheme, toggleTheme, uiTheme, setUiTheme }),
-    [theme, setTheme, toggleTheme, uiTheme, setUiTheme]
+    () => ({ theme, setTheme, applySystemTheme, toggleTheme, uiTheme, setUiTheme }),
+    [theme, setTheme, applySystemTheme, toggleTheme, uiTheme, setUiTheme]
   );
 
   return (

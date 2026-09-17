@@ -121,7 +121,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
   };
 
   return (
-    <aside data-testid="pos-tables-workspace" className="flex h-full min-h-0 w-screen min-w-[100vw] max-w-none shrink-0 flex-col border-e border-ui-border bg-ui-surface">
+    <aside data-testid="pos-tables-workspace" className="flex h-full min-h-0 w-screen min-w-0 max-w-full shrink-0 flex-col border-e border-ui-border bg-ui-surface lg:w-[calc(100vw-380px)] xl:w-[calc(100vw-410px)] 2xl:w-[calc(100vw-440px)]">
       <div className="shrink-0 border-b border-ui-border px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -195,7 +195,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
         {filteredTables.length > 0 ? (
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
+          <div data-testid="pos-table-grid" className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
             {filteredTables.map((table) => (
               <TableCard
                 key={table.id}

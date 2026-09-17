@@ -53,8 +53,6 @@ BEGIN
         AND op.reference_type = 'sale'
     );
 
-  -- Authoritative expense total for the shift. Prefer direct shift linkage.
-  -- Legacy unlinked expenses are reconciled by the operational creation window.
   SELECT COALESCE(sum(e.amount), 0)
   INTO v_expenses
   FROM public.expenses e
@@ -69,7 +67,6 @@ BEGIN
       )
     );
 
-  -- Net revenue is sales after refunds minus posted operating expenses.
   v_net := round(v_net - v_expenses, 2);
 
   SELECT round(
@@ -87,8 +84,6 @@ BEGIN
   FROM public.shift_operations
   WHERE shift_id = p_shift_id;
 
-  -- Historical expenses pre-dating shift_id have no shift_operation row, so cash
-  -- expenses from that legacy set must reduce the expected drawer explicitly.
   SELECT COALESCE(sum(e.amount), 0)
   INTO v_legacy_cash_expenses
   FROM public.expenses e
