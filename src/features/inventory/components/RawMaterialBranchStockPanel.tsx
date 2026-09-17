@@ -4,7 +4,7 @@ import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useBranches } from '@/hooks/useBranches';
-import { formatNumber } from '@/lib/format';
+import { formatNumber, formatRawMaterialQuantity } from '@/lib/format';
 import { DesignPanel } from '@/components/design';
 import { Select } from '@/components/Input';
 
@@ -210,13 +210,13 @@ export function RawMaterialBranchStockPanel() {
                   const branchName = branches.find((branch) => branch.id === row.branch_id)?.name || row.branch_id;
                   return (
                     <tr key={`${row.branch_id}:${row.raw_material_id}`} data-testid={`raw-stock-row-${row.raw_material_id}`}>
-                      <td className="px-3 py-2 font-semibold text-ui-text">{row.raw_material.name || '-'}</td>
+                      <td className="px-3 py-2 font-semibold text-ui-text"><div>{row.raw_material.name || '-'}</div><div className="text-xs font-normal text-ui-subtle">{unit}</div></td>
                       {showBranchColumn && <td className="px-3 py-2 text-ui-muted">{branchName}</td>}
                       <td className="px-3 py-2 text-ui-muted">{unit}</td>
-                      <td className="px-3 py-2 text-end font-bold text-ui-text">{formatNumber(quantity)}</td>
+                      <td className="px-3 py-2 text-end font-bold text-ui-text">{formatRawMaterialQuantity(quantity, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2 text-end text-ui-muted">{formatNumber(averageCost, 2)}</td>
                       <td className="px-3 py-2 text-end font-semibold text-ui-text">{formatNumber(stockValue, 2)}</td>
-                      <td className="px-3 py-2 text-end text-ui-muted">{formatNumber(minimum)}</td>
+                      <td className="px-3 py-2 text-end text-ui-muted">{formatRawMaterialQuantity(minimum, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${quantity <= 0 ? 'bg-ui-danger-soft text-ui-danger' : low ? 'bg-ui-warning-soft text-ui-warning' : 'bg-ui-success-soft text-ui-success'}`}>
                           {low && <AlertTriangle className="h-3.5 w-3.5" />}
