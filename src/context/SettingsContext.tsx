@@ -39,8 +39,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [branchSettingsMap, setBranchSettingsMap] = useState<Record<string, BranchSettings>>({});
   const [loading, setLoading] = useState(true);
-  const { setTheme } = useTheme();
-  const { setLang } = useLanguage();
+  const { applySystemTheme } = useTheme();
+  const { applySystemLang } = useLanguage();
   const { session } = useAuth();
 
   const sessionUserId = session?.user?.id ?? null;
@@ -68,14 +68,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         applyBrandColor(brand.hue, brand.sat);
         applyDefaultSurface();
       }
-      if (data.theme && !hasLockedThemePreference()) setTheme(data.theme as 'light' | 'dark');
-      if (data.language && !hasLockedLanguagePreference()) setLang(data.language as 'ar' | 'en');
+      if (data.theme && !hasLockedThemePreference()) applySystemTheme(data.theme as 'light' | 'dark');
+      if (data.language && !hasLockedLanguagePreference()) applySystemLang(data.language as 'ar' | 'en');
     }
     const bMap: Record<string, BranchSettings> = {};
     for (const row of (bRes.data as BranchSettings[]) || []) bMap[row.branch_id] = row;
     setBranchSettingsMap(bMap);
     setLoading(false);
-  }, [sessionUserId, setTheme, setLang]);
+  }, [sessionUserId, applySystemTheme, applySystemLang]);
 
   useEffect(() => {
     refresh();
