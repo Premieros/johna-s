@@ -2,6 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Language } from '../lib/types';
 import { t as translate, type TranslationKey } from '../lib/i18n';
 
+export const LANGUAGE_STORAGE_KEY = 'pos_lang';
+export const LANGUAGE_PREFERENCE_LOCK_KEY = 'pos_lang_preference_locked';
+
+export function hasLockedLanguagePreference(): boolean {
+  return localStorage.getItem(LANGUAGE_PREFERENCE_LOCK_KEY) === '1';
+}
+
 interface LanguageContextValue {
   lang: Language;
   setLang: (l: Language) => void;
@@ -13,7 +20,7 @@ const LanguageContext = createContext<LanguageContextValue | undefined>(undefine
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Language>(() => {
-    const saved = localStorage.getItem('pos_lang');
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     return (saved as Language) || 'ar';
   });
 
@@ -22,10 +29,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = dir;
-    localStorage.setItem('pos_lang', lang);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
   }, [lang, dir]);
 
-  const setLang = useCallback((l: Language) => setLangState(l), []);
+  const setLang = useCallback((l: Language) => {
+    localStorage.setItem(LANGUAGE_PREFERENCE_LOCK_KEY, '1');
+    setLangState(l);
+  }, []);
   const t = useCallback((key: TranslationKey) => translate(lang, key), [lang]);
 
   const value = useMemo(
