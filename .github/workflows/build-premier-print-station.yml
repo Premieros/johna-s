@@ -1,0 +1,54 @@
+name: Build Premier Print Station
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'windows-print-station/**'
+      - '.github/workflows/build-premier-print-station.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore windows-print-station/PremierPrintStation.Service/PremierPrintStation.Service.csproj
+          dotnet restore windows-print-station/PremierPrintStation.Desktop/PremierPrintStation.Desktop.csproj
+
+      - name: Build
+        shell: pwsh
+        run: |
+          dotnet build windows-print-station/PremierPrintStation.Service/PremierPrintStation.Service.csproj -c Release --no-restore
+          dotnet build windows-print-station/PremierPrintStation.Desktop/PremierPrintStation.Desktop.csproj -c Release --no-restore
+
+      - name: Publish Windows x64 self-contained
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out/service | Out-Null
+          New-Item -ItemType Directory -Force -Path out/desktop | Out-Null
+          dotnet publish windows-print-station/PremierPrintStation.Service/PremierPrintStation.Service.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o out/service
+          dotnet publish windows-print-station/PremierPrintStation.Desktop/PremierPrintStation.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o out/desktop
+          Copy-Item windows-print-station/install.ps1 out/install.ps1
+          Copy-Item windows-print-station/uninstall.ps1 out/uninstall.ps1
+          Copy-Item windows-print-station/README.md out/README.md
+
+      - name: Verify bundle
+        shell: pwsh
+        run: |
+          if (-not (Test-Path out/service/PremierPrintStation.Service.exe)) { throw 'Service executable missing' }
+          if (-not (Test-Path out/desktop/PremierPrintStation.exe)) { throw 'Desktop executable missing' }
+          if (-not (Test-Path out/install.ps1)) { throw 'Installer missing' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: premier-print-station-windows-x64
+          path: out/**
+          if-no-files-found: error
+          retention-days: 14
