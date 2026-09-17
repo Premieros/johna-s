@@ -3,6 +3,24 @@ import type { RpcResult, TreasuryBalance, TrialBalanceRow, JournalDto, ArAgingRo
 import { rpc } from '../rpc';
 
 export const accounting = {
+  postShiftExpense(p: {
+    p_idempotency_key: string;
+    p_branch_id: string;
+    p_shift_id: string;
+    p_category: string;
+    p_description: string | null;
+    p_amount: number;
+    p_payment_method: string;
+    p_expense_account_id: string;
+    p_treasury_account_id: string;
+    p_expense_date: string;
+    p_notes: string | null;
+  }): ApiResult<RpcResult & { expense_id?: string; journal_entry_id?: string; already_posted?: boolean }> {
+    return rpc('post_shift_expense', p);
+  },
+  reverseShiftExpense(p: { p_expense_id: string; p_reason: string }): ApiResult<RpcResult & { journal_entry_id?: string; already_reversed?: boolean }> {
+    return rpc('reverse_shift_expense', p);
+  },
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p); },
   seedOpeningBalances(p: { p_branch_id: string | null }): ApiResult<RpcResult> { return rpc('seed_opening_balances', p); },
   getJournals(p: { p_branch_id: string | null; p_from_date: string | null; p_to_date: string | null; p_reference_type: string | null; p_search: string | null }): ApiResult<JournalDto[]> { return rpc('get_journals', p); },

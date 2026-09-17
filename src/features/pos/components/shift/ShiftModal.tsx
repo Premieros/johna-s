@@ -5,7 +5,8 @@ import { formatCurrency } from '@/lib/format';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useToast } from '@/components/Toast';
-import { fetchShiftClosingDetails, buildThermalZReportHtml, buildA4ZReportHtml, type ShiftClosingSummary } from '@/features/trade/services/shiftClosingReport';
+import { buildThermalZReportHtml, buildA4ZReportHtml, type ShiftClosingSummary } from '@/features/trade/services/shiftClosingReport';
+import { fetchShiftClosingReportServer } from '@/features/trade/services/shiftClosingFinancials';
 
 interface ShiftModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export function ShiftModal({
   useEffect(() => {
     if (isOpen && activeShift?.id) {
       setLoadingSummary(true);
-      fetchShiftClosingDetails(activeShift.id, branchId)
+      fetchShiftClosingReportServer(activeShift.id)
         .then((data) => setSummary(data))
         .catch((err) => console.warn('Could not load live shift summary', err))
         .finally(() => setLoadingSummary(false));

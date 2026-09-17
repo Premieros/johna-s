@@ -239,6 +239,12 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
     expect(cashOperation.rows).toHaveLength(1);
     expect(cashOperation.rows[0].created_by).toBe(ids.users.cashier);
 
+    await client.query(
+      `UPDATE public.orders SET status = 'completed', payment_status = 'paid'
+       WHERE branch_id = $1 AND status IN ('open', 'held')`,
+      [ids.branchA],
+    );
+
     const close = await rpc(
       ids.users.cashier,
       `SELECT public.close_shift($1, 20, 'functional cycle close') AS r`,

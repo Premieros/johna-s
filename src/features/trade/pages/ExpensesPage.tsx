@@ -1,6 +1,7 @@
-﻿import { useState } from 'react';
-import { Plus, Edit2, Trash2, Download } from 'lucide-react';
+﻿import { useEffect, useState } from 'react';
+import { Plus, RotateCcw, Download } from 'lucide-react';
 import { supabase } from '@/api';
+import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
@@ -11,10 +12,8 @@ import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
 import { Input, Select, Textarea } from '@/components/Input';
 import { Modal } from '@/components/Modal';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatCurrency, formatDate, todayISO } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
-import { logAudit } from '@/lib/audit';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
@@ -24,6 +23,7 @@ const EXPENSE_CATEGORIES = ['rent', 'utilities', 'salaries', 'supplies', 'mainte
 
 export function ExpensesPage() {
   const { t, lang } = useLanguage();
+  const isAr = lang === 'ar';
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const { show } = useToast();
@@ -39,37 +39,75 @@ export function ExpensesPage() {
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Expense | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ category: '', description: '', amount: 0, branch_id: '', payment_method: 'cash', expense_date: todayISO(), notes: '' });
+  const [reverseId, setReverseId] = useState<string | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
+  const [expenseAccounts, setExpenseAccounts] = useState<Array<{ id: string; code: string; name: string; name_en: string | null }>>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<Array<{ id: string; account_name: string; account_type: string }>>([]);
+  const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  const [form, setForm] = useState({ category: '', description: '', amount: 0, branch_id: '', payment_method: 'cash', expense_date: todayISO(), notes: '', expense_account_id: '', treasury_account_id: '' });
+
+  const effectiveBranchId = branchFilter || user?.branch_id || '';
+
+  useEffect(() => {
+    if (!effectiveBranchId) {
+      setExpenseAccounts([]);
+      setTreasuryAccounts([]);
+      setActiveShiftId(null);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([
+      supabase.from('chart_of_accounts').select('id,code,name,name_en').eq('branch_id', effectiveBranchId).eq('account_type', 'expense').eq('is_active', true).order('code'),
+      supabase.from('treasury_accounts').select('id,account_name,account_type').eq('branch_id', effectiveBranchId).eq('is_active', true).order('account_type'),
+      api.pos.getActiveShift({ p_branch_id: effectiveBranchId }),
+    ]).then(([accountsRes, treasuryRes, shiftRes]) => {
+      if (cancelled) return;
+      setExpenseAccounts((accountsRes.data || []) as typeof expenseAccounts);
+      setTreasuryAccounts((treasuryRes.data || []) as typeof treasuryAccounts);
+      const active = shiftRes.data as unknown as { open?: boolean; shift?: { id?: string } | null } | null;
+      setActiveShiftId(active?.open ? active.shift?.id || null : null);
+    });
+    return () => { cancelled = true; };
+  }, [effectiveBranchId]);
 
   const filtered = items.filter((e) => !search || e.description?.toLowerCase().includes(search.toLowerCase()) || e.category?.toLowerCase().includes(search.toLowerCase()));
-  const openAdd = () => { setEditing(null); setForm({ category: '', description: '', amount: 0, branch_id: branchFilter || '', payment_method: 'cash', expense_date: todayISO(), notes: '' }); setModalOpen(true); };
-  const openEdit = (e: Expense) => { setEditing(e); setForm({ category: e.category || '', description: e.description || '', amount: e.amount, branch_id: e.branch_id || '', payment_method: e.payment_method, expense_date: e.expense_date, notes: e.notes || '' }); setModalOpen(true); };
+  const openAdd = () => {
+    setForm({ category: '', description: '', amount: 0, branch_id: effectiveBranchId, payment_method: 'cash', expense_date: todayISO(), notes: '', expense_account_id: '', treasury_account_id: '' });
+    setModalOpen(true);
+  };
 
   const save = async () => {
     if (!form.amount || form.amount <= 0) { show(t('required') + ': ' + t('amount'), 'error'); return; }
-    const base = { ...form, branch_id: branchFilter || form.branch_id || null };
-    if (editing) {
-      const { error } = await supabase.from('expenses').update(base).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'expenses', editing.id);
-    } else {
-      const { error } = await supabase.from('expenses').insert({ ...base, created_by: user?.id || null });
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'expenses');
-    }
+    if (!effectiveBranchId || !activeShiftId) { show(isAr ? 'لا توجد وردية مفتوحة' : 'No open shift is available', 'error'); return; }
+    if (!form.expense_account_id || !form.treasury_account_id) { show(t('required'), 'error'); return; }
+    const { data, error } = await api.accounting.postShiftExpense({
+      p_idempotency_key: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+      p_branch_id: effectiveBranchId,
+      p_shift_id: activeShiftId,
+      p_category: form.category,
+      p_description: form.description || null,
+      p_amount: form.amount,
+      p_payment_method: form.payment_method,
+      p_expense_account_id: form.expense_account_id,
+      p_treasury_account_id: form.treasury_account_id,
+      p_expense_date: form.expense_date,
+      p_notes: form.notes || null,
+    });
+    const result = data as { success?: boolean; error?: string; detail?: string } | null;
+    if (error || !result?.success) { show(error?.message || result?.detail || result?.error || t('error'), 'error'); return; }
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadExpenses();
   };
 
-  const remove = async () => {
-    if (!deleteId) return;
-    const { error } = await supabase.from('expenses').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'expenses', deleteId); }
-    setDeleteId(null);
+  const reverse = async () => {
+    if (!reverseId || !reverseReason.trim()) return;
+    const { data, error } = await api.accounting.reverseShiftExpense({ p_expense_id: reverseId, p_reason: reverseReason.trim() });
+    const result = data as { success?: boolean; error?: string; detail?: string } | null;
+    if (error || !result?.success) show(error?.message || result?.detail || result?.error || t('error'), 'error');
+    else show(t('saveSuccess'), 'success');
+    setReverseId(null);
+    setReverseReason('');
     reloadExpenses();
   };
 
@@ -83,11 +121,8 @@ export function ExpensesPage() {
     { key: 'payment_method', header: t('paymentMethod'), render: (e) => <span className="capitalize">{e.payment_method}</span> },
     { key: 'actions', header: t('actions'), render: (e) => (
       <div className="flex gap-1">
-        {can('expenses.manage') && (
-          <button onClick={() => openEdit(e)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
-        )}
-        {can('expenses.manage') && (
-          <button onClick={() => setDeleteId(e.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+        {can('expenses.manage') && e.status !== 'voided' && (
+          <button onClick={() => setReverseId(e.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={isAr ? 'عكس المصروف' : 'Reverse expense'}><RotateCcw className="w-4 h-4" /></button>
         )}
       </div>
     )},
@@ -107,10 +142,10 @@ export function ExpensesPage() {
         <DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="expenses-search" />
       </DesignPanel>
       <DesignPanel testId="expenses-table-panel">
-        <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={openEdit} />
+        <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('edit') : t('add')}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t('add')}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Select label={t('expenseCategory')} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
@@ -119,6 +154,14 @@ export function ExpensesPage() {
             </Select>
             <Input label={t('expenseDate')} type="date" value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} required />
             <Input label={t('amount')} type="number" step="0.01" value={form.amount || ''} onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })} required />
+            <Select label={isAr ? 'حساب المصروف' : 'Expense account'} value={form.expense_account_id} onChange={(e) => setForm({ ...form, expense_account_id: e.target.value })} required>
+              <option value="">--</option>
+              {expenseAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} - {isAr ? account.name : account.name_en || account.name}</option>)}
+            </Select>
+            <Select label={isAr ? 'الخزينة / البنك' : 'Treasury / bank'} value={form.treasury_account_id} onChange={(e) => setForm({ ...form, treasury_account_id: e.target.value })} required>
+              <option value="">--</option>
+              {treasuryAccounts.map((account) => <option key={account.id} value={account.id}>{account.account_name} ({account.account_type})</option>)}
+            </Select>
             <Select label={t('paymentMethod')} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               <option value="cash">{t('cash')}</option>
               <option value="card">{t('card')}</option>
@@ -139,7 +182,15 @@ export function ExpensesPage() {
           </div>
         </div>
       </Modal>
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
+      <Modal open={!!reverseId} onClose={() => setReverseId(null)} title={isAr ? 'عكس المصروف' : 'Reverse expense'}>
+        <div className="space-y-4">
+          <Textarea label={isAr ? 'سبب العكس' : 'Reversal reason'} value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} rows={3} required />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setReverseId(null)}>{t('cancel')}</Button>
+            <Button variant="danger" onClick={reverse} disabled={!reverseReason.trim()}><RotateCcw className="w-4 h-4" /> {isAr ? 'عكس' : 'Reverse'}</Button>
+          </div>
+        </div>
+      </Modal>
     </DesignSurface>
   );
 }

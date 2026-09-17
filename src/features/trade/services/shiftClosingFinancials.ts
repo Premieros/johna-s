@@ -47,6 +47,77 @@ const ORDER_LABELS: Record<string, string> = {
   drive_thru: 'خدمة السيارات (Drive-thru)',
 };
 
+export async function fetchShiftClosingReportServer(shiftId: string): Promise<ShiftClosingSummary> {
+  const { data, error } = await supabase.rpc('get_shift_closing_report', { p_shift_id: shiftId });
+  if (error) throw new Error(error.message);
+  const raw = data as Record<string, unknown> | null;
+  if (!raw?.success) throw new Error(String(raw?.detail || raw?.error || 'Could not load shift closing report'));
+
+  const paymentMethods = Array.isArray(raw.payment_methods)
+    ? raw.payment_methods.map((row) => {
+      const item = row as Record<string, unknown>;
+      const method = String(item.method || 'cash');
+      return { method, label: PAYMENT_LABELS[method] || method, count: Number(item.count || 0), total: Number(item.total || 0) };
+    })
+    : [];
+  const userReports = Array.isArray(raw.users)
+    ? raw.users.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        userId: String(item.user_id || ''),
+        displayName: String(item.display_name || ''),
+        salesTotal: Number(item.sales_total || 0),
+        invoiceCount: Number(item.invoice_count || 0),
+        discounts: Number(item.discounts || 0),
+        returns: Number(item.returns || 0),
+        expenses: Number(item.expenses || 0),
+        netContribution: Number(item.net_contribution || 0),
+      };
+    })
+    : [];
+  const treasuryBalances = Array.isArray(raw.treasury)
+    ? raw.treasury.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        accountId: String(item.account_id || ''),
+        accountName: String(item.account_name || ''),
+        openingBalance: Number(item.opening_balance || 0),
+        glBalance: Number(item.gl_balance || 0),
+      };
+    })
+    : [];
+
+  return {
+    shiftId,
+    branchId: String(raw.branch_id || ''),
+    branchName: String(raw.branch_name || ''),
+    cashierName: String(raw.cashier_name || ''),
+    openedAt: String(raw.opened_at || ''),
+    closedAt: raw.closed_at ? String(raw.closed_at) : null,
+    openingAmount: Number(raw.opening_amount || 0),
+    expectedAmount: Number(raw.expected_cash || 0),
+    actualAmount: Number(raw.actual_cash || 0),
+    difference: Number(raw.difference || 0),
+    notes: raw.notes ? String(raw.notes) : null,
+    totalInvoices: Number(raw.invoice_count || 0),
+    grossSales: Number(raw.gross_sales || 0),
+    totalDiscounts: Number(raw.discounts || 0),
+    returns: Number(raw.returns || 0),
+    voids: Number(raw.voids || 0),
+    expenses: Number(raw.expenses || 0),
+    netRevenue: Number(raw.net_revenue || 0),
+    totalTaxes: Number(raw.taxes || 0),
+    netSales: Number(raw.net_revenue || 0) + Number(raw.expenses || 0),
+    avgTicket: Number(raw.invoice_count || 0) > 0 ? Number(raw.net_revenue || 0) / Number(raw.invoice_count) : 0,
+    orderTypes: [],
+    paymentMethods,
+    productsSold: [],
+    ingredientsConsumed: [],
+    userReports,
+    treasuryBalances,
+  };
+}
+
 function calculateExpectedDrawerAmount(openingAmount: number, operations: ShiftOperationRow[]) {
   const expected = operations.reduce((total, op) => {
     if ((op.payment_method || 'cash') !== 'cash') return total;
@@ -212,6 +283,10 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
     totalInvoices,
     grossSales,
     totalDiscounts,
+    returns: 0,
+    voids: 0,
+    expenses: 0,
+    netRevenue: netSales,
     totalTaxes,
     netSales,
     avgTicket: totalInvoices > 0 ? netSales / totalInvoices : 0,

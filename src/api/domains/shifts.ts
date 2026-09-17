@@ -16,6 +16,14 @@ export const shifts = {
     return rpc<RpcResult>('close_shift', p);
   },
 
+  dayClose(p: { p_branch_id: string; p_business_date: string }): ApiResult<RpcResult & { daily_close_id?: string; already_closed?: boolean }> {
+    return rpc('day_close', p);
+  },
+
+  getClosingReport(p: { p_shift_id: string }): ApiResult<RpcResult & Record<string, unknown>> {
+    return rpc('get_shift_closing_report', p);
+  },
+
   forceClose(p: { p_shift_id: string; p_actual_amount: number | null; p_reason: string | null }): ApiResult<RpcResult> {
     return rpc<RpcResult>('force_close_shift', p);
   },

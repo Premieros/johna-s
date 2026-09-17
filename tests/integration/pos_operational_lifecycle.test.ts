@@ -259,6 +259,12 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
     expect(approvalRow.rows[0].status).toBe('consumed');
     expect(await batchQty()).toBe(stockBeforeKds); // full refund restores aggregate stock across batches.
 
+    await client.query(
+      `UPDATE public.orders SET status = 'completed', payment_status = 'paid'
+       WHERE branch_id = $1 AND status IN ('open', 'held')`,
+      [ids.branchA],
+    );
+
     const closed = await rpc(
       ids.users.cashier,
       `SELECT public.close_shift($1, $2, $3) AS r`,

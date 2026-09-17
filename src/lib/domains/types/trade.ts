@@ -84,4 +84,12 @@ export interface Expense {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  shift_id?: string | null;
+  account_id?: string | null;
+  treasury_account_id?: string | null;
+  idempotency_key?: string | null;
+  status?: 'posted' | 'voided';
+  voided_at?: string | null;
+  voided_by?: string | null;
+  void_reason?: string | null;
 }
