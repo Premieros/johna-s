@@ -7,7 +7,7 @@ const STORAGE_AGENT_BRANCH_KEY = 'johns_pos_cloud_print_agent_branch_id';
 const STORAGE_AGENT_ID_KEY = 'johns_pos_cloud_print_agent_id';
 
 export interface CloudPrintPayload { text?: string; html?: string; paperWidthMm?: number; copies?: number; }
-export type CloudPrintJobStatus = 'pending' | 'claimed' | 'printing' | 'submitted' | 'printed' | 'failed';
+export type CloudPrintJobStatus = 'pending' | 'claimed' | 'printing' | 'submitted' | 'printed' | 'failed' | 'cancelled';
 export interface CloudPrintJob {
   id: string; branch_id: string; kind: 'kitchen' | 'receipt' | 'test'; station_code: string;
   payload: CloudPrintPayload; sale_id?: string | null; expected_print_number?: number | null;
@@ -27,6 +27,8 @@ export interface CloudPrintQueueJob {
   next_attempt_at?: string | null;
   submitted_at?: string | null;
   printed_at?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
   created_at: string;
   updated_at: string;
   sale_id?: string | null;
