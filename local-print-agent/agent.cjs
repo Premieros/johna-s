@@ -8,6 +8,9 @@ const HOST = '127.0.0.1';
 const PORT = Number(process.env.JOHNS_PRINT_PORT || 17654);
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
 const MAX_BODY = 256 * 1024;
+const PREFLIGHT_RETRY_DELAYS_MS = [150, 350];
+const printerLanes = new Map();
+const printerQueueDepth = new Map();
 
 function originAllowed(origin) {
   if (!origin) return true;
@@ -62,6 +65,44 @@ function ps(script, args = []) {
   });
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function printerKey(printerName) {
+  return String(printerName || '').trim().toLocaleLowerCase();
+}
+
+function queueDepthFor(printerName) {
+  return printerQueueDepth.get(printerKey(printerName)) || 0;
+}
+
+function queueSnapshot() {
+  return Array.from(printerQueueDepth.entries())
+    .filter(([, depth]) => depth > 0)
+    .map(([printer, depth]) => ({ printer, depth }));
+}
+
+function enqueuePrinterTask(printerName, task) {
+  const key = printerKey(printerName);
+  if (!key) return Promise.reject(new Error('PRINTER_NAME_REQUIRED'));
+
+  printerQueueDepth.set(key, (printerQueueDepth.get(key) || 0) + 1);
+  const previous = printerLanes.get(key) || Promise.resolve();
+  let current;
+  current = previous
+    .catch(() => undefined)
+    .then(task)
+    .finally(() => {
+      const nextDepth = Math.max(0, (printerQueueDepth.get(key) || 1) - 1);
+      if (nextDepth === 0) printerQueueDepth.delete(key);
+      else printerQueueDepth.set(key, nextDepth);
+      if (printerLanes.get(key) === current) printerLanes.delete(key);
+    });
+  printerLanes.set(key, current);
+  return current;
+}
+
 async function listPrinters() {
   const out = await ps("Get-Printer | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress");
   const parsed = JSON.parse(String(out || '[]').trim() || '[]');
@@ -69,9 +110,27 @@ async function listPrinters() {
   return parsed ? [String(parsed)] : [];
 }
 
-async function printText(printerName, text) {
-  const printers = await listPrinters();
-  if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
+async function ensureSpoolerReady(printerName) {
+  const script = "$p=$args[0];$svc=Get-Service -Name Spooler -ErrorAction Stop;if($svc.Status -ne 'Running'){throw 'PRINT_SPOOLER_NOT_RUNNING'};$printer=Get-Printer -Name $p -ErrorAction Stop;if($printer.PrinterStatus -eq 'Offline'){throw 'PRINTER_OFFLINE'}";
+  await ps(script, [printerName]);
+}
+
+async function ensureSpoolerReadyWithRetry(printerName) {
+  let lastError;
+  for (let attempt = 0; attempt <= PREFLIGHT_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      await ensureSpoolerReady(printerName);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= PREFLIGHT_RETRY_DELAYS_MS.length) break;
+      await sleep(PREFLIGHT_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+  throw lastError || new Error('PRINT_SPOOLER_NOT_READY');
+}
+
+async function submitTextToSpooler(printerName, text) {
   const tmp = path.join(os.tmpdir(), `johns-ticket-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
   fs.writeFileSync(tmp, text, 'utf8');
   try {
@@ -80,6 +139,19 @@ async function printText(printerName, text) {
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
+}
+
+async function printText(printerName, text) {
+  return enqueuePrinterTask(printerName, async () => {
+    const printers = await listPrinters();
+    if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
+
+    // Retry only the preflight. Once Out-Printer is invoked we never retry here,
+    // because an ambiguous retry could produce a duplicate physical ticket.
+    await ensureSpoolerReadyWithRetry(printerName);
+    await submitTextToSpooler(printerName, text);
+    return { acceptedBySpooler: true };
+  });
 }
 
 async function kickDrawer(printerName) {
@@ -153,7 +225,8 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
     if (req.method === 'GET' && url.pathname === '/') return html(res, configPage());
-    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 1 });
+    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 2, queue: queueSnapshot() });
+    if (req.method === 'GET' && url.pathname === '/queue') return json(res, 200, { queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/printers') return json(res, 200, { printers: await listPrinters() });
     if (req.method === 'GET' && url.pathname === '/config') return json(res, 200, readConfig());
     if (req.method === 'POST' && url.pathname === '/config') {
@@ -161,7 +234,7 @@ const server = http.createServer(async (req, res) => {
       const printers = await listPrinters();
       const routes = {};
       for (const [station, printer] of Object.entries(body.routes || {})) {
-        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(station)) return json(res, 400, { success: false, error: 'INVALID_STATION' });
+        if (!/^[a-zA-Z0-9_\-\u0600-\u06FF]{1,64}$/.test(station)) return json(res, 400, { success: false, error: 'INVALID_STATION' });
         if (printer && !printers.includes(String(printer))) return json(res, 400, { success: false, error: 'PRINTER_NOT_INSTALLED', station });
         if (printer) routes[station] = String(printer);
       }
@@ -172,13 +245,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const station = String(body.station || 'main');
       const text = String(body.text || '');
-      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(station)) return json(res, 400, { success: false, error: 'INVALID_STATION' });
+      if (!/^[a-zA-Z0-9_\-\u0600-\u06FF]{1,64}$/.test(station)) return json(res, 400, { success: false, error: 'INVALID_STATION' });
       if (!text || text.length > 200000) return json(res, 400, { success: false, error: 'INVALID_TEXT' });
       const config = readConfig();
       const printer = body.printer ? String(body.printer) : config.routes[station];
       if (!printer) return json(res, 409, { success: false, error: 'STATION_NOT_CONFIGURED', station });
-      await printText(printer, text);
-      return json(res, 200, { success: true, station, printer });
+      const queuedAhead = queueDepthFor(printer);
+      const result = await printText(printer, text);
+      return json(res, 200, { success: true, station, printer, acceptedBySpooler: Boolean(result?.acceptedBySpooler), queuedAhead });
     }
     if (req.method === 'POST' && url.pathname === '/drawer') {
       const body = await readBody(req);
