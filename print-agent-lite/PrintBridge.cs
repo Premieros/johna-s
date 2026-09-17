@@ -151,12 +151,10 @@ namespace PremierPrintAgentLite
             if (!PrinterInstalled(printerName))
                 throw new InvalidOperationException("PRINTER_NOT_FOUND:" + printerName);
 
-            using (var settings = new PrinterSettings())
-            {
-                settings.PrinterName = printerName;
-                if (!settings.IsValid)
-                    throw new InvalidOperationException("INVALID_PRINTER:" + printerName);
-            }
+            var settings = new PrinterSettings();
+            settings.PrinterName = printerName;
+            if (!settings.IsValid)
+                throw new InvalidOperationException("INVALID_PRINTER:" + printerName);
         }
 
         private static bool PrinterInstalled(string printerName)
