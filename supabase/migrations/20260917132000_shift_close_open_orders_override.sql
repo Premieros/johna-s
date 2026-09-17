@@ -73,6 +73,12 @@ BEGIN
       FROM public.order_items oi
       WHERE oi.order_id = o.id
         AND oi.quantity > 0
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.sales s
+      WHERE s.order_id = o.id
+        AND s.status = 'completed'
     );
 
   IF v_open_order_count > 0 THEN
@@ -206,6 +212,12 @@ BEGIN
       FROM public.order_items oi
       WHERE oi.order_id = o.id
         AND oi.quantity > 0
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.sales s
+      WHERE s.order_id = o.id
+        AND s.status = 'completed'
     );
 
   SELECT round(
