@@ -46,7 +46,7 @@ describe.skipIf(skip)('QA batch 1 — user creation toggle enforcement', () => {
     await client.query(
       `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
        VALUES
-         ($1,'مدير إنشاء','Creation manager','["users.manage"]'::jsonb,'global',true),
+         ($1,'مدير إنشاء','Creation manager','["users.create","users.manage"]'::jsonb,'global',true),
          ($2,'مستخدم اختبار','Toggle target','[]'::jsonb,'global',true)`,
       [managerRole, targetRole],
     );
