@@ -332,30 +332,22 @@ export function usePosOrder(input: UsePosOrderInput) {
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
 
-    if (!base.activeOrderId) {
-      if (settlementReceipt) {
-        const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
-        return;
-      }
+    // Printing an open order is a read-only POS action. The base hook already
+    // builds an open-order receipt from the live cart and marks it isOpenOrder,
+    // so it must not depend on settlement RPCs that belong to the Pay flow.
+    if (base.cart.length > 0) {
       await base.printReceipt();
       return;
     }
 
-    const preview = await loadSettlementPreview(false);
-    if (!preview) {
-      if (settlementReceipt) {
-        const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
-      }
+    if (settlementReceipt) {
+      const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
+      openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
       return;
     }
 
-    const receipt = buildSettlementReceipt(preview, base.activeOrderNumber || `ORDER-${Date.now()}`, 0);
-    receipt.isOpenOrder = true;
-    const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr, { authorize: false });
-    openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
-  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, settlementReceipt]);
+    await base.printReceipt();
+  }, [base, input.effSettings, isAr, lang, settlementReceipt]);
 
   const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
     ? {
