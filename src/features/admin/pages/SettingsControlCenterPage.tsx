@@ -44,7 +44,7 @@ export function SettingsControlCenterPage() {
   const { show } = useToast();
   const isAr = lang === 'ar';
 
-  const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'owner';
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const [active, setActive] = useState<SettingsTab>('branch_profile');
   const [saving, setSaving] = useState(false);
