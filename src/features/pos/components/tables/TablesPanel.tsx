@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import { formatCurrency } from '@/lib/format';
 import type { DiningTable, Order } from '@/lib/types';
+import type { OrderKitchenSend } from '../../types';
 import { orderOperatorName } from '../../utils/operatorName';
 import { usePosPermissions } from '../../hooks/usePosPermissions';
 
@@ -15,13 +16,14 @@ interface TablesPanelProps {
   onClose: () => void;
   tables: DiningTable[];
   ordersByTable: Record<string, Order[]>;
+  kitchenSendsByOrder: Record<string, OrderKitchenSend[]>;
   currency: string;
   onResume: (order: Order) => void;
   onPay: (order: Order) => void;
   onStart: (table: DiningTable, guests: number) => void;
 }
 
-export function TablesPanel({ open, onClose, tables, ordersByTable, currency, onResume, onPay, onStart }: TablesPanelProps) {
+export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSendsByOrder, currency, onResume, onPay, onStart }: TablesPanelProps) {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const perms = usePosPermissions();
@@ -147,7 +149,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, currency, on
           const order = tableOrders[0];
           const operatorName = order ? orderOperatorName(order) : null;
           if (order) {
-            const canPaySentOrder = perms.canPay && Boolean(order.kitchen_sent_at);
+            const canPaySentOrder = perms.canPay && (kitchenSendsByOrder[order.id]?.length || 0) > 0;
             return (
               <div className="space-y-3">
                 <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
