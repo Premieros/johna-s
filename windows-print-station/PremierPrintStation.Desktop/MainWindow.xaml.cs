@@ -34,6 +34,11 @@ public partial class MainWindow : Window
         AnonKeyBox.Password = _config.AnonKey;
         BranchIdBox.Text = _config.BranchId;
         BranchSummary.Text = string.IsNullOrWhiteSpace(_config.BranchId) ? "غير محدد" : _config.BranchId;
+        CustomMappingsBox.Text = string.Join(Environment.NewLine,
+            _config.StationPrinters
+                .Where(kv => !new[] { "kitchen", "bar", "cashier", "receipt" }.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(kv => kv.Key)
+                .Select(kv => $"{kv.Key}={kv.Value}"));
     }
 
     private void LoadPrinters()
@@ -84,6 +89,7 @@ public partial class MainWindow : Window
             SetMapping("bar", BarPrinterBox.SelectedItem as string);
             SetMapping("cashier", CashierPrinterBox.SelectedItem as string);
             SetMapping("receipt", ReceiptPrinterBox.SelectedItem as string);
+            ApplyCustomMappings();
             _configStore.Save(_config);
             BranchSummary.Text = string.IsNullOrWhiteSpace(_config.BranchId) ? "غير محدد" : _config.BranchId;
             MessageBox.Show("تم حفظ الإعدادات. الخدمة ستقرأها تلقائيًا في الدورة التالية.", "Premier Print Station", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -95,6 +101,29 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(printer)) _config.StationPrinters.Remove(station);
         else _config.StationPrinters[station] = printer;
+    }
+
+    private void ApplyCustomMappings()
+    {
+        var fixedStations = new HashSet<string>(new[] { "kitchen", "bar", "cashier", "receipt" }, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in _config.StationPrinters.Keys.Where(k => !fixedStations.Contains(k)).ToList())
+            _config.StationPrinters.Remove(key);
+
+        foreach (var rawLine in CustomMappingsBox.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0) continue;
+            var separator = line.IndexOf('=');
+            if (separator <= 0 || separator == line.Length - 1)
+                throw new InvalidOperationException($"صيغة ربط المحطة غير صحيحة: {line}");
+            var station = line[..separator].Trim();
+            var printer = line[(separator + 1)..].Trim();
+            if (fixedStations.Contains(station))
+                throw new InvalidOperationException($"استخدم القائمة المخصصة للمحطة القياسية: {station}");
+            if (!_printer.InstalledPrinters().Any(p => string.Equals(p, printer, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"الطابعة غير مثبتة: {printer}");
+            _config.StationPrinters[station] = printer;
+        }
     }
 
     private async void SignIn_Click(object sender, RoutedEventArgs e)
@@ -119,6 +148,7 @@ public partial class MainWindow : Window
         SetMapping("bar", BarPrinterBox.SelectedItem as string);
         SetMapping("cashier", CashierPrinterBox.SelectedItem as string);
         SetMapping("receipt", ReceiptPrinterBox.SelectedItem as string);
+        ApplyCustomMappings();
         _configStore.Save(_config);
     }
 
@@ -136,7 +166,8 @@ public partial class MainWindow : Window
                 : "إعادة محاولة هذه المهمة؟",
             "تأكيد إعادة المحاولة", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (ok != MessageBoxResult.Yes) return;
-        _queue.Retry(job.Id);
+        _queue.ApproveCloudRetry(job.Id);
+        MessageBox.Show("تم اعتماد إعادة المحاولة. ستنتظر المهمة Claim جديدًا من السحابة قبل الطباعة لحماية النظام من التكرار.", "Premier Print Station", MessageBoxButton.OK, MessageBoxImage.Information);
         RefreshDashboard();
     }
 
