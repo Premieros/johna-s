@@ -51,7 +51,7 @@ describe('POS open-order printing', () => {
       products: [],
       customers: [],
       effSettings: { receipt_width_mm: 80 },
-    } as any;
+    } as unknown as Parameters<typeof usePosOrder>[0];
 
     const { result } = renderHook(() => usePosOrder(input));
 
