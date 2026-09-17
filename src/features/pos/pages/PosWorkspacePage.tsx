@@ -221,7 +221,23 @@ export function PosWorkspacePage() {
     return activeOrder ? orderOperatorName(activeOrder) : null;
   }, [orders, pos.activeOrderId, user]);
   const orderItemsForActive = useMemo(() => (pos.activeOrderId ? itemsByOrder[pos.activeOrderId] || [] : []), [pos.activeOrderId, itemsByOrder]);
-  const kitchenSendsForActive = useMemo(() => (pos.activeOrderId ? kitchenSendsByOrder[pos.activeOrderId] || [] : []), [pos.activeOrderId, kitchenSendsByOrder]);
+  const kitchenSendsForActive = useMemo(() => {
+    const realtime = pos.activeOrderId ? kitchenSendsByOrder[pos.activeOrderId] || [] : [];
+    if (realtime.length > 0 || !pos.activeOrderId || pos.kitchenSentItems.length === 0) return realtime;
+
+    // A successful send_to_kitchen RPC is already server-confirmed. Keep a
+    // session-local fallback until Realtime delivers the same rows so Pay/Print
+    // become available immediately after the first successful kitchen send.
+    return pos.kitchenSentItems.map((item, index) => ({
+      id: item.send_id || `session-send-${index}`,
+      branch_id: effectiveBranch,
+      order_id: pos.activeOrderId as string,
+      order_item_id: item.order_item_id || `session-order-item-${index}`,
+      sent_at: new Date().toISOString(),
+      sent_by: user?.id || null,
+      sent_quantity: Number(item.quantity || 0),
+    }));
+  }, [pos.activeOrderId, pos.kitchenSentItems, kitchenSendsByOrder, effectiveBranch, user?.id]);
 
   // stockMap already reflects quantities physically deducted at kitchen send.
   // Project only the still-unsent part of the cart so sent quantities are not
