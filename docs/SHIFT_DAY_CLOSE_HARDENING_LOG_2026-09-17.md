@@ -39,14 +39,14 @@ Existing architecture already uses the server RPC `close_shift`; the UI does not
 ## Approved Operational Decision
 Normal shift close and final financial day close are not the same action.
 
-1. Normal **Close Shift** fails closed when the branch still has an effective `open`/`held` order containing a positive-quantity line.
+1. Normal **Close Shift** fails closed when the branch still has an effective `open`/`held` order containing a positive-quantity line that is not already paid.
 2. A separate **Close Shift With Open Orders** action is available only with both `shifts.close` and `shifts.close_with_open_orders`.
 3. The override closes the drawer/shift only. It must not cancel, pay, complete, move, or otherwise mutate open orders, and it must not mark occupied tables vacant.
 4. Preserved orders/tables continue operationally into the next shift. Later payment is attributed through the then-open branch shift while the original order ownership remains intact.
 5. Final **Day Close** remains stricter and is not represented by the shift-close button.
 
 ## Implementation
-### 2026-09-17
+### 2026-09-17 — initial implementation
 - `219494b780b2fa291bba61b57c8ec1aa80da873e`
   - hardened `close_shift` to fail closed on effective open/held orders;
   - added `close_shift_with_open_orders` server RPC;
@@ -68,12 +68,58 @@ Normal shift close and final financial day close are not the same action.
 - `f9eac0af071166e3e396d99e860e1d5778235a19`
   - added Integration regression coverage for normal-close blocking, permission enforcement, order/table preservation, retry safety, and branch isolation.
 
+### 2026-09-17 — CI-proven repairs on PR #173
+PR: `#173` — `harden(shifts): safe close with open-order override`
+
+Initial PR head inspected in GitHub: `6ca468769fc765283ce62ed5b2982960562b9564`.
+
+Verify run `#1633` / run ID `35209973034`:
+- frontend API contract, lint, typecheck, unit and build passed;
+- DB integration/security/RLS failed;
+- browser smoke was skipped because the DB job failed.
+
+Actual failure analysis from the uploaded integration log found two classes of issues introduced/exposed by the new guard:
+1. The new `shift_close_open_orders_guard` fixture inserted an order item without a branch-valid product, causing `PRODUCT_NOT_IN_BRANCH`.
+2. Existing lifecycle tests use the shared RLS fixture, which intentionally contains an open order for policy probing; the new branch-wide close guard correctly treated that synthetic order as operational unless the test isolated it.
+
+Repairs made on the same branch only:
+- `a4832db3979e06118c694f19bec94c459638f3c4` — first refinement of effective-open-order counting.
+- `5d533944786449c58d4f463aede83038ee09048b` — seeded a real branch product in the new guard fixture and linked the order item to it.
+- Verify `#1635` then exposed an invalid attempted `sales.order_id` relationship and a bind-parameter mismatch in the new test fixture.
+- `dd7c1cf2d786a5011dde22178fe18633553e3ba8` — switched settlement detection to the canonical order state: `orders.payment_status <> 'paid'`; no RLS or permission weakening.
+- `3fd5d716f8a6cedde37f1f8cb44f42f338decc73` — corrected the user-fixture bind parameters.
+- Verify `#1637` proved the new five-case shift-close guard test Green; only three unrelated existing tests remained blocked by the shared synthetic RLS probe order.
+- `311dd8362cf261ff95d26edcdb26d5d14fcd4a8c` — isolated the synthetic RLS probe order in `functional_core_cycle.test.ts` by marking only that test fixture row settled.
+- `2c269f2bce2bd109c30142ded39d65ba144df08a` — applied the same isolation in `shift_live_expected_consistency.test.ts`.
+- `d85a6429d726de55ad22d57f3d52fe6795d87836` — applied the same isolation in `pos_operational_lifecycle.test.ts`.
+
+The production guard remains strict: a branch order in `open`/`held` state with positive quantity and `payment_status` not `paid` blocks normal shift close. The RLS policies and Permission-First authorization were not relaxed.
+
 ## Validation State
-- Local/CI validation on the modified head has not yet been declared Green.
-- Next step: open PR, run Full Verify, inspect all frontend/DB/browser jobs, and fix only proven regressions before merge.
+### Full Verify Green — PR functional head
+Verify run `#1640` / run ID `35211531062` on exact head `d85a6429d726de55ad22d57f3d52fe6795d87836` completed Green:
+- locked Supabase project identity ✅
+- frontend API contract ✅
+- lint ✅
+- application typecheck ✅
+- application + test-suite typecheck ✅
+- unit tests ✅
+- production build ✅
+- canonical migrations on the ephemeral CI PostgreSQL service ✅
+- schema verification ✅
+- integration + security/RLS regression tests ✅
+- browser smoke / Playwright ✅
+
+CI database migrations above were applied only to the disposable CI PostgreSQL service. They were not applied to Production Supabase.
+
+This documentation commit changes no application, database, RLS, permission, printing, or mobile behavior. Its final PR head must still receive a fresh Full Verify before merge.
 
 ## Merge / Production State
-- Pull request: not opened yet.
-- Full Verify: pending on the modified head.
-- Merged to `main`: no.
-- Production migration applied: no.
+- Pull request: `#173` open at the time of this log update.
+- Functional Full Verify: Green on `d85a6429d726de55ad22d57f3d52fe6795d87836` via run `#1640`.
+- Final documentation-head Verify: pending after this log commit.
+- Merged to `main`: no at the time of this log update.
+- Production migration applied: **no**.
+- Production Supabase was not modified by this validation/repair cycle.
+- Printing / Print Agent modified: **no**.
+- Mobile application modified: **no**.
