@@ -12,12 +12,13 @@ import {
 } from '../../services/cloudPrint';
 import {
   executeSilentPrintDetailed,
+  getAvailablePrinters,
   getLocalPrinterRoutes,
-  isRunningInElectron,
   isSilentPrintEnabled,
 } from '../../services/localPrintAgent';
 
 const POLL_INTERVAL_MS = 700;
+const TRANSPORT_CHECK_INTERVAL_MS = 5_000;
 
 function printRouteForStation(station: string, routes: Record<string, string>): string {
   const direct = routes[station];
@@ -83,7 +84,10 @@ export function CloudPrintAgent() {
   }, []);
 
   useEffect(() => {
-    if (!isRunningInElectron() || !user?.id || !can('settings.manage')) return;
+    // The installed legacy Windows print service is intentionally supported here.
+    // It is reachable from the normal web POS through localPrintAgent.ts, so Electron
+    // must not be required before polling the durable cloud queue.
+    if (!user?.id || !can('settings.manage')) return;
     if (!isSilentPrintEnabled() || !isCloudPrintAgentEnabled()) return;
     const branchId = getCloudPrintAgentBranchId();
     if (!branchId) return;
@@ -91,6 +95,20 @@ export function CloudPrintAgent() {
     const agentId = getCloudPrintAgentId();
     let cancelled = false;
     let timer = 0;
+    let transportAvailable = false;
+    let lastTransportCheckAt = 0;
+
+    const ensurePrintTransport = async (): Promise<boolean> => {
+      const now = Date.now();
+      if (now - lastTransportCheckAt < TRANSPORT_CHECK_INTERVAL_MS) return transportAvailable;
+      lastTransportCheckAt = now;
+      try {
+        transportAvailable = (await getAvailablePrinters()).length > 0;
+      } catch {
+        transportAvailable = false;
+      }
+      return transportAvailable;
+    };
 
     const poll = async () => {
       if (cancelled) return;
@@ -100,6 +118,10 @@ export function CloudPrintAgent() {
       }
       busy.current = true;
       try {
+        // Never claim durable jobs unless Electron or the legacy localhost print
+        // service can actually see a Windows printer. This leaves jobs pending
+        // instead of burning retry attempts while the local service is offline.
+        if (!(await ensurePrintTransport())) return;
         const jobs = await claimCloudPrintJobs(branchId, agentId, 12);
         if (jobs.length > 0) await executeClaimedBatch(jobs, agentId);
       } catch (error) {
