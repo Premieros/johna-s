@@ -18,7 +18,8 @@ describe('offline financial truth contract', () => {
     expect(payment).toContain('await enqueueOfflineSale(queuedSale)');
 
     expect(hook).toContain("const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine");
-    expect(hook).toContain('if (!explicitlyOffline) return base.completeSale()');
+    expect(hook).toContain('if (explicitlyOffline) {');
+    expect(hook).toContain('if (!base.activeOrderId) return base.completeSale()');
     expect(hook).toContain('!result.offline || !result.pending_sync');
     expect(hook).toContain('لم يتم تسجيل البيع أو الدفع نهائيًا بعد');
     expect(hook).toContain('The sale/payment is not final until the server confirms it.');
