@@ -14,6 +14,9 @@ export interface CloudPrintJob {
 }
 type RpcResult = { success?: boolean; error?: string; detail?: string; job_id?: string; status?: string; jobs?: CloudPrintJob[] };
 const safeText = (value: unknown) => String(value ?? '').trim();
+const KITCHEN_ENQUEUE_MAX_ATTEMPTS = 3;
+const KITCHEN_ENQUEUE_RETRY_MS = 250;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function randomId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   const hex = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
@@ -55,14 +58,31 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
   const results = await Promise.all(entries.map(async ([station, stationItems]) => {
     const sendIds = stationItems.map((item) => safeText(item.send_id || item.order_item_id)).filter(Boolean).sort();
     const keySeed = sendIds.length ? sendIds.join(',') : `${safeText(params.context.orderNumber)}:${stationItems.map((item) => `${item.product_id}:${Number(item.quantity || 0)}`).join(',')}`;
-    const { data, error } = await supabase.rpc('enqueue_cloud_kitchen_print', {
-      p_branch_id: branchId,
-      p_station_code: station,
-      p_payload: { text: buildStationTicketText(station, stationItems, params.context), paperWidthMm: Number(params.paperWidthMm || 80), copies: 1 },
-      p_idempotency_key: `kitchen:${station}:${keySeed}`,
+    const idempotencyKey = `kitchen:${station}:${keySeed}`;
+    const payload = { text: buildStationTicketText(station, stationItems, params.context), paperWidthMm: Number(params.paperWidthMm || 80), copies: 1 };
+
+    let lastError = '';
+    for (let attempt = 1; attempt <= KITCHEN_ENQUEUE_MAX_ATTEMPTS; attempt += 1) {
+      const { data, error } = await supabase.rpc('enqueue_cloud_kitchen_print', {
+        p_branch_id: branchId,
+        p_station_code: station,
+        p_payload: payload,
+        p_idempotency_key: idempotencyKey,
+      });
+      const result = (data ?? {}) as RpcResult;
+      if (!error && Boolean(result.success)) return { station, ok: true, attempts: attempt, error: '' };
+
+      lastError = error?.message || result.error || result.detail || 'CLOUD_PRINT_ENQUEUE_FAILED';
+      if (attempt < KITCHEN_ENQUEUE_MAX_ATTEMPTS) await sleep(KITCHEN_ENQUEUE_RETRY_MS * attempt);
+    }
+
+    console.error('[cloud-print] kitchen station enqueue failed after retries', {
+      station,
+      branchId,
+      idempotencyKey,
+      error: lastError,
     });
-    const result = (data ?? {}) as RpcResult;
-    return { station, ok: !error && Boolean(result.success) };
+    return { station, ok: false, attempts: KITCHEN_ENQUEUE_MAX_ATTEMPTS, error: lastError };
   }));
   const queuedStations = results.filter((x) => x.ok).map((x) => x.station);
   const failedStations = results.filter((x) => !x.ok).map((x) => x.station);

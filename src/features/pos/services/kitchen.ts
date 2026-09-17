@@ -1,6 +1,5 @@
 import type { KitchenSendItem, KitchenSendResult } from '../types';
 import { rpc } from '@/api/rpc';
-import { supabase } from '@/api';
 import { enqueueCloudKitchenPrintJobs } from './cloudPrint';
 import { groupKitchenItemsByStation, printKitchenStationsLocally, suppressNextKitchenBrowserPopup } from './localPrintAgent';
 
@@ -17,7 +16,7 @@ function withKitchenInstructions(item: KitchenSendItem): KitchenSendItem {
   return { ...item, product_name: `${item.product_name || '—'} • ${parts.join(' • ')}` };
 }
 
-export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: string | null }): Promise<KitchenSendResult> {
+export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: string | null; p_branch_id?: string | null }): Promise<KitchenSendResult> {
   const orderId = p.p_order_id;
   if (!orderId) return { success: false, error: 'NO_ORDER_ID', detail: 'Order ID is required' };
   if (activeSendLocks.has(orderId)) return { success: false, error: 'SEND_IN_PROGRESS', detail: 'Kitchen send is already in progress for this order' };
@@ -57,12 +56,20 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
 
       const cloudQueuedStations = new Set<string>();
       try {
-        const { data: orderRow } = await supabase.from('orders').select('branch_id').eq('id', orderId).maybeSingle();
-        const branchId = (orderRow as { branch_id?: string } | null)?.branch_id || '';
-        if (branchId) {
+        const branchId = String(p.p_branch_id || '').trim();
+        if (!branchId) {
+          console.error('[cloud-print] kitchen dispatch skipped because branch id was not supplied by POS', { orderId });
+        } else {
           const cloud = await enqueueCloudKitchenPrintJobs({ branchId, items: rawSentItems, context });
           for (const station of cloud.queuedStations) cloudQueuedStations.add(station);
           if (cloudQueuedStations.size > 0) suppressNextKitchenBrowserPopup();
+          if (!cloud.accepted) {
+            console.error('[cloud-print] one or more kitchen stations were not queued after retries', {
+              orderId,
+              branchId,
+              failedStations: cloud.failedStations,
+            });
+          }
         }
       } catch (error) {
         console.warn('[cloud-print] kitchen queue unavailable; using station-level compatibility print path', error);

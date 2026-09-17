@@ -673,7 +673,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       const { ok, orderId: targetOrderId, orderNumber: targetOrderNumber } = await persistCart('open');
       if (!ok || !targetOrderId) return false;
 
-      const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null });
+      const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId });
       if (!res.success) {
         show(res.detail || res.error || t('error'), 'error');
         return false;
