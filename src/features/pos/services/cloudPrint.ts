@@ -56,8 +56,21 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
   const entries = Object.entries(groupKitchenItemsByStation(params.items));
   if (!entries.length) return { accepted: false, queuedStations: [], failedStations: [] };
   const results = await Promise.all(entries.map(async ([station, stationItems]) => {
-    const sendIds = stationItems.map((item) => safeText(item.send_id || item.order_item_id)).filter(Boolean).sort();
-    const keySeed = sendIds.length ? sendIds.join(',') : `${safeText(params.context.orderNumber)}:${stationItems.map((item) => `${item.product_id}:${Number(item.quantity || 0)}`).join(',')}`;
+    const deltaIdentities = stationItems
+      .map((item) => {
+        const sendIdentity = safeText(item.send_id || item.order_item_id);
+        const currentQuantity = Number(item.current_quantity);
+        if (!sendIdentity || !Number.isFinite(currentQuantity)) return '';
+        return `${sendIdentity}:${currentQuantity}`;
+      })
+      .filter(Boolean)
+      .sort();
+    const fallbackIdentities = stationItems
+      .map((item) => `${safeText(item.order_item_id || item.product_id)}:${Number(item.quantity || 0)}`)
+      .sort();
+    const keySeed = deltaIdentities.length === stationItems.length
+      ? deltaIdentities.join(',')
+      : `${safeText(params.context.orderNumber)}:${fallbackIdentities.join(',')}`;
     const idempotencyKey = `kitchen:${station}:${keySeed}`;
     const payload = { text: buildStationTicketText(station, stationItems, params.context), paperWidthMm: Number(params.paperWidthMm || 80), copies: 1 };
 
