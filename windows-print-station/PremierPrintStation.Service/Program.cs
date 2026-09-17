@@ -29,6 +29,10 @@ public sealed class PrintStationWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _log.LogInformation("Premier Print Station service started");
+        var recovered = _queue.RecoverInterruptedPrints();
+        if (recovered > 0)
+            _log.LogWarning("Moved {RecoveredCount} interrupted printing job(s) to needs_review", recovered);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             var cfg = _configStore.Load();
