@@ -12,10 +12,10 @@ import { Button } from '@/components/Button';
 import { Input, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { formatCurrency, formatNumber } from '@/lib/format';
+import { formatCurrency, formatNumber, formatRawMaterialQuantity, measurementUnitLabel } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { Recipe, RecipeItem, RawMaterial, Product, Branch, RecipeItemInput } from '@/lib/types';
+import type { Recipe, RecipeItem, RawMaterial, Product, Branch, RecipeItemInput, Unit } from '@/lib/types';
 
 interface ItemForm {
   raw_material_id: string;
@@ -51,6 +51,7 @@ export function RecipesPage() {
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [materialCosts, setMaterialCosts] = useState<Record<string, number>>({});
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -66,15 +67,21 @@ export function RecipesPage() {
     let branchQuery = supabase.from('branches').select('*').eq('is_active', true);
     if (branchFilter) branchQuery = branchQuery.eq('id', branchFilter);
 
-    const [pr, br] = await Promise.all([productQuery.order('name'), branchQuery.order('name')]);
-    if (pr.error || br.error) {
-      setMetaError(pr.error?.message || br.error?.message || 'Failed to load recipe metadata');
+    const [pr, br, unitRes] = await Promise.all([
+      productQuery.order('name'),
+      branchQuery.order('name'),
+      supabase.from('measurement_units').select('*').eq('is_active', true).order('name'),
+    ]);
+    if (pr.error || br.error || unitRes.error) {
+      setMetaError(pr.error?.message || br.error?.message || unitRes.error?.message || 'Failed to load recipe metadata');
       setProducts([]);
       setBranches([]);
+      setUnits([]);
       return;
     }
     setProducts((pr.data as Product[]) || []);
     setBranches((br.data as Branch[]) || []);
+    setUnits((unitRes.data as Unit[]) || []);
   }, [branchFilter]);
 
   const loadMaterialsForBranch = useCallback(async (branchId: string) => {
@@ -103,6 +110,15 @@ export function RecipesPage() {
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
   useEffect(() => { void loadMaterialsForBranch(form.branch_id); }, [form.branch_id, loadMaterialsForBranch]);
+
+  const unitForMaterial = (materialId: string) => {
+    const material = materials.find((row) => row.id === materialId);
+    return material?.unit_id ? units.find((unit) => unit.id === material.unit_id) : undefined;
+  };
+  const unitLabelForMaterial = (materialId: string) => {
+    const unit = unitForMaterial(materialId);
+    return unit ? (measurementUnitLabel(unit) || unit.name) : '';
+  };
 
   const filtered = recipes.filter((rc) => {
     if (!search) return true;
@@ -234,14 +250,32 @@ export function RecipesPage() {
             <div className="flex items-center justify-between mb-2"><p className="text-sm font-bold text-ui-muted">{t('recipeItems')}</p><Button variant="outline" size="sm" onClick={addLine}><Plus className="w-4 h-4" /> {t('add')}</Button></div>
             {materials.length === 0 && form.branch_id ? <p className="rounded-lg bg-ui-page-alt p-3 text-sm text-ui-muted">{isAr ? 'لا توجد خامات نشطة في هذا الفرع.' : 'No active raw materials in this branch.'}</p> : null}
             <div className="space-y-2">
-              {items.map((item, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_120px_120px_40px] gap-2 items-end">
-                  <Select value={item.raw_material_id} onChange={(e) => updateLine(index, 'raw_material_id', e.target.value)}><option value="" disabled>{t('selectRawMaterial')}</option>{materials.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}</Select>
-                  <Input type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)} />
-                  <Input type="number" min="0" step="0.01" value={item.wastage_percent} onChange={(e) => updateLine(index, 'wastage_percent', parseFloat(e.target.value) || 0)} />
-                  <button onClick={() => removeLine(index)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              ))}
+              {items.map((item, index) => {
+                const selectedUnit = unitForMaterial(item.raw_material_id);
+                const selectedUnitLabel = unitLabelForMaterial(item.raw_material_id);
+                return (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_120px_40px] gap-2 items-end">
+                    <Select value={item.raw_material_id} onChange={(e) => updateLine(index, 'raw_material_id', e.target.value)}>
+                      <option value="" disabled>{t('selectRawMaterial')}</option>
+                      {materials.map((material) => {
+                        const unit = material.unit_id ? units.find((row) => row.id === material.unit_id) : undefined;
+                        const label = unit ? (measurementUnitLabel(unit) || unit.name) : '';
+                        return <option key={material.id} value={material.id}>{material.name}{label ? ` — ${label}` : ''}</option>;
+                      })}
+                    </Select>
+                    <div>
+                      <Input label={selectedUnitLabel ? `${t('quantity')} (${selectedUnitLabel})` : t('quantity')} type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)} />
+                      {item.raw_material_id && Number(item.quantity) > 0 && (
+                        <p className="mt-1 text-xs font-semibold text-ui-primary" data-testid={`recipe-item-display-quantity-${index}`}>
+                          {formatRawMaterialQuantity(item.quantity, selectedUnit, { preferGrams: true, lang })}
+                        </p>
+                      )}
+                    </div>
+                    <Input label={isAr ? 'هالك %' : 'Waste %'} type="number" min="0" step="0.01" value={item.wastage_percent} onChange={(e) => updateLine(index, 'wastage_percent', parseFloat(e.target.value) || 0)} />
+                    <button onClick={() => removeLine(index)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

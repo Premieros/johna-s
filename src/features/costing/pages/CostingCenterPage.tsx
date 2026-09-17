@@ -10,7 +10,7 @@ import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
-import { formatCurrency, formatNumber, formatDate, formatDateTime } from '@/lib/format';
+import { formatCurrency, formatNumber, formatDate, formatDateTime, formatExactQuantity, formatRawMaterialQuantity, type MeasurementUnitDisplay } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
 import { foodCostPct, marginPct, safeDiv, variancePct } from '@/lib/costing';
 import type {
@@ -42,6 +42,7 @@ export function CostingCenterPage() {
   const [supplierId, setSupplierId] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
 
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -61,6 +62,26 @@ export function CostingCenterPage() {
     setSuppliers(s);
     if (s.length > 0) setSupplierId(s[0].id);
   }, [show]);
+
+  const loadRawMaterialUnits = useCallback(async () => {
+    const [materialsRes, unitsRes] = await Promise.all([
+      supabase.from('raw_materials').select('id, unit_id'),
+      supabase.from('measurement_units').select('id, code, name, symbol'),
+    ]);
+    if (materialsRes.error || unitsRes.error) return;
+    const unitsById = new Map<string, MeasurementUnitDisplay>();
+    for (const unit of (unitsRes.data || []) as Array<{ id: string; code: string; name: string; symbol: string | null }>) {
+      unitsById.set(unit.id, unit);
+    }
+    const next: Record<string, MeasurementUnitDisplay> = {};
+    for (const material of (materialsRes.data || []) as Array<{ id: string; unit_id: string | null }>) {
+      if (material.unit_id) {
+        const unit = unitsById.get(material.unit_id);
+        if (unit) next[material.id] = unit;
+      }
+    }
+    setRawMaterialUnits(next);
+  }, []);
 
   const effBranch = useMemo(() => branchId || null, [branchId]);
 
@@ -112,6 +133,8 @@ export function CostingCenterPage() {
   useEffect(() => { loadBranches(); }, [loadBranches]);
 
   useEffect(() => { loadSuppliers(); }, [loadSuppliers]);
+
+  useEffect(() => { void loadRawMaterialUnits(); }, [loadRawMaterialUnits]);
 
   useEffect(() => {
     if (tab === 'overview') loadOverview();
@@ -431,7 +454,7 @@ export function CostingCenterPage() {
                       {detail.components!.map((c) => (
                         <tr key={c.component_product_id} className="border-t border-ui-border">
                           <td className="px-3 py-2">{c.component_name}</td>
-                          <td className="px-3 py-2">{formatNumber(c.quantity)}</td>
+                          <td className="px-3 py-2">{formatExactQuantity(c.quantity)}</td>
                           <td className="px-3 py-2">{money(c.unit_cost)}</td>
                           <td className="px-3 py-2">{money(c.line_cost)}</td>
                         </tr>
@@ -460,7 +483,7 @@ export function CostingCenterPage() {
                       {detail.recipe_items!.map((c) => (
                         <tr key={c.raw_material_id} className="border-t border-ui-border">
                           <td className="px-3 py-2">{c.raw_material_name}</td>
-                          <td className="px-3 py-2">{formatNumber(c.quantity)}</td>
+                          <td className="px-3 py-2">{formatRawMaterialQuantity(c.quantity, rawMaterialUnits[c.raw_material_id], { preferGrams: true, lang })}</td>
                           <td className="px-3 py-2">{formatNumber(c.wastage_percent, 1)}%</td>
                           <td className="px-3 py-2">{money(c.unit_cost)}</td>
                           <td className="px-3 py-2">{money(c.line_cost)}</td>
