@@ -95,6 +95,24 @@ describe.skipIf(skip)('Phase 2 — kitchen station routing', () => {
     });
   });
 
+  it('keeps a paid/completed order visible until kitchen marks it served', async () => {
+    await asAdmin(async () => {
+      await client.query(`UPDATE public.orders SET status='completed', kitchen_status='sent' WHERE id=$1`, [orderId]);
+      const rows = await q<{ order_id: string }>(
+        `SELECT order_id FROM public.get_kitchen_queue(NULL, $1)`, [branchId]
+      );
+      expect(rows.some(r => r.order_id === orderId)).toBe(true);
+
+      await client.query(`UPDATE public.orders SET kitchen_status='served' WHERE id=$1`, [orderId]);
+      const servedRows = await q<{ order_id: string }>(
+        `SELECT order_id FROM public.get_kitchen_queue(NULL, $1)`, [branchId]
+      );
+      expect(servedRows.some(r => r.order_id === orderId)).toBe(false);
+
+      await client.query(`UPDATE public.orders SET status='open', kitchen_status='sent' WHERE id=$1`, [orderId]);
+    });
+  });
+
   it('get_kitchen_queue filters by station', async () => {
     await asAdmin(async () => {
       const rows = await q<{ order_id: string }>(
