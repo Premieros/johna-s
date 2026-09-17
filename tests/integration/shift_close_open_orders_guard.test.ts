@@ -25,6 +25,7 @@ describe.skipIf(skip)('shift close open-order guard', () => {
   const closeRole = `qa_shift_close_${randomUUID().slice(0, 8)}`;
   const overrideRole = `qa_shift_override_${randomUUID().slice(0, 8)}`;
   const tableA = randomUUID();
+  const productA = randomUUID();
   const orderA = randomUUID();
   const shiftA = randomUUID();
   const shiftB = randomUUID();
@@ -51,6 +52,12 @@ describe.skipIf(skip)('shift close open-order guard', () => {
     );
 
     await client.query(
+      `INSERT INTO public.products (id,name,branch_id,cost_price,sale_price,is_active)
+       VALUES ($1,'QA Shift Product',$2,10,25,true)`,
+      [productA, branchA],
+    );
+
+    await client.query(
       `INSERT INTO public.roles (role,name_ar,name_en,permissions,scope,is_active) VALUES
        ($1,'إغلاق فقط','Close only','["shifts.close"]'::jsonb,'global',true),
        ($2,'إغلاق مع طلبات مفتوحة','Close with open orders','["shifts.close","shifts.close_with_open_orders"]'::jsonb,'global',true)`,
@@ -65,8 +72,8 @@ describe.skipIf(skip)('shift close open-order guard', () => {
        ($8,$9,'Branch B Close',$3,$10,true)`,
       [
         closeOnlyUser, `${closeOnlyUser}@test.local`, closeRole, branchA,
-        overrideUser, `${overrideUser}@test.local`, overrideRole,
-        branchBUser, `${branchBUser}@test.local`, branchB,
+        overrideUser, `${overrideUser}@test.local`, overrideRole, branchA,
+        branchBUser, `${branchBUser}@test.local`, closeRole, branchB,
       ],
     );
     await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
@@ -82,9 +89,9 @@ describe.skipIf(skip)('shift close open-order guard', () => {
       [orderA, `QA-${randomUUID()}`, branchA, tableA, closeOnlyUser],
     );
     await client.query(
-      `INSERT INTO public.order_items(order_id,quantity,unit_price,total)
-       VALUES ($1,1,25,25)`,
-      [orderA],
+      `INSERT INTO public.order_items(order_id,product_id,unit_name,quantity,unit_price,total)
+       VALUES ($1,$2,'piece',1,25,25)`,
+      [orderA, productA],
     );
 
     await client.query(
