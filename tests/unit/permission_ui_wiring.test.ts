@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('permission UI wiring', () => {
   it('uses independent user action permissions', () => {
