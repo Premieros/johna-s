@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Timer, Play, Square, Printer, FileText, CalendarCheck, TriangleAlert } from 'lucide-react';
+import { Timer, Play, Square, Printer, FileText, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useAuth } from '@/context/AuthContext';
@@ -308,7 +308,7 @@ export function ShiftsPage() {
           </div>
 
           {closeBlock && <div className="rounded-lg border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm">
-            <div className="flex items-start gap-2"><TriangleAlert className="w-5 h-5 text-ui-danger shrink-0 mt-0.5" /><div><p className="font-semibold text-ui-danger">{isAr ? 'الإغلاق العادي ممنوع لوجود طلبات مفتوحة' : 'Normal close is blocked by open orders'}</p><p className="mt-1 text-ui-muted">{isAr ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق مرتبط بـ ${closeBlock.openTableCount} طاولة. يجب تسويتها، أو استخدام الإغلاق الاستثنائي إذا كانت لديك الصلاحية.` : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s). Resolve them, or use the permitted override.`}</p></div></div>
+            <div className="flex items-start gap-2"><AlertTriangle className="w-5 h-5 text-ui-danger shrink-0 mt-0.5" /><div><p className="font-semibold text-ui-danger">{isAr ? 'الإغلاق العادي ممنوع لوجود طلبات مفتوحة' : 'Normal close is blocked by open orders'}</p><p className="mt-1 text-ui-muted">{isAr ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق مرتبط بـ ${closeBlock.openTableCount} طاولة. يجب تسويتها، أو استخدام الإغلاق الاستثنائي إذا كانت لديك الصلاحية.` : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s). Resolve them, or use the permitted override.`}</p></div></div>
           </div>}
 
           <div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'thermal')}><Printer className="w-4 h-4" /> {isAr ? 'معاينة إيصال Z-Report' : 'Preview Thermal'}</Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'a4')}><FileText className="w-4 h-4" /> {isAr ? 'معاينة تقرير A4' : 'Preview A4'}</Button></div>
@@ -317,7 +317,7 @@ export function ShiftsPage() {
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="secondary" disabled={closing} onClick={() => { setCloseTarget(null); setCloseBlock(null); }}>{t('cancel')}</Button>
             <Button variant="danger" disabled={closing} onClick={closeShift}><Square className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق الوردية' : t('closeShift')}</Button>
-            {closeBlock && can('shifts.close_with_open_orders') && <Button variant="outline" disabled={closing} onClick={closeShiftWithOpenOrders}><TriangleAlert className="w-4 h-4" /> {isAr ? 'إغلاق الوردية مع بقاء الطلبات المفتوحة' : 'Close Shift With Open Orders'}</Button>}
+            {closeBlock && can('shifts.close_with_open_orders') && <Button variant="outline" disabled={closing} onClick={closeShiftWithOpenOrders}><AlertTriangle className="w-4 h-4" /> {isAr ? 'إغلاق الوردية مع بقاء الطلبات المفتوحة' : 'Close Shift With Open Orders'}</Button>}
           </div>
         </div>}
       </Modal>
