@@ -9,116 +9,91 @@
 - Printing changes: NONE
 
 ## Audit findings accepted for remediation
-1. Header Active Orders shortcut is visible without checking `floor_plan.view`.
-2. User identity control routes directly to Settings even without `settings.manage`.
-3. Desktop sidebar/header side logic is inconsistent for English LTR.
-4. Dashboard clickable metrics can advertise destinations without permission-aware rendering.
-5. POS Send-to-Kitchen immediate state path deserves regression verification for the session-local fallback.
-6. Menu density and finance permission granularity require documentation, not contract changes in this branch.
+1. Header Active Orders shortcut was visible without checking `floor_plan.view`.
+2. User identity control routed directly to Settings even without `settings.manage`.
+3. Desktop sidebar/header side logic was inconsistent for English LTR.
+4. Dashboard clickable metrics could advertise destinations without permission-aware rendering.
+5. POS Send-to-Kitchen immediate state path has a memo dependency mismatch affecting the session-local fallback.
+6. Menu density and finance permission granularity require a coordinated later design/contract change, not an ad-hoc change here.
 
 ## Phase history
 
 ### Phase 0 — Baseline and documentation
 Status: COMPLETE
-
-Actions:
-- Read actual `main` branch state before changing anything.
-- Confirmed baseline SHA: `21c076a5bb71cf860de28f80df45bff41e17eccd`.
-- Created isolated branch `development/ui-operational-audit-20260917` from that exact SHA.
-- Created staged remediation plan and this execution log.
-
-Commits:
-- `9529ce61ae38dc3e2ed7ad8c44fab1ba1c1fef0b` — staged operational UI remediation plan.
-- `e63dc7b1729460f7e3669814c0e942a26dedc063` — execution log creation.
-
-Verification:
-- No source code changed in Phase 0.
-- No active parallel branch touched.
-- No Production/DB/printing action performed.
+- Baseline `main`: `21c076a5bb71cf860de28f80df45bff41e17eccd`.
+- Isolated branch created: `development/ui-operational-audit-20260917`.
+- Plan commit: `9529ce61ae38dc3e2ed7ad8c44fab1ba1c1fef0b`.
+- Log creation commit: `e63dc7b1729460f7e3669814c0e942a26dedc063`.
 
 ### Phase 1 — Permission-aware application shell
 Status: COMPLETE
-
-Actions:
-- Added explicit `floor_plan.view` gating for the global Active Orders shortcut.
-- Changed Active Orders navigation to the canonical `APP_ROUTES.floorPlan` route constant.
-- Added explicit `settings.manage` gating to the user identity control.
-- Users without `settings.manage` still see their identity, but the control is disabled and no longer acts as a misleading Settings shortcut.
-- Existing `ProtectedRoute` checks remain unchanged as defense in depth.
-
-Files:
-- `src/components/Layout.tsx`
-
-Source commit:
-- `3dee157b46839777b24170734fb7863d4e8cd1c4`
-
-Verification:
-- No permission names changed.
-- No route guards removed or weakened.
-- No RLS/DB/Production/printing changes.
+- Active Orders shortcut now requires `floor_plan.view`.
+- User identity control no longer opens Settings without `settings.manage`.
+- Route guards remain unchanged.
+- Source commit: `3dee157b46839777b24170734fb7863d4e8cd1c4`.
 
 ### Phase 2 — RTL/LTR shell correctness
 Status: COMPLETE
-
-Actions:
-- Unified sidebar placement on logical `start-0`.
-- Arabic RTL therefore keeps the sidebar on the right; English LTR places it on the left.
-- Unified fixed-header desktop offset on logical `lg:start-[260px]`.
-- Unified main content desktop offset on logical `lg:ms-[260px]`.
-- Corrected closed mobile drawer transform: RTL exits right; LTR exits left.
-
-Files:
-- `src/components/Layout.tsx`
-
-Source commit:
-- `3dee157b46839777b24170734fb7863d4e8cd1c4`
-
-Verification:
-- Logical CSS preserves a single implementation for both directions.
-- Sidebar border remains `border-e`, so it stays on the inner edge in both RTL and LTR.
-- No business logic changed.
+- Sidebar uses logical `start-0`: right in Arabic RTL, left in English LTR.
+- Header uses logical `lg:start-[260px]`.
+- Main content uses logical `lg:ms-[260px]`.
+- Mobile drawer exits right in RTL and left in LTR.
+- Source commit: `3dee157b46839777b24170734fb7863d4e8cd1c4`.
 
 ### Phase 3 — Permission-aware dashboard navigation
 Status: COMPLETE
-
-Actions:
-- Added `useCan()` to the dashboard action layer.
-- The New Sale CTA is shown only when the user has both `pos.view` and `pos.order.create`.
-- KPI cards remain visible as read-only metrics, but become links only when `reports.view` is available.
-- The low-stock list remains visible, but inventory navigation is enabled only with `inventory.view`.
-- Read-only metric presentation uses `aria-disabled` rather than redirecting users into route guards.
-
-Files:
-- `src/features/dashboard/pages/DashboardDataPage.tsx`
-
-Source commit:
-- `8c28cc75ffd263d2f128842321b382398fc1ffe7`
-
-Verification:
-- No dashboard data calculation changed.
-- No report/inventory/POS authorization contract changed.
-- Existing route guards remain unchanged.
-- No DB/Production/printing changes.
+- New Sale requires `pos.view` + `pos.order.create`.
+- KPI cards link to Reports only with `reports.view`; otherwise they remain read-only metrics.
+- Low-stock entries link to Inventory only with `inventory.view`.
+- Source commit: `8c28cc75ffd263d2f128842321b382398fc1ffe7`.
 
 ### Phase 4 — POS immediate Send-to-Kitchen -> Pay state
 Status: COMPLETE — FINDING DOCUMENTED / SOURCE CHANGE DEFERRED
 
-Finding:
-- `kitchenSendsForActive` intentionally provides a session-local fallback after a successful `send_to_kitchen` RPC and before Realtime delivers the same rows.
-- `hasUnsentItems` reads `kitchenSendsForActive`, but its `useMemo` dependency list is `[pos.cart, kitchenSendsByOrder, orderItemsForActive]`.
-- Because `pos.kitchenSentItems` can update the fallback without changing `kitchenSendsByOrder`, the memo can temporarily retain a stale `hasUnsentItems` value until Realtime arrives.
+Confirmed finding:
+- `kitchenSendsForActive` provides the session-local fallback after successful kitchen send.
+- `hasUnsentItems` reads it, but its memo depends on `kitchenSendsByOrder` instead of `kitchenSendsForActive`.
+- This can leave the UI stale until Realtime updates.
 
-Required fix in the POS-owning workstream:
-- Depend directly on `kitchenSendsForActive` in `hasUnsentItems`.
-- Add a regression test covering: successful Send-to-Kitchen -> session fallback updated -> Pay immediately, before Realtime delivery.
+Required POS-workstream fix:
+- Depend directly on `kitchenSendsForActive`.
+- Add regression coverage for immediate Pay after successful Send-to-Kitchen before Realtime delivery.
 
-Reason source change was deferred here:
-- The user explicitly requested this work not interfere with the other model's active workstream.
-- `PosWorkspacePage.tsx` is a high-conflict operational file, so this audit branch records the exact defect rather than creating an avoidable merge conflict.
+No POS source changed here to avoid conflict with the separately active POS workstream.
 
-Verification:
-- No POS source changed.
-- No stock deduction, send-to-kitchen RPC, Realtime, RLS, Production, or printing behavior changed.
+### Phase 5 — Navigation density / permission granularity
+Status: COMPLETE
 
-Next:
-- Phase 5: navigation density and permission-granularity recommendations.
+Output:
+- `docs/UI_OPERATIONAL_AUDIT_RECOMMENDATIONS_2026-09-17.md`
+
+Documented:
+- proposed reduction of persistent sidebar density without deleting routes;
+- finance navigation permission granularity gaps;
+- separation between view and mutation permissions;
+- profile/settings separation;
+- dashboard permission-first action rule;
+- mobile POS CSS maintainability risk;
+- exact POS dependency follow-up.
+
+Source/document commit:
+- `978e38af6757631cd7c315aaaea282e74fd01c93`.
+
+### Phase 6 — Verification / handoff
+Status: IN PROGRESS
+
+Planned verification:
+- compare branch against baseline `main`;
+- inspect changed file list and diff scope;
+- open PR from this isolated branch only;
+- inspect CI/workflow status;
+- do not merge without explicit user approval.
+
+## Safety summary
+- `main` direct edits: NONE
+- Production Supabase changes: NONE
+- Production migrations: NONE
+- RLS changes: NONE
+- Permission contract changes: NONE
+- Printing changes: NONE
+- Other active development branch changes: NONE
