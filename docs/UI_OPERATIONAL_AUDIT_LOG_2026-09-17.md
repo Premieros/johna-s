@@ -78,5 +78,27 @@ Verification:
 - Sidebar border remains `border-e`, so it stays on the inner edge in both RTL and LTR.
 - No business logic changed.
 
+### Phase 3 — Permission-aware dashboard navigation
+Status: COMPLETE
+
+Actions:
+- Added `useCan()` to the dashboard action layer.
+- The New Sale CTA is shown only when the user has both `pos.view` and `pos.order.create`.
+- KPI cards remain visible as read-only metrics, but become links only when `reports.view` is available.
+- The low-stock list remains visible, but inventory navigation is enabled only with `inventory.view`.
+- Read-only metric presentation uses `aria-disabled` rather than redirecting users into route guards.
+
+Files:
+- `src/features/dashboard/pages/DashboardDataPage.tsx`
+
+Source commit:
+- `8c28cc75ffd263d2f128842321b382398fc1ffe7`
+
+Verification:
+- No dashboard data calculation changed.
+- No report/inventory/POS authorization contract changed.
+- Existing route guards remain unchanged.
+- No DB/Production/printing changes.
+
 Next:
-- Phase 3: Permission-aware dashboard navigation.
+- Phase 4: POS immediate Send-to-Kitchen -> Pay state regression hardening.
