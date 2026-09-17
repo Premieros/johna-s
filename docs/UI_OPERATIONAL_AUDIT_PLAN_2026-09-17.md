@@ -55,7 +55,7 @@ Acceptance:
 - Mobile drawer enters/exits from the correct side.
 
 ### Phase 3 — Permission-aware dashboard navigation
-Status: IN PROGRESS
+Status: COMPLETE
 
 - Audit clickable dashboard metrics/actions.
 - Do not present links to pages the current user cannot open.
@@ -65,7 +65,7 @@ Acceptance:
 - A user with `dashboard.view` only never receives misleading CTA navigation.
 
 ### Phase 4 — POS operational state regression hardening
-Status: PENDING
+Status: IN PROGRESS
 
 - Review immediate Send-to-Kitchen -> Pay UI state.
 - Correct memo/dependency issues only if reproducible from code/test evidence.
