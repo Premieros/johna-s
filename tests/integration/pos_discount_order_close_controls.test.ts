@@ -39,7 +39,7 @@ describe.skipIf(skip)('POS discount and order close controls', () => {
     expect(sale).toContain('user_may_access_branch(p_branch_id)');
     expect(sale).toContain('FULL_PAYMENT_REQUIRED_FOR_SENT_ITEMS');
     expect(sale).toContain("can_permission('pos.discount')");
-    expect(sale).toContain("action_type = 'discount'");
+    expect(sale).toMatch(/action_type\s*=\s*'discount'/);
   });
 
   it('applies the same payment and discount controls to split tender', async () => {
@@ -48,7 +48,7 @@ describe.skipIf(skip)('POS discount and order close controls', () => {
     expect(split).toContain('user_may_access_branch(p_branch_id)');
     expect(split).toContain("can_permission('pos.discount')");
     expect(split).toContain('MANAGER_APPROVAL_REQUIRED');
-    expect(split).toContain("action_type = 'discount'");
+    expect(split).toMatch(/action_type\s*=\s*'discount'/);
     expect(split).toContain('SPLIT_PAYMENT_TOTAL_MISMATCH');
   });
 
