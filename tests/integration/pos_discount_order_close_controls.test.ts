@@ -33,11 +33,11 @@ describe.skipIf(skip)('POS discount and order close controls', () => {
     return rows[0].def;
   }
 
-  it('requires payment permission and full settlement before a linked order can close', async () => {
+  it('requires payment permission and full payment of the current sent-only settlement slice', async () => {
     const sale = await def('process_sale');
     expect(sale).toContain("can_permission('pos.payment.take')");
     expect(sale).toContain('user_may_access_branch(p_branch_id)');
-    expect(sale).toContain('FULL_PAYMENT_REQUIRED_TO_CLOSE_ORDER');
+    expect(sale).toContain('FULL_PAYMENT_REQUIRED_FOR_SENT_ITEMS');
     expect(sale).toContain("can_permission('pos.discount')");
     expect(sale).toContain("action_type='discount'");
   });
