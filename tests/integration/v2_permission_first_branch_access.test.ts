@@ -55,7 +55,7 @@ describe.skipIf(skip)('V2 permission-first roles and branch access', () => {
     await client.query(
       `INSERT INTO public.roles (role, name_ar, name_en, permissions, scope, is_active)
        VALUES
-         ($1, 'مدير صلاحيات V2', 'V2 permission manager', '["users.view","users.manage","settings.manage","branches.manage","pos.view"]'::jsonb, 'global', true),
+         ($1, 'مدير صلاحيات V2', 'V2 permission manager', '["users.view","users.manage","users.branches.manage","settings.manage","branches.manage","pos.view"]'::jsonb, 'global', true),
          ($2, 'مستخدم V2', 'V2 target', '["pos.view"]'::jsonb, 'global', true),
          ($3, 'دور أعلى V2', 'V2 escalated', '["accounts.manage"]'::jsonb, 'global', true)`,
       [managerRole, targetRole, escalatedRole],
@@ -129,7 +129,7 @@ describe.skipIf(skip)('V2 permission-first roles and branch access', () => {
     expect(result.visible).toEqual([branchA, branchB].sort());
   });
 
-  it('lets users.manage maintain branch grants only inside the caller scope', async () => {
+  it('lets users.branches.manage maintain branch grants only inside the caller scope', async () => {
     const success = await asUser(managerId, async () => {
       const result = await client.query<{ r: { success?: boolean; error?: string } }>(
         `SELECT public.set_user_branch_access($1, ARRAY[$2,$3]::uuid[]) AS r`,

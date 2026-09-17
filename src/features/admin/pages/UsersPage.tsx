@@ -31,6 +31,9 @@ export function UsersPage() {
   const { roleMeta, rolesList } = useRoles();
   const can = useCan();
   const canManageUsers = can('users.manage');
+  const canCreateUsers = can('users.create');
+  const canManageBranches = can('users.branches.manage');
+  const canOpenUserEditor = canManageUsers || canManageBranches;
   const isPlatformAdmin = me?.role === 'super_admin';
   const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadUsers } = usePaginatedRows<AppUser>({
     table: 'users',
@@ -59,21 +62,25 @@ export function UsersPage() {
   );
 
   const openEdit = async (u: AppUser) => {
-    if (!canManageUsers) return;
+    if (!canOpenUserEditor) return;
     setEditing(u);
     setForm({ full_name: u.full_name || '', username: u.username || '', role: u.role, branch_id: u.branch_id || '', is_active: u.is_active });
     setNewPassword('');
-    const { data, error } = await supabase.rpc('get_user_branch_access', { p_user_id: u.id });
-    if (error) {
-      setBranchAccessIds(u.branch_id ? [u.branch_id] : []);
+    if (canManageBranches) {
+      const { data, error } = await supabase.rpc('get_user_branch_access', { p_user_id: u.id });
+      if (error) {
+        setBranchAccessIds(u.branch_id ? [u.branch_id] : []);
+      } else {
+        setBranchAccessIds(((data as { branch_id: string }[]) ?? []).map((r) => r.branch_id));
+      }
     } else {
-      setBranchAccessIds(((data as { branch_id: string }[]) ?? []).map((r) => r.branch_id));
+      setBranchAccessIds(u.branch_id ? [u.branch_id] : []);
     }
     setModalOpen(true);
   };
 
   const openAdd = () => {
-    if (!canManageUsers) return;
+    if (!canCreateUsers) return;
     const defaultBranchId = branches.find((b) => b.id === me?.branch_id)?.id || branches[0]?.id || '';
     setAddForm({ full_name: '', username: '', email: '', password: '', role: 'cashier', branch_id: defaultBranchId, is_active: true });
     setBranchAccessIds(defaultBranchId ? [defaultBranchId] : []);
@@ -81,7 +88,7 @@ export function UsersPage() {
   };
 
   const createNewUser = async () => {
-    if (!canManageUsers) { show(t('noPermissionToCreateUser'), 'error'); return; }
+    if (!canCreateUsers) { show(t('noPermissionToCreateUser'), 'error'); return; }
     const email = addForm.email.trim();
     const username = addForm.username.trim().toLowerCase();
     if (!addForm.full_name || !email || !username || !addForm.password || !addForm.branch_id) { show(t('required'), 'error'); return; }
@@ -109,11 +116,14 @@ export function UsersPage() {
       return;
     }
 
-    if (result.user_id) {
-      const branchIds = ensurePrimaryBranch(branchAccessIds, addForm.branch_id);
+    const auditedBranchIds = canManageBranches
+      ? ensurePrimaryBranch(branchAccessIds, addForm.branch_id)
+      : [addForm.branch_id];
+
+    if (result.user_id && canManageBranches) {
       const { data: accessData, error: accessError } = await supabase.rpc('set_user_branch_access', {
         p_user_id: result.user_id,
-        p_branch_ids: branchIds,
+        p_branch_ids: auditedBranchIds,
       });
       const accessResult = accessData as { success?: boolean; error?: string; detail?: string } | null;
       if (accessError || !accessResult?.success) {
@@ -126,57 +136,67 @@ export function UsersPage() {
       }
     }
 
-    await logAudit('create', 'users', result.user_id, { email, branch_ids: ensurePrimaryBranch(branchAccessIds, addForm.branch_id) });
+    await logAudit('create', 'users', result.user_id, { email, branch_ids: auditedBranchIds });
     show(t('saveSuccess'), 'success');
     setAddModal(false);
     await reloadUsers();
   };
 
   const save = async () => {
-    if (!editing || !canManageUsers) return;
-    if (!isPlatformAdmin && form.role === 'super_admin') { show(t('noPermissionToCreateUser'), 'error'); return; }
+    if (!editing || !canOpenUserEditor) return;
 
-    const isPlatformTarget = editing.role === 'super_admin';
-    const demoting = isPlatformTarget && form.role !== 'super_admin';
-    const deactivating = isPlatformTarget && editing.is_active && !form.is_active;
-    if (demoting || deactivating) {
-      const otherPlatformAdmins = items.filter((u) => u.id !== editing.id && u.role === 'super_admin' && u.is_active).length;
-      if (otherPlatformAdmins === 0) { show(t('lastAdminWarning'), 'error'); return; }
+    if (canManageUsers) {
+      if (!isPlatformAdmin && form.role === 'super_admin') { show(t('noPermissionToCreateUser'), 'error'); return; }
+
+      const isPlatformTarget = editing.role === 'super_admin';
+      const demoting = isPlatformTarget && form.role !== 'super_admin';
+      const deactivating = isPlatformTarget && editing.is_active && !form.is_active;
+      if (demoting || deactivating) {
+        const otherPlatformAdmins = items.filter((u) => u.id !== editing.id && u.role === 'super_admin' && u.is_active).length;
+        if (otherPlatformAdmins === 0) { show(t('lastAdminWarning'), 'error'); return; }
+      }
+
+      const username = form.username.trim().toLowerCase();
+      if (!username || !/^[a-z0-9][a-z0-9._-]*$/.test(username)) { show(t('usernameInvalid'), 'error'); return; }
+      if (!form.branch_id) { show(t('required'), 'error'); return; }
+
+      const payload = { full_name: form.full_name, username, role: form.role, branch_id: form.branch_id, is_active: form.is_active };
+      const { error } = await supabase.from('users').update(payload).eq('id', editing.id);
+      if (error) { show(error.message, 'error'); return; }
+
+      if (newPassword) {
+        if (newPassword.length < 4 || (newPassword.length === 4 && !/^\d{4}$/.test(newPassword))) { show(t('weakPassword'), 'error'); return; }
+        const { data: pwData, error: pwError } = await api.admin.updateUserPassword({ p_user_id: editing.id, p_new_password: newPassword });
+        if (pwError) { show(`${t('unknownErrorCreatingUser')}: ${pwError.message}`, 'error'); return; }
+        const pwResult = pwData as { success: boolean; error?: string; detail?: string } | null;
+        if (!pwResult?.success) {
+          if (pwResult?.error === 'PERMISSION_DENIED') show(t('noPermissionToCreateUser'), 'error');
+          else if (pwResult?.error === 'WEAK_PASSWORD') show(t('weakPassword'), 'error');
+          else show(`${t('unknownErrorCreatingUser')}: ${pwResult?.detail || 'unknown'}`, 'error');
+          return;
+        }
+      }
     }
-
-    const username = form.username.trim().toLowerCase();
-    if (!username || !/^[a-z0-9][a-z0-9._-]*$/.test(username)) { show(t('usernameInvalid'), 'error'); return; }
-    if (!form.branch_id) { show(t('required'), 'error'); return; }
-
-    const payload = { full_name: form.full_name, username, role: form.role, branch_id: form.branch_id, is_active: form.is_active };
-    const { error } = await supabase.from('users').update(payload).eq('id', editing.id);
-    if (error) { show(error.message, 'error'); return; }
 
     const branchIds = ensurePrimaryBranch(branchAccessIds, form.branch_id);
-    const { data: accessData, error: accessError } = await supabase.rpc('set_user_branch_access', {
-      p_user_id: editing.id,
-      p_branch_ids: branchIds,
-    });
-    const accessResult = accessData as { success?: boolean; error?: string; detail?: string } | null;
-    if (accessError || !accessResult?.success) {
-      show(accessError?.message || accessResult?.detail || accessResult?.error || 'BRANCH_ACCESS_SAVE_FAILED', 'error');
-      return;
-    }
-
-    if (newPassword) {
-      if (newPassword.length < 4 || (newPassword.length === 4 && !/^\d{4}$/.test(newPassword))) { show(t('weakPassword'), 'error'); return; }
-      const { data: pwData, error: pwError } = await api.admin.updateUserPassword({ p_user_id: editing.id, p_new_password: newPassword });
-      if (pwError) { show(`${t('unknownErrorCreatingUser')}: ${pwError.message}`, 'error'); return; }
-      const pwResult = pwData as { success: boolean; error?: string; detail?: string } | null;
-      if (!pwResult?.success) {
-        if (pwResult?.error === 'PERMISSION_DENIED') show(t('noPermissionToCreateUser'), 'error');
-        else if (pwResult?.error === 'WEAK_PASSWORD') show(t('weakPassword'), 'error');
-        else show(`${t('unknownErrorCreatingUser')}: ${pwResult?.detail || 'unknown'}`, 'error');
+    if (canManageBranches) {
+      const { data: accessData, error: accessError } = await supabase.rpc('set_user_branch_access', {
+        p_user_id: editing.id,
+        p_branch_ids: branchIds,
+      });
+      const accessResult = accessData as { success?: boolean; error?: string; detail?: string } | null;
+      if (accessError || !accessResult?.success) {
+        show(accessError?.message || accessResult?.detail || accessResult?.error || 'BRANCH_ACCESS_SAVE_FAILED', 'error');
         return;
       }
     }
 
-    await logAudit('update', 'users', editing.id, { ...payload, branch_ids: branchIds, password_changed: !!newPassword });
+    await logAudit('update', 'users', editing.id, {
+      profile_updated: canManageUsers,
+      branch_access_updated: canManageBranches,
+      branch_ids: canManageBranches ? branchIds : undefined,
+      password_changed: canManageUsers && !!newPassword,
+    });
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     setNewPassword('');
@@ -227,10 +247,10 @@ export function UsersPage() {
       </span>
     )},
     { key: 'created_at', header: t('date'), render: (u) => formatDate(u.created_at) },
-    { key: 'actions', header: t('actions'), render: (u) => canManageUsers ? (
+    { key: 'actions', header: t('actions'), render: (u) => canOpenUserEditor ? (
       <div className="flex gap-1">
         <button onClick={() => void openEdit(u)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>
-        <button onClick={() => setDeleteId(u.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('deleteUser')}><Trash2 className="w-4 h-4" /></button>
+        {canManageUsers && <button onClick={() => setDeleteId(u.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('deleteUser')}><Trash2 className="w-4 h-4" /></button>}
       </div>
     ) : <span className="text-ui-subtle">—</span> },
   ];
@@ -260,7 +280,7 @@ export function UsersPage() {
   return (
     <DesignSurface testId="users-page">
       <DesignPageHeader title={t('users')} actions={
-        canManageUsers ? <Button size="sm" onClick={openAdd} data-testid="users-add"><Plus className="w-4 h-4" /> {t('addUser')}</Button> : undefined
+        canCreateUsers ? <Button size="sm" onClick={openAdd} data-testid="users-add"><Plus className="w-4 h-4" /> {t('addUser')}</Button> : undefined
       } />
       <DesignPanel testId="users-search-panel">
         <DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="users-search" />
@@ -277,12 +297,12 @@ export function UsersPage() {
               <p className="text-sm text-ui-subtle">{t('email')}</p>
               <p className="font-medium text-ui-text">{editing.email}</p>
             </div>
-            <Input label={t('fullName')} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
-            <Input label={t('username')} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
-            <Select label={t('role')} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <Input disabled={!canManageUsers} label={t('fullName')} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            <Input disabled={!canManageUsers} label={t('username')} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
+            <Select disabled={!canManageUsers} label={t('role')} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
               {roleOptions.map((role) => <option key={role} value={role}>{roleMeta[role]?.[lang] || role}</option>)}
             </Select>
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => {
+            <Select disabled={!canManageUsers} label={t('branch')} value={form.branch_id} onChange={(e) => {
               const branchId = e.target.value;
               setForm({ ...form, branch_id: branchId });
               setBranchAccessIds((ids) => ensurePrimaryBranch(ids, branchId));
@@ -290,12 +310,12 @@ export function UsersPage() {
               <option value="">--</option>
               {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
             </Select>
-            {canManageUsers && branchAccessPicker}
-            <Select label={t('status')} value={form.is_active ? '1' : '0'} onChange={(e) => setForm({ ...form, is_active: e.target.value === '1' })}>
+            {canManageBranches && branchAccessPicker}
+            <Select disabled={!canManageUsers} label={t('status')} value={form.is_active ? '1' : '0'} onChange={(e) => setForm({ ...form, is_active: e.target.value === '1' })}>
               <option value="1">{t('active')}</option>
               <option value="0">{t('inactive')}</option>
             </Select>
-            <Input label={t('pinChangeHint')} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('leaveBlankToKeepPassword')} inputMode="numeric" maxLength={4} />
+            {canManageUsers && <Input label={t('pinChangeHint')} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('leaveBlankToKeepPassword')} inputMode="numeric" maxLength={4} />}
             <div className="flex justify-end gap-2">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-lg bg-ui-page-alt text-ui-text text-sm font-medium">{t('cancel')}</button>
               <button onClick={() => void save()} className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">{t('save')}</button>
@@ -321,7 +341,7 @@ export function UsersPage() {
             <option value="">--</option>
             {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </Select>
-          {canManageUsers && branchAccessPicker}
+          {canManageBranches && branchAccessPicker}
           <Select label={t('status')} value={addForm.is_active ? '1' : '0'} onChange={(e) => setAddForm({ ...addForm, is_active: e.target.value === '1' })}>
             <option value="1">{t('active')}</option>
             <option value="0">{t('inactive')}</option>

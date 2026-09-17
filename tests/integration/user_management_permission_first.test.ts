@@ -12,11 +12,15 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
   let client: pg.Client;
   const branchA = randomUUID();
   const branchB = randomUUID();
-  const permissionManagerId = randomUUID();
+  const createOnlyId = randomUUID();
+  const manageOnlyId = randomUUID();
+  const branchOnlyId = randomUUID();
   const labelOnlyManagerId = randomUUID();
   const superAdminId = randomUUID();
   const outOfScopeTargetId = randomUUID();
-  const managerRole = `qa_users_manager_${randomUUID().slice(0, 8)}`;
+  const createRole = `qa_users_create_${randomUUID().slice(0, 8)}`;
+  const manageRole = `qa_users_manage_${randomUUID().slice(0, 8)}`;
+  const branchRole = `qa_users_branches_${randomUUID().slice(0, 8)}`;
   const targetRole = `qa_users_target_${randomUUID().slice(0, 8)}`;
 
   async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
@@ -53,9 +57,11 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     await client.query(
       `INSERT INTO public.roles (role,name_ar,name_en,permissions,scope,is_active)
        VALUES
-         ($1,'مدير مستخدمين QA','QA user manager','["users.manage"]'::jsonb,'global',true),
-         ($2,'مستخدم فارغ QA','QA target','[]'::jsonb,'global',true)`,
-      [managerRole, targetRole],
+         ($1,'منشئ مستخدمين QA','QA user creator','["users.create"]'::jsonb,'global',true),
+         ($2,'مدير مستخدمين QA','QA user manager','["users.manage"]'::jsonb,'global',true),
+         ($3,'مدير فروع مستخدم QA','QA branch access manager','["users.branches.manage"]'::jsonb,'global',true),
+         ($4,'مستخدم فارغ QA','QA target','[]'::jsonb,'global',true)`,
+      [createRole, manageRole, branchRole, targetRole],
     );
 
     // Prove that the legacy Branch Manager label by itself grants nothing.
@@ -68,12 +74,16 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     await client.query(
       `INSERT INTO public.users(id,email,username,full_name,role,branch_id,is_active)
        VALUES
-         ($1,$2,$3,'Permission Manager',$4,$5,true),
-         ($6,$7,$8,'Label Only Manager','branch_manager',$5,true),
-         ($9,$10,$11,'Super Admin','super_admin',$5,true),
-         ($12,$13,$14,'Out of Scope Target',$15,$16,true)`,
+         ($1,$2,$3,'Create Only',$4,$5,true),
+         ($6,$7,$8,'Manage Only',$9,$5,true),
+         ($10,$11,$12,'Branch Access Only',$13,$5,true),
+         ($14,$15,$16,'Label Only Manager','branch_manager',$5,true),
+         ($17,$18,$19,'Super Admin','super_admin',$5,true),
+         ($20,$21,$22,'Out of Scope Target',$23,$24,true)`,
       [
-        permissionManagerId, `${randomUUID()}@test.local`, `pm_${randomUUID().slice(0, 8)}`, managerRole, branchA,
+        createOnlyId, `${randomUUID()}@test.local`, `cu_${randomUUID().slice(0, 8)}`, createRole, branchA,
+        manageOnlyId, `${randomUUID()}@test.local`, `mu_${randomUUID().slice(0, 8)}`, manageRole,
+        branchOnlyId, `${randomUUID()}@test.local`, `bu_${randomUUID().slice(0, 8)}`, branchRole,
         labelOnlyManagerId, `${randomUUID()}@test.local`, `lm_${randomUUID().slice(0, 8)}`,
         superAdminId, `${randomUUID()}@test.local`, `sa_${randomUUID().slice(0, 8)}`,
         outOfScopeTargetId, `${randomUUID()}@test.local`, `oo_${randomUUID().slice(0, 8)}`, targetRole, branchB,
@@ -92,9 +102,9 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     const rows = await client.query<{ proname: string; cfg: string[] | null }>(
       `SELECT proname, proconfig AS cfg
        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='public' AND proname IN ('create_user','delete_user','update_user_password')`,
+       WHERE n.nspname='public' AND proname IN ('create_user','delete_user','update_user_password','set_user_branch_access')`,
     );
-    expect(rows.rows.length).toBeGreaterThanOrEqual(4);
+    expect(rows.rows.length).toBeGreaterThanOrEqual(5);
     for (const row of rows.rows) {
       expect(row.cfg).toContain('search_path=public, pg_temp');
     }
@@ -105,8 +115,8 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     expect(result).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
   });
 
-  it('allows an arbitrary role with users.manage to create a same-branch user', async () => {
-    const result = await callCreate(permissionManagerId, branchA, `managed-${randomUUID()}@test.local`);
+  it('allows users.create to create a same-branch user without users.manage', async () => {
+    const result = await callCreate(createOnlyId, branchA, `created-${randomUUID()}@test.local`);
     expect(result.success).toBe(true);
     expect(result.user_id).toBeTruthy();
 
@@ -119,13 +129,18 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     expect(stored.rows[0]).toMatchObject({ role: targetRole, branch_id: branchA, auth_count: '1' });
   });
 
-  it('blocks cross-branch create even when users.manage is present', async () => {
-    const result = await callCreate(permissionManagerId, branchB, `cross-${randomUUID()}@test.local`);
+  it('does not let users.manage substitute for users.create', async () => {
+    const result = await callCreate(manageOnlyId, branchA, `manage-create-${randomUUID()}@test.local`);
+    expect(result).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
+  });
+
+  it('blocks cross-branch create even when users.create is present', async () => {
+    const result = await callCreate(createOnlyId, branchB, `cross-${randomUUID()}@test.local`);
     expect(result).toMatchObject({ success: false, error: 'BRANCH_ACCESS_DENIED' });
   });
 
-  it('uses users.manage, not the role label, for password updates', async () => {
-    const created = await callCreate(permissionManagerId, branchA, `password-${randomUUID()}@test.local`);
+  it('keeps password updates under users.manage', async () => {
+    const created = await callCreate(createOnlyId, branchA, `password-${randomUUID()}@test.local`);
     expect(created.success).toBe(true);
     const userId = String(created.user_id);
 
@@ -133,13 +148,13 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
       `SELECT encrypted_password FROM auth.users WHERE id=$1`, [userId],
     );
 
-    const denied = await asUser(labelOnlyManagerId, async () => {
+    const denied = await asUser(createOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.update_user_password($1,$2) AS r`, [userId, '9371']);
       return result.rows[0].r;
     });
     expect(denied).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
 
-    const allowed = await asUser(permissionManagerId, async () => {
+    const allowed = await asUser(manageOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.update_user_password($1,$2) AS r`, [userId, '9371']);
       return result.rows[0].r;
     });
@@ -151,14 +166,47 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
     expect(after.rows[0].encrypted_password).not.toBe(before.rows[0].encrypted_password);
   });
 
+  it('separates users.branches.manage from users.manage', async () => {
+    const created = await callCreate(createOnlyId, branchA, `branches-${randomUUID()}@test.local`);
+    expect(created.success).toBe(true);
+    const userId = String(created.user_id);
+
+    const denied = await asUser(manageOnlyId, async () => {
+      const result = await client.query<{ r: Rpc }>(
+        `SELECT public.set_user_branch_access($1,$2::uuid[]) AS r`,
+        [userId, [branchA]],
+      );
+      return result.rows[0].r;
+    });
+    expect(denied).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
+
+    const allowed = await asUser(branchOnlyId, async () => {
+      const result = await client.query<{ r: Rpc }>(
+        `SELECT public.set_user_branch_access($1,$2::uuid[]) AS r`,
+        [userId, [branchA]],
+      );
+      return result.rows[0].r;
+    });
+    expect(allowed.success).toBe(true);
+
+    const crossBranch = await asUser(branchOnlyId, async () => {
+      const result = await client.query<{ r: Rpc }>(
+        `SELECT public.set_user_branch_access($1,$2::uuid[]) AS r`,
+        [userId, [branchA, branchB]],
+      );
+      return result.rows[0].r;
+    });
+    expect(crossBranch).toMatchObject({ success: false, error: 'BRANCH_ACCESS_DENIED' });
+  });
+
   it('blocks out-of-scope password/delete operations', async () => {
-    const password = await asUser(permissionManagerId, async () => {
+    const password = await asUser(manageOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.update_user_password($1,$2) AS r`, [outOfScopeTargetId, '1122']);
       return result.rows[0].r;
     });
     expect(password).toMatchObject({ success: false, error: 'TARGET_OUT_OF_SCOPE' });
 
-    const deleted = await asUser(permissionManagerId, async () => {
+    const deleted = await asUser(manageOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.delete_user($1) AS r`, [outOfScopeTargetId]);
       return result.rows[0].r;
     });
@@ -166,17 +214,17 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
   });
 
   it('allows users.manage to delete a same-branch unreferenced user from app + auth', async () => {
-    const created = await callCreate(permissionManagerId, branchA, `delete-${randomUUID()}@test.local`);
+    const created = await callCreate(createOnlyId, branchA, `delete-${randomUUID()}@test.local`);
     expect(created.success).toBe(true);
     const userId = String(created.user_id);
 
-    const denied = await asUser(labelOnlyManagerId, async () => {
+    const denied = await asUser(createOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.delete_user($1) AS r`, [userId]);
       return result.rows[0].r;
     });
     expect(denied).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
 
-    const allowed = await asUser(permissionManagerId, async () => {
+    const allowed = await asUser(manageOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.delete_user($1) AS r`, [userId]);
       return result.rows[0].r;
     });
@@ -192,13 +240,13 @@ describe.skipIf(skip)('QA batch 1 — Permission-First user management lifecycle
   });
 
   it('keeps Super Admin protected from non-admin mutation', async () => {
-    const password = await asUser(permissionManagerId, async () => {
+    const password = await asUser(manageOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.update_user_password($1,$2) AS r`, [superAdminId, '1122']);
       return result.rows[0].r;
     });
     expect(password).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
 
-    const deleted = await asUser(permissionManagerId, async () => {
+    const deleted = await asUser(manageOnlyId, async () => {
       const result = await client.query<{ r: Rpc }>(`SELECT public.delete_user($1) AS r`, [superAdminId]);
       return result.rows[0].r;
     });

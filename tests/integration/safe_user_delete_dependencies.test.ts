@@ -35,7 +35,7 @@ describe.skipIf(skip)('QA batch 1 — safe user deletion with dependencies', () 
     await client.query(
       `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
        VALUES
-         ($1,'مدير حذف','Delete manager','["users.manage"]'::jsonb,'global',true),
+         ($1,'مدير حذف','Delete manager','["users.create","users.manage"]'::jsonb,'global',true),
          ($2,'مستخدم','Delete target','[]'::jsonb,'global',true)`,
       [managerRole, targetRole],
     );
