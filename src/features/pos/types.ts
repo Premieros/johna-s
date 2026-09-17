@@ -37,7 +37,6 @@ export interface KitchenStationDispatchResult {
   item_count: number;
   state: KitchenStationDispatchState;
   detail?: string;
-  dispatch?: KitchenStationDispatchSummary;
 }
 
 export interface KitchenStationDispatchSummary {
@@ -63,6 +62,7 @@ export interface KitchenSendResult {
   product_name?: string | null;
   error?: string;
   detail?: string;
+  dispatch?: KitchenStationDispatchSummary;
 }
 
 export interface PosRealtimeData {
