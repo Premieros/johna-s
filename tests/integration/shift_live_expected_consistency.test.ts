@@ -14,6 +14,15 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
     await client.connect();
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
+
+    // The shared RLS fixture intentionally carries an open order for policy probes.
+    // Settle that unrelated row so this test stays focused on drawer math consistency.
+    await client.query(
+      `UPDATE public.orders
+          SET payment_status = 'paid', payment_at = now()
+        WHERE id = $1`,
+      [ids.rows.orders.own],
+    );
   });
 
   afterAll(async () => {

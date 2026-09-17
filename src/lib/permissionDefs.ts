@@ -44,7 +44,7 @@ export type Permission =
   | 'refunds.approve'
   | 'reports.view' | 'reports.financial' | 'reports.costing'
   | 'accounts.view' | 'accounts.manage'
-  | 'shifts.view' | 'shifts.open' | 'shifts.close' | 'shifts.manage'
+  | 'shifts.view' | 'shifts.open' | 'shifts.close' | 'shifts.close_with_open_orders' | 'shifts.manage'
   | 'shifts.report.user' | 'shifts.report.shift' | 'shifts.day_close'
   | 'approvals.review' | 'approvals.override' | 'approvals.policy.manage'
   | 'procurement.request.create' | 'procurement.order.create' | 'procurement.receive' | 'procurement.payment.create'
@@ -83,7 +83,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'sales.view', 'sales.refund.create', 'sales.payment.receive', 'refunds.approve',
   'reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export',
   'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage',
-  'shifts.view', 'shifts.open', 'shifts.close', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close',
+  'shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close',
   'approvals.review', 'approvals.override', 'approvals.policy.manage',
   'users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage',
   'audit.view', 'settings.manage', 'branches.manage',
@@ -185,6 +185,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'shifts.view': { ar: 'عرض الشيفتات', en: 'View Shifts' },
   'shifts.open': { ar: 'فتح شيفت', en: 'Open Shift' },
   'shifts.close': { ar: 'إغلاق شيفت', en: 'Close Shift' },
+  'shifts.close_with_open_orders': { ar: 'إغلاق الوردية مع بقاء الطلبات المفتوحة', en: 'Close Shift With Open Orders' },
   'shifts.manage': { ar: 'إدارة كل الشيفتات', en: 'Manage All Shifts' },
   'shifts.report.user': { ar: 'تقرير إغلاق المستخدم', en: 'User Closing Report' },
   'shifts.report.shift': { ar: 'تقرير إغلاق الشيفت', en: 'Shift Closing Report' },
@@ -226,7 +227,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'sales', ar: 'المبيعات', en: 'Sales', permissions: ['sales.view', 'sales.refund.create', 'sales.payment.receive', 'sales.export', 'refunds.approve', 'sales.print'] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', permissions: ['expenses.view', 'expenses.manage', 'expenses.print'] },
   { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage'] },
-  { key: 'shifts', ar: 'الشيفتات', en: 'Shifts', permissions: ['shifts.view', 'shifts.open', 'shifts.close', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close'] },
+  { key: 'shifts', ar: 'الشيفتات', en: 'Shifts', permissions: ['shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close'] },
   { key: 'approvals', ar: 'الموافقات', en: 'Approvals', permissions: ['approvals.review', 'approvals.override', 'approvals.policy.manage'] },
   { key: 'reports', ar: 'التقارير', en: 'Reports', permissions: ['reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export'] },
   { key: 'admin', ar: 'الإدارة', en: 'Administration', permissions: ['users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage', 'audit.view', 'settings.manage', 'branches.manage'] },

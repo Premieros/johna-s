@@ -54,6 +54,15 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
     ids = await seedRlsFixture(client);
     impersonationAvailable = await canImpersonate(client);
 
+    // The shared RLS fixture intentionally carries an open order only for policy probes.
+    // Mark that unrelated probe settled so this test exercises the order it creates below.
+    await client.query(
+      `UPDATE public.orders
+          SET payment_status = 'paid', payment_at = now()
+        WHERE id = $1`,
+      [ids.rows.orders.own],
+    );
+
     await client.query(`
       UPDATE public.roles
          SET permissions = COALESCE(permissions, '[]'::jsonb)
