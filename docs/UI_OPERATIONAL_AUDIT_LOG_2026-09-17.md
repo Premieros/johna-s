@@ -100,5 +100,25 @@ Verification:
 - Existing route guards remain unchanged.
 - No DB/Production/printing changes.
 
+### Phase 4 — POS immediate Send-to-Kitchen -> Pay state
+Status: COMPLETE — FINDING DOCUMENTED / SOURCE CHANGE DEFERRED
+
+Finding:
+- `kitchenSendsForActive` intentionally provides a session-local fallback after a successful `send_to_kitchen` RPC and before Realtime delivers the same rows.
+- `hasUnsentItems` reads `kitchenSendsForActive`, but its `useMemo` dependency list is `[pos.cart, kitchenSendsByOrder, orderItemsForActive]`.
+- Because `pos.kitchenSentItems` can update the fallback without changing `kitchenSendsByOrder`, the memo can temporarily retain a stale `hasUnsentItems` value until Realtime arrives.
+
+Required fix in the POS-owning workstream:
+- Depend directly on `kitchenSendsForActive` in `hasUnsentItems`.
+- Add a regression test covering: successful Send-to-Kitchen -> session fallback updated -> Pay immediately, before Realtime delivery.
+
+Reason source change was deferred here:
+- The user explicitly requested this work not interfere with the other model's active workstream.
+- `PosWorkspacePage.tsx` is a high-conflict operational file, so this audit branch records the exact defect rather than creating an avoidable merge conflict.
+
+Verification:
+- No POS source changed.
+- No stock deduction, send-to-kitchen RPC, Realtime, RLS, Production, or printing behavior changed.
+
 Next:
-- Phase 4: POS immediate Send-to-Kitchen -> Pay state regression hardening.
+- Phase 5: navigation density and permission-granularity recommendations.
