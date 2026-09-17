@@ -16,14 +16,14 @@ interface TablesPanelProps {
   onClose: () => void;
   tables: DiningTable[];
   ordersByTable: Record<string, Order[]>;
-  kitchenSendsByOrder: Record<string, OrderKitchenSend[]>;
+  kitchenSendsByOrder?: Record<string, OrderKitchenSend[]>;
   currency: string;
   onResume: (order: Order) => void;
   onPay: (order: Order) => void;
   onStart: (table: DiningTable, guests: number) => void;
 }
 
-export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSendsByOrder, currency, onResume, onPay, onStart }: TablesPanelProps) {
+export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSendsByOrder = {}, currency, onResume, onPay, onStart }: TablesPanelProps) {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const perms = usePosPermissions();
