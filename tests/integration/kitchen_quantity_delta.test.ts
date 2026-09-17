@@ -181,4 +181,42 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     );
     expect(Number(aggregateAfterDelta.rows[0].quantity)).toBe(beforeVoid - 1);
   });
+  it('blocks deleting a sent line until every pending kitchen inventory event is restored', async () => {
+    const created = await asCashier(async () => {
+      const r = await client.query(
+        `SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,100,0,'amount',0,100,$3) AS r`,
+        [branchId, itemJson(1), cashierId],
+      );
+      return r.rows[0].r;
+    });
+    expect(created.success).toBe(true);
+    const orderId = String(created.order_id);
+    const first = await send(orderId);
+    expect(first.success).toBe(true);
+    const itemId = String(first.sent[0].order_item_id);
+
+    await client.query(`SELECT set_config('app.approved_sent_item_void','1',true)`);
+    await expect(client.query(`DELETE FROM public.order_items WHERE id=$1`, [itemId]))
+      .rejects.toThrow(/SENT_ITEM_VOID_INCOMPLETE/);
+
+    const restored = await client.query(
+      `SELECT public._restore_kitchen_inventory_for_void($1,$2,1) AS r`,
+      [orderId, itemId],
+    );
+    expect(restored.rows[0].r.success).toBe(true);
+    expect(Number(restored.rows[0].r.restored_sent_quantity)).toBe(1);
+
+    await client.query(`SELECT set_config('app.approved_sent_item_void','1',true)`);
+    await client.query(`DELETE FROM public.order_items WHERE id=$1`, [itemId]);
+
+    const pending = await client.query(
+      `SELECT COALESCE(SUM(sent_quantity-voided_quantity),0)::numeric AS q
+       FROM public.order_kitchen_inventory_events
+       WHERE order_id=$1 AND order_item_id=$2
+         AND settled_sale_id IS NULL AND sent_quantity>voided_quantity`,
+      [orderId, itemId],
+    );
+    expect(Number(pending.rows[0].q)).toBe(0);
+  });
+
 });
