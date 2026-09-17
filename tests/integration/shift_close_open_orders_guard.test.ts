@@ -72,8 +72,8 @@ describe.skipIf(skip)('shift close open-order guard', () => {
        ($8,$9,'Branch B Close',$3,$10,true)`,
       [
         closeOnlyUser, `${closeOnlyUser}@test.local`, closeRole, branchA,
-        overrideUser, `${overrideUser}@test.local`, overrideRole, branchA,
-        branchBUser, `${branchBUser}@test.local`, closeRole, branchB,
+        overrideUser, `${overrideUser}@test.local`, overrideRole,
+        branchBUser, `${branchBUser}@test.local`, branchB,
       ],
     );
     await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
