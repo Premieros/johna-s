@@ -13,7 +13,7 @@ import { buildReceiptHtml, buildKitchenTicketHtml, openPrintWindow, ReceiptPrint
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
 import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
-import type { KitchenSendItem } from '../types';
+import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
 
 export interface ActiveShiftInfo {
   id: string;
@@ -79,6 +79,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [orderLoading, setOrderLoading] = useState(false);
   const [kitchenSending, setKitchenSending] = useState(false);
   const [kitchenSentItems, setKitchenSentItems] = useState<KitchenSendItem[]>([]);
+  const [kitchenDispatch, setKitchenDispatch] = useState<KitchenStationDispatchSummary | null>(null);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
 
@@ -681,10 +682,26 @@ export function usePosOrder(input: UsePosOrderInput) {
       setActiveOrderId(targetOrderId);
       if (targetOrderNumber) setActiveOrderNumber(targetOrderNumber);
       setKitchenSentItems(res.sent || []);
+      setKitchenDispatch(res.dispatch || null);
       const sentCount = res.items_sent_count || 0;
       if (sentCount > 0) {
         onInventoryChanged?.();
-        show(`${t('sendToKitchen')} (${sentCount})`, 'success');
+        const dispatchStatus = res.dispatch?.status;
+        if (dispatchStatus === 'failed' || dispatchStatus === 'partial') {
+          const failedStations = res.dispatch?.failed_stations?.join('، ') || (isAr ? 'محطة غير محددة' : 'Unknown station');
+          const missing = Number(res.dispatch?.missing_station_items || 0);
+          const suffix = missing > 0
+            ? (isAr ? ` — ${missing} صنف بلا محطة` : ` — ${missing} item(s) without station`)
+            : '';
+          show(
+            isAr
+              ? `تم تسجيل إرسال المطبخ، لكن توجيه المحطات غير مكتمل: ${failedStations}${suffix}`
+              : `Kitchen send was recorded, but station dispatch is incomplete: ${failedStations}${suffix}`,
+            'warning',
+          );
+        } else {
+          show(`${t('sendToKitchen')} (${sentCount})`, 'success');
+        }
         if (effSettings) {
           const html = buildKitchenTicketHtml({
             orderNumber: targetOrderNumber || activeOrderNumber,
@@ -872,6 +889,8 @@ export function usePosOrder(input: UsePosOrderInput) {
     setActiveOrderNumber(null);
     setActiveTable(null);
     setCheckoutOpen(false);
+    setKitchenSentItems([]);
+    setKitchenDispatch(null);
   }, []);
 
   return {
@@ -887,7 +906,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     guestCount, setGuestCount,
     activeOrderId, activeOrderNumber, activeTable,
     checkoutOpen, setCheckoutOpen,
-    completing, orderLoading, kitchenSending, kitchenSentItems,
+    completing, orderLoading, kitchenSending, kitchenSentItems, kitchenDispatch,
     lastReceipt, receiptSaleId, closeReceipt,
     subtotal, discountValue, taxAmount, total, change,
     effCurrency,
