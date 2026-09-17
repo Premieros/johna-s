@@ -215,7 +215,6 @@ public sealed class LocalQueueDb
           created_at TEXT NOT NULL, updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_jobs_state_created ON jobs(state, created_at);
-        UPDATE jobs SET state='needs_review', last_error=COALESCE(last_error,'Station restarted during print; manual review required'), updated_at=datetime('now') WHERE state='printing';
         """;
         cmd.ExecuteNonQuery();
     }
@@ -226,13 +225,44 @@ public sealed class LocalQueueDb
         foreach (var job in jobs)
         {
             using var cmd = c.CreateCommand(); cmd.Transaction = tx;
-            cmd.CommandText = "INSERT OR IGNORE INTO jobs(id,kind,station_code,payload_json,state,attempts,created_at,updated_at) VALUES($id,$kind,$station,$payload,$state,$attempts,$created,$updated)";
+            cmd.CommandText = """
+            INSERT INTO jobs(id,kind,station_code,payload_json,state,attempts,created_at,updated_at)
+            VALUES($id,$kind,$station,$payload,$state,$attempts,$created,$updated)
+            ON CONFLICT(id) DO UPDATE SET
+              kind=excluded.kind,
+              station_code=excluded.station_code,
+              payload_json=excluded.payload_json,
+              attempts=MAX(jobs.attempts, excluded.attempts),
+              state=CASE
+                WHEN jobs.state IN ('completed','printed_pending_ack','printing','needs_review') THEN jobs.state
+                ELSE 'received'
+              END,
+              last_error=CASE
+                WHEN jobs.state IN ('completed','printed_pending_ack','printing','needs_review') THEN jobs.last_error
+                ELSE NULL
+              END,
+              updated_at=excluded.updated_at;
+            """;
             cmd.Parameters.AddWithValue("$id", job.id); cmd.Parameters.AddWithValue("$kind", job.kind); cmd.Parameters.AddWithValue("$station", job.station_code);
             cmd.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(job.payload)); cmd.Parameters.AddWithValue("$state", JobStates.Received); cmd.Parameters.AddWithValue("$attempts", job.attempts);
             cmd.Parameters.AddWithValue("$created", job.created_at); cmd.Parameters.AddWithValue("$updated", DateTime.UtcNow.ToString("O")); cmd.ExecuteNonQuery();
         }
         tx.Commit();
     }
+    public int RecoverInterruptedPrints()
+    {
+        using var c = new SqliteConnection(_cs); c.Open(); using var cmd = c.CreateCommand();
+        cmd.CommandText = """
+        UPDATE jobs
+        SET state='needs_review',
+            last_error=COALESCE(last_error,'Print Station service restarted during print; physical outcome is unknown'),
+            updated_at=$updated
+        WHERE state='printing';
+        """;
+        cmd.Parameters.AddWithValue("$updated", DateTime.UtcNow.ToString("O"));
+        return cmd.ExecuteNonQuery();
+    }
+
     public List<LocalPrintJob> GetRunnable(int limit = 25) => Query("state IN ('received','printed_pending_ack')", limit);
     public List<LocalPrintJob> GetRecent(int limit = 200) => Query("1=1", limit);
     private List<LocalPrintJob> Query(string where, int limit)
