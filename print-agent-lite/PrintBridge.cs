@@ -6,6 +6,7 @@ using System.Drawing.Printing;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.ServiceProcess;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,8 @@ namespace PremierPrintAgentLite
     internal sealed class PrintBridge
     {
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _lanes = new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, int> _queueDepth = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private static readonly int[] PreflightRetryDelaysMs = { 150, 350 };
 
         internal List<Dictionary<string, object>> GetPrinters()
         {
@@ -36,17 +39,29 @@ namespace PremierPrintAgentLite
         {
             printerName = (printerName ?? "").Trim();
             if (printerName.Length == 0) return Fail("PRINTER_NAME_REQUIRED");
-            if (!PrinterSettings.InstalledPrinters.Cast<string>().Any(x => string.Equals(x, printerName, StringComparison.OrdinalIgnoreCase))) return Fail("PRINTER_NOT_FOUND:" + printerName);
+            if (!PrinterInstalled(printerName)) return Fail("PRINTER_NOT_FOUND:" + printerName);
             var printable = !string.IsNullOrWhiteSpace(text) ? text : HtmlToText(html);
             if (string.IsNullOrWhiteSpace(printable)) return Fail("NO_CONTENT_TO_PRINT");
 
+            var queuedAhead = Math.Max(0, _queueDepth.AddOrUpdate(printerName, 1, delegate(string _, int depth) { return depth + 1; }) - 1);
             var lane = _lanes.GetOrAdd(printerName, _ => new SemaphoreSlim(1, 1));
             await lane.WaitAsync().ConfigureAwait(false);
             try
             {
-                return await Task.Run(() => PrintText(printerName, printable, Math.Max(1, Math.Min(5, copies)))).ConfigureAwait(false);
+                var result = await Task.Run(() => PrintText(printerName, printable, Math.Max(1, Math.Min(5, copies)))).ConfigureAwait(false);
+                if (result.TryGetValue("success", out var success) && success is bool ok && ok)
+                {
+                    result["acceptedBySpooler"] = true;
+                    result["queuedAhead"] = queuedAhead;
+                }
+                return result;
             }
-            finally { lane.Release(); }
+            finally
+            {
+                lane.Release();
+                var remaining = _queueDepth.AddOrUpdate(printerName, 0, delegate(string _, int depth) { return Math.Max(0, depth - 1); });
+                if (remaining <= 0) _queueDepth.TryRemove(printerName, out _);
+            }
         }
 
         internal async Task<Dictionary<string, object>> KickDrawerAsync(string printerName)
@@ -60,6 +75,8 @@ namespace PremierPrintAgentLite
         {
             try
             {
+                EnsureSpoolerAndPrinterReadyWithRetry(printerName);
+
                 for (var copy = 0; copy < copies; copy++)
                 {
                     using (var document = new PrintDocument())
@@ -92,12 +109,60 @@ namespace PremierPrintAgentLite
                             }
                             e.HasMorePages = false;
                         };
+
+                        // Never retry after Print() is invoked: an ambiguous retry could duplicate a physical ticket.
                         document.Print();
                     }
                 }
                 return Ok();
             }
             catch (Exception ex) { return Fail(ex.GetType().Name + ":" + ex.Message); }
+        }
+
+        private static void EnsureSpoolerAndPrinterReadyWithRetry(string printerName)
+        {
+            Exception lastError = null;
+            for (var attempt = 0; attempt <= PreflightRetryDelaysMs.Length; attempt++)
+            {
+                try
+                {
+                    EnsureSpoolerAndPrinterReady(printerName);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    if (attempt >= PreflightRetryDelaysMs.Length) break;
+                    Thread.Sleep(PreflightRetryDelaysMs[attempt]);
+                }
+            }
+            throw lastError ?? new InvalidOperationException("PRINT_SPOOLER_NOT_READY");
+        }
+
+        private static void EnsureSpoolerAndPrinterReady(string printerName)
+        {
+            using (var spooler = new ServiceController("Spooler"))
+            {
+                spooler.Refresh();
+                if (spooler.Status != ServiceControllerStatus.Running)
+                    throw new InvalidOperationException("PRINT_SPOOLER_NOT_RUNNING");
+            }
+
+            if (!PrinterInstalled(printerName))
+                throw new InvalidOperationException("PRINTER_NOT_FOUND:" + printerName);
+
+            using (var settings = new PrinterSettings())
+            {
+                settings.PrinterName = printerName;
+                if (!settings.IsValid)
+                    throw new InvalidOperationException("INVALID_PRINTER:" + printerName);
+            }
+        }
+
+        private static bool PrinterInstalled(string printerName)
+        {
+            return PrinterSettings.InstalledPrinters.Cast<string>()
+                .Any(x => string.Equals(x, printerName, StringComparison.OrdinalIgnoreCase));
         }
 
         private static string[] NormalizeLines(string text)
