@@ -133,7 +133,7 @@ namespace PremierPrintAgentLite
     getPrinters: () => call('getPrinters'),
     printSilent: (o) => call('printSilent', o),
     kickDrawer: (p) => call('kickDrawer', {printerName:p}),
-    getSystemInfo: () => Promise.resolve({isElectron:true,platform:'win32',hostname:'Premier-Lite',version:'1.1.0'})
+    getSystemInfo: () => Promise.resolve({isElectron:true,platform:'win32',hostname:'Premier-Lite',version:'1.2.0'})
   };
   window.__PREMIER_LITE_BACKGROUND__ = true;
 })();");
