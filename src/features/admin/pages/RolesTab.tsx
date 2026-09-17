@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Save, Trash2, ShieldCheck, Search, CheckCheck } from 'lucide-react';
+import { Plus, Save, Trash2, ShieldCheck, Search, CheckCheck, Lock } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useRoles, type RoleScope } from '@/context/RolesContext';
 import { useBranches } from '@/hooks/useBranches';
+import { useAuth } from '@/context/AuthContext';
 import { Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { Input, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { logAudit } from '@/lib/audit';
-import { ALL_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_LABELS, ROLE_META, type Permission } from '@/lib/permissions';
+import { ALL_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_LABELS, ROLE_META, useCan, type Permission } from '@/lib/permissions';
 import type { Role } from '@/lib/types';
 
 export function RolesTab() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
+  const { user } = useAuth();
+  const can = useCan();
+  const canManageRoles = can('roles.permissions.manage');
+  const isPlatformAdmin = user?.role === 'super_admin';
   const { rolePermissionsMap, roleMeta, rolesList, loading, saveRole, createRole, deleteRole } = useRoles();
   const { branches } = useBranches();
   const isAr = lang === 'ar';
@@ -45,7 +50,15 @@ export function RolesTab() {
     if (!selectedRole || !roles.includes(selectedRole)) setSelectedRole(roles[0]);
   }, [roles, selectedRole]);
 
+  const mayEditRole = (role: string) => {
+    if (!canManageRoles || role === 'super_admin') return false;
+    if (isPlatformAdmin) return true;
+    const def = rolesList.find((r) => r.role === role);
+    return def?.scope === 'branch';
+  };
+
   const toggle = (role: string, perm: Permission) => {
+    if (!mayEditRole(role)) return;
     setDrafts((prev) => {
       const list = prev[role] ?? rolePermissionsMap[role] ?? [];
       const has = list.includes(perm);
@@ -54,10 +67,12 @@ export function RolesTab() {
   };
 
   const setAll = (role: string, value: boolean) => {
+    if (!mayEditRole(role)) return;
     setDrafts((prev) => ({ ...prev, [role]: value ? [...ALL_PERMISSIONS] : [] }));
   };
 
   const setGroup = (role: string, permissions: Permission[], value: boolean) => {
+    if (!mayEditRole(role)) return;
     setDrafts((prev) => {
       const base = new Set(prev[role] ?? rolePermissionsMap[role] ?? []);
       permissions.forEach((p) => { if (value) base.add(p); else base.delete(p); });
@@ -66,6 +81,7 @@ export function RolesTab() {
   };
 
   const save = async (role: string) => {
+    if (!mayEditRole(role)) return;
     setSavingRole(role);
     const ok = await saveRole(role, drafts[role] ?? []);
     setSavingRole(null);
@@ -73,14 +89,32 @@ export function RolesTab() {
     else show(isAr ? 'تعذر حفظ الصلاحيات' : 'Failed to save permissions', 'error');
   };
 
+  const openCreate = () => {
+    if (!canManageRoles) return;
+    setCreateForm({
+      role: '',
+      name_ar: '',
+      name_en: '',
+      scope: isPlatformAdmin ? 'global' : 'branch',
+      branch_id: isPlatformAdmin ? '' : (branches[0]?.id || ''),
+      description_ar: '',
+      description_en: '',
+    });
+    setCreating(true);
+  };
+
   const submitCreate = async () => {
+    if (!canManageRoles) return;
     if (!createForm.role.trim() || !createForm.name_ar.trim()) { show(t('required'), 'error'); return; }
+    const scope: RoleScope = isPlatformAdmin ? createForm.scope : 'branch';
+    const branchId = scope === 'branch' ? (createForm.branch_id || null) : null;
+    if (scope === 'branch' && !branchId) { show(t('required'), 'error'); return; }
     const res = await createRole({
       role: createForm.role,
       name_ar: createForm.name_ar,
       name_en: createForm.name_en,
-      scope: createForm.scope,
-      branch_id: createForm.scope === 'branch' ? (createForm.branch_id || null) : null,
+      scope,
+      branch_id: branchId,
       description_ar: createForm.description_ar,
       description_en: createForm.description_en,
       permissions: [],
@@ -91,15 +125,14 @@ export function RolesTab() {
       else show(`${isAr ? 'تعذر إنشاء الدور: ' : 'Failed to create role: '}${res.error || 'unknown'}`, 'error');
       return;
     }
-    await logAudit('create', 'roles', res.role, { role: createForm.role });
+    await logAudit('create', 'roles', res.role, { role: createForm.role, scope, branch_id: branchId });
     show(t('saveSuccess'), 'success');
     setCreating(false);
     setSelectedRole(res.role || createForm.role);
-    setCreateForm({ role: '', name_ar: '', name_en: '', scope: 'global', branch_id: '', description_ar: '', description_en: '' });
   };
 
   const confirmDelete = async () => {
-    if (!deleting) return;
+    if (!deleting || !mayEditRole(deleting)) return;
     const roleToDelete = deleting;
     const res = await deleteRole(roleToDelete);
     if (!res.success) {
@@ -121,6 +154,7 @@ export function RolesTab() {
   const currentPlatformAdmin = currentRole === 'super_admin';
   const currentCustom = !!currentRole && !currentSystem;
   const currentPermissions = drafts[currentRole] ?? rolePermissionsMap[currentRole] ?? [];
+  const canEditCurrent = mayEditRole(currentRole);
 
   const visibleGroups = useMemo(() => {
     const q = permissionSearch.trim().toLowerCase();
@@ -159,7 +193,7 @@ export function RolesTab() {
               {isAr ? 'اسم الدور للتنظيم فقط؛ الصلاحيات المحددة هنا هي التي تتحكم فعليًا في الوصول. سوبر أدمن فقط خارج هذه المصفوفة.' : 'Role names are organizational labels; the permissions selected here control real access. Only Super Admin is outside this matrix.'}
             </p>
           </div>
-          <Button size="sm" onClick={() => setCreating(true)}><Plus className="w-4 h-4" /> {isAr ? 'دور جديد' : 'New role'}</Button>
+          {canManageRoles && <Button size="sm" onClick={openCreate}><Plus className="w-4 h-4" /> {isAr ? 'دور جديد' : 'New role'}</Button>}
         </div>
       </Card>
 
@@ -205,7 +239,7 @@ export function RolesTab() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {!currentPlatformAdmin && (
+              {canEditCurrent && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setAll(currentRole, true)}><CheckCheck className="w-4 h-4" /> {t('all')}</Button>
                   <Button size="sm" variant="outline" onClick={() => setAll(currentRole, false)}>{t('none')}</Button>
@@ -214,7 +248,7 @@ export function RolesTab() {
                   </Button>
                 </>
               )}
-              {currentCustom && <Button size="sm" variant="danger" onClick={() => setDeleting(currentRole)}><Trash2 className="w-4 h-4" /> {t('delete')}</Button>}
+              {currentCustom && canEditCurrent && <Button size="sm" variant="danger" onClick={() => setDeleting(currentRole)}><Trash2 className="w-4 h-4" /> {t('delete')}</Button>}
             </div>
           </div>
 
@@ -224,6 +258,12 @@ export function RolesTab() {
             </div>
           ) : (
             <>
+              {!canEditCurrent && (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-subtle">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{isAr ? 'عرض فقط: تحتاج صلاحية إدارة الأدوار، كما أن الأدوار العامة لا يعدلها إلا Super Admin.' : 'Read only: role management permission is required, and only Super Admin may edit global roles.'}</span>
+                </div>
+              )}
               <div className="relative mb-4">
                 <Search className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-ui-subtle" />
                 <input
@@ -245,21 +285,24 @@ export function RolesTab() {
                           <h5 className="font-semibold text-sm text-ui-text">{group[lang]}</h5>
                           <p className="text-[11px] text-ui-subtle">{selectedCount}/{group.permissions.length} {isAr ? 'مفعّلة' : 'enabled'}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setGroup(currentRole, group.permissions, !groupAll)}
-                          className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
-                        >
-                          {groupAll ? (isAr ? 'إلغاء الكل' : 'Clear all') : (isAr ? 'تحديد الكل' : 'Select all')}
-                        </button>
+                        {canEditCurrent && (
+                          <button
+                            type="button"
+                            onClick={() => setGroup(currentRole, group.permissions, !groupAll)}
+                            className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                          >
+                            {groupAll ? (isAr ? 'إلغاء الكل' : 'Clear all') : (isAr ? 'تحديد الكل' : 'Select all')}
+                          </button>
+                        )}
                       </div>
                       <div className="divide-y divide-ui-border">
                         {group.permissions.map((perm) => (
-                          <label key={perm} className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-ui-page-alt/50">
+                          <label key={perm} className={`flex items-center justify-between gap-3 px-3 py-2.5 ${canEditCurrent ? 'cursor-pointer hover:bg-ui-page-alt/50' : 'cursor-default'}`}>
                             <span className="text-sm text-ui-muted">{PERMISSION_LABELS[perm]?.[lang] || perm}</span>
                             <input
                               type="checkbox"
                               checked={currentPermissions.includes(perm)}
+                              disabled={!canEditCurrent}
                               onChange={() => toggle(currentRole, perm)}
                               className="w-4 h-4 rounded border-ui-border text-brand-600 focus:ring-brand-500"
                             />
@@ -279,18 +322,22 @@ export function RolesTab() {
         </Card>
       )}
 
-      <p className="text-xs text-ui-subtle px-1">{isAr ? 'أي تغيير يتم حفظه في قاعدة البيانات ويُطبّق فورًا بدون إعادة تسجيل الدخول.' : 'Saved permission changes apply immediately without requiring a new login.'}</p>
+      <p className="text-xs text-ui-subtle px-1">{isAr ? 'أي تغيير مصرح به يتم حفظه في قاعدة البيانات ويُطبّق فورًا بدون إعادة تسجيل الدخول.' : 'Authorized permission changes are saved to the database and apply immediately without requiring a new login.'}</p>
 
       <Modal open={creating} onClose={() => setCreating(false)} title={isAr ? 'دور جديد' : 'New role'}>
         <div className="space-y-4">
           <Input label={isAr ? 'الرمز (بالإنجليزية)' : 'Code (English)'} value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value.replace(/\s+/g, '_').toLowerCase() })} placeholder="floor_supervisor" autoComplete="off" />
           <Input label={isAr ? 'الاسم (عربي)' : 'Name (Arabic)'} value={createForm.name_ar} onChange={(e) => setCreateForm({ ...createForm, name_ar: e.target.value })} />
           <Input label={isAr ? 'الاسم (إنجليزي)' : 'Name (English)'} value={createForm.name_en} onChange={(e) => setCreateForm({ ...createForm, name_en: e.target.value })} />
-          <Select label={isAr ? 'النطاق' : 'Scope'} value={createForm.scope} onChange={(e) => setCreateForm({ ...createForm, scope: e.target.value as RoleScope })}>
-            <option value="global">{isAr ? 'عام (كل الفروع الممنوحة)' : 'Global (all granted branches)'}</option>
-            <option value="branch">{isAr ? 'فرع محدد' : 'Branch-specific'}</option>
-          </Select>
-          {createForm.scope === 'branch' && (
+          {isPlatformAdmin ? (
+            <Select label={isAr ? 'النطاق' : 'Scope'} value={createForm.scope} onChange={(e) => setCreateForm({ ...createForm, scope: e.target.value as RoleScope })}>
+              <option value="global">{isAr ? 'عام (كل الفروع الممنوحة)' : 'Global (all granted branches)'}</option>
+              <option value="branch">{isAr ? 'فرع محدد' : 'Branch-specific'}</option>
+            </Select>
+          ) : (
+            <div className="rounded-lg bg-ui-page-alt p-3 text-sm text-ui-subtle">{isAr ? 'يمكنك إنشاء دور مخصص لفرع فقط.' : 'You can create branch-scoped roles only.'}</div>
+          )}
+          {(isPlatformAdmin ? createForm.scope === 'branch' : true) && (
             <Select label={t('branch')} value={createForm.branch_id} onChange={(e) => setCreateForm({ ...createForm, branch_id: e.target.value })}>
               <option value="">--</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
