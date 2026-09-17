@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, ChefHat, CheckCircle2, UtensilsCrossed, Volume2, VolumeX } from 'lucide-react';
+import { RefreshCw, ChefHat, CheckCircle2, UtensilsCrossed, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
@@ -43,21 +43,28 @@ function modifierText(value: unknown, ar: boolean): string {
   }
 }
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) return String((error as { message?: unknown }).message || 'KDS_LOAD_FAILED');
+  return error instanceof Error ? error.message : 'KDS_LOAD_FAILED';
+}
+
 export function KitchenDisplayPage() {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const canViewKds = can('pos.kds_view');
   const canUpdateKds = can('pos.kds_update');
   const [station, setStation] = useState('');
   const [items, setItems] = useState<KitchenQueueItem[]>([]);
   const [stations, setStations] = useState<KitchenStation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const prevCountRef = useRef(0);
 
   const loadStations = useCallback(async () => {
-    if (!branchFilter) {
+    if (!branchFilter || !canViewKds) {
       setStations([]);
       setStation('');
       return;
@@ -68,17 +75,19 @@ export function KitchenDisplayPage() {
       const allowed = (Array.isArray(data) ? data : []) as KitchenStation[];
       setStations(allowed);
       setStation((current) => current && allowed.some((s) => s.code === current) ? current : '');
-    } catch {
+    } catch (error) {
       setStations([]);
+      setLoadError(errorMessage(error));
     }
-  }, [branchFilter]);
+  }, [branchFilter, canViewKds]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (!branchFilter) {
+      if (!branchFilter || !canViewKds) {
         setItems([]);
         prevCountRef.current = 0;
+        setLoadError(!canViewKds ? 'POS_KDS_VIEW_REQUIRED' : 'BRANCH_REQUIRED');
         return;
       }
       const { data, error } = await supabase.rpc('get_kitchen_queue', {
@@ -90,12 +99,15 @@ export function KitchenDisplayPage() {
       if (soundEnabled && prevCountRef.current > 0 && newItems.length > prevCountRef.current) playBeep();
       prevCountRef.current = newItems.length;
       setItems(newItems);
-    } catch {
-      setItems([]);
+      setLoadError('');
+    } catch (error) {
+      // Never turn a KDS transport/permission failure into a fake empty queue.
+      // Keep the last known cards visible and surface the error so staff can retry.
+      setLoadError(errorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, station, soundEnabled]);
+  }, [branchFilter, station, soundEnabled, canViewKds]);
 
   const playBeep = () => {
     try {
@@ -115,10 +127,10 @@ export function KitchenDisplayPage() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    if (!branchFilter) return;
+    if (!branchFilter || !canViewKds) return;
     const unsubscribe = subscribePosRealtime({ branchId: branchFilter, onEvent: () => { void load(); }, debounceMs: 500 });
     return unsubscribe;
-  }, [branchFilter, load]);
+  }, [branchFilter, canViewKds, load]);
 
   useEffect(() => {
     const id = setInterval(() => { void load(); }, 30000);
@@ -144,18 +156,33 @@ export function KitchenDisplayPage() {
       <DesignPageHeader title={ar ? 'شاشة المطبخ' : 'Kitchen Display'} subtitle={ar ? 'الطلبات النشطة حسب المحطات المسموح بها للمستخدم' : 'Active orders for the stations assigned to this user'} />
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Select value={station} onChange={e => setStation(e.target.value)} className="min-w-0 flex-1 sm:w-44 sm:flex-none">
+          <Select value={station} onChange={e => setStation(e.target.value)} className="min-w-0 flex-1 sm:w-44 sm:flex-none" disabled={!canViewKds}>
             <option value="">{ar ? 'كل المحطات المسموح بها' : 'All Allowed Stations'}</option>
             {stations.filter(s => s.is_active).map(s => <option key={s.code} value={s.code}>{ar ? s.name_ar : s.name_en}</option>)}
           </Select>
-          <Button onClick={() => void load()} variant="outline"><RefreshCw className="h-4 w-4" /> {ar ? 'تحديث' : 'Refresh'}</Button>
+          <Button onClick={() => void load()} variant="outline" disabled={!canViewKds}><RefreshCw className="h-4 w-4" /> {ar ? 'تحديث' : 'Refresh'}</Button>
           <button onClick={() => setSoundEnabled(!soundEnabled)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-muted/10 transition" title={soundEnabled ? (ar ? 'كتم الصوت' : 'Mute') : (ar ? 'تشغيل الصوت' : 'Unmute')}>
             {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
           <span className="w-full text-xs text-ui-muted sm:w-auto sm:text-sm"><span className="me-1 inline-block h-2 w-2 rounded-full bg-ui-success animate-pulse" />{items.length} {ar ? 'طلب/محطة نشطة' : 'active order/station cards'}</span>
         </div>
 
-        {loading && !items.length && <div className="text-ui-muted py-8 text-center">{ar ? 'جاري التحميل...' : 'Loading...'}</div>}
+        {loadError && (
+          <div data-testid="kds-load-error" className="flex flex-col gap-3 rounded-2xl border border-ui-danger/30 bg-ui-danger/10 p-4 text-ui-danger sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-bold">{ar ? 'تعذر تحديث شاشة المطبخ' : 'Kitchen display could not refresh'}</p>
+                <p className="break-words text-xs opacity-80">{loadError}</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={!canViewKds || loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> {ar ? 'إعادة المحاولة' : 'Retry'}
+            </Button>
+          </div>
+        )}
+
+        {loading && !items.length && !loadError && <div className="text-ui-muted py-8 text-center">{ar ? 'جاري التحميل...' : 'Loading...'}</div>}
 
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {items.map(item => (
@@ -195,7 +222,7 @@ export function KitchenDisplayPage() {
           ))}
         </div>
 
-        {!loading && !items.length && <div className="text-center py-16 text-ui-muted"><ChefHat className="h-12 w-12 mx-auto mb-3 opacity-30" /><div className="text-lg">{ar ? 'لا توجد طلبات نشطة ضمن المحطات المسموح بها' : 'No active orders in your allowed stations'}</div></div>}
+        {!loading && !items.length && !loadError && <div className="text-center py-16 text-ui-muted"><ChefHat className="h-12 w-12 mx-auto mb-3 opacity-30" /><div className="text-lg">{ar ? 'لا توجد طلبات نشطة ضمن المحطات المسموح بها' : 'No active orders in your allowed stations'}</div></div>}
       </div>
     </DesignSurface>
   );
