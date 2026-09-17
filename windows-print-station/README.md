@@ -16,8 +16,11 @@ V1 is a standalone Windows printing system for `Premieros/johna-s`. It consumes 
 3. The job is marked `printing` **before** entering the Windows spooler boundary.
 4. After Windows accepts the document, state becomes `printed_pending_ack`.
 5. If cloud acknowledgement fails, only the acknowledgement is retried — the paper is not printed again.
-6. If the service/process restarts while a job is `printing`, that job becomes `needs_review`; it is never auto-reprinted because the physical outcome is ambiguous.
-7. Manual Retry for `needs_review` requires an explicit warning/confirmation in the desktop UI.
+6. Only the Windows Service performs crash recovery. Opening the desktop monitor never mutates active `printing` jobs.
+7. If the service restarts while a job is `printing`, that job becomes `needs_review`; it is never auto-reprinted because the physical outcome is ambiguous.
+8. Failed cloud jobs can be reclaimed after backoff; a fresh cloud claim resets only safe local failed/received states and never resets `printed_pending_ack`, `printing`, `completed`, or `needs_review`.
+9. Manual Retry does not print immediately. It marks the local job as approved for retry and waits for a fresh cloud claim before printing.
+10. Station routing supports the common `kitchen`, `bar`, `cashier`, and `receipt` routes plus arbitrary exact station codes through custom `station_code=Windows Printer Name` mappings.
 
 ## Installation
 
@@ -33,7 +36,8 @@ V1 is a standalone Windows printing system for `Premieros/johna-s`. It consumes 
    - Supabase URL (defaults to the approved project `azzdesuowpdcoflmyezn`).
    - Public anon key used by the existing web application.
    - Branch UUID.
-   - Map station codes (`kitchen`, `bar`, `cashier`, `receipt`) to installed Windows printers.
+   - Map the common station codes (`kitchen`, `bar`, `cashier`, `receipt`) to installed Windows printers.
+   - Add any branch-specific station codes (including Arabic/custom codes) in the custom mapping box using `station_code=Windows Printer Name`.
 6. Sign in once using an authorized application user. The password is not stored; only the refresh token is persisted encrypted with Windows DPAPI.
 7. Use **Test Print** and verify the dashboard heartbeat.
 
