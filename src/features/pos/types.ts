@@ -29,6 +29,24 @@ export interface KitchenSendItem {
   modifiers?: ProductModifierSnapshot[] | null;
 }
 
+
+export type KitchenStationDispatchState = 'queued' | 'local_printed' | 'failed';
+
+export interface KitchenStationDispatchResult {
+  station_code: string;
+  item_count: number;
+  state: KitchenStationDispatchState;
+  detail?: string;
+  dispatch?: KitchenStationDispatchSummary;
+}
+
+export interface KitchenStationDispatchSummary {
+  status: 'not_needed' | 'complete' | 'partial' | 'failed';
+  stations: KitchenStationDispatchResult[];
+  failed_stations: string[];
+  missing_station_items: number;
+}
+
 export interface KitchenSendResult {
   success: boolean;
   order_id?: string;
