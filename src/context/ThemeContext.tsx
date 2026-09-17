@@ -13,6 +13,7 @@ export function hasLockedThemePreference(): boolean {
 interface ThemeContextValue {
   theme: Theme;
   setTheme: (t: Theme) => void;
+  applySystemTheme: (t: Theme) => void;
   toggleTheme: () => void;
   uiTheme: string;
   setUiTheme: (key: string) => void;
@@ -51,6 +52,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(t);
   }, [lockThemePreference]);
 
+  const applySystemTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+  }, []);
+
   const toggleTheme = useCallback(() => {
     lockThemePreference();
     setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
@@ -67,8 +72,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [lockThemePreference]);
 
   const value = useMemo(
-    () => ({ theme, setTheme, toggleTheme, uiTheme, setUiTheme }),
-    [theme, setTheme, toggleTheme, uiTheme, setUiTheme]
+    () => ({ theme, setTheme, applySystemTheme, toggleTheme, uiTheme, setUiTheme }),
+    [theme, setTheme, applySystemTheme, toggleTheme, uiTheme, setUiTheme]
   );
 
   return (
