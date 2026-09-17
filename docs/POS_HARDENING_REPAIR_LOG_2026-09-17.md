@@ -1,6 +1,6 @@
 # POS HARDENING REPAIR LOG — 2026-09-17
 
-الحالة: ACTIVE — final verification pending
+الحالة: FULL VERIFY GREEN — code scope verified; PR remains Draft / unmerged
 
 الفرع: `development/pos-hardening-20260916`
 
@@ -106,34 +106,58 @@ PR: `#170`
   - `order.kitchen_sent_at` موجود، أي حدث أول kitchen send.
 - Contract: `tests/unit/posTablesPanelPayGateContract.test.ts`.
 
+### 7) Final Verify regression repairs
+
+خلال Full Verify ظهرت فروق عقدية فعلية وتم إصلاحها بدون تخفيف RLS أو الاختبارات:
+
+- normal authenticated `create_order` يرفض صراحة spoof لـ `p_cashier_id` عبر `ORDER_OPERATOR_ASSIGNMENT_FORBIDDEN`.
+- `process_sale` يتحقق مبكرًا من branch identity للطلب المرتبط ويعيد `BRANCH_MISMATCH`/`ORDER_NOT_FOUND` بشكل صريح.
+- non-linked sale يحتفظ بـ `p_discount_type` الأصلي، بينما linked sent-only settlement يستخدم amount semantics المشتقة من preview.
+- operator ownership guard في `process_sale` يعيد `ORDER_OPERATOR_REQUIRED` قبل المعالجة المالية.
+- sent-line mutation detail يثبت أن التغيير يتطلب controlled void/approval boundary.
+- sent-only full-payment contract يستخدم `FULL_PAYMENT_REQUIRED_FOR_SENT_ITEMS`.
+- modifier UUID ordering تم تطبيعه server-side قبل مقارنة settlement payload حتى لا يرفض نفس مجموعة modifiers بسبب اختلاف الترتيب فقط.
+- Browser Smoke تم تحديثه ليتبع العقد النهائي: Kitchen Send أولًا ثم Pay.
+- تم إصلاح race حقيقي في الواجهة: نجاح `send_to_kitchen` الموثق server-side يوفّر session-local send state حتى تصل صفوف Realtime، لذلك Pay/Print لا يظلان مخفيين بعد نجاح الإرسال بسبب تأخر Realtime فقط.
+- E2E mock أصبح يحاكي persisted order/items/kitchen sends وauthoritative settlement preview بدل نجاح RPC ناقص الحالة.
+
 ## حالة البنود الأصلية
 
 - Cancel server authority: VERIFIED (`set_order_status` يفرض `pos.cancel_order`, branch, operator, sent-item controlled void).
-- Full-order transfer: IMPLEMENTED, awaiting final CI.
-- Sent-only payable/printable: IMPLEMENTED, awaiting final CI/DB integration.
+- Full-order transfer: VERIFIED — Full Verify Green.
+- Sent-only payable/printable: VERIFIED — Full Verify Green.
 - Kitchen concurrency/audit: VERIFIED + contract locked.
 - Warehouse authority: VERIFIED + contract locked.
-- create/update server permissions: IMPLEMENTED, awaiting final CI/DB integration.
-- View-only / Pay-only: UI edit gates موجودة + server create/edit hardened + Pay gates updated; final regression verification pending.
+- create/update server permissions: VERIFIED — Full Verify Green.
+- View-only / Pay-only: VERIFIED ضمن Permission-First regressions؛ edit gates منفصلة عن payment gate.
+- Browser send→pay flow: VERIFIED بعد إزالة Realtime race.
 
-## CI
+## Full Verify — GREEN
 
-Latest intended verification head at time of this log:
-`3805320444c9d4a650119d82860974b1d37e974c`
+Code HEAD verified:
+`202f0b84af2ef0af468428f470aab866dd39fc56`
 
-Workflow: `Verify main` run #1600 (`35186751043`).
+Workflow: `Verify main` run #1626 (`35198974446`).
 
-Status at log creation: IN PROGRESS.
+النتيجة:
+- Locked Supabase identity ✅
+- Frontend API contract ✅
+- Lint ✅
+- TypeScript ✅
+- Typecheck application + tests ✅
+- Unit ✅
+- Build ✅
+- Fresh canonical DB migrations ✅
+- Schema verification ✅
+- Integration / Security / RLS ✅
+- Browser Smoke / Playwright ✅
 
-لا يُعتبر هذا المسار مغلقًا ولا PR جاهزًا للدمج قبل نجاح:
-- verify
-- fresh DB / migrations
-- integration/security/RLS
-- browser smoke
+PR #170 ظل Draft/Open وغير مدمج بعد نجاح التحقق، انتظارًا لأمر صريح بالدمج.
 
 ## Production
 
 - لم يتم تطبيق أي migration من هذه الدفعة على Production.
-- Production DB `azzdesuowpdcoflmyezn` استُخدمت للقراءة/التدقيق فقط.
+- Production DB `azzdesuowpdcoflmyezn` لم يتم تعديلها أثناء هذا المسار.
 - لا يوجد تغيير في Print Agent.
 - لا يوجد تغيير في mobile app branch.
+- لا يوجد تعديل مباشر على `main`.
