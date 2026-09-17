@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ShoppingCart, Printer } from 'lucide-react';
+import { ShoppingCart, Printer, Barcode as BarcodeIcon } from 'lucide-react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -358,50 +358,74 @@ export function PosWorkspacePage() {
         let catq = supabase.from('categories').select('*');
         let areaq = supabase.from('dining_areas').select('*');
         const productQuery = fixedBranch
-          ? supabase.from('products').select('*').eq('branch_id', fixedBranch).eq('is_active', true)
-          : Promise.resolve({ data: [] as Product[], error: null });
+          ? supabase.from('products').select('*, category:categories(*)').eq('branch_id', fixedBranch).eq('is_active', true)
+          : supabase.from('products').select('*, category:categories(*)').eq('is_active', true).order('name');
         if (fixedBranch) {
           cusq = cusq.eq('branch_id', fixedBranch);
           catq = catq.eq('branch_id', fixedBranch);
           areaq = areaq.eq('branch_id', fixedBranch);
-        } else {
-          cusq = cusq.eq('id', '00000000-0000-0000-0000-000000000000');
-          catq = catq.eq('id', '00000000-0000-0000-0000-000000000000');
-          areaq = areaq.eq('id', '00000000-0000-0000-0000-000000000000');
         }
-        const [prodRes, cusRes, setRes, brRes, catRes, areaRes] = await Promise.all([
+        const [pRes, cRes, sRes, bRes, catRes, aRes] = await Promise.allSettled([
           productQuery,
-          cusq,
+          cusq.order('name'),
           supabase.from('settings').select('*').maybeSingle(),
-          supabase.from('branches').select('*').order('name'),
+          supabase.from('branches').select('*').eq('is_active', true).order('name'),
           catq.order('name'),
-          areaq.order('sort_order'),
+          areaq.order('name'),
         ]);
-
         if (cancelled) return;
+        
         const errors: string[] = [];
-        if (prodRes.error) errors.push(`Products: ${prodRes.error.message}`);
-        if (cusRes.error) errors.push(`Customers: ${cusRes.error.message}`);
-        if (setRes.error) errors.push(`Settings: ${setRes.error.message}`);
-        if (brRes.error) errors.push(`Branches: ${brRes.error.message}`);
-        if (catRes.error) errors.push(`Categories: ${catRes.error.message}`);
-        if (areaRes.error) errors.push(`Dining areas: ${areaRes.error.message}`);
+        let loadedProds: Product[] = [];
+        let loadedCats: Category[] = [];
+        let loadedCusts: Customer[] = [];
+        let loadedSettings: Settings | null = null;
+        let loadedBranches: Branch[] = [];
 
-        const loadedProds = (prodRes.data || []) as Product[];
-        const loadedCus = (cusRes.data || []) as Customer[];
-        const loadedSettings = setRes.data as Settings | null;
-        const loadedBranches = (brRes.data || []) as Branch[];
-        const loadedCategories = (catRes.data || []) as Category[];
-        const loadedAreas = (areaRes.data || []) as DiningArea[];
-        setProducts(loadedProds);
-        setCustomers(loadedCus);
-        setSettings(loadedSettings);
-        setBranches(loadedBranches);
-        setCategories(loadedCategories);
-        setDiningAreas(loadedAreas);
-        if (fixedBranch) await loadStock(fixedBranch);
-        await cachePosData({ products: loadedProds, customers: loadedCus, settings: loadedSettings, branches: loadedBranches, categories: loadedCategories, branchId: fixedBranch || undefined, rawShortageOnly: rawShortageMap });
-        if (fixedBranch) offlinePosManager.setCatalogCache(fixedBranch, { products: loadedProds, categories: loadedCategories });
+        if (pRes.status === 'fulfilled' && pRes.value.error) errors.push('products: ' + pRes.value.error.message);
+        else if (pRes.status === 'fulfilled') {
+          loadedProds = (pRes.value.data as Product[]) || [];
+          setProducts(loadedProds);
+        }
+
+        if (cRes.status === 'fulfilled' && cRes.value.error) errors.push('customers: ' + cRes.value.error.message);
+        else if (cRes.status === 'fulfilled') {
+          loadedCusts = (cRes.value.data as Customer[]) || [];
+          setCustomers(loadedCusts);
+        }
+
+        if (sRes.status === 'fulfilled' && sRes.value.error) errors.push('settings: ' + sRes.value.error.message);
+        else if (sRes.status === 'fulfilled') {
+          loadedSettings = sRes.value.data as Settings;
+          setSettings(loadedSettings);
+        }
+
+        if (bRes.status === 'fulfilled' && bRes.value.error) errors.push('branches: ' + bRes.value.error.message);
+        else if (bRes.status === 'fulfilled') {
+          loadedBranches = (bRes.value.data as Branch[]) || [];
+          setBranches(loadedBranches);
+        }
+
+        if (catRes.status === 'fulfilled' && catRes.value.error) errors.push('categories: ' + catRes.value.error.message);
+        else if (catRes.status === 'fulfilled') {
+          loadedCats = (catRes.value.data as Category[]) || [];
+          setCategories(loadedCats);
+        }
+
+        if (aRes.status === 'fulfilled' && aRes.value.data) setDiningAreas((aRes.value.data as DiningArea[]) || []);
+
+        // Cache online data for offline use
+        if (loadedProds.length > 0) {
+          offlinePosManager.saveCatalogCache(fixedBranch || 'default', loadedProds, loadedCats);
+          void cachePosData({
+            branchId: fixedBranch || 'default',
+            products: loadedProds,
+            categories: loadedCats,
+            customers: loadedCusts,
+            settings: loadedSettings,
+            branches: loadedBranches,
+          });
+        }
 
         // If online query had errors or zero products, attempt offline fallback gracefully
         if (errors.length > 0 || loadedProds.length === 0) {
@@ -747,7 +771,9 @@ export function PosWorkspacePage() {
         </div>
       )}
 
+      {/* Main Split-Screen Workspace */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Tables-first landing stays available on phones, tablets, and desktop. */}
         <div className="flex shrink-0 h-full">
           <PosTablesSidebar
             tables={tables}
@@ -789,6 +815,7 @@ export function PosWorkspacePage() {
           />
         </div>
 
+        {/* Center: Product Browser with Fast Order Header Bar */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-ui-page">
           <PosOrderHeaderBar
             orderNumber={pos.activeOrderNumber}
@@ -852,6 +879,7 @@ export function PosWorkspacePage() {
           </div>
         </div>
 
+        {/* Right Side: Cart / Order Panel / Checkout */}
         <div className="hidden lg:flex w-[380px] xl:w-[410px] 2xl:w-[440px] flex-shrink-0 flex-col border-s border-ui-border bg-ui-surface shadow-ui-md">
           {rightPanel}
         </div>
@@ -918,7 +946,6 @@ export function PosWorkspacePage() {
         onClose={() => setPanel(null)}
         tables={tables}
         ordersByTable={ordersByTable}
-        kitchenSendsByOrder={kitchenSendsByOrder}
         currency={pos.effCurrency}
         onResume={(o) => openOrderWorkspace(o.id)}
         onPay={(o) => openOrderWorkspace(o.id, { pay: true })}
@@ -951,64 +978,77 @@ export function PosWorkspacePage() {
           onResume={handleWizardResume}
           onActiveOrders={() => {
             setStartStep(null);
+            setPreselectedTableId(null);
             setOrdersCategory('all');
             setPanel('orders');
           }}
         />
       )}
 
-      <ProductConfigModal
-        open={!!configProduct || !!configItem}
-        product={configProduct || configItem?.product || null}
-        initialItem={configItem}
-        currency={pos.effCurrency}
-        onClose={() => { setConfigProduct(null); setConfigItem(null); }}
-        onConfirm={(item) => {
-          if (configItem) {
-            pos.replaceCartLine(cartLineKey(configItem), item);
-          } else if (configProduct) {
-            pos.addToCart(item.product, item.quantity, item.modifiers, item.discount_amount, item.modifier_option_ids, item.unit_price, item.item_note);
-          }
-          setConfigProduct(null);
-          setConfigItem(null);
-        }}
-      />
+      {/* Product Config Modal */}
+      {(configProduct || configItem) && (
+        <ProductConfigModal
+          isOpen={!!(configProduct || configItem)}
+          onClose={() => {
+            setConfigProduct(null);
+            setConfigItem(null);
+          }}
+          product={configProduct || configItem?.product || null}
+          initialItem={configItem}
+          currency={pos.effCurrency}
+          onConfirm={(item) => {
+            if (configItem) {
+              pos.replaceCartLine(cartLineKey(configItem), item);
+            } else {
+              pos.addToCart(
+                item.product,
+                item.quantity,
+                item.modifiers || [],
+                item.discount_amount,
+                item.modifier_option_ids || [],
+                item.unit_price,
+                item.item_note,
+              );
+            }
+            setConfigProduct(null);
+            setConfigItem(null);
+          }}
+          canDiscount={perms.canDiscount}
+        />
+      )}
 
+      {/* Customer Quick Modal */}
       <CustomerQuickModal
-        open={customerModalOpen}
+        isOpen={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
-        branchId={effectiveBranch}
-        customerId={pos.customerId}
         customers={customers}
-        onCustomer={(id) => pos.setCustomerId(id)}
-      />
-
-      <TableSelectModal
-        open={tableModalOpen}
-        onClose={() => setTableModalOpen(false)}
-        areas={diningAreas}
-        tables={tables}
-        ordersByTable={ordersByTable}
-        selectedTableId={pos.tableId}
-        onSelect={(table) => {
-          pos.setTableId(table.id);
-          pos.setOrderType('dine_in');
-          setTableModalOpen(false);
+        selectedCustomerId={pos.customerId}
+        onSelectCustomer={(c) => pos.setCustomerId(c.id)}
+        onCustomerCreated={(c) => {
+          setCustomers((prev) => [c, ...prev]);
+          pos.setCustomerId(c.id);
         }}
-      />
-
-      <ShiftModal
-        open={shiftModalOpen}
-        onClose={() => setShiftModalOpen(false)}
         branchId={effectiveBranch}
-        branchName={currentBranchName}
-        activeShift={activeShift}
-        onChanged={reloadShift}
       />
 
+      {/* Table Select Modal */}
+      <TableSelectModal
+        isOpen={tableModalOpen}
+        onClose={() => setTableModalOpen(false)}
+        tables={tables}
+        areas={diningAreas}
+        selectedTableId={pos.activeTable?.id || null}
+        onSelectTable={(table) => pos.setTableId(table.id)}
+      />
+
+      {/* Transfer Order Modal */}
       <TransferOrderModal
         open={transferModalOpen}
-        onClose={() => setTransferModalOpen(false)}
+        onClose={() => {
+          setTransferModalOpen(false);
+          setTransferOrder(null);
+          setTransferSourceTable(null);
+        }}
         order={transferOrder}
         sourceTable={transferSourceTable}
         tables={tables}
@@ -1017,51 +1057,50 @@ export function PosWorkspacePage() {
         onConfirmTransfer={handleConfirmTransfer}
       />
 
+      {/* Void Sent Item Modal */}
       <VoidItemModal
         open={voidModalOpen}
-        onClose={() => { setVoidModalOpen(false); setVoidItem(null); }}
+        onClose={() => {
+          setVoidModalOpen(false);
+          setVoidItem(null);
+        }}
         item={voidItem}
-        defaultQuantity={voidSentQty}
-        onConfirm={handleConfirmVoid}
+        sentQty={voidSentQty}
+        onConfirmVoid={handleConfirmVoid}
       />
 
-      <Modal
-        open={!!pos.receiptSaleId}
-        onClose={() => pos.closeReceipt()}
-        title={t('receipt')}
-        size="md"
-        footer={(
-          <div className="flex justify-end gap-2">
-            <button onClick={() => pos.closeReceipt()} className="px-4 py-2 rounded-lg bg-ui-page-alt hover:bg-ui-border text-ui-text text-sm font-medium">{t('close')}</button>
+      {/* Shift Modal */}
+      <ShiftModal
+        isOpen={shiftModalOpen}
+        onClose={() => setShiftModalOpen(false)}
+        branchId={effectiveBranch}
+        activeShift={activeShift}
+        currency={pos.effCurrency}
+        onShiftClosed={() => {
+          reloadShift();
+        }}
+      />
+
+      {/* Receipt Modal */}
+      <Modal open={!!pos.receiptSaleId} onClose={pos.closeReceipt} title={t('printReceipt')} size="sm">
+        {pos.lastReceipt && (
+          <div className="space-y-4">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-ui-success/15 ring-2 ring-ui-border-strong flex items-center justify-center mx-auto mb-3">
+                <BarcodeIcon className="w-8 h-8 text-ui-success" />
+              </div>
+              <p className="text-base font-semibold text-ui-text">{t('saleCompleted')}</p>
+              <p className="text-sm text-ui-muted mt-1">{pos.lastReceipt.invoice}</p>
+            </div>
             {perms.canPrint && (
               <button
-                type="button"
                 data-testid="pos-receipt-print"
                 onClick={() => void pos.printReceipt()}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg text-sm font-bold"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
               >
-                <Printer className="w-4 h-4" />
-                {t('print')}
+                <Printer className="w-5 h-5" /> {t('printReceipt')}
               </button>
             )}
-          </div>
-        )}
-      >
-        {pos.lastReceipt && (
-          <div className="space-y-4 text-sm text-ui-text">
-            <div className="text-center font-semibold">{pos.lastReceipt.invoice}</div>
-            <div className="border rounded p-3 bg-ui-page-alt space-y-2">
-              {pos.lastReceipt.items.map((item, idx) => (
-                <div key={`${item.name}-${idx}`} className="flex justify-between">
-                  <span>{item.name} × {item.qty}</span>
-                  <span>{formatCurrency(item.total, pos.effCurrency, lang)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between font-semibold">
-              <span>{t('total')}</span>
-              <span>{formatCurrency(pos.lastReceipt.total, pos.effCurrency, lang)}</span>
-            </div>
           </div>
         )}
       </Modal>
