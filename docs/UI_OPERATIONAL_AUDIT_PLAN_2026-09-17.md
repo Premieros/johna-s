@@ -23,14 +23,14 @@ Make the application shell and key operational UI fully permission-aware, direct
 ## Staged plan
 
 ### Phase 0 — Baseline and documentation
-Status: IN PROGRESS
+Status: COMPLETE
 
 - Freeze baseline SHA.
 - Create this plan and a separate execution log.
 - Record audit findings and acceptance criteria.
 
 ### Phase 1 — Permission-aware application shell
-Status: PENDING
+Status: COMPLETE
 
 - Hide/disable Active Orders entry when `floor_plan.view` is unavailable.
 - Stop the user identity control from acting as an unconditional Settings shortcut.
@@ -43,7 +43,7 @@ Acceptance:
 - Existing permitted users retain access.
 
 ### Phase 2 — RTL/LTR shell correctness
-Status: PENDING
+Status: COMPLETE
 
 - Arabic sidebar remains right-aligned.
 - English sidebar becomes left-aligned.
@@ -55,7 +55,7 @@ Acceptance:
 - Mobile drawer enters/exits from the correct side.
 
 ### Phase 3 — Permission-aware dashboard navigation
-Status: PENDING
+Status: IN PROGRESS
 
 - Audit clickable dashboard metrics/actions.
 - Do not present links to pages the current user cannot open.
