@@ -101,6 +101,7 @@ export function CurrentOrderPanel({
   onDiscountAmountChange,
   onUpdateQty,
   onRemove,
+  onAddItem,
   onConfigureItem,
   onOpenTableModal,
   onVoidItem,
@@ -201,7 +202,7 @@ export function CurrentOrderPanel({
             </label>
           )}
 
-          {canDiscount && (
+          {canDiscount && !empty && (
             <button
               data-testid="pos-action-discount"
               type="button"
@@ -255,7 +256,7 @@ export function CurrentOrderPanel({
           </div>
         )}
 
-        {showDiscount && (
+        {showDiscount && !empty && (
           <div data-testid="pos-discount-editor" className="mt-2 rounded-xl border border-ui-border bg-ui-page-alt p-2">
             <div className="flex gap-2">
               <button data-testid="pos-discount-percent" type="button" onClick={() => onDiscountTypeChange('percent')} className={`flex-1 rounded-lg p-2 text-xs font-black ${discountType === 'percent' ? 'bg-ui-primary text-ui-primary-fg' : 'bg-ui-surface text-ui-muted'}`}>%</button>
@@ -268,12 +269,23 @@ export function CurrentOrderPanel({
         {orderNotes && <p className="mt-2 truncate rounded-lg bg-ui-page-alt px-2 py-1 text-[10px] font-bold text-ui-subtle">{orderNotes}</p>}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+      <div className={`min-h-0 flex-1 overflow-y-auto ${empty ? 'p-3' : 'p-2.5'}`}>
         {empty ? (
-          <div className="flex h-full flex-col items-center justify-center text-center text-ui-subtle">
-            <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-ui-page-alt"><ShoppingCart className="h-8 w-8 opacity-30" /></div>
-            <p className="text-sm font-black">{t('emptyCart')}</p>
-            <p className="mt-1 text-[10px] font-bold">{isAr ? 'اختر منتجًا من القائمة' : 'Choose a product from the catalog'}</p>
+          <div data-testid="pos-empty-cart-state" className="rounded-2xl border border-dashed border-ui-border bg-ui-page-alt/60 px-4 py-5 text-center text-ui-subtle">
+            <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-ui-surface"><ShoppingCart className="h-5 w-5 opacity-40" /></div>
+            <p className="text-sm font-black text-ui-text">{t('emptyCart')}</p>
+            <p className="mt-1 text-[10px] font-bold">{isAr ? 'اختر منتجًا من القائمة لبدء الطلب' : 'Choose a product to start the order'}</p>
+            {onAddItem && perms.canEditOrder && (
+              <button
+                type="button"
+                data-testid="pos-empty-cart-add-item"
+                onClick={onAddItem}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-ui-primary px-3 py-2 text-[11px] font-black text-ui-primary-fg shadow-ui-xs transition hover:bg-ui-primary-hover active:scale-95"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {isAr ? 'إضافة صنف' : 'Add item'}
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -334,13 +346,15 @@ export function CurrentOrderPanel({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-ui-border p-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-ui-page-alt p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('subtotal')}</p><p className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(subtotal, currency, lang)}</p></div>
-          <div className="rounded-xl bg-ui-page-alt p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('discount')}</p><p data-testid="pos-discount-value" className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(discountValue, currency, lang)}</p></div>
-          <div className="rounded-xl bg-ui-primary-soft p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('total')}</p><p data-testid="pos-total-value" className="mt-0.5 truncate text-sm font-black text-ui-accent">{formatCurrency(total, currency, lang)}</p></div>
+      {!empty && (
+        <div className="shrink-0 border-t border-ui-border p-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-ui-page-alt p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('subtotal')}</p><p className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(subtotal, currency, lang)}</p></div>
+            <div className="rounded-xl bg-ui-page-alt p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('discount')}</p><p data-testid="pos-discount-value" className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(discountValue, currency, lang)}</p></div>
+            <div className="rounded-xl bg-ui-primary-soft p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('total')}</p><p data-testid="pos-total-value" className="mt-0.5 truncate text-sm font-black text-ui-accent">{formatCurrency(total, currency, lang)}</p></div>
+          </div>
         </div>
-      </div>
+      )}
 
       {perms.canSplitOrder && (
         <TransferItemModal
