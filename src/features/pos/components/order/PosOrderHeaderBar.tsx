@@ -78,6 +78,7 @@ export function PosOrderHeaderBar({
 
   const hasSent = kitchenSends.length > 0;
   const canPrintSentReceipt = hasSent && canPrintReceipt;
+  const kitchenActionBusy = kitchenSending || completing;
 
   return (
     <div data-testid="pos-top-action-bar" className="flex flex-wrap items-center justify-between gap-2 border-b border-ui-border bg-ui-page px-3 py-2 text-xs select-none">
@@ -164,11 +165,18 @@ export function PosOrderHeaderBar({
             data-testid="pos-action-send-kitchen"
             type="button"
             onClick={onSendKitchen}
-            disabled={kitchenSending}
+            disabled={kitchenActionBusy}
+            aria-busy={kitchenActionBusy}
             className="flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-1.5 font-black text-xs text-white transition hover:bg-amber-600 active:scale-95 shadow-ui-xs shadow-amber-500/20 disabled:cursor-wait disabled:opacity-50"
           >
             <ChefHat className="h-3.5 w-3.5" />
-            <span>{kitchenSending ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : hasSent ? (isAr ? 'إرسال الجديد' : 'Send New') : (isAr ? 'إرسال للمطبخ' : 'Kitchen')}</span>
+            <span>{kitchenSending
+              ? (isAr ? 'جارٍ الإرسال...' : 'Sending...')
+              : completing
+                ? (isAr ? 'جارٍ حفظ الطلب...' : 'Saving order...')
+                : hasSent
+                  ? (isAr ? 'إرسال الجديد' : 'Send New')
+                  : (isAr ? 'إرسال للمطبخ' : 'Kitchen')}</span>
           </button>
         )}
 
