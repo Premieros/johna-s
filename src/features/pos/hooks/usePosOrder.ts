@@ -258,7 +258,11 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
     }
 
-    if (!base.activeOrderId) return base.completeSale();
+    if (!base.activeOrderId) {
+      setSettlementReceipt(null);
+      setSettlementReceiptSaleId(null);
+      return base.completeSale();
+    }
     if (!input.branchId || !input.activeShift?.id) {
       show(isAr ? 'يجب اختيار فرع وفتح وردية قبل التحصيل' : 'Select a branch and open a shift before settlement', 'error');
       return false;
@@ -382,6 +386,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     lastReceipt: settlementReceipt || base.lastReceipt,
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
     closeReceipt: () => {
+      setSettlementReceipt(null);
       setSettlementReceiptSaleId(null);
       base.closeReceipt();
     },
