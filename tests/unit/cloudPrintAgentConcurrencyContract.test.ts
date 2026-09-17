@@ -46,6 +46,7 @@ describe('cloud print agent concurrency contract', () => {
     const cloud = read('src/features/pos/services/cloudPrint.ts');
     const printing = read('src/features/pos/utils/printing.ts');
     const kitchen = read('src/features/pos/services/kitchen.ts');
+    const dispatch = read('src/features/pos/services/kitchenDispatch.ts');
     const securityMigration = read('supabase/migrations/20260911232000_cloud_print_agent.sql');
     const receiptRetry = read('supabase/migrations/20260912003000_cloud_print_receipt_retry_idempotency.sql');
 
@@ -56,8 +57,9 @@ describe('cloud print agent concurrency contract', () => {
     expect(printing.indexOf('const cloud = await enqueueCloudReceiptPrint')).toBeLessThan(printing.indexOf('const routes = getLocalPrinterRoutes();'));
 
     expect(kitchen).toContain("('send_to_kitchen'");
-    expect(kitchen).toContain('await enqueueCloudKitchenPrintJobs');
-    expect(kitchen.indexOf("('send_to_kitchen'")).toBeLessThan(kitchen.indexOf('await enqueueCloudKitchenPrintJobs'));
+    expect(kitchen).toContain('await dispatchKitchenStations');
+    expect(kitchen.indexOf("('send_to_kitchen'")).toBeLessThan(kitchen.indexOf('await dispatchKitchenStations'));
+    expect(dispatch).toContain('await enqueueCloudKitchenPrintJobs');
 
     for (const forbidden of ['send_to_kitchen(', 'process_sale', 'deduct_sale_unit_inventory(', 'payment_transactions']) {
       expect(receiptRetry).not.toContain(forbidden);
