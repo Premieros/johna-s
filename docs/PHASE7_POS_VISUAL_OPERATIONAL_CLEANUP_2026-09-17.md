@@ -38,7 +38,7 @@ Verification run:
 - GitHub Actions `Verify main` run #1669: verify ✅, db/integration/RLS ✅, browser smoke ✅.
 
 ### 7B — Table grid clipping and responsive width
-Status: IMPLEMENTED / VERIFYING
+Status: COMPLETE / CI GREEN
 
 Root cause confirmed:
 - Tables landing reserved `100vw` while the desktop order panel simultaneously reserved 380/410/440px.
@@ -52,28 +52,34 @@ Implemented:
   - `2xl`: `calc(100vw - 440px)`
 - Replaced fixed 6/8/10-column desktop grid with `auto-fit` + `minmax(150px, 1fr)` so columns adapt to actual available width.
 - Added stable `data-testid="pos-table-grid"`.
+- Occupied-table operator identity is displayed in its own readable row.
 
-Regression test:
+Regression tests:
 - `tests/unit/posTablesResponsiveLayout.test.ts`
+- `tests/unit/posHeaderAndOperatorVisualContract.test.ts`
 
-Acceptance:
-- No partially clipped first/last table card.
-- Grid responds to available center-panel width.
-- RTL and LTR both supported through the existing logical-direction shell.
-- Browser smoke must remain green.
+Verification run:
+- GitHub Actions `Verify main` run #1676: verify ✅, db/integration/RLS ✅, browser smoke ✅.
 
 ### 7C — Empty order panel / header density
-Status: IN PROGRESS
+Status: IMPLEMENTED / VERIFYING
 
-Acceptance:
-- Empty cart does not consume excessive operational workspace.
-- Print action has a coherent disabled/hidden placement when no order exists.
-- Header remains functional with lower visual density.
-- Assigned-user identity remains readable on occupied tables.
+Implemented:
+- Empty cart is now a compact dashed card instead of a full-height centered void.
+- Empty state exposes an explicit Add item action using the existing item-focus callback.
+- Discount controls and subtotal/discount/total footer are hidden while the cart is empty.
+- Print is hidden until there is a sent, printable receipt instead of appearing as a disabled floating action.
+- Header counters remain functional but use compact icon + count presentation.
+- Online/time/user detail move to wider breakpoints to reduce desktop crowding.
+- No print execution path, order logic, stock logic, permission contract, RLS, schema, or Production behavior changed.
+
+Regression test:
+- `tests/unit/posEmptyCartVisualContract.test.ts`
 
 ### 7D — Full regression verification
-Status: PENDING
+Status: PENDING FINAL HEAD VERIFICATION
 
+Required on final HEAD:
 - Lint
 - Typecheck
 - Unit tests
