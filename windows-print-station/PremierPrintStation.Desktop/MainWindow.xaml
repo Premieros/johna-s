@@ -116,12 +116,16 @@
 
             <GroupBox Grid.Row="2" Header="توجيه المحطات إلى الطابعات" Padding="14" Margin="0,0,0,14">
               <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <TextBlock Text="kitchen" VerticalAlignment="Center"/><ComboBox Grid.Column="1" x:Name="KitchenPrinterBox" Margin="6"/>
                 <TextBlock Grid.Row="1" Text="bar" VerticalAlignment="Center"/><ComboBox Grid.Row="1" Grid.Column="1" x:Name="BarPrinterBox" Margin="6"/>
                 <TextBlock Grid.Row="2" Text="cashier" VerticalAlignment="Center"/><ComboBox Grid.Row="2" Grid.Column="1" x:Name="CashierPrinterBox" Margin="6"/>
                 <TextBlock Grid.Row="3" Text="receipt" VerticalAlignment="Center"/><ComboBox Grid.Row="3" Grid.Column="1" x:Name="ReceiptPrinterBox" Margin="6"/>
+                <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Margin="6,10,6,0">
+                  <TextBlock Text="محطات إضافية (سطر لكل محطة بالشكل station_code=Windows Printer Name)" Foreground="#64748B" Margin="0,0,0,5"/>
+                  <TextBox x:Name="CustomMappingsBox" AcceptsReturn="True" MinHeight="90" VerticalScrollBarVisibility="Auto" FontFamily="Consolas"/>
+                </StackPanel>
               </Grid>
             </GroupBox>
 
