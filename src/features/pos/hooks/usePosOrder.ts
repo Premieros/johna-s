@@ -1,9 +1,14 @@
 import { useMemo, useState, useCallback } from 'react';
 import { supabase } from '@/api';
+import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
-import { cartToItems } from '../utils/cart';
+import { cartToItems, type ItemPayload } from '../utils/cart';
 import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
+import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/settlementPreview';
+import { buildReceiptHtml, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { ORDER_TYPE_KEY } from '../utils/orderTypes';
+import { usePosPermissions } from './usePosPermissions';
 import {
   usePosOrder as usePosOrderBase,
   type ActiveShiftInfo,
@@ -23,17 +28,122 @@ export type { ActiveShiftInfo, UsePosOrderInput } from './usePosOrderBase';
 export function usePosOrder(input: UsePosOrderInput) {
   const sellThroughInput = useMemo<UsePosOrderInput>(() => ({
     ...input,
-    // usePosOrderBase historically uses this map only to bypass client-side
-    // quantity guards. Mark every visible product eligible here without
-    // changing the real raw-shortage signal or any server inventory behavior.
     rawShortageOnly: Object.fromEntries(input.products.map((product) => [product.id, true])),
   }), [input]);
 
   const base = usePosOrderBase(sellThroughInput);
-  const { lang } = useLanguage();
+  const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { show } = useToast();
+  const perms = usePosPermissions();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
+  const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
+  const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
+  const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
+
+  const findCartSource = useCallback((item: ItemPayload) => {
+    const wanted = [...(item.modifier_option_ids || [])].sort().join(',');
+    return base.cart.find((entry) => {
+      if (entry.product.id !== item.product_id) return false;
+      const ids = [...(entry.modifier_option_ids || entry.modifiers?.flatMap((m) => m.id ? [m.id] : []) || [])]
+        .sort()
+        .join(',');
+      return ids === wanted && (entry.item_note || '') === (item.notes || '');
+    }) || base.cart.find((entry) => entry.product.id === item.product_id);
+  }, [base.cart]);
+
+  const buildSettlementReceipt = useCallback((
+    preview: OrderSettlementPreview,
+    invoice: string,
+    paid: number,
+  ): ReceiptData => ({
+    invoice,
+    branchName: input.branchName,
+    items: preview.items.map((item) => {
+      const source = findCartSource(item);
+      return {
+        name: source
+          ? [source.product.name, source.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — ')
+          : item.product_id,
+        qty: Number(item.quantity),
+        price: Number(item.unit_price),
+        total: Number(item.total),
+      };
+    }),
+    subtotal: preview.subtotal,
+    discount: preview.discount_amount,
+    tax: preview.tax_amount,
+    total: preview.total,
+    paid,
+    change: Math.max(paid - preview.total, 0),
+    date: new Date().toISOString(),
+    customerName: input.customers.find((c) => c.id === base.customerId)?.name || '',
+    orderNumber: base.activeOrderNumber || undefined,
+    tableName: base.activeTable?.name || undefined,
+    orderTypeLabel: t(ORDER_TYPE_KEY[base.orderType]),
+    guestCount: base.guestCount || undefined,
+    operatorName: null,
+  }), [base.activeOrderNumber, base.activeTable?.name, base.customerId, base.guestCount, base.orderType, findCartSource, input.branchName, input.customers, t]);
+
+  const saveOpenOrderSnapshot = useCallback(async (): Promise<boolean> => {
+    if (!base.activeOrderId || !perms.canEditOrder) return true;
+
+    const { data: currentOrder, error: currentOrderError } = await supabase
+      .from('orders')
+      .select('status')
+      .eq('id', base.activeOrderId)
+      .eq('branch_id', input.branchId)
+      .maybeSingle();
+
+    if (currentOrderError) {
+      show(currentOrderError.message, 'error');
+      return false;
+    }
+
+    const status = (currentOrder as { status?: 'open' | 'held' } | null)?.status;
+    if (status !== 'open' && status !== 'held') {
+      show(isAr ? 'الطلب لم يعد مفتوحًا للتحصيل' : 'The order is no longer open for settlement', 'error');
+      return false;
+    }
+
+    const { data, error } = await api.floorPlan.updateOrder({
+      p_order_id: base.activeOrderId,
+      p_order_type: base.orderType,
+      p_table_id: base.orderType === 'dine_in' ? base.tableId : null,
+      p_customer_id: base.customerId || null,
+      p_guest_count: base.guestCount,
+      p_notes: base.orderNotes || null,
+      p_items: cartToItems(base.cart),
+      p_subtotal: base.subtotal,
+      p_discount_amount: base.discountValue,
+      p_discount_type: base.discountType === 'percent' ? 'percent' : 'amount',
+      p_tax_amount: base.taxAmount,
+      p_total: base.total,
+      p_status: status,
+    });
+
+    const result = data as { success?: boolean; error?: string; detail?: string } | null;
+    if (error || !result?.success) {
+      show(error?.message || result?.detail || result?.error || (isAr ? 'تعذر حفظ الإضافات قبل التحصيل' : 'Could not save order additions before settlement'), 'error');
+      return false;
+    }
+
+    return true;
+  }, [base, input.branchId, isAr, perms.canEditOrder, show]);
+
+  const loadSettlementPreview = useCallback(async (saveSnapshot: boolean): Promise<OrderSettlementPreview | null> => {
+    if (!base.activeOrderId) return null;
+    if (saveSnapshot && !(await saveOpenOrderSnapshot())) return null;
+
+    const { preview, error } = await fetchOrderSettlementPreview(base.activeOrderId);
+    if (error || !preview?.has_payable_items) {
+      show(error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for settlement'), 'error');
+      return null;
+    }
+
+    setSettlementPreview(preview);
+    return preview;
+  }, [base.activeOrderId, isAr, saveOpenOrderSnapshot, show]);
 
   const transferOrderToTable = useCallback(async (
     targetOrderId: string,
@@ -60,10 +170,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         return false;
       }
 
-      if (base.activeOrderId === targetOrderId) {
-        base.setTableId(toTableId);
-      }
-
+      if (base.activeOrderId === targetOrderId) base.setTableId(toTableId);
       show(isAr ? 'تم تحويل الطلب إلى الطاولة الجديدة بنجاح' : 'Order transferred successfully', 'success');
       return true;
     } catch (error) {
@@ -72,91 +179,218 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
   }, [base.activeOrderId, base.setTableId, isAr, show]);
 
+  const setCheckoutOpen = useCallback((open: boolean) => {
+    if (!open) {
+      setSettlementPreview(null);
+      base.setCheckoutOpen(false);
+      return;
+    }
+
+    if (!base.activeOrderId) {
+      base.setCheckoutOpen(true);
+      return;
+    }
+
+    void (async () => {
+      const preview = await loadSettlementPreview(true);
+      if (!preview) return;
+      base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
+      base.setCheckoutOpen(true);
+    })();
+  }, [base, loadSettlementPreview]);
+
   const completeSale = useCallback(async (): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    if (!explicitlyOffline) return base.completeSale();
 
-    if (base.cart.length === 0 || base.completing || offlineCompleting) return false;
-    if (!input.branchId) {
-      show(isAr ? 'اختر الفرع أولاً' : 'Select a branch first', 'error');
-      return false;
+    if (explicitlyOffline) {
+      if (base.cart.length === 0 || base.completing || offlineCompleting) return false;
+      if (!input.branchId) {
+        show(isAr ? 'اختر الفرع أولاً' : 'Select a branch first', 'error');
+        return false;
+      }
+      if (!input.activeShift?.id) {
+        show(isAr ? 'يجب وجود وردية مفتوحة' : 'An open shift is required', 'error');
+        return false;
+      }
+
+      setOfflineCompleting(true);
+      try {
+        const invoiceNumber = await nextInvoiceNumber();
+        const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : base.paidAmount || base.total;
+        const { result, error } = await processSaleForOrder({
+          p_invoice_number: invoiceNumber,
+          p_branch_id: input.branchId,
+          p_shift_id: input.activeShift.id,
+          p_warehouse_id: null,
+          p_customer_id: base.customerId || null,
+          p_salesperson_id: null,
+          p_subtotal: base.subtotal,
+          p_discount_amount: base.discountValue,
+          p_discount_type: base.discountType === 'percent' ? 'percent' : 'amount',
+          p_tax_amount: base.taxAmount,
+          p_bonus_amount: 0,
+          p_total: base.total,
+          p_paid_amount: paidAmountToUse,
+          p_payment_method: base.paymentMethod,
+          p_status: 'completed',
+          p_items: cartToItems(base.cart),
+          p_order_type: base.orderType,
+          p_table_id: base.orderType === 'dine_in' ? base.tableId : null,
+          p_order_id: base.activeOrderId,
+          p_guest_count: base.guestCount,
+        });
+
+        if (error || !result?.success || !result.offline || !result.pending_sync) {
+          show(error || result?.detail || result?.error || (isAr ? 'تعذر حفظ البيع دون اتصال بأمان' : 'Could not safely queue the offline sale'), 'error');
+          return false;
+        }
+
+        base.resetWorkspace();
+        show(
+          isAr
+            ? 'تم حفظ العملية محليًا كمعلّقة للمزامنة. لم يتم تسجيل البيع أو الدفع نهائيًا بعد.'
+            : 'Saved locally as pending sync. The sale/payment is not final until the server confirms it.',
+          'warning',
+        );
+        return true;
+      } finally {
+        setOfflineCompleting(false);
+      }
     }
-    if (!input.activeShift?.id) {
-      show(isAr ? 'يجب وجود وردية مفتوحة' : 'An open shift is required', 'error');
-      return false;
-    }
-    if (base.orderType === 'dine_in' && !base.tableId) {
-      show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
+
+    if (!base.activeOrderId) return base.completeSale();
+    if (!input.branchId || !input.activeShift?.id) {
+      show(isAr ? 'يجب اختيار فرع وفتح وردية قبل التحصيل' : 'Select a branch and open a shift before settlement', 'error');
       return false;
     }
 
-    // Offline quantity availability is not a saleability gate. Reconciliation
-    // remains server-authoritative; no cached-stock rejection is performed here.
     setOfflineCompleting(true);
     try {
+      const preview = settlementPreview || await loadSettlementPreview(true);
+      if (!preview) return false;
+
       const invoiceNumber = await nextInvoiceNumber();
-      const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : base.paidAmount || base.total;
+      const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : (base.paidAmount || preview.total);
       const { result, error } = await processSaleForOrder({
         p_invoice_number: invoiceNumber,
         p_branch_id: input.branchId,
         p_shift_id: input.activeShift.id,
-        // Warehouse resolution is server-authoritative on reconciliation. An
-        // offline client must not invent a warehouse it cannot verify.
-        p_warehouse_id: null,
+        p_warehouse_id: preview.warehouse_id || null,
         p_customer_id: base.customerId || null,
         p_salesperson_id: null,
-        p_subtotal: base.subtotal,
-        p_discount_amount: base.discountValue,
-        p_discount_type: base.discountType === 'percent' ? 'percent' : 'amount',
-        p_tax_amount: base.taxAmount,
+        p_subtotal: preview.subtotal,
+        p_discount_amount: preview.discount_amount,
+        p_discount_type: 'amount',
+        p_tax_amount: preview.tax_amount,
         p_bonus_amount: 0,
-        p_total: base.total,
+        p_total: preview.total,
         p_paid_amount: paidAmountToUse,
         p_payment_method: base.paymentMethod,
         p_status: 'completed',
-        p_items: cartToItems(base.cart),
+        p_items: preview.items,
         p_order_type: base.orderType,
         p_table_id: base.orderType === 'dine_in' ? base.tableId : null,
         p_order_id: base.activeOrderId,
         p_guest_count: base.guestCount,
       });
 
-      if (error || !result?.success || !result.offline || !result.pending_sync) {
-        show(error || result?.detail || result?.error || (isAr ? 'تعذر حفظ البيع دون اتصال بأمان' : 'Could not safely queue the offline sale'), 'error');
+      if (error || !result?.success) {
+        show(error || result?.detail || result?.error || (isAr ? 'تعذر تحصيل الأصناف المرسلة' : 'Could not settle sent items'), 'error');
         return false;
       }
 
-      // Intentionally no receiptSaleId, no saleCompleted toast, no audit write,
-      // no receipt auto-print, and no cash-drawer kick. The server has not yet
-      // confirmed a financial sale/payment.
-      base.resetWorkspace();
-      show(
-        isAr
-          ? 'تم حفظ العملية محليًا كمعلّقة للمزامنة. لم يتم تسجيل البيع أو الدفع نهائيًا بعد.'
-          : 'Saved locally as pending sync. The sale/payment is not final until the server confirms it.',
-        'warning',
-      );
+      const extended = result as typeof result & { order_completed?: boolean; sale_id?: string };
+      const receipt = buildSettlementReceipt(preview, invoiceNumber, paidAmountToUse);
+      setSettlementReceipt(receipt);
+      setSettlementReceiptSaleId(extended.sale_id || null);
+      setSettlementPreview(null);
+      base.setCheckoutOpen(false);
+      base.setPaidAmount(0);
+
+      if (input.effSettings?.receipt_auto_print) {
+        const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr);
+        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+      }
+
+      if (extended.order_completed) {
+        base.resetWorkspace();
+        show(t('saleCompleted'), 'success');
+      } else {
+        show(
+          isAr
+            ? 'تم تحصيل الأصناف المرسلة فقط. الإضافات غير المرسلة ما زالت على الطلب.'
+            : 'Only sent items were settled. Unsent additions remain on the open order.',
+          'success',
+        );
+      }
       return true;
-    } catch (error) {
-      show(
-        error instanceof Error ? error.message : (isAr ? 'تعذر حفظ البيع دون اتصال بأمان' : 'Could not safely queue the offline sale'),
-        'error',
-      );
-      return false;
     } finally {
       setOfflineCompleting(false);
     }
-  }, [base, input.activeShift?.id, input.branchId, isAr, offlineCompleting, show]);
+  }, [base, buildSettlementReceipt, input.activeShift?.id, input.branchId, input.effSettings, isAr, lang, loadSettlementPreview, offlineCompleting, settlementPreview, show, t]);
+
+  const printReceipt = useCallback(async () => {
+    if (!input.effSettings) return;
+
+    if (!base.activeOrderId) {
+      if (settlementReceipt) {
+        const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
+        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+        return;
+      }
+      await base.printReceipt();
+      return;
+    }
+
+    const preview = await loadSettlementPreview(false);
+    if (!preview) {
+      if (settlementReceipt) {
+        const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
+        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+      }
+      return;
+    }
+
+    const receipt = buildSettlementReceipt(preview, base.activeOrderNumber || `ORDER-${Date.now()}`, 0);
+    receipt.isOpenOrder = true;
+    const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr, { authorize: false });
+    openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, settlementReceipt]);
+
+  const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
+    ? {
+        subtotal: settlementPreview.subtotal,
+        discountValue: settlementPreview.discount_amount,
+        taxAmount: settlementPreview.tax_amount,
+        total: settlementPreview.total,
+        change: Math.max(base.paidAmount - settlementPreview.total, 0),
+      }
+    : {
+        subtotal: base.subtotal,
+        discountValue: base.discountValue,
+        taxAmount: base.taxAmount,
+        total: base.total,
+        change: base.change,
+      };
 
   return {
     ...base,
+    ...settlementTotals,
     completing: base.completing || offlineCompleting,
+    checkoutOpen: base.checkoutOpen,
+    setCheckoutOpen,
+    lastReceipt: settlementReceipt || base.lastReceipt,
+    receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
+    closeReceipt: () => {
+      setSettlementReceiptSaleId(null);
+      base.closeReceipt();
+    },
     transferOrderToTable,
     completeSale,
+    printReceipt,
   };
 }
 
 export type UsePosOrder = ReturnType<typeof usePosOrder>;
 
-// Keep these names visible from the public hook module for existing imports.
 void (null as unknown as ActiveShiftInfo | UsePosOrderInput);
