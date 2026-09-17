@@ -29,12 +29,54 @@ Actions:
 
 Commits:
 - `9529ce61ae38dc3e2ed7ad8c44fab1ba1c1fef0b` — staged operational UI remediation plan.
-- Log creation commit: recorded by GitHub after this entry is created.
+- `e63dc7b1729460f7e3669814c0e942a26dedc063` — execution log creation.
 
 Verification:
 - No source code changed in Phase 0.
 - No active parallel branch touched.
 - No Production/DB/printing action performed.
 
+### Phase 1 — Permission-aware application shell
+Status: COMPLETE
+
+Actions:
+- Added explicit `floor_plan.view` gating for the global Active Orders shortcut.
+- Changed Active Orders navigation to the canonical `APP_ROUTES.floorPlan` route constant.
+- Added explicit `settings.manage` gating to the user identity control.
+- Users without `settings.manage` still see their identity, but the control is disabled and no longer acts as a misleading Settings shortcut.
+- Existing `ProtectedRoute` checks remain unchanged as defense in depth.
+
+Files:
+- `src/components/Layout.tsx`
+
+Source commit:
+- `3dee157b46839777b24170734fb7863d4e8cd1c4`
+
+Verification:
+- No permission names changed.
+- No route guards removed or weakened.
+- No RLS/DB/Production/printing changes.
+
+### Phase 2 — RTL/LTR shell correctness
+Status: COMPLETE
+
+Actions:
+- Unified sidebar placement on logical `start-0`.
+- Arabic RTL therefore keeps the sidebar on the right; English LTR places it on the left.
+- Unified fixed-header desktop offset on logical `lg:start-[260px]`.
+- Unified main content desktop offset on logical `lg:ms-[260px]`.
+- Corrected closed mobile drawer transform: RTL exits right; LTR exits left.
+
+Files:
+- `src/components/Layout.tsx`
+
+Source commit:
+- `3dee157b46839777b24170734fb7863d4e8cd1c4`
+
+Verification:
+- Logical CSS preserves a single implementation for both directions.
+- Sidebar border remains `border-e`, so it stays on the inner edge in both RTL and LTR.
+- No business logic changed.
+
 Next:
-- Phase 1: Permission-aware application shell.
+- Phase 3: Permission-aware dashboard navigation.
