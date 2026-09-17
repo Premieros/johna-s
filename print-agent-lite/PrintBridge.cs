@@ -93,6 +93,9 @@ namespace PremierPrintAgentLite
                             e.HasMorePages = false;
                         };
                         document.Print();
+                        // Preserve the proven 1.0 PrintDocument path, but give thermal drivers a brief moment
+                        // to enqueue the document before the next job in this printer's lane starts.
+                        Thread.Sleep(150);
                     }
                 }
                 return Ok();
