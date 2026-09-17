@@ -77,6 +77,7 @@ export function PosOrderHeaderBar({
   }, [createdAt, isAr]);
 
   const hasSent = kitchenSends.length > 0;
+  const canPrintSentReceipt = hasSent && canPrintReceipt;
 
   return (
     <div data-testid="pos-top-action-bar" className="flex flex-wrap items-center justify-between gap-2 border-b border-ui-border bg-ui-page px-3 py-2 text-xs select-none">
@@ -139,8 +140,12 @@ export function PosOrderHeaderBar({
             data-testid="pos-action-print"
             type="button"
             onClick={onPrint}
-            disabled={!canPrintReceipt}
-            title={!canPrintReceipt ? (isAr ? 'لا يوجد إيصال بيع جاهز للطباعة' : 'No sale receipt is ready to print') : undefined}
+            disabled={!canPrintSentReceipt}
+            title={!hasSent
+              ? (isAr ? 'تتاح الطباعة بعد أول إرسال للمطبخ' : 'Printing is available after the first kitchen send')
+              : !canPrintReceipt
+                ? (isAr ? 'لا يوجد إيصال جاهز للطباعة' : 'No receipt is ready to print')
+                : undefined}
             className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Printer className="h-3.5 w-3.5 text-ui-primary" />
@@ -173,7 +178,7 @@ export function PosOrderHeaderBar({
           </button>
         )}
 
-        {perms.canPay && itemsCount > 0 && (
+        {perms.canPay && hasSent && itemsCount > 0 && (
           <button
             data-testid="pos-action-pay"
             type="button"

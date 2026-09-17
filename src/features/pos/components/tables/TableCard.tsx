@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/format';
 import type { DiningTable, Order, OrderItem } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
 import { orderOperatorName } from '../../utils/operatorName';
+import { usePosPermissions } from '../../hooks/usePosPermissions';
 
 export type TableOperationalStatus = 'vacant' | 'open' | 'sent' | 'new_additions' | 'needs_action';
 
@@ -22,6 +23,7 @@ interface TableCardProps {
 export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, currency, isSelected, onSelect, onTransfer }: TableCardProps) {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
+  const perms = usePosPermissions();
   const activeOrder = orders[0] || null;
   const operatorName = activeOrder ? orderOperatorName(activeOrder) : null;
 
@@ -68,7 +70,7 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
           </div>
         </div>
       ) : <p className="mt-3 text-[9px] font-bold text-ui-subtle">{isAr ? 'اضغط لفتح طلب' : 'Tap to open order'}</p>}
-      {activeOrder && onTransfer && <button type="button" onClick={(e) => { e.stopPropagation(); onTransfer(activeOrder, table); }} title={isAr ? 'نقل الطلب' : 'Transfer order'} className="absolute bottom-2 end-2 flex h-6 w-6 items-center justify-center rounded-md border border-ui-border bg-ui-page text-ui-muted opacity-0 transition hover:text-ui-primary group-hover:opacity-100"><ArrowRightLeft className="h-3 w-3" /></button>}
+      {activeOrder && perms.canTransferOrder && onTransfer && <button type="button" onClick={(e) => { e.stopPropagation(); onTransfer(activeOrder, table); }} title={isAr ? 'نقل الطلب' : 'Transfer order'} className="absolute bottom-2 end-2 flex h-6 w-6 items-center justify-center rounded-md border border-ui-border bg-ui-page text-ui-muted opacity-0 transition hover:text-ui-primary group-hover:opacity-100"><ArrowRightLeft className="h-3 w-3" /></button>}
     </div>
   );
 }

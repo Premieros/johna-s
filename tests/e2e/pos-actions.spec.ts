@@ -8,6 +8,9 @@ const PRODUCT_ID = '00000000-0000-0000-0000-000000000020';
 const WAREHOUSE_ID = '00000000-0000-0000-0000-000000000030';
 const TABLE_ID = '00000000-0000-0000-0000-000000000040';
 const SHIFT_ID = '00000000-0000-0000-0000-000000000050';
+const ORDER_ID = '00000000-0000-0000-0000-000000000060';
+const ORDER_ITEM_ID = '00000000-0000-0000-0000-000000000061';
+const SEND_ID = '00000000-0000-0000-0000-000000000062';
 
 const fakeUser = { id: TEST_USER_ID, email: 'e2e@example.test', full_name: 'E2E Admin', role: 'super_admin', is_active: true, branch_id: BRANCH_ID, created_at: new Date().toISOString() };
 const branches = [
@@ -30,6 +33,31 @@ async function mockPosBackend(page: Page) {
   rpcCalls = [];
   rpcPayloads = {};
   const session = makeSession();
+  let currentOrder: Record<string, unknown> | null = null;
+  let currentItems: Array<Record<string, unknown>> = [];
+  let sentQuantity = 0;
+
+  const orderRow = () => currentOrder || {
+    id: ORDER_ID,
+    branch_id: BRANCH_ID,
+    order_number: 'E2E-001',
+    order_type: 'takeaway',
+    table_id: null,
+    customer_id: null,
+    guest_count: null,
+    notes: null,
+    status: 'open',
+    cashier_id: TEST_USER_ID,
+    subtotal: currentItems.reduce((sum, item) => sum + Number(item.total || item.quantity || 0) * (item.total ? 1 : 100), 0),
+    discount_amount: 0,
+    discount_type: 'amount',
+    tax_amount: 0,
+    total: currentItems.reduce((sum, item) => sum + Number(item.total || item.quantity || 0) * (item.total ? 1 : 100), 0),
+    inventory_warehouse_id: WAREHOUSE_ID,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
   await page.route(`${SUPABASE_ORIGIN}/auth/v1/**`, async (route) => {
     const url = route.request().url();
     if (url.includes('/auth/v1/user')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session.user) });
@@ -47,9 +75,32 @@ async function mockPosBackend(page: Page) {
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/inventory**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, quantity: 20 }]) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/product_components**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/dining_tables**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([diningTable]) }));
-  await page.route(`${SUPABASE_ORIGIN}/rest/v1/orders**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route(`${SUPABASE_ORIGIN}/rest/v1/order_items**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route(`${SUPABASE_ORIGIN}/rest/v1/order_kitchen_sends**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/orders**`, async (r) => {
+    const accept = r.request().headers()['accept'] || '';
+    const wantsObject = accept.includes('vnd.pgrst.object');
+    if (!currentOrder) return r.fulfill({ status: 200, contentType: 'application/json', body: wantsObject ? 'null' : '[]' });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(wantsObject ? currentOrder : [currentOrder]) });
+  });
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/order_items**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentOrder ? currentItems.map((item, index) => ({
+    id: index === 0 ? ORDER_ITEM_ID : `00000000-0000-0000-0000-${String(70 + index).padStart(12, '0')}`,
+    order_id: ORDER_ID,
+    product_id: item.product_id || PRODUCT_ID,
+    unit_name: item.unit_name || 'piece',
+    quantity: Number(item.quantity || 1),
+    unit_price: Number(item.unit_price || 100),
+    discount_amount: Number(item.discount_amount || 0),
+    modifier_option_ids: item.modifier_option_ids || [],
+    notes: item.notes || null,
+  })) : []) }));
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/order_kitchen_sends**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sentQuantity > 0 ? [{
+    id: SEND_ID,
+    branch_id: BRANCH_ID,
+    order_id: ORDER_ID,
+    order_item_id: ORDER_ITEM_ID,
+    sent_at: new Date().toISOString(),
+    sent_by: TEST_USER_ID,
+    sent_quantity: sentQuantity,
+  }] : []) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/kitchen_sends**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/**`, async (r) => {
     const name = new URL(r.request().url()).pathname.split('/').pop() || '';
@@ -86,8 +137,91 @@ async function mockPosBackend(page: Page) {
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, available_quantity: available, is_available: available > 0 }]) });
     }
     if (name === 'get_pos_order_operator_labels') return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    if (name === 'create_order' || name === 'update_order') {
+      const nextItems = Array.isArray(requestPayload.p_items) ? requestPayload.p_items as Array<Record<string, unknown>> : currentItems;
+      currentItems = nextItems;
+      currentOrder = {
+        ...orderRow(),
+        id: ORDER_ID,
+        order_number: 'E2E-001',
+        branch_id: BRANCH_ID,
+        status: 'open',
+        cashier_id: TEST_USER_ID,
+        inventory_warehouse_id: WAREHOUSE_ID,
+        subtotal: currentItems.reduce((sum, item) => sum + Number(item.quantity || 1) * Number(item.unit_price || 100), 0),
+        total: currentItems.reduce((sum, item) => sum + Number(item.quantity || 1) * Number(item.unit_price || 100), 0),
+      };
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, id: ORDER_ID, order_id: ORDER_ID, order_number: 'E2E-001' }) });
+    }
+    if (name === 'send_to_kitchen') {
+      sentQuantity = Math.max(1, currentItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0));
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          id: SEND_ID,
+          order_id: ORDER_ID,
+          order_number: 'E2E-001',
+          warehouse_id: WAREHOUSE_ID,
+          sent: [{
+            send_id: SEND_ID,
+            order_item_id: ORDER_ITEM_ID,
+            product_id: PRODUCT_ID,
+            product_name: product.name,
+            unit_name: 'piece',
+            station_code: 'kitchen',
+            quantity: sentQuantity,
+            unit_price: 100,
+            discount_amount: 0,
+            bonus_quantity: 0,
+            total: sentQuantity * 100,
+            notes: null,
+            modifiers: [],
+          }],
+          items_sent_count: 1,
+          all_sent: true,
+        }),
+      });
+    }
+    if (name === 'get_order_settlement_preview') {
+      const quantity = Math.max(1, sentQuantity);
+      const total = quantity * 100;
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          order_id: ORDER_ID,
+          branch_id: BRANCH_ID,
+          warehouse_id: WAREHOUSE_ID,
+          order_status: 'open',
+          items: [{
+            product_id: PRODUCT_ID,
+            unit_name: 'piece',
+            quantity,
+            unit_price: 100,
+            discount_amount: 0,
+            bonus_quantity: 0,
+            total,
+            modifier_option_ids: [],
+            notes: null,
+            order_item_id: ORDER_ITEM_ID,
+          }],
+          subtotal: total,
+          discount_amount: 0,
+          discount_type: 'amount',
+          tax_amount: 0,
+          total,
+          pending_quantity: quantity,
+          unsent_quantity: 0,
+          has_payable_items: true,
+        }),
+      });
+    }
     if (name === 'next_sale_document_number') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, number: 'E2E-INV-001' }) });
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, id: 'e2e-order-id', order_id: 'e2e-order-id', order_number: 'E2E-001', sale_id: 'e2e-sale-id', sent: [{ product_name: product.name, quantity: 1, unit_name: 'piece' }], items_sent_count: 1 }) });
+    if (name === 'process_sale') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, sale_id: 'e2e-sale-id', order_completed: true }) });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, id: ORDER_ID, order_id: ORDER_ID, order_number: 'E2E-001', sale_id: 'e2e-sale-id' }) });
   });
 }
 
@@ -111,6 +245,13 @@ async function addProduct(page: Page) {
   await expect(addButton).toBeEnabled({ timeout: 10000 });
 }
 
+async function sendCurrentOrderToKitchen(page: Page) {
+  await page.getByTestId('pos-action-send-kitchen').click();
+  await expect(page.getByText(/إرسال للمطبخ \(1\)|Sent to kitchen \(1\)/i)).toBeVisible({ timeout: 10000 });
+  await expect.poll(() => rpcCalls.includes('send_to_kitchen'), { timeout: 10000 }).toBe(true);
+  await expect(page.getByTestId('pos-action-pay')).toBeVisible({ timeout: 10000 });
+}
+
 function tableButton(page: Page) {
   return page.getByRole('button', { name: new RegExp(diningTable.name, 'i') });
 }
@@ -129,11 +270,13 @@ test.describe('POS action-level', () => {
     await expect(page.locator('body')).not.toHaveText(/Error Loading Data|خطأ في تحميل البيانات/i);
   });
 
-  test('starts quick pickup, adds product, changes quantity, and opens payment', async ({ page }) => {
+  test('starts quick pickup, adds product, changes quantity, sends to kitchen, and opens payment', async ({ page }) => {
     await page.getByTestId('pos-start-quick-order').click();
     await addProduct(page);
     await page.getByTestId(`pos-cart-qty-increase-${PRODUCT_ID}`).click();
     await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('2');
+    await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
+    await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
@@ -156,6 +299,8 @@ test.describe('POS action-level', () => {
     await mobileCartClose.click();
     await expect(mobileCart).toBeHidden();
 
+    await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
+    await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
@@ -248,9 +393,11 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-action-send-kitchen')).toBeVisible();
   });
 
-  test('complete sale executes payment confirmation and process_sale', async ({ page }) => {
+  test('complete sale executes kitchen send, payment confirmation, and process_sale', async ({ page }) => {
     await page.getByTestId('pos-start-quick-order').click();
     await addProduct(page);
+    await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
+    await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('pos-payment-method-cash').click();
