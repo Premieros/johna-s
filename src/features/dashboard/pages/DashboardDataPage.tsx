@@ -11,6 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
+import { useCan } from '@/lib/permissions';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
   aggregatePaymentMethods,
@@ -96,25 +97,32 @@ function Empty({ ar }: { ar: boolean }) {
   return <div className="flex min-h-[120px] items-center justify-center text-sm text-ui-subtle">{ar ? 'لا توجد بيانات فعلية للفترة المحددة' : 'No actual data for the selected period'}</div>;
 }
 
-function Metric({ testId, icon: Icon, title, value, display, previous, href, ar }: {
-  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href: string; ar: boolean;
+function Metric({ testId, icon: Icon, title, value, display, previous, href, ar, enabled }: {
+  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href: string; ar: boolean; enabled: boolean;
 }) {
   const change = previous > 0 ? ((value - previous) / previous) * 100 : null;
   const positive = (change ?? 0) >= 0;
-  return <Link data-testid={testId} to={href} className="group rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui transition hover:-translate-y-0.5 hover:shadow-ui-lg">
-    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-ui-subtle" /></div>
+  const content = <>
+    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{enabled && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
     <p className="mt-5 text-sm font-semibold text-ui-muted">{title}</p><p className="mt-1 text-3xl font-black tracking-tight text-ui-text">{display}</p>
     <div className="mt-2 flex items-center gap-2 text-xs">{change === null ? <span className="text-ui-subtle">—</span> : <span className={`inline-flex items-center gap-0.5 font-bold ${positive ? 'text-ui-success' : 'text-ui-danger'}`}>{positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}{formatPercent(Math.abs(change), 1)}</span>}<span className="text-ui-subtle">{ar ? 'مقارنة بالفترة السابقة' : 'vs previous period'}</span></div>
-  </Link>;
+  </>;
+  const className = `rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${enabled ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
+  if (!enabled) return <div data-testid={testId} aria-disabled="true" className={className}>{content}</div>;
+  return <Link data-testid={testId} to={href} className={className}>{content}</Link>;
 }
 
 export function DashboardDataPage() {
   const { lang } = useLanguage();
   const { user } = useAuth();
+  const can = useCan();
   const branchFilter = useBranchFilter();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const ar = lang === 'ar';
+  const canCreateSale = can('pos.view') && can('pos.order.create');
+  const canViewReports = can('reports.view');
+  const canViewInventory = can('inventory.view');
   const [range, setRange] = useState<Range>('month');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -271,7 +279,7 @@ export function DashboardDataPage() {
   const recent = sales.slice(0, 5);
 
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] bg-ui-page px-4 py-5 sm:px-7 sm:py-7" data-testid="dashboard-surface"><div className="mx-auto max-w-[1560px] space-y-6">
-    <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-black text-ui-text">{ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome back, ${user?.full_name || 'Admin'}`}</h1><p className="mt-1 text-sm text-ui-muted">{ar ? 'بيانات فعلية من النظام حسب الفترة والفرع المحددين' : 'Live system data for the selected period and branch'}</p></div><Link to="/pos" className="inline-flex items-center gap-2 rounded-xl bg-ui-primary px-4 py-2 text-sm font-bold text-ui-primary-fg"><ShoppingBag className="h-4 w-4" />{ar ? 'إنشاء بيع' : 'New sale'}</Link></section>
+    <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-black text-ui-text">{ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome back, ${user?.full_name || 'Admin'}`}</h1><p className="mt-1 text-sm text-ui-muted">{ar ? 'بيانات فعلية من النظام حسب الفترة والفرع المحددين' : 'Live system data for the selected period and branch'}</p></div>{canCreateSale && <Link to="/pos" className="inline-flex items-center gap-2 rounded-xl bg-ui-primary px-4 py-2 text-sm font-bold text-ui-primary-fg"><ShoppingBag className="h-4 w-4" />{ar ? 'إنشاء بيع' : 'New sale'}</Link>}</section>
 
     <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month'}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
 
@@ -286,11 +294,11 @@ export function DashboardDataPage() {
 
     {loading ? <div className="flex h-64 items-center justify-center rounded-3xl border border-ui-border bg-ui-surface"><RefreshCw className="h-7 w-7 animate-spin text-ui-primary" /></div> : <>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric testId="kpi-orders" icon={ShoppingBag} title={ar ? 'الطلبات' : 'Orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href="/reports?reportType=detailed_invoices" ar={ar} />
-        <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href="/reports?reportType=sales" ar={ar} />
-        <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href="/reports?reportType=sales_by_payment" ar={ar} />
-        <Metric testId="kpi-returns" icon={RotateCcw} title={ar ? 'المبالغ المرتجعة' : 'Return amount'} value={current.returns} display={money(current.returns)} previous={previous.returns} href="/reports?reportType=returns" ar={ar} />
-        <Metric testId="kpi-discounts" icon={Tag} title={ar ? 'إجمالي الخصومات' : 'Discount amount'} value={current.discounts} display={money(current.discounts)} previous={previous.discounts} href="/reports?reportType=sales" ar={ar} />
+        <Metric testId="kpi-orders" icon={ShoppingBag} title={ar ? 'الطلبات' : 'Orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href="/reports?reportType=detailed_invoices" ar={ar} enabled={canViewReports} />
+        <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />
+        <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href="/reports?reportType=sales_by_payment" ar={ar} enabled={canViewReports} />
+        <Metric testId="kpi-returns" icon={RotateCcw} title={ar ? 'المبالغ المرتجعة' : 'Return amount'} value={current.returns} display={money(current.returns)} previous={previous.returns} href="/reports?reportType=returns" ar={ar} enabled={canViewReports} />
+        <Metric testId="kpi-discounts" icon={Tag} title={ar ? 'إجمالي الخصومات' : 'Discount amount'} value={current.discounts} display={money(current.discounts)} previous={previous.discounts} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={chart}><XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(value) => money(Number(value || 0))} /><Area type="monotone" dataKey="sales" stroke="currentColor" fill="currentColor" fillOpacity={0.12} /></AreaChart></ResponsiveContainer> : <Empty ar={ar} />}</div></Card>
@@ -301,7 +309,7 @@ export function DashboardDataPage() {
       <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أكثر الأصناف مبيعًا' : 'Top selling items'}</h2>{productRows.length ? productRows.map(([name, qty]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(qty, 2)}</span></div>) : <Empty ar={ar} />}</Card>
       <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أحدث الطلبات' : 'Recent orders'}</h2>{recent.length ? recent.map((sale) => <div key={sale.id} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{sale.invoice_number || '—'}</span><span className="text-ui-muted">{money(netSaleAmount(sale))}</span></div>) : <Empty ar={ar} />}</Card></section>
 
-      {lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row, index) => { const product = relation(row.product); return <Link key={index} to="/inventory" className="rounded-xl bg-ui-page-alt p-3"><p className="truncate text-sm font-bold text-ui-text">{product?.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(Number(row.quantity || 0), 2)}</p></Link>; })}</div></Card>}
+      {lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row, index) => { const product = relation(row.product); const content = <><p className="truncate text-sm font-bold text-ui-text">{product?.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(Number(row.quantity || 0), 2)}</p></>; return canViewInventory ? <Link key={index} to="/inventory" className="rounded-xl bg-ui-page-alt p-3">{content}</Link> : <div key={index} aria-disabled="true" className="rounded-xl bg-ui-page-alt p-3">{content}</div>; })}</div></Card>}
     </>}
   </div></div>;
 }

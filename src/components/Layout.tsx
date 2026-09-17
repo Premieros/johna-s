@@ -80,6 +80,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const { counts } = useActiveOrders(branchFilter || user?.branch_id || '');
 
   const isAdmin = isAdminRole(user?.role);
+  const canViewFloorPlan = can('floor_plan.view');
+  const canOpenSettings = can('settings.manage');
   const { branches } = useBranches();
   const [, setActiveBranchId] = useActiveBranchId();
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -122,7 +124,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div dir={ar ? 'rtl' : 'ltr'} className="min-h-screen bg-ui-page text-ui-text overflow-x-hidden" data-testid="app-shell">
-      <header data-testid="app-header" className={`fixed top-0 start-0 end-0 ${ar ? 'lg:start-[260px]' : 'lg:end-[260px]'} z-[60] flex h-[64px] items-center justify-between gap-3 liquid-glass-header px-4 shadow-ui-sm sm:px-6`}>
+      <header data-testid="app-header" className="fixed top-0 start-0 end-0 lg:start-[260px] z-[60] flex h-[64px] items-center justify-between gap-3 liquid-glass-header px-4 shadow-ui-sm sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button data-testid="sidebar-open" type="button" onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'فتح القائمة' : 'Open sidebar'}>
             <Menu className="h-5 w-5" />
@@ -173,12 +175,22 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <div className="hidden sm:flex"><OfflineStatusIndicator /></div>
           <ApprovalInbox ar={ar} />
-          <button data-testid="active-orders-button" type="button" onClick={() => navigate('/floor-plan')} className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label={ar ? 'الطلبات النشطة' : 'Active orders'}>
-            <Activity className="h-5 w-5" />
-            {counts.active > 0 && <span data-testid="active-orders-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">{counts.active}</span>}
-          </button>
+          {canViewFloorPlan && (
+            <button data-testid="active-orders-button" type="button" onClick={() => navigate(APP_ROUTES.floorPlan)} className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label={ar ? 'الطلبات النشطة' : 'Active orders'}>
+              <Activity className="h-5 w-5" />
+              {counts.active > 0 && <span data-testid="active-orders-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">{counts.active}</span>}
+            </button>
+          )}
           <div className="hidden h-6 w-px bg-ui-border sm:block" />
-          <button data-testid="user-menu-button" type="button" onClick={() => navigate(APP_ROUTES.settings)} className="flex items-center gap-2.5 rounded-xl p-1.5 pe-2 transition-colors hover:bg-ui-page-alt">
+          <button
+            data-testid="user-menu-button"
+            type="button"
+            onClick={canOpenSettings ? () => navigate(APP_ROUTES.settings) : undefined}
+            disabled={!canOpenSettings}
+            aria-label={canOpenSettings ? (ar ? 'فتح الإعدادات' : 'Open settings') : (ar ? 'هوية المستخدم' : 'User identity')}
+            title={canOpenSettings ? (ar ? 'الإعدادات' : 'Settings') : undefined}
+            className={`flex items-center gap-2.5 rounded-xl p-1.5 pe-2 transition-colors ${canOpenSettings ? 'hover:bg-ui-page-alt' : 'cursor-default'}`}
+          >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-ui-primary-soft text-xs font-bold text-ui-primary">{(user?.full_name || user?.email || 'A').slice(0, 1).toUpperCase()}</div>
             <div className="hidden text-start sm:block">
               <p className="text-sm font-semibold leading-tight text-ui-text">{user?.full_name || user?.email || (ar ? 'مدير النظام' : 'System Admin')}</p>
@@ -197,7 +209,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <aside data-testid="app-sidebar" className={`fixed top-0 bottom-0 ${ar ? 'start-0' : 'end-0'} z-50 w-[260px] liquid-glass border-e border-ui-border shadow-ui-md transition-transform duration-200 ease-[var(--ui-ease)] ${mobileOpen ? 'translate-x-0' : ar ? 'translate-x-full' : 'translate-x-full'} lg:translate-x-0`}>
+      <aside data-testid="app-sidebar" className={`fixed top-0 bottom-0 start-0 z-50 w-[260px] liquid-glass border-e border-ui-border shadow-ui-md transition-transform duration-200 ease-[var(--ui-ease)] ${mobileOpen ? 'translate-x-0' : ar ? 'translate-x-full' : '-translate-x-full'} lg:translate-x-0`}>
         <div className="flex h-14 items-center justify-between border-b border-ui-border px-5">
           <Logo variant="horizontal" size={28} tone="mono" showTagline={false} className="text-ui-primary" />
           <button data-testid="sidebar-close" type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'إغلاق القائمة' : 'Close sidebar'}><X className="h-5 w-5" /></button>
@@ -236,7 +248,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {mobileOpen && <button data-testid="mobile-sidebar-backdrop" type="button" className="fixed inset-0 z-40 bg-ui-text/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-label={ar ? 'إغلاق' : 'Close'} />}
 
-      <div className={`pt-[64px] ${ar ? 'lg:ms-[260px]' : 'lg:me-[260px]'} min-h-screen`}>
+      <div className="pt-[64px] lg:ms-[260px] min-h-screen">
         <ReturnContextBanner />
         <main data-testid="app-main" className="min-h-[calc(100vh-64px)] bg-ui-page p-4 sm:p-6 lg:p-7">
           <div data-testid="design-content-surface" className="mx-auto min-h-[calc(100vh-64px)] w-full max-w-[1600px] space-y-5">{children}</div>
