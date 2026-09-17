@@ -44,7 +44,7 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
   const itemCount = activeOrder ? (itemsByOrder[activeOrder.id] || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) : 0;
 
   return (
-    <div onClick={() => onSelect(table)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(table)} className={`group relative min-h-[108px] cursor-pointer select-none rounded-xl border p-2.5 text-start transition ${isSelected ? 'border-ui-primary bg-ui-primary/5 ring-2 ring-ui-primary shadow-ui-sm' : 'border-ui-border bg-ui-surface hover:border-ui-primary hover:shadow-ui-sm'}`}>
+    <div onClick={() => onSelect(table)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(table)} className={`group relative min-h-[116px] cursor-pointer select-none rounded-xl border p-2.5 text-start transition ${isSelected ? 'border-ui-primary bg-ui-primary/5 ring-2 ring-ui-primary shadow-ui-sm' : 'border-ui-border bg-ui-surface hover:border-ui-primary hover:shadow-ui-sm'}`}>
       <div className="flex items-center justify-between gap-1">
         <span className="truncate text-sm font-black text-ui-text">{table.name}</span>
         <span className="flex shrink-0 items-center gap-0.5 rounded-md bg-ui-page-alt px-1.5 py-0.5 text-[9px] font-bold text-ui-muted"><Users className="h-2.5 w-2.5" />{table.capacity || 4}</span>
@@ -59,15 +59,15 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
             <span className="font-bold text-ui-muted">{itemCount} {isAr ? 'صنف' : 'items'}</span>
             <span className="font-black text-ui-text">{formatCurrency(activeOrder.total, currency, lang)}</span>
           </div>
-          <div className="mt-1 flex min-w-0 items-center justify-between gap-1 text-[9px] text-ui-subtle">
+          <div className="mt-1 flex items-center gap-1 text-[9px] text-ui-subtle">
             <span className="flex shrink-0 items-center gap-1"><Clock className="h-2.5 w-2.5" />{statusInfo.elapsed} {isAr ? 'د' : 'm'}</span>
-            {operatorName && (
-              <span className="flex min-w-0 items-center gap-1 font-bold text-ui-muted" title={operatorName}>
-                <Users className="h-2.5 w-2.5 shrink-0" />
-                <span className="truncate">{operatorName}</span>
-              </span>
-            )}
           </div>
+          {operatorName && (
+            <div data-testid={`pos-table-operator-${table.id}`} className="mt-1 flex min-w-0 items-center gap-1 rounded-md bg-ui-page-alt px-1.5 py-1 text-[9px] font-black text-ui-muted" title={operatorName}>
+              <Users className="h-2.5 w-2.5 shrink-0 text-ui-primary" />
+              <span className="truncate">{operatorName}</span>
+            </div>
+          )}
         </div>
       ) : <p className="mt-3 text-[9px] font-bold text-ui-subtle">{isAr ? 'اضغط لفتح طلب' : 'Tap to open order'}</p>}
       {activeOrder && perms.canTransferOrder && onTransfer && <button type="button" onClick={(e) => { e.stopPropagation(); onTransfer(activeOrder, table); }} title={isAr ? 'نقل الطلب' : 'Transfer order'} className="absolute bottom-2 end-2 flex h-6 w-6 items-center justify-center rounded-md border border-ui-border bg-ui-page text-ui-muted opacity-0 transition hover:text-ui-primary group-hover:opacity-100"><ArrowRightLeft className="h-3 w-3" /></button>}
