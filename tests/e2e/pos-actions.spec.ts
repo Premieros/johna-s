@@ -111,6 +111,13 @@ async function addProduct(page: Page) {
   await expect(addButton).toBeEnabled({ timeout: 10000 });
 }
 
+async function sendCurrentOrderToKitchen(page: Page) {
+  await page.getByTestId('pos-action-send-kitchen').click();
+  await expect(page.getByText(/إرسال للمطبخ \(1\)|Sent to kitchen \(1\)/i)).toBeVisible({ timeout: 10000 });
+  await expect.poll(() => rpcCalls.includes('send_to_kitchen'), { timeout: 10000 }).toBe(true);
+  await expect(page.getByTestId('pos-action-pay')).toBeVisible({ timeout: 10000 });
+}
+
 function tableButton(page: Page) {
   return page.getByRole('button', { name: new RegExp(diningTable.name, 'i') });
 }
@@ -129,11 +136,13 @@ test.describe('POS action-level', () => {
     await expect(page.locator('body')).not.toHaveText(/Error Loading Data|خطأ في تحميل البيانات/i);
   });
 
-  test('starts quick pickup, adds product, changes quantity, and opens payment', async ({ page }) => {
+  test('starts quick pickup, adds product, changes quantity, sends to kitchen, and opens payment', async ({ page }) => {
     await page.getByTestId('pos-start-quick-order').click();
     await addProduct(page);
     await page.getByTestId(`pos-cart-qty-increase-${PRODUCT_ID}`).click();
     await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('2');
+    await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
+    await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
@@ -156,6 +165,8 @@ test.describe('POS action-level', () => {
     await mobileCartClose.click();
     await expect(mobileCart).toBeHidden();
 
+    await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
+    await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
@@ -248,9 +259,11 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-action-send-kitchen')).toBeVisible();
   });
 
-  test('complete sale executes payment confirmation and process_sale', async ({ page }) => {
+  test('complete sale executes kitchen send, payment confirmation, and process_sale', async ({ page }) => {
     await page.getByTestId('pos-start-quick-order').click();
     await addProduct(page);
+    await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
+    await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('pos-payment-method-cash').click();
