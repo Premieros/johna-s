@@ -48,6 +48,73 @@ export function formatQuantity(value: number | null | undefined, decimals = 3): 
   return formatDisplayNumber(value, decimals);
 }
 
+/**
+ * Inventory and recipe quantities must never be silently approximated for display.
+ * Numeric JSON values are rendered with all meaningful decimals received from the API,
+ * while still applying locale thousands separators.
+ */
+export function formatExactQuantity(value: number | null | undefined): string {
+  const numeric = numericOrZero(value);
+  if (Math.abs(numeric) < ZERO_EPSILON) return '-';
+  return numeric.toLocaleString(DISPLAY_LOCALE, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 12,
+    useGrouping: true,
+  });
+}
+
+export interface MeasurementUnitDisplay {
+  code?: string | null;
+  name?: string | null;
+  symbol?: string | null;
+}
+
+function normalizedUnitTokens(unit?: MeasurementUnitDisplay | null): string[] {
+  if (!unit) return [];
+  return [unit.code, unit.name, unit.symbol]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim().toLocaleLowerCase());
+}
+
+function isKilogramUnit(unit?: MeasurementUnitDisplay | null): boolean {
+  const tokens = normalizedUnitTokens(unit);
+  return tokens.some((token) => ['kg', 'kgs', 'kilogram', 'kilograms', 'كجم', 'كغ', 'كيلو', 'كيلوجرام'].includes(token));
+}
+
+function isGramUnit(unit?: MeasurementUnitDisplay | null): boolean {
+  const tokens = normalizedUnitTokens(unit);
+  return tokens.some((token) => ['g', 'gr', 'gram', 'grams', 'جم', 'غ', 'جرام'].includes(token));
+}
+
+export function measurementUnitLabel(unit?: MeasurementUnitDisplay | null): string {
+  return unit?.symbol?.trim() || unit?.name?.trim() || unit?.code?.trim() || '';
+}
+
+/**
+ * Formats a raw-material quantity together with its configured measurement unit.
+ * For recipe/component presentation only, kilograms can be rendered as exact grams
+ * to avoid misleading rounded values such as 0.1 kg for an actual 125 g component.
+ * This is a display conversion only; stored quantities and costing remain unchanged.
+ */
+export function formatRawMaterialQuantity(
+  value: number | null | undefined,
+  unit?: MeasurementUnitDisplay | null,
+  options: { preferGrams?: boolean; lang?: Language } = {},
+): string {
+  const numeric = numericOrZero(value);
+  if (Math.abs(numeric) < ZERO_EPSILON) return '-';
+
+  if (options.preferGrams && isKilogramUnit(unit)) {
+    const gramLabel = options.lang === 'en' ? 'g' : 'جم';
+    return `${formatExactQuantity(numeric * 1000)} ${gramLabel}`;
+  }
+
+  const label = isGramUnit(unit)
+    ? (options.lang === 'en' ? 'g' : 'جم')
+    : measurementUnitLabel(unit);
+  return `${formatExactQuantity(numeric)}${label ? ` ${label}` : ''}`;
+}
+
 export function formatPercent(value: number | null | undefined, decimals = 1): string {
   const formatted = formatDisplayNumber(value, decimals);
   return formatted === '-' ? '-' : `${formatted}%`;
@@ -94,7 +161,6 @@ export function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
     .replace(/[\x22]/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
