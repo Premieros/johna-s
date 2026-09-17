@@ -1,51 +1,44 @@
-# POS Prepayment Print Fix Log — 2026-09-17
+# POS Prepayment Print Repair — 2026-09-17
 
-## Scope
-Fix the Print button on the POS sale screen when printing a customer receipt before payment.
-
-## Repository identity
-- Repository: `Premieros/johna-s`
-- Development branch: `development/pos-prepayment-print-fix`
-- Base branch: `main`
-- Production Supabase: `azzdesuowpdcoflmyezn` (not modified)
+## Identity
+- Repository: Premieros/johna-s
+- Branch: development/pos-prepayment-print-fix
+- Production database: azzdesuowpdcoflmyezn
+- Production touched: no
+- Migration applied to Production: no
 
 ## Root cause
-The POS wrapper `src/features/pos/hooks/usePosOrder.ts` routed open-order printing through settlement preview first. That caused the sale-screen Print action to call `get_order_settlement_preview(p_order_id)` before a receipt could be printed. The RPC is part of settlement/payment behavior and must not be required for the read-only prepayment receipt path.
+The POS prepayment/customer receipt path depends on the canonical `public.get_order_settlement_preview(p_order_id uuid)` RPC so that only sent, unvoided, unsettled kitchen quantities are printable/payable. The repository already contains this function in `supabase/migrations/20260917084500_sent_only_order_settlement.sql`, but read-only inspection of Production showed the function is not currently present there.
 
-The underlying base POS hook already owns the correct open-order print behavior and builds the receipt from the live cart, marking it as an open order.
+## Correction made on this branch
+An earlier temporary code change bypassed the settlement RPC and printed from the live cart. CI proved that this violated the existing sent-only receipt contract because unsent additions could be included. That bypass was reverted.
 
-## Implementation
-### Commit 1
-- SHA: `d3d4bfde9b30be355344896a598311a4b342d199`
-- Message: `fix(pos): print open order without settlement RPC`
-- File changed: `src/features/pos/hooks/usePosOrder.ts`
-- Change: open-order printing now delegates directly to `base.printReceipt()` when the cart has items. Settlement receipt printing remains available for a completed settlement receipt. Payment and settlement logic were not changed.
+The POS receipt path is now restored to the canonical behavior from `main`:
+- uses `get_order_settlement_preview` for active orders,
+- preserves `pos.receipt.print` / `pos.payment.take` authorization in the database function,
+- preserves branch isolation and order-operator checks,
+- preserves sent-only printable quantities,
+- preserves `{ authorize: false }` only for rendering after server authorization has already succeeded.
 
-### Commit 2
-- SHA: `e907192a757816aa0d0cf0bc33100c45436e2214`
-- Message: `test(pos): guard open-order print from settlement RPC`
-- File added: `tests/unit/pos-open-order-print.test.tsx`
-- Regression: verifies that the open-order Print action calls the base print path and does not call `fetchOrderSettlementPreview()`.
+No permission names, grants, RLS policies, role rules, or printer-routing behavior were changed.
 
-## Pull request
-- PR: #175
-- State: Draft
-- Purpose: run CI only; do not merge yet.
+## Commits
+- d3d4bfde9b30be355344896a598311a4b342d199 — temporary open-order print bypass (superseded)
+- e907192a757816aa0d0cf0bc33100c45436e2214 — temporary regression test for bypass (superseded)
+- cae1f76b7c10b9903fd5994a1c5c55b38de9c8aa — lint-only correction in temporary test
+- 0c65ad1febbaac102e4baf607dc71afacdde2695 — restore sent-only receipt controls and remove temporary bypass test
 
-## Database / production safety
-- New migration: none
-- Production migration executed: no
-- Production data modified: no
-- RLS changed: no
-- Printing agent / printer configuration changed: no
-- Payment / settlement logic changed: no
+## Verification status
+Before the corrective revert, CI showed:
+- database identity: pass
+- API contract: pass
+- lint: pass
+- typecheck: pass
+- typecheck:all: pass
+- temporary bypass regression test: pass
+- existing sent-only receipt contract: failed, proving the bypass was not acceptable
 
-## Verification
-CI is expected to run the repository `Verify main` workflow for the draft PR, including lint, application/test typecheck, unit tests, build, fresh Postgres migration/schema verification, integration/security/RLS tests, and browser smoke tests.
+A fresh CI run is required on the corrective commit before this work can be considered Green.
 
-Current status at log creation: CI pending.
-
-## Remaining
-1. Inspect PR #175 CI results.
-2. Fix any failure on `development/pos-prepayment-print-fix` only.
-3. Keep PR unmerged until explicit user approval.
+## Remaining production step
+Production still needs the already-existing canonical migration/function to be applied before the POS print button can work there. This must not be done until Full Verify is Green and explicit approval is given.
