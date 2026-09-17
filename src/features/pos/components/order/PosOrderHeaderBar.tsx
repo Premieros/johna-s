@@ -135,18 +135,12 @@ export function PosOrderHeaderBar({
           </button>
         )}
 
-        {perms.canPrint && (
+        {perms.canPrint && canPrintSentReceipt && (
           <button
             data-testid="pos-action-print"
             type="button"
             onClick={onPrint}
-            disabled={!canPrintSentReceipt}
-            title={!hasSent
-              ? (isAr ? 'تتاح الطباعة بعد أول إرسال للمطبخ' : 'Printing is available after the first kitchen send')
-              : !canPrintReceipt
-                ? (isAr ? 'لا يوجد إيصال جاهز للطباعة' : 'No receipt is ready to print')
-                : undefined}
-            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs"
           >
             <Printer className="h-3.5 w-3.5 text-ui-primary" />
             <span className="hidden sm:inline">{isAr ? 'طباعة' : 'Print'}</span>
