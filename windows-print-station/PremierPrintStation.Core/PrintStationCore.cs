@@ -280,7 +280,7 @@ public sealed class LocalQueueDb
         cmd.CommandText = "UPDATE jobs SET state=$state,last_error=$error,attempts=attempts+$inc,updated_at=$updated WHERE id=$id";
         cmd.Parameters.AddWithValue("$state", state); cmd.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value); cmd.Parameters.AddWithValue("$inc", incrementAttempt?1:0); cmd.Parameters.AddWithValue("$updated", DateTime.UtcNow.ToString("O")); cmd.Parameters.AddWithValue("$id", id); cmd.ExecuteNonQuery();
     }
-    public void Retry(string id) => SetState(id, JobStates.Received, null, false);
+    public void ApproveCloudRetry(string id) => SetState(id, JobStates.Failed, "Manual retry approved; waiting for a fresh cloud claim", false);
 }
 
 public sealed record PrintDispatchResult(bool Accepted, string? Error = null);
