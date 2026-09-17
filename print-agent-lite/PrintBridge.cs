@@ -6,7 +6,6 @@ using System.Drawing.Printing;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.ServiceProcess;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -75,7 +74,7 @@ namespace PremierPrintAgentLite
         {
             try
             {
-                EnsureSpoolerAndPrinterReadyWithRetry(printerName);
+                EnsurePrinterReadyWithRetry(printerName);
 
                 for (var copy = 0; copy < copies; copy++)
                 {
@@ -110,7 +109,6 @@ namespace PremierPrintAgentLite
                             e.HasMorePages = false;
                         };
 
-                        // Never retry after Print() is invoked: an ambiguous retry could duplicate a physical ticket.
                         document.Print();
                     }
                 }
@@ -119,14 +117,14 @@ namespace PremierPrintAgentLite
             catch (Exception ex) { return Fail(ex.GetType().Name + ":" + ex.Message); }
         }
 
-        private static void EnsureSpoolerAndPrinterReadyWithRetry(string printerName)
+        private static void EnsurePrinterReadyWithRetry(string printerName)
         {
             Exception lastError = null;
             for (var attempt = 0; attempt <= PreflightRetryDelaysMs.Length; attempt++)
             {
                 try
                 {
-                    EnsureSpoolerAndPrinterReady(printerName);
+                    EnsurePrinterReady(printerName);
                     return;
                 }
                 catch (Exception ex)
@@ -136,23 +134,15 @@ namespace PremierPrintAgentLite
                     Thread.Sleep(PreflightRetryDelaysMs[attempt]);
                 }
             }
-            throw lastError ?? new InvalidOperationException("PRINT_SPOOLER_NOT_READY");
+            throw lastError ?? new InvalidOperationException("PRINTER_NOT_READY");
         }
 
-        private static void EnsureSpoolerAndPrinterReady(string printerName)
+        private static void EnsurePrinterReady(string printerName)
         {
-            using (var spooler = new ServiceController("Spooler"))
-            {
-                spooler.Refresh();
-                if (spooler.Status != ServiceControllerStatus.Running)
-                    throw new InvalidOperationException("PRINT_SPOOLER_NOT_RUNNING");
-            }
-
             if (!PrinterInstalled(printerName))
                 throw new InvalidOperationException("PRINTER_NOT_FOUND:" + printerName);
 
-            var settings = new PrinterSettings();
-            settings.PrinterName = printerName;
+            var settings = new PrinterSettings { PrinterName = printerName };
             if (!settings.IsValid)
                 throw new InvalidOperationException("INVALID_PRINTER:" + printerName);
         }
