@@ -50,7 +50,8 @@ describe('navigation regressions', () => {
     expect(layout).toContain('MENU_ITEMS');
     expect(layout).toContain('APP_ROUTES');
     expect(layout).toContain('MENU_GROUPS');
-    expect(layout).toContain("navigate('/floor-plan')");
+    expect(layout).toContain('navigate(APP_ROUTES.floorPlan)');
+    expect(layout).toContain("can('floor_plan.view')");
     expect(layout).toContain("user?.role === 'super_admin'");
     expect(MENU_ITEMS.length).toBeGreaterThan(0);
   });
@@ -77,11 +78,12 @@ describe('navigation regressions', () => {
 
   it('sidebar uses logical inline positioning for RTL/LTR correctness', () => {
     const layout = read('src/components/Layout.tsx');
-    expect(layout).toContain("ar ? 'start-0' : 'end-0'");
+    expect(layout).toContain('data-testid="app-sidebar"');
+    expect(layout).toContain('fixed top-0 bottom-0 start-0');
+    expect(layout).toContain('border-e');
+    expect(layout).toContain('fixed top-0 start-0 end-0 lg:start-[260px]');
+    expect(layout).toContain('pt-[64px] lg:ms-[260px]');
     expect(layout).not.toMatch(/fixed[^`]*\bright-0\b/);
     expect(layout).not.toMatch(/fixed[^`]*\bleft-0\b/);
-    expect(layout).toContain('fixed top-0 bottom-0');
-    expect(layout).toContain('fixed top-0 start-0 end-0');
-    expect(layout).toContain('pt-[64px]');
   });
 });
