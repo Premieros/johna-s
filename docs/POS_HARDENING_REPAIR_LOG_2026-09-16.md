@@ -34,21 +34,22 @@ Baseline: `main@2901a3c58533706c80f61bdf670f758c6f3b598e`
 
 ### P0 — صلاحيات ومسارات مالية
 
-- [~] ربط زر/handler إلغاء الطلب بـ`pos.cancel_order` في الواجهة، مع إثبات أن السيرفر يفرض نفس الصلاحية والـbranch scope. **UI action gated؛ server audit ما زال مفتوحًا.**
-- [~] ربط نقل الطلب بين الطاولات بـ`pos.order.transfer` في جميع نقاط الدخول. **Header + table-card entry points gated؛ handler/server atomic audit ما زال مفتوحًا.**
+- [~] ربط زر/handler إلغاء الطلب بـ`pos.cancel_order` في الواجهة، مع إثبات أن السيرفر يفرض نفس الصلاحية والـbranch scope. **UI action gated، وتم إثبات أن `set_order_status` يفرض `pos.cancel_order` + branch + operator scope؛ ما زال يلزم إغلاق handler/acceptance test.**
+- [~] ربط نقل الطلب بين الطاولات بـ`pos.order.transfer` في جميع نقاط الدخول. **Header + table-card entry points gated؛ full-order transfer ما زال غير Atomic ويحتاج RPC واحدة.**
 - [x] منع عرض زر الدفع للمستخدم الذي لا يملك `pos.payment.take` في شريط الطلب وقائمة الطلبات النشطة.
 - [~] منع عرض/تنفيذ الطباعة بدون `pos.receipt.print` مع الحفاظ على Super Admin implicit bypass فقط. **الزر permission-gated؛ sent-only payload ما زال مفتوحًا.**
-- [ ] إنشاء contract موحد لحساب `sent-only payable/printable items` من `order_items + kitchen sends`.
+- [ ] إنشاء contract موحد لحساب `sent-only payable/printable items` من `order_items + kitchen sends/events`.
 - [x] جعل زر الدفع يظهر فقط بعد وجود كمية مرسلة فعليًا للمطبخ.
 - [ ] منع الدفع عن أي quantity غير مرسلة للمطبخ.
 - [ ] منع طباعة quantity غير مرسلة للمطبخ من الطلب المفتوح.
 
 ### P0 — سلامة نقل الطاولات
 
-- [ ] استبدال النقل الحالي متعدد الاستعلامات بعملية server-authoritative atomic transaction/RPC إذا لم يوجد RPC صحيح بالفعل.
+- [ ] استبدال `transferOrderToTable` الحالي متعدد الاستعلامات بعملية server-authoritative atomic transaction/RPC.
 - [ ] العملية يجب أن تتحقق من: permission + branch + source/target table state + order status + ownership/concurrency.
-- [ ] تحرير الطاولة القديمة وتشغيل الجديدة وتحديث order.table_id في transaction واحدة.
+- [ ] تحرير الطاولة القديمة وتشغيل الجديدة وتحديث `orders.table_id` في transaction واحدة.
 - [ ] إضافة regression test لفشل منتصف العملية والتأكد من عدم وجود partial state.
+- [x] تم التحقق أن `transfer_order_item_to_table` الجزئي الموجود على السيرفر Atomic ومحمي، لكنه **لا يغطي نقل الطلب كاملًا**.
 
 ### P1 — Kitchen / Audit / concurrency
 
@@ -66,8 +67,21 @@ Baseline: `main@2901a3c58533706c80f61bdf670f758c6f3b598e`
 ### P1 — Warehouse authority
 
 - [ ] مراجعة عقد اختيار warehouse للطلب الجديد.
-- [ ] إثبات أن POS availability وsend_to_kitchen وsettlement تستخدم نفس authoritative warehouse.
+- [ ] إثبات أن POS availability و`send_to_kitchen` وsettlement تستخدم نفس authoritative warehouse.
 - [ ] منع silent fallback لمخزن مختلف إذا كان order مربوطًا بـ`inventory_warehouse_id`.
+
+### P2 — Shift close / treasury / accounting
+
+- [ ] إغلاق الوردية يغلق اليومية المرتبطة بعد تحقق الشروط.
+- [ ] كل الطلبات/الطاولات المفتوحة تُعالج قبل الإغلاق؛ وبعد نجاح الإغلاق تصبح جميع الطاولات المعنية متاحة.
+- [ ] المصروفات تخصم من إجمالي الإيراد للوصول لصافي إيراد الوردية.
+- [ ] إصدار تقرير مستقل لكل مستخدم شارك في الشفت.
+- [ ] إصدار تقرير مجمع للوردية، ومجموع تقارير المستخدمين يطابق التقرير المجمع.
+- [ ] كل خزينة ترتبط بحساب مالي في شجرة الحسابات.
+- [ ] كل تصنيف مصروف يرتبط بحساب مصروف في شجرة الحسابات.
+- [ ] قيد المصروف يكون: **مدين مصروف / دائن خزينة أو بنك**.
+- [ ] لا حذف صامت للمصروفات؛ الإلغاء يتم بعكس/void محاسبي قابل للتدقيق.
+- [ ] رصيد الخزينة النهائي يطابق حسابها في الـGL عند إغلاق الوردية.
 
 ## اختبارات القبول الإلزامية
 
@@ -95,6 +109,14 @@ Baseline: `main@2901a3c58533706c80f61bdf670f758c6f3b598e`
 - [ ] delta يخصم الزيادة فقط.
 - [ ] void لصنف مرسل يعيد الكمية الصحيحة فقط بعد approval/permission contract.
 - [ ] cancel order بعد kitchen send يعكس الاستهلاك حسب العقد المعتمد ولا يسبب double restore.
+
+### Shift close / accounting
+
+- [ ] إغلاق شفت متعدد المستخدمين يصدر تقريرًا لكل مستخدم وتقريرًا مجمعًا متطابقًا.
+- [ ] المصروفات تخصم من الإيراد وتظهر في تقرير الشفت وصافي الإيراد.
+- [ ] جميع الطاولات تصبح متاحة فقط بعد نجاح الإغلاق بالكامل.
+- [ ] إعادة محاولة إغلاق الشفت لا تكرر القيود أو التقارير.
+- [ ] قيود المصروفات والخزينة متزنة ومطابقة للـGL وعزل الفرع محفوظ.
 
 ## سجل التنفيذ الحي
 
@@ -132,9 +154,92 @@ Commits:
 - `ed914ed277d10faaeb5066f364e35bdca8806fa4` — Table transfer permission gate.
 - `f430966a3a842ec95b856cbc0951dcc6a91dd5e4` — focused contract test.
 
-Verification status:
-- ⏳ Focused/Full Verify لم يُعتبر Green بعد؛ سيتم تشغيله على PR/CI قبل إغلاق البنود جزئيًا أو كليًا.
-- ⏭️ NEXT: تنفيذ `sent-only payable/printable items` بحيث الإضافات غير المرسلة لا تدخل في الحساب أو الطباعة، ثم مراجعة server authority للـcancel/transfer.
+### 2026-09-16 — Full Verify run #1584
+
+- Run ID: `35151566173`.
+- ✅ Lint: passed with warnings only.
+- ✅ TypeScript: passed.
+- ✅ Typecheck all app/tests: passed.
+- ❌ Unit: **1 failed / 585 passed / 3 todo**.
+- DB + Browser Smoke skipped بسبب فشل Unit.
+
+Root Cause للفشل:
+- الاختبار القديم `tests/components/pos-customer-receipt-print-contract.test.ts` كان يتوقع:
+  `disabled={!canPrintReceipt}`
+- بينما القاعدة الجديدة المعتمدة أصبحت:
+  `disabled={!canPrintSentReceipt}`
+  لأن الطباعة لا تتاح قبل أول kitchen send.
+- لا يوجد دليل على Runtime regression من هذا الفشل؛ هو Contract قديم بالنسبة للقاعدة الجديدة.
+
+Actions:
+- ✅ تم تحديث Contract ليطابق قاعدة first-send الجديدة.
+- ✅ تم حذف ملفات Workflow helper المؤقتة التي استُخدمت أثناء محاولة تجهيز sent-only patch، حتى لا يبقى منطق تنفيذ ذاتي داخل الفرع.
+- آخر HEAD بعد التنظيف: `3345f3b38f266f4ebc626a8a10559d2b43dceec2` قبل تحديث هذا السجل.
+
+### 2026-09-17 — Server authority audit
+
+تم فحص Production **قراءة فقط** بدون أي DDL/DML:
+
+- ✅ `set_order_status` يفرض:
+  - auth user
+  - active user
+  - branch scope
+  - operator/manager scope
+  - `pos.cancel_order` عند `cancelled`
+  - منع إلغاء طلب أُرسل للمطبخ إلا عبر controlled void
+  - سبب إلغاء إلزامي
+  - audit log
+- ✅ `transfer_order_item_to_table` الجزئي يفرض:
+  - branch scope
+  - operator ownership
+  - `pos.order.transfer`
+  - source/target table validation
+  - locks داخل transaction
+  - يمنع نقل line أُرسلت للمطبخ
+  - audit log
+- ❌ `transferOrderToTable` في الواجهة لنقل **الطلب كاملًا** ما زال يبدأ بتحديث `orders.table_id` مباشرة ثم يكمل خطوات منفصلة؛ هذا هو P0 المفتوح التالي ويحتاج RPC Atomic مستقلة.
+
+### 2026-09-17 — Shift/Treasury additions
+
+تمت إضافة المتطلبات التالية إلى خطة التنفيذ بدون تنفيذ Production:
+
+- إغلاق الوردية يغلق اليومية المرتبطة.
+- المصروفات تخصم من إجمالي الإيراد.
+- جميع الطاولات تصبح متاحة بعد إغلاق ناجح.
+- تقرير لكل مستخدم في الشفت + تقرير مجمع.
+- الخزينة والمصروفات مربوطة بشجرة الحسابات.
+- كل مصروف ينتج قيدًا متزنًا من حساب المصروف إلى حساب الخزينة/البنك.
+- ملف تفصيلي إضافي: `docs/TREASURY_EXPENSE_GL_PLAN.md`.
+
+## الحالة الحقيقية الآن
+
+**مغلق/مثبت جزئيًا:**
+- Permission gates الأساسية لـPay/Cancel/Transfer/Print في نقاط الدخول التي تمت مراجعتها.
+- Pay لا يظهر قبل first kitchen send.
+- Server-side cancel authority تم إثباته.
+- Server-side item-transfer authority تم إثباته.
+- Contract الطباعة القديم تم تصحيحه.
+- ملفات التنفيذ المؤقتة تم تنظيفها.
+
+**ما زال مفتوحًا ولم يتم الادعاء بإغلاقه:**
+1. Atomic full-order table transfer.
+2. sent-only payment payload فعليًا.
+3. sent-only open-order print payload فعليًا.
+4. Kitchen concurrency/idempotency audit.
+5. Warehouse authority audit.
+6. View-only / Pay-only end-to-end acceptance.
+7. Shift close + daily close + tables release + per-user/combined reports.
+8. Treasury/expense GL implementation.
+9. Full Verify Green النهائي بعد إغلاق البنود السابقة.
+
+**ترتيب الإغلاق المعتمد القادم:**
+1. Atomic full-order table transfer.
+2. sent-only payment + print.
+3. Kitchen concurrency/audit.
+4. Warehouse authority.
+5. View-only / Pay-only acceptance.
+6. Shift close + treasury/GL.
+7. Full Verify + DB + Browser Smoke.
 
 ## قاعدة تحديث هذا السجل
 
