@@ -209,6 +209,15 @@ export function CostingCenterPage() {
 
   const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
   const money = (v: number | undefined | null) => formatCurrency(Number(v || 0), 'EGP', lang);
+  const rawUnitMoney = (v: number | undefined | null) => {
+    const value = Number(v || 0);
+    const decimals = Math.abs(value) > 0 && Math.abs(value) < 1 ? 6 : 2;
+    return `${formatNumber(value, decimals)} EGP`;
+  };
+  const rawUnitLabel = (rawMaterialId: string) => {
+    const unit = rawMaterialUnits[rawMaterialId];
+    return unit?.symbol || unit?.code || unit?.name || '';
+  };
   const pill = (label: string, cls: string) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
   const marginPill = (v: number) => {
     if (v >= 40) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-success-soft text-ui-success dark:text-ui-success');
@@ -265,8 +274,8 @@ export function CostingCenterPage() {
 
   const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string }>[] = [
     { key: 'raw', header: t('rawMaterial'), render: (r) => <div><p className="font-semibold text-ui-text">{r.raw_material_name}</p><p className="text-xs text-ui-subtle">{r.raw_material_code || '-'}</p></div> },
-    { key: 'latest', header: isAr ? 'آخر سعر' : 'Latest price', render: (r) => <span className="font-bold text-ui-text">{money(r.latest_cost)}</span> },
-    { key: 'previous', header: isAr ? 'السعر السابق' : 'Previous price', render: (r) => r.previous_cost == null ? '-' : money(r.previous_cost) },
+    { key: 'latest', header: isAr ? 'آخر سعر / وحدة المخزون' : 'Latest / stock unit', render: (r) => <div><span className="font-bold text-ui-text">{rawUnitMoney(r.latest_cost)}</span>{rawUnitLabel(r.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(r.raw_material_id)}</p>}</div> },
+    { key: 'previous', header: isAr ? 'السعر السابق' : 'Previous price', render: (r) => r.previous_cost == null ? '-' : rawUnitMoney(r.previous_cost) },
     { key: 'change', header: isAr ? 'التغير' : 'Change', render: (r) => r.change_pct == null ? '-' : <span className={`font-semibold ${r.change_pct > 0 ? 'text-ui-danger' : r.change_pct < 0 ? 'text-ui-success' : 'text-ui-muted'}`}>{r.change_pct > 0 ? '+' : ''}{formatNumber(r.change_pct, 2)}%</span> },
     { key: 'source', header: isAr ? 'مصدر السعر' : 'Price source', render: (r) => rawPriceSourcePill(r.price_source) },
     { key: 'date', header: isAr ? 'تاريخ السعر' : 'Price date', render: (r) => r.priced_at ? formatDateTime(r.priced_at, lang) : '-' },
@@ -277,8 +286,8 @@ export function CostingCenterPage() {
   const rawHistoryColumns: Column<RawMaterialCostHistoryRow & { id: string }>[] = [
     { key: 'date', header: t('date'), render: (r) => formatDateTime(r.priced_at, lang) },
     { key: 'source', header: isAr ? 'المصدر' : 'Source', render: (r) => rawPriceSourcePill(r.price_source) },
-    { key: 'cost', header: isAr ? 'السعر' : 'Price', render: (r) => <span className="font-bold text-ui-text">{money(r.unit_cost)}</span> },
-    { key: 'previous', header: isAr ? 'السعر السابق' : 'Previous', render: (r) => r.previous_cost == null ? '-' : money(r.previous_cost) },
+    { key: 'cost', header: isAr ? 'السعر' : 'Price', render: (r) => <span className="font-bold text-ui-text">{rawUnitMoney(r.unit_cost)}</span> },
+    { key: 'previous', header: isAr ? 'السعر السابق' : 'Previous', render: (r) => r.previous_cost == null ? '-' : rawUnitMoney(r.previous_cost) },
     { key: 'change', header: isAr ? 'التغير' : 'Change', render: (r) => r.change_pct == null ? '-' : <span className={`font-semibold ${r.change_pct > 0 ? 'text-ui-danger' : r.change_pct < 0 ? 'text-ui-success' : 'text-ui-muted'}`}>{r.change_pct > 0 ? '+' : ''}{formatNumber(r.change_pct, 2)}%</span> },
     { key: 'reference', header: isAr ? 'رقم المستند' : 'Document', render: (r) => r.reference_number || '-' },
     { key: 'detail', header: isAr ? 'التوضيح' : 'Details', render: (r) => r.source_detail || '-' },
@@ -350,7 +359,7 @@ export function CostingCenterPage() {
       <Modal open={rawHistoryTarget !== null} onClose={() => { setRawHistoryTarget(null); setRawHistory([]); }} title={rawHistoryTarget ? `${isAr ? 'تاريخ سعر' : 'Price History'} — ${rawHistoryTarget.raw_material_name}` : ''} size="xl">
         {rawHistoryTarget && <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'آخر سعر معتمد' : 'Latest authoritative price'}</p><p className="mt-1 text-lg font-bold text-ui-text">{money(rawHistoryTarget.latest_cost)}</p></div>
+            <div className="rounded-xl border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'آخر سعر معتمد' : 'Latest authoritative price'}</p><p className="mt-1 text-lg font-bold text-ui-text">{rawUnitMoney(rawHistoryTarget.latest_cost)} {rawUnitLabel(rawHistoryTarget.raw_material_id) ? `/ ${rawUnitLabel(rawHistoryTarget.raw_material_id)}` : ''}</p></div>
             <div className="rounded-xl border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'المصدر' : 'Source'}</p><div className="mt-2">{rawPriceSourcePill(rawHistoryTarget.price_source)}</div></div>
             <div className="rounded-xl border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تاريخ آخر سعر' : 'Latest price date'}</p><p className="mt-1 text-sm font-semibold text-ui-text">{rawHistoryTarget.priced_at ? formatDateTime(rawHistoryTarget.priced_at, lang) : '-'}</p></div>
           </div>
@@ -381,7 +390,7 @@ export function CostingCenterPage() {
           {(detail.recipe_items?.length || 0) > 0 && <div>
             <h3 className="text-sm font-bold text-ui-text mb-2">{t('recipeItems')}</h3>
             <div className="overflow-x-auto rounded-ui-lg border border-ui-border"><table className="w-full text-sm"><thead><tr className="bg-ui-page-alt text-start text-xs text-ui-subtle"><th className="px-3 py-2">{t('item')}</th><th className="px-3 py-2">{t('quantity')}</th><th className="px-3 py-2">{t('wastagePercent')}</th><th className="px-3 py-2">{t('unitCost')}</th><th className="px-3 py-2">{isAr ? 'مصدر السعر' : 'Price source'}</th><th className="px-3 py-2">{isAr ? 'تاريخ السعر' : 'Price date'}</th><th className="px-3 py-2">{t('total')}</th><th className="px-3 py-2">{isAr ? 'التوضيح' : 'Explanation'}</th></tr></thead><tbody>
-              {detail.recipe_items!.map((c) => <tr key={c.raw_material_id} className="border-t border-ui-border"><td className="px-3 py-2">{c.raw_material_name}</td><td className="px-3 py-2">{formatRawMaterialQuantity(c.quantity, rawMaterialUnits[c.raw_material_id], { preferGrams: true, lang })}</td><td className="px-3 py-2">{formatNumber(c.wastage_percent, 1)}%</td><td className="px-3 py-2">{money(c.unit_cost)}</td><td className="px-3 py-2">{rawPriceSourcePill(c.cost_source || 'default_cost')}{c.cost_reference && <p className="mt-1 text-[10px] text-ui-subtle">{c.cost_reference}</p>}</td><td className="px-3 py-2 text-xs">{c.cost_priced_at ? formatDateTime(c.cost_priced_at, lang) : '-'}</td><td className="px-3 py-2">{money(c.line_cost)}</td><td className="px-3 py-2"><CostBreakdownButton kind="raw_material" itemId={c.raw_material_id} itemName={c.raw_material_name} lineQuantity={c.quantity} usedUnitCost={c.unit_cost} lineCost={c.line_cost} branchId={effBranch} unit={rawMaterialUnits[c.raw_material_id]} /></td></tr>)}
+              {detail.recipe_items!.map((c) => <tr key={c.raw_material_id} className="border-t border-ui-border"><td className="px-3 py-2">{c.raw_material_name}</td><td className="px-3 py-2">{formatRawMaterialQuantity(c.quantity, rawMaterialUnits[c.raw_material_id], { preferGrams: true, lang })}</td><td className="px-3 py-2">{formatNumber(c.wastage_percent, 1)}%</td><td className="px-3 py-2">{rawUnitMoney(c.unit_cost)}{rawUnitLabel(c.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(c.raw_material_id)}</p>}</td><td className="px-3 py-2">{rawPriceSourcePill(c.cost_source || 'default_cost')}{c.cost_reference && <p className="mt-1 text-[10px] text-ui-subtle">{c.cost_reference}</p>}</td><td className="px-3 py-2 text-xs">{c.cost_priced_at ? formatDateTime(c.cost_priced_at, lang) : '-'}</td><td className="px-3 py-2">{money(c.line_cost)}</td><td className="px-3 py-2"><CostBreakdownButton kind="raw_material" itemId={c.raw_material_id} itemName={c.raw_material_name} lineQuantity={c.quantity} usedUnitCost={c.unit_cost} lineCost={c.line_cost} branchId={effBranch} unit={rawMaterialUnits[c.raw_material_id]} /></td></tr>)}
             </tbody></table></div>
           </div>}
 
