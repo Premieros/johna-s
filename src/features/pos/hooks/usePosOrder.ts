@@ -6,7 +6,8 @@ import { useToast } from '@/components/Toast';
 import { cartToItems, type ItemPayload } from '../utils/cart';
 import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
 import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/settlementPreview';
-import { buildReceiptHtml, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { buildReceiptHtml, buildReceiptThermalText, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { usePosPermissions } from './usePosPermissions';
 import {
@@ -362,8 +363,26 @@ export function usePosOrder(input: UsePosOrderInput) {
 
     const receipt = buildSettlementReceipt(preview, base.activeOrderNumber || `ORDER-${Date.now()}`, 0);
     receipt.isOpenOrder = true;
-    const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr, { authorize: false });
-    openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+    const text = buildReceiptThermalText(receipt, input.effSettings, lang, isAr);
+    const queued = await enqueueCloudOpenOrderPrint({
+      orderId: base.activeOrderId,
+      payload: {
+        text,
+        paperWidthMm: input.effSettings.receipt_width_mm || 80,
+        copies: 1,
+      },
+      idempotencyKey: `open-check:${base.activeOrderId}:${Date.now()}`,
+    });
+    if (!queued.accepted) {
+      show(
+        isAr
+          ? `تعذر إرسال الحساب إلى محطة الكاشير: ${queued.error || 'PRINT_QUEUE_FAILED'}`
+          : `Could not queue the open check to the cashier station: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
+        'error',
+      );
+      return;
+    }
+    show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
   }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, settlementReceipt]);
 
   const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
