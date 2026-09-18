@@ -31,6 +31,21 @@ function physicalPrinterKey(printerName: string): string {
   return printerName.trim().toLocaleLowerCase();
 }
 
+function legacyReportHtmlToText(html: string): string {
+  if (typeof window === 'undefined' || !html.trim()) return '';
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('style,script,noscript').forEach((node) => node.remove());
+    return (doc.body?.innerText || doc.body?.textContent || '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  } catch {
+    return '';
+  }
+}
+
 async function executeJob(job: CloudPrintJob, agentId: string, printerName: string): Promise<void> {
   const started = await startCloudPrintJob(job.id, agentId);
   if (!started) return;
@@ -40,10 +55,13 @@ async function executeJob(job: CloudPrintJob, agentId: string, printerName: stri
     return;
   }
 
+  const legacyReportText = job.kind === 'report' && !job.payload?.text && job.payload?.html
+    ? legacyReportHtmlToText(job.payload.html)
+    : '';
   const result = await executeSilentPrintDetailed({
     printerName,
-    text: job.payload?.text,
-    html: job.payload?.html,
+    text: job.payload?.text || legacyReportText || undefined,
+    html: job.kind === 'report' ? undefined : job.payload?.html,
     copies: Math.max(1, Math.min(5, Number(job.payload?.copies || 1))),
     paperWidthMm: Number(job.payload?.paperWidthMm || 80),
   });
