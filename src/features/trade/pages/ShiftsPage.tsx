@@ -19,7 +19,7 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import type { Shift, RpcResult } from '@/lib/types';
-import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
+import { buildThermalZReportText, buildA4ZReportHtml } from '../services/shiftClosingReport';
 import { fetchShiftClosingReportServer } from '../services/shiftClosingFinancials';
 import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '../services/dayClosingReport';
 import { enqueueCloudReportPrint } from '../../pos/services/cloudPrint';
@@ -212,10 +212,10 @@ export function ShiftsPage() {
     try {
       const summary = await fetchShiftClosingReportServer(shift.id);
       if (format === 'thermal') {
-        const html = buildThermalZReportHtml(summary, currency, lang);
+        const text = buildThermalZReportText(summary, currency, lang);
         const queued = await enqueueCloudReportPrint({
           branchId: shift.branch_id,
-          payload: { html, paperWidthMm: 80, copies: 1 },
+          payload: { text, paperWidthMm: 80, copies: 1 },
           idempotencyKey: `zreport:${shift.id}:${summary.closedAt || 'open'}:${Date.now()}`,
         });
         if (!queued.accepted) {
