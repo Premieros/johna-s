@@ -192,7 +192,8 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
 
     void (async () => {
-      const preview = await loadSettlementPreview(true);
+      // Opening payment is read-only for an already-sent order. Do not rewrite sent lines.
+      const preview = await loadSettlementPreview(false);
       if (!preview) return;
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
@@ -266,7 +267,8 @@ export function usePosOrder(input: UsePosOrderInput) {
 
     setOfflineCompleting(true);
     try {
-      const preview = settlementPreview || await loadSettlementPreview(true);
+      // Settlement must never rewrite already-sent order items; sent quantities are server-owned.
+      const preview = settlementPreview || await loadSettlementPreview(false);
       if (!preview) return false;
 
       const invoiceNumber = await nextInvoiceNumber();
