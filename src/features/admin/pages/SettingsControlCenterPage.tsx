@@ -269,7 +269,7 @@ export function SettingsControlCenterPage() {
                 <h2 className="text-lg font-bold text-ui-text">{isAr ? 'تعريف بداية ونهاية اليوم المالي' : 'Business Day Boundaries'}</h2>
                 <p className="text-xs text-ui-subtle">
                   {isAr
-                    ? 'اختر هل اليومية تعتمد على أوقات ثابتة، أم تبدأ من أول شفت في اليوم وتنتهي عند إغلاق آخر شفت.'
+                    ? 'اختر هل اليومية تعتمد على أوقات ثابتة، أم تبدأ من أول شفت بعد وقت بداية محدد وتنتهي عند إغلاق آخر شفت لذلك اليوم.'
                     : 'Choose fixed business hours, or span the day from the first opened shift through the last closed shift.'}
                 </p>
               </div>
@@ -284,7 +284,7 @@ export function SettingsControlCenterPage() {
                   })}
                 >
                   <option value="fixed_time">{isAr ? 'وقت بداية ونهاية ثابت' : 'Fixed start / end time'}</option>
-                  <option value="shift_span">{isAr ? 'من أول شفت مفتوح إلى آخر شفت مغلق' : 'First opened shift → last closed shift'}</option>
+                  <option value="shift_span">{isAr ? 'من أول شفت بعد وقت البداية إلى آخر شفت مغلق' : 'First shift after cutoff → last closed shift'}</option>
                 </Select>
 
                 {(branchForm.business_day_mode || 'fixed_time') === 'fixed_time' ? (
@@ -303,10 +303,18 @@ export function SettingsControlCenterPage() {
                     />
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-muted">
-                    {isAr
-                      ? 'في هذا الوضع: بداية اليومية = وقت فتح أول شفت بتاريخ العمل، ونهايتها = وقت إغلاق آخر شفت. لا يمكن إغلاق اليوم طالما يوجد شفت مفتوح.'
-                      : 'In this mode, day start is the first shift open time and day end is the final shift close time. Day close remains blocked while any shift is open.'}
+                  <div className="space-y-3">
+                    <Input
+                      type="time"
+                      label={isAr ? 'وقت بداية احتساب اليوم' : 'Business Day Cutoff'}
+                      value={branchForm.business_day_start || '09:00'}
+                      onChange={(e) => setBranchForm({ ...branchForm, business_day_start: e.target.value })}
+                    />
+                    <div className="rounded-xl border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-muted">
+                      {isAr
+                        ? 'مثال: إذا كان وقت البداية 09:00، يبدأ اليوم من أول شفت يُفتح بعد 09:00، وينتهي عند إغلاق آخر شفت بدأ قبل 09:00 من اليوم التالي—even لو أغلق 04:00 فجرًا. أي مشتريات أو مصروفات قبل أول شفت لا تدخل في اليومية.'
+                        : 'Example: with a 09:00 cutoff, the business day starts at the first shift opened after 09:00 and ends when the last shift that started before the next 09:00 closes, even at 04:00. Purchases and expenses before the first shift are excluded.'}
+                    </div>
                   </div>
                 )}
 

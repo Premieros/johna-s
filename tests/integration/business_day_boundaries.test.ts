@@ -53,7 +53,10 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     expect(def).toContain("min(s.opened_at)");
     expect(def).toContain("max(COALESCE(s.closed_at,now()))");
     expect(def).toContain("AT TIME ZONE 'Africa/Cairo'");
-    expect(def).toContain("v_end_time<=v_start_time");
+    expect(def).toContain("v_nominal_start");
+    expect(def).toContain("v_nominal_next");
+    expect(def).toContain("s.opened_at>=v_nominal_start");
+    expect(def).toContain("s.opened_at<v_nominal_next");
   });
 
   it('uses the resolved window for sales, expenses and cash purchases', async () => {
@@ -65,6 +68,8 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     expect(def).toContain('s.created_at>=v_start');
     expect(def).toContain('e.created_at>=v_start');
     expect(def).toContain('p.created_at>=v_start');
+    expect(def).toContain('public.sale_payments');
+    expect(def).toContain('sp.refunded_amount');
     expect(def).toContain("'business_day_mode'");
     expect(def).toContain("'window_start'");
     expect(def).toContain("'window_end'");

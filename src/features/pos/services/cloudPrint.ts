@@ -1,4 +1,4 @@
-import { supabase } from '@/api';
+import { supabase, shifts as shiftsApi } from '@/api';
 import type { KitchenSendItem } from '../types';
 import { buildStationTicketText, groupKitchenItemsByStation, type LocalKitchenPrintContext } from './localPrintAgent';
 
@@ -8,7 +8,7 @@ const STORAGE_AGENT_ID_KEY = 'johns_pos_cloud_print_agent_id';
 
 export interface CloudPrintPayload { text?: string; html?: string; paperWidthMm?: number; copies?: number; }
 export interface CloudPrintJob {
-  id: string; branch_id: string; kind: 'kitchen' | 'receipt' | 'test'; station_code: string;
+  id: string; branch_id: string; kind: 'kitchen' | 'receipt' | 'test' | 'report'; station_code: string;
   payload: CloudPrintPayload; sale_id?: string | null; expected_print_number?: number | null;
   attempts: number; created_at: string;
 }
@@ -113,6 +113,20 @@ export async function enqueueCloudReceiptPrint(params: { saleId: string; approva
   if (error) return { accepted: false, error: error.message };
   const result = (data ?? {}) as RpcResult;
   return result.success ? { accepted: true, jobId: result.job_id } : { accepted: false, error: result.error || result.detail || 'CLOUD_PRINT_ENQUEUE_FAILED' };
+}
+
+export async function enqueueCloudReportPrint(params: { branchId: string; payload: CloudPrintPayload; idempotencyKey: string }) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { accepted: false, error: 'OFFLINE' };
+  const { data, error } = await shiftsApi.enqueueReportPrint({
+    p_branch_id: params.branchId,
+    p_payload: params.payload as Record<string, unknown>,
+    p_idempotency_key: params.idempotencyKey,
+  });
+  if (error) return { accepted: false, error: error.message };
+  const result = (data ?? {}) as RpcResult;
+  return result.success
+    ? { accepted: true, jobId: result.job_id, stationCode: 'cashier' }
+    : { accepted: false, error: result.error || result.detail || 'CLOUD_PRINT_ENQUEUE_FAILED' };
 }
 
 export async function claimCloudPrintJobs(branchId: string, agentId: string, limit = 12): Promise<CloudPrintJob[]> {

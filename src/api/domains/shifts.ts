@@ -24,6 +24,15 @@ export const shifts = {
     return rpc('get_shift_closing_report', p);
   },
 
+  getSaleTenders(p: { p_shift_id: string }): ApiResult<RpcResult & Record<string, unknown>> {
+    return rpc('get_shift_sale_tenders', p);
+  },
+
+  enqueueReportPrint(p: { p_branch_id: string; p_payload: Record<string, unknown>; p_idempotency_key: string }): ApiResult<RpcResult & { job_id?: string; status?: string; station_code?: string }> {
+    return rpc('enqueue_cloud_report_print', p);
+  },
+
+
   getDayClosingReport(p: { p_branch_id: string; p_day: string }): ApiResult<RpcResult & Record<string, unknown>> {
     return rpc('get_day_closing_report', p);
   },

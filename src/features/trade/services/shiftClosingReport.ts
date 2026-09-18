@@ -82,6 +82,7 @@ export interface ShiftClosingSummary {
     paidAmount: number;
     refundedAmount: number;
     paymentMethod: string;
+    payments?: Array<{ method: string; amount: number }>;
     orderType: string;
     createdAt: string;
   }[];
@@ -436,6 +437,18 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     </div>
   `).join('')}
 
+  ${(summary.salesDetails || []).length > 0 ? `
+    <div class="section-title">${isAr ? 'الفواتير وطرق الدفع' : 'INVOICES & TENDERS'}</div>
+    ${(summary.salesDetails || []).map((sale) => `
+      <div class="py-1 border-b">
+        <div class="flex justify-between"><span class="font-bold">${escapeHtml(sale.invoiceNumber)}</span><span class="font-bold">${formatCurrency(sale.total, currency, lang)}</span></div>
+        <div style="font-size:9px;">${escapeHtml(sale.userName || '-')} · ${formatDateTime(sale.createdAt, lang)}</div>
+        ${(sale.payments && sale.payments.length > 0)
+          ? sale.payments.map((payment) => `<div class="flex justify-between" style="font-size:10px;"><span>${escapeHtml(payment.method)}</span><span>${formatCurrency(payment.amount, currency, lang)}</span></div>`).join('')
+          : `<div class="flex justify-between" style="font-size:10px;"><span>${escapeHtml(sale.paymentMethod || '-')}</span><span>${formatCurrency(sale.paidAmount, currency, lang)}</span></div>`}
+      </div>
+    `).join('')}
+  ` : ''}
   <!-- Cash Drawer Balancing -->
   <div class="section-title">${isAr ? 'تسوية الدرج والنقدية' : 'CASH RECONCILIATION'}</div>
   <div class="flex justify-between py-1">
@@ -705,6 +718,25 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
       </tbody>
     </table>
 
+    ${(summary.salesDetails || []).length > 0 ? `
+      <h3 class="section-heading">${isAr ? 'الفواتير ودفعات كل فاتورة' : 'Invoices & Tender Allocation'}</h3>
+      <table>
+        <thead><tr>
+          <th>${isAr ? 'الفاتورة' : 'Invoice'}</th>
+          <th>${isAr ? 'المستخدم' : 'User'}</th>
+          <th>${isAr ? 'طرق الدفع' : 'Tender Allocation'}</th>
+          <th class="text-end">${isAr ? 'الإجمالي' : 'Total'}</th>
+        </tr></thead>
+        <tbody>${(summary.salesDetails || []).map((sale) => `<tr>
+          <td>${escapeHtml(sale.invoiceNumber)}</td>
+          <td>${escapeHtml(sale.userName || '-')}</td>
+          <td>${(sale.payments && sale.payments.length > 0)
+            ? sale.payments.map((payment) => `${escapeHtml(payment.method)}: ${formatCurrency(payment.amount, currency, lang)}`).join(' + ')
+            : `${escapeHtml(sale.paymentMethod || '-')}: ${formatCurrency(sale.paidAmount, currency, lang)}`}</td>
+          <td class="text-end font-bold">${formatCurrency(sale.total, currency, lang)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    ` : ''}
     ${(summary.expenseDetails || []).length > 0 ? `
       <h3 class="section-heading">${isAr ? 'المصروفات بالتفصيل' : 'Expense Details'}</h3>
       <table>
