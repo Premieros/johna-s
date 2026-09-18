@@ -327,47 +327,104 @@ export async function fetchShiftClosingDetails(shiftId: string, branchId?: strin
 /**
  * Generates an 80mm / 58mm Thermal Z-Report Receipt HTML
  */
+function zThermalNumber(value: unknown, maxFractionDigits = 2): string {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return '0';
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxFractionDigits,
+    useGrouping: true,
+  }).format(n);
+}
+
+function zThermalMoney(value: unknown, currency: string): string {
+  return `${zThermalNumber(value, 2)} ${String(currency || 'EGP').trim()}`;
+}
+
+function zThermalDateTime(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
+}
+
+function zThermalPaymentLabel(method: string, fallback: string, isAr: boolean): string {
+  const key = String(method || '').toLowerCase();
+  const labels: Record<string, [string, string]> = {
+    cash: ['نقدي', 'CASH'],
+    card: ['بطاقة', 'CARD'],
+    transfer: ['تحويل', 'TRANSFER'],
+    bank_transfer: ['تحويل بنكي', 'BANK TRANSFER'],
+    instapay: ['إنستاباي', 'INSTAPAY'],
+    credit: ['آجل', 'CREDIT'],
+  };
+  const label = labels[key];
+  if (label) return isAr ? `${label[0]} / ${label[1]}` : label[1];
+  return String(fallback || method || '-').trim();
+}
+
 export function buildThermalZReportText(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
-  const line = '-'.repeat(32);
+  const line = '-'.repeat(36);
+  const money = (value: unknown) => zThermalMoney(value, currency);
+  const splitTenderCount = (summary.salesDetails || []).filter(
+    (sale) => (sale.payments || []).filter((payment) => Number(payment.amount) > 0).length > 1,
+  ).length;
+
   const rows: string[] = [
     summary.branchName,
-    isAr ? '*** تقرير إغلاق الوردية Z-REPORT ***' : '*** SHIFT Z-REPORT ***',
-    `#${summary.shiftId.slice(0, 8).toUpperCase()}`,
+    isAr ? '*** تقرير Z / Z-REPORT ***' : '*** Z-REPORT ***',
+    `SHIFT: #${summary.shiftId.slice(0, 8).toUpperCase()}`,
     line,
     `${isAr ? 'الكاشير' : 'Cashier'}: ${summary.cashierName}`,
-    `${isAr ? 'الفتح' : 'Opened'}: ${formatDateTime(summary.openedAt, lang)}`,
-    `${isAr ? 'الإغلاق' : 'Closed'}: ${summary.closedAt ? formatDateTime(summary.closedAt, lang) : (isAr ? 'مستمر' : 'Active')}`,
+    `${isAr ? 'الفتح' : 'Opened'}: ${zThermalDateTime(summary.openedAt)}`,
+    `${isAr ? 'الإغلاق' : 'Closed'}: ${summary.closedAt ? zThermalDateTime(summary.closedAt) : (isAr ? 'مفتوح / ACTIVE' : 'ACTIVE')}`,
     line,
-    `${isAr ? 'عدد الفواتير' : 'Invoices'}: ${summary.totalInvoices}`,
-    `${isAr ? 'إجمالي المبيعات' : 'Gross Sales'}: ${formatCurrency(summary.grossSales, currency, lang)}`,
-    `${isAr ? 'الخصومات' : 'Discounts'}: ${formatCurrency(summary.totalDiscounts, currency, lang)}`,
-    `${isAr ? 'الضرائب' : 'Taxes'}: ${formatCurrency(summary.totalTaxes, currency, lang)}`,
-    `${isAr ? 'صافي المبيعات' : 'Net Sales'}: ${formatCurrency(summary.netSales, currency, lang)}`,
+    isAr ? 'ملخص المبيعات / SALES' : 'SALES SUMMARY',
+    `${isAr ? 'الفواتير' : 'Invoices'}: ${zThermalNumber(summary.totalInvoices, 0)}`,
+    `${isAr ? 'إجمالي المبيعات' : 'Gross Sales'}: ${money(summary.grossSales)}`,
+    `${isAr ? 'الخصومات' : 'Discounts'}: ${money(summary.totalDiscounts)}`,
+    `${isAr ? 'الضرائب' : 'Taxes'}: ${money(summary.totalTaxes)}`,
+    `${isAr ? 'المرتجعات' : 'Returns'}: ${money(summary.returns)}`,
+    `${isAr ? 'الإلغاءات' : 'Voids'}: ${money(summary.voids)}`,
+    `${isAr ? 'المصروفات' : 'Expenses'}: ${money(summary.expenses)}`,
+    `${isAr ? 'صافي المبيعات' : 'Net Sales'}: ${money(summary.netSales)}`,
+    `${isAr ? 'صافي الإيراد' : 'Net Revenue'}: ${money(summary.netRevenue)}`,
     line,
-    isAr ? 'طرق الدفع' : 'PAYMENT METHODS',
-    ...summary.paymentMethods.map((pm) => `${pm.label}: ${formatCurrency(pm.total, currency, lang)} (${pm.count})`),
+    isAr ? 'طرق الدفع / PAYMENTS' : 'PAYMENTS',
+    ...summary.paymentMethods.map((pm) =>
+      `${zThermalPaymentLabel(pm.method, pm.label, isAr)}: ${money(pm.total)} (${zThermalNumber(pm.count, 0)})`
+    ),
   ];
-  if ((summary.salesDetails || []).length) {
-    rows.push(line, isAr ? 'الفواتير وطرق الدفع' : 'INVOICES & TENDERS');
-    for (const sale of summary.salesDetails || []) {
-      rows.push(`${sale.invoiceNumber}  ${formatCurrency(sale.total, currency, lang)}`);
-      rows.push(`${sale.userName || '-'}  ${formatDateTime(sale.createdAt, lang)}`);
-      const payments = sale.payments?.length
-        ? sale.payments
-        : [{ method: sale.paymentMethod || '-', amount: sale.paidAmount }];
-      for (const payment of payments) rows.push(`  ${payment.method}: ${formatCurrency(payment.amount, currency, lang)}`);
-    }
+
+  if (splitTenderCount > 0) {
+    rows.push(`${isAr ? 'فواتير دفع مقسم' : 'Split-tender invoices'}: ${splitTenderCount}`);
   }
+
   rows.push(
     line,
-    `${isAr ? 'رصيد الافتتاح' : 'Opening Cash'}: ${formatCurrency(summary.openingAmount, currency, lang)}`,
-    `${isAr ? 'المتوقع بالدرج' : 'Expected Cash'}: ${formatCurrency(summary.expectedAmount, currency, lang)}`,
-    `${isAr ? 'الفعلي بالدرج' : 'Actual Counted'}: ${formatCurrency(summary.actualAmount, currency, lang)}`,
-    `${isAr ? 'الفارق' : 'Difference'}: ${formatCurrency(summary.difference, currency, lang)}`,
+    isAr ? 'النقدية / CASH DRAWER' : 'CASH DRAWER',
+    `${isAr ? 'رصيد الافتتاح' : 'Opening Cash'}: ${money(summary.openingAmount)}`,
+    `${isAr ? 'المتوقع بالدرج' : 'Expected Cash'}: ${money(summary.expectedAmount)}`,
+    `${isAr ? 'الفعلي بالدرج' : 'Actual Counted'}: ${money(summary.actualAmount)}`,
+    `${isAr ? 'الفارق' : 'Difference'}: ${money(summary.difference)}`,
     line,
+    isAr
+      ? 'التفاصيل الكاملة متاحة في تقرير A4'
+      : 'Full invoice detail is available in the A4 report',
   );
-  return rows.join('\n');
+
+  return rows.join('\r\n');
 }
 
 export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
