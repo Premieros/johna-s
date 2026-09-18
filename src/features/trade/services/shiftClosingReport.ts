@@ -52,6 +52,38 @@ export interface ShiftClosingSummary {
     returns: number;
     expenses: number;
     netContribution: number;
+    sales?: Array<{ invoiceNumber: string; total: number; paymentMethod: string; createdAt: string }>;
+    expenseDetails?: Array<{ category: string; description: string; amount: number; paymentMethod: string; createdAt: string }>;
+    returnDetails?: Array<{ amount: number; paymentMethod: string; createdAt: string }>;
+  }[];
+
+  expenseDetails?: {
+    expenseId: string;
+    category: string;
+    description: string;
+    amount: number;
+    paymentMethod: string;
+    expenseDate: string;
+    notes: string | null;
+    createdAt: string;
+    createdBy: string;
+    createdByName: string;
+  }[];
+
+  salesDetails?: {
+    saleId: string;
+    invoiceNumber: string;
+    userId: string;
+    userName: string;
+    subtotal: number;
+    discountAmount: number;
+    taxAmount: number;
+    total: number;
+    paidAmount: number;
+    refundedAmount: number;
+    paymentMethod: string;
+    orderType: string;
+    createdAt: string;
   }[];
 
   treasuryBalances?: {
@@ -423,6 +455,32 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     <span>${formatCurrency(summary.difference, currency, lang)}</span>
   </div>
 
+  ${(summary.expenseDetails || []).length > 0 ? `
+    <div class="section-title">${isAr ? 'المصروفات بالتفصيل' : 'EXPENSE DETAILS'}</div>
+    ${(summary.expenseDetails || []).map((e) => `
+      <div class="py-1 border-b">
+        <div class="flex justify-between"><span class="font-bold">${escapeHtml(e.category || '-')}</span><span class="font-bold">-${formatCurrency(e.amount, currency, lang)}</span></div>
+        <div class="flex justify-between"><span>${escapeHtml(e.description || '-')}</span><span>${escapeHtml(e.paymentMethod)}</span></div>
+        <div style="font-size:9px;">${escapeHtml(e.createdByName)} · ${formatDateTime(e.createdAt, lang)}</div>
+      </div>
+    `).join('')}
+  ` : ''}
+
+  ${(summary.userReports || []).length > 0 ? `
+    <div class="section-title">${isAr ? 'تفاصيل المستخدمين' : 'USER DETAILS'}</div>
+    ${(summary.userReports || []).map((u) => `
+      <div class="py-1 border-b">
+        <div class="font-bold">${escapeHtml(u.displayName)}</div>
+        <div class="flex justify-between"><span>${isAr ? 'المبيعات' : 'Sales'}</span><span>${formatCurrency(u.salesTotal, currency, lang)}</span></div>
+        <div class="flex justify-between"><span>${isAr ? 'الفواتير' : 'Invoices'}</span><span>${u.invoiceCount}</span></div>
+        <div class="flex justify-between"><span>${isAr ? 'الخصومات' : 'Discounts'}</span><span>${formatCurrency(u.discounts, currency, lang)}</span></div>
+        <div class="flex justify-between"><span>${isAr ? 'المرتجعات' : 'Returns'}</span><span>${formatCurrency(u.returns, currency, lang)}</span></div>
+        <div class="flex justify-between"><span>${isAr ? 'المصروفات' : 'Expenses'}</span><span>${formatCurrency(u.expenses, currency, lang)}</span></div>
+        <div class="flex justify-between font-bold"><span>${isAr ? 'الصافي' : 'Net'}</span><span>${formatCurrency(u.netContribution, currency, lang)}</span></div>
+      </div>
+    `).join('')}
+  ` : ''}
+
   <!-- Products Sold -->
   ${summary.productsSold.length > 0 ? `
     <div class="section-title">${isAr ? 'المنتجات المباعة' : 'PRODUCTS SOLD'}</div>
@@ -646,6 +704,42 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
         `).join('')}
       </tbody>
     </table>
+
+    ${(summary.expenseDetails || []).length > 0 ? `
+      <h3 class="section-heading">${isAr ? 'المصروفات بالتفصيل' : 'Expense Details'}</h3>
+      <table>
+        <thead><tr>
+          <th>${isAr ? 'التصنيف' : 'Category'}</th><th>${isAr ? 'البيان' : 'Description'}</th>
+          <th>${isAr ? 'المستخدم' : 'User'}</th><th>${isAr ? 'الدفع' : 'Payment'}</th>
+          <th class="text-end">${isAr ? 'المبلغ' : 'Amount'}</th>
+        </tr></thead>
+        <tbody>${(summary.expenseDetails || []).map((e) => `<tr>
+          <td>${escapeHtml(e.category || '-')}</td><td>${escapeHtml(e.description || '-')}</td>
+          <td>${escapeHtml(e.createdByName || '-')}</td><td>${escapeHtml(e.paymentMethod || '-')}</td>
+          <td class="text-end font-bold">${formatCurrency(e.amount, currency, lang)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    ` : ''}
+
+    ${(summary.userReports || []).length > 0 ? `
+      <h3 class="section-heading">${isAr ? 'تفاصيل كل مستخدم' : 'Per-user Details'}</h3>
+      <table>
+        <thead><tr>
+          <th>${isAr ? 'المستخدم' : 'User'}</th><th class="text-center">${isAr ? 'الفواتير' : 'Invoices'}</th>
+          <th class="text-end">${isAr ? 'المبيعات' : 'Sales'}</th><th class="text-end">${isAr ? 'الخصومات' : 'Discounts'}</th>
+          <th class="text-end">${isAr ? 'المرتجعات' : 'Returns'}</th><th class="text-end">${isAr ? 'المصروفات' : 'Expenses'}</th>
+          <th class="text-end">${isAr ? 'الصافي' : 'Net'}</th>
+        </tr></thead>
+        <tbody>${(summary.userReports || []).map((u) => `<tr>
+          <td>${escapeHtml(u.displayName)}</td><td class="text-center">${u.invoiceCount}</td>
+          <td class="text-end">${formatCurrency(u.salesTotal, currency, lang)}</td>
+          <td class="text-end">${formatCurrency(u.discounts, currency, lang)}</td>
+          <td class="text-end">${formatCurrency(u.returns, currency, lang)}</td>
+          <td class="text-end">${formatCurrency(u.expenses, currency, lang)}</td>
+          <td class="text-end font-bold">${formatCurrency(u.netContribution, currency, lang)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    ` : ''}
 
     <!-- Products Sold -->
     <h3 class="section-heading">${isAr ? 'المنتجات والأصناف المباعة' : 'Products Sold Summary'}</h3>
