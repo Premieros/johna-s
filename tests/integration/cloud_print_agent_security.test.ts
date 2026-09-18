@@ -119,9 +119,9 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
         AND pg_get_function_identity_arguments(p.oid)='p_kind text'
     `);
     expect(helper.rows).toHaveLength(1);
-    expect(helper.rows[0].definition).toContain("can_permission('pos.print_kitchen'::text)");
-    expect(helper.rows[0].definition).toContain("can_permission('pos.receipt.print'::text)");
-    expect(helper.rows[0].definition).toContain("can_permission('settings.manage'::text)");
+    expect(helper.rows[0].definition).toContain("can_permission('pos.print_kitchen')");
+    expect(helper.rows[0].definition).toContain("can_permission('pos.receipt.print')");
+    expect(helper.rows[0].definition).toContain("can_permission('settings.manage')");
 
     const rows = await client.query<{ name: string; definition: string }>(`
       SELECT p.proname AS name, lower(pg_get_functiondef(p.oid)) AS definition
