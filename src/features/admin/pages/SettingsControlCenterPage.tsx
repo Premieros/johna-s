@@ -8,6 +8,7 @@ import {
   Sparkles,
   Save,
   Loader2,
+  CalendarClock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/api';
@@ -25,7 +26,7 @@ import { findUiTheme, UI_THEMES } from '@/lib/themes';
 import type { BranchSettings } from '@/lib/types';
 import { APP_ROUTES } from '@/core/navigation/routes';
 
-type SettingsTab = 'branch_profile' | 'branch_staff' | 'appearance' | 'language';
+type SettingsTab = 'branch_profile' | 'business_day' | 'branch_staff' | 'appearance' | 'language';
 
 interface UserRow {
   id: string;
@@ -69,6 +70,9 @@ export function SettingsControlCenterPage() {
         tax_enabled: row?.tax_enabled ?? null,
         currency: row?.currency ?? '',
         low_stock_threshold: row?.low_stock_threshold ?? null,
+        business_day_mode: row?.business_day_mode ?? 'fixed_time',
+        business_day_start: row?.business_day_start ?? '00:00',
+        business_day_end: row?.business_day_end ?? '00:00',
       });
     }
   }, [targetBranchId, branchSettingsMap]);
@@ -112,6 +116,9 @@ export function SettingsControlCenterPage() {
         branchForm.low_stock_threshold != null && !Number.isNaN(branchForm.low_stock_threshold)
           ? branchForm.low_stock_threshold
           : null,
+      business_day_mode: branchForm.business_day_mode || 'fixed_time',
+      business_day_start: branchForm.business_day_start || '00:00',
+      business_day_end: branchForm.business_day_end || '00:00',
     };
     const ok = await saveBranchSettings(targetBranchId, patch);
     if (ok) {
@@ -125,6 +132,7 @@ export function SettingsControlCenterPage() {
 
   const SECTIONS: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'branch_profile', label: isAr ? 'بيانات الفرع والطباعة' : 'Branch Profile & Receipts', icon: <Store className="w-4 h-4" /> },
+    { key: 'business_day', label: isAr ? 'اليوم المالي والشفتات' : 'Business Day & Shifts', icon: <CalendarClock className="w-4 h-4" /> },
     { key: 'branch_staff', label: isAr ? 'طاقم عمل الفرع' : 'Branch Staff', icon: <Users className="w-4 h-4" /> },
     { key: 'appearance', label: isAr ? 'المظهر والثيم' : 'Appearance & Theme', icon: <Palette className="w-4 h-4" /> },
     { key: 'language', label: isAr ? 'اللغة والتوطين' : 'Language', icon: <Languages className="w-4 h-4" /> },
@@ -248,6 +256,74 @@ export function SettingsControlCenterPage() {
                 <Button onClick={saveBranchSpecific} disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>{isAr ? 'حفظ إعدادات الفرع' : 'Save Branch Profile'}</span>
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {active === 'business_day' && (
+            <Card className="p-6 space-y-6">
+              <div>
+                <h2 className="text-lg font-bold text-ui-text">{isAr ? 'تعريف بداية ونهاية اليوم المالي' : 'Business Day Boundaries'}</h2>
+                <p className="text-xs text-ui-subtle">
+                  {isAr
+                    ? 'اختر هل اليومية تعتمد على أوقات ثابتة، أم تبدأ من أول شفت في اليوم وتنتهي عند إغلاق آخر شفت.'
+                    : 'Choose fixed business hours, or span the day from the first opened shift through the last closed shift.'}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <Select
+                  label={isAr ? 'طريقة تحديد اليوم المالي' : 'Business Day Mode'}
+                  value={branchForm.business_day_mode || 'fixed_time'}
+                  onChange={(e) => setBranchForm({
+                    ...branchForm,
+                    business_day_mode: e.target.value as BranchSettings['business_day_mode'],
+                  })}
+                >
+                  <option value="fixed_time">{isAr ? 'وقت بداية ونهاية ثابت' : 'Fixed start / end time'}</option>
+                  <option value="shift_span">{isAr ? 'من أول شفت مفتوح إلى آخر شفت مغلق' : 'First opened shift → last closed shift'}</option>
+                </Select>
+
+                {(branchForm.business_day_mode || 'fixed_time') === 'fixed_time' ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Input
+                      type="time"
+                      label={isAr ? 'وقت بداية اليوم' : 'Day Start Time'}
+                      value={branchForm.business_day_start || '00:00'}
+                      onChange={(e) => setBranchForm({ ...branchForm, business_day_start: e.target.value })}
+                    />
+                    <Input
+                      type="time"
+                      label={isAr ? 'وقت نهاية اليوم' : 'Day End Time'}
+                      value={branchForm.business_day_end || '00:00'}
+                      onChange={(e) => setBranchForm({ ...branchForm, business_day_end: e.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-muted">
+                    {isAr
+                      ? 'في هذا الوضع: بداية اليومية = وقت فتح أول شفت بتاريخ العمل، ونهايتها = وقت إغلاق آخر شفت. لا يمكن إغلاق اليوم طالما يوجد شفت مفتوح.'
+                      : 'In this mode, day start is the first shift open time and day end is the final shift close time. Day close remains blocked while any shift is open.'}
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-ui-border p-4 text-sm">
+                  <p className="font-semibold text-ui-text">
+                    {isAr ? 'قاعدة الشفت المفتوح' : 'Open Shift Rule'}
+                  </p>
+                  <p className="mt-1 text-ui-muted">
+                    {isAr
+                      ? 'مسموح بشفت واحد مفتوح فقط لكل فرع. جميع مستخدمي نقطة البيع يعملون داخل نفس شفت الفرع، ويظهر كل مستخدم بتفاصيل عملياته في تقرير الإغلاق.'
+                      : 'Only one open shift is allowed per branch. POS users share that branch shift, while closing reports keep per-user activity details.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-ui-border flex justify-end">
+                <Button onClick={saveBranchSpecific} disabled={saving}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{isAr ? 'حفظ إعدادات اليوم المالي' : 'Save Business Day Settings'}</span>
                 </Button>
               </div>
             </Card>
