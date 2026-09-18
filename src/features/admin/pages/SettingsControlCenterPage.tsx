@@ -10,7 +10,7 @@ import {
   Loader2,
   CalendarClock,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -37,6 +37,7 @@ interface UserRow {
 }
 
 export function SettingsControlCenterPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { t, lang, setLang } = useLanguage();
   const { theme, setTheme, setUiTheme } = useTheme();
@@ -47,7 +48,12 @@ export function SettingsControlCenterPage() {
 
   const isSuperAdmin = user?.role === 'super_admin';
 
-  const [active, setActive] = useState<SettingsTab>('branch_profile');
+  const initialTab = searchParams.get('tab');
+  const [active, setActive] = useState<SettingsTab>(
+    initialTab === 'business_day' || initialTab === 'branch_staff' || initialTab === 'appearance' || initialTab === 'language'
+      ? initialTab
+      : 'branch_profile',
+  );
   const [saving, setSaving] = useState(false);
 
   const myBranchId = user?.branch_id || (branches[0]?.id ?? '');
@@ -95,6 +101,24 @@ export function SettingsControlCenterPage() {
   useEffect(() => {
     if (active === 'branch_staff') void loadBranchStaff();
   }, [active, loadBranchStaff]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'branch_profile' || tab === 'business_day' || tab === 'branch_staff' || tab === 'appearance' || tab === 'language') {
+      setActive(tab);
+    }
+  }, [searchParams]);
+
+  const selectSection = (tab: SettingsTab) => {
+    setActive(tab);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  };
+
+
 
   const pickTheme = (key: string) => {
     const p = findUiTheme(key);
@@ -200,7 +224,7 @@ export function SettingsControlCenterPage() {
           {SECTIONS.map((sec) => (
             <button
               key={sec.key}
-              onClick={() => setActive(sec.key)}
+              onClick={() => selectSection(sec.key)}
               className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition text-start ${
                 active === sec.key
                   ? 'bg-brand-600 text-white shadow-sm shadow-brand-500/20'
