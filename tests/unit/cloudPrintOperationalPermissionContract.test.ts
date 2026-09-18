@@ -13,15 +13,22 @@ describe('cloud print operational permission contract', () => {
     expect(agent).not.toContain("if (!user?.id || !can('settings.manage')) return;");
   });
 
-  it('keeps queue execution permission-scoped by job kind', () => {
-    const migration = readFileSync(
+  it('keeps queue transport operational and separate from printer administration', () => {
+    const original = readFileSync(
       'supabase/migrations/20260918185500_cloud_print_agent_operational_permissions.sql',
       'utf8',
     );
+    const repair = readFileSync(
+      'supabase/migrations/20260918223500_restore_cloud_print_queue_execution.sql',
+      'utf8',
+    );
 
-    expect(migration).toContain("p_kind = 'kitchen' AND public.can_permission('pos.print_kitchen')");
-    expect(migration).toContain("p_kind IN ('receipt','report') AND public.can_permission('pos.receipt.print')");
-    expect(migration).not.toContain("p_kind = 'test'");
-    expect(migration).toContain('public.can_execute_cloud_print_kind(kind)');
+    expect(original).toContain('public.can_execute_cloud_print_kind(kind)');
+    expect(repair).toContain("p_kind IN ('kitchen','receipt','report')");
+    expect(repair).toContain("public.can_permission('pos.print_kitchen')");
+    expect(repair).toContain("public.can_permission('pos.receipt.print')");
+    expect(repair).toContain("public.can_permission('settings.manage')");
+    expect(repair).not.toContain("p_kind = 'test'");
+    expect(repair).not.toContain("p_kind = 'kitchen' AND public.can_permission('pos.print_kitchen')");
   });
 });
