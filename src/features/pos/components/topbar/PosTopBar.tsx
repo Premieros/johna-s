@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Plus, Wifi, WifiOff, Timer, Moon, Sun, LogOut, Clock3, MoreHorizontal, ListOrdered, RefreshCw, CalendarCheck, ChefHat, Truck } from 'lucide-react';
+import { Plus, Wifi, WifiOff, Timer, Moon, Sun, LogOut, Clock3, MoreHorizontal, ListOrdered, RefreshCw, CalendarCheck, ChefHat, Truck, Languages, Palette, Settings2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -8,6 +8,8 @@ import { Logo } from '@/components/Logo';
 import type { Branch } from '@/lib/types';
 import type { ActiveShiftInfo } from '../../hooks/usePosOrder';
 import { usePosPermissions } from '../../hooks/usePosPermissions';
+import { useCan } from '@/lib/permissions';
+import { APP_ROUTES } from '@/core/navigation/routes';
 import { offlinePosManager } from '../../services/offlinePos';
 
 export type PosPanelId = 'orders' | 'tables' | 'kitchen' | null;
@@ -47,10 +49,11 @@ export function PosTopBar({
   onExit,
   onOpenShiftModal,
 }: PosTopBarProps) {
-  const { t, lang } = useLanguage();
+  const { t, lang, setLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const perms = usePosPermissions();
+  const can = useCan();
   const navigate = useNavigate();
   const location = useLocation();
   const landingOpened = useRef(false);
@@ -253,6 +256,54 @@ export function PosTopBar({
                 <CalendarCheck className="h-4 w-4 text-ui-accent" />
                 {activeShift ? (isAr ? 'إغلاق اليوم والوردية (Z-Report)' : 'Day & Shift Closing') : (isAr ? 'فتح وردية' : 'Open Shift')}
               </button>
+            )}
+            <div className="my-1 h-px bg-ui-border" />
+            <button
+              data-testid="pos-language-action"
+              onClick={() => { setLang(isAr ? 'en' : 'ar'); setMore(false); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+            >
+              <Languages className="h-4 w-4 text-ui-accent" />
+              {isAr ? 'English' : 'العربية'}
+            </button>
+            <button
+              data-testid="pos-theme-action"
+              onClick={() => { toggleTheme(); setMore(false); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+            >
+              <Palette className="h-4 w-4 text-ui-accent" />
+              {theme === 'light'
+                ? (isAr ? 'الوضع الداكن' : 'Dark theme')
+                : (isAr ? 'الوضع الفاتح' : 'Light theme')}
+            </button>
+            {can('settings.manage') && (
+              <>
+                <div className="my-1 h-px bg-ui-border" />
+                <button
+                  data-testid="pos-shift-settings-action"
+                  onClick={() => { navigate(`${APP_ROUTES.settings}?tab=business_day`); setMore(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+                >
+                  <Timer className="h-4 w-4 text-ui-accent" />
+                  {isAr ? 'إعدادات الشفت واليوم المالي' : 'Shift & business-day settings'}
+                </button>
+                <button
+                  data-testid="pos-theme-settings-action"
+                  onClick={() => { navigate(`${APP_ROUTES.settings}?tab=appearance`); setMore(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+                >
+                  <Settings2 className="h-4 w-4 text-ui-accent" />
+                  {isAr ? 'إعدادات المظهر والثيم' : 'Appearance & theme settings'}
+                </button>
+                <button
+                  data-testid="pos-language-settings-action"
+                  onClick={() => { navigate(`${APP_ROUTES.settings}?tab=language`); setMore(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+                >
+                  <Languages className="h-4 w-4 text-ui-accent" />
+                  {isAr ? 'إعدادات اللغة' : 'Language settings'}
+                </button>
+              </>
             )}
             {perms.canChangeBranch && canChangeBranch && (
               <>
