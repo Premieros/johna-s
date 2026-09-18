@@ -17,4 +17,11 @@ describe('settings direct-tab navigation', () => {
     expect(source).toContain("key: 'appearance'");
     expect(source).toContain("key: 'language'");
   });
+
+  it('provides explicit save actions for theme and language', () => {
+    expect(source).toContain('data-testid="save-appearance-settings"');
+    expect(source).toContain('data-testid="save-language-settings"');
+    expect(source).toContain('saveSettings({ theme, brand_color: uiTheme })');
+    expect(source).toContain('saveSettings({ language: lang })');
+  });
 });
