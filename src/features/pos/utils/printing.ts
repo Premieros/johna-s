@@ -278,7 +278,7 @@ export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang
   row(isAr ? 'الإجمالي' : 'TOTAL', thermalMoney(receipt.total, currency));
 
   if (!receipt.isOpenOrder) {
-    const payments = (receipt.payments || []).filter((payment) => Number(payment.amount) > 0);
+    const payments = (receipt.payments || []).filter((payment) => String(payment.method || '').trim());
     if (payments.length > 0) {
       lines.push(divider, isAr ? 'الدفع / PAYMENT' : 'PAYMENT');
       for (const payment of payments) {
