@@ -327,6 +327,49 @@ export async function fetchShiftClosingDetails(shiftId: string, branchId?: strin
 /**
  * Generates an 80mm / 58mm Thermal Z-Report Receipt HTML
  */
+export function buildThermalZReportText(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
+  const isAr = lang === 'ar';
+  const line = '-'.repeat(32);
+  const rows: string[] = [
+    summary.branchName,
+    isAr ? '*** تقرير إغلاق الوردية Z-REPORT ***' : '*** SHIFT Z-REPORT ***',
+    `#${summary.shiftId.slice(0, 8).toUpperCase()}`,
+    line,
+    `${isAr ? 'الكاشير' : 'Cashier'}: ${summary.cashierName}`,
+    `${isAr ? 'الفتح' : 'Opened'}: ${formatDateTime(summary.openedAt, lang)}`,
+    `${isAr ? 'الإغلاق' : 'Closed'}: ${summary.closedAt ? formatDateTime(summary.closedAt, lang) : (isAr ? 'مستمر' : 'Active')}`,
+    line,
+    `${isAr ? 'عدد الفواتير' : 'Invoices'}: ${summary.totalInvoices}`,
+    `${isAr ? 'إجمالي المبيعات' : 'Gross Sales'}: ${formatCurrency(summary.grossSales, currency, lang)}`,
+    `${isAr ? 'الخصومات' : 'Discounts'}: ${formatCurrency(summary.totalDiscounts, currency, lang)}`,
+    `${isAr ? 'الضرائب' : 'Taxes'}: ${formatCurrency(summary.totalTaxes, currency, lang)}`,
+    `${isAr ? 'صافي المبيعات' : 'Net Sales'}: ${formatCurrency(summary.netSales, currency, lang)}`,
+    line,
+    isAr ? 'طرق الدفع' : 'PAYMENT METHODS',
+    ...summary.paymentMethods.map((pm) => `${pm.label}: ${formatCurrency(pm.total, currency, lang)} (${pm.count})`),
+  ];
+  if ((summary.salesDetails || []).length) {
+    rows.push(line, isAr ? 'الفواتير وطرق الدفع' : 'INVOICES & TENDERS');
+    for (const sale of summary.salesDetails || []) {
+      rows.push(`${sale.invoiceNumber}  ${formatCurrency(sale.total, currency, lang)}`);
+      rows.push(`${sale.userName || '-'}  ${formatDateTime(sale.createdAt, lang)}`);
+      const payments = sale.payments?.length
+        ? sale.payments
+        : [{ method: sale.paymentMethod || '-', amount: sale.paidAmount }];
+      for (const payment of payments) rows.push(`  ${payment.method}: ${formatCurrency(payment.amount, currency, lang)}`);
+    }
+  }
+  rows.push(
+    line,
+    `${isAr ? 'رصيد الافتتاح' : 'Opening Cash'}: ${formatCurrency(summary.openingAmount, currency, lang)}`,
+    `${isAr ? 'المتوقع بالدرج' : 'Expected Cash'}: ${formatCurrency(summary.expectedAmount, currency, lang)}`,
+    `${isAr ? 'الفعلي بالدرج' : 'Actual Counted'}: ${formatCurrency(summary.actualAmount, currency, lang)}`,
+    `${isAr ? 'الفارق' : 'Difference'}: ${formatCurrency(summary.difference, currency, lang)}`,
+    line,
+  );
+  return rows.join('\n');
+}
+
 export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
   const dir = isAr ? 'rtl' : 'ltr';
