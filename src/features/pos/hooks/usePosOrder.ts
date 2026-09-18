@@ -56,6 +56,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     preview: OrderSettlementPreview,
     invoice: string,
     paid: number,
+    payments: Array<{ payment_method: string; amount: number }> = [],
   ): ReceiptData => ({
     invoice,
     branchName: input.branchName,
@@ -83,6 +84,10 @@ export function usePosOrder(input: UsePosOrderInput) {
     orderTypeLabel: t(ORDER_TYPE_KEY[base.orderType]),
     guestCount: base.guestCount || undefined,
     operatorName: null,
+    payments: payments.map((payment) => ({
+      method: payment.payment_method,
+      amount: Number(payment.amount || 0),
+    })),
   }), [base.activeOrderNumber, base.activeTable?.name, base.customerId, base.guestCount, base.orderType, findCartSource, input.branchName, input.customers, t]);
 
   const saveOpenOrderSnapshot = useCallback(async (): Promise<boolean> => {
@@ -299,8 +304,12 @@ export function usePosOrder(input: UsePosOrderInput) {
         return false;
       }
 
-      const extended = result as typeof result & { order_completed?: boolean; sale_id?: string };
-      const receipt = buildSettlementReceipt(preview, invoiceNumber, paidAmountToUse);
+      const extended = result as typeof result & {
+        order_completed?: boolean;
+        sale_id?: string;
+        payments?: Array<{ payment_method: string; amount: number }>;
+      };
+      const receipt = buildSettlementReceipt(preview, invoiceNumber, paidAmountToUse, extended.payments || []);
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
       setSettlementPreview(null);
