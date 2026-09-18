@@ -30,10 +30,15 @@ export interface ProcessSplitSalePayload extends Omit<ProcessSalePayload, 'p_pai
   p_payments: SplitTenderInput[];
 }
 
+export interface ReceiptTender {
+  payment_method: string;
+  amount: number;
+}
+
 export type ProcessSaleResult = RpcResult & {
   offline?: boolean;
   pending_sync?: boolean;
-  payments?: SplitTenderInput[];
+  payments?: ReceiptTender[];
 };
 
 type OwnedOfflineSaleQueueItem = Omit<OfflineSaleQueueItem, 'status' | 'retry_count'> & {
@@ -174,7 +179,7 @@ export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ resu
         result: {
           ...(data as RpcResult),
           payments: [{
-            payment_method: settlementPayload.p_payment_method as SplitTenderInput['payment_method'],
+            payment_method: settlementPayload.p_payment_method,
             amount: Number(settlementPayload.p_paid_amount || 0),
           }],
         },
