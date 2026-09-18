@@ -182,13 +182,22 @@ DECLARE
   v_old text;
 BEGIN
   SELECT pg_get_functiondef('public.transfer_order_operator(uuid,uuid)'::regprocedure) INTO v_def;
+
+  -- Fresh/local databases keep the canonical multiline body, while Production
+  -- may have the same function normalized to a compact one-line body.
   v_old := '  IF NOT public.can_manage_other_pos_orders() THEN' || E'\n' ||
            '    RETURN jsonb_build_object(''success'', false, ''error'', ''POS_ADMIN_PERMISSION_REQUIRED'');' || E'\n' ||
            '  END IF;' || E'\n';
-  IF position(v_old IN v_def)=0 THEN
-    RAISE EXCEPTION 'transfer_order_operator manage-others fragment drift; refusing patch';
+  IF position(v_old IN v_def)>0 THEN
+    v_def := replace(v_def,v_old,'');
+  ELSE
+    v_old := 'IF NOT public.can_manage_other_pos_orders() THEN RETURN jsonb_build_object(''success'',false,''error'',''POS_ADMIN_PERMISSION_REQUIRED''); END IF;';
+    IF position(v_old IN v_def)=0 THEN
+      RAISE EXCEPTION 'transfer_order_operator manage-others fragment drift; refusing patch';
+    END IF;
+    v_def := replace(v_def,v_old,'');
   END IF;
-  v_def := replace(v_def,v_old,'');
+
   EXECUTE v_def;
 END;
 $transfer_permission$;
@@ -201,8 +210,10 @@ DO $ownership_guard$
 DECLARE
   v_def text;
   v_old text;
+  v_new text;
 BEGIN
   SELECT pg_get_functiondef('public.guard_pos_operator_ownership()'::regprocedure) INTO v_def;
+
   v_old :=
     '      IF NOT v_transfer_context THEN' || E'\n' ||
     '        RAISE EXCEPTION ''ORDER_TRANSFER_RPC_REQUIRED'';' || E'\n' ||
@@ -210,16 +221,22 @@ BEGIN
     '      IF NOT v_can_manage_others THEN' || E'\n' ||
     '        RAISE EXCEPTION ''POS_ADMIN_PERMISSION_REQUIRED'';' || E'\n' ||
     '      END IF;' || E'\n';
-  IF position(v_old IN v_def)=0 THEN
-    RAISE EXCEPTION 'guard_pos_operator_ownership transfer fragment drift; refusing patch';
-  END IF;
-  v_def := replace(
-    v_def,
-    v_old,
+  v_new :=
     '      IF NOT v_transfer_context THEN' || E'\n' ||
     '        RAISE EXCEPTION ''ORDER_TRANSFER_RPC_REQUIRED'';' || E'\n' ||
-    '      END IF;' || E'\n'
-  );
+    '      END IF;' || E'\n';
+
+  IF position(v_old IN v_def)>0 THEN
+    v_def := replace(v_def,v_old,v_new);
+  ELSE
+    v_old := 'IF NOT v_transfer_context THEN RAISE EXCEPTION ''ORDER_TRANSFER_RPC_REQUIRED''; END IF; IF NOT v_can_manage_others THEN RAISE EXCEPTION ''POS_ADMIN_PERMISSION_REQUIRED''; END IF;';
+    v_new := 'IF NOT v_transfer_context THEN RAISE EXCEPTION ''ORDER_TRANSFER_RPC_REQUIRED''; END IF;';
+    IF position(v_old IN v_def)=0 THEN
+      RAISE EXCEPTION 'guard_pos_operator_ownership transfer fragment drift; refusing patch';
+    END IF;
+    v_def := replace(v_def,v_old,v_new);
+  END IF;
+
   EXECUTE v_def;
 END;
 $ownership_guard$;
