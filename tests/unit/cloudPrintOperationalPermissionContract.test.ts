@@ -21,7 +21,7 @@ describe('cloud print operational permission contract', () => {
 
     expect(migration).toContain("p_kind = 'kitchen' AND public.can_permission('pos.print_kitchen')");
     expect(migration).toContain("p_kind IN ('receipt','report') AND public.can_permission('pos.receipt.print')");
-    expect(migration).toContain("p_kind = 'test'").toBe(false);
+    expect(migration).not.toContain("p_kind = 'test'");
     expect(migration).toContain('public.can_execute_cloud_print_kind(kind)');
   });
 });
