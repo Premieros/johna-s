@@ -12,7 +12,7 @@ describe('business-day UI contract', () => {
     expect(settingsPage).toContain('shift_span');
     expect(settingsPage).toContain('وقت بداية اليوم');
     expect(settingsPage).toContain('وقت نهاية اليوم');
-    expect(settingsPage).toContain('من أول شفت مفتوح إلى آخر شفت مغلق');
+    expect(settingsPage).toContain('من أول شفت بعد وقت البداية إلى آخر شفت مغلق');
   });
 
   it('does not offer opening another shift when the target branch already has one', () => {
