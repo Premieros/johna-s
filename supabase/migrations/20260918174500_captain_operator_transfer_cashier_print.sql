@@ -134,8 +134,27 @@ BEGIN
 END;
 $patch$;
 
+-- Make pos.order.transfer the complete authorization for this action.
+-- users.manage remains unrelated; branch/target/order guards stay intact.
+DO $transfer_permission$
+DECLARE
+  v_def text;
+  v_old text;
+BEGIN
+  SELECT pg_get_functiondef('public.transfer_order_operator(uuid,uuid)'::regprocedure) INTO v_def;
+  v_old := '  IF NOT public.can_manage_other_pos_orders() THEN' || E'\n' ||
+           '    RETURN jsonb_build_object(''success'', false, ''error'', ''POS_ADMIN_PERMISSION_REQUIRED'');' || E'\n' ||
+           '  END IF;' || E'\n';
+  IF position(v_old IN v_def)=0 THEN
+    RAISE EXCEPTION 'transfer_order_operator manage-others fragment drift; refusing patch';
+  END IF;
+  v_def := replace(v_def,v_old,'');
+  EXECUTE v_def;
+END;
+$transfer_permission$;
+
 -- Add an audit record to the existing guarded operator-transfer RPC without
--- changing its authorization contract.
+-- changing its branch/target protections.
 DO $patch$
 DECLARE
   v_def text;
@@ -176,7 +195,7 @@ DECLARE
   v_order public.orders%ROWTYPE;
 BEGIN
   IF v_uid IS NULL THEN RETURN; END IF;
-  IF NOT public.can_permission('pos.order.transfer') OR NOT public.can_manage_other_pos_orders() THEN
+  IF NOT public.can_permission('pos.order.transfer') THEN
     RETURN;
   END IF;
 
