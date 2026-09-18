@@ -1,6 +1,6 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
-آخر تحديث: **2026-09-17 — Added shift-close operational contract**
+آخر تحديث: **2026-09-19 — synchronized through PR #228**
 
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة. سجل إصلاح POS الحالي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
 
@@ -22,12 +22,33 @@
 
 ## Baseline الحالي
 
-- `main@2901a3c58533706c80f61bdf670f758c6f3b598e`
-- آخر دمج مثبت على `main`: PR #168 — fit customer receipt to thermal paper.
-- Full Verify للـPR #168 كان Green على exact head قبل الدمج.
-- فرع إصلاح POS الحالي: `development/pos-hardening-20260916`، بدأ من هذا الـbaseline بالضبط.
-- لا توجد Production DB writes ضمن بدء مسار POS hardening.
-- Print Agent / printer routing / queues ليست ضمن scope هذا المسار إلا بتغيير منفصل وموافقة صريحة.
+- `main@a2ba244d3a710621dbb79c6cb516892e42b40cfc`
+- آخر دمج مثبت: PR #228 — **sent-order settlement read-only**.
+- Full Verify للـPR #228: **Run #1825 Green بالكامل**:
+  - lint ✅
+  - typecheck ✅
+  - application/test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - fresh DB + schema ✅
+  - integration + security/RLS ✅
+  - Browser Smoke ✅
+- نطاق #228 كان ملف كود POS واحد + اختبار عقد واحد فقط؛ **لا تغيير في الطباعة أو محطات الطباعة أو الوكيل أو زر/مسار الإرسال للمطبخ أو أي Migration**.
+- Production Supabase الوحيد `azzdesuowpdcoflmyezn` حالته ACTIVE_HEALTHY حسب آخر فحص قراءة.
+- آخر Production migration مثبتة في الفحص: `20260918202741_costing_sales_summary_kitchen_cogs`.
+- أي migrations أحدث على `main` تمس الطباعة أو kitchen-send/void **مجمّدة ولا تطبق** تحت قفل الطباعة/الإرسال الحالي.
+- PRs القديمة #215 و#186 و#153 أغلقت لأنها superseded/obsolete؛ لم يتم حذف أو تعديل أي PR متعلق بالطباعة أو KDS/الإرسال.
+
+### قفل الطباعة والإرسال — CURRENT FREEZE
+
+حتى إشعار صريح جديد من المستخدم:
+- ممنوع تعديل printer stations أو routing.
+- ممنوع تعديل Print Agent / Windows Agent أو آلية claim/start/complete.
+- ممنوع تعديل cloud print queues أو payloads أو print migrations.
+- ممنوع تعديل أزرار الطباعة أو ربطها.
+- ممنوع تعديل زر `send_to_kitchen` أو kitchen dispatch/routing أو KDS بسبب هذا المسار.
+- ممنوع تطبيق أي Production migration مرتبطة بما سبق.
+- أي فحص لهذه الأجزاء يكون **read-only فقط** ولا يعاد فتحها بدون Regression مثبت وطلب صريح.
 
 ## فصل مسارات العمل — إلزامي
 
@@ -47,26 +68,14 @@
 
 لا يتم خلطه مع فرع الموبايل. أي إصلاح أو تغيير جديد للنظام الأساسي يبدأ من أحدث `main` على فرع مستقل بعد فحص الأعمال المتوازية.
 
-### C) POS hardening — ACTIVE
+### C) POS hardening — CURRENT BASELINE
 
-- الفرع: `development/pos-hardening-20260916`.
-- السجل الحي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
-- الهدف: إغلاق فجوات الصلاحيات والـatomicity ومسار sent-only للدفع والطباعة، بدون إعادة بناء POS.
-- الأولويات P0:
-  1. ربط Cancel وTransfer بالـpermissions في كل UI/handler/server path.
-  2. جعل نقل الطاولة server-authoritative وatomic.
-  3. زر الدفع يظهر فقط بعد أول kitchen send ناجح.
-  4. Pay وPrint للطلب المفتوح يحسبان **sent-to-kitchen quantities فقط**.
-  5. الإضافات غير المرسلة لا تدخل في الدفع أو الطباعة حتى نجاح delta send.
-- قواعد الصلاحيات المثبتة:
-  - الدفع: `pos.payment.take`.
-  - الطباعة: `pos.receipt.print`.
-  - النقل: `pos.order.transfer`.
-  - الإلغاء: `pos.cancel_order`.
-  - Super Admin فقط implicit bypass؛ ممنوع role-name checks جديدة.
-- لا يتم تعليم أي إصلاح مغلقًا قبل focused regression test، ثم Full Verify قبل PR/merge.
+- الإصلاحات الحرجة السابقة تم دمجها تدريجيًا حتى PR #228.
+- الدفع للطلب الذي سبق إرساله أصبح read-only عند فتح/إكمال التحصيل؛ لا يعيد كتابة `order_items` في مسار الدفع.
+- أي إعادة فتح لإصلاح POS قديم يجب أن تبدأ من أحدث `main` مع Regression مثبت، وليس من `development/pos-hardening-20260916`.
+- `send_to_kitchen` والطباعة تحت القفل الحالي ولا يدخلان في أي تعديل جديد من هذا المسار.
 
-### D) Shift Close / Day Close — PLANNED OPERATIONAL CONTRACT
+### D) Shift Close / Day Close — MERGED BASELINE / REGRESSION CONTRACT
 
 عند تنفيذ إغلاق الوردية يجب أن يكون الإغلاق **عملية تشغيلية ومالية كاملة** وليس مجرد تغيير حالة الشفت.
 
@@ -116,33 +125,34 @@
 
 ## العمل العالق المؤكد
 
-1. **POS hardening — ACTIVE**
-   - راجع السجل الحي المذكور أعلاه.
-   - NEXT: تدقيق server contracts/RPCs لـcancel/transfer/send_to_kitchen/process_sale ثم تنفيذ أول P0 صغير مع test.
+1. **PR #198 — Purchase branch visibility**
+   - ما زال مفتوحًا وقديمًا بالنسبة إلى `main` الحالي.
+   - لا يدمج مباشرة؛ يلزم إعادة تأسيسه على أحدث `main` ثم Full Verify جديد.
+   - لا Production migration قبل Green وموافقة منفصلة.
 
-2. **Shift Close / Day Close operational contract — PLANNED**
-   - تنفيذ عقد الإغلاق الموثق أعلاه بعد إغلاق إصلاحات POS الحرجة الحالية أو على فرع مستقل من أحدث `main`.
-   - لا يعتبر مكتملًا قبل report reconciliation + atomicity/idempotency + table reset + expenses/net revenue tests + Full Verify.
+2. **PR #217 — Compact UI actions/settings**
+   - Draft ومتأخر عن `main`.
+   - يتضمن سطحًا قريبًا من أزرار POS؛ لا يعاد فتحه أو دمجه أثناء قفل الطباعة إلا بعد فصل أي جزء يمس زر الطباعة تمامًا.
 
-3. **PR #132 — تطبيق النادل Android**
-   - مستمر عند المسار الآخر فقط.
-   - المطلوب قبل اعتباره جاهزًا: إكمال التصميم/الوظائف المعتمدة، Full Verify المناسب، ثم مراجعة مستقلة قبل الدمج.
+3. **PRs #214 و#189 — KDS**
+   - تترك دون تعديل ضمن هذا المسار لأن KDS/الإرسال تحت القفل الحالي.
+   - لا تنظيف/دمج/إعادة تأسيس لها من هذا المسار.
 
-4. **حذف سجل المبيعات التجريبي من Production**
-   - خطوة Production مستقلة معلقة.
-   - لا تنفذ ضمن POS hardening.
+4. **PR #221 — Z-report / thermal payload**
+   - متعلق بالطباعة مباشرة؛ **مجمّد بالكامل** ولا يلمس.
 
-5. **أي Production migrations غير مطبقة**
-   - لا يتم تطبيق أي Migration على Production اعتمادًا على سجل قديم.
-   - يجب أولًا تحديد migration المطلوبة من أحدث `main`/PR، Full Verify Green، ثم موافقة صريحة منفصلة.
+5. **PR #132 — Android waiter app**
+   - Draft / مسار منفصل.
+   - لا يخلط مع النظام الأساسي ولا يدمج دون مراجعة مستقلة.
 
-6. **Regression / handover verification النهائي**
-   - lint + typecheck + unit + build + fresh DB + schema + integration/security/RLS + Browser Smoke حيث ينطبق.
-   - يجب التأكد أن Permission-First وbranch/warehouse isolation وsend_to_kitchen والapprovals والطباعة لم يحدث لها Regression.
+6. **Production migration drift**
+   - توجد ملفات migrations أحدث على `main` من آخر Production migration المثبتة في الفحص.
+   - migrations التي تمس thermal printing أو sent-item/kitchen-send تبقى غير مطبقة تحت القفل الحالي.
+   - لا تتم محاولة “مطابقة Production” بإجبار migrations محظورة؛ السلامة التشغيلية مقدمة على التطابق الشكلي.
 
-7. **مراجعة الأعمال المفتوحة/المتوازية قبل أي كتابة جديدة**
-   - توجد فروع POS قديمة/متوازية؛ لا يُسحب منها شيء تلقائيًا إلى POS hardening.
-   - قبل كل تغيير جديد يجب جلب current `main` وفحص overlap لتجنب إعادة تنفيذ عمل موجود.
+7. **توثيق وتنظيف الفروع**
+   - `CURRENT_WORK_PLAN.md` هو المرجع الحالي بعد هذا التحديث.
+   - عدد فروع development كبير؛ الحذف الفعلي لا يتم إلا للفروع المثبت أنها merged/superseded ولا ترتبط بمسار طباعة/إرسال نشط.
 
 ## عقود ثابتة لا يعاد فتحها بلا Regression مثبت
 
@@ -164,13 +174,13 @@
 
 ## NEXT ACTION
 
-1. استمرار العمل فقط على `development/pos-hardening-20260916` لهذا الـscope.
-2. تدقيق RPC/server authority لـcancel/transfer/send_to_kitchen/process_sale قبل تعديل Business Logic.
-3. تنفيذ P0s بترتيب: permission gates -> sent-only pay/print -> atomic transfer -> concurrency/audit.
-4. تحديث `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md` بعد كل commit/اختبار.
-5. بعد استقرار POS، تنفيذ Shift Close / Day Close حسب العقد أعلاه على فرع مستقل أو scope موثق، مع reconciliation reports لكل مستخدم وللوردية.
-6. عدم لمس `development/mobile-delivery-app` أو أي مشروع/قاعدة أخرى.
-7. لا Merge ولا Production migration بدون Full Verify Green والموافقة المطلوبة لكل خطوة.
+1. لا تعديل على الطباعة أو محطات الطباعة أو الوكيل أو أزرار الطباعة أو `send_to_kitchen`/KDS تحت القفل الحالي.
+2. أي إصلاح جديد يبدأ من أحدث `main` على فرع مستقل.
+3. الأولوية غير المرتبطة بالطباعة/الإرسال: إعادة تأسيس PR #198 على أحدث `main` وفحصه فقط؛ Production migration تحتاج موافقة منفصلة بعد Green.
+4. PR #217 لا يلمس قبل فصل أي تغييرات مرتبطة بزر الطباعة.
+5. استمر في تنظيف PRs/الفروع القديمة فقط عندما يكون superseded مثبتًا ولا توجد علاقة بمسار الطباعة/الإرسال.
+6. قبل أي Merge: exact-head Full Verify Green ثم التأكد أن `main` لم يتحرك.
+7. Production ليست test environment؛ لا migrations تجريبية ولا reset/reseed.
 
 ## التنفيذ القياسي
 
