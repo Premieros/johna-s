@@ -276,13 +276,6 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','NO_SHIFTS_FOR_DAY');
   END IF;
 
-  IF v_mode='fixed_time' AND now()<v_end THEN
-    RETURN jsonb_build_object(
-      'success',false,'error','BUSINESS_DAY_NOT_FINISHED',
-      'window_end',v_end
-    );
-  END IF;
-
   v_report:=public._build_day_closing_report(p_branch_id,p_business_date);
 
   INSERT INTO public.daily_closes(branch_id,business_date,closed_by,report_snapshot)
