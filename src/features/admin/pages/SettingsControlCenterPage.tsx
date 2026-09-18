@@ -73,6 +73,7 @@ export function SettingsControlCenterPage() {
         business_day_mode: row?.business_day_mode ?? 'fixed_time',
         business_day_start: row?.business_day_start ?? '00:00',
         business_day_end: row?.business_day_end ?? '00:00',
+        auto_close_shift_at_day_end: row?.auto_close_shift_at_day_end ?? false,
       });
     }
   }, [targetBranchId, branchSettingsMap]);
@@ -119,6 +120,7 @@ export function SettingsControlCenterPage() {
       business_day_mode: branchForm.business_day_mode || 'fixed_time',
       business_day_start: branchForm.business_day_start || '00:00',
       business_day_end: branchForm.business_day_end || '00:00',
+      auto_close_shift_at_day_end: branchForm.auto_close_shift_at_day_end ?? false,
     };
     const ok = await saveBranchSettings(targetBranchId, patch);
     if (ok) {
@@ -307,6 +309,25 @@ export function SettingsControlCenterPage() {
                       : 'In this mode, day start is the first shift open time and day end is the final shift close time. Day close remains blocked while any shift is open.'}
                   </div>
                 )}
+
+                <label className="flex items-start gap-3 rounded-xl border border-ui-border p-4">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={Boolean(branchForm.auto_close_shift_at_day_end)}
+                    onChange={(e) => setBranchForm({ ...branchForm, auto_close_shift_at_day_end: e.target.checked })}
+                  />
+                  <span>
+                    <span className="block font-semibold text-ui-text">
+                      {isAr ? 'إغلاق الشفت تلقائيًا عند نهاية اليوم المالي' : 'Auto-close shift at business-day end'}
+                    </span>
+                    <span className="mt-1 block text-sm text-ui-muted">
+                      {isAr
+                        ? 'يعمل فقط إذا لم توجد أي طلبات مفتوحة أو معلقة. إذا وُجدت طلبات، يبقى الشفت مفتوحًا حتى يغلقها المستخدم.'
+                        : 'Runs only when no open or held orders remain. Otherwise the shift stays open until the user resolves all orders.'}
+                    </span>
+                  </span>
+                </label>
 
                 <div className="rounded-xl border border-ui-border p-4 text-sm">
                   <p className="font-semibold text-ui-text">
