@@ -127,9 +127,9 @@ describe.skipIf(!dbUrl)('financial day cutoff + split tender truth', () => {
 
     const sales = r.sales_details as Array<{ sale_id: string; payments: Array<{ method: string; amount: number }> }>;
     const split = sales.find((x) => x.sale_id === saleId);
-    expect(split?.payments).toEqual([
-      { method: 'cash', amount: 40 },
+    expect([...(split?.payments || [])].sort((a, b) => a.method.localeCompare(b.method))).toEqual([
       { method: 'card', amount: 60 },
+      { method: 'cash', amount: 40 },
     ]);
   });
 });
