@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Plus, Save, Search } from 'lucide-react';
+import { Archive, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
-import type { Product } from '@/lib/types';
+import type { InventoryUnit, Product } from '@/lib/types';
+
+interface RawMaterialRef {
+  id: string;
+  name: string;
+  branch_id: string | null;
+}
 
 type InventoryEffect = {
   target_type: 'raw_material' | 'inventory_unit';
@@ -75,6 +81,8 @@ export function ProductModifiersPage() {
   const branchFilter = useBranchFilter();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterialRef[]>([]);
+  const [inventoryUnits, setInventoryUnits] = useState<InventoryUnit[]>([]);
   const [modifiers, setModifiers] = useState<ModifierRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
@@ -84,6 +92,8 @@ export function ProductModifiersPage() {
   const load = useCallback(async () => {
     if (!branchFilter) {
       setProducts([]);
+      setRawMaterials([]);
+      setInventoryUnits([]);
       setModifiers([]);
       setLoading(false);
       return;
@@ -91,18 +101,23 @@ export function ProductModifiersPage() {
 
     setLoading(true);
     try {
-      const [productResult, groupsResult] = await Promise.all([
+      const [productResult, groupsResult, rawResult, units] = await Promise.all([
         supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
         api.catalog.listModifierGroupsAdmin(branchFilter),
+        supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
+        api.catalog.listInventoryUnits({ branch_id: branchFilter, is_active: true }),
       ]);
 
       if (productResult.error) throw productResult.error;
+      if (rawResult.error) throw rawResult.error;
       if (groupsResult.error) throw groupsResult.error;
 
       const result = (groupsResult.data || {}) as AdminGroupsResponse;
       if (!result.success) throw new Error(result.detail || result.error || 'LOAD_MODIFIERS_FAILED');
 
       setProducts((productResult.data || []) as Product[]);
+      setRawMaterials((rawResult.data || []) as RawMaterialRef[]);
+      setInventoryUnits((units || []) as InventoryUnit[]);
       setModifiers(normalize(result.groups || []));
     } catch (err) {
       show(err instanceof Error ? err.message : 'Failed to load modifiers', 'error');
@@ -132,6 +147,28 @@ export function ProductModifiersPage() {
     updateModifier(index, { product_ids: productIds });
   };
 
+  const updateInventoryEffect = (modifierIndex: number, effectIndex: number, patch: Partial<InventoryEffect>) => {
+    const row = modifiers[modifierIndex];
+    updateModifier(modifierIndex, {
+      inventory_effects: row.inventory_effects.map((effect, index) =>
+        index === effectIndex ? { ...effect, ...patch } : effect),
+    });
+  };
+
+  const addInventoryEffect = (modifierIndex: number) => {
+    const row = modifiers[modifierIndex];
+    updateModifier(modifierIndex, {
+      inventory_effects: [...row.inventory_effects, { target_type: 'raw_material', target_id: '', quantity_delta: 1 }],
+    });
+  };
+
+  const removeInventoryEffect = (modifierIndex: number, effectIndex: number) => {
+    const row = modifiers[modifierIndex];
+    updateModifier(modifierIndex, {
+      inventory_effects: row.inventory_effects.filter((_, index) => index !== effectIndex),
+    });
+  };
+
   const saveModifier = async (index: number) => {
     if (!branchFilter || !canManage) return;
     const row = modifiers[index];
@@ -143,6 +180,12 @@ export function ProductModifiersPage() {
     if (row.product_ids.length === 0) {
       show(isAr ? 'عيّن منتجًا واحدًا على الأقل للموديفاير' : 'Assign at least one product to the modifier', 'error');
       return;
+    }
+    for (const effect of row.inventory_effects) {
+      if (!effect.target_id || !Number.isFinite(effect.quantity_delta) || effect.quantity_delta === 0) {
+        show(isAr ? 'حدد الخامة أو المصنع والكمية بشكل صحيح' : 'Select the raw/manufactured component and a valid quantity', 'error');
+        return;
+      }
     }
 
     setSavingIndex(index);
@@ -298,6 +341,74 @@ export function ProductModifiersPage() {
                     </button>
                   )}
                 </div>
+              </div>
+
+
+              <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
+                <div className="mb-3">
+                  <p className="text-sm font-black text-ui-text">{isAr ? 'مكوّن الموديفاير وتأثير المخزون' : 'Modifier component & inventory effect'}</p>
+                  <p className="text-xs text-ui-muted">
+                    {isAr ? 'اختر خامة أو مصنع وحدد الكمية التي يضيفها أو يخصمها هذا الموديفاير.' : 'Choose a raw material or manufactured item and set the quantity added or removed by this modifier.'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {row.inventory_effects.map((effect, effectIndex) => {
+                    const targets = effect.target_type === 'raw_material' ? rawMaterials : inventoryUnits;
+                    return (
+                      <div key={`${row.id || index}-effect-${effectIndex}`} className="grid gap-2 md:grid-cols-[170px_1fr_160px_auto]">
+                        <select
+                          value={effect.target_type}
+                          onChange={(e) => updateInventoryEffect(index, effectIndex, {
+                            target_type: e.target.value as InventoryEffect['target_type'],
+                            target_id: '',
+                          })}
+                          className="min-h-11 rounded-xl border border-ui-border bg-ui-surface px-3"
+                        >
+                          <option value="raw_material">{isAr ? 'خامة' : 'Raw material'}</option>
+                          <option value="inventory_unit">{isAr ? 'مصنع' : 'Manufactured item'}</option>
+                        </select>
+
+                        <select
+                          value={effect.target_id}
+                          onChange={(e) => updateInventoryEffect(index, effectIndex, { target_id: e.target.value })}
+                          className="min-h-11 rounded-xl border border-ui-border bg-ui-surface px-3"
+                        >
+                          <option value="">{isAr ? 'اختر المكوّن' : 'Select component'}</option>
+                          {targets.map((target) => (
+                            <option key={target.id} value={target.id}>{target.name}</option>
+                          ))}
+                        </select>
+
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={effect.quantity_delta}
+                          onChange={(e) => updateInventoryEffect(index, effectIndex, { quantity_delta: Number(e.target.value) })}
+                          className="min-h-11 rounded-xl border border-ui-border bg-ui-surface px-3"
+                          title={isAr ? 'موجب للإضافة، سالب للحذف' : 'Positive to add, negative to remove'}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => removeInventoryEffect(index, effectIndex)}
+                          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-ui-danger/40 px-3 text-ui-danger"
+                          title={isAr ? 'حذف التأثير' : 'Remove effect'}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => addInventoryEffect(index)}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-ui-border bg-ui-surface px-3 text-sm font-semibold"
+                >
+                  <Plus className="h-4 w-4" /> {isAr ? 'إضافة خامة أو مصنع' : 'Add raw/manufactured component'}
+                </button>
               </div>
 
               <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
