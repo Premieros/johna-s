@@ -153,6 +153,37 @@ BEGIN
 END;
 $transfer_permission$;
 
+-- The generic ownership trigger must recognize the dedicated transfer
+-- permission as sufficient only when the signed transfer RPC established the
+-- exact order/target context. Other cross-user mutations still use
+-- can_manage_other_pos_orders().
+DO $ownership_guard$
+DECLARE
+  v_def text;
+  v_old text;
+BEGIN
+  SELECT pg_get_functiondef('public.guard_pos_operator_ownership()'::regprocedure) INTO v_def;
+  v_old :=
+    '      IF NOT v_transfer_context THEN' || E'\n' ||
+    '        RAISE EXCEPTION ''ORDER_TRANSFER_RPC_REQUIRED'';' || E'\n' ||
+    '      END IF;' || E'\n' ||
+    '      IF NOT v_can_manage_others THEN' || E'\n' ||
+    '        RAISE EXCEPTION ''POS_ADMIN_PERMISSION_REQUIRED'';' || E'\n' ||
+    '      END IF;' || E'\n';
+  IF position(v_old IN v_def)=0 THEN
+    RAISE EXCEPTION 'guard_pos_operator_ownership transfer fragment drift; refusing patch';
+  END IF;
+  v_def := replace(
+    v_def,
+    v_old,
+    '      IF NOT v_transfer_context THEN' || E'\n' ||
+    '        RAISE EXCEPTION ''ORDER_TRANSFER_RPC_REQUIRED'';' || E'\n' ||
+    '      END IF;' || E'\n'
+  );
+  EXECUTE v_def;
+END;
+$ownership_guard$;
+
 -- Permission-first list used by the transfer dialog. No role names are used.
 CREATE OR REPLACE FUNCTION public.list_pos_order_transfer_targets(p_order_id uuid)
 RETURNS TABLE(user_id uuid, display_name text)
