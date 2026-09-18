@@ -12,6 +12,7 @@ import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '..
 import { buildReceiptHtml, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
+import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
 import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
 
@@ -677,7 +678,18 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId });
       if (!res.success) {
-        show(res.detail || res.error || t('error'), 'error');
+        if (res.error === 'ORDER_OPERATOR_REQUIRED') {
+          show(
+            isAr
+              ? 'الطلب مسجل على مستخدم آخر. انقل مسؤولية الطلب إلى المستخدم الصحيح ثم أعد الإرسال للمطبخ.'
+              : 'This order belongs to another operator. Transfer the order to the correct user, then send it to the kitchen again.',
+            'error',
+          );
+        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.send_kitchen')) {
+          show(isAr ? 'لا توجد صلاحية إرسال للمطبخ لهذا المستخدم.' : 'This user does not have Send to Kitchen permission.', 'error');
+        } else {
+          show(res.detail || res.error || t('error'), 'error');
+        }
         return false;
       }
       setActiveOrderId(targetOrderId);
@@ -839,8 +851,14 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (!effSettings) return;
     try {
       if (cart.length > 0) {
+        const persisted = await persistCart('open');
+        if (!persisted.ok || !persisted.orderId) {
+          show(isAr ? 'تعذر حفظ الطلب قبل الطباعة.' : 'Could not save the order before printing.', 'error');
+          return;
+        }
+
         const openOrderReceipt: ReceiptData = {
-          invoice: activeOrderNumber || `ORDER-${Date.now()}`,
+          invoice: persisted.orderNumber || activeOrderNumber || `ORDER-${Date.now()}`,
           branchName,
           items: cart.map((i) => ({
             name: [i.product.name, i.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — '),
@@ -856,7 +874,7 @@ export function usePosOrder(input: UsePosOrderInput) {
           change: 0,
           date: new Date().toISOString(),
           customerName: customers.find((c) => c.id === customerId)?.name || '',
-          orderNumber: activeOrderNumber || undefined,
+          orderNumber: persisted.orderNumber || activeOrderNumber || undefined,
           tableName: activeTable?.name || undefined,
           orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
           guestCount: guestCount || undefined,
@@ -864,7 +882,25 @@ export function usePosOrder(input: UsePosOrderInput) {
           isOpenOrder: true,
         };
         const html = await buildReceiptHtml(openOrderReceipt, effSettings, lang, isAr, { authorize: false });
-        openPrintWindow(html, effSettings.receipt_width_mm || 80);
+        const queued = await enqueueCloudOpenOrderPrint({
+          orderId: persisted.orderId,
+          payload: {
+            html,
+            paperWidthMm: effSettings.receipt_width_mm || 80,
+            copies: Math.max(1, Math.min(5, effSettings.receipt_copies || 1)),
+          },
+          idempotencyKey: `open-check:${persisted.orderId}:${Date.now()}`,
+        });
+        if (!queued.accepted) {
+          show(
+            isAr
+              ? `تعذر إرسال الطباعة إلى محطة الكاشير: ${queued.error || 'PRINT_QUEUE_FAILED'}`
+              : `Could not queue printing to the cashier station: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
+            'error',
+          );
+          return;
+        }
+        show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
         return;
       }
       if (!lastReceipt) return;
@@ -873,7 +909,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } catch (error) {
       showReceiptPrintError(error);
     }
-  }, [cart, lastReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError]);
+  }, [cart, lastReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError, persistCart, show]);
 
   const closeReceipt = useCallback(() => setReceiptSaleId(null), []);
 
