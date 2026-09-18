@@ -48,46 +48,46 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public._resolve_business_day_window(uuid,date)'::regprocedure) def
     `);
-    const def = rows[0].def;
-    expect(def).toContain("v_mode = 'shift_span'");
+    const def = rows[0].def.replace(/\s+/g, ' ');
+    expect(def).toContain("v_mode='shift_span'");
     expect(def).toContain("min(s.opened_at)");
-    expect(def).toContain("max(COALESCE(s.closed_at, now()))");
+    expect(def).toContain("max(COALESCE(s.closed_at,now()))");
     expect(def).toContain("AT TIME ZONE 'Africa/Cairo'");
-    expect(def).toContain("v_end_time <= v_start_time");
+    expect(def).toContain("v_end_time<=v_start_time");
   });
 
   it('uses the resolved window for sales, expenses and cash purchases', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public._build_day_closing_report(uuid,date)'::regprocedure) def
     `);
-    const def = rows[0].def;
+    const def = rows[0].def.replace(/\s+/g, ' ');
     expect(def).toContain('public._resolve_business_day_window');
-    expect(def).toContain('s.created_at >= v_start');
-    expect(def).toContain('e.created_at >= v_start');
-    expect(def).toContain('p.created_at >= v_start');
+    expect(def).toContain('s.created_at>=v_start');
+    expect(def).toContain('e.created_at>=v_start');
+    expect(def).toContain('p.created_at>=v_start');
     expect(def).toContain("'business_day_mode'");
     expect(def).toContain("'window_start'");
     expect(def).toContain("'window_end'");
   });
 
-  it('blocks day close while a shift is open and protects configured day end', async () => {
+  it('blocks manual day close while a shift is open but does not require waiting for configured auto-close time', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public._finalize_day_close(uuid,date,uuid)'::regprocedure) def
     `);
     const def = rows[0].def;
     expect(def).toContain("'OPEN_SHIFTS_REMAIN'");
     expect(def).toContain("'NO_SHIFTS_FOR_DAY'");
-    expect(def).toContain("'BUSINESS_DAY_NOT_FINISHED'");
+    expect(def).not.toContain("'BUSINESS_DAY_NOT_FINISHED'");
   });
 
   it('auto-close never bypasses open orders and never fakes an actual cash count', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public.try_auto_close_branch_shift(uuid)'::regprocedure) def
     `);
-    const def = rows[0].def;
+    const def = rows[0].def.replace(/\s+/g, ' ');
     expect(def).toContain("'OPEN_ORDERS_BLOCK_SHIFT_CLOSE'");
-    expect(def).toContain("actual_amount = NULL");
-    expect(def).toContain("difference = NULL");
+    expect(def).toContain("actual_amount=NULL");
+    expect(def).toContain("difference=NULL");
     expect(def).toContain("AUTO_CLOSED_AT_BUSINESS_DAY_END");
   });
 
