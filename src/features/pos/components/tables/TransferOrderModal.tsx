@@ -37,6 +37,10 @@ export function TransferOrderModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [operatorTargets, setOperatorTargets] = useState<Array<{ user_id: string; display_name: string }>>([]);
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string>('');
+  const [operatorLoading, setOperatorLoading] = useState(false);
+  const [operatorError, setOperatorError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +49,31 @@ export function TransferOrderModal({
     setErrorMsg(null);
     setPendingRequestId(null);
     setPendingStatus(null);
+    setSelectedOperatorId('');
+    setOperatorError(null);
+  }, [open, order?.id]);
+
+  useEffect(() => {
+    if (!open || !order?.id) {
+      setOperatorTargets([]);
+      return;
+    }
+    let cancelled = false;
+    setOperatorLoading(true);
+    api.pos.listOrderTransferTargets({ p_order_id: order.id })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setOperatorTargets([]);
+          setOperatorError(error.message);
+          return;
+        }
+        setOperatorTargets(Array.isArray(data) ? data : []);
+      })
+      .finally(() => {
+        if (!cancelled) setOperatorLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [open, order?.id]);
 
   const availableTargetTables = useMemo(() => tables.filter((tb) => tb.id !== sourceTable?.id), [tables, sourceTable]);
@@ -66,6 +95,37 @@ export function TransferOrderModal({
   const targetOrder = selectedTargetTable ? (ordersByTable[selectedTargetTable.id]?.[0] || null) : null;
   const targetHasOrder = !!targetOrder;
   const actionType = targetHasOrder ? 'merge_order' : 'transfer_order';
+
+  const performOperatorTransfer = async () => {
+    if (!order || !selectedOperatorId || operatorLoading) return;
+    setOperatorLoading(true);
+    setOperatorError(null);
+    try {
+      const { data, error } = await api.floorPlan.transferOrderOperator({
+        p_order_id: order.id,
+        p_target_user_id: selectedOperatorId,
+      });
+      if (error) {
+        setOperatorError(error.message);
+        return;
+      }
+      if (!data?.success) {
+        setOperatorError(
+          data?.error === 'POS_ADMIN_PERMISSION_REQUIRED'
+            ? (isAr ? 'تحتاج صلاحية إدارة طلبات المستخدمين الآخرين لإتمام النقل.' : 'Managing other users’ orders is required for this transfer.')
+            : data?.detail || data?.error || (isAr ? 'تعذر نقل المستخدم.' : 'Could not transfer the operator.'),
+        );
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('pos:operator-transferred', {
+        detail: { orderId: order.id, userId: selectedOperatorId },
+      }));
+      setSelectedOperatorId('');
+      onClose();
+    } finally {
+      setOperatorLoading(false);
+    }
+  };
 
   const perform = async () => {
     if (!order || !sourceTable || !selectedTargetId || loading) return;
@@ -163,6 +223,40 @@ export function TransferOrderModal({
           <span className="inline-flex items-center rounded-lg bg-ui-primary-soft px-2.5 py-1 text-xs font-black text-ui-accent">
             {isAr ? 'المخزون وKDS لا يتغيران' : 'Inventory & KDS unchanged'}
           </span>
+        </div>
+
+        <div className="rounded-2xl border border-ui-border bg-ui-surface p-3.5 space-y-3">
+          <div>
+            <p className="text-sm font-black text-ui-text">{isAr ? 'نقل مسؤولية الطلب لمستخدم آخر' : 'Transfer order ownership'}</p>
+            <p className="mt-1 text-[11px] font-semibold text-ui-muted">
+              {isAr
+                ? 'بعد النقل يصبح المستخدم الجديد مسؤولًا عن الطلب، وتُنسب له المبيعات الناتجة من هذا الطلب عند الدفع.'
+                : 'After transfer, the selected user owns the order and sales settled from this order are attributed to that user.'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select
+              data-testid="pos-operator-transfer-target"
+              value={selectedOperatorId}
+              onChange={(event) => { setSelectedOperatorId(event.target.value); setOperatorError(null); }}
+              disabled={operatorLoading}
+              className="h-11 flex-1 rounded-xl border border-ui-border bg-ui-surface px-3 text-sm font-bold text-ui-text outline-none focus:border-ui-primary"
+            >
+              <option value="">{operatorLoading ? (isAr ? 'جارٍ تحميل المستخدمين...' : 'Loading users...') : (isAr ? 'اختر المستخدم الجديد' : 'Select new user')}</option>
+              {operatorTargets.map((target) => (
+                <option key={target.user_id} value={target.user_id}>{target.display_name}</option>
+              ))}
+            </select>
+            <Button
+              variant="secondary"
+              onClick={() => void performOperatorTransfer()}
+              disabled={operatorLoading || !selectedOperatorId}
+            >
+              <Users className="h-4 w-4" />
+              <span>{isAr ? 'نقل المستخدم' : 'Transfer User'}</span>
+            </Button>
+          </div>
+          {operatorError && <p className="text-xs font-bold text-rose-600">{operatorError}</p>}
         </div>
 
         <div className="flex items-center gap-1 rounded-xl bg-ui-page-alt p-1">
