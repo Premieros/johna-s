@@ -14,10 +14,13 @@ describe('POS sent-only settlement contract', () => {
     expect(previewService).toContain("supabase.rpc('get_order_settlement_preview'");
   });
 
-  it('saves editable open-order additions before settlement preview', () => {
+  it('keeps payment preview read-only for already-sent orders', () => {
     expect(publicHook).toContain('const saveOpenOrderSnapshot = useCallback');
     expect(publicHook).toContain('api.floorPlan.updateOrder');
-    expect(publicHook).toContain('const preview = await loadSettlementPreview(true)');
+    expect(publicHook).toContain('const preview = await loadSettlementPreview(false)');
+    expect(publicHook).toContain('settlementPreview || await loadSettlementPreview(false)');
+    expect(publicHook).not.toContain('const preview = await loadSettlementPreview(true)');
+    expect(publicHook).not.toContain('settlementPreview || await loadSettlementPreview(true)');
   });
 
   it('excludes unsent additions from checkout totals and open-order receipt', () => {
