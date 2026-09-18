@@ -49,6 +49,21 @@ function safeText(value: unknown): string {
     .trim();
 }
 
+function htmlToThermalText(html: string): string {
+  if (typeof window === 'undefined' || !html.trim()) return '';
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('style,script,noscript,svg').forEach((node) => node.remove());
+    return safeText(doc.body?.innerText || doc.body?.textContent || '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  } catch {
+    return '';
+  }
+}
+
 function modifierNames(item: KitchenSendItem): string[] {
   return (item.modifiers || [])
     .map((m) => safeText(m.option_name || m.option_name_en))
@@ -265,7 +280,7 @@ export async function executeSilentPrintDetailed(options: {
       body: JSON.stringify({
         station: 'custom',
         printer: printerName,
-        text: options.text || options.html || '',
+        text: options.text || (options.html ? htmlToThermalText(options.html) : ''),
       }),
     });
     if (!response.ok) return { success: false, error: `LOCAL_AGENT_HTTP_${response.status}` };
