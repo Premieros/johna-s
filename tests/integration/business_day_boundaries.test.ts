@@ -24,10 +24,11 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
       SELECT column_name,column_default
       FROM information_schema.columns
       WHERE table_schema='public' AND table_name='branch_settings'
-        AND column_name IN ('business_day_mode','business_day_start','business_day_end')
+        AND column_name IN ('business_day_mode','business_day_start','business_day_end','auto_close_shift_at_day_end')
       ORDER BY column_name
     `);
     expect(rows.map((r) => r.column_name)).toEqual([
+      'auto_close_shift_at_day_end',
       'business_day_end',
       'business_day_mode',
       'business_day_start',
@@ -77,6 +78,25 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     expect(def).toContain("'OPEN_SHIFTS_REMAIN'");
     expect(def).toContain("'NO_SHIFTS_FOR_DAY'");
     expect(def).toContain("'BUSINESS_DAY_NOT_FINISHED'");
+  });
+
+  it('auto-close never bypasses open orders and never fakes an actual cash count', async () => {
+    const { rows } = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('public.try_auto_close_branch_shift(uuid)'::regprocedure) def
+    `);
+    const def = rows[0].def;
+    expect(def).toContain("'OPEN_ORDERS_BLOCK_SHIFT_CLOSE'");
+    expect(def).toContain("actual_amount = NULL");
+    expect(def).toContain("difference = NULL");
+    expect(def).toContain("AUTO_CLOSED_AT_BUSINESS_DAY_END");
+  });
+
+  it('retains the compatibility override only as a fail-closed surface', async () => {
+    const { rows } = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('public.close_shift_with_open_orders(uuid,numeric,text)'::regprocedure) def
+    `);
+    expect(rows[0].def).toContain("'OPEN_ORDERS_BLOCK_SHIFT_CLOSE'");
+    expect(rows[0].def).not.toContain("status = 'closed'");
   });
 
   it('still enforces exactly one open shared shift per branch', async () => {
