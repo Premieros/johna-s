@@ -37,25 +37,39 @@ describe.skipIf(skip)('shift cash integrity and scope', () => {
     expect(rows[0].can_delete).toBe(false);
   });
 
-  it('uses the same cash movement categories in active, normal-close, and force-close paths', async () => {
+  it('uses the same cash movement categories through the canonical shift cash helper', async () => {
     const { rows } = await client.query<{ proname: string; def: string }>(`
       SELECT p.proname, pg_get_functiondef(p.oid) AS def
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
-        AND p.proname IN ('get_active_shift', 'close_shift', 'force_close_shift')
+        AND p.proname IN ('get_active_shift', 'close_shift', 'force_close_shift', '_compute_shift_expected_cash')
         AND p.prokind = 'f'
       ORDER BY p.proname
     `);
 
-    expect(rows).toHaveLength(3);
-    for (const row of rows) {
-      expect(row.def).toContain('cash_in');
-      expect(row.def).toContain('cash_out');
-      expect(row.def).toContain('refund');
-      expect(row.def).toContain('expense');
-      expect(row.def).toContain('cash');
-    }
+    expect(rows).toHaveLength(4);
+    const helper = rows.find((row) => row.proname === '_compute_shift_expected_cash');
+    expect(helper?.def).toContain('cash_in');
+    expect(helper?.def).toContain('cash_out');
+    expect(helper?.def).toContain('refund');
+    expect(helper?.def).toContain('expense');
+    expect(helper?.def).toContain('cash');
+
+    const close = rows.find((row) => row.proname === 'close_shift');
+    expect(close?.def).toContain('public._compute_shift_expected_cash(p_shift_id)');
+
+    const force = rows.find((row) => row.proname === 'force_close_shift');
+    expect(force?.def).toContain('cash_in');
+    expect(force?.def).toContain('cash_out');
+    expect(force?.def).toContain('refund');
+    expect(force?.def).toContain('expense');
+
+    const active = rows.find((row) => row.proname === 'get_active_shift');
+    expect(active?.def).toContain('cash_in');
+    expect(active?.def).toContain('cash_out');
+    expect(active?.def).toContain('refund');
+    expect(active?.def).toContain('expense');
   });
 
   it('scopes force-close and open-drawer shift lookup through canonical branch access', async () => {
