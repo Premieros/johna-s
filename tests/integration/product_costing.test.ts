@@ -78,6 +78,20 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await mkUser(adminId, 'super_admin', null);
     await mkUser(managerId, 'branch_manager', branchA);
     await mkUser(managerBId, 'branch_manager', branchB);
+
+    // Permission-First fixture: this suite exercises reports.costing endpoints,
+    // so grant that capability explicitly to the ordinary manager role inside
+    // this rollback-only transaction. Super Admin still relies only on the
+    // canonical implicit bypass in can_permission().
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = CASE
+         WHEN COALESCE(permissions, '[]'::jsonb) ? 'reports.costing' THEN permissions
+         ELSE COALESCE(permissions, '[]'::jsonb) || '["reports.costing"]'::jsonb
+       END
+       WHERE role = 'branch_manager'`,
+    );
+
     await client.query(`INSERT INTO public.organization_members (organization_id, user_id, membership_role, is_active) VALUES ($1, $2, 'owner', true), ($1, $3, 'member', true), ($1, $4, 'member', true)`, [orgId, adminId, managerId, managerBId]);
   });
 
