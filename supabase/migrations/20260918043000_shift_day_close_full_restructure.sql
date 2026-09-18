@@ -25,16 +25,6 @@ AS $function$
       )
       FROM public.shift_operations op
       WHERE op.shift_id=s.id
-    ),0)
-    - COALESCE((
-      SELECT sum(e.amount)
-      FROM public.expenses e
-      WHERE e.branch_id=s.branch_id
-        AND e.status='posted'
-        AND e.shift_id IS NULL
-        AND COALESCE(e.payment_method,'cash')='cash'
-        AND e.created_at>=s.opened_at
-        AND e.created_at<=COALESCE(s.closed_at,now())
     ),0),
     2
   )
