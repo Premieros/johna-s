@@ -7,14 +7,14 @@ const modifiersPage = readFileSync(resolve(root, 'src/features/catalog/pages/Pro
 const setupWizard = readFileSync(resolve(root, 'src/features/catalog/pages/ProductSetupWizardPage.tsx'), 'utf8');
 
 describe('catalog branch/component selection contracts', () => {
-  it('keeps reusable modifier-group administration scoped to one active branch', () => {
+  it('keeps reusable modifier administration scoped to one active branch', () => {
     expect(modifiersPage).toContain('const branchFilter = useBranchFilter()');
     expect(modifiersPage).toContain('if (!branchFilter)');
     expect(modifiersPage).toContain("supabase.from('products').select('*').eq('branch_id', branchFilter)");
-    expect(modifiersPage).toContain("supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', branchFilter)");
     expect(modifiersPage).toContain('api.catalog.listModifierGroupsAdmin(branchFilter)');
-    expect(modifiersPage).toContain('api.catalog.listInventoryUnits({ branch_id: branchFilter, is_active: true })');
     expect(modifiersPage).toContain('p_branch_id: branchFilter');
+    expect(modifiersPage).toContain('product_ids: string[]');
+    expect(modifiersPage).toContain('toggleProduct');
     expect(modifiersPage).not.toContain('selectedProduct.branch_id');
   });
 
