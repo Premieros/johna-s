@@ -24,6 +24,10 @@ export const shifts = {
     return rpc('get_shift_closing_report', p);
   },
 
+  getDayClosingReport(p: { p_branch_id: string; p_day: string }): ApiResult<RpcResult & Record<string, unknown>> {
+    return rpc('get_day_closing_report', p);
+  },
+
   closeWithOpenOrders(p: { p_shift_id: string; p_actual_amount: number; p_notes: string | null }): ApiResult<RpcResult & { open_orders_preserved?: boolean; open_order_count?: number; open_table_count?: number }> {
     return rpc<RpcResult & { open_orders_preserved?: boolean; open_order_count?: number; open_table_count?: number }>('close_shift_with_open_orders', p);
   },
