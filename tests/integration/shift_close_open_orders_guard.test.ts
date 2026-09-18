@@ -125,28 +125,17 @@ describe.skipIf(skip)('shift close open-order guard', () => {
     expect(state.rows[0].status).toBe('open');
   });
 
-  it('requires both base close and explicit open-order override permissions', async () => {
-    const result = await asUser(
-      closeOnlyUser,
-      `SELECT public.close_shift_with_open_orders($1,100,NULL) AS r`,
-      [shiftA],
-    );
-    expect(result.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_CLOSE_OPEN_ORDERS_DENIED' });
-  });
-
-  it('override closes only the shift and preserves the open order and occupied table', async () => {
+  it('compatibility override is fail-closed even when the caller has the old override permission', async () => {
     await client.query('UPDATE public.shifts SET cashier_id=$1 WHERE id=$2', [overrideUser, shiftA]);
 
     const result = await asUser(
       overrideUser,
-      `SELECT public.close_shift_with_open_orders($1,100,'handover with open table') AS r`,
+      `SELECT public.close_shift_with_open_orders($1,100,'legacy override attempt') AS r`,
       [shiftA],
     );
-    const r = result.rows[0].r as CloseResult;
-    expect(r).toMatchObject({
-      success: true,
-      shift_id: shiftA,
-      open_orders_preserved: true,
+    expect(result.rows[0].r).toMatchObject({
+      success: false,
+      error: 'OPEN_ORDERS_BLOCK_SHIFT_CLOSE',
       open_order_count: 1,
       open_table_count: 1,
     });
@@ -154,20 +143,31 @@ describe.skipIf(skip)('shift close open-order guard', () => {
     const order = await client.query<{ status: string }>('SELECT status FROM public.orders WHERE id=$1', [orderA]);
     expect(order.rows[0].status).toBe('open');
 
-    const table = await client.query<{ status: string }>('SELECT status FROM public.dining_tables WHERE id=$1', [tableA]);
-    expect(table.rows[0].status).toBe('occupied');
-
     const shift = await client.query<{ status: string }>('SELECT status FROM public.shifts WHERE id=$1', [shiftA]);
-    expect(shift.rows[0].status).toBe('closed');
+    expect(shift.rows[0].status).toBe('open');
   });
 
-  it('is retry-safe after the shift has already closed', async () => {
+  it('closes only after the user resolves every open order', async () => {
+    await client.query(
+      `UPDATE public.orders
+       SET status='completed', payment_status='paid'
+       WHERE id=$1`,
+      [orderA],
+    );
+
     const result = await asUser(
       overrideUser,
-      `SELECT public.close_shift_with_open_orders($1,100,NULL) AS r`,
+      `SELECT public.close_shift($1,100,'all orders resolved') AS r`,
       [shiftA],
     );
-    expect(result.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_CLOSED' });
+    expect(result.rows[0].r).toMatchObject({ success: true, shift_id: shiftA });
+
+    const retry = await asUser(
+      overrideUser,
+      `SELECT public.close_shift($1,100,NULL) AS r`,
+      [shiftA],
+    );
+    expect(retry.rows[0].r).toMatchObject({ success: false, error: 'SHIFT_CLOSED' });
   });
 
   it('does not let another branch open order block normal close', async () => {
