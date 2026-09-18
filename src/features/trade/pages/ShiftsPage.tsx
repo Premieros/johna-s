@@ -21,6 +21,7 @@ import { logAudit } from '@/lib/audit';
 import type { Shift, RpcResult } from '@/lib/types';
 import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
 import { fetchShiftClosingReportServer } from '../services/shiftClosingFinancials';
+import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '../services/dayClosingReport';
 
 interface ShiftUserRow { id: string; full_name: string | null; email: string | null; }
 interface ActiveShiftPayload { open?: boolean; shift?: { id?: string; expected?: number }; }
@@ -60,6 +61,9 @@ export function ShiftsPage() {
   const [closeBlock, setCloseBlock] = useState<CloseBlock | null>(null);
   const [closing, setClosing] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [dayCloseModal, setDayCloseModal] = useState(false);
+  const [dayClosing, setDayClosing] = useState(false);
+  const [dayDate, setDayDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' }));
 
   async function loadMeta() {
     const { data } = await supabase.from('users').select('id, full_name, email');
@@ -235,6 +239,53 @@ export function ShiftsPage() {
     }
   };
 
+  const targetBranchId = branchFilter || user?.branch_id || '';
+
+  const printDayReport = async () => {
+    if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
+    try {
+      const report = await fetchDayClosingReportServer(targetBranchId, dayDate);
+      const html = buildA4DayClosingReportHtml(report, currency, lang);
+      const w = window.open('', '_blank', 'width=1000,height=850');
+      if (w) { w.document.write(html); w.document.close(); }
+    } catch (err: unknown) {
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر تحميل تقرير اليوم' : 'Could not load day report'), 'error');
+    }
+  };
+
+  const closeDay = async () => {
+    if (!targetBranchId || dayClosing) { if (!targetBranchId) show(t('selectBranchFirst'), 'error'); return; }
+    setDayClosing(true);
+    try {
+      const { data, error: closeError } = await api.shifts.dayClose({
+        p_branch_id: targetBranchId,
+        p_business_date: dayDate,
+      });
+      if (closeError) { show(closeError.message, 'error'); return; }
+      const res = data as (RpcResult & { daily_close_id?: string; already_closed?: boolean }) | null;
+      if (!res?.success) {
+        if (res?.error === 'OPEN_SHIFTS_REMAIN') {
+          show(isAr ? 'لا يمكن إغلاق اليوم قبل إغلاق كل الشفتات المفتوحة في الفرع.' : 'Close every open shift in this branch before day close.', 'error');
+          return;
+        }
+        show(res?.detail || res?.error || t('error'), 'error');
+        return;
+      }
+      await logAudit('update', 'daily_closes', res.daily_close_id || '', {
+        branch_id: targetBranchId,
+        business_date: dayDate,
+        already_closed: Boolean(res.already_closed),
+      });
+      show(res.already_closed
+        ? (isAr ? 'اليوم مغلق بالفعل وتم تحميل نسخة الإغلاق الثابتة' : 'Day was already closed; immutable snapshot loaded')
+        : (isAr ? 'تم إغلاق اليوم وحفظ التقرير الثابت' : 'Day closed and immutable snapshot saved'), 'success');
+      setDayCloseModal(false);
+      await printDayReport();
+    } finally {
+      setDayClosing(false);
+    }
+  };
+
   const filtered = joinedItems.filter((i) => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -269,8 +320,13 @@ export function ShiftsPage() {
       <DesignPageHeader
         title={isAr ? 'إدارة الورديات واليومية' : t('shifts')}
         subtitle={isAr ? 'إدارة الورديات وتقارير الإغلاق؛ إغلاق اليوم المالي يبقى منفصلًا عن إغلاق الوردية' : 'Manage shifts and closing reports; financial day close remains separate from shift close'}
-        actions={<div className="flex gap-2">
-          {openShifts.length > 0 && <Button variant="outline" onClick={() => handlePrintZReport(openShifts[0], 'a4')}><CalendarCheck className="w-4 h-4" /> {isAr ? 'تقرير اليومية المباشر' : 'Live Daily Report'}</Button>}
+        actions={<div className="flex flex-wrap gap-2">
+          {(can('shifts.day_close') || can('shifts.report.shift')) && targetBranchId && (
+            <Button variant="outline" onClick={() => { void printDayReport(); }}><FileText className="w-4 h-4" /> {isAr ? 'تقرير اليومية الكامل' : 'Full Day Report'}</Button>
+          )}
+          {can('shifts.day_close') && targetBranchId && (
+            <Button variant="outline" onClick={() => setDayCloseModal(true)}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
+          )}
           {can('shifts.open') && <Button onClick={() => setOpenModal(true)}><Play className="w-4 h-4" /> {t('openShift')}</Button>}
         </div>}
       />
@@ -296,6 +352,26 @@ export function ShiftsPage() {
           <Input type="number" min={0} step="0.01" label={t('openingAmount')} value={String(openForm.opening_amount)} onChange={(e) => setOpenForm({ ...openForm, opening_amount: Number(e.target.value) })} />
           <Textarea label={t('notes')} value={openForm.notes} onChange={(e) => setOpenForm({ ...openForm, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setOpenModal(false)}>{t('cancel')}</Button><Button onClick={openShift}><Play className="w-4 h-4" /> {t('openShift')}</Button></div>
+        </div>
+      </Modal>
+
+      <Modal open={dayCloseModal} onClose={() => { if (!dayClosing) setDayCloseModal(false); }} title={isAr ? 'إغلاق اليوم المالي' : 'Financial Day Close'}>
+        <div className="space-y-4">
+          <div className="rounded-lg border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-muted">
+            {isAr
+              ? 'إغلاق اليوم لا يخفي أي بيانات: التقرير يحفظ كل الشفتات والمبيعات والمصروفات والمستخدمين ومشتريات الكاش. يجب إغلاق كل الشفتات أولًا.'
+              : 'Day close keeps full detail: shifts, sales, expenses, users and cash purchases. Every shift must be closed first.'}
+          </div>
+          <Input type="date" label={isAr ? 'تاريخ العمل' : 'Business Date'} value={dayDate} onChange={(e) => setDayDate(e.target.value)} />
+          <div className="p-3 bg-ui-page-alt rounded-lg text-sm">
+            <span className="text-ui-muted">{isAr ? 'الفرع:' : 'Branch:'}</span>{' '}
+            <strong>{branches.find((b) => b.id === targetBranchId)?.name || '-'}</strong>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" disabled={dayClosing} onClick={() => setDayCloseModal(false)}>{t('cancel')}</Button>
+            <Button variant="outline" disabled={dayClosing} onClick={() => { void printDayReport(); }}><FileText className="w-4 h-4" /> {isAr ? 'معاينة التقرير الكامل' : 'Preview Full Report'}</Button>
+            <Button variant="danger" disabled={dayClosing} onClick={() => { void closeDay(); }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق اليوم وطباعة التقرير' : 'Close Day & Print'}</Button>
+          </div>
         </div>
       </Modal>
 
