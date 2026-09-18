@@ -16,6 +16,7 @@ interface TransferOrderModalProps {
   areas?: DiningArea[];
   ordersByTable: Record<string, Order[]>;
   onConfirmTransfer?: (orderId: string, fromTableId: string, toTableId: string) => Promise<boolean>;
+  onOperatorTransferred?: () => void;
 }
 
 export function TransferOrderModal({
@@ -26,6 +27,7 @@ export function TransferOrderModal({
   tables,
   areas = [],
   ordersByTable,
+  onOperatorTransferred,
 }: TransferOrderModalProps) {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
@@ -121,6 +123,7 @@ export function TransferOrderModal({
         detail: { orderId: order.id, userId: selectedOperatorId },
       }));
       setSelectedOperatorId('');
+      onOperatorTransferred?.();
       onClose();
     } finally {
       setOperatorLoading(false);
