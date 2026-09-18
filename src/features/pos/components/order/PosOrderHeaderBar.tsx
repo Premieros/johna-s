@@ -146,7 +146,7 @@ export function PosOrderHeaderBar({
             className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:border-ui-primary hover:text-ui-primary hover:bg-ui-primary-soft transition active:scale-95 shadow-ui-xs"
           >
             <ArrowRightLeft className="h-3.5 w-3.5 text-ui-primary" />
-            <span className="hidden sm:inline">{isAr ? 'دمج / نقل' : 'Merge / Transfer'}</span>
+            <span>{isAr ? 'دمج / نقل' : 'Merge / Transfer'}</span>
           </button>
         )}
 
@@ -158,7 +158,7 @@ export function PosOrderHeaderBar({
             className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs"
           >
             <Printer className="h-3.5 w-3.5 text-ui-primary" />
-            <span className="hidden sm:inline">{isAr ? 'طباعة' : 'Print'}</span>
+            <span>{isAr ? 'طباعة' : 'Print'}</span>
           </button>
         )}
 
@@ -170,7 +170,7 @@ export function PosOrderHeaderBar({
             className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs"
           >
             <Pause className="h-3.5 w-3.5 text-amber-600" />
-            <span className="hidden sm:inline">{isAr ? 'تعليق' : 'Hold'}</span>
+            <span>{isAr ? 'تعليق' : 'Hold'}</span>
           </button>
         )}
 
