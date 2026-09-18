@@ -102,6 +102,22 @@ describe.skipIf(skip)('order-lifecycle guards (047 H1/H3/H4/M9/L2)', () => {
 
     await client.query(`DELETE FROM public.order_items WHERE id = $1`, [secondItem.rows[0].id]);
     expect(await tableStatus(t)).toBe('vacant');
+
+    // A stale client must not be able to re-occupy an empty active-order shell.
+    await client.query(`UPDATE public.dining_tables SET status='occupied' WHERE id=$1`, [t]);
+    expect(await tableStatus(t)).toBe('vacant');
+
+    const labels = await asUser(async () => client.query(
+      `SELECT * FROM public.get_pos_order_operator_labels($1) WHERE order_id=$2`,
+      [branchId, order.rows[0].id],
+    ));
+    expect(labels.rows).toHaveLength(0);
+
+    const resolution = await asUser(async () => client.query(
+      `SELECT public.resolve_my_active_table_order($1) AS r`,
+      [t],
+    ));
+    expect(resolution.rows[0].r).toMatchObject({ success: false, resumable: false });
   });
   it('CHECK constraints reject impossible status/type values (L2)', async () => {
     const badStatus = async () => { await client.query('SAVEPOINT l2_status'); try { await client.query(`INSERT INTO public.orders (order_number, branch_id, order_type, status, subtotal, discount_amount, tax_amount, total) VALUES ('ORD-X', $1, 'dine_in', 'ghost_status', 0, 0, 0, 0)`, [branchId]); return null; } catch (e: unknown) { return (e as Error).message; } finally { await client.query('ROLLBACK TO SAVEPOINT l2_status').catch(() => {}); await client.query('RELEASE SAVEPOINT l2_status').catch(() => {}); } };
