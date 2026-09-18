@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useCan } from '@/lib/permissions';
 import {
   claimCloudPrintJobs,
   completeCloudPrintJob,
@@ -69,7 +68,6 @@ async function executeClaimedBatch(jobs: CloudPrintJob[], agentId: string): Prom
 
 export function CloudPrintAgent() {
   const { user } = useAuth();
-  const can = useCan();
   const [configVersion, setConfigVersion] = useState(0);
   const busy = useRef(false);
 
@@ -87,7 +85,7 @@ export function CloudPrintAgent() {
     // The installed legacy Windows print service is intentionally supported here.
     // It is reachable from the normal web POS through localPrintAgent.ts, so Electron
     // must not be required before polling the durable cloud queue.
-    if (!user?.id || !can('settings.manage')) return;
+    if (!user?.id) return;
     if (!isSilentPrintEnabled() || !isCloudPrintAgentEnabled()) return;
     const branchId = getCloudPrintAgentBranchId();
     if (!branchId) return;
@@ -137,7 +135,7 @@ export function CloudPrintAgent() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [can, configVersion, user?.id]);
+  }, [configVersion, user?.id]);
 
   return null;
 }
