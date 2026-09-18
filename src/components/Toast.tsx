@@ -20,10 +20,18 @@ const SENT_ITEM_GUARD_CODES = [
   'SENT_ITEM_CHANGE_REQUIRES_VOID',
 ] as const;
 
+const SENT_ITEM_RECONCILIATION_CODES = [
+  'SENT_ITEM_VOID_INCOMPLETE',
+  'KITCHEN_EVENT_OVERAGE_REPAIR_FAILED',
+] as const;
+
 function normalizeToastMessage(message: string, type: ToastType): string {
   const text = String(message || '').trim();
   if (type === 'error' && SENT_ITEM_GUARD_CODES.some((code) => text.includes(code))) {
     return 'هذا الصنف تم إرساله للمطبخ بالفعل. لا يمكن تعديل الكمية المرسلة مباشرة؛ استخدم إلغاء الصنف (Void) ليتم تنفيذ مسار الموافقة الصحيح.';
+  }
+  if (type === 'error' && SENT_ITEM_RECONCILIATION_CODES.some((code) => text.includes(code))) {
+    return 'تعذر إتمام إلغاء الصنف لأن سجل إرسال المطبخ والمخزون غير متزامن. حدّث الطلب وحاول مرة أخرى؛ إذا استمرت الرسالة فلا تغيّر الكمية يدويًا.';
   }
   return text;
 }
