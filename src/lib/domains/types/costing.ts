@@ -28,6 +28,48 @@ export interface CostingRecipeLine {
   wastage_percent: number;
   unit_cost: number;
   line_cost: number;
+  cost_source?: RawMaterialPriceSource;
+  cost_priced_at?: string | null;
+  cost_reference?: string | null;
+  cost_detail?: string | null;
+}
+
+export type RawMaterialPriceSource =
+  | 'purchase'
+  | 'stock_count'
+  | 'inventory_average'
+  | 'batch_average'
+  | 'default_cost';
+
+export interface RawMaterialCostOverviewRow {
+  raw_material_id: string;
+  raw_material_name: string;
+  raw_material_code: string | null;
+  branch_id: string;
+  latest_cost: number;
+  previous_cost: number | null;
+  change_amount: number | null;
+  change_pct: number | null;
+  price_source: RawMaterialPriceSource;
+  priced_at: string | null;
+  reference_number: string | null;
+  source_detail: string | null;
+  event_count: number;
+}
+
+export interface RawMaterialCostHistoryRow {
+  event_id: string;
+  raw_material_id: string;
+  raw_material_name: string;
+  branch_id: string;
+  unit_cost: number;
+  previous_cost: number | null;
+  change_amount: number | null;
+  change_pct: number | null;
+  price_source: 'purchase' | 'stock_count';
+  priced_at: string;
+  reference_number: string | null;
+  source_detail: string | null;
 }
 
 export interface CostHistoryRow {
