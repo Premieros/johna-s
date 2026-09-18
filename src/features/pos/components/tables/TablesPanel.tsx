@@ -109,21 +109,21 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSends
                     type="button"
                     data-testid={`pos-table-drawer-${table.id}`}
                     onClick={() => chooseTable(table)}
-                    className={`min-h-24 rounded-2xl border p-3 text-start shadow-ui-sm transition hover:-translate-y-0.5 ${occupied ? 'border-ui-warning/30 bg-ui-warning/5' : 'border-ui-border bg-ui-surface hover:border-ui-primary'}`}
+                    className={`min-h-28 rounded-2xl border p-3 text-start shadow-ui-sm transition hover:-translate-y-0.5 hover:shadow-ui-md ${occupied ? 'border-ui-warning/55 bg-ui-warning/15' : 'border-ui-success/35 bg-ui-success/5 hover:border-ui-primary'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="truncate text-xs font-black text-ui-text">{table.name}</span>
+                      <span className="truncate text-sm font-black text-ui-text">{table.name}</span>
                       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${occupied ? 'bg-ui-warning' : 'bg-ui-success'}`} />
                     </div>
-                    <p className="mt-2 flex items-center gap-1 text-[10px] font-bold text-ui-subtle"><Users className="h-3 w-3" /> {table.capacity}</p>
+                    <p className="mt-2 flex items-center gap-1 text-[11px] font-bold text-ui-muted"><Users className="h-3 w-3" /> {table.capacity}</p>
                     {order ? (
                       <div className="mt-2 space-y-0.5">
-                        <p className="truncate text-[10px] font-black text-ui-text">#{order.order_number}</p>
-                        <p className="truncate text-[10px] font-black text-ui-accent">{formatCurrency(order.total, currency, lang)}</p>
-                        {operatorName && <p className="flex items-center gap-1 truncate text-[10px] font-bold text-ui-muted"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></p>}
+                        <p className="truncate text-[11px] font-black text-ui-text">#{order.order_number}</p>
+                        <p className="truncate text-[12px] font-black text-ui-accent">{formatCurrency(order.total, currency, lang)}</p>
+                        {operatorName && <p className="flex items-center gap-1 truncate text-[10px] font-black text-ui-text"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></p>}
                       </div>
                     ) : (
-                      <p className="mt-2 text-[10px] font-black text-ui-success">{isAr ? 'متاحة' : 'Available'}</p>
+                      <p className="mt-2 text-[11px] font-black text-ui-success">{isAr ? 'متاحة' : 'Available'}</p>
                     )}
                   </button>
                 );
@@ -152,7 +152,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSends
             const canPaySentOrder = perms.canPay && (kitchenSendsByOrder[order.id]?.length || 0) > 0;
             return (
               <div className="space-y-3">
-                <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
+                <div className="rounded-xl border border-ui-border-strong bg-ui-page-alt p-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-black text-ui-text">#{order.order_number}</span>
                     <span className="text-sm font-black text-ui-accent">{formatCurrency(order.total, currency, lang)}</span>
