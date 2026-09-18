@@ -7,7 +7,8 @@
 ALTER TABLE public.branch_settings
   ADD COLUMN IF NOT EXISTS business_day_mode text NOT NULL DEFAULT 'fixed_time',
   ADD COLUMN IF NOT EXISTS business_day_start time without time zone NOT NULL DEFAULT '00:00',
-  ADD COLUMN IF NOT EXISTS business_day_end time without time zone NOT NULL DEFAULT '00:00';
+  ADD COLUMN IF NOT EXISTS business_day_end time without time zone NOT NULL DEFAULT '00:00',
+  ADD COLUMN IF NOT EXISTS auto_close_shift_at_day_end boolean NOT NULL DEFAULT false;
 
 DO $do$
 BEGIN
@@ -296,3 +297,57 @@ $function$;
 
 REVOKE ALL ON FUNCTION public._finalize_day_close(uuid,date,uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public._finalize_day_close(uuid,date,uuid) TO service_role,postgres;
+
+
+-- Strict close policy: a branch shift cannot be closed while any open/held
+-- operational order remains. The former override RPC is retained only as a
+-- fail-closed compatibility surface so old clients cannot bypass this rule.
+CREATE OR REPLACE FUNCTION public.close_shift_with_open_orders(
+  p_shift_id uuid,
+  p_actual_amount numeric,
+  p_notes text DEFAULT NULL::text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public','pg_temp'
+AS $function$
+DECLARE
+  v_shift public.shifts%ROWTYPE;
+  v_open_order_count integer:=0;
+  v_open_table_count integer:=0;
+BEGIN
+  SELECT * INTO v_shift
+  FROM public.shifts
+  WHERE id=p_shift_id
+    AND (public.is_pos_admin() OR public.user_may_access_branch(branch_id));
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success',false,'error','SHIFT_NOT_FOUND');
+  END IF;
+
+  SELECT
+    count(*)::int,
+    count(DISTINCT o.table_id) FILTER (WHERE o.table_id IS NOT NULL)::int
+  INTO v_open_order_count,v_open_table_count
+  FROM public.orders o
+  WHERE o.branch_id=v_shift.branch_id
+    AND o.status IN ('open','held')
+    AND COALESCE(o.payment_status,'unpaid')<>'paid'
+    AND EXISTS (
+      SELECT 1 FROM public.order_items oi
+      WHERE oi.order_id=o.id AND oi.quantity>0
+    );
+
+  RETURN jsonb_build_object(
+    'success',false,
+    'error','OPEN_ORDERS_BLOCK_SHIFT_CLOSE',
+    'detail','All open or held orders must be resolved before the shift can close.',
+    'open_order_count',v_open_order_count,
+    'open_table_count',v_open_table_count
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.close_shift_with_open_orders(uuid,numeric,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.close_shift_with_open_orders(uuid,numeric,text) TO authenticated,service_role;
