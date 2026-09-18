@@ -1,4 +1,4 @@
-import { supabase } from '@/api';
+import { supabase, shifts as shiftsApi } from '@/api';
 import type { KitchenSendItem } from '../types';
 import { buildStationTicketText, groupKitchenItemsByStation, type LocalKitchenPrintContext } from './localPrintAgent';
 
@@ -117,9 +117,9 @@ export async function enqueueCloudReceiptPrint(params: { saleId: string; approva
 
 export async function enqueueCloudReportPrint(params: { branchId: string; payload: CloudPrintPayload; idempotencyKey: string }) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return { accepted: false, error: 'OFFLINE' };
-  const { data, error } = await supabase.rpc('enqueue_cloud_report_print', {
+  const { data, error } = await shiftsApi.enqueueReportPrint({
     p_branch_id: params.branchId,
-    p_payload: params.payload,
+    p_payload: params.payload as Record<string, unknown>,
     p_idempotency_key: params.idempotencyKey,
   });
   if (error) return { accepted: false, error: error.message };
