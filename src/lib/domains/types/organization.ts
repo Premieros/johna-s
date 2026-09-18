@@ -30,6 +30,7 @@ export interface BranchSettings {
   business_day_mode: 'fixed_time' | 'shift_span';
   business_day_start: string;
   business_day_end: string;
+  auto_close_shift_at_day_end: boolean;
   created_at: string;
   updated_at: string;
 }
