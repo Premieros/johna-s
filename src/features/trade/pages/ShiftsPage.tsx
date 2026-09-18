@@ -19,7 +19,7 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import type { Shift, RpcResult } from '@/lib/types';
-import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
+import { buildThermalZReportText, buildA4ZReportHtml } from '../services/shiftClosingReport';
 import { fetchShiftClosingReportServer } from '../services/shiftClosingFinancials';
 import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '../services/dayClosingReport';
 import { enqueueCloudReportPrint } from '../../pos/services/cloudPrint';
@@ -32,6 +32,29 @@ interface ShiftCloseResult extends RpcResult {
   open_orders_preserved?: boolean;
 }
 interface CloseBlock { openOrderCount: number; openTableCount: number; }
+
+function businessDateForShift(openedAt: string, businessDayStart = '00:00'): string {
+  const date = new Date(openedAt);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const localDate = `${part('year')}-${part('month')}-${part('day')}`;
+  const openMinutes = Number(part('hour') || 0) * 60 + Number(part('minute') || 0);
+  const [startHour = 0, startMinute = 0] = businessDayStart.split(':').map(Number);
+  const cutoffMinutes = startHour * 60 + startMinute;
+  if (openMinutes >= cutoffMinutes) return localDate;
+
+  const previous = new Date(`${localDate}T12:00:00Z`);
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  return previous.toISOString().slice(0, 10);
+}
 
 export function ShiftsPage() {
   const { t, lang } = useLanguage();
@@ -212,10 +235,10 @@ export function ShiftsPage() {
     try {
       const summary = await fetchShiftClosingReportServer(shift.id);
       if (format === 'thermal') {
-        const html = buildThermalZReportHtml(summary, currency, lang);
+        const text = buildThermalZReportText(summary, currency, lang);
         const queued = await enqueueCloudReportPrint({
           branchId: shift.branch_id,
-          payload: { html, paperWidthMm: 80, copies: 1 },
+          payload: { text, paperWidthMm: 80, copies: 1 },
           idempotencyKey: `zreport:${shift.id}:${summary.closedAt || 'open'}:${Date.now()}`,
         });
         if (!queued.accepted) {
@@ -246,8 +269,11 @@ export function ShiftsPage() {
 
   const printDayReport = async () => {
     if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
+    const reportDate = targetOpenShift?.opened_at
+      ? businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings?.business_day_start || '00:00')
+      : dayDate;
     try {
-      const report = await fetchDayClosingReportServer(targetBranchId, dayDate);
+      const report = await fetchDayClosingReportServer(targetBranchId, reportDate);
       const html = buildA4DayClosingReportHtml(report, currency, lang);
       const w = window.open('', '_blank', 'width=1000,height=850');
       if (w) { w.document.write(html); w.document.close(); }
@@ -338,8 +364,8 @@ export function ShiftsPage() {
           )}
           {can('shifts.day_close') && targetBranchId && (
             <Button variant="outline" onClick={() => {
-              if (targetBusinessDaySettings?.business_day_mode === 'shift_span' && targetOpenShift?.opened_at) {
-                setDayDate(new Date(targetOpenShift.opened_at).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' }));
+              if (targetOpenShift?.opened_at) {
+                setDayDate(businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings?.business_day_start || '00:00'));
               }
               setDayCloseModal(true);
             }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
@@ -386,9 +412,14 @@ export function ShiftsPage() {
             <div><span className="text-ui-muted">{isAr ? 'الفرع:' : 'Branch:'}</span>{' '}
               <strong>{branches.find((b) => b.id === targetBranchId)?.name || '-'}</strong>
             </div>
-            <div><span className="text-ui-muted">{isAr ? 'طريقة اليوم المالي:' : 'Business day mode:'}</span>{' '}
+            {targetOpenShift && (
+              <div><span className="text-ui-muted">{isAr ? 'اليوم الحالي:' : 'Current workday:'}</span>{' '}
+                <strong>{isAr ? 'يبدأ مع الشفت المفتوح الآن' : 'Starts with the currently open shift'}</strong>
+              </div>
+            )}
+            <div><span className="text-ui-muted">{isAr ? 'إعداد نهاية اليوم:' : 'Day-boundary setting:'}</span>{' '}
               <strong>{targetBusinessDaySettings?.business_day_mode === 'shift_span'
-                ? (isAr ? `من أول شفت بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} إلى آخر شفت` : `First shift after ${targetBusinessDaySettings?.business_day_start || '09:00'} → last shift`)
+                ? (isAr ? `بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} ويُحفظ التاريخ النهائي بعد إغلاق الشفت` : `Cutoff ${targetBusinessDaySettings?.business_day_start || '09:00'}; final history is kept after shift close`)
                 : (isAr ? `وقت ثابت ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}` : `Fixed ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}`)}</strong>
             </div>
           </div>
