@@ -72,9 +72,74 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
         returns: Number(item.returns || 0),
         expenses: Number(item.expenses || 0),
         netContribution: Number(item.net_contribution || 0),
+        sales: Array.isArray(item.sales) ? item.sales.map((sale) => {
+          const s = sale as Record<string, unknown>;
+          return {
+            invoiceNumber: String(s.invoice_number || ''),
+            total: Number(s.total || 0),
+            paymentMethod: String(s.payment_method || ''),
+            createdAt: String(s.created_at || ''),
+          };
+        }) : [],
+        expenseDetails: Array.isArray(item.expenses_detail) ? item.expenses_detail.map((expense) => {
+          const e = expense as Record<string, unknown>;
+          return {
+            category: String(e.category || ''),
+            description: String(e.description || ''),
+            amount: Number(e.amount || 0),
+            paymentMethod: String(e.payment_method || ''),
+            createdAt: String(e.created_at || ''),
+          };
+        }) : [],
+        returnDetails: Array.isArray(item.returns_detail) ? item.returns_detail.map((ret) => {
+          const r = ret as Record<string, unknown>;
+          return {
+            amount: Number(r.amount || 0),
+            paymentMethod: String(r.payment_method || ''),
+            createdAt: String(r.created_at || ''),
+          };
+        }) : [],
       };
     })
     : [];
+  const expenseDetails = Array.isArray(raw.expense_details)
+    ? raw.expense_details.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        expenseId: String(item.expense_id || ''),
+        category: String(item.category || ''),
+        description: String(item.description || ''),
+        amount: Number(item.amount || 0),
+        paymentMethod: String(item.payment_method || 'cash'),
+        expenseDate: String(item.expense_date || ''),
+        notes: item.notes ? String(item.notes) : null,
+        createdAt: String(item.created_at || ''),
+        createdBy: String(item.created_by || ''),
+        createdByName: String(item.created_by_name || ''),
+      };
+    })
+    : [];
+  const salesDetails = Array.isArray(raw.sales_details)
+    ? raw.sales_details.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        saleId: String(item.sale_id || ''),
+        invoiceNumber: String(item.invoice_number || ''),
+        userId: String(item.user_id || ''),
+        userName: String(item.user_name || ''),
+        subtotal: Number(item.subtotal || 0),
+        discountAmount: Number(item.discount_amount || 0),
+        taxAmount: Number(item.tax_amount || 0),
+        total: Number(item.total || 0),
+        paidAmount: Number(item.paid_amount || 0),
+        refundedAmount: Number(item.refunded_amount || 0),
+        paymentMethod: String(item.payment_method || ''),
+        orderType: String(item.order_type || ''),
+        createdAt: String(item.created_at || ''),
+      };
+    })
+    : [];
+
   const treasuryBalances = Array.isArray(raw.treasury)
     ? raw.treasury.map((row) => {
       const item = row as Record<string, unknown>;
@@ -107,7 +172,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     expenses: Number(raw.expenses || 0),
     netRevenue: Number(raw.net_revenue || 0),
     totalTaxes: Number(raw.taxes || 0),
-    netSales: Number(raw.net_revenue || 0) + Number(raw.expenses || 0),
+    netSales: Number(raw.net_sales || 0),
     avgTicket: Number(raw.invoice_count || 0) > 0 ? Number(raw.net_revenue || 0) / Number(raw.invoice_count) : 0,
     orderTypes: [],
     paymentMethods,
@@ -115,6 +180,8 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     ingredientsConsumed: [],
     userReports,
     treasuryBalances,
+    expenseDetails,
+    salesDetails,
   };
 }
 
