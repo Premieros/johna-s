@@ -194,7 +194,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       `SELECT * FROM public.list_pos_order_transfer_targets($1)`,
       [orderId],
     );
-    expect(targets.some((row: { user_id: string }) => row.user_id === ids.users.branch_manager)).toBe(true);
+    expect(targets.some((row) => String(row.user_id || '') === ids.users.branch_manager)).toBe(true);
 
     const transferred = await rpc(
       ids.users.branch_manager,
