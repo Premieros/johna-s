@@ -12,6 +12,15 @@ export interface CloudPrintJob {
   payload: CloudPrintPayload; sale_id?: string | null; expected_print_number?: number | null;
   attempts: number; created_at: string;
 }
+
+export interface CloudPrintQueueRow extends CloudPrintJob {
+  status: 'pending' | 'claimed' | 'printing' | 'submitted' | 'failed' | string;
+  last_error?: string | null;
+  claimed_at?: string | null;
+  submitted_at?: string | null;
+  printed_at?: string | null;
+  updated_at?: string | null;
+}
 type RpcResult = { success?: boolean; error?: string; detail?: string; job_id?: string; status?: string; jobs?: CloudPrintJob[] };
 const safeText = (value: unknown) => String(value ?? '').trim();
 const KITCHEN_ENQUEUE_MAX_ATTEMPTS = 3;
@@ -141,6 +150,19 @@ export async function enqueueCloudReportPrint(params: { branchId: string; payloa
   return result.success
     ? { accepted: true, jobId: result.job_id, stationCode: 'cashier' }
     : { accepted: false, error: result.error || result.detail || 'CLOUD_PRINT_ENQUEUE_FAILED' };
+}
+
+export async function listCloudPrintQueue(branchId: string, limit = 100): Promise<CloudPrintQueueRow[]> {
+  const scopedBranchId = safeText(branchId);
+  if (!scopedBranchId) return [];
+  const { data, error } = await supabase
+    .from('cloud_print_jobs')
+    .select('id,branch_id,kind,station_code,payload,sale_id,expected_print_number,attempts,status,last_error,claimed_at,submitted_at,printed_at,created_at,updated_at')
+    .eq('branch_id', scopedBranchId)
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(250, Number(limit) || 100)));
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as CloudPrintQueueRow[];
 }
 
 export async function claimCloudPrintJobs(branchId: string, agentId: string, limit = 12): Promise<CloudPrintJob[]> {

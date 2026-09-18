@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Cloud, Coffee, Printer, Receipt, RefreshCw, Save, TestTube2, UtensilsCrossed, WalletCards } from 'lucide-react';
+import { AlertTriangle, Cloud, Coffee, Printer, Receipt, RefreshCw, Save, TestTube2, UtensilsCrossed, WalletCards } from 'lucide-react';
 import { catalog } from '@/api/domains/catalog';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Input';
@@ -25,7 +25,9 @@ import {
 import {
   getCloudPrintAgentBranchId,
   isCloudPrintAgentEnabled,
+  listCloudPrintQueue,
   saveCloudPrintAgentConfig,
+  type CloudPrintQueueRow,
 } from '../../services/cloudPrint';
 
 interface PrinterSettingsPanelProps {
@@ -107,6 +109,10 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
   const [refreshing, setRefreshing] = useState(false);
   const [testingStation, setTestingStation] = useState<string | null>(null);
   const [testingDrawer, setTestingDrawer] = useState(false);
+  const [queueJobs, setQueueJobs] = useState<CloudPrintQueueRow[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [queueFilter, setQueueFilter] = useState<'all' | 'pending' | 'active' | 'submitted' | 'failed'>('pending');
 
   useEffect(() => {
     if (!canManagePrinters) return;
@@ -142,6 +148,56 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
       }));
     return [CASHIER_STATION, ...dynamicStations];
   }, [branchStations, selectedBranchId, stationLoadFailed]);
+
+  const loadPrintQueue = useCallback(async () => {
+    if (!canManagePrinters || !selectedBranchId) {
+      setQueueJobs([]);
+      setQueueError(null);
+      return;
+    }
+    setQueueLoading(true);
+    try {
+      const jobs = await listCloudPrintQueue(selectedBranchId, 150);
+      setQueueJobs(jobs);
+      setQueueError(null);
+    } catch (error) {
+      setQueueJobs([]);
+      setQueueError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setQueueLoading(false);
+    }
+  }, [canManagePrinters, selectedBranchId]);
+
+  useEffect(() => {
+    if (!canManagePrinters || !selectedBranchId) return;
+    void loadPrintQueue();
+    const timer = window.setInterval(() => void loadPrintQueue(), 5000);
+    return () => window.clearInterval(timer);
+  }, [canManagePrinters, loadPrintQueue, selectedBranchId]);
+
+  const queueCounts = useMemo(() => {
+    const counts = { pending: 0, active: 0, submitted: 0, failed: 0 };
+    for (const job of queueJobs) {
+      if (job.status === 'pending') counts.pending += 1;
+      else if (job.status === 'claimed' || job.status === 'printing') counts.active += 1;
+      else if (job.status === 'submitted') counts.submitted += 1;
+      else if (job.status === 'failed') counts.failed += 1;
+    }
+    return counts;
+  }, [queueJobs]);
+
+  const visibleQueueJobs = useMemo(() => queueJobs.filter((job) => {
+    if (queueFilter === 'all') return true;
+    if (queueFilter === 'active') return job.status === 'claimed' || job.status === 'printing';
+    return job.status === queueFilter;
+  }), [queueFilter, queueJobs]);
+
+  const queueJobLabel = useCallback((job: CloudPrintQueueRow) => {
+    const text = String(job.payload?.text || '');
+    const order = text.match(/طلب:\s*([^\r\n]+)/)?.[1]?.trim();
+    const table = text.match(/طاولة:\s*([^\r\n]+)/)?.[1]?.trim();
+    return { order: order || '—', table: table || '—' };
+  }, []);
 
   const loadBranchStations = useCallback(async () => {
     if (!selectedBranchId) {
@@ -187,7 +243,7 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
   const refresh = async () => {
     setRefreshing(true);
     try {
-      const [next] = await Promise.all([getAvailablePrinters(), loadBranchStations()]);
+      const [next] = await Promise.all([getAvailablePrinters(), loadBranchStations(), loadPrintQueue()]);
       setPrinters(next);
       show(isAr ? `تم اكتشاف ${next.length} طابعة على هذا الجهاز` : `Detected ${next.length} printers on this device`, next.length > 0 ? 'success' : 'info');
     } finally {
@@ -307,6 +363,93 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
           </div>
         </div>
       )}
+
+      <div className="rounded-2xl border border-ui-border bg-ui-surface p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-ui-text">
+              <Cloud className="h-5 w-5 text-brand-600" />
+              <h3 className="font-bold">{isAr ? 'طابور الطباعة السحابي' : 'Cloud print queue'}</h3>
+            </div>
+            <p className="mt-1 text-xs text-ui-subtle">
+              {isAr ? 'يعرض أوامر الطباعة لهذا الفرع مباشرة من قاعدة البيانات ويتحدث تلقائيًا كل 5 ثوانٍ.' : 'Shows this branch print jobs directly from the database and refreshes every 5 seconds.'}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void loadPrintQueue()} disabled={!selectedBranchId || queueLoading}>
+            <RefreshCw className={`h-4 w-4 ${queueLoading ? 'animate-spin' : ''}`} />
+            <span>{isAr ? 'تحديث الطابور' : 'Refresh queue'}</span>
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          {[
+            { key: 'pending' as const, ar: 'معلق', en: 'Pending', count: queueCounts.pending },
+            { key: 'active' as const, ar: 'قيد التنفيذ', en: 'Active', count: queueCounts.active },
+            { key: 'submitted' as const, ar: 'تم الإرسال', en: 'Submitted', count: queueCounts.submitted },
+            { key: 'failed' as const, ar: 'فشل', en: 'Failed', count: queueCounts.failed },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setQueueFilter(item.key)}
+              className={`rounded-xl border px-3 py-2 text-start transition ${queueFilter === item.key ? 'border-brand-500 bg-brand-500/10' : 'border-ui-border bg-ui-page'}`}
+            >
+              <span className="block text-[11px] font-semibold text-ui-subtle">{isAr ? item.ar : item.en}</span>
+              <span className="text-xl font-black text-ui-text">{item.count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setQueueFilter('all')} className={`rounded-full border px-3 py-1 text-xs font-bold ${queueFilter === 'all' ? 'border-brand-500 bg-brand-500/10 text-brand-700' : 'border-ui-border text-ui-muted'}`}>
+            {isAr ? 'الكل' : 'All'} ({queueJobs.length})
+          </button>
+        </div>
+
+        {queueError ? (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{isAr ? 'تعذر قراءة طابور الطباعة: ' : 'Could not read print queue: '}{queueError}</span>
+          </div>
+        ) : null}
+
+        <div className="mt-4 overflow-x-auto rounded-xl border border-ui-border">
+          <table className="min-w-[900px] w-full text-xs">
+            <thead className="bg-ui-page text-ui-muted">
+              <tr>
+                <th className="px-3 py-2 text-start">{isAr ? 'الوقت' : 'Time'}</th>
+                <th className="px-3 py-2 text-start">{isAr ? 'الطلب' : 'Order'}</th>
+                <th className="px-3 py-2 text-start">{isAr ? 'الطاولة' : 'Table'}</th>
+                <th className="px-3 py-2 text-start">{isAr ? 'المحطة' : 'Station'}</th>
+                <th className="px-3 py-2 text-start">{isAr ? 'الحالة' : 'Status'}</th>
+                <th className="px-3 py-2 text-start">{isAr ? 'المحاولات' : 'Attempts'}</th>
+                <th className="px-3 py-2 text-start">{isAr ? 'آخر خطأ' : 'Last error'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleQueueJobs.map((job) => {
+                const label = queueJobLabel(job);
+                return (
+                  <tr key={job.id} className="border-t border-ui-border text-ui-text">
+                    <td className="whitespace-nowrap px-3 py-2">{new Date(job.created_at).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</td>
+                    <td className="px-3 py-2 font-bold">{label.order}</td>
+                    <td className="px-3 py-2">{label.table}</td>
+                    <td className="px-3 py-2 font-mono">{job.station_code || '—'}</td>
+                    <td className="px-3 py-2">
+                      <span className="rounded-full border border-ui-border bg-ui-page px-2 py-1 font-bold">{job.status}</span>
+                    </td>
+                    <td className="px-3 py-2">{job.attempts}</td>
+                    <td className="max-w-[280px] truncate px-3 py-2 text-ui-muted" title={job.last_error || ''}>{job.last_error || '—'}</td>
+                  </tr>
+                );
+              })}
+              {!queueLoading && visibleQueueJobs.length === 0 ? (
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-ui-muted">{isAr ? 'لا توجد أوامر في هذه الحالة.' : 'No jobs in this status.'}</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 rounded-2xl border border-ui-border bg-ui-surface p-10 text-sm text-ui-muted"><RefreshCw className="h-4 w-4 animate-spin" /><span>{isAr ? 'جاري تحميل الطابعات والمحطات...' : 'Loading printers and stations...'}</span></div>
