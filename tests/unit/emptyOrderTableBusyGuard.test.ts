@@ -12,6 +12,6 @@ describe('empty order table busy guard', () => {
     expect(migration).toContain('FROM public.order_items oi');
     expect(migration).toContain('oi.quantity > 0');
     expect(migration).toContain("RETURN jsonb_build_object(''success'', false, ''error'', ''TABLE_BUSY''");
-    expect(migration).toContain("create_order occupancy guard drift; refusing patch");
+    expect(migration).toContain("create_order occupancy predicate drift; refusing patch");
   });
 });
