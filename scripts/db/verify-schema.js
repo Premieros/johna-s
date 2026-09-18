@@ -60,6 +60,7 @@ const EXPECTED_FUNCTIONS = [
   'create_purchase_order', 'update_purchase_order_status', 'receive_purchase_order',
   'get_purchase_backorders', 'get_purchase_receipts', 'get_supplier_evaluation',
   'get_supplier_price_impact', 'get_raw_material_cost_overview', 'get_raw_material_cost_history',
+  'can_execute_cloud_print_kind',
 ];
 
 function loadContract() {
@@ -131,6 +132,35 @@ async function main() {
   const missingTables = EXPECTED_TABLES.filter((t) => !existingTables.has(t));
   const missingFns = EXPECTED_FUNCTIONS.filter((f) => !existingFns.has(f));
 
+  // Safety invariant: cloud queue execution is transport, not the originating
+  // business action. A receipt-capable terminal must be able to drain already
+  // authorized kitchen/bar jobs; otherwise durable jobs silently pile up.
+  let cloudPrintTransportInvariantOk = false;
+  let cloudPrintTransportInvariantDetail = '';
+  if (existingFns.has('can_execute_cloud_print_kind')) {
+    const { rows } = await client.query(
+      `SELECT lower(pg_get_functiondef('public.can_execute_cloud_print_kind(text)'::regprocedure)) AS definition`,
+    );
+    const def = rows[0]?.definition || '';
+    const hasKnownKinds = def.includes("p_kind in ('kitchen','receipt','report')");
+    const hasReceiptCapability = def.includes("can_permission('pos.receipt.print')");
+    const hasKitchenCapability = def.includes("can_permission('pos.print_kitchen')");
+    const hasSettingsCapability = def.includes("can_permission('settings.manage')");
+    const reintroducesPerKindCoupling =
+      def.includes("p_kind = 'kitchen' and public.can_permission('pos.print_kitchen')")
+      || def.includes("p_kind in ('receipt','report') and public.can_permission('pos.receipt.print')");
+    cloudPrintTransportInvariantOk =
+      hasKnownKinds
+      && hasReceiptCapability
+      && hasKitchenCapability
+      && hasSettingsCapability
+      && !reintroducesPerKindCoupling;
+    if (!cloudPrintTransportInvariantOk) {
+      cloudPrintTransportInvariantDetail =
+        'can_execute_cloud_print_kind must allow any operational print-capable branch terminal to transport kitchen/receipt/report jobs without coupling the current user permission to the queued job kind.';
+    }
+  }
+
   // Frontend contract: every RPC/table the frontend calls must exist.
   const contract = loadContract();
   const contractMissingTables = contract.tables.filter((t) => !existingTables.has(t));
@@ -140,6 +170,7 @@ async function main() {
   console.log(`Functions: ${EXPECTED_FUNCTIONS.length} expected, ${EXPECTED_FUNCTIONS.length - missingFns.length} present`);
   console.log(`Contract RPCs: ${contract.rpcs.length} expected, ${contract.rpcs.length - contractMissingRpcs.length} present`);
   console.log(`Contract tables: ${contract.tables.length} expected, ${contract.tables.length - contractMissingTables.length} present`);
+  console.log(`Cloud print transport invariant: ${cloudPrintTransportInvariantOk ? 'OK' : 'FAILED'}`);
 
   if (missingTables.length) {
     console.error('\nMissing tables:');
@@ -158,11 +189,22 @@ async function main() {
     contractMissingRpcs.forEach((f) => console.error(`  - ${f}`));
   }
 
+  if (!cloudPrintTransportInvariantOk) {
+    console.error('\nCloud print transport invariant failed:');
+    console.error(`  - ${cloudPrintTransportInvariantDetail || 'can_execute_cloud_print_kind is missing or unsafe'}`);
+  }
+
   const version = await client.query('SELECT version()');
   console.log(`\nServer: ${version.rows[0].version.split(',')[0]}`);
   await client.end();
 
-  if (missingTables.length || missingFns.length || contractMissingTables.length || contractMissingRpcs.length) {
+  if (
+    missingTables.length
+    || missingFns.length
+    || contractMissingTables.length
+    || contractMissingRpcs.length
+    || !cloudPrintTransportInvariantOk
+  ) {
     process.exit(1);
   }
   console.log('\nSchema verification passed.');
