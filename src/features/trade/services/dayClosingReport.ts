@@ -8,6 +8,9 @@ export interface DayClosingReport {
   businessDate: string;
   dailyCloseStatus: 'open' | 'closed';
   snapshot: boolean;
+  businessDayMode: 'fixed_time' | 'shift_span';
+  windowStart: string;
+  windowEnd: string;
   grossSales: number;
   discounts: number;
   taxes: number;
@@ -62,6 +65,9 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
     businessDate: s(raw.business_date || businessDate),
     dailyCloseStatus: raw.daily_close_status === 'closed' ? 'closed' : 'open',
     snapshot: Boolean(raw.snapshot),
+    businessDayMode: raw.business_day_mode === 'shift_span' ? 'shift_span' : 'fixed_time',
+    windowStart: s(raw.window_start),
+    windowEnd: s(raw.window_end),
     grossSales: n(raw.gross_sales),
     discounts: n(raw.discounts),
     taxes: n(raw.taxes),
@@ -141,6 +147,8 @@ table{width:100%;border-collapse:collapse;margin:6px 0 16px}th,td{border:1px sol
 </style></head><body onload="window.print()">
 <h1>${escapeHtml(report.branchName)} — ${isAr ? 'إغلاق اليوم' : 'Day Close'}</h1>
 <div class="meta"><div>${isAr ? 'تاريخ العمل' : 'Business date'}: <b>${escapeHtml(report.businessDate)}</b></div><div>${report.snapshot ? (isAr ? 'نسخة إغلاق ثابتة' : 'Immutable closing snapshot') : (isAr ? 'معاينة مباشرة' : 'Live preview')}</div></div>
+<div class="meta"><div><b>${isAr ? 'بداية اليوم:' : 'Day start:'}</b> ${report.windowStart ? formatDateTime(report.windowStart, lang) : '-'}</div><div><b>${isAr ? 'نهاية اليوم:' : 'Day end:'}</b> ${report.windowEnd ? formatDateTime(report.windowEnd, lang) : '-'}</div></div>
+<div class="meta"><div>${isAr ? 'طريقة تحديد اليوم:' : 'Boundary mode:'} <b>${report.businessDayMode === 'shift_span' ? (isAr ? 'أول شفت ← آخر شفت' : 'First shift → last shift') : (isAr ? 'وقت ثابت' : 'Fixed time')}</b></div></div>
 <div class="grid">
 <div class="card"><div class="label">${isAr ? 'صافي المبيعات' : 'Net sales'}</div><div class="value">${money(report.netSales)}</div></div>
 <div class="card"><div class="label">${isAr ? 'المصروفات' : 'Expenses'}</div><div class="value negative">-${money(report.expenses)}</div></div>
