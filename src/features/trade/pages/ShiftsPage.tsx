@@ -269,8 +269,8 @@ export function ShiftsPage() {
 
   const printDayReport = async () => {
     if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
-    const reportDate = targetBusinessDaySettings?.business_day_mode === 'shift_span' && targetOpenShift?.opened_at
-      ? businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings.business_day_start || '00:00')
+    const reportDate = targetOpenShift?.opened_at
+      ? businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings?.business_day_start || '00:00')
       : dayDate;
     try {
       const report = await fetchDayClosingReportServer(targetBranchId, reportDate);
@@ -364,8 +364,8 @@ export function ShiftsPage() {
           )}
           {can('shifts.day_close') && targetBranchId && (
             <Button variant="outline" onClick={() => {
-              if (targetBusinessDaySettings?.business_day_mode === 'shift_span' && targetOpenShift?.opened_at) {
-                setDayDate(businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings.business_day_start || '00:00'));
+              if (targetOpenShift?.opened_at) {
+                setDayDate(businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings?.business_day_start || '00:00'));
               }
               setDayCloseModal(true);
             }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
@@ -412,11 +412,14 @@ export function ShiftsPage() {
             <div><span className="text-ui-muted">{isAr ? 'الفرع:' : 'Branch:'}</span>{' '}
               <strong>{branches.find((b) => b.id === targetBranchId)?.name || '-'}</strong>
             </div>
-            <div><span className="text-ui-muted">{isAr ? 'طريقة اليوم المالي:' : 'Business day mode:'}</span>{' '}
+            {targetOpenShift && (
+              <div><span className="text-ui-muted">{isAr ? 'اليوم الحالي:' : 'Current workday:'}</span>{' '}
+                <strong>{isAr ? 'يبدأ مع الشفت المفتوح الآن' : 'Starts with the currently open shift'}</strong>
+              </div>
+            )}
+            <div><span className="text-ui-muted">{isAr ? 'إعداد نهاية اليوم:' : 'Day-boundary setting:'}</span>{' '}
               <strong>{targetBusinessDaySettings?.business_day_mode === 'shift_span'
-                ? (targetOpenShift
-                  ? (isAr ? 'اليوم الحالي يبدأ مع الشفت المفتوح الآن' : 'Current workday starts with the open shift')
-                  : (isAr ? `اليوم المغلق: من أول شفت بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} إلى آخر شفت` : `Closed day: first shift after ${targetBusinessDaySettings?.business_day_start || '09:00'} → last shift`))
+                ? (isAr ? `بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} ويُحفظ التاريخ النهائي بعد إغلاق الشفت` : `Cutoff ${targetBusinessDaySettings?.business_day_start || '09:00'}; final history is kept after shift close`)
                 : (isAr ? `وقت ثابت ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}` : `Fixed ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}`)}</strong>
             </div>
           </div>
