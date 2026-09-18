@@ -16,9 +16,9 @@ describe('thermal receipt and Z-report readability contract', () => {
     expect(printing).toContain("*** إيصال دفع / PAYMENT RECEIPT ***");
     expect(printing).toContain("timeZone: 'Africa/Cairo'");
     expect(printing).toContain("new Intl.NumberFormat('en-US'");
-    expect(printing).toContain("نقدي / CASH");
-    expect(printing).toContain("بطاقة / CARD");
-    expect(printing).toContain("الدفع / PAYMENT");
+    expect(printing).toContain("cash: ['نقدي', 'CASH']");
+    expect(printing).toContain("card: ['بطاقة', 'CARD']");
+    expect(printing).toContain("isAr ? 'الدفع / PAYMENT' : 'PAYMENT'");
     expect(printing).toContain("payments?: Array<{ method: string; amount: number }>");
   });
 
