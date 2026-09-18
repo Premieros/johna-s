@@ -109,6 +109,36 @@ describe.skipIf(!dbUrl)('cloud print agent security contract', () => {
     }
   });
 
+  it('separates printer administration from operational queue execution', async () => {
+    const helper = await client.query<{ definition: string }>(`
+      SELECT lower(pg_get_functiondef(p.oid)) AS definition
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname='public'
+        AND p.proname='can_execute_cloud_print_kind'
+        AND pg_get_function_identity_arguments(p.oid)='p_kind text'
+    `);
+    expect(helper.rows).toHaveLength(1);
+    expect(helper.rows[0].definition).toContain("can_permission('pos.print_kitchen'::text)");
+    expect(helper.rows[0].definition).toContain("can_permission('pos.receipt.print'::text)");
+    expect(helper.rows[0].definition).toContain("can_permission('settings.manage'::text)");
+
+    const rows = await client.query<{ name: string; definition: string }>(`
+      SELECT p.proname AS name, lower(pg_get_functiondef(p.oid)) AS definition
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public'
+        AND p.proname = ANY($1::text[])
+    `, [['claim_cloud_print_jobs','start_cloud_print_job','complete_cloud_print_job']]);
+
+    expect(rows.rows).toHaveLength(3);
+    for (const row of rows.rows) {
+      expect(row.definition, row.name).toContain('can_execute_cloud_print_kind');
+    }
+    const claim = rows.rows.find((row) => row.name === 'claim_cloud_print_jobs');
+    expect(claim?.definition).toMatch(/can_execute_cloud_print_kind\(kind\)/);
+  });
+
   it('records Windows acceptance as submitted and never as physical print success', async () => {
     const rows = await client.query<{ name: string; definition: string }>(
       `SELECT p.proname AS name, lower(pg_get_functiondef(p.oid)) AS definition
