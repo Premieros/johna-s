@@ -81,6 +81,37 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!sessionUserId || Object.keys(branchSettingsMap).length === 0) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      const eligible = Object.values(branchSettingsMap).filter(
+        (row) => row.auto_close_shift_at_day_end && row.business_day_mode === 'fixed_time',
+      );
+      if (eligible.length === 0) return;
+
+      await Promise.all(eligible.map(async (row) => {
+        const { data, error } = await supabase.rpc('try_auto_close_branch_shift', {
+          p_branch_id: row.branch_id,
+        });
+        if (cancelled || error) return;
+        const result = data as { success?: boolean; closed?: boolean; error?: string } | null;
+        if (result?.closed && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shift:auto-closed', { detail: { branchId: row.branch_id } }));
+        }
+      }));
+    };
+
+    void tick();
+    const timer = window.setInterval(() => { void tick(); }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [sessionUserId, branchSettingsMap]);
+
+
   const effectiveSettings = useCallback(
     (branchId?: string | null): Settings | null => {
       if (!settings) return null;

@@ -49,8 +49,10 @@ export function ShiftsPage() {
   });
   const [search, setSearch] = useState('');
   const { branches } = useBranches();
-  const { effectiveSettings } = useSettings();
+  const { effectiveSettings, branchSettingsMap } = useSettings();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
+  const targetBranchId = branchFilter || user?.branch_id || '';
+  const targetBusinessDaySettings = targetBranchId ? branchSettingsMap[targetBranchId] : null;
   const [users, setUsers] = useState<ShiftUserRow[]>([]);
   const [liveExpectedByShift, setLiveExpectedByShift] = useState<Record<string, number>>({});
 
@@ -106,8 +108,13 @@ export function ShiftsPage() {
 
   const openShift = async () => {
     if (!can('shifts.open')) return;
-    const targetBranchId = branchFilter || user?.branch_id || '';
     if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
+    const existingOpen = items.find((shift) => shift.branch_id === targetBranchId && shift.status === 'open');
+    if (existingOpen) {
+      show(isAr ? 'يوجد شفت مفتوح بالفعل لهذا الفرع. يجب إغلاقه قبل فتح شفت جديد.' : 'This branch already has an open shift. Close it before opening another.', 'error');
+      setOpenModal(false);
+      return;
+    }
     const { data, error: openError } = await api.shifts.open({
       p_branch_id: targetBranchId,
       p_opening_amount: openForm.opening_amount || 0,
@@ -199,30 +206,6 @@ export function ShiftsPage() {
     }
   };
 
-  const closeShiftWithOpenOrders = async () => {
-    if (!closeTarget || !closeBlock || closing || !can('shifts.close_with_open_orders')) return;
-    const confirmed = window.confirm(
-      isAr
-        ? `سيتم إغلاق الوردية فقط مع إبقاء ${closeBlock.openOrderCount} طلب مفتوح/معلق والطاولات المشغولة كما هي للوردية التالية. لن يتم إلغاء أو دفع أو إغلاق أي طلب. هل تريد المتابعة؟`
-        : `Close only this shift while preserving ${closeBlock.openOrderCount} open/held order(s) and occupied tables for the next shift? No order will be cancelled, paid, or closed.`,
-    );
-    if (!confirmed) return;
-    setClosing(true);
-    try {
-      const { data, error: closeError } = await api.shifts.closeWithOpenOrders({
-        p_shift_id: closeTarget.id,
-        p_actual_amount: closeForm.actual_amount,
-        p_notes: closeForm.notes || null,
-      });
-      if (closeError) { show(closeError.message, 'error'); return; }
-      const res = data as ShiftCloseResult | null;
-      if (!res?.success) { show(res?.detail || res?.error || t('error'), 'error'); return; }
-      await finishClose(res, true);
-    } finally {
-      setClosing(false);
-    }
-  };
-
   const handlePrintZReport = async (shift: Shift, format: 'thermal' | 'a4') => {
     setPrintingId(shift.id);
     try {
@@ -238,8 +221,6 @@ export function ShiftsPage() {
       setPrintingId(null);
     }
   };
-
-  const targetBranchId = branchFilter || user?.branch_id || '';
 
   const printDayReport = async () => {
     if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
@@ -265,7 +246,15 @@ export function ShiftsPage() {
       const res = data as (RpcResult & { daily_close_id?: string; already_closed?: boolean }) | null;
       if (!res?.success) {
         if (res?.error === 'OPEN_SHIFTS_REMAIN') {
-          show(isAr ? 'لا يمكن إغلاق اليوم قبل إغلاق كل الشفتات المفتوحة في الفرع.' : 'Close every open shift in this branch before day close.', 'error');
+          show(isAr ? 'لا يمكن إغلاق اليوم قبل إغلاق الشفت المفتوح في الفرع.' : 'Close the branch open shift before day close.', 'error');
+          return;
+        }
+        if (res?.error === 'NO_SHIFTS_FOR_DAY') {
+          show(isAr ? 'لا توجد شفتات لهذا اليوم المالي، لذلك لا يمكن إغلاقه بوضع أول شفت/آخر شفت.' : 'No shifts exist for this business date, so shift-span day close cannot run.', 'error');
+          return;
+        }
+        if (res?.error === 'BUSINESS_DAY_NOT_FINISHED') {
+          show(isAr ? 'وقت نهاية اليوم المالي المحدد لم يأتِ بعد.' : 'The configured business-day end time has not been reached yet.', 'error');
           return;
         }
         show(res?.detail || res?.error || t('error'), 'error');
@@ -314,6 +303,7 @@ export function ShiftsPage() {
   ];
 
   const openShifts = items.filter((s) => s.status === 'open');
+  const targetOpenShift = openShifts.find((s) => s.branch_id === targetBranchId) || null;
 
   return (
     <DesignSurface testId="shifts-page">
@@ -325,9 +315,16 @@ export function ShiftsPage() {
             <Button variant="outline" onClick={() => { void printDayReport(); }}><FileText className="w-4 h-4" /> {isAr ? 'تقرير اليومية الكامل' : 'Full Day Report'}</Button>
           )}
           {can('shifts.day_close') && targetBranchId && (
-            <Button variant="outline" onClick={() => setDayCloseModal(true)}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
+            <Button variant="outline" onClick={() => {
+              if (targetBusinessDaySettings?.business_day_mode === 'shift_span' && targetOpenShift?.opened_at) {
+                setDayDate(new Date(targetOpenShift.opened_at).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' }));
+              }
+              setDayCloseModal(true);
+            }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
           )}
-          {can('shifts.open') && <Button onClick={() => setOpenModal(true)}><Play className="w-4 h-4" /> {t('openShift')}</Button>}
+          {can('shifts.open') && !targetOpenShift && (
+            <Button onClick={() => setOpenModal(true)}><Play className="w-4 h-4" /> {t('openShift')}</Button>
+          )}
         </div>}
       />
 
@@ -363,9 +360,15 @@ export function ShiftsPage() {
               : 'Day close keeps full detail: shifts, sales, expenses, users and cash purchases. Every shift must be closed first.'}
           </div>
           <Input type="date" label={isAr ? 'تاريخ العمل' : 'Business Date'} value={dayDate} onChange={(e) => setDayDate(e.target.value)} />
-          <div className="p-3 bg-ui-page-alt rounded-lg text-sm">
-            <span className="text-ui-muted">{isAr ? 'الفرع:' : 'Branch:'}</span>{' '}
-            <strong>{branches.find((b) => b.id === targetBranchId)?.name || '-'}</strong>
+          <div className="p-3 bg-ui-page-alt rounded-lg text-sm space-y-1">
+            <div><span className="text-ui-muted">{isAr ? 'الفرع:' : 'Branch:'}</span>{' '}
+              <strong>{branches.find((b) => b.id === targetBranchId)?.name || '-'}</strong>
+            </div>
+            <div><span className="text-ui-muted">{isAr ? 'طريقة اليوم المالي:' : 'Business day mode:'}</span>{' '}
+              <strong>{targetBusinessDaySettings?.business_day_mode === 'shift_span'
+                ? (isAr ? 'من أول شفت إلى آخر شفت' : 'First shift → last shift')
+                : (isAr ? `وقت ثابت ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}` : `Fixed ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}`)}</strong>
+            </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" disabled={dayClosing} onClick={() => setDayCloseModal(false)}>{t('cancel')}</Button>
@@ -384,7 +387,7 @@ export function ShiftsPage() {
           </div>
 
           {closeBlock && <div className="rounded-lg border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm">
-            <div className="flex items-start gap-2"><AlertTriangle className="w-5 h-5 text-ui-danger shrink-0 mt-0.5" /><div><p className="font-semibold text-ui-danger">{isAr ? 'الإغلاق العادي ممنوع لوجود طلبات مفتوحة' : 'Normal close is blocked by open orders'}</p><p className="mt-1 text-ui-muted">{isAr ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق مرتبط بـ ${closeBlock.openTableCount} طاولة. يجب تسويتها، أو استخدام الإغلاق الاستثنائي إذا كانت لديك الصلاحية.` : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s). Resolve them, or use the permitted override.`}</p></div></div>
+            <div className="flex items-start gap-2"><AlertTriangle className="w-5 h-5 text-ui-danger shrink-0 mt-0.5" /><div><p className="font-semibold text-ui-danger">{isAr ? 'لا يمكن إغلاق الوردية مع وجود طلبات مفتوحة' : 'Shift cannot close while orders remain open'}</p><p className="mt-1 text-ui-muted">{isAr ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق مرتبط بـ ${closeBlock.openTableCount} طاولة. يجب على المستخدم إغلاق أو تسوية كل الطلبات أولًا، ثم إعادة محاولة إغلاق الوردية.` : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s). The user must resolve every order before closing the shift.`}</p></div></div>
           </div>}
 
           <div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'thermal')}><Printer className="w-4 h-4" /> {isAr ? 'معاينة إيصال Z-Report' : 'Preview Thermal'}</Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'a4')}><FileText className="w-4 h-4" /> {isAr ? 'معاينة تقرير A4' : 'Preview A4'}</Button></div>
@@ -393,7 +396,6 @@ export function ShiftsPage() {
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="secondary" disabled={closing} onClick={() => { setCloseTarget(null); setCloseBlock(null); }}>{t('cancel')}</Button>
             <Button variant="danger" disabled={closing} onClick={closeShift}><Square className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق الوردية' : t('closeShift')}</Button>
-            {closeBlock && can('shifts.close_with_open_orders') && <Button variant="outline" disabled={closing} onClick={closeShiftWithOpenOrders}><AlertTriangle className="w-4 h-4" /> {isAr ? 'إغلاق الوردية مع بقاء الطلبات المفتوحة' : 'Close Shift With Open Orders'}</Button>}
           </div>
         </div>}
       </Modal>

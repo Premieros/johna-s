@@ -16,6 +16,8 @@ describe('POS operator display contract', () => {
   it('keeps operator labels branch-scoped without broadening users visibility', () => {
     const service = source('src/features/pos/services/posOrders.ts');
     const migration = source('supabase/migrations/20260907160000_pos_operator_ownership.sql');
+    const emptyOrderFix = source('supabase/migrations/20260918145500_empty_order_table_release.sql');
+    const orderHookBase = source('src/features/pos/hooks/usePosOrderBase.ts');
 
     expect(service).toContain("supabase.rpc('get_pos_order_operator_labels', { p_branch_id: branchId })");
     expect(service).not.toContain("from('users')");
@@ -23,6 +25,12 @@ describe('POS operator display contract', () => {
     expect(migration).toContain("public.user_may_access_branch(p_branch_id)");
     expect(migration).toContain("public.can_permission('pos.view')");
     expect(migration).toContain("o.status IN ('open', 'held')");
+    expect(emptyOrderFix).toContain("oi.quantity>0");
+    expect(emptyOrderFix).toContain("NEW.status = 'occupied'");
+    expect(emptyOrderFix).toContain("NEW.status := 'vacant'");
+    expect(emptyOrderFix).toContain('CREATE OR REPLACE FUNCTION public.resolve_my_active_table_order');
+    expect(orderHookBase).toContain('const hasEffectiveItems = items.some');
+    expect(orderHookBase).toContain('if (order.table_id && hasEffectiveItems)');
   });
 
   it('shows the operator name on every active POS order and occupied-table surface', () => {

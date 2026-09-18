@@ -27,6 +27,10 @@ export interface BranchSettings {
   tax_enabled: boolean | null;
   currency: string | null;
   low_stock_threshold: number | null;
+  business_day_mode: 'fixed_time' | 'shift_span';
+  business_day_start: string;
+  business_day_end: string;
+  auto_close_shift_at_day_end: boolean;
   created_at: string;
   updated_at: string;
 }
