@@ -1,4 +1,4 @@
-import { supabase } from '@/api';
+import { supabase, shifts as shiftsApi } from '@/api';
 import type { ShiftClosingSummary } from './shiftClosingReport';
 
 type ShiftOperationRow = {
@@ -50,7 +50,7 @@ const ORDER_LABELS: Record<string, string> = {
 export async function fetchShiftClosingReportServer(shiftId: string): Promise<ShiftClosingSummary> {
   const [reportRes, tenderRes] = await Promise.all([
     supabase.rpc('get_shift_closing_report', { p_shift_id: shiftId }),
-    supabase.rpc('get_shift_sale_tenders', { p_shift_id: shiftId }),
+    shiftsApi.getSaleTenders({ p_shift_id: shiftId }),
   ]);
   if (reportRes.error) throw new Error(reportRes.error.message);
   const raw = reportRes.data as Record<string, unknown> | null;
