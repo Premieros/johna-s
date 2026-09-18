@@ -32,7 +32,7 @@ describe('full shift and day close restructuring contract', () => {
     expect(migration).toContain("'net_after_expenses_and_cash_purchases'");
     expect(migration).toContain("'cash_purchase_details',v_purchases");
     expect(dayReport).toContain('Cash purchases');
-    expect(dayReport).toContain('Mشتريات'.replace('M','م'));
+    expect(dayReport).toContain('مشتريات الكاش');
     expect(dayReport).toContain('cashPurchaseDetails');
   });
 
