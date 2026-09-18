@@ -36,9 +36,9 @@ export function TableCard({ table, orders, itemsByOrder, kitchenSendsByOrder, cu
     const unsent = orderItems.length - sent;
     const elapsed = Math.max(1, Math.round((Date.now() - new Date(activeOrder.created_at).getTime()) / 60000));
     if (activeOrder.status === 'held') return { status: 'needs_action' as TableOperationalStatus, label: isAr ? 'معلقة' : 'Held', tone: 'text-ui-danger bg-ui-danger-soft border-ui-danger/35', cardTone: 'border-ui-danger/55 bg-ui-danger/10', elapsed };
-    if (sent > 0 && unsent > 0) return { status: 'new_additions' as TableOperationalStatus, label: isAr ? 'إضافة جديدة' : 'New items', tone: 'text-ui-warning bg-ui-warning-soft border-ui-warning/35', cardTone: 'border-ui-warning/60 bg-ui-warning/12', elapsed };
+    if (sent > 0 && unsent > 0) return { status: 'new_additions' as TableOperationalStatus, label: isAr ? 'إضافة جديدة' : 'New items', tone: 'text-ui-warning bg-ui-warning-soft border-ui-warning/35', cardTone: 'border-ui-warning/60 bg-ui-warning/10', elapsed };
     if (sent > 0) return { status: 'sent' as TableOperationalStatus, label: isAr ? 'بالمطبخ' : 'Kitchen', tone: 'text-ui-info bg-ui-info-soft border-ui-info/35', cardTone: 'border-ui-info/55 bg-ui-info/10', elapsed };
-    return { status: 'open' as TableOperationalStatus, label: isAr ? 'مشغولة' : 'Occupied', tone: 'text-ui-warning bg-ui-warning-soft border-ui-warning/35', cardTone: 'border-ui-warning/60 bg-ui-warning/12', elapsed };
+    return { status: 'open' as TableOperationalStatus, label: isAr ? 'مشغولة' : 'Occupied', tone: 'text-ui-warning bg-ui-warning-soft border-ui-warning/35', cardTone: 'border-ui-warning/60 bg-ui-warning/10', elapsed };
   }, [activeOrder, table.status, itemsByOrder, kitchenSendsByOrder, isAr]);
 
   const itemCount = activeOrder ? (itemsByOrder[activeOrder.id] || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) : 0;
