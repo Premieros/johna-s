@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/audit';
 import type { CartItem, Customer, DiningTable, Order, OrderItem, OrderType, Product, RpcResult, Settings } from '@/lib/types';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '../utils/cart';
-import { buildReceiptHtml, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
+import { buildReceiptHtml, buildReceiptThermalText, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
@@ -817,6 +817,10 @@ export function usePosOrder(input: UsePosOrderInput) {
         orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
         guestCount: guestCount || undefined,
         operatorName: user?.full_name || user?.username || user?.email || null,
+        payments: (result.payments || []).map((payment) => ({
+          method: payment.payment_method,
+          amount: Number(payment.amount || 0),
+        })),
       };
       setLastReceipt(receiptPayload);
       setReceiptSaleId(saleId);
@@ -881,13 +885,13 @@ export function usePosOrder(input: UsePosOrderInput) {
           operatorName: user?.full_name || user?.username || user?.email || null,
           isOpenOrder: true,
         };
-        const html = await buildReceiptHtml(openOrderReceipt, effSettings, lang, isAr, { authorize: false });
+        const text = buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr);
         const queued = await enqueueCloudOpenOrderPrint({
           orderId: persisted.orderId,
           payload: {
-            html,
+            text,
             paperWidthMm: effSettings.receipt_width_mm || 80,
-            copies: Math.max(1, Math.min(5, effSettings.receipt_copies || 1)),
+            copies: 1,
           },
           idempotencyKey: `open-check:${persisted.orderId}:${Date.now()}`,
         });

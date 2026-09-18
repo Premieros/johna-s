@@ -26,7 +26,8 @@ describe('POS sent-only settlement contract', () => {
     expect(publicHook).toContain('settlementPreview.tax_amount');
     expect(publicHook).toContain('settlementPreview.total');
     expect(publicHook).toContain('buildSettlementReceipt(preview');
-    expect(publicHook).toContain('{ authorize: false }');
+    expect(publicHook).toContain('buildReceiptThermalText(receipt, input.effSettings, lang, isAr)');
+    expect(publicHook).toContain('enqueueCloudOpenOrderPrint({');
   });
 
   it('keeps the order open after partial settlement and completes only when nothing remains', () => {

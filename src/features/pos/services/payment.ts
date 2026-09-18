@@ -30,9 +30,15 @@ export interface ProcessSplitSalePayload extends Omit<ProcessSalePayload, 'p_pai
   p_payments: SplitTenderInput[];
 }
 
+export interface ReceiptTender {
+  payment_method: string;
+  amount: number;
+}
+
 export type ProcessSaleResult = RpcResult & {
   offline?: boolean;
   pending_sync?: boolean;
+  payments?: ReceiptTender[];
 };
 
 type OwnedOfflineSaleQueueItem = Omit<OfflineSaleQueueItem, 'status' | 'retry_count'> & {
@@ -157,13 +163,28 @@ export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ resu
     const { p_paid_amount: _paidAmount, p_payment_method: _paymentMethod, ...splitBase } = settlementPayload;
     void _paidAmount;
     void _paymentMethod;
-    return processSplitSaleForOrder({ ...splitBase, p_payments: splitPayments });
+    const splitResult = await processSplitSaleForOrder({ ...splitBase, p_payments: splitPayments });
+    return {
+      ...splitResult,
+      result: splitResult.result?.success
+        ? { ...splitResult.result, payments: splitPayments }
+        : splitResult.result,
+    };
   }
 
   try {
     const { data, error } = await posApi.processSale(settlementPayload);
     if (!error && (data as { success?: boolean })?.success) {
-      return { result: data as RpcResult, error: null };
+      return {
+        result: {
+          ...(data as RpcResult),
+          payments: [{
+            payment_method: settlementPayload.p_payment_method,
+            amount: Number(settlementPayload.p_paid_amount || 0),
+          }],
+        },
+        error: null,
+      };
     }
 
     // A server rejection (approval, stock, subscription, validation, etc.) is

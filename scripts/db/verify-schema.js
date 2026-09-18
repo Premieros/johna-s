@@ -61,6 +61,7 @@ const EXPECTED_FUNCTIONS = [
   'get_purchase_backorders', 'get_purchase_receipts', 'get_supplier_evaluation',
   'get_supplier_price_impact', 'get_raw_material_cost_overview', 'get_raw_material_cost_history',
   'can_execute_cloud_print_kind', 'sync_kitchen_sent_quantity_after_void',
+  '_normalize_thermal_print_payload', 'normalize_cloud_thermal_print_job',
 ];
 
 function loadContract() {
@@ -156,6 +157,38 @@ async function main() {
     }
   }
 
+  let thermalPrintPayloadInvariantOk = false;
+  let thermalPrintPayloadInvariantDetail = '';
+  if (
+    existingFns.has('_normalize_thermal_print_payload')
+    && existingFns.has('normalize_cloud_thermal_print_job')
+  ) {
+    const [{ rows: normalizerRows }, { rows: triggerRows }] = await Promise.all([
+      client.query(
+        `SELECT lower(pg_get_functiondef('public._normalize_thermal_print_payload(jsonb)'::regprocedure)) AS definition`,
+      ),
+      client.query(
+        `SELECT lower(pg_get_triggerdef(oid)) AS definition
+         FROM pg_trigger
+         WHERE tgrelid='public.cloud_print_jobs'::regclass
+           AND tgname='trg_normalize_cloud_thermal_print_job'
+           AND NOT tgisinternal`,
+      ),
+    ]);
+    const normalizer = normalizerRows[0]?.definition || '';
+    const triggerDef = triggerRows[0]?.definition || '';
+    const stripsHtml = normalizer.includes("p_payload - 'html'");
+    const createsText = normalizer.includes("jsonb_build_object('text', v_text)");
+    const guardsQueue =
+      triggerDef.includes('before insert or update of payload, kind')
+      && triggerDef.includes('normalize_cloud_thermal_print_job()');
+    thermalPrintPayloadInvariantOk = stripsHtml && createsText && guardsQueue;
+    if (!thermalPrintPayloadInvariantOk) {
+      thermalPrintPayloadInvariantDetail =
+        'receipt/report cloud jobs must be normalized to text at the cloud_print_jobs queue boundary; raw HTML/CSS must never reach the thermal text transport.';
+    }
+  }
+
   let cloudPrintTransportInvariantOk = false;
   let cloudPrintTransportInvariantDetail = '';
   if (existingFns.has('can_execute_cloud_print_kind')) {
@@ -192,6 +225,7 @@ async function main() {
   console.log(`Contract RPCs: ${contract.rpcs.length} expected, ${contract.rpcs.length - contractMissingRpcs.length} present`);
   console.log(`Contract tables: ${contract.tables.length} expected, ${contract.tables.length - contractMissingTables.length} present`);
   console.log(`Kitchen void idempotency invariant: ${kitchenVoidInvariantOk ? 'OK' : 'FAILED'}`);
+  console.log(`Thermal print payload invariant: ${thermalPrintPayloadInvariantOk ? 'OK' : 'FAILED'}`);
   console.log(`Cloud print transport invariant: ${cloudPrintTransportInvariantOk ? 'OK' : 'FAILED'}`);
 
   if (missingTables.length) {
@@ -216,6 +250,11 @@ async function main() {
     console.error(`  - ${kitchenVoidInvariantDetail || 'sync_kitchen_sent_quantity_after_void is missing or unsafe'}`);
   }
 
+  if (!thermalPrintPayloadInvariantOk) {
+    console.error('\nThermal print payload invariant failed:');
+    console.error(`  - ${thermalPrintPayloadInvariantDetail || 'receipt/report queue normalization is missing or unsafe'}`);
+  }
+
   if (!cloudPrintTransportInvariantOk) {
     console.error('\nCloud print transport invariant failed:');
     console.error(`  - ${cloudPrintTransportInvariantDetail || 'can_execute_cloud_print_kind is missing or unsafe'}`);
@@ -231,6 +270,7 @@ async function main() {
     || contractMissingTables.length
     || contractMissingRpcs.length
     || !kitchenVoidInvariantOk
+    || !thermalPrintPayloadInvariantOk
     || !cloudPrintTransportInvariantOk
   ) {
     process.exit(1);

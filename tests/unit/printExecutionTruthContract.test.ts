@@ -62,7 +62,7 @@ describe('print execution truth contract', () => {
 
     expect(receiptBuilder).toContain('await authorizeReceiptPrint(receipt)');
     expect(receiptBuilder).toContain('pendingReceiptPrints.set(printToken');
-    expect(receiptBuilder).toContain('plainText: buildReceiptPlainText');
+    expect(receiptBuilder).toContain('plainText: buildReceiptThermalText');
     expect(receiptBuilder).toContain('johns-print-auth');
     expect(receiptBuilder).not.toContain('window.print()');
   });
