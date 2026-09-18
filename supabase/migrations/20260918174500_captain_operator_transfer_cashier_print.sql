@@ -153,35 +153,6 @@ BEGIN
 END;
 $transfer_permission$;
 
--- Add an audit record to the existing guarded operator-transfer RPC without
--- changing its branch/target protections.
-DO $patch$
-DECLARE
-  v_def text;
-  v_old text;
-  v_new text;
-BEGIN
-  SELECT pg_get_functiondef('public.transfer_order_operator(uuid,uuid)'::regprocedure) INTO v_def;
-
-  v_old := '  PERFORM set_config(''app.pos_operator_transfer_order_id'', '''', true);' || E'\n' ||
-           '  PERFORM set_config(''app.pos_operator_transfer_target_id'', '''', true);' || E'\n\n' ||
-           '  RETURN jsonb_build_object(';
-  v_new := '  PERFORM set_config(''app.pos_operator_transfer_order_id'', '''', true);' || E'\n' ||
-           '  PERFORM set_config(''app.pos_operator_transfer_target_id'', '''', true);' || E'\n\n' ||
-           '  PERFORM public.log_audit_action(' || E'\n' ||
-           '    v_order.branch_id,''ORDER_OPERATOR_TRANSFERRED'',''order'',v_order.id,' || E'\n' ||
-           '    jsonb_build_object(''from_user_id'',v_order.cashier_id,''to_user_id'',p_target_user_id,''transferred_by'',v_executor_id)' || E'\n' ||
-           '  );' || E'\n\n' ||
-           '  RETURN jsonb_build_object(';
-
-  IF position(v_old IN v_def)=0 THEN
-    RAISE EXCEPTION 'transfer_order_operator audit insertion drift; refusing patch';
-  END IF;
-  v_def := replace(v_def,v_old,v_new);
-  EXECUTE v_def;
-END;
-$patch$;
-
 -- Permission-first list used by the transfer dialog. No role names are used.
 CREATE OR REPLACE FUNCTION public.list_pos_order_transfer_targets(p_order_id uuid)
 RETURNS TABLE(user_id uuid, display_name text)
