@@ -48,13 +48,35 @@ const ORDER_LABELS: Record<string, string> = {
 };
 
 export async function fetchShiftClosingReportServer(shiftId: string): Promise<ShiftClosingSummary> {
-  const { data, error } = await supabase.rpc('get_shift_closing_report', { p_shift_id: shiftId });
-  if (error) throw new Error(error.message);
-  const raw = data as Record<string, unknown> | null;
+  const [reportRes, tenderRes] = await Promise.all([
+    supabase.rpc('get_shift_closing_report', { p_shift_id: shiftId }),
+    supabase.rpc('get_shift_sale_tenders', { p_shift_id: shiftId }),
+  ]);
+  if (reportRes.error) throw new Error(reportRes.error.message);
+  const raw = reportRes.data as Record<string, unknown> | null;
   if (!raw?.success) throw new Error(String(raw?.detail || raw?.error || 'Could not load shift closing report'));
 
-  const paymentMethods = Array.isArray(raw.payment_methods)
-    ? raw.payment_methods.map((row) => {
+  const tenderRaw = (tenderRes.data as Record<string, unknown> | null) || null;
+  const tenderBySale = new Map<string, Array<{ method: string; amount: number }>>();
+  if (!tenderRes.error && tenderRaw?.success && Array.isArray(tenderRaw.sales)) {
+    for (const row of tenderRaw.sales) {
+      const item = row as Record<string, unknown>;
+      const saleId = String(item.sale_id || '');
+      const payments = Array.isArray(item.payments)
+        ? item.payments.map((payment) => {
+          const p = payment as Record<string, unknown>;
+          return { method: String(p.method || 'cash'), amount: Number(p.amount || 0) };
+        })
+        : [];
+      if (saleId) tenderBySale.set(saleId, payments);
+    }
+  }
+
+  const paymentSource = !tenderRes.error && tenderRaw?.success && Array.isArray(tenderRaw.payment_methods)
+    ? tenderRaw.payment_methods
+    : raw.payment_methods;
+  const paymentMethods = Array.isArray(paymentSource)
+    ? paymentSource.map((row) => {
       const item = row as Record<string, unknown>;
       const method = String(item.method || 'cash');
       return { method, label: PAYMENT_LABELS[method] || method, count: Number(item.count || 0), total: Number(item.total || 0) };
@@ -134,6 +156,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
         paidAmount: Number(item.paid_amount || 0),
         refundedAmount: Number(item.refunded_amount || 0),
         paymentMethod: String(item.payment_method || ''),
+        payments: tenderBySale.get(String(item.sale_id || '')) || [],
         orderType: String(item.order_type || ''),
         createdAt: String(item.created_at || ''),
       };
