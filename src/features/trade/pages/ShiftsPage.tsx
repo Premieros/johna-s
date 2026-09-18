@@ -33,6 +33,29 @@ interface ShiftCloseResult extends RpcResult {
 }
 interface CloseBlock { openOrderCount: number; openTableCount: number; }
 
+function businessDateForShift(openedAt: string, businessDayStart = '00:00'): string {
+  const date = new Date(openedAt);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const localDate = `${part('year')}-${part('month')}-${part('day')}`;
+  const openMinutes = Number(part('hour') || 0) * 60 + Number(part('minute') || 0);
+  const [startHour = 0, startMinute = 0] = businessDayStart.split(':').map(Number);
+  const cutoffMinutes = startHour * 60 + startMinute;
+  if (openMinutes >= cutoffMinutes) return localDate;
+
+  const previous = new Date(`${localDate}T12:00:00Z`);
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  return previous.toISOString().slice(0, 10);
+}
+
 export function ShiftsPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
@@ -246,8 +269,11 @@ export function ShiftsPage() {
 
   const printDayReport = async () => {
     if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
+    const reportDate = targetBusinessDaySettings?.business_day_mode === 'shift_span' && targetOpenShift?.opened_at
+      ? businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings.business_day_start || '00:00')
+      : dayDate;
     try {
-      const report = await fetchDayClosingReportServer(targetBranchId, dayDate);
+      const report = await fetchDayClosingReportServer(targetBranchId, reportDate);
       const html = buildA4DayClosingReportHtml(report, currency, lang);
       const w = window.open('', '_blank', 'width=1000,height=850');
       if (w) { w.document.write(html); w.document.close(); }
@@ -339,7 +365,7 @@ export function ShiftsPage() {
           {can('shifts.day_close') && targetBranchId && (
             <Button variant="outline" onClick={() => {
               if (targetBusinessDaySettings?.business_day_mode === 'shift_span' && targetOpenShift?.opened_at) {
-                setDayDate(new Date(targetOpenShift.opened_at).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' }));
+                setDayDate(businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings.business_day_start || '00:00'));
               }
               setDayCloseModal(true);
             }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
@@ -388,7 +414,9 @@ export function ShiftsPage() {
             </div>
             <div><span className="text-ui-muted">{isAr ? 'طريقة اليوم المالي:' : 'Business day mode:'}</span>{' '}
               <strong>{targetBusinessDaySettings?.business_day_mode === 'shift_span'
-                ? (isAr ? `من أول شفت بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} إلى آخر شفت` : `First shift after ${targetBusinessDaySettings?.business_day_start || '09:00'} → last shift`)
+                ? (targetOpenShift
+                  ? (isAr ? 'اليوم الحالي يبدأ مع الشفت المفتوح الآن' : 'Current workday starts with the open shift')
+                  : (isAr ? `اليوم المغلق: من أول شفت بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} إلى آخر شفت` : `Closed day: first shift after ${targetBusinessDaySettings?.business_day_start || '09:00'} → last shift`))
                 : (isAr ? `وقت ثابت ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}` : `Fixed ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}`)}</strong>
             </div>
           </div>
