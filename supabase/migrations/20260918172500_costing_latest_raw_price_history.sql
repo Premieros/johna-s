@@ -49,6 +49,41 @@ BEGIN
     UNION ALL
 
     SELECT
+      (norm.value->>'stock_unit_cost')::numeric AS unit_cost,
+      'purchase'::text AS source,
+      COALESCE(p.approved_at, pi.created_at, p.created_at) AS priced_at,
+      p.invoice_number AS reference_number,
+      s.name::text AS detail,
+      2 AS source_rank
+    FROM public.purchase_items pi
+    JOIN public.purchases p ON p.id = pi.purchase_id
+    LEFT JOIN public.suppliers s ON s.id = p.supplier_id
+    CROSS JOIN LATERAL (
+      SELECT public._normalize_raw_purchase_uom(
+        pi.raw_material_id,
+        pi.quantity,
+        pi.unit_cost,
+        pi.unit_name
+      ) AS value
+    ) norm
+    WHERE pi.raw_material_id = p_raw_material_id
+      AND p.status = 'completed'
+      AND COALESCE(pi.unit_cost, 0) > 0
+      AND COALESCE((norm.value->>'success')::boolean, false)
+      AND COALESCE((norm.value->>'stock_unit_cost')::numeric, 0) > 0
+      AND (p_branch_id IS NULL OR p.branch_id = p_branch_id)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.inventory_ledger il
+        WHERE il.reference_id = p.id
+          AND il.reference_type = 'purchase'
+          AND il.entry_type = 'purchase'
+          AND il.raw_material_id = pi.raw_material_id
+      )
+
+    UNION ALL
+
+    SELECT
       sci.unit_cost::numeric,
       'stock_count'::text,
       COALESCE(sc.applied_at, sc.approved_at, sc.created_at),
@@ -177,6 +212,9 @@ AS $function$
     AND (p_branch_id IS NULL OR r.branch_id = p_branch_id)
 $function$;
 
+REVOKE ALL ON FUNCTION public._product_recipe_cost(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._product_recipe_cost(uuid, uuid) TO service_role, postgres;
+
 
 CREATE OR REPLACE FUNCTION public.get_raw_material_cost_overview(
   p_branch_id uuid DEFAULT NULL
@@ -233,6 +271,43 @@ BEGIN
       AND COALESCE(il.unit_cost, 0) > 0
       AND (p_branch_id IS NULL OR il.branch_id = p_branch_id)
       AND public.user_may_access_branch(il.branch_id)
+
+    UNION ALL
+
+    SELECT
+      pi.raw_material_id,
+      p.branch_id,
+      (norm.value->>'stock_unit_cost')::numeric(18,6) AS unit_cost,
+      'purchase'::text AS source,
+      COALESCE(p.approved_at, pi.created_at, p.created_at) AS priced_at,
+      p.invoice_number AS reference_number,
+      s.name::text AS detail
+    FROM public.purchase_items pi
+    JOIN public.purchases p ON p.id = pi.purchase_id
+    LEFT JOIN public.suppliers s ON s.id = p.supplier_id
+    CROSS JOIN LATERAL (
+      SELECT public._normalize_raw_purchase_uom(
+        pi.raw_material_id,
+        pi.quantity,
+        pi.unit_cost,
+        pi.unit_name
+      ) AS value
+    ) norm
+    WHERE pi.raw_material_id IS NOT NULL
+      AND p.status = 'completed'
+      AND COALESCE(pi.unit_cost, 0) > 0
+      AND COALESCE((norm.value->>'success')::boolean, false)
+      AND COALESCE((norm.value->>'stock_unit_cost')::numeric, 0) > 0
+      AND (p_branch_id IS NULL OR p.branch_id = p_branch_id)
+      AND public.user_may_access_branch(p.branch_id)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.inventory_ledger il
+        WHERE il.reference_id = p.id
+          AND il.reference_type = 'purchase'
+          AND il.entry_type = 'purchase'
+          AND il.raw_material_id = pi.raw_material_id
+      )
 
     UNION ALL
 
@@ -385,6 +460,43 @@ BEGIN
     UNION ALL
 
     SELECT
+      'legacy-purchase:' || pi.id::text AS event_id,
+      pi.raw_material_id,
+      p.branch_id,
+      (norm.value->>'stock_unit_cost')::numeric(18,6) AS unit_cost,
+      'purchase'::text AS source,
+      COALESCE(p.approved_at, pi.created_at, p.created_at) AS priced_at,
+      p.invoice_number AS reference_number,
+      s.name::text AS detail
+    FROM public.purchase_items pi
+    JOIN public.purchases p ON p.id = pi.purchase_id
+    LEFT JOIN public.suppliers s ON s.id = p.supplier_id
+    CROSS JOIN LATERAL (
+      SELECT public._normalize_raw_purchase_uom(
+        pi.raw_material_id,
+        pi.quantity,
+        pi.unit_cost,
+        pi.unit_name
+      ) AS value
+    ) norm
+    WHERE pi.raw_material_id = p_raw_material_id
+      AND p.branch_id = v_material_branch
+      AND p.status = 'completed'
+      AND COALESCE(pi.unit_cost, 0) > 0
+      AND COALESCE((norm.value->>'success')::boolean, false)
+      AND COALESCE((norm.value->>'stock_unit_cost')::numeric, 0) > 0
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.inventory_ledger il
+        WHERE il.reference_id = p.id
+          AND il.reference_type = 'purchase'
+          AND il.entry_type = 'purchase'
+          AND il.raw_material_id = pi.raw_material_id
+      )
+
+    UNION ALL
+
+    SELECT
       sci.id::text,
       sci.raw_material_id,
       sc.branch_id,
@@ -455,37 +567,42 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $function$
 DECLARE
-  v_user_branch uuid;
   v_scope uuid;
   v_row record;
   v_components jsonb;
   v_recipe jsonb;
   v_history jsonb;
 BEGIN
-  IF NOT public.is_pos_admin() THEN
-    SELECT branch_id INTO v_user_branch FROM public.users WHERE id = auth.uid();
-    v_scope := v_user_branch;
-  ELSE
-    v_scope := p_branch_id;
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+  END IF;
+  IF NOT public.can_permission('reports.costing') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_ALLOWED');
+  END IF;
+  IF p_branch_id IS NOT NULL AND NOT public.user_may_access_branch(p_branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
 
   SELECT
-    p.id, p.name, p.barcode, p.sku,
+    p.id, p.name, p.barcode, p.sku, p.branch_id,
     COALESCE(p.sale_price, 0) AS sale_price,
-    COALESCE(public._product_wavg_cost(p.id, v_scope), 0) AS unit_cost,
-    COALESCE(public._product_bom_cost(p.id, v_scope), 0) AS theoretical_cost,
-    COALESCE(public._product_recipe_cost(p.id, v_scope), 0) AS actual_cost,
+    COALESCE(public._product_wavg_cost(p.id, p.branch_id), 0) AS unit_cost,
+    COALESCE(public._product_bom_cost(p.id, p.branch_id), 0) AS theoretical_cost,
+    COALESCE(public._product_recipe_cost(p.id, p.branch_id), 0) AS actual_cost,
     (SELECT COUNT(*) FROM public.product_components pc WHERE pc.product_id = p.id) AS component_count,
     (SELECT COUNT(*) FROM public.recipe_items ri JOIN public.recipes r ON r.id = ri.recipe_id
       WHERE r.product_id = p.id) AS recipe_item_count
   INTO v_row
   FROM public.products p
   WHERE p.id = p_product_id
-    AND (v_scope IS NULL OR p.branch_id = v_scope);
+    AND public.user_may_access_branch(p.branch_id)
+    AND (p_branch_id IS NULL OR p.branch_id = p_branch_id);
 
   IF v_row.id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'PRODUCT_NOT_FOUND');
   END IF;
+
+  v_scope := v_row.branch_id;
 
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'component_product_id', cp.id,
