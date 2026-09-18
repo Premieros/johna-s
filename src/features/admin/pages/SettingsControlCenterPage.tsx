@@ -40,8 +40,8 @@ export function SettingsControlCenterPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { t, lang, setLang } = useLanguage();
-  const { theme, setTheme, setUiTheme } = useTheme();
-  const { branchSettingsMap, saveBranchSettings } = useSettings();
+  const { theme, uiTheme, setTheme, setUiTheme } = useTheme();
+  const { branchSettingsMap, saveBranchSettings, save: saveSettings } = useSettings();
   const { branches } = useBranches();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -55,6 +55,7 @@ export function SettingsControlCenterPage() {
       : 'branch_profile',
   );
   const [saving, setSaving] = useState(false);
+  const [savingUi, setSavingUi] = useState(false);
 
   const myBranchId = user?.branch_id || (branches[0]?.id ?? '');
   const [selectedBranchId, setSelectedBranchId] = useState<string>(myBranchId);
@@ -125,6 +126,36 @@ export function SettingsControlCenterPage() {
     if (!p) return;
     setUiTheme(key);
     setTheme(p.mode);
+  };
+
+  const saveAppearanceSettings = async () => {
+    setSavingUi(true);
+    try {
+      const ok = await saveSettings({ theme, brand_color: uiTheme });
+      if (ok) {
+        await logAudit('update', 'settings', 'appearance');
+        show(isAr ? 'تم حفظ إعدادات المظهر والثيم' : 'Appearance and theme settings saved', 'success');
+      } else {
+        show(isAr ? 'فشل حفظ إعدادات المظهر والثيم' : 'Failed to save appearance and theme settings', 'error');
+      }
+    } finally {
+      setSavingUi(false);
+    }
+  };
+
+  const saveLanguageSettings = async () => {
+    setSavingUi(true);
+    try {
+      const ok = await saveSettings({ language: lang });
+      if (ok) {
+        await logAudit('update', 'settings', 'language');
+        show(isAr ? 'تم حفظ إعدادات اللغة' : 'Language settings saved', 'success');
+      } else {
+        show(isAr ? 'فشل حفظ إعدادات اللغة' : 'Failed to save language settings', 'error');
+      }
+    } finally {
+      setSavingUi(false);
+    }
   };
 
   const saveBranchSpecific = async () => {
@@ -478,6 +509,12 @@ export function SettingsControlCenterPage() {
                   ))}
                 </div>
               </div>
+              <div className="pt-4 border-t border-ui-border flex justify-end">
+                <Button data-testid="save-appearance-settings" onClick={() => void saveAppearanceSettings()} disabled={savingUi}>
+                  {savingUi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{isAr ? 'حفظ إعدادات المظهر' : 'Save Appearance Settings'}</span>
+                </Button>
+              </div>
             </Card>
           )}
 
@@ -502,6 +539,12 @@ export function SettingsControlCenterPage() {
                   className="w-32"
                 >
                   English
+                </Button>
+              </div>
+              <div className="pt-4 border-t border-ui-border flex justify-end">
+                <Button data-testid="save-language-settings" onClick={() => void saveLanguageSettings()} disabled={savingUi}>
+                  {savingUi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{isAr ? 'حفظ إعدادات اللغة' : 'Save Language Settings'}</span>
                 </Button>
               </div>
             </Card>
