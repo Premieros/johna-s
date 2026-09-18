@@ -51,6 +51,16 @@ describe.skipIf(!dbUrl)('financial day cutoff + split tender truth', () => {
   });
 
   it('excludes pre-shift expense/purchase and uses sale_payments for split tenders', async () => {
+    const baselineQuery = await client.query<{ r: Record<string, unknown> }>(
+      `SELECT public._build_day_closing_report($1,$2::date) AS r`,
+      [ids.branchA, businessDate],
+    );
+    const baseline = baselineQuery.rows[0].r;
+    const baselineMethods = new Map(
+      ((baseline.payment_methods || []) as Array<{ method: string; sales_total: number }>)
+        .map((x) => [x.method, Number(x.sales_total || 0)]),
+    );
+
     const expenseBefore = randomUUID();
     const expenseDuring = randomUUID();
     await client.query(
@@ -100,12 +110,20 @@ describe.skipIf(!dbUrl)('financial day cutoff + split tender truth', () => {
       [ids.branchA, businessDate],
     );
     const r = rows[0].r;
-    expect(Number(r.expenses)).toBe(22);
-    expect(Number(r.cash_purchases)).toBe(44);
+    expect(Number(r.expenses) - Number(baseline.expenses || 0)).toBe(22);
+    expect(Number(r.cash_purchases) - Number(baseline.cash_purchases || 0)).toBe(44);
+
+    const expenseDetails = r.expense_details as Array<{ description: string; amount: number }>;
+    expect(expenseDetails.some((x) => x.description === 'before first shift')).toBe(false);
+    expect(expenseDetails.some((x) => x.description === 'inside day' && Number(x.amount) === 22)).toBe(true);
+
+    const purchaseDetails = r.cash_purchase_details as Array<{ invoice_number: string; cash_outflow: number }>;
+    expect(purchaseDetails.some((x) => x.invoice_number.startsWith('PRE-'))).toBe(false);
+    expect(purchaseDetails.some((x) => x.invoice_number.startsWith('IN-') && Number(x.cash_outflow) === 44)).toBe(true);
 
     const methods = r.payment_methods as Array<{ method: string; sales_total: number }>;
-    expect(methods.find((x) => x.method === 'cash')?.sales_total).toBe(40);
-    expect(methods.find((x) => x.method === 'card')?.sales_total).toBe(60);
+    expect(Number(methods.find((x) => x.method === 'cash')?.sales_total || 0) - Number(baselineMethods.get('cash') || 0)).toBe(40);
+    expect(Number(methods.find((x) => x.method === 'card')?.sales_total || 0) - Number(baselineMethods.get('card') || 0)).toBe(60);
 
     const sales = r.sales_details as Array<{ sale_id: string; payments: Array<{ method: string; amount: number }> }>;
     const split = sales.find((x) => x.sale_id === saleId);
