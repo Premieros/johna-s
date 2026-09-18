@@ -55,18 +55,58 @@ $patch$;
 -- Normal checkout: linked-order sales belong to the CURRENT order operator,
 -- not to the user who merely collected payment. The payer remains in
 -- shift_operations.created_by for audit.
+--
+-- Production may legitimately be missing the earlier forward-only
+-- process_sale ownership patch while keeping the same RPC signature. Reconcile
+-- that body drift here before changing sale attribution, but refuse any unknown
+-- shape.
 DO $patch$
 DECLARE
   v_def text;
   v_old text;
   v_new text;
+  v_preview_marker text;
+  v_preview_with_owner text;
 BEGIN
   SELECT pg_get_functiondef(
     'public.process_sale(text,uuid,uuid,uuid,uuid,numeric,numeric,text,numeric,numeric,numeric,numeric,text,text,jsonb,uuid,text,uuid,uuid,integer)'::regprocedure
   ) INTO v_def;
 
   IF position('v_order_owner uuid;' IN v_def)=0 THEN
-    RAISE EXCEPTION 'process_sale order-owner guard missing; refusing patch';
+    v_old := '  v_order_table uuid;' || E'\n';
+    v_new := '  v_order_table uuid;' || E'\n' || '  v_order_owner uuid;' || E'\n';
+    IF position(v_old IN v_def)=0 THEN
+      RAISE EXCEPTION 'process_sale order-table declaration drift; refusing compatibility patch';
+    END IF;
+    v_def := replace(v_def,v_old,v_new);
+
+    v_preview_marker :=
+      '  IF p_order_id IS NOT NULL THEN' || E'\n' ||
+      '    v_preview := public._build_order_settlement_preview(p_order_id);';
+
+    v_preview_with_owner :=
+      '  IF p_order_id IS NOT NULL THEN' || E'\n' ||
+      '    SELECT o.cashier_id' || E'\n' ||
+      '    INTO v_order_owner' || E'\n' ||
+      '    FROM public.orders o' || E'\n' ||
+      '    WHERE o.id = p_order_id' || E'\n' ||
+      '      AND o.branch_id = p_branch_id;' || E'\n\n' ||
+      '    IF NOT FOUND THEN' || E'\n' ||
+      '      IF EXISTS (SELECT 1 FROM public.orders o WHERE o.id = p_order_id) THEN' || E'\n' ||
+      '        RETURN jsonb_build_object(''success'', false, ''error'', ''BRANCH_MISMATCH'');' || E'\n' ||
+      '      END IF;' || E'\n' ||
+      '      RETURN jsonb_build_object(''success'', false, ''error'', ''ORDER_NOT_FOUND'');' || E'\n' ||
+      '    END IF;' || E'\n\n' ||
+      '    IF v_order_owner IS DISTINCT FROM auth.uid()' || E'\n' ||
+      '       AND NOT public.can_manage_other_pos_orders() THEN' || E'\n' ||
+      '      RETURN jsonb_build_object(''success'', false, ''error'', ''ORDER_OPERATOR_REQUIRED'');' || E'\n' ||
+      '    END IF;' || E'\n\n' ||
+      '    v_preview := public._build_order_settlement_preview(p_order_id);';
+
+    IF position(v_preview_marker IN v_def)=0 THEN
+      RAISE EXCEPTION 'process_sale settlement-preview marker drift; refusing compatibility patch';
+    END IF;
+    v_def := replace(v_def,v_preview_marker,v_preview_with_owner);
   END IF;
 
   v_old := '    p_salesperson_id,' || E'\n' ||
