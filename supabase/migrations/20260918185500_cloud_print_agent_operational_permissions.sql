@@ -25,6 +25,7 @@ DECLARE
   v_def text;
   v_guard text;
   v_filter text;
+  v_replacement text;
 BEGIN
   SELECT pg_get_functiondef('public.claim_cloud_print_jobs(uuid,uuid,integer)'::regprocedure) INTO v_def;
 
@@ -33,26 +34,34 @@ BEGIN
     '    RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''settings.manage'');' || E'\n' ||
     '  END IF;' || E'\n';
 
-  IF position(v_guard IN v_def)=0 THEN
-    RAISE EXCEPTION 'claim_cloud_print_jobs settings guard drift; refusing patch';
+  IF position(v_guard IN v_def)>0 THEN
+    v_def := replace(v_def, v_guard, '');
+  ELSE
+    v_guard := 'IF NOT public.can_permission(''settings.manage'') THEN RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''settings.manage''); END IF;';
+    IF position(v_guard IN v_def)=0 THEN
+      RAISE EXCEPTION 'claim_cloud_print_jobs settings guard drift; refusing patch';
+    END IF;
+    v_def := replace(v_def, v_guard, '');
   END IF;
-  v_def := replace(v_def, v_guard, '');
 
   v_filter :=
     '    WHERE branch_id = p_branch_id' || E'\n' ||
     '      AND status IN (''pending'', ''failed'')';
-
-  IF position(v_filter IN v_def)=0 THEN
-    RAISE EXCEPTION 'claim_cloud_print_jobs picked filter drift; refusing patch';
-  END IF;
-
-  v_def := replace(
-    v_def,
-    v_filter,
+  v_replacement :=
     '    WHERE branch_id = p_branch_id' || E'\n' ||
     '      AND public.can_execute_cloud_print_kind(kind)' || E'\n' ||
-    '      AND status IN (''pending'', ''failed'')'
-  );
+    '      AND status IN (''pending'', ''failed'')';
+
+  IF position(v_filter IN v_def)>0 THEN
+    v_def := replace(v_def, v_filter, v_replacement);
+  ELSE
+    v_filter := 'WHERE branch_id = p_branch_id AND status IN (''pending'', ''failed'')';
+    v_replacement := 'WHERE branch_id = p_branch_id AND public.can_execute_cloud_print_kind(kind) AND status IN (''pending'', ''failed'')';
+    IF position(v_filter IN v_def)=0 THEN
+      RAISE EXCEPTION 'claim_cloud_print_jobs picked filter drift; refusing patch';
+    END IF;
+    v_def := replace(v_def, v_filter, v_replacement);
+  END IF;
 
   EXECUTE v_def;
 END;
@@ -63,6 +72,7 @@ DECLARE
   v_def text;
   v_guard text;
   v_anchor text;
+  v_replacement text;
 BEGIN
   SELECT pg_get_functiondef('public.start_cloud_print_job(uuid,uuid)'::regprocedure) INTO v_def;
 
@@ -71,27 +81,35 @@ BEGIN
     '    RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''settings.manage'');' || E'\n' ||
     '  END IF;' || E'\n';
 
-  IF position(v_guard IN v_def)=0 THEN
-    RAISE EXCEPTION 'start_cloud_print_job settings guard drift; refusing patch';
+  IF position(v_guard IN v_def)>0 THEN
+    v_def := replace(v_def, v_guard, '');
+  ELSE
+    v_guard := 'IF NOT public.can_permission(''settings.manage'') THEN RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''settings.manage''); END IF;';
+    IF position(v_guard IN v_def)=0 THEN
+      RAISE EXCEPTION 'start_cloud_print_job settings guard drift; refusing patch';
+    END IF;
+    v_def := replace(v_def, v_guard, '');
   END IF;
-  v_def := replace(v_def, v_guard, '');
 
   v_anchor :=
     '  SELECT * INTO v_job FROM public.cloud_print_jobs WHERE id = p_job_id FOR UPDATE;' || E'\n' ||
     '  IF v_job.id IS NULL THEN RETURN jsonb_build_object(''success'', false, ''error'', ''JOB_NOT_FOUND''); END IF;';
-
-  IF position(v_anchor IN v_def)=0 THEN
-    RAISE EXCEPTION 'start_cloud_print_job job lookup drift; refusing patch';
-  END IF;
-
-  v_def := replace(
-    v_def,
-    v_anchor,
+  v_replacement :=
     v_anchor || E'\n' ||
     '  IF NOT public.can_execute_cloud_print_kind(v_job.kind) THEN' || E'\n' ||
     '    RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''print.execute'');' || E'\n' ||
-    '  END IF;'
-  );
+    '  END IF;';
+
+  IF position(v_anchor IN v_def)>0 THEN
+    v_def := replace(v_def, v_anchor, v_replacement);
+  ELSE
+    v_anchor := 'SELECT * INTO v_job FROM public.cloud_print_jobs WHERE id = p_job_id FOR UPDATE; IF v_job.id IS NULL THEN RETURN jsonb_build_object(''success'', false, ''error'', ''JOB_NOT_FOUND''); END IF;';
+    v_replacement := v_anchor || ' IF NOT public.can_execute_cloud_print_kind(v_job.kind) THEN RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''print.execute''); END IF;';
+    IF position(v_anchor IN v_def)=0 THEN
+      RAISE EXCEPTION 'start_cloud_print_job job lookup drift; refusing patch';
+    END IF;
+    v_def := replace(v_def, v_anchor, v_replacement);
+  END IF;
 
   EXECUTE v_def;
 END;
@@ -102,6 +120,7 @@ DECLARE
   v_def text;
   v_guard text;
   v_anchor text;
+  v_replacement text;
 BEGIN
   SELECT pg_get_functiondef('public.complete_cloud_print_job(uuid,uuid,boolean,text)'::regprocedure) INTO v_def;
 
@@ -110,27 +129,35 @@ BEGIN
     '    RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''settings.manage'');' || E'\n' ||
     '  END IF;' || E'\n';
 
-  IF position(v_guard IN v_def)=0 THEN
-    RAISE EXCEPTION 'complete_cloud_print_job settings guard drift; refusing patch';
+  IF position(v_guard IN v_def)>0 THEN
+    v_def := replace(v_def, v_guard, '');
+  ELSE
+    v_guard := 'IF NOT public.can_permission(''settings.manage'') THEN RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''settings.manage''); END IF;';
+    IF position(v_guard IN v_def)=0 THEN
+      RAISE EXCEPTION 'complete_cloud_print_job settings guard drift; refusing patch';
+    END IF;
+    v_def := replace(v_def, v_guard, '');
   END IF;
-  v_def := replace(v_def, v_guard, '');
 
   v_anchor :=
     '  SELECT * INTO v_job FROM public.cloud_print_jobs WHERE id = p_job_id FOR UPDATE;' || E'\n' ||
     '  IF v_job.id IS NULL THEN RETURN jsonb_build_object(''success'', false, ''error'', ''JOB_NOT_FOUND''); END IF;';
-
-  IF position(v_anchor IN v_def)=0 THEN
-    RAISE EXCEPTION 'complete_cloud_print_job job lookup drift; refusing patch';
-  END IF;
-
-  v_def := replace(
-    v_def,
-    v_anchor,
+  v_replacement :=
     v_anchor || E'\n' ||
     '  IF NOT public.can_execute_cloud_print_kind(v_job.kind) THEN' || E'\n' ||
     '    RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''print.execute'');' || E'\n' ||
-    '  END IF;'
-  );
+    '  END IF;';
+
+  IF position(v_anchor IN v_def)>0 THEN
+    v_def := replace(v_def, v_anchor, v_replacement);
+  ELSE
+    v_anchor := 'SELECT * INTO v_job FROM public.cloud_print_jobs WHERE id = p_job_id FOR UPDATE; IF v_job.id IS NULL THEN RETURN jsonb_build_object(''success'', false, ''error'', ''JOB_NOT_FOUND''); END IF;';
+    v_replacement := v_anchor || ' IF NOT public.can_execute_cloud_print_kind(v_job.kind) THEN RETURN jsonb_build_object(''success'', false, ''error'', ''PERMISSION_DENIED'', ''permission'', ''print.execute''); END IF;';
+    IF position(v_anchor IN v_def)=0 THEN
+      RAISE EXCEPTION 'complete_cloud_print_job job lookup drift; refusing patch';
+    END IF;
+    v_def := replace(v_def, v_anchor, v_replacement);
+  END IF;
 
   EXECUTE v_def;
 END;
