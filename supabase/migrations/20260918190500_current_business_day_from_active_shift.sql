@@ -217,3 +217,7 @@ BEGIN
   );
 END;
 $function$;
+
+
+REVOKE ALL ON FUNCTION public._build_day_closing_report(uuid,date) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public._build_day_closing_report(uuid,date) TO service_role,postgres;
