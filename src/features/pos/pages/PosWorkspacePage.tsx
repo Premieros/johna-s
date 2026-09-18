@@ -1072,6 +1072,7 @@ export function PosWorkspacePage() {
         areas={diningAreas}
         ordersByTable={ordersByTable}
         onConfirmTransfer={handleConfirmTransfer}
+        onOperatorTransferred={() => setReloadKey((value) => value + 1)}
       />
 
       {/* Void Sent Item Modal */}
