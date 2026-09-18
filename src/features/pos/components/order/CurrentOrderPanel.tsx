@@ -152,7 +152,7 @@ export function CurrentOrderPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-ui-surface">
+    <div className="flex h-full min-h-0 flex-col bg-ui-surface text-ui-text">
       <div className="shrink-0 border-b border-ui-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ui-primary-soft">
@@ -163,7 +163,7 @@ export function CurrentOrderPanel({
               <p className="truncate text-sm font-black text-ui-text">{activeOrderNumber ? `#${activeOrderNumber}` : t('newOrder')}</p>
               <OrderStageBadge stage={stage} />
             </div>
-            <p className="text-[10px] font-bold text-ui-subtle">{cart.length} {isAr ? 'صنف' : 'items'}</p>
+            <p className="text-[11px] font-bold text-ui-muted">{cart.length} {isAr ? 'صنف' : 'items'}</p>
           </div>
         </div>
 
@@ -226,7 +226,7 @@ export function CurrentOrderPanel({
         {selectedItem && (
           <div className="mt-2 flex items-center gap-2 rounded-xl border border-ui-primary/30 bg-ui-primary-soft p-2">
             <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-bold text-ui-subtle">{isAr ? 'الصنف المحدد' : 'Selected item'}</p>
+              <p className="text-[10px] font-bold text-ui-muted">{isAr ? 'الصنف المحدد' : 'Selected item'}</p>
               <p className="truncate text-xs font-black text-ui-text">{selectedItem.product.name} × {selectedItem.quantity}</p>
             </div>
             {perms.canSplitOrder && (
@@ -314,11 +314,11 @@ export function CurrentOrderPanel({
                         <p className="truncate text-xs font-black text-ui-text">{item.product.name}</p>
                         {sent.sent && <Check className="h-3 w-3 shrink-0 text-ui-success" />}
                       </div>
-                      {item.modifiers?.length ? <p className="mt-0.5 truncate ps-5 text-[9px] font-bold text-ui-subtle">{item.modifiers.map((modifier) => modifier.name).join(' · ')}</p> : null}
-                      {item.item_note ? <p className="mt-0.5 truncate ps-5 text-[9px] font-bold text-ui-subtle">📝 {item.item_note}</p> : null}
+                      {item.modifiers?.length ? <p className="mt-0.5 truncate ps-5 text-[10px] font-bold text-ui-muted">{item.modifiers.map((modifier) => modifier.name).join(' · ')}</p> : null}
+                      {item.item_note ? <p className="mt-0.5 truncate ps-5 text-[10px] font-bold text-ui-muted">📝 {item.item_note}</p> : null}
                     </button>
                     {perms.canEditOrder && (
-                      <button type="button" onClick={() => onConfigureItem?.(item)} className="shrink-0 rounded-lg px-1.5 py-1 text-[9px] font-bold text-ui-subtle hover:bg-ui-surface hover:text-ui-text">
+                      <button type="button" onClick={() => onConfigureItem?.(item)} className="shrink-0 rounded-lg border border-ui-border px-2 py-1 text-[10px] font-bold text-ui-muted hover:border-ui-primary hover:bg-ui-surface hover:text-ui-text">
                         {isAr ? 'تعديل' : 'Edit'}
                       </button>
                     )}
@@ -335,7 +335,7 @@ export function CurrentOrderPanel({
                     ><Minus className="h-3.5 w-3.5" /></button>
                     <span data-testid={`pos-cart-qty-${item.product.id}`} className="w-7 text-center text-xs font-black text-ui-text">{item.quantity}</span>
                     <button data-testid={`pos-cart-qty-increase-${item.product.id}`} aria-label={isAr ? `زيادة كمية ${item.product.name}` : `Increase quantity ${item.product.name}`} disabled={!perms.canEditOrder} onClick={() => onUpdateQty(lineKey, 1)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-ui-primary text-ui-primary-fg disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-3.5 w-3.5" /></button>
-                    <span className="ms-auto text-[9px] font-bold text-ui-subtle">
+                    <span className="ms-auto text-[10px] font-bold text-ui-muted">
                       {sent.sentQty > 0 ? (isAr ? `مرسل ${sent.sentQty}` : `Sent ${sent.sentQty}`) : (isAr ? 'غير مرسل' : 'Unsent')}
                     </span>
                   </div>
@@ -349,9 +349,9 @@ export function CurrentOrderPanel({
       {!empty && (
         <div className="shrink-0 border-t border-ui-border p-3">
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-ui-page-alt p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('subtotal')}</p><p className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(subtotal, currency, lang)}</p></div>
+            <div className="rounded-xl border border-ui-border bg-ui-page-alt p-2"><p className="text-[10px] font-bold text-ui-muted">{t('subtotal')}</p><p className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(subtotal, currency, lang)}</p></div>
             <div className="rounded-xl bg-ui-page-alt p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('discount')}</p><p data-testid="pos-discount-value" className="mt-0.5 truncate text-xs font-black text-ui-text">{formatCurrency(discountValue, currency, lang)}</p></div>
-            <div className="rounded-xl bg-ui-primary-soft p-2"><p className="text-[9px] font-bold text-ui-subtle">{t('total')}</p><p data-testid="pos-total-value" className="mt-0.5 truncate text-sm font-black text-ui-accent">{formatCurrency(total, currency, lang)}</p></div>
+            <div className="rounded-xl border border-ui-primary/30 bg-ui-primary-soft p-2"><p className="text-[10px] font-bold text-ui-muted">{t('total')}</p><p data-testid="pos-total-value" className="mt-0.5 truncate text-sm font-black text-ui-accent">{formatCurrency(total, currency, lang)}</p></div>
           </div>
         </div>
       )}
