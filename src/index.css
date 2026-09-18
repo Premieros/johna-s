@@ -58,8 +58,8 @@
 
   /* === Text === */
   --ui-text: 15 23 42;
-  --ui-muted: 71 85 105;
-  --ui-subtle: 148 163 184;
+  --ui-muted: 55 65 81;
+  --ui-subtle: 100 116 139;
 
   /* === Semantic === */
   --ui-success: 16 185 129;
@@ -132,21 +132,35 @@
 }
 
 .dark {
-  --ui-surface: 19 27 46;
-  --ui-surface-raised: 26 36 60;
-  --ui-page: 11 15 25;
-  --ui-page-alt: 15 21 37;
-  --ui-border: 30 41 59;
-  --ui-border-strong: 51 65 85;
-  --ui-text: 248 250 252;
-  --ui-muted: 148 163 184;
-  --ui-subtle: 100 116 139;
-  --ui-primary-soft: 30 58 138;
-  --ui-success-soft: 6 78 59;
-  --ui-warning-soft: 120 53 15;
-  --ui-danger-soft: 127 29 29;
-  --ui-info-soft: 30 58 138;
-  --ui-ring: 96 165 250;
+  /* True-black dark mode: page is black, surfaces stay slightly lifted for hierarchy. */
+  --ui-surface: 9 9 11;
+  --ui-surface-raised: 16 16 19;
+  --ui-page: 0 0 0;
+  --ui-page-alt: 12 12 15;
+
+  /* Stronger separation on black so cards, tables and controls do not blend together. */
+  --ui-border: 52 52 58;
+  --ui-border-strong: 82 82 91;
+
+  /* High-contrast typography for dense POS/table data. */
+  --ui-text: 255 255 255;
+  --ui-muted: 203 213 225;
+  --ui-subtle: 148 163 184;
+
+  /* Accent is intentionally brighter in dark mode for prices/actions. */
+  --ui-accent: var(--brand-400);
+  --ui-primary-soft: 23 37 84;
+  --ui-success-soft: 5 46 34;
+  --ui-warning-soft: 73 38 7;
+  --ui-danger-soft: 69 20 20;
+  --ui-info-soft: 19 42 91;
+  --ui-ring: 147 197 253;
+
+  --ui-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --ui-shadow: 0 3px 12px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --ui-shadow-md: 0 8px 22px rgba(0, 0, 0, 0.68), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --ui-shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --ui-shadow-xl: 0 24px 52px rgba(0, 0, 0, 0.78), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 @layer base {
