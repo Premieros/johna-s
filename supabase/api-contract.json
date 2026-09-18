@@ -62,6 +62,8 @@
     {"name":"get_product_costing_detail","params":["branch_id","product_id"]},
     {"name":"get_purchase_backorders","params":["branch_id"]},
     {"name":"get_purchase_receipts","params":["branch_id"]},
+    {"name":"get_raw_material_cost_history","params":["branch_id","limit","raw_material_id"]},
+    {"name":"get_raw_material_cost_overview","params":["branch_id"]},
     {"name":"get_rfq_comparison","params":["rfq_id"]},
     {"name":"get_day_closing_report","params":["branch_id","day"]},
     {"name":"get_shift_closing_report","params":["shift_id"]},
