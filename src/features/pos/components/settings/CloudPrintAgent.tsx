@@ -87,7 +87,8 @@ export function CloudPrintAgent() {
     // The installed legacy Windows print service is intentionally supported here.
     // It is reachable from the normal web POS through localPrintAgent.ts, so Electron
     // must not be required before polling the durable cloud queue.
-    if (!user?.id || !can('settings.manage')) return;
+    if (!user?.id) return;
+    if (!can('settings.manage') && !can('pos.print_kitchen') && !can('pos.receipt.print')) return;
     if (!isSilentPrintEnabled() || !isCloudPrintAgentEnabled()) return;
     const branchId = getCloudPrintAgentBranchId();
     if (!branchId) return;
