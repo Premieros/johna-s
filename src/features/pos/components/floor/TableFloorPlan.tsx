@@ -49,7 +49,7 @@ export function TableFloorPlan({ areas, tables, ordersByTable, canManage, curren
     const maxW = positions.reduce((m, p) => Math.max(m, p.left + p.width), 0) + 20;
     const maxH = positions.reduce((m, p) => Math.max(m, p.top + p.height), 0) + 20;
     return (
-      <div className="overflow-auto rounded-xl bg-ui-page border border-ui-border">
+      <div className="overflow-auto rounded-xl border border-ui-border-strong bg-ui-page-alt">
         <div className="relative" style={{ width: Math.max(maxW, 900), height: Math.max(maxH, 380) }}>
           {positions.map(({ table, left, top, width, height }) => {
             const st = STATUS_STYLES[table.status] || STATUS_STYLES.vacant;
@@ -60,19 +60,19 @@ export function TableFloorPlan({ areas, tables, ordersByTable, canManage, curren
               <button
                 key={table.id}
                 onClick={() => onSelectTable(table)}
-                className={`absolute rounded-xl border-2 shadow-sm p-2 flex flex-col items-center justify-center transition-all hover:shadow-card-hover hover:-translate-y-0.5 active:scale-[0.98] ${st.card}`}
+                className={`absolute rounded-xl border-2 p-2.5 flex flex-col items-center justify-center shadow-ui-sm transition-all hover:-translate-y-0.5 hover:shadow-ui-md active:scale-[0.98] ${st.card}`}
                 style={{ left, top, width, height }}
               >
-                <span className="text-sm font-bold text-ui-text truncate max-w-full">{table.name}</span>
-                <span className="flex items-center gap-1 text-[10px] text-ui-muted">
+                <span className="max-w-full truncate text-[15px] font-black text-ui-text">{table.name}</span>
+                <span className="flex items-center gap-1 text-[11px] font-bold text-ui-muted">
                   <Users className="w-3 h-3" /> {table.capacity}
                 </span>
                 {order && (
                   <>
-                    <span className={`mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold truncate max-w-full ${st.badge}`}>
+                    <span className={`mt-1 max-w-full truncate rounded-full px-2 py-1 text-[10px] font-black ${st.badge}`}>
                       {order.order_number} · {formatCurrency(order.total, currency, lang)}{tableOrders.length > 1 ? ` +${tableOrders.length - 1}` : ''}
                     </span>
-                    {operatorName && <span className="mt-1 flex max-w-full items-center gap-1 truncate text-[10px] font-bold text-ui-muted"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></span>}
+                    {operatorName && <span className="mt-1 flex max-w-full items-center gap-1 truncate rounded-md bg-ui-surface/70 px-1.5 py-0.5 text-[10px] font-black text-ui-text"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></span>}
                   </>
                 )}
               </button>
