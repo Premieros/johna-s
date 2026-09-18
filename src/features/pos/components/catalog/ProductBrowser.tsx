@@ -216,7 +216,7 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
                     <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                       <span className="min-w-0 truncate text-[15px] font-black text-ui-accent">{formatCurrency(product.sale_price, currency, lang)}</span>
                       {!gated && <div className="flex shrink-0 items-center gap-1.5">
-                        {onConfigureProduct && <button type="button" onClick={(event) => { event.stopPropagation(); onConfigureProduct(product); }} title={isAr ? 'تخصيص الصنف' : 'Configure Item'} className="hidden h-9 w-9 items-center justify-center rounded-full border border-ui-border bg-ui-page-alt text-ui-muted transition hover:border-ui-primary hover:text-ui-accent sm:flex"><SlidersHorizontal className="h-4 w-4" /></button>}
+                        {onConfigureProduct && <button type="button" onClick={(event) => { event.stopPropagation(); onConfigureProduct(product); }} title={isAr ? 'تخصيص الصنف' : 'Configure Item'} className="flex h-9 w-9 items-center justify-center rounded-full border border-ui-border bg-ui-page-alt text-ui-muted transition hover:border-ui-primary hover:text-ui-accent"><SlidersHorizontal className="h-4 w-4" /></button>}
                         <button type="button" aria-label={isAr ? 'إضافة' : 'Add'} onClick={(event) => { event.stopPropagation(); addProductDirectly(product); }} className="flex h-10 w-10 items-center justify-center rounded-full bg-ui-primary text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary/90 active:scale-95"><Plus className="h-5 w-5" /></button>
                       </div>}
                     </div>
