@@ -1,0 +1,84 @@
+name: Cleanup merged development branches
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup-merged-development-branches.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: cleanup-merged-development-branches
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: delete-fully-merged-development-branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete only fully merged development branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+
+          gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --limit 200 \
+            --json headRefName \
+            --jq '.[].headRefName' \
+            > /tmp/open-heads.txt
+
+          mapfile -t merged_branches < <(
+            git for-each-ref \
+              --format='%(refname:short)' \
+              refs/remotes/origin/development/ \
+            | sed 's#^origin/##' \
+            | while read -r branch; do
+                if git merge-base --is-ancestor "origin/$branch" origin/main; then
+                  printf '%s\n' "$branch"
+                fi
+              done \
+            | sort
+          )
+
+          deleted=0
+          skipped=0
+          failed=0
+
+          for branch in "${merged_branches[@]}"; do
+            if grep -Fxq "$branch" /tmp/open-heads.txt; then
+              echo "SKIP open PR head: $branch"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            echo "DELETE fully merged branch: $branch"
+            if git push origin --delete "$branch"; then
+              deleted=$((deleted + 1))
+            else
+              echo "::error::Could not delete $branch"
+              failed=$((failed + 1))
+            fi
+          done
+
+          echo "Deleted: $deleted"
+          echo "Skipped open PR heads: $skipped"
+          echo "Failed: $failed"
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
