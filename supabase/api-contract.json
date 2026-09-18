@@ -65,6 +65,8 @@
     {"name":"get_rfq_comparison","params":["rfq_id"]},
     {"name":"get_day_closing_report","params":["branch_id","day"]},
     {"name":"get_shift_closing_report","params":["shift_id"]},
+    {"name":"get_shift_sale_tenders","params":["shift_id"]},
+    {"name":"enqueue_cloud_report_print","params":["branch_id","idempotency_key","payload"]},
     {"name":"try_auto_close_branch_shift","params":["branch_id"]},
     {"name":"get_stock_valuation","params":["branch_id","warehouse_id"]},
     {"name":"get_stock_valuation_summary","params":["branch_id","warehouse_id"]},
