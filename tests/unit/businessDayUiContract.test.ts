@@ -21,6 +21,19 @@ describe('business-day UI contract', () => {
     expect(shiftsPage).toContain('يوجد شفت مفتوح بالفعل لهذا الفرع');
   });
 
+  it('requires every open order to be resolved before shift close', () => {
+    expect(shiftsPage).toContain('لا يمكن إغلاق الوردية مع وجود طلبات مفتوحة');
+    expect(shiftsPage).toContain('يجب على المستخدم إغلاق أو تسوية كل الطلبات أولًا');
+    expect(shiftsPage).not.toContain('إغلاق الوردية مع بقاء الطلبات المفتوحة');
+    expect(shiftsPage).not.toContain('Close Shift With Open Orders');
+  });
+
+  it('shows the safe auto-close policy in branch settings', () => {
+    expect(settingsPage).toContain('auto_close_shift_at_day_end');
+    expect(settingsPage).toContain('إغلاق الشفت تلقائيًا عند نهاية اليوم المالي');
+    expect(settingsPage).toContain('إذا وُجدت طلبات، يبقى الشفت مفتوحًا');
+  });
+
   it('shows the resolved financial-day start and end on the printed report', () => {
     expect(dayReport).toContain('windowStart');
     expect(dayReport).toContain('windowEnd');
