@@ -195,9 +195,12 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     expect(first.success).toBe(true);
     const itemId = String(first.sent[0].order_item_id);
 
+    await client.query('SAVEPOINT before_invalid_sent_delete');
     await client.query(`SELECT set_config('app.approved_sent_item_void','1',true)`);
     await expect(client.query(`DELETE FROM public.order_items WHERE id=$1`, [itemId]))
       .rejects.toThrow(/SENT_ITEM_VOID_INCOMPLETE/);
+    await client.query('ROLLBACK TO SAVEPOINT before_invalid_sent_delete');
+    await client.query('RELEASE SAVEPOINT before_invalid_sent_delete');
 
     const restored = await client.query(
       `SELECT public._restore_kitchen_inventory_for_void($1,$2,1) AS r`,
