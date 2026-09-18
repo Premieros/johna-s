@@ -63,7 +63,7 @@ $function$;
 REVOKE ALL ON FUNCTION public._normalize_thermal_print_payload(jsonb)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public._normalize_thermal_print_payload(jsonb)
-  TO service_role, postgres;
+  TO authenticated, service_role, postgres;
 
 
 CREATE OR REPLACE FUNCTION public.normalize_cloud_thermal_print_job()
