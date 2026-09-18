@@ -60,7 +60,7 @@ const EXPECTED_FUNCTIONS = [
   'create_purchase_order', 'update_purchase_order_status', 'receive_purchase_order',
   'get_purchase_backorders', 'get_purchase_receipts', 'get_supplier_evaluation',
   'get_supplier_price_impact', 'get_raw_material_cost_overview', 'get_raw_material_cost_history',
-  'can_execute_cloud_print_kind',
+  'can_execute_cloud_print_kind', 'sync_kitchen_sent_quantity_after_void',
 ];
 
 function loadContract() {
@@ -135,6 +135,27 @@ async function main() {
   // Safety invariant: cloud queue execution is transport, not the originating
   // business action. A receipt-capable terminal must be able to drain already
   // authorized kitchen/bar jobs; otherwise durable jobs silently pile up.
+  let kitchenVoidInvariantOk = false;
+  let kitchenVoidInvariantDetail = '';
+  if (existingFns.has('sync_kitchen_sent_quantity_after_void')) {
+    const { rows } = await client.query(
+      `SELECT lower(pg_get_functiondef('public.sync_kitchen_sent_quantity_after_void()'::regprocedure)) AS definition`,
+    );
+    const def = rows[0]?.definition || '';
+    const alignsToCurrentQuantity =
+      def.includes('set sent_quantity = greatest(coalesce(v_current_quantity, 0), 0)')
+      && def.includes('from public.order_items oi')
+      && def.includes('where oi.id = new.order_item_id');
+    const legacyDoubleSubtract =
+      def.includes('sent_quantity - new.quantity')
+      || def.includes('sent_quantity = greatest(sent_quantity - new.quantity');
+    kitchenVoidInvariantOk = alignsToCurrentQuantity && !legacyDoubleSubtract;
+    if (!kitchenVoidInvariantOk) {
+      kitchenVoidInvariantDetail =
+        'sync_kitchen_sent_quantity_after_void must align sent_quantity to the current order-item quantity and must never subtract NEW.quantity a second time.';
+    }
+  }
+
   let cloudPrintTransportInvariantOk = false;
   let cloudPrintTransportInvariantDetail = '';
   if (existingFns.has('can_execute_cloud_print_kind')) {
@@ -170,6 +191,7 @@ async function main() {
   console.log(`Functions: ${EXPECTED_FUNCTIONS.length} expected, ${EXPECTED_FUNCTIONS.length - missingFns.length} present`);
   console.log(`Contract RPCs: ${contract.rpcs.length} expected, ${contract.rpcs.length - contractMissingRpcs.length} present`);
   console.log(`Contract tables: ${contract.tables.length} expected, ${contract.tables.length - contractMissingTables.length} present`);
+  console.log(`Kitchen void idempotency invariant: ${kitchenVoidInvariantOk ? 'OK' : 'FAILED'}`);
   console.log(`Cloud print transport invariant: ${cloudPrintTransportInvariantOk ? 'OK' : 'FAILED'}`);
 
   if (missingTables.length) {
@@ -189,6 +211,11 @@ async function main() {
     contractMissingRpcs.forEach((f) => console.error(`  - ${f}`));
   }
 
+  if (!kitchenVoidInvariantOk) {
+    console.error('\nKitchen void idempotency invariant failed:');
+    console.error(`  - ${kitchenVoidInvariantDetail || 'sync_kitchen_sent_quantity_after_void is missing or unsafe'}`);
+  }
+
   if (!cloudPrintTransportInvariantOk) {
     console.error('\nCloud print transport invariant failed:');
     console.error(`  - ${cloudPrintTransportInvariantDetail || 'can_execute_cloud_print_kind is missing or unsafe'}`);
@@ -203,6 +230,7 @@ async function main() {
     || missingFns.length
     || contractMissingTables.length
     || contractMissingRpcs.length
+    || !kitchenVoidInvariantOk
     || !cloudPrintTransportInvariantOk
   ) {
     process.exit(1);
