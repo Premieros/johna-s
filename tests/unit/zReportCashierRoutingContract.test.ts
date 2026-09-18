@@ -15,7 +15,7 @@ describe('Z-report cashier routing + tender detail contract', () => {
     expect(page).toContain('enqueueCloudReportPrint');
     expect(page).toContain('تم إرسال Z-Report إلى محطة طباعة الكاشير');
     expect(cloud).toContain("kind: 'kitchen' | 'receipt' | 'test' | 'report'");
-    expect(cloud).toContain("supabase.rpc('enqueue_cloud_report_print'");
+    expect(cloud).toContain('shiftsApi.enqueueReportPrint');
   });
 
   it('uses actual sale tender rows and renders each tender per invoice', () => {
@@ -25,7 +25,7 @@ describe('Z-report cashier routing + tender detail contract', () => {
 
     expect(migration).toContain('FROM public.sale_payments sp');
     expect(migration).toContain("'payments'");
-    expect(financials).toContain("supabase.rpc('get_shift_sale_tenders'");
+    expect(financials).toContain('shiftsApi.getSaleTenders');
     expect(financials).toContain('tenderBySale');
     expect(report).toContain('sale.payments.map');
     expect(report).toContain('الفواتير وطرق الدفع');
