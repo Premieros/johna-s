@@ -173,10 +173,7 @@ BEGIN
         WHERE uba.user_id=u.id AND uba.branch_id=v_order.branch_id
       )
     )
-    AND (
-      COALESCE(r.permissions,'[]'::jsonb) ? 'pos.view'
-      OR public.is_pos_admin(u.id)
-    )
+    AND COALESCE(r.permissions,'[]'::jsonb) ? 'pos.view'
   ORDER BY COALESCE(NULLIF(trim(u.full_name),''),NULLIF(trim(u.username),''),u.email);
 END;
 $function$;
