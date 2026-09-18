@@ -137,7 +137,8 @@ export function usePosOrder(input: UsePosOrderInput) {
         setActiveOrderNumber(order.order_number);
         setGuestCount(order.guest_count);
         setOrderNotes(order.notes || '');
-        if (order.table_id) {
+        const hasEffectiveItems = items.some((item) => Number(item.quantity || 0) > 0);
+        if (order.table_id && hasEffectiveItems) {
           supabase.from('dining_tables').select('status').eq('id', order.table_id).maybeSingle().then(({ data: tbl }) => {
             if (!cancelled && tbl && (tbl as { status: string }).status === 'vacant') {
               api.floorPlan.setTableStatus({ p_table_id: order.table_id as string, p_status: 'occupied' }).catch(() => {});
