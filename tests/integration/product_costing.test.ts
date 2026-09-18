@@ -170,6 +170,115 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(missing[0].r.error).toBe('PRODUCT_NOT_FOUND');
   });
 
+  it('costing uses latest purchase/count raw price and exposes dated history without changing inventory WAVG', async () => {
+    const purchaseId = randomUUID();
+    const countId = randomUUID();
+
+    await client.query(
+      `INSERT INTO public.purchases
+         (id, invoice_number, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status, approved_at)
+       VALUES ($1, 'RAW-COST-PO', $2, $3, 24, 0, 0, 24, 24, 'cash', 'completed', now() - interval '10 minutes')`,
+      [purchaseId, branchA, whId],
+    );
+    await client.query(
+      `INSERT INTO public.purchase_items
+         (purchase_id, raw_material_id, unit_name, quantity, unit_cost, total, created_at)
+       VALUES ($1, $2, 'g', 1, 24, 24, now() - interval '10 minutes')`,
+      [purchaseId, rmId],
+    );
+    await client.query(
+      `INSERT INTO public.inventory_ledger
+         (raw_material_id, branch_id, warehouse_id, quantity, unit_cost, total_cost, entry_type, reference_type, reference_id, reference_number, created_at)
+       VALUES ($1, $2, $3, 1, 24, 24, 'purchase', 'purchase', $4, 'RAW-COST-PO', now() - interval '10 minutes')`,
+      [rmId, branchA, whId, purchaseId],
+    );
+
+    const wavgBeforeCount = await client.query<{ cost: string }>(
+      `SELECT public._raw_wavg_cost($1, $2) AS cost`,
+      [rmId, branchA],
+    );
+    expect(Number(wavgBeforeCount.rows[0].cost)).toBe(20);
+
+    const purchaseCost = await client.query<{ cost: string }>(
+      `SELECT public._raw_cost_for_costing($1, $2) AS cost`,
+      [rmId, branchA],
+    );
+    expect(Number(purchaseCost.rows[0].cost)).toBe(24);
+
+    await client.query(
+      `INSERT INTO public.stock_counts
+         (id, branch_id, warehouse_id, status, count_type, count_number, approved_at, applied_at)
+       VALUES ($1, $2, $3, 'applied', 'cycle', 'RAW-COST-SC', now() - interval '1 minute', now())`,
+      [countId, branchA, whId],
+    );
+    await client.query(
+      `INSERT INTO public.stock_count_items
+         (stock_count_id, raw_material_id, system_quantity, counted_quantity, unit_cost, reason)
+       VALUES ($1, $2, 10, 10, 28, 'physical count price')`,
+      [countId, rmId],
+    );
+
+    const latestCost = await client.query<{ cost: string }>(
+      `SELECT public._raw_cost_for_costing($1, $2) AS cost`,
+      [rmId, branchA],
+    );
+    expect(Number(latestCost.rows[0].cost)).toBe(28);
+
+    const wavgAfterCount = await client.query<{ cost: string }>(
+      `SELECT public._raw_wavg_cost($1, $2) AS cost`,
+      [rmId, branchA],
+    );
+    expect(Number(wavgAfterCount.rows[0].cost)).toBe(20);
+
+    const overview = await asUser(managerId, async () =>
+      rows<{ raw_material_id: string; latest_cost: string; previous_cost: string; price_source: string; reference_number: string; event_count: string }>(
+        `SELECT raw_material_id, latest_cost, previous_cost, price_source, reference_number, event_count
+         FROM public.get_raw_material_cost_overview($1)
+         WHERE raw_material_id = $2`,
+        [branchA, rmId],
+      ),
+    );
+    expect(overview).toHaveLength(1);
+    expect(Number(overview[0].latest_cost)).toBe(28);
+    expect(Number(overview[0].previous_cost)).toBe(24);
+    expect(overview[0].price_source).toBe('stock_count');
+    expect(overview[0].reference_number).toBe('RAW-COST-SC');
+    expect(Number(overview[0].event_count)).toBe(2);
+
+    const history = await asUser(managerId, async () =>
+      rows<{ unit_cost: string; previous_cost: string | null; price_source: string; reference_number: string }>(
+        `SELECT unit_cost, previous_cost, price_source, reference_number
+         FROM public.get_raw_material_cost_history($1, $2, 100)`,
+        [rmId, branchA],
+      ),
+    );
+    expect(history).toHaveLength(2);
+    expect(Number(history[0].unit_cost)).toBe(28);
+    expect(Number(history[0].previous_cost)).toBe(24);
+    expect(history[0].price_source).toBe('stock_count');
+    expect(history[1].price_source).toBe('purchase');
+    expect(history[1].reference_number).toBe('RAW-COST-PO');
+
+    const detail = await asUser(managerId, async () =>
+      rows<{ r: { actual_cost: number; recipe_items: Array<{ unit_cost: number; line_cost: number; cost_source: string; cost_reference: string }> } }>(
+        `SELECT public.get_product_costing_detail($1, $2) AS r`,
+        [prodId, branchA],
+      ),
+    );
+    expect(Number(detail[0].r.actual_cost)).toBe(30.8);
+    expect(Number(detail[0].r.recipe_items[0].unit_cost)).toBe(28);
+    expect(Number(detail[0].r.recipe_items[0].line_cost)).toBe(30.8);
+    expect(detail[0].r.recipe_items[0].cost_source).toBe('stock_count');
+    expect(detail[0].r.recipe_items[0].cost_reference).toBe('RAW-COST-SC');
+
+    const branchBOverview = await asUser(managerBId, async () =>
+      rows<{ raw_material_id: string }>(
+        `SELECT raw_material_id FROM public.get_raw_material_cost_overview(NULL)`,
+      ),
+    );
+    expect(branchBOverview.some((row) => row.raw_material_id === rmId)).toBe(false);
+  });
+
   it('track_product_cost_history trigger records cost changes; get_cost_history returns them', async () => {
     await client.query(`UPDATE public.products SET cost_price = 45 WHERE id = $1`, [prodId]);
 
