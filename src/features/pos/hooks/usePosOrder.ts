@@ -198,7 +198,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
 
     void (async () => {
-      const preview = await loadSettlementPreview(true);
+      const preview = await loadSettlementPreview(false);
       if (!preview) return;
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
@@ -272,7 +272,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
     setOfflineCompleting(true);
     try {
-      const preview = settlementPreview || await loadSettlementPreview(true);
+      const preview = settlementPreview || await loadSettlementPreview(false);
       if (!preview) return false;
 
       const invoiceNumber = await nextInvoiceNumber();
