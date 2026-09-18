@@ -23,4 +23,15 @@ describe('compact POS action visibility', () => {
     expect(topBar).toContain("className=\"flex min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-muted");
     expect(topBar).toContain("{isAr ? 'طلب جديد' : 'New'}");
   });
+
+  it('exposes language/theme quick actions and permission-gated settings shortcuts', () => {
+    expect(topBar).toContain('data-testid="pos-language-action"');
+    expect(topBar).toContain("setLang(isAr ? 'en' : 'ar')");
+    expect(topBar).toContain('data-testid="pos-theme-action"');
+    expect(topBar).toContain('toggleTheme()');
+    expect(topBar).toContain("can('settings.manage')");
+    expect(topBar).toContain('?tab=business_day');
+    expect(topBar).toContain('?tab=appearance');
+    expect(topBar).toContain('?tab=language');
+  });
 });
