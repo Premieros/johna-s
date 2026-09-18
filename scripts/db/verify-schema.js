@@ -59,7 +59,7 @@ const EXPECTED_FUNCTIONS = [
   'record_supplier_quotation', 'select_supplier_quotation', 'get_rfq_comparison',
   'create_purchase_order', 'update_purchase_order_status', 'receive_purchase_order',
   'get_purchase_backorders', 'get_purchase_receipts', 'get_supplier_evaluation',
-  'get_supplier_price_impact',
+  'get_supplier_price_impact', 'get_raw_material_cost_overview', 'get_raw_material_cost_history',
 ];
 
 function loadContract() {
