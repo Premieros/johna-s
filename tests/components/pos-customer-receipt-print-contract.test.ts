@@ -35,9 +35,12 @@ describe('POS customer receipt print contract', () => {
     const hook = fs.readFileSync(path.join(root, 'src/features/pos/hooks/usePosOrderBase.ts'), 'utf8');
     expect(hook).toContain('if (cart.length > 0)');
     expect(hook).toContain('isOpenOrder: true');
-    expect(hook).toContain('buildReceiptHtml(openOrderReceipt, effSettings, lang, isAr, { authorize: false })');
+    expect(hook).toContain('buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr)');
+    expect(hook).toContain('payload: {');
+    expect(hook).toContain('text,');
+    expect(hook).not.toContain('payload: {\n            html,');
     expect(printing).toContain('options?: { authorize?: boolean }');
-    expect(printing).toContain('حساب مبدئي – غير مدفوع');
+    expect(printing).toContain('*** حساب مبدئي / OPEN CHECK ***');
   });
 
   it('keeps the existing single-print and manager-approved reprint authorization', () => {
