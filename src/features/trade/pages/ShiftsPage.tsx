@@ -22,6 +22,7 @@ import type { Shift, RpcResult } from '@/lib/types';
 import { buildThermalZReportHtml, buildA4ZReportHtml } from '../services/shiftClosingReport';
 import { fetchShiftClosingReportServer } from '../services/shiftClosingFinancials';
 import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '../services/dayClosingReport';
+import { enqueueCloudReportPrint } from '../../pos/services/cloudPrint';
 
 interface ShiftUserRow { id: string; full_name: string | null; email: string | null; }
 interface ActiveShiftPayload { open?: boolean; shift?: { id?: string; expected?: number }; }
@@ -210,10 +211,31 @@ export function ShiftsPage() {
     setPrintingId(shift.id);
     try {
       const summary = await fetchShiftClosingReportServer(shift.id);
-      const html = format === 'thermal'
-        ? buildThermalZReportHtml(summary, currency, lang)
-        : buildA4ZReportHtml(summary, currency, lang);
-      const w = window.open('', '_blank', format === 'thermal' ? 'width=380,height=600' : 'width=900,height=800');
+      if (format === 'thermal') {
+        const html = buildThermalZReportHtml(summary, currency, lang);
+        const queued = await enqueueCloudReportPrint({
+          branchId: shift.branch_id,
+          payload: { html, paperWidthMm: 80, copies: 1 },
+          idempotencyKey: `zreport:${shift.id}:${summary.closedAt || 'open'}:${Date.now()}`,
+        });
+        if (!queued.accepted) {
+          show(
+            isAr
+              ? `تعذر إرسال Z-Report لمحطة الكاشير: ${queued.error || 'PRINT_QUEUE_FAILED'}`
+              : `Could not queue Z-Report to cashier station: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
+            'error',
+          );
+          return;
+        }
+        show(
+          isAr ? 'تم إرسال Z-Report إلى محطة طباعة الكاشير' : 'Z-Report queued to the cashier print station',
+          'success',
+        );
+        return;
+      }
+
+      const html = buildA4ZReportHtml(summary, currency, lang);
+      const w = window.open('', '_blank', 'width=900,height=800');
       if (w) { w.document.write(html); w.document.close(); }
     } catch (err: unknown) {
       show(err instanceof Error ? err.message : 'Error generating report', 'error');
@@ -366,7 +388,7 @@ export function ShiftsPage() {
             </div>
             <div><span className="text-ui-muted">{isAr ? 'طريقة اليوم المالي:' : 'Business day mode:'}</span>{' '}
               <strong>{targetBusinessDaySettings?.business_day_mode === 'shift_span'
-                ? (isAr ? 'من أول شفت إلى آخر شفت' : 'First shift → last shift')
+                ? (isAr ? `من أول شفت بعد ${targetBusinessDaySettings?.business_day_start || '09:00'} إلى آخر شفت` : `First shift after ${targetBusinessDaySettings?.business_day_start || '09:00'} → last shift`)
                 : (isAr ? `وقت ثابت ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}` : `Fixed ${targetBusinessDaySettings?.business_day_start || '00:00'} → ${targetBusinessDaySettings?.business_day_end || '00:00'}`)}</strong>
             </div>
           </div>
