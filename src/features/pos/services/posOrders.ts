@@ -46,7 +46,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   const tables = (tRes.data as DiningTable[]) || [];
   const operatorLabels = (operatorRes.data as PosOrderOperatorLabel[] | null) || [];
   const operatorByOrder = new Map(operatorLabels.map((row) => [row.order_id, row]));
-  const orders = (((oRes.data as Order[]) || []).map((order) => {
+  let orders = (((oRes.data as Order[]) || []).map((order) => {
     const label = operatorByOrder.get(order.id);
     if (!label?.cashier_id) return order;
     return {
@@ -68,6 +68,15 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
     ]);
     orderItems = (iRes.data as OrderItem[]) || [];
     kitchenSends = (kRes.data as OrderKitchenSend[]) || [];
+
+    const effectiveOrderIds = new Set(
+      orderItems
+        .filter((item) => Number(item.quantity || 0) > 0)
+        .map((item) => item.order_id),
+    );
+    orders = orders.filter((order) => effectiveOrderIds.has(order.id));
+    orderItems = orderItems.filter((item) => effectiveOrderIds.has(item.order_id));
+    kitchenSends = kitchenSends.filter((send) => effectiveOrderIds.has(send.order_id));
   }
   return { orders, tables, orderItems, kitchenSends };
 }
