@@ -61,7 +61,6 @@ namespace PremierCleopatraPrintAgent
 
         private void OpenSettings()
         {
-            _worker.Stop();
             using (var form = new SetupForm(_api, _printer, _config))
             {
                 if (form.ShowDialog(this) == DialogResult.OK && form.SavedConfig != null)
@@ -70,7 +69,6 @@ namespace PremierCleopatraPrintAgent
                     _worker.UpdateConfig(_config);
                 }
             }
-            _worker.Start();
         }
 
         private void ShowAgent()
