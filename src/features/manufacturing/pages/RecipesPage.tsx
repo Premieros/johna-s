@@ -13,7 +13,6 @@ import { Input, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatCurrency, formatNumber, formatRawMaterialQuantity, measurementUnitLabel } from '@/lib/format';
-import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { Recipe, RecipeItem, RawMaterial, Product, Branch, RecipeItemInput, Unit } from '@/lib/types';
 
