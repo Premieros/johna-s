@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BadgeDollarSign, Boxes, Package, RefreshCw, Save } from 'lucide-react';
-import { supabase } from '@/api';
+import { costing, supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { Button } from '@/components/Button';
@@ -176,13 +176,19 @@ export function PricingPage() {
     if (!draft) return;
     setSavingId(row.id);
     const nextCost = safePrice(draft.default_cost);
-    const { error } = await supabase
-      .from('raw_materials')
-      .update({ default_cost: nextCost })
-      .eq('id', row.id)
-      .eq('branch_id', branchId);
+    const { data, error } = await costing.setRawMaterialPrice({
+      p_raw_material_id: row.id,
+      p_branch_id: branchId,
+      p_unit_cost: nextCost,
+      p_note: ar ? 'تسعير يدوي من شاشة التسعير' : 'Manual price from pricing workspace',
+    });
     if (error) {
       show(error.message, 'error');
+      setSavingId(null);
+      return;
+    }
+    if (!data?.success) {
+      show(data?.error || (ar ? 'تعذر حفظ سعر الخامة' : 'Could not save raw-material price'), 'error');
       setSavingId(null);
       return;
     }
@@ -293,8 +299,8 @@ export function PricingPage() {
       <DesignPageHeader
         title={ar ? 'التسعير' : 'Pricing'}
         subtitle={ar
-          ? `تعديل أسعار الخامات والمصنعات والمنتجات داخل ${branchName} بدون تغيير متوسط تكلفة المخزون المحسوب`
-          : `Manage raw-material, manufactured-item and product pricing for ${branchName} without changing calculated inventory average cost`}
+          ? `تسعير الخامات والمصنعات والمنتجات داخل ${branchName}. تسعير الخامة يدخل تاريخ مركز التكلفة ويصبح السعر المعتمد حتى حدث أحدث، بدون تغيير متوسط المخزون.`
+          : `Manage pricing for ${branchName}. Raw-material pricing enters Costing Center history and stays authoritative until a newer pricing, purchase, or stock-count event, without changing inventory average cost.`}
         actions={(
           <Button size="sm" variant="secondary" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -346,7 +352,7 @@ export function PricingPage() {
                   <th className="px-4 py-3 text-start">{ar ? 'الصنف' : 'Item'}</th>
                   <th className="px-4 py-3 text-start">{ar ? 'الكود' : 'Code'}</th>
                   {tab === 'raw' ? (
-                    <th className="px-4 py-3 text-end">{ar ? 'السعر المرجعي للخامة' : 'Reference raw cost'}</th>
+                    <th className="px-4 py-3 text-end">{ar ? 'سعر التسعير' : 'Pricing cost'}</th>
                   ) : (
                     <>
                       <th className="px-4 py-3 text-end">{ar ? 'التكلفة' : 'Cost'}</th>
@@ -433,8 +439,8 @@ export function PricingPage() {
 
         <p className="mt-3 text-xs text-ui-subtle">
           {ar
-            ? `ملاحظة: سعر الخامة هنا هو السعر المرجعي فقط. متوسط تكلفة المخزون الفعلي لا يتم تغييره من شاشة التسعير. مثال عرض: ${formatNumber(0, 2)}`
-            : `Note: raw-material price here is the reference cost only. Calculated inventory average cost is not changed from this page. Example: ${formatNumber(0, 2)}`}
+            ? `ملاحظة: حفظ سعر الخامة يسجل حدث «تسعير» في تاريخ مركز التكلفة ويصبح آخر سعر معتمد حتى شراء أو جرد أو تسعير أحدث. كمية المخزون ومتوسط التكلفة الفعلي لا يتغيران. مثال عرض: ${formatNumber(0, 2)}`
+            : `Note: saving a raw-material price records a Pricing event in Costing Center history and remains the latest costing price until a newer purchase, stock count, or pricing event. Inventory quantity and calculated average cost are unchanged. Example: ${formatNumber(0, 2)}`}
         </p>
       </DesignPanel>
     </DesignSurface>
