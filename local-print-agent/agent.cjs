@@ -142,8 +142,7 @@ async function listPrinters() {
 }
 
 async function ensureSpoolerReady(printerName) {
-  const script = "$p=$args[0];$svc=Get-Service -Name Spooler -ErrorAction Stop;if($svc.Status -ne 'Running'){throw 'PRINT_SPOOLER_NOT_RUNNING'};$printer=Get-Printer -Name $p -ErrorAction Stop;if($printer.PrinterStatus -eq 'Offline'){throw 'PRINTER_OFFLINE'}";
-  await ps(script, [printerName]);
+  await psFile(PRINTER_PREFLIGHT_SCRIPT_PATH, [printerName]);
 }
 
 async function ensureSpoolerReadyWithRetry(printerName) {
@@ -162,6 +161,7 @@ async function ensureSpoolerReadyWithRetry(printerName) {
 }
 
 const ESC_POS_RASTER_SCRIPT_PATH = path.join(__dirname, 'print-escpos-raster.ps1');
+const PRINTER_PREFLIGHT_SCRIPT_PATH = path.join(__dirname, 'printer-preflight.ps1');
 
 async function submitTextToSpooler(printerName, text, paperWidthMm = 80) {
   const tmp = path.join(os.tmpdir(), `johns-ticket-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
@@ -353,7 +353,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
     if (req.method === 'GET' && url.pathname === '/') return html(res, configPage());
-    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 5, transport: 'escpos-raw-raster', queue: queueSnapshot() });
+    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 6, transport: 'escpos-raw-raster', queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/queue') return json(res, 200, { queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/printers') return json(res, 200, { printers: await listPrinters() });
     if (req.method === 'GET' && url.pathname === '/config') return json(res, 200, readConfig());
