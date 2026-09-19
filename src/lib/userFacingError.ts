@@ -224,7 +224,8 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
       : `You cannot assign this role because it contains a permission you do not have: ${permissionLabel(permission, lang)} (${permission}). Ask for that permission or choose a role within your permissions.`;
   }
 
-  const requiredPermission = text.match(/PERMISSION_DENIED:\s*([a-z0-9_.-]+)/i)\n    || text.match(/permission\s+([a-z0-9_.-]+)\s+required/i);
+  const requiredPermission = text.match(/PERMISSION_DENIED:\s*([a-z0-9_.-]+)/i)
+    || text.match(/permission\s+([a-z0-9_.-]+)\s+required/i);
   if (requiredPermission && requiredPermission[1].includes('.')) {
     const permission = requiredPermission[1];
     return lang === 'ar'
