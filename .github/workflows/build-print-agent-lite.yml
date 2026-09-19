@@ -65,18 +65,19 @@ jobs:
           Copy-Item 'local-print-agent/start.cmd' $stage
           Copy-Item 'local-print-agent/install-startup.cmd' $stage
           Copy-Item 'local-print-agent/README.md' $stage
+          Copy-Item 'local-print-agent/cleopatra-stations.json' $stage
           @'
           CLEOPATRA ONLY
           This package is for the Cleopatra Windows print-agent computer only.
           Do not install or copy it to the Smouha branch computer.
           Transport: escpos-raw-raster
-          Agent health version: 4
+          Agent health version: 5
           '@ | Set-Content -Path "$stage/CLEOPATRA_ONLY.txt" -Encoding UTF8
-          Compress-Archive -Path "$stage/*" -DestinationPath 'Cleopatra-Print-Agent-v4-Windows.zip' -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath 'Cleopatra-Print-Agent-v5-Windows.zip' -Force
       - name: Upload Cleopatra local agent
         uses: actions/upload-artifact@v4
         with:
-          name: cleopatra-print-agent-v4-windows
-          path: Cleopatra-Print-Agent-v4-Windows.zip
+          name: cleopatra-print-agent-v5-windows
+          path: Cleopatra-Print-Agent-v5-Windows.zip
           if-no-files-found: error
           retention-days: 14
