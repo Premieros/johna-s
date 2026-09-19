@@ -1,29 +1,26 @@
-# Johns Local Print Service (Windows)
+# Johns Print Service — Cleopatra v6
 
-This service lets the browser POS route kitchen tickets to different Windows printers without showing the browser print dialog.
+هذه الحزمة مخصصة **لجهاز فرع كليوباترا فقط**.
 
-## What it does
+## المحطات الفعلية
+- `kit` — مطبخ
+- `بار` — بار
+- `كاش` — كاش
 
-- Runs only on `127.0.0.1:17654`.
-- Reads printers installed in Windows.
-- Stores printer names locally in `printer-config.json` on this terminal only.
-- Routes each KDS station code to a Windows printer.
-- The POS keeps the normal browser print as a fallback if the local service is unavailable or a station is not configured.
+## التشغيل
+1. تأكد أن الطابعات مثبتة في Windows.
+2. يلزم وجود Node.js LTS.
+3. شغّل `install-startup.cmd`.
+4. افتح `http://127.0.0.1:17654/` إن لم تُفتح الصفحة تلقائيًا.
+5. اختر الطابعة لكل محطة واضغط **حفظ التعيينات**.
+6. استخدم **اختبار هذه المحطة**.
 
-## Branch setup
+## معالجة أسماء الطابعات
+الإصدار v6 لا يمرر اسم الطابعة عبر `PowerShell -Command`.
+الأسماء التي تحتوي مسافات أو تبدأ بأرقام مثل `80mm Series...` تمر كـ arguments آمنة عبر ملفات PowerShell مستقلة.
 
-1. Install both thermal printers in Windows and confirm a Windows test page prints from each one.
-2. Install Node.js LTS on the cashier PC if it is not already installed.
-3. Run `start.cmd` from this folder.
-4. The configuration page opens at `http://127.0.0.1:17654/`.
-5. Map stations for the current Johns production data:
-   - `drinks` -> the barista/drinks printer.
-   - `main` -> the kitchen/food printer.
-6. Use **Test Print** on both mappings before the first real order.
-7. In Johns, drink categories must be assigned to the `drinks` kitchen station; food categories stay on `main`. The server, not the browser, decides each item's station.
+## الطباعة العربية
+الإيصال يتحول إلى صورة Raster ثم يرسل كـ RAW ESC/POS لتجنب مشاكل Code Page/Unicode.
 
-## Important
-
-Do not store physical Windows printer names in Supabase. They belong to this PC and can differ between terminals.
-
-The print agent must be running while the browser POS is open. If it is not running, Johns falls back to the existing browser kitchen print flow rather than silently dropping the ticket.
+## مهم
+لا تستخدم هذه الحزمة على جهاز فرع سموحة.
