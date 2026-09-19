@@ -21,7 +21,15 @@ export interface UseActiveOrdersResult {
 export function useActiveOrders(branchId: string): UseActiveOrdersResult {
   const { data, loading, error } = usePosRealtime(branchId);
 
-  const orders = data.orders;
+  // Empty open/held order shells are explicitly non-operational. Keep them out
+  // of every POS active-order surface so a vacant table can immediately start
+  // a real order even if a stale empty shell still exists server-side.
+  const orders = useMemo(
+    () => data.orders.filter((order) =>
+      (itemsByOrder[order.id] || []).some((item) => Number(item.quantity || 0) > 0),
+    ),
+    [data.orders, itemsByOrder],
+  );
   const counts = useMemo(() => countActiveOrders(orders), [orders]);
   const ordersByTable = useMemo(() => {
     const map: Record<string, Order[]> = {};
