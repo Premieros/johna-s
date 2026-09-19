@@ -68,8 +68,8 @@ export function VoidItemModal({
             </p>
             <p className="text-rose-600">
               {isAr
-                ? 'إلغاء الصنف يغيّر حالة الطلب وKDS فقط ولا يضيف أي كمية للمخزون؛ المخزون يُخصم مرة واحدة عند إتمام البيع. قد يتطلب الإلغاء موافقة المدير حسب صلاحيات المستخدم.'
-                : 'Voiding changes the order/KDS state only and does not add inventory. Stock is deducted once at sale completion. Manager approval may be required.'}
+                ? 'سيتم تنفيذ الإلغاء عبر مسار Void المعتمد مع تسجيل السبب وتحديث الطلب والمخزون حسب الكمية المرسلة. من يملك صلاحية مراجعة الموافقات ينفذ الإلغاء مباشرة، وإلا يُرسل طلب موافقة.'
+                : 'The item will be voided through the controlled Void flow, with the reason audited and order/inventory updated for the sent quantity. Users with approval-review permission execute directly; otherwise an approval request is created.'}
             </p>
           </div>
         </div>

@@ -318,8 +318,16 @@ export function CurrentOrderPanel({
                       {item.item_note ? <p className="mt-0.5 truncate ps-5 text-[10px] font-bold text-ui-muted">📝 {item.item_note}</p> : null}
                     </button>
                     {perms.canEditOrder && (
-                      <button type="button" onClick={() => onConfigureItem?.(item)} className="shrink-0 rounded-lg border border-ui-border px-2 py-1 text-[10px] font-bold text-ui-muted hover:border-ui-primary hover:bg-ui-surface hover:text-ui-text">
-                        {isAr ? 'تعديل' : 'Edit'}
+                      <button
+                        type="button"
+                        onClick={() => onConfigureItem?.(item)}
+                        disabled={sent.sentQty > 0}
+                        title={sent.sentQty > 0
+                          ? (isAr ? 'الصنف مُرسل للمطبخ؛ استخدم Void للتقليل أو التغيير' : 'Sent item: use Void to reduce or change it')
+                          : undefined}
+                        className="shrink-0 rounded-lg border border-ui-border px-2 py-1 text-[10px] font-bold text-ui-muted hover:border-ui-primary hover:bg-ui-surface hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {sent.sentQty > 0 ? (isAr ? 'مرسل' : 'Sent') : (isAr ? 'تعديل' : 'Edit')}
                       </button>
                     )}
                     <span className="shrink-0 text-xs font-black text-ui-accent">{formatCurrency(item.quantity * item.unit_price - (item.discount_amount || 0), currency, lang)}</span>
