@@ -53,7 +53,7 @@ namespace PremierPrintAgentLite
     getPrinters: () => call('getPrinters'),
     printSilent: (o) => call('printSilent', o),
     kickDrawer: (p) => call('kickDrawer', {printerName:p}),
-    getSystemInfo: () => Promise.resolve({isElectron:true,platform:'win32',hostname:'Premier-Lite',version:'1.0.1'})
+    getSystemInfo: () => Promise.resolve({isElectron:true,platform:'win32',hostname:'Premier-Lite',version:'1.0.2'})
   };
 })();");
             _web.Source = new Uri(AppUrl);
@@ -77,7 +77,8 @@ namespace PremierPrintAgentLite
                     var text = args.TryGetProperty("text", out var t) ? t.GetString() : "";
                     var html = args.TryGetProperty("html", out var h) ? h.GetString() : "";
                     var copies = args.TryGetProperty("copies", out var c) && c.TryGetInt32(out var n) ? n : 1;
-                    result = await _bridge.PrintAsync(printer, text, html, copies);
+                    var paperWidthMm = args.TryGetProperty("paperWidthMm", out var w) && w.TryGetDouble(out var width) ? (int)Math.Round(width) : 80;
+                    result = await _bridge.PrintAsync(printer, text, html, copies, paperWidthMm);
                 }
                 else if (method == "kickDrawer")
                 {
