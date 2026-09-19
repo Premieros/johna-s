@@ -159,22 +159,15 @@ export function RolesTab() {
   const canGrantPermission = (permission: Permission): boolean =>
     isPlatformAdmin || can(permission);
 
-  const unavailablePermissions = useMemo(
-    () =>
-      isPlatformAdmin
-        ? []
-        : currentPermissions.filter((permission) => !canGrantPermission(permission)),
-    [currentPermissions, isPlatformAdmin, can],
-  );
+  const unavailablePermissions = isPlatformAdmin
+    ? []
+    : currentPermissions.filter((permission) => !canGrantPermission(permission));
 
-  const dependencyErrors = useMemo(
-    () => missingPermissionDependencies(currentPermissions),
-    [currentPermissions],
-  );
+  const dependencyErrors = missingPermissionDependencies(currentPermissions);
 
-  const hasUnsavedChanges = useMemo(
-    () => !samePermissions(currentPermissions, persistedPermissions),
-    [currentPermissions, persistedPermissions],
+  const hasUnsavedChanges = !samePermissions(
+    currentPermissions,
+    persistedPermissions,
   );
 
   const setDraft = (role: string, permissions: Permission[]) => {
