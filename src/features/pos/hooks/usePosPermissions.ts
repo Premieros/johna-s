@@ -15,7 +15,6 @@ export interface PosPermissions {
   canPrintKitchen: boolean;
   canPay: boolean;
   canCancelOrder: boolean;
-  canRefund: boolean;
   canTransferOrder: boolean;
   canSplitOrder: boolean;
   canOpenShift: boolean;
@@ -46,7 +45,6 @@ export function usePosPermissions(): PosPermissions {
     canPrintKitchen: can('pos.print_kitchen'),
     canPay: can('pos.payment.take'),
     canCancelOrder: can('pos.cancel_order'),
-    canRefund: can('pos.refund'),
     canTransferOrder: can('pos.order.transfer'),
     canSplitOrder: can('pos.order.split'),
     canOpenShift: can('shifts.open'),
