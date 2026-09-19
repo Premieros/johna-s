@@ -18,10 +18,10 @@ if errorlevel 1 (
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0restart-agent.ps1"
 if errorlevel 1 (
-  echo Failed to start the corrected print agent.
+  echo Failed to start the ESC/POS raster print agent.
   pause
   exit /b 1
 )
 
-echo Johns Print Service v3 is installed and verified.
+echo Johns Print Service v4 is installed and verified.
 pause
