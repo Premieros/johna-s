@@ -41,16 +41,22 @@ describe('legacy print agent spool reliability contract', () => {
     const drawerHandlerStart = agent.indexOf("if (req.method === 'POST' && url.pathname === '/drawer')", printHandlerStart);
     const printHandler = agent.slice(printHandlerStart, drawerHandlerStart);
 
-    expect(agent).toContain('await ps(UNICODE_PRINT_SCRIPT, [printerName, tmp]);');
+    expect(agent).toContain('await psFile(UNICODE_PRINT_SCRIPT_PATH, [printerName, tmp]);');
     expect(printHandler).toContain('const result = await printText(printer, text)');
     expect(printHandler).toContain('acceptedBySpooler: Boolean(result?.acceptedBySpooler)');
     expect(printHandler.indexOf('const result = await printText(printer, text)')).toBeLessThan(
       printHandler.indexOf('success: true'),
     );
     expect(agent).toContain('\\u0600-\\u06FF');
-    expect(agent).toContain('JohnsUnicodePrinter');
-    expect(agent).toContain('TextRenderingHint.AntiAliasGridFit');
-    expect(agent).toContain('printerGraphics.DrawImage(bitmap, destination)');
+    expect(agent).toContain("path.join(__dirname, 'print-unicode.ps1')");
+    expect(agent).toContain('await psFile(UNICODE_PRINT_SCRIPT_PATH, [printerName, tmp])');
     expect(agent).not.toContain('Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p');
+
+    const helper = read('local-print-agent/print-unicode.ps1');
+    expect(helper).toContain('public static class JohnsUnicodePrinter');
+    expect(helper).toContain('TextRenderingHint.AntiAliasGridFit');
+    expect(helper).toContain('printerGraphics.DrawImage(bitmap, destination)');
+    expect(helper).toContain('new UTF8Encoding(false, true)');
+    expect(helper).toContain('StringFormatFlags.DirectionRightToLeft');
   });
 });
