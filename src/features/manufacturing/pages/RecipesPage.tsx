@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, ChefHat, Calculator, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChefHat, Calculator, Package, Factory } from 'lucide-react';
 import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -23,6 +23,24 @@ interface ItemForm {
   wastage_percent: number;
 }
 
+interface ManufacturedComponentForm {
+  unit_id: string;
+  quantity: number;
+}
+
+interface ManufacturedUnitOption {
+  id: string;
+  name: string;
+  branch_id: string | null;
+  cost_price: number | null;
+}
+
+interface ManufacturedLinkRow {
+  unit_id: string;
+  quantity: number | string | null;
+  unit?: { id?: string; name?: string; unit_type?: string; branch_id?: string | null; cost_price?: number | null } | null;
+}
+
 interface RecipeMutationResult {
   success?: boolean;
   error?: string;
@@ -30,6 +48,7 @@ interface RecipeMutationResult {
 }
 
 const EMPTY_ITEM: ItemForm = { raw_material_id: '', quantity: 1, wastage_percent: 0 };
+const EMPTY_MANUFACTURED_COMPONENT: ManufacturedComponentForm = { unit_id: '', quantity: 1 };
 
 export function RecipesPage() {
   const { t, lang } = useLanguage();
@@ -52,12 +71,14 @@ export function RecipesPage() {
   const [materialCosts, setMaterialCosts] = useState<Record<string, number>>({});
   const [branches, setBranches] = useState<Branch[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [manufacturedUnits, setManufacturedUnits] = useState<ManufacturedUnitOption[]>([]);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Recipe | null>(null);
   const [form, setForm] = useState({ product_id: '', branch_id: '', name: '', yield_quantity: 1, notes: '', is_active: true });
   const [items, setItems] = useState<ItemForm[]>([{ ...EMPTY_ITEM }]);
+  const [manufacturedComponents, setManufacturedComponents] = useState<ManufacturedComponentForm[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const loadMeta = useCallback(async () => {
@@ -85,19 +106,32 @@ export function RecipesPage() {
   }, [branchFilter]);
 
   const loadMaterialsForBranch = useCallback(async (branchId: string) => {
-    if (!branchId) { setMaterials([]); setMaterialCosts({}); return; }
-    const [materialsRes, inventoryRes] = await Promise.all([
-      supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
-      supabase.from('raw_material_inventory').select('raw_material_id,avg_cost').eq('branch_id', branchId),
-    ]);
-    if (materialsRes.error) {
-      setMetaError(materialsRes.error.message);
+    if (!branchId) {
       setMaterials([]);
       setMaterialCosts({});
+      setManufacturedUnits([]);
+      return;
+    }
+    const [materialsRes, inventoryRes, manufacturedRes] = await Promise.all([
+      supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
+      supabase.from('raw_material_inventory').select('raw_material_id,avg_cost').eq('branch_id', branchId),
+      supabase.from('inventory_units')
+        .select('id,name,branch_id,cost_price')
+        .eq('is_active', true)
+        .eq('unit_type', 'manufactured')
+        .eq('branch_id', branchId)
+        .order('name'),
+    ]);
+    if (materialsRes.error || manufacturedRes.error) {
+      setMetaError(materialsRes.error?.message || manufacturedRes.error?.message || 'Failed to load recipe components');
+      setMaterials([]);
+      setMaterialCosts({});
+      setManufacturedUnits([]);
       return;
     }
     const rows = (materialsRes.data as RawMaterial[]) || [];
     setMaterials(rows);
+    setManufacturedUnits((manufacturedRes.data as ManufacturedUnitOption[]) || []);
     const nextCosts: Record<string, number> = {};
     for (const row of (inventoryRes.data || []) as { raw_material_id: string; avg_cost: number }[]) {
       if (Number(row.avg_cost) > 0) nextCosts[row.raw_material_id] = Number(row.avg_cost);
@@ -131,27 +165,53 @@ export function RecipesPage() {
     const branchId = branchFilter || user?.branch_id || branches[0]?.id || '';
     setForm({ product_id: '', branch_id: branchId, name: '', yield_quantity: 1, notes: '', is_active: true });
     setItems([{ ...EMPTY_ITEM }]);
+    setManufacturedComponents([]);
     setModalOpen(true);
   };
 
   const openEdit = async (rc: Recipe) => {
-    const { data, error: itemError } = await supabase.from('recipe_items').select('*').eq('recipe_id', rc.id).order('created_at');
-    if (itemError) { show(itemError.message, 'error'); return; }
+    const [itemsResult, manufacturedResult] = await Promise.all([
+      supabase.from('recipe_items').select('*').eq('recipe_id', rc.id).order('created_at'),
+      supabase.from('product_unit_links')
+        .select('unit_id,quantity,unit:inventory_units!inner(id,name,unit_type,branch_id,cost_price)')
+        .eq('product_id', rc.product_id)
+        .eq('unit.unit_type', 'manufactured')
+        .eq('unit.branch_id', rc.branch_id),
+    ]);
+    if (itemsResult.error || manufacturedResult.error) {
+      show(itemsResult.error?.message || manufacturedResult.error?.message || t('error'), 'error');
+      return;
+    }
     setEditing(rc);
-    setForm({ product_id: rc.product_id, branch_id: rc.branch_id, name: rc.name || '', yield_quantity: Number(rc.yield_quantity) || 1, notes: rc.notes || '', is_active: rc.is_active });
-    const fetched = ((data as RecipeItem[]) || []).map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) }));
+    const yieldQty = Number(rc.yield_quantity) || 1;
+    setForm({ product_id: rc.product_id, branch_id: rc.branch_id, name: rc.name || '', yield_quantity: yieldQty, notes: rc.notes || '', is_active: rc.is_active });
+    const fetched = ((itemsResult.data as RecipeItem[]) || []).map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) }));
     setItems(fetched.length ? fetched : [{ ...EMPTY_ITEM }]);
+    const manufacturedRows = (manufacturedResult.data || []) as unknown as ManufacturedLinkRow[];
+    setManufacturedComponents(manufacturedRows
+      .filter((row) => row.unit?.unit_type === 'manufactured')
+      .map((row) => ({ unit_id: row.unit_id, quantity: Number(row.quantity || 0) * yieldQty }))
+      .filter((row) => row.quantity > 0));
     setModalOpen(true);
   };
 
   const addLine = () => setItems((current) => [...current, { ...EMPTY_ITEM }]);
   const updateLine = (index: number, field: keyof ItemForm, value: string | number) => setItems((current) => current.map((item, i) => i === index ? { ...item, [field]: value } : item));
   const removeLine = (index: number) => setItems((current) => current.filter((_, i) => i !== index));
+  const addManufacturedLine = () => setManufacturedComponents((current) => [...current, { ...EMPTY_MANUFACTURED_COMPONENT }]);
+  const updateManufacturedLine = (index: number, field: keyof ManufacturedComponentForm, value: string | number) =>
+    setManufacturedComponents((current) => current.map((item, i) => i === index ? { ...item, [field]: value } : item));
+  const removeManufacturedLine = (index: number) => setManufacturedComponents((current) => current.filter((_, i) => i !== index));
 
   const save = async () => {
     if (!form.product_id || !form.branch_id) { show(t('required'), 'error'); return; }
     const validItems = items.filter((it) => it.raw_material_id && Number(it.quantity) > 0);
-    if (validItems.length === 0) { show(t('required') + ': ' + t('recipeItems'), 'error'); return; }
+    const validManufactured = manufacturedComponents.filter((it) => it.unit_id && Number(it.quantity) > 0);
+    if (validItems.length === 0 && validManufactured.length === 0) { show(t('required') + ': ' + t('recipeItems'), 'error'); return; }
+    if (editing && validItems.length === 0) {
+      show(isAr ? 'الوصفة المعدلة يجب أن تحتوي خامة واحدة على الأقل حاليًا؛ يمكن إضافة التصنيعات بجانب الخامات.' : 'Edited recipes currently require at least one raw material; manufactured components can be added alongside raw materials.', 'error');
+      return;
+    }
 
     const payload = { product_id: form.product_id, branch_id: form.branch_id, name: form.name.trim() || null, yield_quantity: Number(form.yield_quantity) || 1, notes: form.notes.trim() || null, is_active: form.is_active };
     const itemRows: RecipeItemInput[] = validItems.map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) || 0 }));
@@ -180,6 +240,16 @@ export function RecipesPage() {
       await logAudit('create', 'recipes', recipeId);
     }
 
+    const { data: manufacturedData, error: manufacturedError } = await supabase.rpc('set_recipe_manufactured_components', {
+      p_recipe_id: recipeId,
+      p_components: validManufactured.map((item) => ({ unit_id: item.unit_id, quantity: Number(item.quantity) })),
+    });
+    const manufacturedResult = manufacturedData as RecipeMutationResult | null;
+    if (manufacturedError || !manufacturedResult?.success) {
+      show(manufacturedError?.message || manufacturedResult?.detail || manufacturedResult?.error || t('error'), 'error');
+      return;
+    }
+
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadRecipes();
@@ -201,14 +271,20 @@ export function RecipesPage() {
       const unitCost = Number(materialCosts[item.raw_material_id] || 0);
       return sum + unitCost * Number(item.quantity) * (1 + Number(item.wastage_percent || 0) / 100);
     }, 0);
+    const manufacturedCost = manufacturedComponents.reduce((sum, item) => {
+      if (!item.unit_id || !Number(item.quantity)) return sum;
+      const unit = manufacturedUnits.find((row) => row.id === item.unit_id);
+      return sum + Number(unit?.cost_price || 0) * Number(item.quantity);
+    }, 0);
+    const totalComponentCost = rawCost + manufacturedCost;
     const yieldQty = Math.max(1, Number(form.yield_quantity || 1));
-    const costPerUnit = rawCost / yieldQty;
+    const costPerUnit = totalComponentCost / yieldQty;
     const selectedProduct = products.find((product) => product.id === form.product_id);
     const sellPrice = Number(selectedProduct?.sale_price || 0);
     const foodCostRatio = sellPrice > 0 ? (costPerUnit / sellPrice) * 100 : 0;
     const margin = sellPrice > 0 ? ((sellPrice - costPerUnit) / sellPrice) * 100 : 0;
-    return { rawCost, costPerUnit, sellPrice, foodCostRatio, margin };
-  }, [form.product_id, form.yield_quantity, items, materialCosts, products]);
+    return { rawCost: totalComponentCost, costPerUnit, sellPrice, foodCostRatio, margin };
+  }, [form.product_id, form.yield_quantity, items, manufacturedComponents, manufacturedUnits, materialCosts, products]);
 
   const columns: Column<Recipe>[] = [
     { key: 'product', header: t('product'), render: (rc) => <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center"><ChefHat className="w-4 h-4 text-purple-600" /></div><div><p className="font-medium text-ui-text">{rc.product?.name || '-'}</p>{rc.name && <p className="text-xs text-ui-subtle">{rc.name}</p>}</div></div> },
@@ -276,6 +352,43 @@ export function RecipesPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-ui-border bg-ui-page-alt/40 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Factory className="h-4 w-4 text-ui-primary" />
+                <div>
+                  <p className="text-sm font-bold text-ui-text">{isAr ? 'التصنيعات داخل الوصفة' : 'Manufactured components'}</p>
+                  <p className="text-xs text-ui-subtle">{isAr ? 'تُخصم من مخزون التصنيع عبر مسار POS الحالي بدون تغيير منطق الإرسال.' : 'Consumed through the existing POS manufactured-unit inventory path without changing send logic.'}</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={addManufacturedLine} disabled={manufacturedUnits.length === 0}>
+                <Plus className="w-4 h-4" /> {isAr ? 'إضافة تصنيع' : 'Add manufactured'}
+              </Button>
+            </div>
+            {manufacturedUnits.length === 0 && form.branch_id ? (
+              <p className="rounded-lg bg-ui-surface p-3 text-sm text-ui-muted">{isAr ? 'لا توجد تصنيعات نشطة في هذا الفرع.' : 'No active manufactured items in this branch.'}</p>
+            ) : null}
+            <div className="space-y-2">
+              {manufacturedComponents.map((item, index) => (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_40px] gap-2 items-end">
+                  <Select value={item.unit_id} onChange={(e) => updateManufacturedLine(index, 'unit_id', e.target.value)}>
+                    <option value="" disabled>{isAr ? 'اختر تصنيعًا' : 'Select manufactured item'}</option>
+                    {manufacturedUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+                  </Select>
+                  <Input
+                    label={isAr ? 'الكمية في دفعة الوصفة' : 'Quantity per recipe batch'}
+                    type="number"
+                    min="0.0001"
+                    step="0.0001"
+                    value={item.quantity}
+                    onChange={(e) => updateManufacturedLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                  />
+                  <button onClick={() => removeManufacturedLine(index)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
             </div>
           </div>
 
