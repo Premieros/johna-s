@@ -53,6 +53,17 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
     ids = await seedRlsFixture(client);
     impersonationAvailable = await canImpersonate(client);
 
+    // This lifecycle explicitly tests the refund-request path. Permission-First
+    // requires the initiator capability to be granted explicitly; the cashier
+    // must still NOT receive refunds.approve, so manager approval remains required.
+    await client.query(
+      `UPDATE public.roles
+          SET permissions = COALESCE(permissions, '[]'::jsonb)
+            || '["sales.refund.create"]'::jsonb
+        WHERE role = 'cashier'
+          AND NOT COALESCE(permissions, '[]'::jsonb) ? 'sales.refund.create'`,
+    );
+
     // The shared RLS fixture intentionally carries an open order only for policy probes.
     // Mark that unrelated probe settled so the lifecycle test exercises its own order.
     await client.query(
