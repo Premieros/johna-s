@@ -59,11 +59,12 @@ export function getCloudPrintAgentId(): string {
   return id;
 }
 
-export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; items: KitchenSendItem[]; context: LocalKitchenPrintContext; paperWidthMm?: number }) {
+export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; items: KitchenSendItem[]; context: LocalKitchenPrintContext; paperWidthMm?: number; idempotencyNamespace?: string }) {
   const branchId = safeText(params.branchId);
   if (!branchId || params.items.length === 0 || (typeof navigator !== 'undefined' && !navigator.onLine)) return { accepted: false, queuedStations: [], failedStations: [] };
   const entries = Object.entries(groupKitchenItemsByStation(params.items));
   if (!entries.length) return { accepted: false, queuedStations: [], failedStations: [] };
+  const idempotencyNamespace = safeText(params.idempotencyNamespace) || 'kitchen';
   const results = await Promise.all(entries.map(async ([station, stationItems]) => {
     const deltaIdentities = stationItems
       .map((item) => {
@@ -80,7 +81,7 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
     const keySeed = deltaIdentities.length === stationItems.length
       ? deltaIdentities.join(',')
       : `${safeText(params.context.orderNumber)}:${fallbackIdentities.join(',')}`;
-    const idempotencyKey = `kitchen:${station}:${keySeed}`;
+    const idempotencyKey = `${idempotencyNamespace}:${station}:${keySeed}`;
     const payload = { text: buildStationTicketText(station, stationItems, params.context), paperWidthMm: Number(params.paperWidthMm || 80), copies: 1 };
 
     let lastError = '';
