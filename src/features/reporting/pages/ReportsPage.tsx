@@ -6,6 +6,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { formatCurrency, formatDate, todayISO } from '@/lib/format';
+import { reportDateRangeUtc } from '@/lib/businessTime';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
 import { useBranchFilter } from '@/lib/useBranchFilter';
@@ -212,11 +213,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   async function loadReport() {
     setLoading(true);
     try {
-      const fromTs = `${from}T00:00:00`;
-      const toTs = `${to}T23:59:59`;
+      const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(from, to);
 
       if (reportType === 'sales') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name)').gte('created_at', fromTs).lte('created_at', toTs).order('created_at', { ascending: false }).limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
         const { data: sales } = await q;
@@ -235,7 +235,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData((sales || []).slice(0, 10).map((sale: Record<string, unknown>) => ({ name: String(sale.invoice_number), value: netSaleAmount(sale) })));
         setSummary({ total: (sales || []).reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: (sales || []).length });
       } else if (reportType === 'purchases') {
-        let q = supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount, status, created_at, supplier:suppliers(name)').gte('created_at', fromTs).lte('created_at', toTs).order('created_at', { ascending: false }).limit(5000);
+        let q = supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount, status, created_at, supplier:suppliers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyPurchaseFilters);
         const { data: purchases } = await q;
@@ -306,7 +306,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'الكمية' : 'Quantity'] || 0), 0), count: rows.length });
       } else if (reportType === 'sales_by_payment') {
         const { payment_method: requestedMethod, ...saleFilters } = filters;
-        let q = supabase.from('sales').select('id, branch_id, payment_method, total, paid_amount, refunded_amount, status').gte('created_at', fromTs).lte('created_at', toTs).limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, payment_method, total, paid_amount, refunded_amount, status').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, saleFilters, applySalesFilters);
         const { data: sales } = await q;
@@ -331,7 +331,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(methodRows.map((row) => ({ name: `${branchNameById(row.branchId)} — ${methodLabels[row.method] || row.method}`, value: row.total })));
         setSummary({ total: methodRows.reduce((sum, row) => sum + row.total, 0), count: methodRows.reduce((sum, row) => sum + row.count, 0) });
       } else if (reportType === 'sales_by_employee') {
-        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lte('created_at', toTs).limit(5000);
+        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
         const { data: sales } = await q;
@@ -362,7 +362,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const { data: items } = await itemsQuery.limit(10000);
         const filtered = (items || []).filter((item: Record<string, unknown>) => {
           const sale = item.sale as { created_at: string } | null;
-          return !!sale && sale.created_at >= fromTs && sale.created_at <= toTs;
+          return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
         });
         const prodMap = new Map<string, { branchId: string; name: string; quantity: number; total: number }>();
         filtered.forEach((item: Record<string, unknown>) => {
@@ -385,7 +385,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(prodMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((product) => ({ name: product.name, value: product.total })));
         setSummary({ total: Array.from(prodMap.values()).reduce((sum, product) => sum + product.total, 0), count: rows.length });
       } else if (reportType === 'detailed_invoices') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lte('created_at', toTs).order('created_at', { ascending: false }).limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
         const { data: sales } = await q;
@@ -409,7 +409,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData([]);
         setSummary({ total: (sales || []).reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: rows.length });
       } else if (reportType === 'component_consumption') {
-        let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, unit_cost, created_at, product:products(name), warehouse:warehouses(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lte('created_at', toTs);
+        let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, unit_cost, created_at, product:products(name), warehouse:warehouses(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyProductScopedFilters);
         const { data: tx } = await q.limit(5000);
@@ -436,7 +436,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المكوّن' : 'Component']), value: Number(row[lang === 'ar' ? 'الكمية المستهلكة' : 'Consumed Qty']) })));
         setSummary({ total: Array.from(map.values()).reduce((sum, row) => sum + row.cost, 0), count: rows.length });
       } else if (reportType === 'top_consumed_components') {
-        let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, product:products(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lte('created_at', toTs);
+        let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, product:products(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyProductScopedFilters);
         const { data: tx } = await q.limit(5000);
@@ -464,7 +464,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const { data: items } = await itemsQuery.limit(10000);
         const filtered = (items || []).filter((item: Record<string, unknown>) => {
           const sale = item.sale as { created_at: string } | null;
-          return !!sale && sale.created_at >= fromTs && sale.created_at <= toTs;
+          return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
         });
         const prodMap = new Map<string, { branchId: string; name: string; quantity: number }>();
         filtered.forEach((item: Record<string, unknown>) => {
@@ -526,7 +526,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: 0, count: rows.length });
       } else if (reportType === 'cashier_performance') {
-        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, payment_method, status, created_at, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lte('created_at', toTs).limit(5000);
+        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, payment_method, status, created_at, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         const { data: sales } = await q;
         const empMap = new Map<string, { branchId: string; name: string; total: number; count: number; refundCount: number }>();
@@ -555,7 +555,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
         setSummary({ total: Array.from(empMap.values()).reduce((sum, employee) => sum + employee.total, 0), count: Array.from(empMap.values()).reduce((sum, employee) => sum + employee.count, 0) });
       } else if (reportType === 'returns') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lte('created_at', toTs).or('refunded_amount.gt.0,status.in.(returned,refunded,cancelled)').limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).or('refunded_amount.gt.0,status.in.(returned,refunded,cancelled)').limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         const { data: returns } = await q;
         const statusLabels: Record<string, string> = {
@@ -578,7 +578,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData([]);
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount'] || 0), 0), count: rows.length });
       } else if (reportType === 'production_waste') {
-        let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lte('created_at', toTs);
+        let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         const { data: waste } = await q;
         const rows = (waste || []).map((row: Record<string, unknown>) => {
