@@ -58,6 +58,7 @@ export const APP_ROUTES = {
   treasury: '/treasury',
   reconciliation: '/reconciliation',
   users: '/users',
+  permissions: '/permissions',
   employees: '/employees',
   approvals: '/approvals',
   auditLog: '/audit-log',
