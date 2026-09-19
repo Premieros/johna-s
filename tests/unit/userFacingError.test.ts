@@ -17,6 +17,15 @@ describe('userFacingErrorMessage', () => {
       .toContain('إنشاء المستخدمين');
   });
 
+  it('prefers sent-item approval codes over the generic approval substring', () => {
+    const msg = userFacingErrorMessage(
+      'SENT_ITEM_APPROVAL_REQUIRED: use the controlled void path',
+      'ar',
+    );
+    expect(msg).toContain('أُرسل للمطبخ');
+    expect(msg).not.toBe('هذه العملية تحتاج موافقة قبل تنفيذها.');
+  });
+
   it('explains branch scope errors', () => {
     expect(userFacingErrorMessage('TARGET_OUT_OF_SCOPE', 'ar')).toContain('فرع');
     expect(userFacingErrorMessage('BRANCH_ACCESS_DENIED', 'ar')).toContain('الفروع المسموح');

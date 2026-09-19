@@ -9,7 +9,7 @@ const skip = !dbUrl;
 describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
   let client: pg.Client;
   const branchId = randomUUID(); const whId = randomUUID(); const prodA = randomUUID(); const prodB = randomUUID(); const unitA = randomUUID(); const unitB = randomUUID(); const cashierId = randomUUID();
-  const itemJson = (items: Array<{ product_id: string; quantity: number }>) => JSON.stringify(items.map((it) => ({ product_id: it.product_id, unit_name: 'piece', quantity: it.quantity, unit_price: 100, discount_amount: 0, bonus_quantity: 0, total: it.quantity * 100 })));
+  const itemJson = (items: Array<{ product_id: string; quantity: number; notes?: string | null }>) => JSON.stringify(items.map((it) => ({ product_id: it.product_id, unit_name: 'piece', quantity: it.quantity, unit_price: 100, discount_amount: 0, bonus_quantity: 0, total: it.quantity * 100, notes: it.notes ?? null })));
   const makeTable = async (): Promise<string> => { const id = randomUUID(); await client.query(`INSERT INTO public.dining_tables (id, name, branch_id, capacity, status) VALUES ($1, $2, $3, 4, 'vacant')`, [id, `T-${id.slice(0,4)}`, branchId]); return id; };
   async function asUser<T>(fn: () => Promise<T>): Promise<T> { await client.query(`SELECT set_config('app.user_id', $1, true)`, [cashierId]); await client.query(`SET LOCAL ROLE authenticated`); try { return await fn(); } finally { await client.query('RESET ROLE').catch(() => {}); await client.query('RESET app.user_id').catch(() => {}); } }
   async function createOrder(items = itemJson([{ product_id: prodA, quantity: 1 }])) { const t = await makeTable(); return asUser(async () => { const res = await client.query(`SELECT public.create_order($1, 'dine_in', $2, NULL, 2, NULL, $3::jsonb, 100, 0, 'amount', 0, 100, $4) AS r`, [branchId, t, items, cashierId]); return res.rows[0].r; }); }
@@ -47,6 +47,56 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
   it('send_to_kitchen deducts and snapshots every fresh delta with complete ticket data', async () => { const beforeA = await batchQty(unitA); const beforeB = await batchQty(unitB); const created = await createOrder(itemJson([{ product_id: prodA, quantity: 1 }, { product_id: prodB, quantity: 2 }])); expect(created.success).toBe(true); const orderId = created.order_id!; const sent = await sendToKitchen(orderId); expect(sent.success).toBe(true); if (!sent.success) throw new Error(JSON.stringify(sent)); expect(sent.items_sent_count).toBe(2); expect(sent.all_sent).toBe(true); expect(sent.sent).toHaveLength(2); expect(sent.sent.every((row: Record<string, unknown>) => row.station_code && Array.isArray(row.modifiers))).toBe(true); expect(await batchQty(unitA)).toBe(beforeA - 1); expect(await batchQty(unitB)).toBe(beforeB - 2); expect(await sendRows(orderId)).toBe(2); });
   it('a re-send is a stock no-op: zero new rows and no duplicate deduction', async () => { const created = await createOrder(); expect(created.success).toBe(true); const orderId = created.order_id!; const first = await sendToKitchen(orderId); expect(first.items_sent_count).toBe(1); const afterFirst = await batchQty(); const second = await sendToKitchen(orderId); expect(second.success).toBe(true); expect(second.items_sent_count).toBe(0); expect(second.all_sent).toBe(true); expect(await batchQty()).toBe(afterFirst); expect(await sendRows(orderId)).toBe(1); const r = await client.query(`SELECT count(*)::int AS c FROM (SELECT order_item_id, count(*) AS n FROM public.order_kitchen_sends WHERE order_id = $1 GROUP BY order_item_id HAVING count(*) > 1) dup`, [orderId]); expect(r.rows[0].c).toBe(0); });
   it('update_order preserves line ids: a same-cart re-persist does not re-send (069)', async () => { const created = await createOrder(); expect(created.success).toBe(true); const orderId = created.order_id!; const first = await sendToKitchen(orderId); expect(first.items_sent_count).toBe(1); expect(await sendRows(orderId)).toBe(1); await asUser(async () => { const res = await client.query(`SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 100, 0, 'amount', 0, 100, 'held') AS r`, [orderId, itemJson([{ product_id: prodA, quantity: 1 }])]); expect(res.rows[0].r.success).toBe(true); }); const second = await sendToKitchen(orderId); expect(second.success).toBe(true); expect(second.items_sent_count).toBe(0); expect(second.all_sent).toBe(true); expect(await sendRows(orderId)).toBe(1); const lines = await client.query(`SELECT count(*)::int AS c, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM public.order_kitchen_sends s WHERE s.order_item_id = public.order_items.id))::int AS sent FROM public.order_items WHERE order_id = $1`, [orderId]); expect(lines.rows[0].c).toBe(1); expect(lines.rows[0].sent).toBe(1); });
+  it('positive delta on duplicate sent product lines with different notes never requires approval', async () => {
+    const before = await batchQty(unitA);
+    const created = await createOrder(itemJson([
+      { product_id: prodA, quantity: 1, notes: 'Sprite' },
+      { product_id: prodA, quantity: 2, notes: null },
+    ]));
+    expect(created.success).toBe(true);
+    const orderId = created.order_id!;
+
+    const firstSend = await sendToKitchen(orderId);
+    expect(firstSend.success).toBe(true);
+    expect(firstSend.items_sent_count).toBe(2);
+    expect(await batchQty(unitA)).toBe(before - 3);
+
+    // Deliberately reverse the duplicate lines when re-persisting. Before the
+    // note-identity fix, update_order could match the wrong sent row and treat
+    // this positive-only change as a reduction that needed manager approval.
+    const updatedItems = itemJson([
+      { product_id: prodA, quantity: 4, notes: null },
+      { product_id: prodA, quantity: 1, notes: 'Sprite' },
+    ]);
+    const update = await asUser(async () => client.query(
+      `SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 500, 0, 'amount', 0, 500, 'open') AS r`,
+      [orderId, updatedItems],
+    ));
+    expect(update.rows[0].r.success).toBe(true);
+
+    const delta = await sendToKitchen(orderId);
+    expect(delta.success).toBe(true);
+    expect(delta.items_sent_count).toBe(1);
+    expect(Number(delta.sent[0].quantity)).toBe(2);
+    expect(await batchQty(unitA)).toBe(before - 5);
+
+    const lines = await client.query(
+      `SELECT oi.notes, oi.quantity, COALESCE(s.sent_quantity,0) sent_quantity
+         FROM public.order_items oi
+         LEFT JOIN public.order_kitchen_sends s ON s.order_item_id=oi.id
+        WHERE oi.order_id=$1
+        ORDER BY oi.notes NULLS FIRST`,
+      [orderId],
+    );
+    expect(lines.rows).toHaveLength(2);
+    const plain = lines.rows.find((row: { notes: string | null }) => row.notes === null);
+    const sprite = lines.rows.find((row: { notes: string | null }) => row.notes === 'Sprite');
+    expect(Number(plain.quantity)).toBe(4);
+    expect(Number(plain.sent_quantity)).toBe(4);
+    expect(Number(sprite.quantity)).toBe(1);
+    expect(Number(sprite.sent_quantity)).toBe(1);
+  });
+
   it('resume + add item + send + payment: only the new line reaches KDS and payment never deducts again (ERP-01)', async () => { const beforeA = await batchQty(unitA); const beforeB = await batchQty(unitB); const created = await createOrder(); expect(created.success).toBe(true); const orderId = created.order_id!; await sendToKitchen(orderId); expect(await batchQty(unitA)).toBe(beforeA - 1); expect(await sendRows(orderId)).toBe(1); const cart = itemJson([{ product_id: prodA, quantity: 1 }, { product_id: prodB, quantity: 1 }]); await asUser(async () => { const res = await client.query(`SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 200, 0, 'amount', 0, 200, 'held') AS r`, [orderId, cart]); expect(res.rows[0].r.success).toBe(true); }); const sent = await sendToKitchen(orderId); expect(sent.success).toBe(true); if (!sent.success) throw new Error(JSON.stringify(sent)); expect(sent.items_sent_count).toBe(1); expect(sent.sent).toHaveLength(1); expect(sent.sent![0].product_id).toBe(prodB); expect(await batchQty(unitB)).toBe(beforeB - 1); expect(await sendRows(orderId)).toBe(2); const beforePaymentA = await batchQty(unitA); const beforePaymentB = await batchQty(unitB); await client.query(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]); await client.query(`SELECT public.seed_account_mappings($1)`, [branchId]); const sale = await asUser(async () => client.query(`SELECT public.process_sale($1, $2, $3, NULL, NULL, 200, 0, 'amount', 0, 0, 200, 200, 'cash', 'completed', $4::jsonb, NULL, 'takeaway', NULL, $5) AS r`, [`INV-${randomUUID()}`, branchId, whId, cart, orderId])); expect(sale.rows[0].r.success).toBe(true); if (!sale.rows[0].r.success) throw new Error(JSON.stringify(sale.rows[0].r)); expect(await batchQty(unitA)).toBe(beforePaymentA); expect(await batchQty(unitB)).toBe(beforePaymentB); const saleLines = await client.query(`SELECT count(*)::int AS c FROM public.sale_items WHERE sale_id = $1`, [sale.rows[0].r.sale_id]); expect(saleLines.rows[0].c).toBe(2); const closed = await sendToKitchen(orderId); expect(closed.success).toBe(false); expect(closed.error).toBe('ORDER_NOT_EDITABLE'); });
 
   it('cashier sent-item void requires approval, blocks bypass, and restores the exact sent quantity', async () => {
