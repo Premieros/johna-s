@@ -32,21 +32,25 @@ describe('legacy print agent spool reliability contract', () => {
     expect(printText.indexOf('await ensureSpoolerReadyWithRetry(printerName)')).toBeLessThan(
       printText.indexOf('await submitTextToSpooler(printerName, text)'),
     );
-    expect(agent).toContain('Once Out-Printer is invoked we never retry here');
+    expect(agent).toContain('Once the Windows GDI print call is invoked we never retry here');
   });
 
-  it('returns success only after Out-Printer resolves and supports Arabic station codes', () => {
+  it('returns success only after the Unicode GDI print call resolves and supports Arabic station codes', () => {
     const agent = read('local-print-agent/agent.cjs');
     const printHandlerStart = agent.indexOf("if (req.method === 'POST' && url.pathname === '/print')");
     const drawerHandlerStart = agent.indexOf("if (req.method === 'POST' && url.pathname === '/drawer')", printHandlerStart);
     const printHandler = agent.slice(printHandlerStart, drawerHandlerStart);
 
-    expect(agent).toContain('await ps(script, [printerName, tmp]);');
+    expect(agent).toContain('await ps(UNICODE_PRINT_SCRIPT, [printerName, tmp]);');
     expect(printHandler).toContain('const result = await printText(printer, text)');
     expect(printHandler).toContain('acceptedBySpooler: Boolean(result?.acceptedBySpooler)');
     expect(printHandler.indexOf('const result = await printText(printer, text)')).toBeLessThan(
       printHandler.indexOf('success: true'),
     );
     expect(agent).toContain('\\u0600-\\u06FF');
+    expect(agent).toContain('JohnsUnicodePrinter');
+    expect(agent).toContain('TextRenderingHint.AntiAliasGridFit');
+    expect(agent).toContain('printerGraphics.DrawImage(bitmap, destination)');
+    expect(agent).not.toContain('Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p');
   });
 });
