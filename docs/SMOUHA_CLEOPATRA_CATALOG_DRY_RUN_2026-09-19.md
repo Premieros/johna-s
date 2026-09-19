@@ -1,28 +1,28 @@
-# Smouha → Cleopatra Catalog Copy — Dry Run Report
+# Smouha → Cleopatra Catalog Copy — Dry Run + Execution Record
 
 Date: 2026-09-19
 
 ## Safety boundary
 
-This branch contains planning and read-only diagnostics only.
+This branch contains planning, diagnostics, and the execution record only.
 
 - Repository: `Premieros/johna-s`
 - Work branch: `development/smouha-cleopatra-catalog-dry-run-20260919`
-- Base: `main@ffdc8259b8c10bd355b0be50a1055d4ddeb5abd8`
-- Production project inspected read-only: `azzdesuowpdcoflmyezn`
-- No Production INSERT/UPDATE/DELETE.
-- No migration applied.
-- No changes to printer stations, Print Agent, print queues, send_to_kitchen, KDS, shifts, business-day close, sales, purchases, stock or financial history.
-- No files from concurrent PR #236 were touched.
+- Initial base: `main@ffdc8259b8c10bd355b0be50a1055d4ddeb5abd8`
+- Latest main observed immediately before execution: `89d8024bfc26d98e7f59667f8800798abfc61ff8` (PR #236 merged)
+- Production project: `azzdesuowpdcoflmyezn`
+- No migration was applied.
+- No changes were made to printer stations, Print Agent, print queues, send_to_kitchen, KDS, shifts, business-day close, sales, purchases, stock balances or financial history.
+- No files from the concurrent PR #236 workstream were modified.
 
 ## Branch identities
 
 - Smouha: `19c3fd23-d784-455b-8840-f4f2ac619651`
 - Cleopatra: `279e6662-e901-40b2-9170-7dda0b471ba7`
 
-## Read-only inventory snapshot
+## Approved dry-run snapshot
 
-| Entity | Smouha | Cleopatra |
+| Entity | Smouha before | Cleopatra before |
 |---|---:|---:|
 | Categories | 26 | 0 |
 | Raw materials | 401 | 0 |
@@ -34,31 +34,26 @@ This branch contains planning and read-only diagnostics only.
 | Inventory-unit component-unit recipe rows | 3 | 0 |
 | Product → inventory-unit links | 55 | 0 |
 
-There are no current name/code overlaps in Cleopatra because the destination catalog is empty.
-
-## Required dependent data
-
-The Smouha products also use modifiers:
+Modifier dependencies in Smouha:
 
 - Modifier groups: 4
 - Modifier options: 8
 - Product/group links: 21
 - Modifier inventory effects: 12
 
-These are catalog dependencies for affected products. If the copy is later approved, they should be copied with new Cleopatra IDs and their inventory effects must point only to cloned Cleopatra raw materials/inventory units.
-
-## Important constraints found
+## Constraints discovered before execution
 
 1. `raw_materials.code` is globally unique, not branch-scoped.
 2. `inventory_units.code` is globally unique, not branch-scoped.
-3. Source codes therefore cannot be copied verbatim into new Cleopatra rows.
-4. Proposed deterministic rule: `CLP-<source_code>`.
-5. Dry Run collision check for that prefix: **0 raw-material collisions, 0 inventory-unit collisions**.
-6. Product SKU/barcode fields do not have the same global unique indexes and can remain unchanged unless a later validation discovers a business-level collision.
+3. Destination code rule used: `CLP-<source_code>`.
+4. Pre-write collision check: 0 raw-material code collisions and 0 inventory-unit code collisions.
+5. All 26 source categories reference source kitchen stations.
+6. Cleopatra already had active matching station codes (`kit`, `بار`, `كاش`).
+7. Source station IDs were never copied; category station references were mapped to the already-existing Cleopatra stations by code.
 
-## Source relationship integrity
+## Source integrity before execution
 
-Read-only checks found:
+The approved preflight found:
 
 - Cross-branch product/category references: 0
 - Cross-branch recipe/product references: 0
@@ -70,46 +65,96 @@ Read-only checks found:
 - Cross-branch modifier option/group references: 0
 - Cross-branch modifier inventory effects: 0
 - Products without recipes: 0
+- Inactive raw materials referenced by active recipes: 0
+- Missing measurement-unit references: 0
 
-One active product is intentionally/accidentally uncategorized in the source and must not be silently changed during copy:
+One active source product had no category:
 
 - `Ice Mocha Latte` — source id `fe4a8dbb-77ef-4c9e-9370-6fb3ce9e28a5`
 
-The safe default is to clone it with `category_id = NULL`; correcting its category should be a separate explicit data decision.
+It was intentionally cloned with `category_id = NULL`; no silent correction was made.
 
-## Category → kitchen station dependency
+## Production execution
 
-All 26 Smouha categories currently reference a Smouha kitchen station.
+User approval was received before the first Production write.
 
-Cleopatra already has active stations with matching codes:
+Execution properties:
 
-- `kit` → مطبخ
-- `بار` → بار
-- `كاش` → كاش
+- One atomic transaction.
+- Isolation: `REPEATABLE READ`.
+- Short `lock_timeout` to avoid waiting on / disrupting live work.
+- Pre-write fail-closed assertions for exact source counts, empty destination, code collisions, station mapping, and recipe/raw-material validity.
+- New UUIDs for all cloned branch-owned rows.
+- No source-row UPDATE or DELETE.
+- No table-wide locks were requested.
+- All post-copy relationship and count assertions were executed before `COMMIT`.
+- Any failed assertion would have aborted the transaction.
 
-No source `kitchen_station_id` may be copied across branches.
+The transaction completed and returned `status = committed`.
 
-For the later write phase, the safe mapping is by existing station `code` to the already-created Cleopatra station. This creates only the new category relationship; it must not create/update/delete printer stations or change Print Agent configuration.
+## Production result after commit
 
-## Proposed later copy order
+| Entity | Smouha after | Cleopatra after |
+|---|---:|---:|
+| Categories | 26 | 26 |
+| Raw materials | 401 | 401 |
+| Inventory/manufactured units | 17 | 17 |
+| Products | 254 | 254 |
+| Recipes | 254 | 254 |
+| Recipe items | 1080 | 1080 |
+| Inventory-unit raw-material recipe rows | — | 68 |
+| Inventory-unit component-unit rows | — | 3 |
+| Product → inventory-unit links | — | 55 |
+| Modifier groups | — | 4 |
+| Modifier options | — | 8 |
+| Modifier product links | — | 21 |
+| Modifier inventory effects | — | 12 |
 
-1. Categories → new Cleopatra IDs, with station mapping by existing Cleopatra station code.
-2. Raw materials → new Cleopatra IDs, `CLP-` code prefix.
-3. Manufactured inventory units → new Cleopatra IDs, `CLP-` code prefix.
-4. Inventory-unit recipes and unit-to-unit components → remapped to Cleopatra IDs.
-5. Products → new Cleopatra IDs and remapped category IDs.
-6. Recipes → new Cleopatra IDs tied to cloned products.
-7. Recipe items → remapped to cloned raw materials.
-8. Product → inventory-unit links → remapped to cloned IDs.
-9. Modifier groups/options/product links/effects → cloned and fully remapped to Cleopatra IDs.
-10. Post-copy assertions: all destination references belong to Cleopatra; stock/history tables remain untouched.
+Source catalog counts remained unchanged after the transaction.
 
-## Explicit exclusions from the later copy
+## Post-commit branch-isolation verification
 
-Do not copy:
+All of the following returned zero violations for Cleopatra:
+
+- Category → kitchen station cross-branch
+- Product → category cross-branch
+- Recipe → product cross-branch
+- Recipe item → raw material cross-branch
+- Product → inventory unit cross-branch
+- Inventory-unit recipe → raw material cross-branch
+- Inventory-unit recipe → component unit cross-branch
+- Modifier group/product cross-branch
+- Modifier inventory-effect target cross-branch
+
+Code verification:
+
+- Cleopatra raw materials without `CLP-` prefix: 0
+- Cleopatra inventory units without `CLP-` prefix: 0
+
+## Operational tables explicitly verified untouched for Cleopatra
+
+Post-commit counts remained zero for the copied catalog in:
+
+- `raw_material_inventory`
+- `raw_material_batches`
+- `inventory_unit_batches`
+- `inventory_unit_entries`
+- `inventory_unit_productions`
+
+The operation did not create stock, batches, production rows, purchases, sales, movements, shifts, business days, or financial history.
+
+## Printing / stations
+
+Existing Cleopatra stations were reused only as foreign-key targets for the cloned category definitions.
+
+No station row was inserted, updated, or deleted. No Print Agent, print queue, printer routing, send-to-kitchen, or KDS implementation was changed.
+
+## Explicit exclusions
+
+The copy did not include:
 
 - warehouse stock or balances
-- raw material inventory balances
+- raw-material inventory balances
 - batches
 - purchases
 - inventory movements / ledger history
@@ -120,10 +165,4 @@ Do not copy:
 - printer stations or Print Agent configuration
 - historical costing transactions
 
-Only catalog/master definitions and the relationships required for those definitions are in scope.
-
-## Approval gate
-
-No Production write has been performed.
-
-Before the first Production write, the copy SQL must be prepared as an atomic transaction, validated against the then-current schema/HEAD, and presented for explicit approval.
+Only catalog/master definitions and their required catalog relationships were copied.
