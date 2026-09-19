@@ -186,10 +186,7 @@ namespace PremierPrintAgentLite
                 e.Graphics.DrawImage(
                     bitmap,
                     new RectangleF(e.MarginBounds.Left, e.MarginBounds.Top, widthHundredths, destinationHeight),
-                    0,
-                    0,
-                    bitmap.Width,
-                    bitmap.Height,
+                    new RectangleF(0f, 0f, bitmap.Width, bitmap.Height),
                     GraphicsUnit.Pixel
                 );
             }
