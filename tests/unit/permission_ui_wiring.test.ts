@@ -18,7 +18,9 @@ describe('permission UI wiring', () => {
     const src = read('src/features/admin/pages/RolesTab.tsx');
     expect(src).toContain("can('roles.permissions.manage')");
     expect(src).toContain('const canEditCurrent = mayEditRole(currentRole)');
-    expect(src).toContain('disabled={!canEditCurrent}');
+    expect(src).toContain('const canGrantPermission');
+    expect(src).toContain('const disabled =');
+    expect(src).toContain('!canEditCurrent || (!checked && !grantable)');
   });
 
   it('does not treat owner as an implicit Super Admin in settings UI', () => {
