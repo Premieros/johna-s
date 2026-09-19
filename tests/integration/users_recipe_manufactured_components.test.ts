@@ -42,7 +42,7 @@ describe.skipIf(skip)('branch-scoped users and manufactured recipe components', 
     expect(result.rows.some((row: { id: string }) => row.id === ids.users.cashier_b)).toBe(false);
   });
 
-  it('recipe manager can add a manufactured component only from the same branch', async () => {
+  it('recipe manager can atomically save manufactured composition only from the same branch', async () => {
     const readyUnit = randomUUID();
     const manufacturedA = randomUUID();
     const manufacturedB = randomUUID();
@@ -75,14 +75,19 @@ describe.skipIf(skip)('branch-scoped users and manufactured recipe components', 
     const ok = await runAs(
       client,
       ids.users.branch_manager,
-      `SELECT public.set_recipe_manufactured_components(
-         $1::uuid,
-         jsonb_build_array(jsonb_build_object('unit_id', $2::uuid, 'quantity', 2))
+      `SELECT public.save_recipe_composition(
+         $1::uuid, $2::uuid, $3::uuid, 'Mixed recipe', 2, '', true,
+         '[]'::jsonb,
+         jsonb_build_array(jsonb_build_object('unit_id', $4::uuid, 'quantity', 4))
        ) AS result`,
-      [ids.rows.recipes.own, manufacturedA],
+      [ids.rows.recipes.own, productId, ids.branchA, manufacturedA],
     );
     expect(ok.error).toBeUndefined();
-    expect(ok.rows[0].result).toMatchObject({ success: true, components_count: 1 });
+    expect(ok.rows[0].result).toMatchObject({
+      success: true,
+      manufactured_components_count: 1,
+      raw_items_count: 0,
+    });
 
     const links = await client.query<{ unit_id: string; quantity: string }>(
       'SELECT unit_id, quantity FROM public.product_unit_links WHERE product_id = $1 ORDER BY unit_id',
@@ -94,11 +99,12 @@ describe.skipIf(skip)('branch-scoped users and manufactured recipe components', 
     const wrongBranch = await runAs(
       client,
       ids.users.branch_manager,
-      `SELECT public.set_recipe_manufactured_components(
-         $1::uuid,
-         jsonb_build_array(jsonb_build_object('unit_id', $2::uuid, 'quantity', 1))
+      `SELECT public.save_recipe_composition(
+         $1::uuid, $2::uuid, $3::uuid, 'Mixed recipe', 2, '', true,
+         '[]'::jsonb,
+         jsonb_build_array(jsonb_build_object('unit_id', $4::uuid, 'quantity', 1))
        ) AS result`,
-      [ids.rows.recipes.own, manufacturedB],
+      [ids.rows.recipes.own, productId, ids.branchA, manufacturedB],
     );
     expect(wrongBranch.error).toBeUndefined();
     expect(wrongBranch.rows[0].result).toMatchObject({
@@ -106,4 +112,5 @@ describe.skipIf(skip)('branch-scoped users and manufactured recipe components', 
       error: 'MANUFACTURED_COMPONENT_NOT_IN_BRANCH',
     });
   });
+
 });
