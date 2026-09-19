@@ -23,5 +23,5 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Johns Print Service v5 is installed and verified.
+echo Johns Print Service v6 is installed and verified.
 pause
