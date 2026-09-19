@@ -12,7 +12,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useCan } from '@/lib/permissions';
-import { formatCurrency, formatNumber, formatPercent } from '@/lib/format';
+import { formatFinancialCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
   aggregatePaymentMethods,
   netSaleAmount,
@@ -187,7 +187,7 @@ export function DashboardDataPage() {
   const [items, setItems] = useState<SaleItem[]>([]);
   const [quickStats, setQuickStats] = useState<QuickStats>({ sales: null, expenses: null, profit: null, lowStockCount: null });
   const settings = effectiveSettings(branchFilter);
-  const money = useCallback((value: number) => formatCurrency(value, settings?.currency || 'EGP', lang), [settings?.currency, lang]);
+  const money = useCallback((value: number) => formatFinancialCurrency(value, settings?.currency || 'EGP', lang), [settings?.currency, lang]);
 
   const load = useCallback(async () => {
     setRefreshing(true);
