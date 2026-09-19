@@ -208,45 +208,30 @@ export function RecipesPage() {
     const validItems = items.filter((it) => it.raw_material_id && Number(it.quantity) > 0);
     const validManufactured = manufacturedComponents.filter((it) => it.unit_id && Number(it.quantity) > 0);
     if (validItems.length === 0 && validManufactured.length === 0) { show(t('required') + ': ' + t('recipeItems'), 'error'); return; }
-    if (editing && validItems.length === 0) {
-      show(isAr ? 'الوصفة المعدلة يجب أن تحتوي خامة واحدة على الأقل حاليًا؛ يمكن إضافة التصنيعات بجانب الخامات.' : 'Edited recipes currently require at least one raw material; manufactured components can be added alongside raw materials.', 'error');
-      return;
-    }
 
-    const payload = { product_id: form.product_id, branch_id: form.branch_id, name: form.name.trim() || null, yield_quantity: Number(form.yield_quantity) || 1, notes: form.notes.trim() || null, is_active: form.is_active };
-    const itemRows: RecipeItemInput[] = validItems.map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) || 0 }));
+    const itemRows: RecipeItemInput[] = validItems.map((it) => ({
+      raw_material_id: it.raw_material_id,
+      quantity: Number(it.quantity),
+      wastage_percent: Number(it.wastage_percent) || 0,
+    }));
 
-    let recipeId = editing?.id || '';
-    if (editing) {
-      const { data, error: rpcError } = await supabase.rpc('update_recipe_with_items', {
-        p_recipe_id: editing.id,
-        p_name: form.name.trim(),
-        p_yield_quantity: Number(form.yield_quantity) || 1,
-        p_notes: form.notes.trim(),
-        p_is_active: form.is_active,
-        p_items: itemRows,
-      });
-      const result = data as RecipeMutationResult | null;
-      if (rpcError || !result?.success) {
-        show(rpcError?.message || result?.detail || result?.error || t('error'), 'error');
-        return;
-      }
-    } else {
-      const { data, error: insertError } = await supabase.from('recipes').insert(payload).select().single();
-      if (insertError || !data) { show(insertError?.message || t('error'), 'error'); return; }
-      recipeId = (data as Recipe).id;
-      const { error: itemsError } = await supabase.from('recipe_items').insert(itemRows.map((item) => ({ ...item, recipe_id: recipeId })));
-      if (itemsError) { show(itemsError.message, 'error'); return; }
-      await logAudit('create', 'recipes', recipeId);
-    }
-
-    const { data: manufacturedData, error: manufacturedError } = await supabase.rpc('set_recipe_manufactured_components', {
-      p_recipe_id: recipeId,
-      p_components: validManufactured.map((item) => ({ unit_id: item.unit_id, quantity: Number(item.quantity) })),
+    const { data, error: saveError } = await supabase.rpc('save_recipe_composition', {
+      p_recipe_id: editing?.id || null,
+      p_product_id: form.product_id,
+      p_branch_id: form.branch_id,
+      p_name: form.name.trim(),
+      p_yield_quantity: Number(form.yield_quantity) || 1,
+      p_notes: form.notes.trim(),
+      p_is_active: form.is_active,
+      p_raw_items: itemRows,
+      p_manufactured_components: validManufactured.map((item) => ({
+        unit_id: item.unit_id,
+        quantity: Number(item.quantity),
+      })),
     });
-    const manufacturedResult = manufacturedData as RecipeMutationResult | null;
-    if (manufacturedError || !manufacturedResult?.success) {
-      show(manufacturedError?.message || manufacturedResult?.detail || manufacturedResult?.error || t('error'), 'error');
+    const saveResult = data as RecipeMutationResult | null;
+    if (saveError || !saveResult?.success) {
+      show(saveError?.message || saveResult?.detail || saveResult?.error || t('error'), 'error');
       return;
     }
 
