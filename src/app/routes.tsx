@@ -15,6 +15,7 @@ const ProcurementCenterPage = lazy(() => import('../features/trade/pages/Procure
 const PosWorkspacePage = lazy(() => import('../features/pos/pages/PosWorkspacePage').then(m => ({ default: m.PosWorkspacePage })));
 const ActiveOrdersPage = lazy(() => import('../features/pos/pages/ActiveOrdersPage').then(m => ({ default: m.ActiveOrdersPage })));
 const ProductsPage = lazy(() => import('../features/catalog/pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const PricingPage = lazy(() => import('../features/catalog/pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const ProductSetupWizardPage = lazy(() => import('../features/catalog/pages/ProductSetupWizardPage').then(m => ({ default: m.ProductSetupWizardPage })));
 const ProductModifiersPage = lazy(() => import('../features/catalog/pages/ProductModifiersPage').then(m => ({ default: m.ProductModifiersPage })));
 const CategoriesPage = lazy(() => import('../features/catalog/pages/CategoriesPage').then(m => ({ default: m.CategoriesPage })));
@@ -142,6 +143,7 @@ export function AppRoutes() {
         <Route path="/kitchen" element={<ProtectedRoute permission="pos.kds_view"><Navigate to={APP_ROUTES.kitchenDisplay} replace /></ProtectedRoute>} />
         <Route path="/tables" element={<ProtectedRoute permission="floor_plan.view"><Navigate to={APP_ROUTES.floorPlan} replace /></ProtectedRoute>} />
         <Route path={APP_ROUTES.products} element={<ProtectedRoute permission="products.view"><ProductsPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.pricing} element={<ProtectedRoute permission="products.view"><PricingPage /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.products}/setup`} element={<ProtectedRoute permission="products.create"><ProductSetupWizardPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.productModifiers} element={<ProtectedRoute permission="products.modifiers.manage"><ProductModifiersPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.categories} element={<ProtectedRoute permission="categories.view"><CategoriesPage /></ProtectedRoute>} />
