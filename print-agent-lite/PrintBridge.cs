@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Printing;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
@@ -85,7 +87,12 @@ namespace PremierPrintAgentLite
                                 using (var format = new StringFormat())
                                 {
                                     if (ContainsArabic(line)) { format.FormatFlags |= StringFormatFlags.DirectionRightToLeft; format.Alignment = StringAlignment.Far; }
-                                    e.Graphics.DrawString(line, font, Brushes.Black, new RectangleF(left, y, Math.Max(1, right - left), height * 2f), format);
+                                    DrawRasterizedLine(
+                                        e.Graphics,
+                                        line,
+                                        font,
+                                        format,
+                                        new RectangleF(left, y, Math.Max(1, right - left), height * 2f));
                                 }
                                 y += height;
                                 if (y + height > e.MarginBounds.Bottom) { e.HasMorePages = index < lines.Length; return; }
@@ -101,6 +108,35 @@ namespace PremierPrintAgentLite
                 return Ok();
             }
             catch (Exception ex) { return Fail(ex.GetType().Name + ":" + ex.Message); }
+        }
+
+        private static void DrawRasterizedLine(Graphics printerGraphics, string line, Font font, StringFormat format, RectangleF destination)
+        {
+            // Rasterize text before it reaches the thermal printer driver.
+            // This keeps Arabic/Unicode shaping inside Windows GDI+ and prevents
+            // printers/code pages from reinterpreting UTF text as ESC/POS bytes.
+            var dpiX = Math.Max(96f, printerGraphics.DpiX);
+            var dpiY = Math.Max(96f, printerGraphics.DpiY);
+            var pixelWidth = Math.Max(1, (int)Math.Ceiling((destination.Width / 100f) * dpiX));
+            var pixelHeight = Math.Max(1, (int)Math.Ceiling((destination.Height / 100f) * dpiY));
+
+            using (var bitmap = new Bitmap(pixelWidth, pixelHeight, PixelFormat.Format32bppArgb))
+            {
+                bitmap.SetResolution(dpiX, dpiY);
+                using (var graphics = Graphics.FromImage(bitmap))
+                using (var bitmapFormat = (StringFormat)format.Clone())
+                {
+                    graphics.Clear(Color.White);
+                    graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                    graphics.DrawString(
+                        line ?? "",
+                        font,
+                        Brushes.Black,
+                        new RectangleF(0f, 0f, pixelWidth, pixelHeight),
+                        bitmapFormat);
+                }
+                printerGraphics.DrawImage(bitmap, destination);
+            }
         }
 
         private static string[] NormalizeLines(string text)

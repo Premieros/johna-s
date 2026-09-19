@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'print-agent-lite/**'
+      - 'local-print-agent/**'
       - '.github/workflows/build-print-agent-lite.yml'
   workflow_dispatch:
 
@@ -21,8 +22,41 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Restore
         run: dotnet restore print-agent-lite/PremierPrintAgentLite.csproj
+      - name: Prepare headless build config
+        shell: pwsh
+        env:
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_ANON_KEY)) {
+            throw 'VITE_SUPABASE_ANON_KEY is required for headless agent build'
+          }
+          $path = 'print-agent-headless/BuildConfig.cs'
+          $content = Get-Content $path -Raw
+          $content = $content.Replace('__VITE_SUPABASE_ANON_KEY__', $env:VITE_SUPABASE_ANON_KEY)
+          Set-Content -Path $path -Value $content -Encoding UTF8
+      - name: Restore Headless Agent
+        run: dotnet restore print-agent-headless/PremierCleopatraPrintAgent.csproj
+      - name: Build Headless Agent
+        run: dotnet build print-agent-headless/PremierCleopatraPrintAgent.csproj -c Release --no-restore
       - name: Build Release
         run: dotnet build print-agent-lite/PremierPrintAgentLite.csproj -c Release --no-restore
+      - name: Validate legacy Unicode print helper
+        shell: pwsh
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File local-print-agent/print-escpos-raster.ps1 -ValidateOnly
+      - name: Validate local agent restart script syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'local-print-agent/restart-agent.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'restart-agent.ps1 syntax validation failed'
+          }
       - name: Package Lite ZIP
         shell: pwsh
         run: |
@@ -34,5 +68,56 @@ jobs:
         with:
           name: premier-print-agent-lite-windows
           path: Premier-Print-Agent-Lite-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Package Cleopatra Headless Agent
+        shell: pwsh
+        run: |
+          $out = 'print-agent-headless/bin/Release/net48'
+          if (!(Test-Path "$out/PremierCleopatraPrintAgent.exe")) { throw 'Headless EXE not found' }
+          @'
+          CLEOPATRA HEADLESS PRINT AGENT
+          - Runs in background with Windows.
+          - Does not require Chrome or the Johns website to stay open.
+          - First setup requires a dedicated Cleopatra device account.
+          - Required permissions only: pos.print_kitchen + pos.receipt.print.
+          - Refresh token is protected with Windows DPAPI.
+          - Do not use this build on Smouha.
+          '@ | Set-Content -Path "$out/README-CLEOPATRA.txt" -Encoding UTF8
+          Compress-Archive -Path "$out/*" -DestinationPath 'Cleopatra-Headless-Print-Agent-v7-Windows-x64.zip' -Force
+      - name: Upload Cleopatra Headless Agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleopatra-headless-print-agent-v7-windows
+          path: Cleopatra-Headless-Print-Agent-v7-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Package Cleopatra local agent
+        shell: pwsh
+        run: |
+          $stage = 'cleopatra-print-agent'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item 'local-print-agent/agent.cjs' $stage
+          Copy-Item 'local-print-agent/print-escpos-raster.ps1' $stage
+          Copy-Item 'local-print-agent/restart-agent.ps1' $stage
+          Copy-Item 'local-print-agent/start.cmd' $stage
+          Copy-Item 'local-print-agent/install-startup.cmd' $stage
+          Copy-Item 'local-print-agent/README.md' $stage
+          Copy-Item 'local-print-agent/cleopatra-stations.json' $stage
+          Copy-Item 'local-print-agent/printer-preflight.ps1' $stage
+          Copy-Item 'local-print-agent/drawer-kick.ps1' $stage
+          @'
+          CLEOPATRA ONLY
+          This package is for the Cleopatra Windows print-agent computer only.
+          Do not install or copy it to the Smouha branch computer.
+          Transport: escpos-raw-raster
+          Agent health version: 6
+          '@ | Set-Content -Path "$stage/CLEOPATRA_ONLY.txt" -Encoding UTF8
+          Compress-Archive -Path "$stage/*" -DestinationPath 'Cleopatra-Print-Agent-v6-Windows.zip' -Force
+      - name: Upload Cleopatra local agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleopatra-print-agent-v6-windows
+          path: Cleopatra-Print-Agent-v6-Windows.zip
           if-no-files-found: error
           retention-days: 14
