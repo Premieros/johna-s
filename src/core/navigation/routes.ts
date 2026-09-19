@@ -17,6 +17,7 @@ export const APP_ROUTES = {
   manufacturingCenter: '/manufacturing-center',
   floorPlan: '/floor-plan',
   products: '/products',
+  pricing: '/pricing',
   productModifiers: '/product-modifiers',
   categories: '/categories',
   components: '/components',
