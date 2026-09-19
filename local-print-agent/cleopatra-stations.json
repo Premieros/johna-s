@@ -1,0 +1,21 @@
+{
+  "branch_id": "279e6662-e901-40b2-9170-7dda0b471ba7",
+  "branch_name": "johna's كليوبترا",
+  "stations": [
+    {
+      "code": "kit",
+      "name_ar": "مطبخ",
+      "name_en": ""
+    },
+    {
+      "code": "بار",
+      "name_ar": "بار",
+      "name_en": ""
+    },
+    {
+      "code": "كاش",
+      "name_ar": "كاش",
+      "name_en": ""
+    }
+  ]
+}
