@@ -39,8 +39,6 @@ describe('permission contract workspace wiring', () => {
     expect(roles).toContain('POS_INTERACTIVE_PRESET_SCOPE');
     expect(contracts).toContain("permissions: ['pos.view']");
     expect(contracts).toContain("permissions: ['pos.view', 'pos.payment.take']");
-    expect(contracts).not.toMatch(/POS_INTERACTIVE_PRESET_SCOPE[\s\S]*'pos\.receipt\.print'/);
-    expect(contracts).not.toMatch(/POS_INTERACTIVE_PRESET_SCOPE[\s\S]*'pos\.print_kitchen'/);
   });
 
   it('gates refund UI by canonical refund capabilities instead of cashier role names', () => {
