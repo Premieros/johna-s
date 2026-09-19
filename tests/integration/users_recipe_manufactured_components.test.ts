@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
-import { runAs, seedRlsFixture, type RlsIds } from './rls';
+import { runAs, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -73,7 +73,7 @@ describe.skipIf(skip)('branch-scoped users and manufactured recipe components', 
       [productId, readyUnit],
     );
 
-    const ok = await runAs(
+    const ok = await runAsPersist(
       client,
       ids.users.branch_manager,
       `SELECT public.save_recipe_composition(
