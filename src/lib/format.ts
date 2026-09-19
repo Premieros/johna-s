@@ -38,6 +38,27 @@ export function formatCurrency(
   return `${formatDisplayNumber(numeric, 1)} ${symbol}`;
 }
 
+/** Financial/reporting display: always show two decimals without changing receipt/POS formatting. */
+export function formatFinancialCurrency(
+  amount: number | null | undefined,
+  currency = 'EGP',
+  lang: Language = 'ar',
+): string {
+  const numeric = numericOrZero(amount);
+  const symbolMap: Record<string, { ar: string; en: string }> = {
+    EGP: { ar: 'ج.م', en: 'EGP' },
+    SAR: { ar: 'ر.س', en: 'SAR' },
+    USD: { ar: 'د.أ', en: 'USD' },
+    AED: { ar: 'د.إ', en: 'AED' },
+  };
+  const symbol = symbolMap[currency]?.[lang] || currency;
+  const formatted = numeric.toLocaleString(DISPLAY_LOCALE, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${formatted} ${symbol}`;
+}
+
 /** General UI numbers: thousands separators, one decimal max, zero as dash. */
 export function formatNumber(value: number | null | undefined, decimals = 1): string {
   return formatDisplayNumber(value, decimals);

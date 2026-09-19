@@ -5,7 +5,7 @@ import { supabase, costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
-import { formatCurrency, formatDate, todayISO } from '@/lib/format';
+import { formatFinancialCurrency, formatDate, todayISO } from '@/lib/format';
 import { reportDateRangeUtc } from '@/lib/businessTime';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
@@ -810,7 +810,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     const headers = data.length > 0 ? Object.keys(data[0]) : [];
     const rows = data.map((row) => headers.map((header) => {
       const value = row[header];
-      if (typeof value === 'number' && moneyKeys.includes(header)) return formatCurrency(value, currency, lang);
+      if (typeof value === 'number' && moneyKeys.includes(header)) return formatFinancialCurrency(value, currency, lang);
       return String(value ?? '');
     }));
     openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${from} - ${to}`, headers, rows, lang: lang as 'ar' | 'en' });
@@ -900,7 +900,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
                       const value = row[key];
                       return (
                         <td key={columnIndex} className="px-4 py-3 text-ui-text">
-                          {typeof value === 'number' && moneyKeys.includes(key) ? formatCurrency(value, currency, lang) : String(value ?? '')}
+                          {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
                         </td>
                       );
                     })}
