@@ -37,6 +37,7 @@ import {
 } from '../reportFilters';
 import {
   aggregatePaymentMethods,
+  allocateSaleNetRevenue,
   netPurchaseAmount,
   netSaleAmount,
   netSaleItemQuantity,
@@ -427,7 +428,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           const baseRevenue = netSaleItemRevenue(item);
           const saleBase = saleBaseTotals.get(String(item.sale_id || '')) || 0;
           const authoritativeSaleNet = netSaleAmount(sale || {});
-          const allocatedRevenue = saleBase > 0 ? authoritativeSaleNet * (baseRevenue / saleBase) : 0;
+          const allocatedRevenue = allocateSaleNetRevenue(baseRevenue, authoritativeSaleNet, saleBase);
           existing.quantity += netSaleItemQuantity(item);
           existing.total += allocatedRevenue;
           prodMap.set(key, existing);
