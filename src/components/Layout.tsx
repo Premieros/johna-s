@@ -21,12 +21,14 @@ import { APP_ROUTES } from '@/core/navigation/routes';
 import { MENU_GROUPS, MENU_ITEMS, type MenuIcon, type MenuGroup } from '@/core/navigation/menu.config';
 import { CommandPalette, CommandPaletteTrigger } from './CommandPalette';
 import { OfflineStatusIndicator } from './OfflineStatusIndicator';
+import { PageUtilityControls } from './PageUtilityControls';
 import { ReturnContextBanner } from '@/core/guard/ReturnContextBanner';
 
 const ICONS: Record<MenuIcon, ReactNode> = {
   dashboard: <LayoutDashboard className="h-5 w-5" />,
   pos: <ShoppingCart className="h-5 w-5" />,
   products: <Package className="h-5 w-5" />,
+  pricing: <BadgeDollarSign className="h-5 w-5" />,
   productModifiers: <SlidersHorizontal className="h-5 w-5" />,
   categories: <Tags className="h-5 w-5" />,
   components: <Layers className="h-5 w-5" />,
@@ -254,6 +256,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div data-testid="design-content-surface" className="mx-auto min-h-[calc(100vh-64px)] w-full max-w-[1600px] space-y-5">{children}</div>
         </main>
       </div>
+      <PageUtilityControls />
       <CommandPalette />
     </div>
   );
