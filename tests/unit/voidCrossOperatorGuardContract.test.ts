@@ -7,11 +7,11 @@ const migration = readFileSync(
 );
 
 describe('cross-operator void ownership contract', () => {
-  it('sets the approved void context before mutating kitchen sends', () => {
-    const flag = migration.indexOf("set_config('app.approved_sent_item_void'");
-    const update = migration.indexOf('UPDATE public.order_kitchen_sends');
-    expect(flag).toBeGreaterThanOrEqual(0);
-    expect(update).toBeGreaterThan(flag);
+  it('verifies the approved void context is set before mutating kitchen sends', () => {
+    expect(migration).toContain("v_update_pos := position('UPDATE public.order_kitchen_sends' in v_def)");
+    expect(migration).toContain("v_flag_pos := position('set_config(''app.approved_sent_item_void''' in v_def)");
+    expect(migration).toContain('IF v_flag_pos = 0 OR v_flag_pos > v_update_pos THEN');
+    expect(migration).toContain('approved sent-item void context is not set before kitchen-send update');
   });
 
   it('keeps the kitchen-send ownership bypass tightly scoped', () => {
