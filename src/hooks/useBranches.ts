@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import type { Branch } from '@/lib/types';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 const BRANCHES_CHANGED_EVENT = 'premier:branches-changed';
 const branchCacheByUser = new Map<string, Branch[]>();
@@ -33,7 +34,7 @@ export function useBranches() {
     const { data, error } = await supabase.from('branches').select('*').order('name');
     if (error) {
       setBranches([]);
-      setError(error.message);
+      setError(userFacingErrorMessage(error));
       setLoading(false);
       return;
     }
