@@ -12,6 +12,7 @@ export async function dispatchKitchenStations(params: {
   branchId?: string | null;
   items: KitchenSendItem[];
   context: LocalKitchenPrintContext;
+  idempotencyNamespace?: string;
 }): Promise<KitchenStationDispatchSummary> {
   const stationGroups = groupKitchenItemsByStation(params.items);
   const allStations = Object.keys(stationGroups);
@@ -31,6 +32,7 @@ export async function dispatchKitchenStations(params: {
         branchId,
         items: params.items,
         context: params.context,
+        idempotencyNamespace: params.idempotencyNamespace,
       });
       for (const station of cloud.queuedStations) cloudQueuedStations.add(station);
     } catch (error) {
