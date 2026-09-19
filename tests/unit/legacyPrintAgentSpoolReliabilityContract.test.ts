@@ -59,4 +59,20 @@ describe('legacy print agent spool reliability contract', () => {
     expect(helper).toContain('new UTF8Encoding(false, true)');
     expect(helper).toContain('StringFormatFlags.DirectionRightToLeft');
   });
+
+
+  it('forces the installed localhost service onto the corrected v3 transport', () => {
+    const agent = read('local-print-agent/agent.cjs');
+    const restart = read('local-print-agent/restart-agent.ps1');
+    const install = read('local-print-agent/install-startup.cmd');
+
+    expect(agent).toContain("version: 3, transport: 'windows-gdi-raster'");
+    expect(restart).toContain('Get-NetTCPConnection -LocalPort $port -State Listen');
+    expect(restart).toContain("$process.Name -ieq 'node.exe'");
+    expect(restart).toContain("$commandLine -match 'agent\\.cjs'");
+    expect(restart).toContain("throw \"WRONG_PRINT_AGENT_VERSION:$($health.version)\"");
+    expect(restart).toContain("throw \"WRONG_PRINT_TRANSPORT:$($health.transport)\"");
+    expect(install).toContain('restart-agent.ps1');
+    expect(install).toContain('Johns Print Service v3 is installed and verified.');
+  });
 });
