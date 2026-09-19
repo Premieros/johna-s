@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   cleanup:
-    name: delete-fully-merged-development-branches
+    name: delete-merged-and-confirmed-superseded-development-branches
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository history
@@ -25,7 +25,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Delete only fully merged development branches
+      - name: Delete safe development branches
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -42,6 +42,11 @@ jobs:
             --jq '.[].headRefName' \
             > /tmp/open-heads.txt
 
+          deleted_merged=0
+          deleted_superseded=0
+          skipped=0
+          failed=0
+
           mapfile -t merged_branches < <(
             git for-each-ref \
               --format='%(refname:short)' \
@@ -55,27 +60,69 @@ jobs:
             | sort
           )
 
-          deleted=0
-          skipped=0
-          failed=0
-
           for branch in "${merged_branches[@]}"; do
             if grep -Fxq "$branch" /tmp/open-heads.txt; then
               echo "SKIP open PR head: $branch"
               skipped=$((skipped + 1))
               continue
             fi
-
             echo "DELETE fully merged branch: $branch"
             if git push origin --delete "$branch"; then
-              deleted=$((deleted + 1))
+              deleted_merged=$((deleted_merged + 1))
             else
               echo "::error::Could not delete $branch"
               failed=$((failed + 1))
             fi
           done
 
-          echo "Deleted: $deleted"
+          cat > /tmp/confirmed-superseded.txt <<'EOF'
+          development/ci-integration-deadlock-fix
+          development/docs-sync-2026-09-16
+          development/header-cleanup
+          development/manufacturing-rpc-authority
+          development/modifier-simple-product-assignment
+          development/pay-sent-order-zreport-fix-20260918
+          development/print-agent-clean-merge-final2
+          development/print-agent-final-clean
+          development/print-agent-final-merge
+          development/print-agent-lite-reliability-20260917
+          development/print-agent-merge-clean-2
+          development/print-agent-merge-final
+          development/print-agent-merge-ready
+          development/safe-display-columns
+          development/stabilization-audit-20260915
+          development/status-registry-unification
+          development/status-registry-unification-v2
+          development/table-occupancy-reconciliation
+          development/windows-print-station-production-ready-20260918
+          EOF
+
+          while IFS= read -r branch; do
+            branch="${branch#"  "}"
+            [ -z "$branch" ] && continue
+
+            if grep -Fxq "$branch" /tmp/open-heads.txt; then
+              echo "SKIP open PR head: $branch"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            if ! git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              echo "ALREADY GONE: $branch"
+              continue
+            fi
+
+            echo "DELETE confirmed superseded branch: $branch"
+            if git push origin --delete "$branch"; then
+              deleted_superseded=$((deleted_superseded + 1))
+            else
+              echo "::error::Could not delete $branch"
+              failed=$((failed + 1))
+            fi
+          done < /tmp/confirmed-superseded.txt
+
+          echo "Deleted fully merged: $deleted_merged"
+          echo "Deleted confirmed superseded: $deleted_superseded"
           echo "Skipped open PR heads: $skipped"
           echo "Failed: $failed"
 
