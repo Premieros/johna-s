@@ -25,11 +25,17 @@ BEGIN
   SELECT pg_get_functiondef(v_sig) INTO v_def;
 
   IF position('can_permission(''pos.void'')' in v_def) = 0 THEN
-    v_next := regexp_replace(
+    -- pg_get_functiondef preserves the PL/pgSQL body formatting. Cover the two
+    -- canonical shapes that exist in fresh migrations and current Production.
+    v_next := replace(
       v_def,
-      'v_privileged[[:space:]]*:=[[:space:]]*public\\.is_pos_admin\\(\\)[[:space:]]+OR[[:space:]]+public\\.can_permission\\(''approvals\\.review''\\)[[:space:]]*;',
-      'v_privileged := public.can_permission(''pos.void'') OR public.can_permission(''approvals.review'');',
-      'i'
+      'v_privileged := public.is_pos_admin() OR public.can_permission(''approvals.review'');',
+      'v_privileged := public.can_permission(''pos.void'') OR public.can_permission(''approvals.review'');'
+    );
+    v_next := replace(
+      v_next,
+      'v_privileged:=public.is_pos_admin() OR public.can_permission(''approvals.review'');',
+      'v_privileged:=public.can_permission(''pos.void'') OR public.can_permission(''approvals.review'');'
     );
 
     IF v_next = v_def
