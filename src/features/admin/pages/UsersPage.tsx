@@ -289,7 +289,7 @@ export function UsersPage() {
       </DesignPanel>
       <DesignPanel testId="users-table-panel">
         <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} />
-        <DesignPagination loaded={scopedItems.length} total={isPlatformAdmin ? total : scopedItems.length} hasMore={isPlatformAdmin ? hasMore : false} loadingMore={loadingMore} onLoadMore={loadMore} />
+        <DesignPagination loaded={scopedItems.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t('edit')}>
