@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import {
+  ALL_PERMISSIONS,
   ROLE_META,
   type Permission,
   type Role,
@@ -182,7 +183,8 @@ export function RolesProvider({ children }: { children: ReactNode }) {
 
 function normalizePermissions(value: unknown): Permission[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((p): p is Permission => typeof p === 'string');
+  const known = new Set<string>(ALL_PERMISSIONS);
+  return value.filter((p): p is Permission => typeof p === 'string' && known.has(p));
 }
 
 export function useRoles() {
