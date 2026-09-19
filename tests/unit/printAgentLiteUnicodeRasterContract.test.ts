@@ -19,7 +19,7 @@ describe('Premier Print Agent Lite Unicode raster contract', () => {
   it('keeps Arabic shaping and RTL alignment inside the Windows rendering path', () => {
     expect(source).toContain('StringFormatFlags.DirectionRightToLeft');
     expect(source).toContain('StringAlignment.Far');
-    expect(source).toContain('[\\u0600-\\u06FF]');
+    expect(source).toContain('"[\\\\u0600-\\\\u06FF]"');
     expect(source).toContain('new Font("Tahoma", 9f');
   });
 
