@@ -77,6 +77,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cleopatra-print-agent-v4-windows
-          path: Cleopatra-Print-Agent-v3-Windows.zip
+          path: Cleopatra-Print-Agent-v4-Windows.zip
           if-no-files-found: error
           retention-days: 14
