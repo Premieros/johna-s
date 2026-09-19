@@ -66,17 +66,25 @@ BEGIN
   END IF;
 
   IF v_internal_void
-     AND TG_OP = 'UPDATE'
-     AND (public.can_permission('pos.void') OR public.can_permission('approvals.review'))
-     AND NEW.id IS NOT DISTINCT FROM OLD.id
-     AND NEW.branch_id IS NOT DISTINCT FROM OLD.branch_id
-     AND NEW.order_id IS NOT DISTINCT FROM OLD.order_id
-     AND NEW.order_item_id IS NOT DISTINCT FROM OLD.order_item_id
-     AND COALESCE(NEW.sent_quantity, 0) <= COALESCE(OLD.sent_quantity, 0)
-     AND (to_jsonb(NEW) - ARRAY['sent_quantity','sent_at','sent_by']::text[])
-       IS NOT DISTINCT FROM
-       (to_jsonb(OLD) - ARRAY['sent_quantity','sent_at','sent_by']::text[]) THEN
-    RETURN NEW;
+     AND (public.can_permission('pos.void') OR public.can_permission('approvals.review')) THEN
+    IF TG_OP = 'UPDATE'
+       AND NEW.id IS NOT DISTINCT FROM OLD.id
+       AND NEW.branch_id IS NOT DISTINCT FROM OLD.branch_id
+       AND NEW.order_id IS NOT DISTINCT FROM OLD.order_id
+       AND NEW.order_item_id IS NOT DISTINCT FROM OLD.order_item_id
+       AND COALESCE(NEW.sent_quantity, 0) <= COALESCE(OLD.sent_quantity, 0)
+       AND (to_jsonb(NEW) - ARRAY['sent_quantity','sent_at','sent_by']::text[])
+         IS NOT DISTINCT FROM
+         (to_jsonb(OLD) - ARRAY['sent_quantity','sent_at','sent_by']::text[]) THEN
+      RETURN NEW;
+    END IF;
+
+    -- Full-line void deletes the order_item after sent_quantity has already
+    -- been reduced to zero. Its FK cascade may delete the zeroed send row.
+    IF TG_OP = 'DELETE'
+       AND COALESCE(OLD.sent_quantity, 0) = 0 THEN
+      RETURN OLD;
+    END IF;
   END IF;
 
   IF v_owner_id IS DISTINCT FROM v_uid THEN
