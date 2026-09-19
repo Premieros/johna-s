@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
@@ -6,14 +6,6 @@ import { canImpersonate, runAs, seedRlsFixture, type RlsIds } from './rls';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
-
-function visibleOldBucket(branchId: string, saleId: string): boolean {
-  const first32 = createHash('md5')
-    .update(`${branchId}:${saleId}`)
-    .digest('hex')
-    .slice(0, 8);
-  return Number(BigInt(`0x${first32}`) % 100n) < 30;
-}
 
 function sortedIds(rows: Array<Record<string, unknown>>): string[] {
   return rows.map((row) => String(row.id)).sort();
@@ -25,7 +17,6 @@ describe.skipIf(skip)('financial sales visibility', () => {
   let imp = false;
   const oldSaleIds: string[] = [];
   const recentSaleIds: string[] = [];
-  let oldVisibleIds: string[] = [];
   let visibleOldSaleId = '';
   let hiddenOldSaleId = '';
   let visibleItemId = '';
@@ -41,8 +32,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
     imp = await canImpersonate(client);
     if (!imp) return;
 
-    // Seed enough old sales to prove that restricted users receive exactly the
-    // deterministic hash-selected set, rather than a user-specific/random set.
+    // Seed old sales to prove authorized branch users receive complete history.
     for (let i = 0; i < 60; i += 1) {
       const saleId = randomUUID();
       oldSaleIds.push(saleId);
@@ -54,12 +44,8 @@ describe.skipIf(skip)('financial sales visibility', () => {
       );
     }
 
-    oldVisibleIds = oldSaleIds.filter((saleId) => visibleOldBucket(ids.branchA, saleId)).sort();
-    visibleOldSaleId = oldSaleIds.find((saleId) => visibleOldBucket(ids.branchA, saleId)) || '';
-    hiddenOldSaleId = oldSaleIds.find((saleId) => !visibleOldBucket(ids.branchA, saleId)) || '';
-    if (!visibleOldSaleId || !hiddenOldSaleId) {
-      throw new Error('fixture did not produce both visible and hidden old-sale buckets');
-    }
+    visibleOldSaleId = oldSaleIds[0];
+    hiddenOldSaleId = oldSaleIds[1];
 
     for (let i = 0; i < 3; i += 1) {
       const saleId = randomUUID();
@@ -82,11 +68,8 @@ describe.skipIf(skip)('financial sales visibility', () => {
       [visibleItemId, visibleOldSaleId, ids.prodA, hiddenItemId, hiddenOldSaleId],
     );
 
-    // Pick a branch-B sale that would pass the hash bucket. Branch isolation
-    // must still reject it for branch-A staff.
-    do {
-      otherBranchVisibleBucketSaleId = randomUUID();
-    } while (!visibleOldBucket(ids.branchB, otherBranchVisibleBucketSaleId));
+    // A branch-B old sale must remain invisible to branch-A staff.
+    otherBranchVisibleBucketSaleId = randomUUID();
 
     await client.query(
       `INSERT INTO public.sales
@@ -131,7 +114,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
     expect(sortedIds(result.rows)).toEqual([...recentSaleIds].sort());
   });
 
-  guarded('non-owner old history is the stable 30-of-100 hash bucket set', async () => {
+  guarded('authorized non-owner users see complete old history for their branch', async () => {
     const cashier = await runAs(
       client,
       ids.users.cashier,
@@ -147,11 +130,11 @@ describe.skipIf(skip)('financial sales visibility', () => {
 
     expect(cashier.error).toBeUndefined();
     expect(manager.error).toBeUndefined();
-    expect(sortedIds(cashier.rows)).toEqual(oldVisibleIds);
-    expect(sortedIds(manager.rows)).toEqual(oldVisibleIds);
+    expect(sortedIds(cashier.rows)).toEqual([...oldSaleIds].sort());
+    expect(sortedIds(manager.rows)).toEqual([...oldSaleIds].sort());
   });
 
-  guarded('super_admin does not inherit owner-only full history', async () => {
+  guarded('super_admin sees complete accessible old history', async () => {
     const result = await runAs(
       client,
       ids.users.super_admin,
@@ -159,10 +142,10 @@ describe.skipIf(skip)('financial sales visibility', () => {
       [oldSaleIds],
     );
     expect(result.error).toBeUndefined();
-    expect(sortedIds(result.rows)).toEqual(oldVisibleIds);
+    expect(sortedIds(result.rows)).toEqual([...oldSaleIds].sort());
   });
 
-  guarded('branch isolation still rejects another branch even when its old hash bucket is visible', async () => {
+  guarded('branch isolation still rejects another branch for old history', async () => {
     const result = await runAs(
       client,
       ids.users.cashier,
@@ -173,7 +156,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
     expect(result.rowCount).toBe(0);
   });
 
-  guarded('sale_items inherit the parent sale visibility decision', async () => {
+  guarded('sale_items remain complete when their parent sales are authorized', async () => {
     const restricted = await runAs(
       client,
       ids.users.cashier,
@@ -188,7 +171,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
     );
 
     expect(restricted.error).toBeUndefined();
-    expect(sortedIds(restricted.rows)).toEqual([visibleItemId].sort());
+    expect(sortedIds(restricted.rows)).toEqual([hiddenItemId, visibleItemId].sort());
     expect(owner.error).toBeUndefined();
     expect(sortedIds(owner.rows)).toEqual([hiddenItemId, visibleItemId].sort());
   });
