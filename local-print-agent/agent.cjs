@@ -162,6 +162,7 @@ async function ensureSpoolerReadyWithRetry(printerName) {
 
 const ESC_POS_RASTER_SCRIPT_PATH = path.join(__dirname, 'print-escpos-raster.ps1');
 const PRINTER_PREFLIGHT_SCRIPT_PATH = path.join(__dirname, 'printer-preflight.ps1');
+const DRAWER_KICK_SCRIPT_PATH = path.join(__dirname, 'drawer-kick.ps1');
 
 async function submitTextToSpooler(printerName, text, paperWidthMm = 80) {
   const tmp = path.join(os.tmpdir(), `johns-ticket-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
@@ -192,8 +193,7 @@ async function kickDrawer(printerName) {
   const tmp = path.join(os.tmpdir(), `johns-drawer-${Date.now()}-${Math.random().toString(16).slice(2)}.bin`);
   fs.writeFileSync(tmp, Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]));
   try {
-    const script = '$p=$args[0];$f=$args[1];Get-Content -LiteralPath $f -Encoding Byte -Raw | Out-Printer -Name $p';
-    await ps(script, [printerName, tmp]);
+    await psFile(DRAWER_KICK_SCRIPT_PATH, [printerName, tmp]);
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
