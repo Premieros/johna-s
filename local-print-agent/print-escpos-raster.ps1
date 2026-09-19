@@ -53,6 +53,19 @@ public static class JohnsEscPosRasterPrinter
     [DllImport("winspool.Drv", SetLastError = true)]
     private static extern bool WritePrinter(IntPtr handle, IntPtr bytes, int count, out int written);
 
+    public static int ValidateRasterPayload()
+    {
+        using (Bitmap ticket = RenderTicket("اختبار العربية 123\r\nJOHNS TEST", 576))
+        {
+            byte[] payload = BuildEscPosRaster(ticket);
+            if (payload.Length < 100)
+                throw new InvalidOperationException("RASTER_PAYLOAD_TOO_SMALL");
+            if (payload[0] != 0x1B || payload[1] != 0x40)
+                throw new InvalidOperationException("ESC_POS_INIT_MISSING");
+            return payload.Length;
+        }
+    }
+
     public static void Print(string printerName, string filePath, int paperWidthMm)
     {
         if (string.IsNullOrWhiteSpace(printerName))
@@ -181,7 +194,7 @@ public static class JohnsEscPosRasterPrinter
     {
         int widthBytes = (bitmap.Width + 7) / 8;
         int height = bitmap.Height;
-        var data = new byte[8 + (widthBytes * height) + 8];
+        var data = new byte[10 + (widthBytes * height) + 8];
         int offset = 0;
 
         // ESC @ : initialize printer.
@@ -274,7 +287,8 @@ public static class JohnsEscPosRasterPrinter
 Add-Type -TypeDefinition $source -ReferencedAssemblies @('System.Drawing.dll')
 
 if ($ValidateOnly) {
-  Write-Output 'ESC_POS_RASTER_HELPER_OK'
+  $length = [JohnsEscPosRasterPrinter]::ValidateRasterPayload()
+  Write-Output "ESC_POS_RASTER_HELPER_OK bytes=$length"
   exit 0
 }
 
