@@ -63,18 +63,25 @@ describe('legacy print agent spool reliability contract', () => {
   });
 
 
-  it('forces the installed localhost service onto the Cleopatra v4 ESC/POS raster transport', () => {
+  it('forces the installed localhost service onto the Cleopatra v5 ESC/POS raster transport', () => {
     const agent = read('local-print-agent/agent.cjs');
     const restart = read('local-print-agent/restart-agent.ps1');
     const install = read('local-print-agent/install-startup.cmd');
 
-    expect(agent).toContain("version: 4, transport: 'escpos-raw-raster'");
+    expect(agent).toContain("version: 5, transport: 'escpos-raw-raster'");
     expect(restart).toContain('Get-NetTCPConnection -LocalPort $port -State Listen');
     expect(restart).toContain("$process.Name -ieq 'node.exe'");
     expect(restart).toContain("$commandLine -match 'agent\\.cjs'");
     expect(restart).toContain("throw \"WRONG_PRINT_AGENT_VERSION:$($health.version)\"");
     expect(restart).toContain("throw \"WRONG_PRINT_TRANSPORT:$($health.transport)\"");
     expect(install).toContain('restart-agent.ps1');
-    expect(install).toContain('Johns Print Service v4 is installed and verified.');
+    expect(install).toContain('Johns Print Service v5 is installed and verified.');
+    expect(agent).toContain("url.pathname === '/stations'");
+    expect(agent).toContain("path.join(__dirname, 'cleopatra-stations.json')");
+    expect(agent).toContain('printerIndex:idx');
+    expect(agent).toContain('if (Number.isInteger(body.printerIndex))');
+    expect(agent).not.toContain("stations=['main','drinks','grill','salad','dessert','fryer']");
+    const stations = JSON.parse(read('local-print-agent/cleopatra-stations.json'));
+    expect(stations.stations.map((station: { code: string }) => station.code)).toEqual(['kit', 'بار', 'كاش']);
   });
 });
