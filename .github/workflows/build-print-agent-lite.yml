@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'print-agent-lite/**'
+      - 'local-print-agent/**'
       - '.github/workflows/build-print-agent-lite.yml'
   workflow_dispatch:
 
@@ -23,6 +24,9 @@ jobs:
         run: dotnet restore print-agent-lite/PremierPrintAgentLite.csproj
       - name: Build Release
         run: dotnet build print-agent-lite/PremierPrintAgentLite.csproj -c Release --no-restore
+      - name: Validate legacy Unicode print helper
+        shell: pwsh
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File local-print-agent/print-unicode.ps1 -ValidateOnly
       - name: Package Lite ZIP
         shell: pwsh
         run: |
