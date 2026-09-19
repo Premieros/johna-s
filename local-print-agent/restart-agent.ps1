@@ -42,11 +42,11 @@ if (-not $health) {
   throw 'PRINT_AGENT_HEALTHCHECK_FAILED'
 }
 
-if ([int]$health.version -ne 3) {
+if ([int]$health.version -ne 4) {
   throw "WRONG_PRINT_AGENT_VERSION:$($health.version)"
 }
 
-if ([string]$health.transport -ne 'windows-gdi-raster') {
+if ([string]$health.transport -ne 'escpos-raw-raster') {
   throw "WRONG_PRINT_TRANSPORT:$($health.transport)"
 }
 
