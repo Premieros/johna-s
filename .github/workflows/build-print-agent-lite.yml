@@ -67,6 +67,7 @@ jobs:
           Copy-Item 'local-print-agent/README.md' $stage
           Copy-Item 'local-print-agent/cleopatra-stations.json' $stage
           Copy-Item 'local-print-agent/printer-preflight.ps1' $stage
+          Copy-Item 'local-print-agent/drawer-kick.ps1' $stage
           @'
           CLEOPATRA ONLY
           This package is for the Cleopatra Windows print-agent computer only.
