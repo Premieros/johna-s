@@ -110,10 +110,10 @@ BEGIN
   END IF;
 
   IF v_flag_pos = 0 OR v_flag_pos > v_update_pos THEN
-    v_next := regexp_replace(
+    v_next := replace(
       v_def,
-      E'([[:space:]]+)UPDATE public\\.order_kitchen_sends',
-      E'\\1PERFORM set_config(''app.approved_sent_item_void'', ''1'', true);\\n\\1UPDATE public.order_kitchen_sends'
+      'UPDATE public.order_kitchen_sends',
+      E'PERFORM set_config(''app.approved_sent_item_void'', ''1'', true);\n\n  UPDATE public.order_kitchen_sends'
     );
 
     IF v_next = v_def THEN
