@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Plus, Wifi, WifiOff, Timer, Moon, Sun, LogOut, Clock3, MoreHorizontal, ListOrdered, RefreshCw, CalendarCheck, ChefHat, Truck } from 'lucide-react';
+import { Plus, Wifi, WifiOff, Timer, Moon, Sun, LogOut, Clock3, MoreHorizontal, ListOrdered, RefreshCw, CalendarCheck, ChefHat, Truck, Languages, Palette, Settings2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -8,6 +8,8 @@ import { Logo } from '@/components/Logo';
 import type { Branch } from '@/lib/types';
 import type { ActiveShiftInfo } from '../../hooks/usePosOrder';
 import { usePosPermissions } from '../../hooks/usePosPermissions';
+import { useCan } from '@/lib/permissions';
+import { APP_ROUTES } from '@/core/navigation/routes';
 import { offlinePosManager } from '../../services/offlinePos';
 
 export type PosPanelId = 'orders' | 'tables' | 'kitchen' | null;
@@ -47,10 +49,11 @@ export function PosTopBar({
   onExit,
   onOpenShiftModal,
 }: PosTopBarProps) {
-  const { t, lang } = useLanguage();
+  const { t, lang, setLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const perms = usePosPermissions();
+  const can = useCan();
   const navigate = useNavigate();
   const location = useLocation();
   const landingOpened = useRef(false);
@@ -155,6 +158,7 @@ export function PosTopBar({
             className="flex min-h-9 items-center gap-1.5 rounded-xl bg-ui-primary px-3 text-xs font-black text-ui-primary-fg shadow-ui-sm transition active:scale-95 hover:bg-ui-primary-hover"
           >
             <Plus className="h-4 w-4" />
+            <span className="sm:hidden">{isAr ? 'طلب جديد' : 'New'}</span>
             <span className="hidden sm:inline">{isAr ? 'الطاولات / طلب جديد' : 'Tables / New order'}</span>
           </button>
         )}
@@ -226,6 +230,24 @@ export function PosTopBar({
               {t('activeOrders')}
               {counts.activeOrders > 0 && <span className="ms-auto rounded-full bg-ui-primary px-2 py-0.5 text-[10px] text-ui-primary-fg">{counts.activeOrders}</span>}
             </button>
+            <button
+              onClick={() => { onPanel('tables'); setMore(false); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              {isAr ? 'الطاولات المشغولة' : 'Occupied tables'}
+              {counts.occupiedTables > 0 && <span className="ms-auto rounded-full bg-ui-primary px-2 py-0.5 text-[10px] text-ui-primary-fg">{counts.occupiedTables}</span>}
+            </button>
+            {perms.canViewKitchen && (
+              <button
+                onClick={() => { onPanel('kitchen'); setMore(false); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+              >
+                <ChefHat className="h-4 w-4" />
+                {isAr ? 'طلبات المطبخ' : 'Kitchen queue'}
+                {counts.kitchenOrders > 0 && <span className="ms-auto rounded-full bg-ui-primary px-2 py-0.5 text-[10px] text-ui-primary-fg">{counts.kitchenOrders}</span>}
+              </button>
+            )}
             {canManageCurrentShift && (
               <button
                 onClick={() => { openShiftManagement(); setMore(false); }}
@@ -234,6 +256,54 @@ export function PosTopBar({
                 <CalendarCheck className="h-4 w-4 text-ui-accent" />
                 {activeShift ? (isAr ? 'إغلاق اليوم والوردية (Z-Report)' : 'Day & Shift Closing') : (isAr ? 'فتح وردية' : 'Open Shift')}
               </button>
+            )}
+            <div className="my-1 h-px bg-ui-border" />
+            <button
+              data-testid="pos-language-action"
+              onClick={() => { setLang(isAr ? 'en' : 'ar'); setMore(false); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+            >
+              <Languages className="h-4 w-4 text-ui-accent" />
+              {isAr ? 'English' : 'العربية'}
+            </button>
+            <button
+              data-testid="pos-theme-action"
+              onClick={() => { toggleTheme(); setMore(false); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+            >
+              <Palette className="h-4 w-4 text-ui-accent" />
+              {theme === 'light'
+                ? (isAr ? 'الوضع الداكن' : 'Dark theme')
+                : (isAr ? 'الوضع الفاتح' : 'Light theme')}
+            </button>
+            {can('settings.manage') && (
+              <>
+                <div className="my-1 h-px bg-ui-border" />
+                <button
+                  data-testid="pos-shift-settings-action"
+                  onClick={() => { navigate(`${APP_ROUTES.settings}?tab=business_day`); setMore(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+                >
+                  <Timer className="h-4 w-4 text-ui-accent" />
+                  {isAr ? 'إعدادات الشفت واليوم المالي' : 'Shift & business-day settings'}
+                </button>
+                <button
+                  data-testid="pos-theme-settings-action"
+                  onClick={() => { navigate(`${APP_ROUTES.settings}?tab=appearance`); setMore(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+                >
+                  <Settings2 className="h-4 w-4 text-ui-accent" />
+                  {isAr ? 'إعدادات المظهر والثيم' : 'Appearance & theme settings'}
+                </button>
+                <button
+                  data-testid="pos-language-settings-action"
+                  onClick={() => { navigate(`${APP_ROUTES.settings}?tab=language`); setMore(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+                >
+                  <Languages className="h-4 w-4 text-ui-accent" />
+                  {isAr ? 'إعدادات اللغة' : 'Language settings'}
+                </button>
+              </>
             )}
             {perms.canChangeBranch && canChangeBranch && (
               <>
@@ -265,7 +335,7 @@ export function PosTopBar({
         {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
       </button>
 
-      <button onClick={onExit} aria-label={isAr ? 'خروج' : 'Exit'} className="hidden min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-muted hover:bg-ui-page-alt sm:flex">
+      <button onClick={onExit} aria-label={isAr ? 'خروج' : 'Exit'} className="flex min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-muted hover:bg-ui-page-alt">
         <LogOut className="h-4 w-4 rotate-180" />
       </button>
 
