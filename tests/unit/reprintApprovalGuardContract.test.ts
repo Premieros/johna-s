@@ -24,6 +24,7 @@ describe('receipt reprint approval guard', () => {
     expect(migration).toContain("permissions ->> 'approvals.review'");
     expect(migration).not.toContain("- 'pos.receipt.print'");
     expect(migration).not.toContain('cloud_print_jobs');
-    expect(migration).not.toContain('printer');
+    expect(migration).not.toContain('printer_stations');
+    expect(migration).not.toContain('print-agent-lite');
   });
 });
