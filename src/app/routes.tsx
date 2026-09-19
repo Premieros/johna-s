@@ -53,6 +53,7 @@ const JournalPage = lazy(() => import('../features/accounting/pages/JournalPage'
 const TreasuryPage = lazy(() => import('../features/accounting/pages/TreasuryPage').then(m => ({ default: m.TreasuryPage })));
 const ReconciliationPage = lazy(() => import('../features/accounting/pages/ReconciliationPage').then(m => ({ default: m.ReconciliationPage })));
 const UsersPage = lazy(() => import('../features/admin/pages/UsersPage').then(m => ({ default: m.UsersPage })));
+const PermissionsPage = lazy(() => import('../features/admin/pages/PermissionsPage').then(m => ({ default: m.PermissionsPage })));
 const ApprovalCenterPage = lazy(() => import('../features/admin/pages/ApprovalCenterPage').then(m => ({ default: m.ApprovalCenterPage })));
 const AuditLogPage = lazy(() => import('../features/reporting/pages/AuditLogPage').then(m => ({ default: m.AuditLogPage })));
 const SettingsControlCenterPage = lazy(() => import('../features/admin/pages/SettingsControlCenterPage').then(m => ({ default: m.SettingsControlCenterPage })));
@@ -80,7 +81,7 @@ function resolveLandingRoute(can: (permission: Permission) => boolean, role?: st
     ['purchases.view', APP_ROUTES.purchases], ['customers.view', APP_ROUTES.customers], ['suppliers.view', APP_ROUTES.suppliers],
     ['expenses.view', APP_ROUTES.expenses], ['sales.view', APP_ROUTES.sales], ['shifts.view', APP_ROUTES.shifts],
     ['reports.view', APP_ROUTES.reports], ['reports.financial', APP_ROUTES.financialReports], ['accounts.view', APP_ROUTES.accounts],
-    ['users.view', APP_ROUTES.users], ['audit.view', APP_ROUTES.auditLog], ['branches.manage', APP_ROUTES.branches], ['settings.manage', APP_ROUTES.settings],
+    ['users.view', APP_ROUTES.users], ['roles.permissions.manage', APP_ROUTES.permissions], ['audit.view', APP_ROUTES.auditLog], ['branches.manage', APP_ROUTES.branches], ['settings.manage', APP_ROUTES.settings],
   ];
   for (const [permission, route] of candidates) if (can(permission)) return route;
   return null;
@@ -185,6 +186,7 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.treasury} element={<ProtectedRoute permission="accounts.view"><TreasuryPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.reconciliation} element={<ProtectedRoute permission="accounts.view"><ReconciliationPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.users} element={<ProtectedRoute permission="users.view"><UsersPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.permissions} element={<ProtectedRoute permission="roles.permissions.manage"><PermissionsPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.employees} element={<ProtectedRoute permission="users.view"><Navigate to={APP_ROUTES.users} replace /></ProtectedRoute>} />
         <Route path={APP_ROUTES.approvals} element={<ProtectedRoute permission="approvals.review"><ApprovalCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.auditLog} element={<ProtectedRoute permission="audit.view"><AuditLogPage /></ProtectedRoute>} />

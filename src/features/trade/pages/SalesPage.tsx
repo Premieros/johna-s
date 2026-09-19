@@ -65,8 +65,8 @@ export function SalesPage() {
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
   const isAr = lang === 'ar';
-  const canRequestRefundApproval = user?.role === 'cashier';
-  const canOpenRefund = can('refunds.approve') || canRequestRefundApproval;
+  const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
+  const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
   const canRequestPaymentApproval = user?.role === 'cashier';
   const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
 
