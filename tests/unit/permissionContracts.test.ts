@@ -24,7 +24,7 @@ describe('permission operational contracts', () => {
 
   it('adds POS screen access for interactive payment but keeps print-agent capabilities independent', () => {
     expect(expandPermissionDependencies(['pos.payment.take'])).toEqual(
-      expect.arrayContaining<Permission>(['pos.view', 'pos.payment.take']),
+      expect.arrayContaining(['pos.view', 'pos.payment.take']),
     );
     expect(permissionContract('pos.receipt.print').requires).not.toContain('pos.view');
     expect(permissionContract('pos.print_kitchen').requires).not.toContain('pos.view');
@@ -48,7 +48,7 @@ describe('permission operational contracts', () => {
   it('models close-with-open-orders as a two-step protected capability', () => {
     const expanded = expandPermissionDependencies(['shifts.close_with_open_orders']);
     expect(expanded).toEqual(
-      expect.arrayContaining<Permission>([
+      expect.arrayContaining([
         'shifts.view',
         'shifts.close',
         'shifts.close_with_open_orders',
