@@ -99,78 +99,99 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
 
   it('resume + add item + send + payment: only the new line reaches KDS and payment never deducts again (ERP-01)', async () => { const beforeA = await batchQty(unitA); const beforeB = await batchQty(unitB); const created = await createOrder(); expect(created.success).toBe(true); const orderId = created.order_id!; await sendToKitchen(orderId); expect(await batchQty(unitA)).toBe(beforeA - 1); expect(await sendRows(orderId)).toBe(1); const cart = itemJson([{ product_id: prodA, quantity: 1 }, { product_id: prodB, quantity: 1 }]); await asUser(async () => { const res = await client.query(`SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 200, 0, 'amount', 0, 200, 'held') AS r`, [orderId, cart]); expect(res.rows[0].r.success).toBe(true); }); const sent = await sendToKitchen(orderId); expect(sent.success).toBe(true); if (!sent.success) throw new Error(JSON.stringify(sent)); expect(sent.items_sent_count).toBe(1); expect(sent.sent).toHaveLength(1); expect(sent.sent![0].product_id).toBe(prodB); expect(await batchQty(unitB)).toBe(beforeB - 1); expect(await sendRows(orderId)).toBe(2); const beforePaymentA = await batchQty(unitA); const beforePaymentB = await batchQty(unitB); await client.query(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]); await client.query(`SELECT public.seed_account_mappings($1)`, [branchId]); const sale = await asUser(async () => client.query(`SELECT public.process_sale($1, $2, $3, NULL, NULL, 200, 0, 'amount', 0, 0, 200, 200, 'cash', 'completed', $4::jsonb, NULL, 'takeaway', NULL, $5) AS r`, [`INV-${randomUUID()}`, branchId, whId, cart, orderId])); expect(sale.rows[0].r.success).toBe(true); if (!sale.rows[0].r.success) throw new Error(JSON.stringify(sale.rows[0].r)); expect(await batchQty(unitA)).toBe(beforePaymentA); expect(await batchQty(unitB)).toBe(beforePaymentB); const saleLines = await client.query(`SELECT count(*)::int AS c FROM public.sale_items WHERE sale_id = $1`, [sale.rows[0].r.sale_id]); expect(saleLines.rows[0].c).toBe(2); const closed = await sendToKitchen(orderId); expect(closed.success).toBe(false); expect(closed.error).toBe('ORDER_NOT_EDITABLE'); });
 
-  it('cashier sent-item void requires approval, blocks bypass, and restores the exact sent quantity', async () => {
-    const created = await createOrder(itemJson([{ product_id: prodA, quantity: 2 }]));
-    expect(created.success).toBe(true);
-    const orderId = created.order_id!;
-    const sent = await sendToKitchen(orderId);
-    expect(sent.success).toBe(true);
-    expect(sent.items_sent_count).toBe(1);
+  it('cashier without pos.void requires approval, blocks bypass, and restores the exact sent quantity', async () => {
+    const beforeRole = await client.query<{ permissions: unknown }>(
+      `SELECT permissions FROM public.roles WHERE role='cashier'`,
+    );
+    const originalPermissions = beforeRole.rows[0]?.permissions;
 
-    const stockAfterSend = await batchQty();
-    expect(stockAfterSend).toBeGreaterThan(0);
-
-    const first = await asUser(async () => client.query(
-      `SELECT public.cancel_sent_order_item($1, $2, 1, 'customer changed mind') AS r`,
-      [orderId, prodA],
-    ));
-    const pending = first.rows[0].r as { success: boolean; error?: string; request_id?: string };
-    expect(pending.success).toBe(false);
-    expect(pending.error).toBe('MANAGER_APPROVAL_REQUIRED');
-    expect(pending.request_id).toBeTruthy();
-    expect(await batchQty()).toBe(stockAfterSend);
-
-    // A cashier cannot bypass the approval RPC by shrinking the already-sent
-    // cart through update_order; the sent-line mutation trigger blocks it.
-    const bypass = await asUser(async () => client.query(
-      `SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 100, 0, 'amount', 0, 100, 'held') AS r`,
-      [orderId, itemJson([{ product_id: prodA, quantity: 1 }])],
-    ));
-    expect(bypass.rows[0].r.success).toBe(false);
-    expect(String(bypass.rows[0].r.detail || '')).toContain('SENT_ITEM_APPROVAL_REQUIRED');
-    expect(await batchQty()).toBe(stockAfterSend);
-
-    // Simulate the manager decision itself as the CI session owner. The
-    // approval RPC is tested separately; this test focuses on the cancellation
-    // boundary and inventory invariant.
+    // This case deliberately models a user who does NOT own the direct Void
+    // capability. CI role seeds can change over time, so make that precondition
+    // explicit instead of relying on the default cashier role.
     await client.query(
-      `UPDATE public.approval_requests SET status='approved', decided_at=now() WHERE id=$1`,
-      [pending.request_id],
+      `UPDATE public.roles
+          SET permissions = COALESCE(permissions, '[]'::jsonb) - 'pos.void'
+        WHERE role='cashier'`,
     );
 
-    const approved = await asUser(async () => client.query(
-      `SELECT public.cancel_sent_order_item($1, $2, 1, 'customer changed mind') AS r`,
-      [orderId, prodA],
-    ));
-    const result = approved.rows[0].r as { success: boolean; remaining_quantity?: number; inventory_changed?: boolean };
-    expect(result.success).toBe(true);
-    expect(Number(result.remaining_quantity)).toBe(1);
-    expect(result.inventory_changed).toBe(true);
-    expect(await batchQty()).toBe(stockAfterSend + 1);
+    try {
+      const created = await createOrder(itemJson([{ product_id: prodA, quantity: 2 }]));
+      expect(created.success).toBe(true);
+      const orderId = created.order_id!;
+      const sent = await sendToKitchen(orderId);
+      expect(sent.success).toBe(true);
+      expect(sent.items_sent_count).toBe(1);
 
-    const line = await client.query(`SELECT quantity FROM public.order_items WHERE order_id=$1 AND product_id=$2`, [orderId, prodA]);
-    expect(Number(line.rows[0].quantity)).toBe(1);
-    const voids = await client.query(`SELECT quantity, reason FROM public.order_kitchen_voids WHERE order_id=$1 AND product_id=$2`, [orderId, prodA]);
-    expect(voids.rows).toHaveLength(1);
-    expect(Number(voids.rows[0].quantity)).toBe(1);
-    const approval = await client.query(`SELECT status FROM public.approval_requests WHERE id=$1`, [pending.request_id]);
-    expect(approval.rows[0].status).toBe('consumed');
+      const stockAfterSend = await batchQty();
+      expect(stockAfterSend).toBeGreaterThan(0);
 
-    const resend = await sendToKitchen(orderId);
-    expect(resend.success).toBe(true);
-    expect(resend.items_sent_count).toBe(0);
-    expect(await batchQty()).toBe(stockAfterSend + 1);
+      const first = await asUser(async () => client.query(
+        `SELECT public.cancel_sent_order_item($1, $2, 1, 'customer changed mind') AS r`,
+        [orderId, prodA],
+      ));
+      const pending = first.rows[0].r as { success: boolean; error?: string; request_id?: string };
+      expect(pending.success).toBe(false);
+      expect(pending.error).toBe('MANAGER_APPROVAL_REQUIRED');
+      expect(pending.request_id).toBeTruthy();
+      expect(await batchQty()).toBe(stockAfterSend);
 
-    const addBack = await asUser(async () => client.query(
-      `SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 200, 0, 'amount', 0, 200, 'held') AS r`,
-      [orderId, itemJson([{ product_id: prodA, quantity: 2 }])],
-    ));
-    expect(addBack.rows[0].r.success).toBe(true);
-    const positiveDelta = await sendToKitchen(orderId);
-    expect(positiveDelta.success).toBe(true);
-    expect(positiveDelta.items_sent_count).toBe(1);
-    expect(Number(positiveDelta.sent[0].quantity)).toBe(1);
-    expect(await batchQty()).toBe(stockAfterSend);
+      // A user cannot bypass the approval RPC by shrinking an already-sent
+      // cart through update_order; the sent-line mutation trigger still blocks it.
+      const bypass = await asUser(async () => client.query(
+        `SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 100, 0, 'amount', 0, 100, 'held') AS r`,
+        [orderId, itemJson([{ product_id: prodA, quantity: 1 }])],
+      ));
+      expect(bypass.rows[0].r.success).toBe(false);
+      expect(String(bypass.rows[0].r.detail || '')).toContain('SENT_ITEM_APPROVAL_REQUIRED');
+      expect(await batchQty()).toBe(stockAfterSend);
+
+      // Simulate the manager decision itself as the CI session owner. The
+      // approval RPC is tested separately; this test focuses on the cancellation
+      // boundary and inventory invariant.
+      await client.query(
+        `UPDATE public.approval_requests SET status='approved', decided_at=now() WHERE id=$1`,
+        [pending.request_id],
+      );
+
+      const approved = await asUser(async () => client.query(
+        `SELECT public.cancel_sent_order_item($1, $2, 1, 'customer changed mind') AS r`,
+        [orderId, prodA],
+      ));
+      const result = approved.rows[0].r as { success: boolean; remaining_quantity?: number; inventory_changed?: boolean };
+      expect(result.success).toBe(true);
+      expect(Number(result.remaining_quantity)).toBe(1);
+      expect(result.inventory_changed).toBe(true);
+      expect(await batchQty()).toBe(stockAfterSend + 1);
+
+      const line = await client.query(`SELECT quantity FROM public.order_items WHERE order_id=$1 AND product_id=$2`, [orderId, prodA]);
+      expect(Number(line.rows[0].quantity)).toBe(1);
+      const voids = await client.query(`SELECT quantity, reason FROM public.order_kitchen_voids WHERE order_id=$1 AND product_id=$2`, [orderId, prodA]);
+      expect(voids.rows).toHaveLength(1);
+      expect(Number(voids.rows[0].quantity)).toBe(1);
+      const approval = await client.query(`SELECT status FROM public.approval_requests WHERE id=$1`, [pending.request_id]);
+      expect(approval.rows[0].status).toBe('consumed');
+
+      const resend = await sendToKitchen(orderId);
+      expect(resend.success).toBe(true);
+      expect(resend.items_sent_count).toBe(0);
+      expect(await batchQty()).toBe(stockAfterSend + 1);
+
+      const addBack = await asUser(async () => client.query(
+        `SELECT public.update_order($1, 'dine_in', NULL, NULL, 2, NULL, $2::jsonb, 200, 0, 'amount', 0, 200, 'held') AS r`,
+        [orderId, itemJson([{ product_id: prodA, quantity: 2 }])],
+      ));
+      expect(addBack.rows[0].r.success).toBe(true);
+      const positiveDelta = await sendToKitchen(orderId);
+      expect(positiveDelta.success).toBe(true);
+      expect(positiveDelta.items_sent_count).toBe(1);
+      expect(Number(positiveDelta.sent[0].quantity)).toBe(1);
+      expect(await batchQty()).toBe(stockAfterSend);
+    } finally {
+      await client.query(
+        `UPDATE public.roles SET permissions=$1::jsonb WHERE role='cashier'`,
+        [JSON.stringify(originalPermissions ?? [])],
+      );
+    }
   });
 
   it('a user with pos.void can void a sent item directly without manager approval', async () => {
