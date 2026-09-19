@@ -277,6 +277,106 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     }
   });
 
+  it('a manager with pos.void can void a sent item on another operator order', async () => {
+    const beforeRole = await client.query<{ permissions: unknown }>(
+      `SELECT permissions FROM public.roles WHERE role='cashier'`,
+    );
+    const originalPermissions = beforeRole.rows[0]?.permissions;
+    const otherOperatorId = randomUUID();
+
+    await client.query(
+      `UPDATE public.roles
+          SET permissions = (
+            COALESCE(permissions, '[]'::jsonb)
+            || '["pos.void","pos.view","pos.order.edit","pos.order.transfer","users.manage"]'::jsonb
+          )
+        WHERE role='cashier'`,
+    );
+
+    await client.query(
+      `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
+       VALUES ($1, $2, 'Other Operator', 'cashier', $3, true)`,
+      [otherOperatorId, `other-${randomUUID()}@test.local`, branchId],
+    );
+
+    try {
+      const created = await createOrder(itemJson([{ product_id: prodA, quantity: 1 }]));
+      expect(created.success).toBe(true);
+      const orderId = created.order_id!;
+
+      const sent = await sendToKitchen(orderId);
+      expect(sent.success).toBe(true);
+      expect(sent.items_sent_count).toBe(1);
+      const stockAfterSend = await batchQty();
+
+      const line = await client.query<{ id: string }>(
+        `SELECT id FROM public.order_items WHERE order_id=$1 AND product_id=$2 LIMIT 1`,
+        [orderId, prodA],
+      );
+      const orderItemId = line.rows[0]?.id;
+      expect(orderItemId).toBeTruthy();
+
+      // Simulate a manager opening an order currently owned by another
+      // cashier/captain. DB-admin test setup changes only the fixture owner.
+      await client.query(
+        `UPDATE public.orders SET cashier_id=$1 WHERE id=$2`,
+        [otherOperatorId, orderId],
+      );
+
+      const manageOthers = await asUser(async () => client.query(
+        `SELECT public.can_manage_other_pos_orders() AS allowed`,
+      ));
+      expect(manageOthers.rows[0].allowed).toBe(true);
+
+      const approvalsBefore = await client.query<{ c: number }>(
+        `SELECT count(*)::int AS c
+           FROM public.approval_requests
+          WHERE requester_id=$1
+            AND action_type='cancel_sent_item'
+            AND entity_id=$2`,
+        [cashierId, orderItemId],
+      );
+
+      const direct = await asUser(async () => client.query(
+        `SELECT public.cancel_sent_order_item_exact($1, $2, 1, 'manager cross operator void') AS r`,
+        [orderId, orderItemId],
+      ));
+      const result = direct.rows[0].r as {
+        success: boolean;
+        error?: string;
+        remaining_quantity?: number;
+        inventory_changed?: boolean;
+      };
+
+      expect(result.success, JSON.stringify(result)).toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(Number(result.remaining_quantity)).toBe(0);
+      expect(result.inventory_changed).toBe(true);
+      expect(await batchQty()).toBe(stockAfterSend + 1);
+
+      const approvalsAfter = await client.query<{ c: number }>(
+        `SELECT count(*)::int AS c
+           FROM public.approval_requests
+          WHERE requester_id=$1
+            AND action_type='cancel_sent_item'
+            AND entity_id=$2`,
+        [cashierId, orderItemId],
+      );
+      expect(approvalsAfter.rows[0].c).toBe(approvalsBefore.rows[0].c);
+
+      const sendRow = await client.query<{ sent_quantity: string }>(
+        `SELECT sent_quantity::text FROM public.order_kitchen_sends WHERE order_item_id=$1`,
+        [orderItemId],
+      );
+      expect(Number(sendRow.rows[0]?.sent_quantity || 0)).toBe(0);
+    } finally {
+      await client.query(
+        `UPDATE public.roles SET permissions=$1::jsonb WHERE role='cashier'`,
+        [JSON.stringify(originalPermissions ?? [])],
+      );
+    }
+  });
+
   it('payment cannot bypass kitchen send or deduct an unsent linked order', async () => {
     const cart = itemJson([{ product_id: prodA, quantity: 1 }]);
     const created = await createOrder(cart);
