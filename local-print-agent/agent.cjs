@@ -353,7 +353,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
     if (req.method === 'GET' && url.pathname === '/') return html(res, configPage());
-    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 4, transport: 'escpos-raw-raster', queue: queueSnapshot() });
+    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 5, transport: 'escpos-raw-raster', queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/queue') return json(res, 200, { queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/printers') return json(res, 200, { printers: await listPrinters() });
     if (req.method === 'GET' && url.pathname === '/config') return json(res, 200, readConfig());
