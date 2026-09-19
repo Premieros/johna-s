@@ -15,6 +15,8 @@ type Rpc = {
   sale_id?: string;
   station_code?: string;
   job_id?: string;
+  status?: string;
+  jobs?: Array<{ id?: string }>;
 };
 
 describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + cashier print', () => {
@@ -174,6 +176,50 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       kind: 'receipt',
       station_code: 'cashier',
       requested_by: ids.users.cashier,
+    });
+
+    // Open checks intentionally have no sale identity. They must travel through
+    // the cashier receipt transport without entering completed-sale sequencing.
+    const agentId = randomUUID();
+    const claimed = await rpc(
+      ids.users.cashier,
+      `SELECT public.claim_cloud_print_jobs($1,$2,10) AS r`,
+      [ids.branchA, agentId],
+    );
+    expect(claimed.success, JSON.stringify(claimed)).toBe(true);
+    expect(claimed.jobs?.some((row) => row.id === queued.job_id)).toBe(true);
+
+    const started = await rpc(
+      ids.users.cashier,
+      `SELECT public.start_cloud_print_job($1,$2) AS r`,
+      [queued.job_id, agentId],
+    );
+    expect(started.success, JSON.stringify(started)).toBe(true);
+
+    const completed = await rpc(
+      ids.users.cashier,
+      `SELECT public.complete_cloud_print_job($1,$2,true,NULL) AS r`,
+      [queued.job_id, agentId],
+    );
+    expect(completed.success, JSON.stringify(completed)).toBe(true);
+    expect(completed.status).toBe('submitted');
+
+    const submitted = await client.query<{
+      status: string;
+      sale_id: string | null;
+      expected_print_number: number | null;
+      last_error: string | null;
+    }>(
+      `SELECT status,sale_id,expected_print_number,last_error
+       FROM public.cloud_print_jobs
+       WHERE id=$1`,
+      [queued.job_id],
+    );
+    expect(submitted.rows[0]).toEqual({
+      status: 'submitted',
+      sale_id: null,
+      expected_print_number: null,
+      last_error: null,
     });
   });
 
