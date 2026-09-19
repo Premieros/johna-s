@@ -38,8 +38,9 @@ describe.skipIf(skip)('branch-scoped users and manufactured recipe components', 
     );
     expect(result.error).toBeUndefined();
     expect(result.rows.length).toBeGreaterThan(0);
-    expect(result.rows.every((row: { branch_id: string | null }) => row.branch_id === ids.branchA)).toBe(true);
-    expect(result.rows.some((row: { id: string }) => row.id === ids.users.cashier_b)).toBe(false);
+    const visibleUsers = result.rows as Array<{ id: string; branch_id: string | null }>;
+    expect(visibleUsers.every((row) => row.branch_id === ids.branchA)).toBe(true);
+    expect(visibleUsers.some((row) => row.id === ids.users.cashier_b)).toBe(false);
   });
 
   it('recipe manager can atomically save manufactured composition only from the same branch', async () => {
