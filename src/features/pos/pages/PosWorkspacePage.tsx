@@ -567,12 +567,33 @@ export function PosWorkspacePage() {
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    const { data, error } = await api.floorPlan.setOrderStatus({ p_order_id: orderId, p_status: 'cancelled' });
+    if (!perms.canCancelOrder) return;
+    const entered = window.prompt(
+      isAr ? 'اكتب سبب إلغاء الطلب (مطلوب):' : 'Enter the cancellation reason (required):',
+      '',
+    );
+    if (entered === null) return;
+    const reason = entered.trim();
+    if (reason.length < 3) {
+      show(isAr ? 'اكتب سببًا واضحًا للإلغاء (3 أحرف على الأقل).' : 'Enter a clear cancellation reason (at least 3 characters).', 'error');
+      return;
+    }
+
+    const { data, error } = await api.floorPlan.setOrderStatus({
+      p_order_id: orderId,
+      p_status: 'cancelled',
+      p_notes: reason,
+    });
     if (error) show(error.message, 'error');
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
       show(r?.detail || r?.error || t('error'), 'error');
-    } else show(t('cancelOrder'), 'success');
+    } else {
+      show(t('cancelOrder'), 'success');
+      setPanel(null);
+      setReloadKey((value) => value + 1);
+      if (pos.activeOrderId === orderId) pos.resetWorkspace();
+    }
   };
 
   const handleBranchChange = (v: string) => {

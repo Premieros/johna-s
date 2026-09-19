@@ -21,7 +21,22 @@ export interface UseActiveOrdersResult {
 export function useActiveOrders(branchId: string): UseActiveOrdersResult {
   const { data, loading, error } = usePosRealtime(branchId);
 
-  const orders = data.orders;
+  const itemsByOrder = useMemo(() => {
+    const map: Record<string, OrderItem[]> = {};
+    for (const i of data.orderItems) (map[i.order_id] ||= []).push(i);
+    return map;
+  }, [data.orderItems]);
+
+  // Empty open/held order shells are explicitly non-operational. Keep them out
+  // of every POS active-order surface so a vacant table can immediately start
+  // a real order even if a stale empty shell still exists server-side.
+  const orders = useMemo(
+    () => data.orders.filter((order) =>
+      (itemsByOrder[order.id] || []).some((item) => Number(item.quantity || 0) > 0),
+    ),
+    [data.orders, itemsByOrder],
+  );
+
   const counts = useMemo(() => countActiveOrders(orders), [orders]);
   const ordersByTable = useMemo(() => {
     const map: Record<string, Order[]> = {};
@@ -35,11 +50,6 @@ export function useActiveOrders(branchId: string): UseActiveOrdersResult {
     for (const t of data.tables) map[t.id] = t;
     return map;
   }, [data.tables]);
-  const itemsByOrder = useMemo(() => {
-    const map: Record<string, OrderItem[]> = {};
-    for (const i of data.orderItems) (map[i.order_id] ||= []).push(i);
-    return map;
-  }, [data.orderItems]);
   const kitchenSendsByOrder = useMemo(() => {
     const map: Record<string, OrderKitchenSend[]> = {};
     for (const k of data.kitchenSends) (map[k.order_id] ||= []).push(k);
