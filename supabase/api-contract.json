@@ -947,6 +947,15 @@
       ]
     },
     {
+      "name": "set_raw_material_price",
+      "params": [
+        "branch_id",
+        "note",
+        "raw_material_id",
+        "unit_cost"
+      ]
+    },
+    {
       "name": "set_table_status",
       "params": [
         "status",

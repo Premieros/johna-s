@@ -228,6 +228,7 @@ export function CostingCenterPage() {
   const rawPriceSourceLabel = (source: RawMaterialPriceSource | string) => {
     if (source === 'purchase') return isAr ? 'مشتريات' : 'Purchase';
     if (source === 'stock_count') return isAr ? 'جرد' : 'Stock count';
+    if (source === 'pricing') return isAr ? 'تسعير' : 'Pricing';
     if (source === 'inventory_average') return isAr ? 'متوسط المخزون' : 'Inventory average';
     if (source === 'batch_average') return isAr ? 'متوسط الدفعات' : 'Batch average';
     return isAr ? 'تكلفة افتراضية' : 'Default cost';
@@ -238,7 +239,9 @@ export function CostingCenterPage() {
       ? 'bg-ui-info-soft text-ui-info'
       : source === 'stock_count'
         ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-        : 'bg-ui-page-alt text-ui-muted';
+        : source === 'pricing'
+          ? 'bg-ui-primary-soft text-ui-primary'
+          : 'bg-ui-page-alt text-ui-muted';
     return pill(rawPriceSourceLabel(source), cls);
   };
 

@@ -18,4 +18,5 @@ export const costing = {
   getSalesSummary(p: { p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }): ApiResult<CostingSalesSummary> { return rpc('get_costing_sales_summary', p); },
   getRawMaterialCostOverview(p: { p_branch_id?: string | null }): ApiResult<RawMaterialCostOverviewRow[]> { return rpc('get_raw_material_cost_overview', p); },
   getRawMaterialCostHistory(p: { p_raw_material_id: string; p_branch_id?: string | null; p_limit?: number }): ApiResult<RawMaterialCostHistoryRow[]> { return rpc('get_raw_material_cost_history', p); },
+  setRawMaterialPrice(p: { p_raw_material_id: string; p_branch_id: string; p_unit_cost: number; p_note?: string | null }): ApiResult<{ success: boolean; error?: string; permission?: string; event_id?: string; reference_number?: string; unit_cost?: number; source?: 'pricing'; priced_at?: string }> { return rpc('set_raw_material_price', p); },
 };
