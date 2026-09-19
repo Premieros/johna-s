@@ -68,8 +68,8 @@ export function VoidItemModal({
             </p>
             <p className="text-rose-600">
               {isAr
-                ? 'سيتم تنفيذ الإلغاء عبر مسار Void المعتمد مع تسجيل السبب وتحديث الطلب والمخزون حسب الكمية المرسلة. من يملك صلاحية مراجعة الموافقات ينفذ الإلغاء مباشرة، وإلا يُرسل طلب موافقة.'
-                : 'The item will be voided through the controlled Void flow, with the reason audited and order/inventory updated for the sent quantity. Users with approval-review permission execute directly; otherwise an approval request is created.'}
+                ? 'سيتم تنفيذ الإلغاء عبر مسار Void المعتمد مع تسجيل السبب وتحديث الطلب والمخزون حسب الكمية المرسلة. من يملك صلاحية إلغاء الصنف (pos.void) ينفذ مباشرة؛ ومن لا يملكها يبقى خاضعًا لمسار الموافقة.'
+                : 'The item will be voided through the controlled Void flow with an audited reason and the sent quantity reconciled. Users with pos.void execute directly; users without it remain on the approval path.'}
             </p>
           </div>
         </div>
