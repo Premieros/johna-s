@@ -139,19 +139,19 @@ async function ensureSpoolerReadyWithRetry(printerName) {
   throw lastError || new Error('PRINT_SPOOLER_NOT_READY');
 }
 
-const UNICODE_PRINT_SCRIPT_PATH = path.join(__dirname, 'print-unicode.ps1');
+const ESC_POS_RASTER_SCRIPT_PATH = path.join(__dirname, 'print-escpos-raster.ps1');
 
-async function submitTextToSpooler(printerName, text) {
+async function submitTextToSpooler(printerName, text, paperWidthMm = 80) {
   const tmp = path.join(os.tmpdir(), `johns-ticket-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
   fs.writeFileSync(tmp, text, { encoding: 'utf8' });
   try {
-    await psFile(UNICODE_PRINT_SCRIPT_PATH, [printerName, tmp]);
+    await psFile(ESC_POS_RASTER_SCRIPT_PATH, [printerName, tmp, String(Number(paperWidthMm) <= 58 ? 58 : 80)]);
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
 }
 
-async function printText(printerName, text) {
+async function printText(printerName, text, paperWidthMm = 80) {
   return enqueuePrinterTask(printerName, async () => {
     const printers = await listPrinters();
     if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
@@ -159,7 +159,7 @@ async function printText(printerName, text) {
     // Retry only the preflight. Once the Windows GDI print call is invoked we never retry here,
     // because an ambiguous retry could produce a duplicate physical ticket.
     await ensureSpoolerReadyWithRetry(printerName);
-    await submitTextToSpooler(printerName, text);
+    await submitTextToSpooler(printerName, text, paperWidthMm);
     return { acceptedBySpooler: true };
   });
 }
@@ -235,7 +235,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
     if (req.method === 'GET' && url.pathname === '/') return html(res, configPage());
-    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 3, transport: 'windows-gdi-raster', queue: queueSnapshot() });
+    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'johns-print-agent', version: 4, transport: 'escpos-raw-raster', queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/queue') return json(res, 200, { queue: queueSnapshot() });
     if (req.method === 'GET' && url.pathname === '/printers') return json(res, 200, { printers: await listPrinters() });
     if (req.method === 'GET' && url.pathname === '/config') return json(res, 200, readConfig());
@@ -261,7 +261,8 @@ const server = http.createServer(async (req, res) => {
       const printer = body.printer ? String(body.printer) : config.routes[station];
       if (!printer) return json(res, 409, { success: false, error: 'STATION_NOT_CONFIGURED', station });
       const queuedAhead = queueDepthFor(printer);
-      const result = await printText(printer, text);
+      const paperWidthMm = Number(body.paperWidthMm || 80);
+      const result = await printText(printer, text, paperWidthMm);
       return json(res, 200, { success: true, station, printer, acceptedBySpooler: Boolean(result?.acceptedBySpooler), queuedAhead });
     }
     if (req.method === 'POST' && url.pathname === '/drawer') {
