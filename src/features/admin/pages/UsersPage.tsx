@@ -55,7 +55,9 @@ export function UsersPage() {
   const [addForm, setAddForm] = useState({ full_name: '', username: '', email: '', password: '', role: 'cashier', branch_id: '', is_active: true });
   const [branchAccessIds, setBranchAccessIds] = useState<string[]>([]);
 
-  const filtered = items.filter((u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || u.username?.toLowerCase().includes(search.toLowerCase()) || u.full_name?.toLowerCase().includes(search.toLowerCase()));
+  const allowedBranchIds = new Set(branches.map((branch) => branch.id));
+  const scopedItems = isPlatformAdmin ? items : items.filter((u) => !!u.branch_id && allowedBranchIds.has(u.branch_id));
+  const filtered = scopedItems.filter((u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || u.username?.toLowerCase().includes(search.toLowerCase()) || u.full_name?.toLowerCase().includes(search.toLowerCase()));
 
   const ensurePrimaryBranch = (ids: string[], primaryBranchId: string) => (
     primaryBranchId && !ids.includes(primaryBranchId) ? [...ids, primaryBranchId] : ids
@@ -287,7 +289,7 @@ export function UsersPage() {
       </DesignPanel>
       <DesignPanel testId="users-table-panel">
         <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} />
-        <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
+        <DesignPagination loaded={scopedItems.length} total={isPlatformAdmin ? total : scopedItems.length} hasMore={isPlatformAdmin ? hasMore : false} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t('edit')}>
