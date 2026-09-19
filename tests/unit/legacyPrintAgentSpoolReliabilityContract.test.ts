@@ -49,6 +49,8 @@ describe('legacy print agent spool reliability contract', () => {
     );
     expect(agent).toContain('\\u0600-\\u06FF');
     expect(agent).toContain("path.join(__dirname, 'print-escpos-raster.ps1')");
+    expect(agent).toContain("path.join(__dirname, 'printer-preflight.ps1')");
+    expect(agent).toContain('await psFile(PRINTER_PREFLIGHT_SCRIPT_PATH, [printerName])');
     expect(agent).toContain('await psFile(ESC_POS_RASTER_SCRIPT_PATH, [printerName, tmp, String(Number(paperWidthMm) <= 58 ? 58 : 80)])');
     expect(agent).not.toContain('Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p');
 
@@ -63,19 +65,19 @@ describe('legacy print agent spool reliability contract', () => {
   });
 
 
-  it('forces the installed localhost service onto the Cleopatra v5 ESC/POS raster transport', () => {
+  it('forces the installed localhost service onto the Cleopatra v6 ESC/POS raster transport', () => {
     const agent = read('local-print-agent/agent.cjs');
     const restart = read('local-print-agent/restart-agent.ps1');
     const install = read('local-print-agent/install-startup.cmd');
 
-    expect(agent).toContain("version: 5, transport: 'escpos-raw-raster'");
+    expect(agent).toContain("version: 6, transport: 'escpos-raw-raster'");
     expect(restart).toContain('Get-NetTCPConnection -LocalPort $port -State Listen');
     expect(restart).toContain("$process.Name -ieq 'node.exe'");
     expect(restart).toContain("$commandLine -match 'agent\\.cjs'");
     expect(restart).toContain("throw \"WRONG_PRINT_AGENT_VERSION:$($health.version)\"");
     expect(restart).toContain("throw \"WRONG_PRINT_TRANSPORT:$($health.transport)\"");
     expect(install).toContain('restart-agent.ps1');
-    expect(install).toContain('Johns Print Service v5 is installed and verified.');
+    expect(install).toContain('Johns Print Service v6 is installed and verified.');
     expect(agent).toContain("url.pathname === '/stations'");
     expect(agent).toContain("path.join(__dirname, 'cleopatra-stations.json')");
     expect(agent).toContain('printerIndex:idx');
