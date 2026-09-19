@@ -115,7 +115,7 @@ export function UsersPage() {
     if (error) { show(`${t('unknownErrorCreatingUser')}: ${error.message}`, 'error'); return; }
     const result = data as { success: boolean; error?: string; detail?: string; user_id?: string } | null;
     if (!result?.success) {
-      if (result?.error === 'PERMISSION_DENIED') show(t('noPermissionToCreateUser'), 'error');
+      if (result?.error === 'PERMISSION_DENIED') show(result?.detail || result.error, 'error');
       else if (result?.error === 'EMAIL_TAKEN') show(t('emailAlreadyUsed'), 'error');
       else if (result?.error === 'USERNAME_TAKEN') show(t('usernameTaken'), 'error');
       else show(`${t('unknownErrorCreatingUser')}: ${result?.detail || 'unknown'}`, 'error');
