@@ -195,7 +195,10 @@ function permissionLabel(code: string, lang: ErrorLanguage): string {
 
 function mappedCode(text: string): string | null {
   const upper = text.toUpperCase();
-  for (const code of Object.keys(messages)) {
+  // Match the most specific code first. This prevents APPROVAL_REQUIRED from
+  // swallowing SENT_ITEM_APPROVAL_REQUIRED / MANAGER_APPROVAL_REQUIRED.
+  const codes = Object.keys(messages).sort((a, b) => b.length - a.length);
+  for (const code of codes) {
     if (upper.includes(code)) return code;
   }
   return null;
