@@ -91,7 +91,7 @@ namespace PremierCleopatraPrintAgent
             var current = new StringBuilder();
             foreach (var word in words)
             {
-                var candidate = current + word;
+                var candidate = current.ToString() + word;
                 if (current.Length > 0 && g.MeasureString(candidate, font).Width > maxWidth)
                 {
                     yield return current.ToString().TrimEnd();
