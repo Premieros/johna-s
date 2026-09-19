@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const pricing = readFileSync('src/features/catalog/pages/PricingPage.tsx', 'utf8');
+const pricingCostMigration = readFileSync(
+  'supabase/migrations/20260919180000_raw_pricing_authoritative_cost_cycle.sql',
+  'utf8',
+);
 const utilities = readFileSync('src/components/PageUtilityControls.tsx', 'utf8');
 const layout = readFileSync('src/components/Layout.tsx', 'utf8');
 const routes = readFileSync('src/app/routes.tsx', 'utf8');
@@ -27,11 +31,16 @@ describe('pricing workspace contract', () => {
     expect(pricing).toContain(".eq('unit_type', 'manufactured')");
   });
 
-  it('does not overwrite calculated raw inventory average cost', () => {
+  it('routes raw pricing through costing history without overwriting inventory average cost', () => {
     expect(pricing).toContain(".from('raw_materials')");
-    expect(pricing).toContain('.update({ default_cost: nextCost })');
+    expect(pricing).toContain('costing.setRawMaterialPrice({');
+    expect(pricing).not.toContain(".update({ default_cost: nextCost })");
     expect(pricing).not.toContain(".from('raw_material_inventory').update");
     expect(pricing).not.toContain('avg_cost:');
+
+    expect(pricingCostMigration).toContain('SET default_cost = round(p_unit_cost, 6)');
+    expect(pricingCostMigration).not.toContain('UPDATE public.raw_material_inventory');
+    expect(pricingCostMigration).not.toContain('UPDATE public.raw_material_batches');
   });
 
   it('supports all requested pricing surfaces', () => {
