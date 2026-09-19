@@ -32,6 +32,7 @@ describe.skipIf(skip)('inventory availability branch guard', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
 
     await client.query(
       `INSERT INTO public.organizations (id, name, slug)
