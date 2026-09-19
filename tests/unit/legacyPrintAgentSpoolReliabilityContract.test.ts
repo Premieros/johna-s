@@ -18,7 +18,7 @@ describe('legacy print agent spool reliability contract', () => {
 
   it('preflights the Windows spooler and retries only before submission', () => {
     const agent = read('local-print-agent/agent.cjs');
-    const printStart = agent.indexOf('async function printText(printerName, text)');
+    const printStart = agent.indexOf('async function printText(printerName, text, paperWidthMm = 80)');
     const drawerStart = agent.indexOf('async function kickDrawer', printStart);
     const printText = agent.slice(printStart, drawerStart);
 
@@ -28,34 +28,36 @@ describe('legacy print agent spool reliability contract', () => {
     expect(agent).toContain('ensureSpoolerReadyWithRetry');
     expect(agent).toContain('PREFLIGHT_RETRY_DELAYS_MS');
     expect(printText).toContain('await ensureSpoolerReadyWithRetry(printerName)');
-    expect(printText).toContain('await submitTextToSpooler(printerName, text)');
+    expect(printText).toContain('await submitTextToSpooler(printerName, text, paperWidthMm)');
     expect(printText.indexOf('await ensureSpoolerReadyWithRetry(printerName)')).toBeLessThan(
-      printText.indexOf('await submitTextToSpooler(printerName, text)'),
+      printText.indexOf('await submitTextToSpooler(printerName, text, paperWidthMm)'),
     );
-    expect(agent).toContain('Once the Windows GDI print call is invoked we never retry here');
+    expect(agent).toContain('Once the raw ESC/POS raster write is invoked we never retry here');
   });
 
-  it('returns success only after the Unicode GDI print call resolves and supports Arabic station codes', () => {
+  it('returns success only after the raw ESC/POS raster call resolves and supports Arabic station codes', () => {
     const agent = read('local-print-agent/agent.cjs');
     const printHandlerStart = agent.indexOf("if (req.method === 'POST' && url.pathname === '/print')");
     const drawerHandlerStart = agent.indexOf("if (req.method === 'POST' && url.pathname === '/drawer')", printHandlerStart);
     const printHandler = agent.slice(printHandlerStart, drawerHandlerStart);
 
-    expect(agent).toContain('await psFile(UNICODE_PRINT_SCRIPT_PATH, [printerName, tmp]);');
-    expect(printHandler).toContain('const result = await printText(printer, text)');
+    expect(agent).toContain('await psFile(ESC_POS_RASTER_SCRIPT_PATH, [printerName, tmp, String(Number(paperWidthMm) <= 58 ? 58 : 80)]);');
+    expect(printHandler).toContain('const result = await printText(printer, text, paperWidthMm)');
     expect(printHandler).toContain('acceptedBySpooler: Boolean(result?.acceptedBySpooler)');
-    expect(printHandler.indexOf('const result = await printText(printer, text)')).toBeLessThan(
+    expect(printHandler.indexOf('const result = await printText(printer, text, paperWidthMm)')).toBeLessThan(
       printHandler.indexOf('success: true'),
     );
     expect(agent).toContain('\\u0600-\\u06FF');
-    expect(agent).toContain("path.join(__dirname, 'print-unicode.ps1')");
-    expect(agent).toContain('await psFile(UNICODE_PRINT_SCRIPT_PATH, [printerName, tmp])');
+    expect(agent).toContain("path.join(__dirname, 'print-escpos-raster.ps1')");
+    expect(agent).toContain('await psFile(ESC_POS_RASTER_SCRIPT_PATH, [printerName, tmp, String(Number(paperWidthMm) <= 58 ? 58 : 80)])');
     expect(agent).not.toContain('Get-Content -LiteralPath $f -Raw -Encoding UTF8 | Out-Printer -Name $p');
 
     const helper = read('local-print-agent/print-escpos-raster.ps1');
     expect(helper).toContain('public static class JohnsEscPosRasterPrinter');
     expect(helper).toContain('TextRenderingHint.AntiAliasGridFit');
-    expect(helper).toContain('GS v 0');
+    expect(helper).toContain('// GS v 0 : raster bit image, normal density.');
+    expect(helper).toContain('ValidateRasterPayload');
+    expect(helper).toContain('new byte[10 + (widthBytes * height) + 8]');
     expect(helper).toContain('new UTF8Encoding(false, true)');
     expect(helper).toContain('StringFormatFlags.DirectionRightToLeft');
   });
