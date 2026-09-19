@@ -18,7 +18,8 @@ describe('POS hardening: permission-first sent actions', () => {
     expect(orders).toContain('const perms = usePosPermissions();');
     expect(orders).toContain('const hasKitchenSend = (kitchenSendsByOrder[order.id]?.length || 0) > 0;');
     expect(orders).toContain('!ready && perms.canPay && hasKitchenSend');
-    expect(orders).toContain("order.status === 'held' && perms.canCancelOrder");
+    expect(orders).toContain('{perms.canCancelOrder && (');
+    expect(orders).not.toContain("order.status === 'held' && perms.canCancelOrder");
   });
 
   it('hides table transfer entry point without pos.order.transfer', () => {
