@@ -16,6 +16,8 @@ export interface LocalKitchenPrintContext {
   orderType?: string | null;
   guestCount?: number | null;
   isAr: boolean;
+  ticketType?: 'send' | 'void';
+  voidReason?: string | null;
 }
 
 export interface DetectedPrinter {
@@ -165,12 +167,15 @@ export function buildStationTicketText(
 ): string {
   const lines: string[] = [];
   const ar = ctx.isAr;
+  const isVoid = ctx.ticketType === 'void';
   lines.push('================================');
+  if (isVoid) lines.push(ar ? '*** إلغاء ***' : '*** VOID ***');
   lines.push(ar ? `محطة: ${station}` : `Station: ${station}`);
   if (ctx.orderNumber) lines.push(`${ar ? 'طلب' : 'Order'}: ${safeText(ctx.orderNumber)}`);
   if (ctx.tableName) lines.push(`${ar ? 'طاولة' : 'Table'}: ${safeText(ctx.tableName)}`);
   if (ctx.orderType) lines.push(`${ar ? 'النوع' : 'Type'}: ${safeText(ctx.orderType)}`);
   if (ctx.guestCount) lines.push(`${ar ? 'ضيوف' : 'Guests'}: ${ctx.guestCount}`);
+  if (isVoid && ctx.voidReason) lines.push(`${ar ? 'سبب الإلغاء' : 'Void reason'}: ${safeText(ctx.voidReason)}`);
   lines.push(new Date().toLocaleString(ar ? 'ar-EG' : 'en-US'));
   lines.push('--------------------------------');
 

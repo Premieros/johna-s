@@ -12,6 +12,7 @@ import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '..
 import { buildReceiptHtml, buildReceiptThermalText, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
+import { dispatchKitchenStations } from '../services/kitchenDispatch';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
 import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
@@ -514,6 +515,32 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       const orderItemId = matchingOrderItems[0].id;
 
+      // Prefer the exact station returned by the authoritative kitchen send in
+      // this session. For a reopened order, resolve the same branch-owned
+      // category -> kitchen station contract used by send_to_kitchen.
+      let stationCode = String(
+        kitchenSentItems.find((sent) => sent.order_item_id === orderItemId)?.station_code || ''
+      ).trim();
+      if (!stationCode && branchId && item.product.category_id) {
+        const { data: category } = await supabase
+          .from('categories')
+          .select('kitchen_station_id,branch_id')
+          .eq('id', item.product.category_id)
+          .eq('branch_id', branchId)
+          .maybeSingle();
+        const stationId = String(category?.kitchen_station_id || '').trim();
+        if (stationId) {
+          const { data: station } = await supabase
+            .from('kitchen_stations')
+            .select('code,branch_id,is_active')
+            .eq('id', stationId)
+            .eq('branch_id', branchId)
+            .eq('is_active', true)
+            .maybeSingle();
+          stationCode = String(station?.code || '').trim();
+        }
+      }
+
       const { data, error } = await supabase.rpc('cancel_sent_order_item_exact', {
         p_order_id: activeOrderId,
         p_order_item_id: orderItemId,
@@ -550,6 +577,59 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
 
       const remaining = Number(result.remaining_quantity ?? Math.max(0, item.quantity - voidQuantity));
+      const voidedQuantity = Number(result.voided_quantity ?? voidQuantity);
+      let voidPrintWarning = '';
+
+      if (stationCode) {
+        try {
+          const voidDispatch = await dispatchKitchenStations({
+            orderId: activeOrderId,
+            branchId,
+            items: [{
+              send_id: `void:${orderItemId}:${remaining}`,
+              order_item_id: orderItemId,
+              product_id: productId,
+              product_name: isAr
+                ? `إلغاء - ${item.product.name}`
+                : `VOID - ${item.product.name_en || item.product.name}`,
+              unit_name: item.unit_name || 'piece',
+              station_code: stationCode,
+              quantity: voidedQuantity,
+              current_quantity: remaining,
+              unit_price: 0,
+              discount_amount: 0,
+              bonus_quantity: 0,
+              total: 0,
+              notes: reason,
+            }],
+            context: {
+              orderNumber: activeOrderNumber || activeOrderId,
+              tableName: activeTable?.name || null,
+              orderType,
+              guestCount,
+              isAr,
+              ticketType: 'void',
+              voidReason: reason,
+            },
+            idempotencyNamespace: `kitchen-void:${orderItemId}:${remaining}`,
+          });
+          setKitchenDispatch(voidDispatch);
+          if (voidDispatch.status === 'failed' || voidDispatch.status === 'partial') {
+            voidPrintWarning = isAr
+              ? `تم الإلغاء بنجاح، لكن تعذر إرسال تذكرة الإلغاء إلى محطة ${stationCode}.`
+              : `Item was voided, but the void ticket could not be sent to station ${stationCode}.`;
+          }
+        } catch {
+          voidPrintWarning = isAr
+            ? `تم الإلغاء بنجاح، لكن تعذر إرسال تذكرة الإلغاء إلى محطة ${stationCode}.`
+            : `Item was voided, but the void ticket could not be sent to station ${stationCode}.`;
+        }
+      } else {
+        voidPrintWarning = isAr
+          ? 'تم الإلغاء بنجاح، لكن لا توجد محطة مطبخ مرتبطة بهذا الصنف لإرسال تذكرة الإلغاء.'
+          : 'Item was voided, but no kitchen station is assigned for its void ticket.';
+      }
+
       setCart((prev) =>
         remaining <= 0
           ? prev.filter((i) => cartLineKey(i) !== lineKey)
@@ -571,18 +651,22 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       if (result.inventory_changed) onInventoryChanged?.();
 
-      show(
-        isAr
-          ? `تم إلغاء الصنف (${item.product.name}) وإرجاع كميته المخصومة للمخزون`
-          : `Item voided and its deducted quantity was restored to inventory`,
-        'success'
-      );
+      if (voidPrintWarning) {
+        show(voidPrintWarning, 'warning');
+      } else {
+        show(
+          isAr
+            ? `تم إلغاء الصنف (${item.product.name}) وإرسال تذكرة الإلغاء إلى محطة ${stationCode}`
+            : `Item voided and its void ticket was sent to station ${stationCode}`,
+          'success'
+        );
+      }
       return true;
     } catch (err) {
       show(err instanceof Error ? err.message : 'Failed to void item', 'error');
       return false;
     }
-  }, [activeOrderId, cart, isAr, onInventoryChanged, show]);
+  }, [activeOrderId, activeOrderNumber, activeTable?.name, branchId, cart, guestCount, isAr, kitchenSentItems, onInventoryChanged, orderType, show]);
 
   const persistCart = useCallback(async (status: 'open' | 'held'): Promise<PersistResult> => {
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
