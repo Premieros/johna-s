@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Trash2, ChefHat, Calculator, Package } from 'lucide-react';
 import { supabase } from '@/api';
+import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
@@ -21,6 +22,18 @@ interface ItemForm {
   raw_material_id: string;
   quantity: number;
   wastage_percent: number;
+}
+
+interface ManufacturedUnitOption {
+  id: string;
+  name: string;
+  branch_id: string | null;
+  cost_price: number;
+}
+
+interface ManufacturedComponentForm {
+  unit_id: string;
+  quantity: number;
 }
 
 interface RecipeMutationResult {
@@ -50,6 +63,10 @@ export function RecipesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [materialCosts, setMaterialCosts] = useState<Record<string, number>>({});
+  const [manufacturedUnits, setManufacturedUnits] = useState<ManufacturedUnitOption[]>([]);
+  const [manufacturedItems, setManufacturedItems] = useState<ManufacturedComponentForm[]>([]);
+  const [manufacturedUnitSel, setManufacturedUnitSel] = useState('');
+  const [manufacturedUnitQty, setManufacturedUnitQty] = useState(1);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -85,19 +102,30 @@ export function RecipesPage() {
   }, [branchFilter]);
 
   const loadMaterialsForBranch = useCallback(async (branchId: string) => {
-    if (!branchId) { setMaterials([]); setMaterialCosts({}); return; }
-    const [materialsRes, inventoryRes] = await Promise.all([
-      supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
-      supabase.from('raw_material_inventory').select('raw_material_id,avg_cost').eq('branch_id', branchId),
-    ]);
-    if (materialsRes.error) {
-      setMetaError(materialsRes.error.message);
+    if (!branchId) {
       setMaterials([]);
       setMaterialCosts({});
+      setManufacturedUnits([]);
+      return;
+    }
+    const [materialsRes, inventoryRes, manufacturedRes] = await Promise.all([
+      supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
+      supabase.from('raw_material_inventory').select('raw_material_id,avg_cost').eq('branch_id', branchId),
+      supabase.from('inventory_units').select('id,name,branch_id,cost_price').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
+    ]);
+    if (materialsRes.error || manufacturedRes.error) {
+      setMetaError(materialsRes.error?.message || manufacturedRes.error?.message || 'Failed to load recipe components');
+      setMaterials([]);
+      setMaterialCosts({});
+      setManufacturedUnits([]);
       return;
     }
     const rows = (materialsRes.data as RawMaterial[]) || [];
     setMaterials(rows);
+    setManufacturedUnits(((manufacturedRes.data || []) as ManufacturedUnitOption[]).map((row) => ({
+      ...row,
+      cost_price: Number(row.cost_price || 0),
+    })));
     const nextCosts: Record<string, number> = {};
     for (const row of (inventoryRes.data || []) as { raw_material_id: string; avg_cost: number }[]) {
       if (Number(row.avg_cost) > 0) nextCosts[row.raw_material_id] = Number(row.avg_cost);
@@ -110,6 +138,31 @@ export function RecipesPage() {
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
   useEffect(() => { void loadMaterialsForBranch(form.branch_id); }, [form.branch_id, loadMaterialsForBranch]);
+
+  useEffect(() => {
+    if (!modalOpen || !form.product_id) {
+      setManufacturedItems([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error: linksError } = await supabase
+        .from('product_unit_links')
+        .select('unit_id,quantity')
+        .eq('product_id', form.product_id);
+      if (cancelled) return;
+      if (linksError) {
+        setMetaError(linksError.message);
+        setManufacturedItems([]);
+        return;
+      }
+      setManufacturedItems(((data || []) as { unit_id: string; quantity: number }[]).map((row) => ({
+        unit_id: row.unit_id,
+        quantity: Number(row.quantity) || 1,
+      })));
+    })();
+    return () => { cancelled = true; };
+  }, [modalOpen, form.product_id]);
 
   const unitForMaterial = (materialId: string) => {
     const material = materials.find((row) => row.id === materialId);
@@ -131,6 +184,9 @@ export function RecipesPage() {
     const branchId = branchFilter || user?.branch_id || branches[0]?.id || '';
     setForm({ product_id: '', branch_id: branchId, name: '', yield_quantity: 1, notes: '', is_active: true });
     setItems([{ ...EMPTY_ITEM }]);
+    setManufacturedItems([]);
+    setManufacturedUnitSel('');
+    setManufacturedUnitQty(1);
     setModalOpen(true);
   };
 
@@ -141,6 +197,8 @@ export function RecipesPage() {
     setForm({ product_id: rc.product_id, branch_id: rc.branch_id, name: rc.name || '', yield_quantity: Number(rc.yield_quantity) || 1, notes: rc.notes || '', is_active: rc.is_active });
     const fetched = ((data as RecipeItem[]) || []).map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) }));
     setItems(fetched.length ? fetched : [{ ...EMPTY_ITEM }]);
+    setManufacturedUnitSel('');
+    setManufacturedUnitQty(1);
     setModalOpen(true);
   };
 
@@ -148,10 +206,35 @@ export function RecipesPage() {
   const updateLine = (index: number, field: keyof ItemForm, value: string | number) => setItems((current) => current.map((item, i) => i === index ? { ...item, [field]: value } : item));
   const removeLine = (index: number) => setItems((current) => current.filter((_, i) => i !== index));
 
+  const availableManufacturedUnits = manufacturedUnits.filter(
+    (unit) => !manufacturedItems.some((item) => item.unit_id === unit.id),
+  );
+  const addManufacturedLine = () => {
+    if (!manufacturedUnitSel) return;
+    setManufacturedItems((current) => [
+      ...current,
+      { unit_id: manufacturedUnitSel, quantity: manufacturedUnitQty > 0 ? manufacturedUnitQty : 1 },
+    ]);
+    setManufacturedUnitSel('');
+    setManufacturedUnitQty(1);
+  };
+  const updateManufacturedQty = (index: number, quantity: number) => {
+    setManufacturedItems((current) => current.map((item, i) => i === index
+      ? { ...item, quantity: quantity > 0 ? quantity : 1 }
+      : item));
+  };
+  const removeManufacturedLine = (index: number) => {
+    setManufacturedItems((current) => current.filter((_, i) => i !== index));
+  };
+
   const save = async () => {
     if (!form.product_id || !form.branch_id) { show(t('required'), 'error'); return; }
     const validItems = items.filter((it) => it.raw_material_id && Number(it.quantity) > 0);
-    if (validItems.length === 0) { show(t('required') + ': ' + t('recipeItems'), 'error'); return; }
+    const validManufacturedItems = manufacturedItems.filter((it) => it.unit_id && Number(it.quantity) > 0);
+    if (validItems.length === 0 && validManufacturedItems.length === 0) {
+      show(t('required') + ': ' + t('recipeItems'), 'error');
+      return;
+    }
 
     const payload = { product_id: form.product_id, branch_id: form.branch_id, name: form.name.trim() || null, yield_quantity: Number(form.yield_quantity) || 1, notes: form.notes.trim() || null, is_active: form.is_active };
     const itemRows: RecipeItemInput[] = validItems.map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) || 0 }));
@@ -180,6 +263,16 @@ export function RecipesPage() {
       await logAudit('create', 'recipes', recipeId);
     }
 
+    try {
+      await api.catalog.setProductUnitLinks(
+        form.product_id,
+        validManufacturedItems.map((item) => ({ unit_id: item.unit_id, quantity: Number(item.quantity) })),
+      );
+    } catch (linkError) {
+      show(linkError instanceof Error ? linkError.message : String(linkError), 'error');
+      return;
+    }
+
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadRecipes();
@@ -201,14 +294,19 @@ export function RecipesPage() {
       const unitCost = Number(materialCosts[item.raw_material_id] || 0);
       return sum + unitCost * Number(item.quantity) * (1 + Number(item.wastage_percent || 0) / 100);
     }, 0);
+    const manufacturedCost = manufacturedItems.reduce((sum, item) => {
+      const unit = manufacturedUnits.find((row) => row.id === item.unit_id);
+      return sum + Number(unit?.cost_price || 0) * Number(item.quantity || 0);
+    }, 0);
+    const totalComponentCost = rawCost + manufacturedCost;
     const yieldQty = Math.max(1, Number(form.yield_quantity || 1));
-    const costPerUnit = rawCost / yieldQty;
+    const costPerUnit = totalComponentCost / yieldQty;
     const selectedProduct = products.find((product) => product.id === form.product_id);
     const sellPrice = Number(selectedProduct?.sale_price || 0);
     const foodCostRatio = sellPrice > 0 ? (costPerUnit / sellPrice) * 100 : 0;
     const margin = sellPrice > 0 ? ((sellPrice - costPerUnit) / sellPrice) * 100 : 0;
-    return { rawCost, costPerUnit, sellPrice, foodCostRatio, margin };
-  }, [form.product_id, form.yield_quantity, items, materialCosts, products]);
+    return { rawCost: totalComponentCost, costPerUnit, sellPrice, foodCostRatio, margin };
+  }, [form.product_id, form.yield_quantity, items, manufacturedItems, manufacturedUnits, materialCosts, products]);
 
   const columns: Column<Recipe>[] = [
     { key: 'product', header: t('product'), render: (rc) => <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center"><ChefHat className="w-4 h-4 text-purple-600" /></div><div><p className="font-medium text-ui-text">{rc.product?.name || '-'}</p>{rc.name && <p className="text-xs text-ui-subtle">{rc.name}</p>}</div></div> },
@@ -276,6 +374,36 @@ export function RecipesPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-bold text-ui-muted">{isAr ? 'المصنعات داخل الوصفة' : 'Manufactured components'}</p>
+              <span className="text-xs text-ui-subtle">{manufacturedItems.length}</span>
+            </div>
+            <div className="space-y-2">
+              {manufacturedItems.map((item, index) => {
+                const unit = manufacturedUnits.find((row) => row.id === item.unit_id);
+                return (
+                  <div key={item.unit_id} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_40px] gap-2 items-end rounded-lg border border-ui-border bg-ui-page-alt p-2">
+                    <div>
+                      <p className="text-sm font-medium text-ui-text">{unit?.name || item.unit_id}</p>
+                      <p className="text-xs text-ui-subtle">{isAr ? 'مصنع مخزني' : 'Manufactured inventory unit'}</p>
+                    </div>
+                    <Input label={t('quantity')} type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={(e) => updateManufacturedQty(index, parseFloat(e.target.value) || 1)} />
+                    <button type="button" onClick={() => removeManufacturedLine(index)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_auto] gap-2 items-end">
+              <Select label={isAr ? 'إضافة تصنيع' : 'Add manufactured item'} value={manufacturedUnitSel} onChange={(e) => setManufacturedUnitSel(e.target.value)}>
+                <option value="">--</option>
+                {availableManufacturedUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+              </Select>
+              <Input label={t('quantity')} type="number" min="0.0001" step="0.0001" value={manufacturedUnitQty} onChange={(e) => setManufacturedUnitQty(parseFloat(e.target.value) || 1)} />
+              <Button type="button" variant="outline" size="sm" onClick={addManufacturedLine} disabled={!manufacturedUnitSel}><Plus className="w-4 h-4" /> {t('add')}</Button>
             </div>
           </div>
 
