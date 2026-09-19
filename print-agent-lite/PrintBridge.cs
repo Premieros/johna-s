@@ -32,7 +32,7 @@ namespace PremierPrintAgentLite
             return result;
         }
 
-        internal async Task<Dictionary<string, object>> PrintAsync(string printerName, string text, string html, int copies)
+        internal async Task<Dictionary<string, object>> PrintAsync(string printerName, string text, string html, int copies, int paperWidthMm)
         {
             printerName = (printerName ?? "").Trim();
             if (printerName.Length == 0) return Fail("PRINTER_NAME_REQUIRED");
@@ -44,7 +44,12 @@ namespace PremierPrintAgentLite
             await lane.WaitAsync().ConfigureAwait(false);
             try
             {
-                return await Task.Run(() => PrintText(printerName, printable, Math.Max(1, Math.Min(5, copies)))).ConfigureAwait(false);
+                return await Task.Run(() => PrintText(
+                    printerName,
+                    printable,
+                    Math.Max(1, Math.Min(5, copies)),
+                    NormalizePaperWidthMm(paperWidthMm)
+                )).ConfigureAwait(false);
             }
             finally { lane.Release(); }
         }
@@ -53,10 +58,14 @@ namespace PremierPrintAgentLite
         {
             printerName = (printerName ?? "").Trim();
             if (printerName.Length == 0) return Fail("PRINTER_NAME_REQUIRED");
-            return await Task.Run(() => RawPrinter.Send(printerName, new byte[] { 0x1B, 0x70, 0x00, 0x19, 0xFA }) ? Ok() : Fail("DRAWER_WRITE_FAILED")).ConfigureAwait(false);
+            return await Task.Run(() => RawPrinter.Send(
+                printerName,
+                new byte[] { 0x1B, 0x70, 0x00, 0x19, 0xFA },
+                "Premier Cash Drawer"
+            ) ? Ok() : Fail("DRAWER_WRITE_FAILED")).ConfigureAwait(false);
         }
 
-        private static Dictionary<string, object> PrintText(string printerName, string text, int copies)
+        private static Dictionary<string, object> PrintText(string printerName, string text, int copies, int paperWidthMm)
         {
             try
             {
@@ -70,37 +79,128 @@ namespace PremierPrintAgentLite
                         document.PrinterSettings.PrinterName = printerName;
                         if (!document.PrinterSettings.IsValid) return Fail("INVALID_PRINTER:" + printerName);
                         document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+
                         var lines = NormalizeLines(text);
                         var index = 0;
                         document.PrintPage += delegate(object sender, PrintPageEventArgs e)
                         {
-                            var left = e.MarginBounds.Left + 3f;
-                            var right = e.MarginBounds.Right - 3f;
-                            var y = e.MarginBounds.Top + 3f;
-                            var height = font.GetHeight(e.Graphics) + 2f;
-                            while (index < lines.Length)
-                            {
-                                var line = lines[index++];
-                                if (line == "\f") { e.HasMorePages = index < lines.Length; return; }
-                                using (var format = new StringFormat())
-                                {
-                                    if (ContainsArabic(line)) { format.FormatFlags |= StringFormatFlags.DirectionRightToLeft; format.Alignment = StringAlignment.Far; }
-                                    e.Graphics.DrawString(line, font, Brushes.Black, new RectangleF(left, y, Math.Max(1, right - left), height * 2f), format);
-                                }
-                                y += height;
-                                if (y + height > e.MarginBounds.Bottom) { e.HasMorePages = index < lines.Length; return; }
-                            }
-                            e.HasMorePages = false;
+                            DrawRasterPage(e, font, lines, ref index, paperWidthMm);
                         };
+
                         document.Print();
-                        // Preserve the proven 1.0 PrintDocument path, but give thermal drivers a brief moment
-                        // to enqueue the document before the next job in this printer's lane starts.
-                        Thread.Sleep(150);
+
+                        // Submission succeeded. Auto-cut is best-effort only: a cut failure must never
+                        // mark the receipt failed because retrying could duplicate a physical receipt.
+                        Thread.Sleep(250);
+                        RawPrinter.Cut(printerName);
+                        Thread.Sleep(75);
                     }
                 }
                 return Ok();
             }
             catch (Exception ex) { return Fail(ex.GetType().Name + ":" + ex.Message); }
+        }
+
+        private static void DrawRasterPage(PrintPageEventArgs e, Font font, string[] lines, ref int index, int paperWidthMm)
+        {
+            var dpiX = Math.Max(96f, e.Graphics.DpiX);
+            var dpiY = Math.Max(96f, e.Graphics.DpiY);
+            var requestedWidthHundredths = (float)(paperWidthMm / 25.4 * 100.0);
+            var widthHundredths = Math.Max(1f, Math.Min(e.MarginBounds.Width, requestedWidthHundredths));
+            var maxHeightHundredths = Math.Max(1f, e.MarginBounds.Height);
+            var bitmapWidth = Math.Max(1, (int)Math.Ceiling(widthHundredths / 100f * dpiX));
+            var maxBitmapHeight = Math.Max(1, (int)Math.Ceiling(maxHeightHundredths / 100f * dpiY));
+            var sidePadding = Math.Max(2f, dpiX * 0.03f);
+            var topPadding = Math.Max(2f, dpiY * 0.03f);
+
+            float lineHeight;
+            using (var measure = new Bitmap(8, 8))
+            {
+                measure.SetResolution(dpiX, dpiY);
+                using (var graphics = Graphics.FromImage(measure))
+                {
+                    lineHeight = font.GetHeight(graphics) + Math.Max(2f, dpiY * 0.01f);
+                }
+            }
+
+            var pageStart = index;
+            var y = topPadding;
+            while (index < lines.Length)
+            {
+                var line = lines[index];
+                if (line == "\f")
+                {
+                    index++;
+                    break;
+                }
+
+                if (y + (lineHeight * 2f) > maxBitmapHeight && index > pageStart) break;
+                index++;
+                y += lineHeight;
+            }
+
+            if (index == pageStart && index < lines.Length) index++;
+
+            var usedLines = lines.Skip(pageStart).Take(Math.Max(0, index - pageStart)).Where(x => x != "\f").ToArray();
+            var contentHeight = Math.Max(
+                (int)Math.Ceiling(topPadding * 2f + Math.Max(1, usedLines.Length) * lineHeight),
+                1
+            );
+            contentHeight = Math.Min(contentHeight, maxBitmapHeight);
+
+            using (var bitmap = new Bitmap(bitmapWidth, contentHeight))
+            {
+                bitmap.SetResolution(dpiX, dpiY);
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    graphics.Clear(Color.White);
+                    var drawY = topPadding;
+                    foreach (var line in usedLines)
+                    {
+                        using (var format = new StringFormat())
+                        {
+                            if (ContainsArabic(line))
+                            {
+                                format.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
+                                format.Alignment = StringAlignment.Far;
+                            }
+
+                            graphics.DrawString(
+                                line,
+                                font,
+                                Brushes.Black,
+                                new RectangleF(
+                                    sidePadding,
+                                    drawY,
+                                    Math.Max(1f, bitmap.Width - (sidePadding * 2f)),
+                                    lineHeight * 2f
+                                ),
+                                format
+                            );
+                        }
+                        drawY += lineHeight;
+                    }
+                }
+
+                var destinationHeight = Math.Max(1f, bitmap.Height / dpiY * 100f);
+                e.Graphics.DrawImage(
+                    bitmap,
+                    new RectangleF(e.MarginBounds.Left, e.MarginBounds.Top, widthHundredths, destinationHeight),
+                    0,
+                    0,
+                    bitmap.Width,
+                    bitmap.Height,
+                    GraphicsUnit.Pixel
+                );
+            }
+
+            e.HasMorePages = index < lines.Length;
+        }
+
+        private static int NormalizePaperWidthMm(int value)
+        {
+            if (value <= 0) return 80;
+            return Math.Max(48, Math.Min(90, value));
         }
 
         private static string[] NormalizeLines(string text)
@@ -139,20 +239,31 @@ namespace PremierPrintAgentLite
         [DllImport("winspool.Drv", SetLastError = true)] private static extern bool EndPagePrinter(IntPtr handle);
         [DllImport("winspool.Drv", SetLastError = true)] private static extern bool WritePrinter(IntPtr handle, IntPtr bytes, int count, out int written);
 
-        internal static bool Send(string printerName, byte[] data)
+        internal static bool Cut(string printerName)
+        {
+            // ESC/POS: feed three lines, then full cut.
+            return Send(
+                printerName,
+                new byte[] { 0x1B, 0x64, 0x03, 0x1D, 0x56, 0x00 },
+                "Premier Auto Cut"
+            );
+        }
+
+        internal static bool Send(string printerName, byte[] data, string documentName = "Premier Raw Command")
         {
             IntPtr handle;
             if (!OpenPrinter(printerName, out handle, IntPtr.Zero)) return false;
             var pointer = IntPtr.Zero;
             try
             {
-                var doc = new DOCINFOA { pDocName = "Premier Cash Drawer", pDataType = "RAW" };
+                var doc = new DOCINFOA { pDocName = documentName, pDataType = "RAW" };
                 if (!StartDocPrinter(handle, 1, doc) || !StartPagePrinter(handle)) return false;
                 pointer = Marshal.AllocCoTaskMem(data.Length);
                 Marshal.Copy(data, 0, pointer, data.Length);
                 int written;
                 var ok = WritePrinter(handle, pointer, data.Length, out written) && written == data.Length;
-                EndPagePrinter(handle); EndDocPrinter(handle);
+                EndPagePrinter(handle);
+                EndDocPrinter(handle);
                 return ok;
             }
             finally
