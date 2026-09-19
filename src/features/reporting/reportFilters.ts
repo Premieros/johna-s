@@ -77,12 +77,12 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
   // Transaction dimensions (payment/cashier/order type) cannot be applied to
   // COGS and operating expenses without producing a misleading pseudo-profit.
   profit: [],
-  inventory: ['warehouse', 'product', 'category'],
+  inventory: ['warehouse'],
   component_consumption: ['warehouse', 'product', 'category'],
   recipe_costs: ['product', 'category'],
   top_consumed_components: ['warehouse', 'product', 'category'],
   top_consumed_products: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category'],
-  low_stock: ['warehouse', 'product', 'category'],
+  low_stock: [],
   // The cashier report currently has a cashier-level query contract only.
   // Do not expose a warehouse filter that would silently return misleading rows.
   cashier_performance: ['cashier'],

@@ -120,6 +120,14 @@ export function PurchasesPage() {
   }, [location.state]);
 
   const filtered = items.filter((p) => !search || p.invoice_number.toLowerCase().includes(search.toLowerCase()) || (p as Purchase & { supplier?: Supplier }).supplier?.name.toLowerCase().includes(search.toLowerCase()));
+  const formWarehouses = useMemo(
+    () => warehouses.filter((warehouse) => !form.branch_id || warehouse.branch_id === form.branch_id),
+    [warehouses, form.branch_id],
+  );
+  const formSuppliers = useMemo(
+    () => suppliers.filter((supplier) => !form.branch_id || supplier.branch_id === form.branch_id),
+    [suppliers, form.branch_id],
+  );
 
   const subtotal = useMemo(() => lineItems.reduce((s, i) => s + i.quantity * i.unit_cost, 0), [lineItems]);
 
@@ -134,10 +142,13 @@ export function PurchasesPage() {
     if (!allowed) return;
 
     setEditingPurchase(null);
+    const targetBranchId = branchFilter || user?.branch_id || branches[0]?.id || '';
+    const targetSupplier = suppliers.find((supplier) => supplier.branch_id === targetBranchId);
+    const targetWarehouse = warehouses.find((warehouse) => warehouse.branch_id === targetBranchId);
     setForm({
-      supplier_id: suppliers[0]?.id || '',
-      warehouse_id: warehouses[0]?.id || '',
-      branch_id: branchFilter || user?.branch_id || branches[0]?.id || '',
+      supplier_id: targetSupplier?.id || '',
+      warehouse_id: targetWarehouse?.id || '',
+      branch_id: targetBranchId,
       payment_method: 'cash',
       notes: '',
     });
@@ -602,13 +613,26 @@ export function PurchasesPage() {
           <div className="grid grid-cols-2 gap-4">
             <Select label={t('supplier')} value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} required>
               <option value="">--</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {formSuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
             <Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}>
               <option value="">--</option>
-              {warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {formWarehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </Select>
-            <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })} disabled={!!editingPurchase}>
+            <Select
+              label={t('branch')}
+              value={form.branch_id}
+              onChange={(e) => {
+                const nextBranchId = e.target.value;
+                setForm({
+                  ...form,
+                  branch_id: nextBranchId,
+                  supplier_id: suppliers.find((supplier) => supplier.branch_id === nextBranchId)?.id || '',
+                  warehouse_id: warehouses.find((warehouse) => warehouse.branch_id === nextBranchId)?.id || '',
+                });
+              }}
+              disabled={!!editingPurchase}
+            >
               <option value="">--</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>

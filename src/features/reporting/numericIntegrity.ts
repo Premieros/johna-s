@@ -52,6 +52,16 @@ export const netSaleItemQuantity = (item: SaleItemNumericLike): number =>
 export const netSaleItemRevenue = (item: SaleItemNumericLike): number =>
   nonNegative(n(item.total) - n(item.refunded_amount));
 
+export function allocateSaleNetRevenue(
+  itemNetRevenue: number,
+  saleNetAmount: number,
+  saleItemsNetBase: number,
+): number {
+  const base = nonNegative(n(saleItemsNetBase));
+  if (base <= 0) return 0;
+  return nonNegative(n(saleNetAmount)) * (nonNegative(n(itemNetRevenue)) / base);
+}
+
 export type PaymentMethodAggregate = {
   branchId: string;
   method: string;

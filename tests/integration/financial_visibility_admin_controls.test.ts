@@ -69,25 +69,8 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
     expect(superResult.rows[0].result).toMatchObject({ success: true, recent_days: 14, historical_percent: 55 });
   });
 
-  guarded('configured historical percentage is used by read predicates', async () => {
+  guarded('financial history remains complete regardless of legacy sampling settings', async () => {
     const rowId = randomUUID();
-
-    const setAllVisible = await runAsPersist(
-      client,
-      ids.users.super_admin,
-      'SELECT public.update_financial_visibility_settings(7, 100) AS result',
-    );
-    expect(setAllVisible.error).toBeUndefined();
-    expect(setAllVisible.rows[0].result).toMatchObject({ success: true, recent_days: 7, historical_percent: 100 });
-
-    const visible = await runAs(
-      client,
-      ids.users.cashier,
-      `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
-      [rowId, ids.branchA],
-    );
-    expect(visible.error).toBeUndefined();
-    expect(visible.rows[0].allowed).toBe(true);
 
     const setAllHidden = await runAsPersist(
       client,
@@ -97,23 +80,23 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
     expect(setAllHidden.error).toBeUndefined();
     expect(setAllHidden.rows[0].result).toMatchObject({ success: true, recent_days: 7, historical_percent: 0 });
 
-    const hidden = await runAs(
+    const ownBranch = await runAs(
       client,
       ids.users.cashier,
       `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
       [rowId, ids.branchA],
     );
-    expect(hidden.error).toBeUndefined();
-    expect(hidden.rows[0].allowed).toBe(false);
+    expect(ownBranch.error).toBeUndefined();
+    expect(ownBranch.rows[0].allowed).toBe(true);
 
-    const owner = await runAs(
+    const otherBranch = await runAs(
       client,
-      ids.users.owner,
+      ids.users.cashier,
       `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
-      [rowId, ids.branchA],
+      [rowId, ids.branchB],
     );
-    expect(owner.error).toBeUndefined();
-    expect(owner.rows[0].allowed).toBe(true);
+    expect(otherBranch.error).toBeUndefined();
+    expect(otherBranch.rows[0].allowed).toBe(false);
   });
 
   guarded('active orders remain fully visible even with zero historical percentage', async () => {

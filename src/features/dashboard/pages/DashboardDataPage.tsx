@@ -36,7 +36,11 @@ type Sale = {
   discount_amount: number | null;
   branch?: RelatedName | RelatedName[] | null;
 };
-type Inventory = { quantity: number | null; product?: RelatedName | RelatedName[] | null };
+type StockAlert = { key: string; name: string; quantity: number; threshold: number };
+type RawStockMaster = { id: string; branch_id: string | null; name: string; min_stock: number | null; is_active: boolean | null };
+type RawStockBalance = { raw_material_id: string; branch_id: string | null; quantity: number | null };
+type UnitStockMaster = { id: string; branch_id: string | null; name: string; min_stock: number | null; low_stock_threshold: number | null; is_active: boolean | null };
+type UnitStockBatch = { unit_id: string; branch_id: string | null; quantity: number | null };
 type SaleItem = { quantity: number | null; refunded_quantity: number | null; product?: RelatedName | RelatedName[] | null };
 type Point = { label: string; sales: number; previous: number };
 type QuickStats = { sales: number | null; expenses: number | null; profit: number | null; lowStockCount: number | null };
@@ -59,6 +63,54 @@ const paymentLabels: Record<string, [string, string]> = {
 
 function relation<T extends RelatedName>(value: T | T[] | null | undefined): T | undefined {
   return Array.isArray(value) ? value[0] : value || undefined;
+}
+
+function buildStockAlerts(
+  rawMasters: RawStockMaster[],
+  rawBalances: RawStockBalance[],
+  unitMasters: UnitStockMaster[],
+  unitBatches: UnitStockBatch[],
+  defaultThreshold: number,
+): StockAlert[] {
+  const rawQty = new Map<string, number>();
+  rawBalances.forEach((row) => {
+    const key = `${row.branch_id || ''}:${row.raw_material_id}`;
+    rawQty.set(key, (rawQty.get(key) || 0) + Number(row.quantity || 0));
+  });
+
+  const unitQty = new Map<string, number>();
+  unitBatches.forEach((row) => {
+    const key = `${row.branch_id || ''}:${row.unit_id}`;
+    unitQty.set(key, (unitQty.get(key) || 0) + Number(row.quantity || 0));
+  });
+
+  const rawAlerts = rawMasters
+    .filter((row) => row.is_active !== false)
+    .map((row) => {
+      const key = `${row.branch_id || ''}:${row.id}`;
+      return {
+        key: `raw:${key}`,
+        name: row.name,
+        quantity: rawQty.get(key) || 0,
+        threshold: Number(row.min_stock ?? defaultThreshold),
+      };
+    });
+
+  const unitAlerts = unitMasters
+    .filter((row) => row.is_active !== false)
+    .map((row) => {
+      const key = `${row.branch_id || ''}:${row.id}`;
+      return {
+        key: `unit:${key}`,
+        name: row.name,
+        quantity: unitQty.get(key) || 0,
+        threshold: Number(row.low_stock_threshold ?? row.min_stock ?? defaultThreshold),
+      };
+    });
+
+  return [...rawAlerts, ...unitAlerts]
+    .filter((row) => row.quantity <= row.threshold)
+    .sort((a, b) => a.quantity - b.quantity || a.name.localeCompare(b.name));
 }
 
 function periodWindow(range: Range) {
@@ -131,7 +183,7 @@ export function DashboardDataPage() {
   const [previousSales, setPreviousSales] = useState<Sale[]>([]);
   const [salePayments, setSalePayments] = useState<SalePaymentLike[]>([]);
   const [previousSalePayments, setPreviousSalePayments] = useState<SalePaymentLike[]>([]);
-  const [inventory, setInventory] = useState<Inventory[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [quickStats, setQuickStats] = useState<QuickStats>({ sales: null, expenses: null, profit: null, lowStockCount: null });
   const settings = effectiveSettings(branchFilter);
@@ -144,19 +196,16 @@ export function DashboardDataPage() {
     const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
     let currentQuery = supabase.from('sales').select(fields).gte('created_at', window.start.toISOString()).lte('created_at', window.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
     let previousQuery = supabase.from('sales').select(fields).gte('created_at', window.previousStart.toISOString()).lte('created_at', window.previousEnd.toISOString()).order('created_at', { ascending: false }).limit(5000);
-    let inventoryQuery = supabase.from('inventory').select('quantity,product:products(name,low_stock_threshold)').limit(5000);
     if (branchFilter) {
       currentQuery = currentQuery.eq('branch_id', branchFilter);
       previousQuery = previousQuery.eq('branch_id', branchFilter);
-      inventoryQuery = inventoryQuery.eq('branch_id', branchFilter);
     }
 
-    const [currentResult, previousResult, inventoryResult] = await Promise.all([currentQuery, previousQuery, inventoryQuery]);
+    const [currentResult, previousResult] = await Promise.all([currentQuery, previousQuery]);
     const currentRows = currentResult.error ? [] : ((currentResult.data || []) as unknown as Sale[]);
     const previousRows = previousResult.error ? [] : ((previousResult.data || []) as unknown as Sale[]);
     setSales(currentRows);
     setPreviousSales(previousRows);
-    setInventory(inventoryResult.error ? [] : ((inventoryResult.data || []) as unknown as Inventory[]));
     if (currentResult.error) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
 
     const ids = [...currentRows, ...previousRows].map((sale) => sale.id);
@@ -188,14 +237,31 @@ export function DashboardDataPage() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       let salesQuery = supabase.from('sales').select('total,refunded_amount').gte('created_at', monthStart.toISOString()).lt('created_at', monthEnd.toISOString());
-      let inventoryQuery = supabase.from('inventory').select('quantity,product:products(low_stock_threshold)');
-      if (branchFilter) { salesQuery = salesQuery.eq('branch_id', branchFilter); inventoryQuery = inventoryQuery.eq('branch_id', branchFilter); }
-      const [salesResult, inventoryResult] = await Promise.all([salesQuery, inventoryQuery]);
+      let rawMasterQuery = supabase.from('raw_materials').select('id,branch_id,name,min_stock,is_active').eq('is_active', true);
+      let rawBalanceQuery = supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity');
+      let unitMasterQuery = supabase.from('inventory_units').select('id,branch_id,name,min_stock,low_stock_threshold,is_active').eq('is_active', true);
+      let unitBatchQuery = supabase.from('inventory_unit_batches').select('unit_id,branch_id,quantity');
+      if (branchFilter) {
+        salesQuery = salesQuery.eq('branch_id', branchFilter);
+        rawMasterQuery = rawMasterQuery.eq('branch_id', branchFilter);
+        rawBalanceQuery = rawBalanceQuery.eq('branch_id', branchFilter);
+        unitMasterQuery = unitMasterQuery.eq('branch_id', branchFilter);
+        unitBatchQuery = unitBatchQuery.eq('branch_id', branchFilter);
+      }
+      const [salesResult, rawMastersResult, rawBalancesResult, unitMastersResult, unitBatchesResult] = await Promise.all([
+        salesQuery, rawMasterQuery, rawBalanceQuery, unitMasterQuery, unitBatchQuery,
+      ]);
       const salesValue = salesResult.error ? null : (salesResult.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + netSaleAmount(row), 0);
-      const lowStockCount = inventoryResult.error ? null : (inventoryResult.data || []).filter((row: Record<string, unknown>) => {
-        const product = relation(row.product as RelatedName | RelatedName[] | null);
-        return Number(row.quantity || 0) <= Number(product?.low_stock_threshold ?? settings?.low_stock_threshold ?? 5);
-      }).length;
+      const stockQueryFailed = Boolean(rawMastersResult.error || rawBalancesResult.error || unitMastersResult.error || unitBatchesResult.error);
+      const alerts = stockQueryFailed ? [] : buildStockAlerts(
+        (rawMastersResult.data || []) as RawStockMaster[],
+        (rawBalancesResult.data || []) as RawStockBalance[],
+        (unitMastersResult.data || []) as UnitStockMaster[],
+        (unitBatchesResult.data || []) as UnitStockBatch[],
+        Number(settings?.low_stock_threshold ?? 5),
+      );
+      setStockAlerts(alerts);
+      const lowStockCount = stockQueryFailed ? null : alerts.length;
       const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
@@ -252,10 +318,7 @@ export function DashboardDataPage() {
     });
     return [...map.entries()].sort((a, b) => b[1].sales - a[1].sales).slice(0, 5);
   }, [ar, sales]);
-  const lowStock = useMemo(() => inventory.filter((row) => {
-    const product = relation(row.product);
-    return Number(row.quantity || 0) <= Number(product?.low_stock_threshold ?? settings?.low_stock_threshold ?? 5);
-  }).slice(0, 5), [inventory, settings?.low_stock_threshold]);
+  const lowStock = useMemo(() => stockAlerts.slice(0, 5), [stockAlerts]);
 
   const chart = useMemo<Point[]>(() => {
     const window = periodWindow(range);
@@ -309,7 +372,7 @@ export function DashboardDataPage() {
       <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أكثر الأصناف مبيعًا' : 'Top selling items'}</h2>{productRows.length ? productRows.map(([name, qty]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(qty, 2)}</span></div>) : <Empty ar={ar} />}</Card>
       <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أحدث الطلبات' : 'Recent orders'}</h2>{recent.length ? recent.map((sale) => <div key={sale.id} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{sale.invoice_number || '—'}</span><span className="text-ui-muted">{money(netSaleAmount(sale))}</span></div>) : <Empty ar={ar} />}</Card></section>
 
-      {lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row, index) => { const product = relation(row.product); const content = <><p className="truncate text-sm font-bold text-ui-text">{product?.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(Number(row.quantity || 0), 2)}</p></>; return canViewInventory ? <Link key={index} to="/inventory" className="rounded-xl bg-ui-page-alt p-3">{content}</Link> : <div key={index} aria-disabled="true" className="rounded-xl bg-ui-page-alt p-3">{content}</div>; })}</div></Card>}
+      {lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row) => { const content = <><p className="truncate text-sm font-bold text-ui-text">{row.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(row.quantity, 3)} / {formatNumber(row.threshold, 3)}</p></>; return canViewInventory ? <Link key={row.key} to="/inventory" className="rounded-xl bg-ui-page-alt p-3">{content}</Link> : <div key={row.key} aria-disabled="true" className="rounded-xl bg-ui-page-alt p-3">{content}</div>; })}</div></Card>}
     </>}
   </div></div>;
 }
