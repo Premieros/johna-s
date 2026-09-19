@@ -1,17 +1,16 @@
 -- Harden the POS inventory availability RPC against cross-branch / cross-warehouse reads.
 --
 -- The RPC is SECURITY DEFINER and intentionally callable by authenticated users,
--- so RLS is not an authorization boundary here. Keep the existing stock logic
--- unchanged and add explicit branch + warehouse authorization at the function
--- boundary. service_role keeps its existing internal-use bypass, but the
--- warehouse must still belong to the supplied branch.
+-- so RLS is not an authorization boundary here. Keep all existing stock/recipe
+-- behavior unchanged for trusted internal execution; enforce branch and
+-- warehouse scope only at the authenticated API boundary.
 
 DO $guard$
 DECLARE
   v_oid oid;
   v_def text;
   v_anchor text := E'BEGIN\n  IF p_quantity IS NULL OR p_quantity <= 0 THEN';
-  v_replacement text := E'BEGIN\n  IF COALESCE(current_setting(''role'', true), '''') <> ''service_role''\n     AND NOT public.user_may_access_branch(p_branch_id) THEN\n    RETURN jsonb_build_object(''success'', false, ''error'', ''BRANCH_ACCESS_DENIED'');\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1\n    FROM public.warehouses w\n    WHERE w.id = p_warehouse_id\n      AND w.branch_id = p_branch_id\n      AND w.is_active = true\n  ) THEN\n    RETURN jsonb_build_object(''success'', false, ''error'', ''WAREHOUSE_BRANCH_MISMATCH'');\n  END IF;\n\n  IF p_quantity IS NULL OR p_quantity <= 0 THEN';
+  v_replacement text := E'BEGIN\n  IF COALESCE(current_setting(''role'', true), '''') = ''authenticated'' THEN\n    IF NOT public.user_may_access_branch(p_branch_id) THEN\n      RETURN jsonb_build_object(''success'', false, ''error'', ''BRANCH_ACCESS_DENIED'');\n    END IF;\n\n    IF NOT EXISTS (\n      SELECT 1\n      FROM public.warehouses w\n      WHERE w.id = p_warehouse_id\n        AND w.branch_id = p_branch_id\n        AND w.is_active = true\n    ) THEN\n      RETURN jsonb_build_object(''success'', false, ''error'', ''WAREHOUSE_BRANCH_MISMATCH'');\n    END IF;\n  END IF;\n\n  IF p_quantity IS NULL OR p_quantity <= 0 THEN';
 BEGIN
   SELECT p.oid
   INTO v_oid
