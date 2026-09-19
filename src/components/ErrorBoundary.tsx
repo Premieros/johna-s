@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -62,11 +63,8 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="text-sm text-ui-muted mb-4">
               {staleChunk
                 ? (ar ? 'تم نشر إصدار أحدث من التطبيق. حدّث الصفحة لتحميل الملفات الجديدة.' : 'A newer app version was deployed. Refresh to load the new files.')
-                : this.state.error.message}
+                : userFacingErrorMessage(this.state.error, ar ? 'ar' : 'en')}
             </p>
-            {!staleChunk && (
-              <p className="text-xs text-ui-subtle mb-6 whitespace-pre-wrap text-start bg-ui-page p-3 rounded-xl max-h-40 overflow-auto">{this.state.error.stack}</p>
-            )}
             <button
               onClick={() => {
                 if (staleChunk) {

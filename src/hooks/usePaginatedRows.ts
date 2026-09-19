@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { supabase } from '@/api';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 // Unified, reusable paginated-rows hook (audit M7). Every list/table page that
 // previously issued an unbounded `.select('*')` (or a silent `.limit(N)`)
@@ -103,7 +104,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       const [{ data, error: err }, totalCount] = await Promise.all([buildDataQuery(0, pageSize - 1), countTotal()]);
       if (g !== gen.current) return;
       if (err) {
-        setError(err.message);
+        setError(userFacingErrorMessage(err));
         setRows([]);
         setTotal(0);
         return;
@@ -123,7 +124,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       const { data, error: err } = await buildDataQuery(rows.length, rows.length + pageSize - 1);
       if (g !== gen.current) return;
       if (err) {
-        setError(err.message);
+        setError(userFacingErrorMessage(err));
         return;
       }
       setRows((prev) => [...prev, ...((data as T[]) || [])]);

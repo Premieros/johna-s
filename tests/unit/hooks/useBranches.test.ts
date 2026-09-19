@@ -95,7 +95,7 @@ describe('useBranches', () => {
     const useBranches = await loadUseBranches();
     const { result } = renderHook(() => useBranches());
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.error).toBe('connection refused');
+    expect(result.current.error).toContain('تعذر الاتصال بالخادم');
     expect(result.current.branches).toEqual([]);
 
     mockState.error = null;
