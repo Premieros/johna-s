@@ -251,7 +251,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData((purchases || []).slice(0, 10).map((purchase: Record<string, unknown>) => ({ name: String(purchase.invoice_number), value: netPurchaseAmount(purchase) })));
         setSummary({ total: (purchases || []).reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: (purchases || []).length });
       } else if (reportType === 'expenses') {
-        let q = supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date').gte('expense_date', from).lte('expense_date', to).order('expense_date', { ascending: false }).limit(5000);
+        let q = supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date').eq('status', 'posted').gte('expense_date', from).lte('expense_date', to).order('expense_date', { ascending: false }).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyExpenseFilters);
         const { data: expenses } = await q;
@@ -403,7 +403,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
         setSummary({ total: (sales || []).reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: (sales || []).length });
       } else if (reportType === 'sales_by_product') {
-        let itemsQuery = supabase.from('sale_items').select('quantity, refunded_quantity, total, refunded_amount, product:products(name), sale:sales(created_at, branch_id, status, order_type, warehouse_id, cashier_id, customer_id, payment_method)');
+        let itemsQuery = supabase.from('sale_items').select('sale_id, quantity, refunded_quantity, total, refunded_amount, product:products(name), sale:sales(id, created_at, branch_id, status, order_type, warehouse_id, cashier_id, customer_id, payment_method, total, refunded_amount)');
         if (effectiveBranchFilter) itemsQuery = itemsQuery.eq('sale.branch_id', effectiveBranchFilter);
         itemsQuery = filterQ(itemsQuery, filters, applySaleItemFilters);
         const { data: items } = await itemsQuery.limit(10000);
@@ -411,16 +411,25 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           const sale = item.sale as { created_at: string } | null;
           return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
         });
+        const saleBaseTotals = new Map<string, number>();
+        filtered.forEach((item: Record<string, unknown>) => {
+          const saleId = String(item.sale_id || '');
+          saleBaseTotals.set(saleId, (saleBaseTotals.get(saleId) || 0) + netSaleItemRevenue(item));
+        });
         const prodMap = new Map<string, { branchId: string; name: string; quantity: number; total: number }>();
         filtered.forEach((item: Record<string, unknown>) => {
           const product = item.product as { name: string } | null;
-          const sale = item.sale as { branch_id?: string } | null;
+          const sale = item.sale as { branch_id?: string; total?: number | string | null; refunded_amount?: number | string | null } | null;
           const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
           const branchId = String(sale?.branch_id || '');
           const key = `${branchId}\u0000${name}`;
           const existing = prodMap.get(key) || { branchId, name, quantity: 0, total: 0 };
+          const baseRevenue = netSaleItemRevenue(item);
+          const saleBase = saleBaseTotals.get(String(item.sale_id || '')) || 0;
+          const authoritativeSaleNet = netSaleAmount(sale || {});
+          const allocatedRevenue = saleBase > 0 ? authoritativeSaleNet * (baseRevenue / saleBase) : 0;
           existing.quantity += netSaleItemQuantity(item);
-          existing.total += netSaleItemRevenue(item);
+          existing.total += allocatedRevenue;
           prodMap.set(key, existing);
         });
         const rows = Array.from(prodMap.values()).sort((a, b) => b.total - a.total).map((product) => withBranch(product.branchId, {
