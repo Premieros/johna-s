@@ -27,6 +27,20 @@ jobs:
       - name: Validate legacy Unicode print helper
         shell: pwsh
         run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File local-print-agent/print-unicode.ps1 -ValidateOnly
+      - name: Validate local agent restart script syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'local-print-agent/restart-agent.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'restart-agent.ps1 syntax validation failed'
+          }
       - name: Package Lite ZIP
         shell: pwsh
         run: |
