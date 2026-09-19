@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregatePaymentMethods,
+  allocateSaleNetRevenue,
   netPurchaseAmount,
   netSaleAmount,
   netSaleItemQuantity,
@@ -17,6 +18,15 @@ describe('report numeric integrity', () => {
     expect(netSaleItemQuantity({ quantity: 4, refunded_quantity: 1 })).toBe(3);
     expect(netSaleItemRevenue({ total: 400, refunded_amount: 100 })).toBe(300);
     expect(netSaleAmount({ total: 100, refunded_amount: 150 })).toBe(0);
+  });
+
+  it('allocates authoritative sale net revenue across items after header discounts', () => {
+    const first = allocateSaleNetRevenue(35, 0, 35);
+    expect(first).toBe(0);
+
+    const a = allocateSaleNetRevenue(60, 90, 100);
+    const b = allocateSaleNetRevenue(40, 90, 100);
+    expect(a + b).toBeCloseTo(90, 10);
   });
 
   it('uses sale_payments as tender truth and only falls back for sales without details', () => {
