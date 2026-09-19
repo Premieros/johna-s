@@ -37,6 +37,7 @@ export interface CostingRecipeLine {
 export type RawMaterialPriceSource =
   | 'purchase'
   | 'stock_count'
+  | 'pricing'
   | 'inventory_average'
   | 'batch_average'
   | 'default_cost';
@@ -66,7 +67,7 @@ export interface RawMaterialCostHistoryRow {
   previous_cost: number | null;
   change_amount: number | null;
   change_pct: number | null;
-  price_source: 'purchase' | 'stock_count';
+  price_source: RawMaterialPriceSource;
   priced_at: string;
   reference_number: string | null;
   source_detail: string | null;
