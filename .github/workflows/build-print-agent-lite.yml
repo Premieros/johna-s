@@ -26,7 +26,7 @@ jobs:
         run: dotnet build print-agent-lite/PremierPrintAgentLite.csproj -c Release --no-restore
       - name: Validate legacy Unicode print helper
         shell: pwsh
-        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File local-print-agent/print-unicode.ps1 -ValidateOnly
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File local-print-agent/print-escpos-raster.ps1 -ValidateOnly
       - name: Validate local agent restart script syntax
         shell: pwsh
         run: |
@@ -60,7 +60,7 @@ jobs:
           $stage = 'cleopatra-print-agent'
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item 'local-print-agent/agent.cjs' $stage
-          Copy-Item 'local-print-agent/print-unicode.ps1' $stage
+          Copy-Item 'local-print-agent/print-escpos-raster.ps1' $stage
           Copy-Item 'local-print-agent/restart-agent.ps1' $stage
           Copy-Item 'local-print-agent/start.cmd' $stage
           Copy-Item 'local-print-agent/install-startup.cmd' $stage
@@ -69,14 +69,14 @@ jobs:
           CLEOPATRA ONLY
           This package is for the Cleopatra Windows print-agent computer only.
           Do not install or copy it to the Smouha branch computer.
-          Transport: windows-gdi-raster
-          Agent health version: 3
+          Transport: escpos-raw-raster
+          Agent health version: 4
           '@ | Set-Content -Path "$stage/CLEOPATRA_ONLY.txt" -Encoding UTF8
-          Compress-Archive -Path "$stage/*" -DestinationPath 'Cleopatra-Print-Agent-v3-Windows.zip' -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath 'Cleopatra-Print-Agent-v4-Windows.zip' -Force
       - name: Upload Cleopatra local agent
         uses: actions/upload-artifact@v4
         with:
-          name: cleopatra-print-agent-v3-windows
+          name: cleopatra-print-agent-v4-windows
           path: Cleopatra-Print-Agent-v3-Windows.zip
           if-no-files-found: error
           retention-days: 14
