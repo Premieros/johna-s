@@ -26,6 +26,15 @@ const safeText = (value: unknown) => String(value ?? '').trim();
 const KITCHEN_ENQUEUE_MAX_ATTEMPTS = 3;
 const KITCHEN_ENQUEUE_RETRY_MS = 250;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function kitchenPrintIdempotencyKey(idempotencyNamespace: string, station: string, keySeed: string): string {
+  if (idempotencyNamespace === 'kitchen') {
+    const idempotencyKey = `kitchen:${station}:${keySeed}`;
+    return idempotencyKey;
+  }
+  return `${idempotencyNamespace}:${station}:${keySeed}`;
+}
+
 function randomId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   const hex = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
@@ -81,7 +90,7 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
     const keySeed = deltaIdentities.length === stationItems.length
       ? deltaIdentities.join(',')
       : `${safeText(params.context.orderNumber)}:${fallbackIdentities.join(',')}`;
-    const idempotencyKey = `${idempotencyNamespace}:${station}:${keySeed}`;
+    const idempotencyKey = kitchenPrintIdempotencyKey(idempotencyNamespace, station, keySeed);
     const payload = { text: buildStationTicketText(station, stationItems, params.context), paperWidthMm: Number(params.paperWidthMm || 80), copies: 1 };
 
     let lastError = '';
