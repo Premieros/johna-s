@@ -72,7 +72,7 @@ describe.skipIf(skip)('purchase branch relationship guards', () => {
     );
   });
 
-  it('does not block unrelated updates to untouched legacy mismatches', async () => {
+  it('keeps existing legacy mismatches editable after the creation-only guard is enabled', async () => {
     const id = randomUUID();
     await client.query('ALTER TABLE public.purchases DISABLE TRIGGER trg_enforce_purchase_branch_relationships');
     await client.query(
