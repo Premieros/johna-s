@@ -11,43 +11,44 @@
 
 DO $patch_void_permissions$
 DECLARE
-  v_name text;
   v_sig regprocedure;
   v_def text;
   v_next text;
 BEGIN
-  FOREACH v_name IN ARRAY ARRAY['cancel_sent_order_item_exact','cancel_sent_order_item']
-  LOOP
-    IF v_name = 'cancel_sent_order_item_exact' THEN
-      v_sig := to_regprocedure('public.cancel_sent_order_item_exact(uuid,uuid,numeric,text)');
-    ELSE
-      v_sig := to_regprocedure('public.cancel_sent_order_item(uuid,uuid,numeric,text)');
-    END IF;
+  -- The product-targeted legacy wrapper delegates to this exact-line function,
+  -- so there is only one authorization boundary to patch.
+  v_sig := to_regprocedure('public.cancel_sent_order_item_exact(uuid,uuid,numeric,text)');
+  IF v_sig IS NULL THEN
+    RAISE EXCEPTION 'cancel_sent_order_item_exact target not found';
+  END IF;
 
-    IF v_sig IS NULL THEN
-      RAISE EXCEPTION '% target not found', v_name;
-    END IF;
+  SELECT pg_get_functiondef(v_sig) INTO v_def;
 
-    SELECT pg_get_functiondef(v_sig) INTO v_def;
-
-    IF position('can_permission(''pos.void'')' in v_def) > 0 THEN
-      CONTINUE;
-    END IF;
-
+  IF position('can_permission(''pos.void'')' in v_def) = 0 THEN
     v_next := regexp_replace(
       v_def,
-      'v_privileged[[:space:]]*:=[[:space:]]*public\.is_pos_admin\(\)[[:space:]]+OR[[:space:]]+public\.can_permission\(''approvals\.review''\)[[:space:]]*;',
+      'v_privileged[[:space:]]*:=[[:space:]]*public\\.is_pos_admin\\(\\)[[:space:]]+OR[[:space:]]+public\\.can_permission\\(''approvals\\.review''\\)[[:space:]]*;',
       'v_privileged := public.can_permission(''pos.void'') OR public.can_permission(''approvals.review'');',
       'i'
     );
 
     IF v_next = v_def
        OR position('can_permission(''pos.void'')' in v_next) = 0 THEN
-      RAISE EXCEPTION '% permission patch pattern changed; refusing migration', v_name;
+      RAISE EXCEPTION 'cancel_sent_order_item_exact permission patch pattern changed; refusing migration';
     END IF;
 
     EXECUTE v_next;
-  END LOOP;
+  END IF;
+
+  IF to_regprocedure('public.cancel_sent_order_item(uuid,uuid,numeric,text)') IS NULL THEN
+    RAISE EXCEPTION 'cancel_sent_order_item wrapper not found';
+  END IF;
+
+  SELECT pg_get_functiondef('public.cancel_sent_order_item(uuid,uuid,numeric,text)'::regprocedure)
+  INTO v_def;
+  IF position('cancel_sent_order_item_exact' in v_def) = 0 THEN
+    RAISE EXCEPTION 'legacy cancel wrapper no longer delegates to exact-line boundary; refusing migration';
+  END IF;
 END;
 $patch_void_permissions$;
 
