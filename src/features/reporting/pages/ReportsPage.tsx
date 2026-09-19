@@ -287,22 +287,69 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.map((row) => ({ name: String(row[branchColumn]), value: Number(row[lang === 'ar' ? 'صافي الربح' : 'Net Profit'] || 0) })));
         setSummary({ total: netProfit, count: rows.length });
       } else if (reportType === 'inventory') {
-        let inventoryQuery = supabase.from('inventory').select('branch_id, quantity, product:products(name, barcode, low_stock_threshold), warehouse:warehouses(name)').order('updated_at', { ascending: false });
-        if (effectiveBranchFilter) inventoryQuery = inventoryQuery.eq('branch_id', effectiveBranchFilter);
-        inventoryQuery = filterQ(inventoryQuery, filters, applyProductScopedFilters);
-        const { data: inv } = await inventoryQuery;
-        const rows = (inv || []).map((item: Record<string, unknown>) => {
-          const product = item.product as { name: string; barcode: string | null; low_stock_threshold: number } | null;
-          const warehouse = item.warehouse as { name: string } | null;
-          return withBranch(item.branch_id, {
-            [lang === 'ar' ? 'المنتج' : 'Product']: product?.name || '',
-            [lang === 'ar' ? 'الباركود' : 'Barcode']: product?.barcode || '',
-            [lang === 'ar' ? 'المستودع' : 'Warehouse']: warehouse?.name || '',
-            [lang === 'ar' ? 'الكمية' : 'Quantity']: Number(item.quantity || 0),
-          });
+        let rawQuery = supabase
+          .from('raw_material_batches')
+          .select('branch_id,warehouse_id,quantity,raw_material:raw_materials(id,name,code,min_stock),warehouse:warehouses(name)');
+        let unitQuery = supabase
+          .from('inventory_unit_batches')
+          .select('branch_id,warehouse_id,quantity,unit:inventory_units(id,name,barcode,min_stock,low_stock_threshold),warehouse:warehouses(name)');
+        if (effectiveBranchFilter) {
+          rawQuery = rawQuery.eq('branch_id', effectiveBranchFilter);
+          unitQuery = unitQuery.eq('branch_id', effectiveBranchFilter);
+        }
+        if (filters.warehouse) {
+          rawQuery = rawQuery.eq('warehouse_id', filters.warehouse);
+          unitQuery = unitQuery.eq('warehouse_id', filters.warehouse);
+        }
+        const [rawResult, unitResult] = await Promise.all([rawQuery.limit(20000), unitQuery.limit(20000)]);
+        const stockMap = new Map<string, { branchId: string; warehouse: string; item: string; code: string; type: string; quantity: number }>();
+        (rawResult.data || []).forEach((row: Record<string, unknown>) => {
+          const material = row.raw_material as { id?: string; name?: string; code?: string } | null;
+          const warehouse = row.warehouse as { name?: string } | null;
+          const branchId = String(row.branch_id || '');
+          const warehouseId = String(row.warehouse_id || '');
+          const itemId = String(material?.id || '');
+          const key = `raw:${branchId}:${warehouseId}:${itemId}`;
+          const current = stockMap.get(key) || {
+            branchId,
+            warehouse: warehouse?.name || '-',
+            item: material?.name || '-',
+            code: material?.code || '',
+            type: lang === 'ar' ? 'خامة' : 'Raw material',
+            quantity: 0,
+          };
+          current.quantity += Number(row.quantity || 0);
+          stockMap.set(key, current);
         });
+        (unitResult.data || []).forEach((row: Record<string, unknown>) => {
+          const unit = row.unit as { id?: string; name?: string; barcode?: string } | null;
+          const warehouse = row.warehouse as { name?: string } | null;
+          const branchId = String(row.branch_id || '');
+          const warehouseId = String(row.warehouse_id || '');
+          const itemId = String(unit?.id || '');
+          const key = `unit:${branchId}:${warehouseId}:${itemId}`;
+          const current = stockMap.get(key) || {
+            branchId,
+            warehouse: warehouse?.name || '-',
+            item: unit?.name || '-',
+            code: unit?.barcode || '',
+            type: lang === 'ar' ? 'وحدة مخزون' : 'Inventory unit',
+            quantity: 0,
+          };
+          current.quantity += Number(row.quantity || 0);
+          stockMap.set(key, current);
+        });
+        const rows = Array.from(stockMap.values())
+          .sort((a, b) => a.item.localeCompare(b.item))
+          .map((row) => withBranch(row.branchId, {
+            [lang === 'ar' ? 'الصنف' : 'Item']: row.item,
+            [lang === 'ar' ? 'النوع' : 'Type']: row.type,
+            [lang === 'ar' ? 'الكود' : 'Code']: row.code,
+            [lang === 'ar' ? 'المستودع' : 'Warehouse']: row.warehouse,
+            [lang === 'ar' ? 'الكمية' : 'Quantity']: row.quantity,
+          }));
         setData(rows);
-        setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
+        setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'الصنف' : 'Item']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'الكمية' : 'Quantity'] || 0), 0), count: rows.length });
       } else if (reportType === 'sales_by_payment') {
         const { payment_method: requestedMethod, ...saleFilters } = filters;
@@ -507,23 +554,69 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'الهامش' : 'Margin']) })));
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'تكلفة الوصفة' : 'Recipe Cost'] || 0), 0), count: rows.length });
       } else if (reportType === 'low_stock') {
-        let lowStockQuery = supabase.from('inventory').select('branch_id, quantity, product:products(name, barcode, low_stock_threshold, product_type), warehouse:warehouses(name)');
-        if (effectiveBranchFilter) lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchFilter);
-        lowStockQuery = filterQ(lowStockQuery, filters, applyProductScopedFilters);
-        const { data: inv } = await lowStockQuery;
-        const rows = (inv || []).map((item: Record<string, unknown>) => {
-          const product = item.product as { name: string; barcode: string | null; low_stock_threshold: number } | null;
-          const warehouse = item.warehouse as { name: string } | null;
-          return { branchId: item.branch_id, product, warehouse: warehouse?.name || '', qty: Number(item.quantity || 0), threshold: product?.low_stock_threshold || 5, barcode: product?.barcode || '' };
-        }).filter((row) => row.qty <= row.threshold).map((row) => withBranch(row.branchId, {
-          [lang === 'ar' ? 'المنتج' : 'Product']: row.product?.name || '-',
-          [lang === 'ar' ? 'الباركود' : 'Barcode']: row.barcode,
-          [lang === 'ar' ? 'المستودع' : 'Warehouse']: row.warehouse,
-          [lang === 'ar' ? 'الكمية' : 'Quantity']: row.qty,
-          [lang === 'ar' ? 'الحد الأدنى' : 'Low Stock Threshold']: row.threshold,
-        }));
+        let rawMasterQuery = supabase.from('raw_materials').select('id,branch_id,name,code,min_stock,is_active').eq('is_active', true);
+        let rawBalanceQuery = supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity,min_stock');
+        let unitMasterQuery = supabase.from('inventory_units').select('id,branch_id,name,barcode,min_stock,low_stock_threshold,is_active').eq('is_active', true);
+        let unitBatchQuery = supabase.from('inventory_unit_batches').select('unit_id,branch_id,quantity');
+        if (effectiveBranchFilter) {
+          rawMasterQuery = rawMasterQuery.eq('branch_id', effectiveBranchFilter);
+          rawBalanceQuery = rawBalanceQuery.eq('branch_id', effectiveBranchFilter);
+          unitMasterQuery = unitMasterQuery.eq('branch_id', effectiveBranchFilter);
+          unitBatchQuery = unitBatchQuery.eq('branch_id', effectiveBranchFilter);
+        }
+        const [rawMastersResult, rawBalancesResult, unitMastersResult, unitBatchesResult] = await Promise.all([
+          rawMasterQuery.limit(10000),
+          rawBalanceQuery.limit(10000),
+          unitMasterQuery.limit(10000),
+          unitBatchQuery.limit(20000),
+        ]);
+        const rawQty = new Map<string, number>();
+        (rawBalancesResult.data || []).forEach((row: Record<string, unknown>) => {
+          const key = `${String(row.branch_id || '')}:${String(row.raw_material_id || '')}`;
+          rawQty.set(key, (rawQty.get(key) || 0) + Number(row.quantity || 0));
+        });
+        const unitQty = new Map<string, number>();
+        (unitBatchesResult.data || []).forEach((row: Record<string, unknown>) => {
+          const key = `${String(row.branch_id || '')}:${String(row.unit_id || '')}`;
+          unitQty.set(key, (unitQty.get(key) || 0) + Number(row.quantity || 0));
+        });
+        const stockRows: Array<{ branchId: string; item: string; code: string; type: string; qty: number; threshold: number }> = [];
+        (rawMastersResult.data || []).forEach((row: Record<string, unknown>) => {
+          const branchId = String(row.branch_id || '');
+          const key = `${branchId}:${String(row.id || '')}`;
+          stockRows.push({
+            branchId,
+            item: String(row.name || '-'),
+            code: String(row.code || ''),
+            type: lang === 'ar' ? 'خامة' : 'Raw material',
+            qty: rawQty.get(key) || 0,
+            threshold: Number(row.min_stock ?? 0),
+          });
+        });
+        (unitMastersResult.data || []).forEach((row: Record<string, unknown>) => {
+          const branchId = String(row.branch_id || '');
+          const key = `${branchId}:${String(row.id || '')}`;
+          stockRows.push({
+            branchId,
+            item: String(row.name || '-'),
+            code: String(row.barcode || ''),
+            type: lang === 'ar' ? 'وحدة مخزون' : 'Inventory unit',
+            qty: unitQty.get(key) || 0,
+            threshold: Number(row.low_stock_threshold ?? row.min_stock ?? 0),
+          });
+        });
+        const rows = stockRows
+          .filter((row) => row.qty <= row.threshold)
+          .sort((a, b) => a.qty - b.qty || a.item.localeCompare(b.item))
+          .map((row) => withBranch(row.branchId, {
+            [lang === 'ar' ? 'الصنف' : 'Item']: row.item,
+            [lang === 'ar' ? 'النوع' : 'Type']: row.type,
+            [lang === 'ar' ? 'الكود' : 'Code']: row.code,
+            [lang === 'ar' ? 'الكمية' : 'Quantity']: row.qty,
+            [lang === 'ar' ? 'الحد الأدنى' : 'Low Stock Threshold']: row.threshold,
+          }));
         setData(rows);
-        setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
+        setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'الصنف' : 'Item']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: 0, count: rows.length });
       } else if (reportType === 'cashier_performance') {
         let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, payment_method, status, created_at, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
