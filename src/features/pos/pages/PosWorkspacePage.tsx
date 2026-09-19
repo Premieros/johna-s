@@ -1015,7 +1015,25 @@ export function PosWorkspacePage() {
           currency={pos.effCurrency}
           onConfirm={(item) => {
             if (configItem) {
-              pos.replaceCartLine(cartLineKey(configItem), item);
+              const originalLineKey = cartLineKey(configItem);
+              const matchingOrderItem = orderItemsForActive.find((row) => orderItemLineKey(row) === originalLineKey);
+              const matchingSend = matchingOrderItem
+                ? kitchenSendsForActive.find((row) => row.order_item_id === matchingOrderItem.id)
+                : null;
+              const sentQty = Number(matchingSend?.sent_quantity || 0);
+              const identityChanged = cartLineKey(item) !== originalLineKey;
+
+              if (sentQty > 0 && (identityChanged || item.quantity < sentQty)) {
+                show(
+                  isAr
+                    ? 'هذا الصنف أُرسل للمطبخ بالفعل. لتقليل الكمية أو تغيير الملاحظة/الإضافات استخدم زر إلغاء الصنف (Void) أولًا، ثم أضف التعديل المطلوب.'
+                    : 'This item was already sent to kitchen. To reduce quantity or change notes/modifiers, void the sent item first, then add the required change.',
+                  'error',
+                );
+                return;
+              }
+
+              pos.replaceCartLine(originalLineKey, item);
             } else {
               pos.addToCart(
                 item.product,
