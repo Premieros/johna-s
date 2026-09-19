@@ -22,6 +22,8 @@ describe('cross-operator void ownership contract', () => {
     expect(migration).toContain("NEW.order_item_id IS NOT DISTINCT FROM OLD.order_item_id");
     expect(migration).toContain("COALESCE(NEW.sent_quantity, 0) <= COALESCE(OLD.sent_quantity, 0)");
     expect(migration).toContain("ARRAY['sent_quantity','sent_at','sent_by']");
+    expect(migration).toContain("TG_OP = 'DELETE'");
+    expect(migration).toContain("COALESCE(OLD.sent_quantity, 0) = 0");
   });
 
   it('does not touch printing or KDS routing', () => {
