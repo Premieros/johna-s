@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -15,25 +16,9 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
-const SENT_ITEM_GUARD_CODES = [
-  'SENT_ITEM_APPROVAL_REQUIRED',
-  'SENT_ITEM_CHANGE_REQUIRES_VOID',
-] as const;
-
-const SENT_ITEM_RECONCILIATION_CODES = [
-  'SENT_ITEM_VOID_INCOMPLETE',
-  'KITCHEN_EVENT_OVERAGE_REPAIR_FAILED',
-] as const;
-
 function normalizeToastMessage(message: string, type: ToastType): string {
   const text = String(message || '').trim();
-  if (type === 'error' && SENT_ITEM_GUARD_CODES.some((code) => text.includes(code))) {
-    return 'هذا الصنف تم إرساله للمطبخ بالفعل. لا يمكن تعديل الكمية المرسلة مباشرة؛ استخدم إلغاء الصنف (Void) ليتم تنفيذ مسار الموافقة الصحيح.';
-  }
-  if (type === 'error' && SENT_ITEM_RECONCILIATION_CODES.some((code) => text.includes(code))) {
-    return 'تعذر إتمام إلغاء الصنف لأن سجل إرسال المطبخ والمخزون غير متزامن. حدّث الطلب وحاول مرة أخرى؛ إذا استمرت الرسالة فلا تغيّر الكمية يدويًا.';
-  }
-  return text;
+  return type === 'error' ? userFacingErrorMessage(text) : text;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
