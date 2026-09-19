@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Edit2, Plus, Shield, Trash2 } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -35,16 +35,22 @@ export function UsersPage() {
   const canManageBranches = can('users.branches.manage');
   const canOpenUserEditor = canManageUsers || canManageBranches;
   const isPlatformAdmin = me?.role === 'super_admin';
+  const { branches, loading: branchesLoading } = useBranches();
+  const allowedBranchScope = useMemo(
+    () => isPlatformAdmin ? undefined : branches.map((branch) => `branch_id.eq.${branch.id}`).join(','),
+    [branches, isPlatformAdmin],
+  );
   const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadUsers } = usePaginatedRows<AppUser>({
     table: 'users',
     select: '*',
     order: { column: 'created_at', ascending: false },
-    // RLS is authoritative. Do not force users.branch_id here because a manager
-    // may be explicitly authorized for multiple branches.
-    branch_id: null,
+    // Permissions answer "what can the user do". Branch scope answers "where".
+    // Never let users.manage/users.view widen visibility beyond branches already
+    // visible to the signed-in user.
+    or: allowedBranchScope,
+    enabled: isPlatformAdmin || (!branchesLoading && branches.length > 0),
     pageSize: 100,
   });
-  const { branches } = useBranches();
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
