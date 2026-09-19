@@ -216,7 +216,7 @@ export function ActiveOrdersDrawer({
                         {t('payOrder')}
                       </button>
                     )}
-                    {order.status === 'held' && perms.canCancelOrder && (
+                    {perms.canCancelOrder && (
                       <button
                         onClick={() => onCancel(order)}
                         className="ms-auto p-1.5 rounded-lg text-ui-subtle hover:text-ui-danger hover:bg-ui-danger/10 transition-colors"
