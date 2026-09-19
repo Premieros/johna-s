@@ -42,7 +42,7 @@ if (-not $health) {
   throw 'PRINT_AGENT_HEALTHCHECK_FAILED'
 }
 
-if ([int]$health.version -ne 4) {
+if ([int]$health.version -ne 5) {
   throw "WRONG_PRINT_AGENT_VERSION:$($health.version)"
 }
 
