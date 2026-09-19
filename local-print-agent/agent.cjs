@@ -156,7 +156,7 @@ async function printText(printerName, text, paperWidthMm = 80) {
     const printers = await listPrinters();
     if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
 
-    // Retry only the preflight. Once the Windows GDI print call is invoked we never retry here,
+    // Retry only the preflight. Once the raw ESC/POS raster write is invoked we never retry here,
     // because an ambiguous retry could produce a duplicate physical ticket.
     await ensureSpoolerReadyWithRetry(printerName);
     await submitTextToSpooler(printerName, text, paperWidthMm);
