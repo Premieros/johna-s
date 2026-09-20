@@ -11,6 +11,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { formatFinancialCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
   aggregatePaymentMethods,
@@ -173,6 +174,7 @@ export function DashboardDataPage() {
   const { lang } = useLanguage();
   const { user } = useAuth();
   const can = useCan();
+  const history = useHistoryAccess();
   const branchFilter = useBranchFilter();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
@@ -180,7 +182,7 @@ export function DashboardDataPage() {
   const canCreateSale = can('pos.view') && can('pos.order.create');
   const canViewReports = can('reports.view');
   const canViewInventory = can('inventory.view');
-  const [range, setRange] = useState<Range>('month');
+  const [range, setRange] = useState<Range>(() => history.unlimited ? 'month' : 'week');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,7 +199,8 @@ export function DashboardDataPage() {
   const load = useCallback(async () => {
     setRefreshing(true);
     setError(null);
-    const window = periodWindow(range);
+    const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+    const window = periodWindow(effectiveRange);
     const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
     let currentQuery = supabase.from('sales').select(fields).gte('created_at', window.start.toISOString()).lte('created_at', window.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
     let previousQuery = supabase.from('sales').select(fields).gte('created_at', window.previousStart.toISOString()).lte('created_at', window.previousEnd.toISOString()).order('created_at', { ascending: false }).limit(5000);
@@ -232,15 +235,15 @@ export function DashboardDataPage() {
 
     setLoading(false);
     setRefreshing(false);
-  }, [ar, branchFilter, range]);
+  }, [ar, branchFilter, range, history.unlimited]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     void (async () => {
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const monthStart = history.unlimited ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(history.minIso || now.toISOString());
+      const monthEnd = new Date(now);
       let salesQuery = supabase.from('sales').select('total,refunded_amount').gte('created_at', monthStart.toISOString()).lt('created_at', monthEnd.toISOString());
       let rawMasterQuery = supabase.from('raw_materials').select('id,branch_id,name,min_stock,is_active').eq('is_active', true);
       let rawBalanceQuery = supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity');
@@ -267,8 +270,10 @@ export function DashboardDataPage() {
       );
       setStockAlerts(alerts);
       const lowStockCount = stockQueryFailed ? null : alerts.length;
-      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const from = history.unlimited
+        ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        : (history.minDate || now.toISOString().slice(0, 10));
+      const to = now.toISOString().slice(0, 10);
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
       const statements = await Promise.all(targetBranches.map((branch) => reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: from, p_to_date: to })));
       const validStatements = statements.filter((result) => !result.error && result.data);
@@ -276,7 +281,7 @@ export function DashboardDataPage() {
       const profit = targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
       setQuickStats({ sales: salesValue, expenses, profit, lowStockCount });
     })();
-  }, [branchFilter, branches, settings?.low_stock_threshold]);
+  }, [branchFilter, branches, settings?.low_stock_threshold, history.unlimited, history.minDate, history.minIso]);
 
   const current = useMemo(() => {
     const methods = aggregatePaymentMethods(sales, salePayments);
@@ -326,22 +331,23 @@ export function DashboardDataPage() {
   const lowStock = useMemo(() => stockAlerts.slice(0, 5), [stockAlerts]);
 
   const chart = useMemo<Point[]>(() => {
-    const window = periodWindow(range);
+    const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+    const window = periodWindow(effectiveRange);
     const currentMap = new Map<string, number>();
     const previousMap = new Map<string, number>();
-    const key = (date: Date) => range === 'today' ? String(date.getHours()) : range === 'year' ? String(date.getMonth()) : date.toISOString().slice(0, 10);
+    const key = (date: Date) => effectiveRange === 'today' ? String(date.getHours()) : effectiveRange === 'year' ? String(date.getMonth()) : date.toISOString().slice(0, 10);
     sales.forEach((sale) => currentMap.set(key(new Date(sale.created_at)), (currentMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
     previousSales.forEach((sale) => previousMap.set(key(new Date(sale.created_at)), (previousMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
-    if (range === 'today') return Array.from({ length: 24 }, (_, hour) => ({ label: `${String(hour).padStart(2, '0')}:00`, sales: currentMap.get(String(hour)) || 0, previous: previousMap.get(String(hour)) || 0 }));
-    if (range === 'year') return Array.from({ length: 12 }, (_, month) => ({ label: new Date(window.start.getFullYear(), month, 1).toLocaleDateString(ar ? 'ar-EG' : 'en-US', { month: 'short' }), sales: currentMap.get(String(month)) || 0, previous: previousMap.get(String(month)) || 0 }));
-    const dayCount = range === 'month' ? new Date(window.start.getFullYear(), window.start.getMonth() + 1, 0).getDate() : 7;
+    if (effectiveRange === 'today') return Array.from({ length: 24 }, (_, hour) => ({ label: `${String(hour).padStart(2, '0')}:00`, sales: currentMap.get(String(hour)) || 0, previous: previousMap.get(String(hour)) || 0 }));
+    if (effectiveRange === 'year') return Array.from({ length: 12 }, (_, month) => ({ label: new Date(window.start.getFullYear(), month, 1).toLocaleDateString(ar ? 'ar-EG' : 'en-US', { month: 'short' }), sales: currentMap.get(String(month)) || 0, previous: previousMap.get(String(month)) || 0 }));
+    const dayCount = effectiveRange === 'month' ? new Date(window.start.getFullYear(), window.start.getMonth() + 1, 0).getDate() : 7;
     return Array.from({ length: dayCount }, (_, index) => {
       const date = new Date(window.start); date.setDate(date.getDate() + index);
       const dateKey = date.toISOString().slice(0, 10);
       const prevDate = new Date(window.previousStart); prevDate.setDate(prevDate.getDate() + index);
       return { label: date.toLocaleDateString(ar ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }), sales: currentMap.get(dateKey) || 0, previous: previousMap.get(prevDate.toISOString().slice(0, 10)) || 0 };
     });
-  }, [ar, previousSales, range, sales]);
+  }, [ar, previousSales, range, sales, history.unlimited]);
 
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
   const recent = sales.slice(0, 5);
@@ -349,11 +355,11 @@ export function DashboardDataPage() {
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] bg-ui-page px-4 py-5 sm:px-7 sm:py-7" data-testid="dashboard-surface"><div className="mx-auto max-w-[1560px] space-y-6">
     <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-black text-ui-text">{ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome back, ${user?.full_name || 'Admin'}`}</h1><p className="mt-1 text-sm text-ui-muted">{ar ? 'بيانات فعلية من النظام حسب الفترة والفرع المحددين' : 'Live system data for the selected period and branch'}</p></div>{canCreateSale && <Link to="/pos" className="inline-flex items-center gap-2 rounded-xl bg-ui-primary px-4 py-2 text-sm font-bold text-ui-primary-fg"><ShoppingBag className="h-4 w-4" />{ar ? 'إنشاء بيع' : 'New sale'}</Link>}</section>
 
-    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month'}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
+    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month') : (ar ? 'الحد الأقصى للعرض: آخر 7 أيام' : 'Maximum visible history: last 7 days')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).filter((item) => history.unlimited || item === 'today' || item === 'week').map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
 
     {error && <div className="rounded-2xl border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm font-bold text-ui-danger">{error}</div>}
 
-    <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{ar ? 'ملخص الشهر الحالي' : 'Current month summary'}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{history.unlimited ? (ar ? 'ملخص الشهر الحالي' : 'Current month summary') : (ar ? 'ملخص آخر 7 أيام' : 'Last 7 days summary')}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي مبيعات الشهر' : 'Net sales this month'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.sales, money)}</p></div>
       <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'المصروفات المحاسبية' : 'Accounting expenses'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.expenses, money)}</p></div>
       <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي الربح المحاسبي' : 'Accounting net profit'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.profit, money)}</p></div>
