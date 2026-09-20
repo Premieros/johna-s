@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNo
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpRight, BarChart3, CreditCard,
-  RefreshCw, RotateCcw, ShoppingBag, Tag, Wallet, Clock3, ReceiptText,
+  RefreshCw, ShoppingBag, Wallet, Clock3, ReceiptText,
   Calculator, Armchair, CircleCheckBig, Timer, ShoppingCart, Users, ChefHat,
   Settings, History as HistoryIcon, Landmark,
 } from 'lucide-react';
@@ -506,12 +506,12 @@ export function DashboardDataPage() {
 
     {error && <div className="rounded-2xl border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm font-bold text-ui-danger">{error}</div>}
 
-    <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{history.unlimited ? (ar ? 'ملخص الشهر الحالي' : 'Current month summary') : (ar ? 'ملخص آخر 7 أيام' : 'Last 7 days summary')}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {(canViewSales || canViewFinancial || canViewInventory) && <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{history.unlimited ? (ar ? 'ملخص الشهر الحالي' : 'Current month summary') : (ar ? 'ملخص آخر 7 أيام' : 'Last 7 days summary')}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {canViewSales && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{history.unlimited ? (ar ? 'صافي مبيعات الشهر' : 'Net sales this month') : (ar ? 'صافي مبيعات آخر 7 أيام' : 'Net sales · last 7 days')}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.sales, money)}</p></div>}
       {canViewFinancial && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'المصروفات المحاسبية' : 'Accounting expenses'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.expenses, money)}</p></div>}
       {canViewFinancial && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي الربح المحاسبي' : 'Accounting net profit'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.profit, money)}</p></div>}
       {canViewInventory && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'تنبيهات المخزون' : 'Low stock alerts'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.lowStockCount, (value) => formatNumber(value, 0))}</p></div>}
-    </div></Card>
+    </div></Card>}
 
     {loading ? <div className="flex h-64 items-center justify-center rounded-3xl border border-ui-border bg-ui-surface"><RefreshCw className="h-7 w-7 animate-spin text-ui-primary" /></div> : <>
       <section data-testid="dashboard-permission-kpis" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
