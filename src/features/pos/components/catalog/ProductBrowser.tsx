@@ -200,8 +200,8 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
               const uploading = uploadingProductId === product.id;
               return (
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[210px] flex-col overflow-hidden rounded-[22px] border bg-ui-surface text-start shadow-ui-sm transition sm:min-h-[190px] ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
-                  <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-32 w-full overflow-hidden bg-ui-page-alt text-start sm:h-28 ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                    <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                  <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-32 w-full overflow-hidden bg-white text-start sm:h-28 ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                    <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full bg-white object-contain p-1.5" />
                     {availabilityError && <span className="absolute end-2 top-2 rounded-lg bg-ui-danger/90 px-2 py-1 text-[9px] font-black text-white shadow-ui-sm">{availabilityErrorLabel(availabilityError)}</span>}
                   </button>
                   {can('products.edit') && (
