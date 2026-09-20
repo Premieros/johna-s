@@ -983,6 +983,14 @@
       ]
     },
     {
+      "name": "transfer_order_items_to_table",
+      "params": [
+        "order_id",
+        "order_item_ids",
+        "target_table_id"
+      ]
+    },
+    {
       "name": "transfer_order_operator",
       "params": [
         "order_id",
