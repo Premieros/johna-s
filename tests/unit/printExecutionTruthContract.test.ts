@@ -109,10 +109,10 @@ describe('print execution truth contract', () => {
       "if (req.method === 'POST' && url.pathname === '/print')",
       "if (req.method === 'POST' && url.pathname === '/drawer')",
     );
-    expect(printRoute).toContain('await printText(printer, text);');
+    expect(printRoute).toContain('await printText(printer, text, paperWidthMm);');
     expect(printRoute).toContain('acceptedBySpooler: Boolean(result?.acceptedBySpooler)');
     expect(printRoute).toContain('return json(res, 200, { success: true');
-    expect(printRoute.indexOf('await printText(printer, text);')).toBeLessThan(printRoute.indexOf('return json(res, 200, { success: true'));
+    expect(printRoute.indexOf('await printText(printer, text, paperWidthMm);')).toBeLessThan(printRoute.indexOf('return json(res, 200, { success: true'));
 
     expect(agent).toContain("if (req.method === 'POST' && url.pathname === '/drawer')");
     expect(agent).toContain('Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])');
