@@ -179,6 +179,12 @@ function receiptPrintToken(html: string): string | null {
   return html.match(/<meta name="johns-print-auth" content="([^"]+)">/)?.[1] || null;
 }
 
+function queueSafeReceiptFormHtml(html: string): string {
+  return String(html || '')
+    .replace(/\s*<meta name="johns-print-auth" content="[^"]*">\s*/i, '')
+    .trim();
+}
+
 function receiptWidthMm(value: unknown): number {
   const configured = Number(value);
   if (!Number.isFinite(configured)) return 80;
@@ -353,6 +359,8 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
           approvalRequestId: pending.authorization.approvalRequestId,
           payload: {
             text: pending.plainText,
+            fixedFormHtml: queueSafeReceiptFormHtml(html),
+            rendererVersion: 1,
             paperWidthMm: widthMm,
             copies: 1,
           },
@@ -459,237 +467,303 @@ export async function buildReceiptHtml(
   const width = receiptWidthMm(s.receipt_width_mm || 80);
   const compact = isCompactThermalWidth(width);
   const copies = Math.max(1, Math.min(5, s.receipt_copies || 1));
+  const currency = s.currency || 'EGP';
   const showTax = s.receipt_show_tax !== false;
   const showQr = s.receipt_show_qr !== false;
-  const currency = s.currency || 'EGP';
-  // Visual-only receipt profile: identical typography scale for Arabic and English.
-  // Routing, authorization, queueing, printer selection and Print Agent behavior stay unchanged.
-  const safeContentWidthMm = Math.max(46, width - (compact ? 4 : 6));
-  const sidePaddingMm = compact ? 1.4 : 1.8;
-  const bodyFontPx = compact ? 11 : 12;
-  const smallFontPx = compact ? 9 : 10;
-  const itemFontPx = compact ? 11 : 12;
-  const totalFontPx = compact ? 15 : 17;
-  const logoWidthMm = compact ? 24 : 32;
-  const qrWidthMm = compact ? 16 : 20;
+  const contentWidth = Math.max(46, width - (compact ? 4 : 6));
+  const brand = safeThermalText(s.store_name || "JOHNA'S").toUpperCase();
+  const title = receipt.isOpenOrder
+    ? (isAr ? 'الحساب المفتوح' : 'OPEN CHECK')
+    : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT');
+  const tagline = isAr ? 'الأكل الجيد يجمع الناس' : 'Good Food Brings People Together';
 
   let qrImg = '';
   if (showQr) {
     try {
       qrImg = await generateQRCodeDataURL(
-        JSON.stringify({ inv: receipt.invoice, total: receipt.total, date: receipt.date })
+        JSON.stringify({ inv: receipt.invoice, total: receipt.total, date: receipt.date }),
       );
     } catch {
       qrImg = '';
     }
   }
 
+  const metaRows: Array<[string, string, boolean]> = [
+    [receipt.isOpenOrder ? (isAr ? 'رقم الطلب' : 'Order') : (isAr ? 'الفاتورة' : 'Invoice'), receipt.invoice, true],
+    [isAr ? 'التاريخ' : 'Date', thermalDateTime(receipt.date), true],
+  ];
+  if (receipt.orderTypeLabel) metaRows.push([isAr ? 'النوع' : 'Type', receipt.orderTypeLabel, false]);
+  if (receipt.orderNumber && receipt.orderNumber !== receipt.invoice) metaRows.push([isAr ? 'الطلب' : 'Order', receipt.orderNumber, true]);
+  if (receipt.tableName) metaRows.push([isAr ? 'الطاولة' : 'Table', receipt.tableName, false]);
+  if (receipt.guestCount) metaRows.push([isAr ? 'الأفراد' : 'Guests', String(receipt.guestCount), true]);
+  if (receipt.customerName) metaRows.push([isAr ? 'العميل' : 'Customer', receipt.customerName, false]);
+  if (receipt.operatorName) metaRows.push([isAr ? 'المستخدم' : 'User', receipt.operatorName, false]);
+
+  const metaHtml = metaRows.map(([label, value, ltr]) => `
+    <div class="meta-row">
+      <div class="meta-label">${escapeHtml(label)}:</div>
+      <div class="meta-value ${ltr ? 'ltr' : ''}">${escapeHtml(value)}</div>
+    </div>`).join('');
+
+  const itemRows = receipt.items.map((item) => `
+    <div class="item-grid item-row">
+      <div class="qty ltr">${escapeHtml(thermalNumber(item.qty, 3))}</div>
+      <div class="item-name">${escapeHtml(item.name)}</div>
+      <div class="price ltr">${escapeHtml(formatCurrency(item.total, currency, lang))}</div>
+    </div>`).join('');
+
+  const paymentRows = (receipt.payments || [])
+    .filter((payment) => String(payment.method || '').trim())
+    .map((payment) => `
+      <div class="summary-row payment-row">
+        <span>${escapeHtml(thermalPaymentLabel(payment.method, isAr))}</span>
+        <strong class="ltr">${escapeHtml(formatCurrency(payment.amount, currency, lang))}</strong>
+      </div>`)
+    .join('');
+
+  const storeInfo = [
+    s.store_address ? escapeHtml(s.store_address) : '',
+    s.store_phone ? `${isAr ? 'هاتف' : 'Tel'}: ${escapeHtml(s.store_phone)}` : '',
+    receipt.branchName ? escapeHtml(receipt.branchName) : '',
+    s.receipt_header ? escapeHtml(s.receipt_header) : '',
+  ].filter(Boolean).map((line) => `<div class="store-line">${line}</div>`).join('');
+
   const single = `
-    ${s.logo_url ? `<div class="center logo-wrap"><img src="${escapeHtml(s.logo_url)}" alt="logo" class="receipt-logo" /></div>` : ''}
-    <div class="center header">${escapeHtml(s.store_name)}</div>
-    ${s.store_address ? `<div class="center sub">${escapeHtml(s.store_address)}</div>` : ''}
-    ${s.store_phone ? `<div class="center sub">${isAr ? 'هاتف' : 'Tel'}: ${escapeHtml(s.store_phone)}</div>` : ''}
-    ${s.receipt_header ? `<div class="center sub pre-wrap">${escapeHtml(s.receipt_header)}</div>` : ''}
-    <div class="center sub branch-name">${isAr ? 'الفرع' : 'Branch'}: ${escapeHtml(receipt.branchName)}</div>
-    <div class="divider"></div>
-    ${receipt.isOpenOrder ? `<div class="center open-order-label">${isAr ? 'حساب مبدئي – غير مدفوع' : 'OPEN CHECK – NOT PAID'}</div>` : ''}
-    <div class="meta-row"><span class="meta-value">${receipt.isOpenOrder ? (isAr ? 'الطلب' : 'Order') : (isAr ? 'الفاتورة' : 'Invoice')}: ${escapeHtml(receipt.invoice)}</span></div>
-    <div class="meta-row"><span class="meta-value">${isAr ? 'التاريخ' : 'Date'}: ${escapeHtml(new Date(receipt.date).toLocaleString(isAr ? 'ar-EG' : 'en-US'))}</span></div>
-    ${receipt.orderTypeLabel ? `<div class="meta-row"><span class="meta-value">${isAr ? 'النوع' : 'Type'}: ${escapeHtml(receipt.orderTypeLabel)}</span></div>` : ''}
-    ${receipt.orderNumber ? `<div class="meta-row"><span class="meta-value">${isAr ? 'الطلب' : 'Order'}: ${escapeHtml(receipt.orderNumber)}</span></div>` : ''}
-    ${receipt.tableName ? `<div class="meta-row"><span class="meta-value">${isAr ? 'طاولة' : 'Table'}: ${escapeHtml(receipt.tableName)}</span></div>` : ''}
-    ${receipt.guestCount ? `<div class="meta-row"><span class="meta-value">${isAr ? 'الضيوف' : 'Guests'}: ${receipt.guestCount}</span></div>` : ''}
-    ${receipt.customerName ? `<div class="meta-row"><span class="meta-value">${isAr ? 'العميل' : 'Customer'}: ${escapeHtml(receipt.customerName)}</span></div>` : ''}
-    ${receipt.operatorName ? `<div class="meta-row"><span class="meta-value">${isAr ? 'المستخدم' : 'User'}: ${escapeHtml(receipt.operatorName)}</span></div>` : ''}
-    <div class="divider"></div>
-    <div class="items-head"><span>${isAr ? 'الصنف' : 'Item'}</span><span>${isAr ? 'الإجمالي' : 'Total'}</span></div>
-    ${receipt.items.map((i) => `<div class="item-row"><div class="item-name">${escapeHtml(i.name)}</div><div class="item-detail"><span class="qty-price">${i.qty} × ${formatCurrency(i.price, currency, lang)}</span><span class="amount">${formatCurrency(i.total, currency, lang)}</span></div></div>`).join('')}
-    <div class="divider"></div>
-    <div class="money-row"><span>${isAr ? 'المجموع الفرعي' : 'Subtotal'}</span><span class="amount">${formatCurrency(receipt.subtotal, currency, lang)}</span></div>
-    ${receipt.discount > 0 ? `<div class="money-row"><span>${isAr ? 'الخصم' : 'Discount'}</span><span class="amount">-${formatCurrency(receipt.discount, currency, lang)}</span></div>` : ''}
-    ${showTax && receipt.tax > 0 ? `<div class="money-row"><span>${isAr ? 'الضريبة' : 'Tax'} (${escapeHtml(s.tax_rate ?? 0)}%)</span><span class="amount">${formatCurrency(receipt.tax, currency, lang)}</span></div>` : ''}
-    <div class="divider strong"></div>
-    <div class="money-row total-row"><span>${isAr ? 'الإجمالي' : 'Total'}</span><span class="amount">${formatCurrency(receipt.total, currency, lang)}</span></div>
-    ${receipt.isOpenOrder ? '' : `<div class="money-row"><span>${isAr ? 'المدفوع' : 'Paid'}</span><span class="amount">${formatCurrency(receipt.paid, currency, lang)}</span></div>`}
-    ${!receipt.isOpenOrder && receipt.change > 0 ? `<div class="money-row"><span>${isAr ? 'الباقي' : 'Change'}</span><span class="amount">${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
-    ${qrImg ? `<div class="center qr-wrap"><img src="${qrImg}" class="receipt-qr" alt="QR" /></div>` : ''}
-    <div class="divider"></div>
-    ${s.receipt_footer ? `<div class="footer pre-wrap">${escapeHtml(s.receipt_footer)}</div>` : ''}
-    <div class="footer thank-you">${isAr ? 'شكراً لزيارتكم' : 'Thank you!'}</div>`;
+    <main class="fixed-receipt">
+      <header class="brand-block">
+        <div class="brand">${escapeHtml(brand)}</div>
+        <div class="restaurant">RESTAURANT</div>
+      </header>
+
+      <div class="title-band">
+        <span></span><div class="document-title">${escapeHtml(title)}</div><span></span>
+      </div>
+      <div class="tagline">${escapeHtml(tagline)}</div>
+      ${storeInfo ? `<div class="store-info">${storeInfo}</div>` : ''}
+
+      <section class="meta-block">${metaHtml}</section>
+      <div class="rule"></div>
+
+      <section>
+        <div class="section-title">${isAr ? 'الأصناف' : 'ITEMS'}</div>
+        <div class="item-grid item-head">
+          <div>${isAr ? 'الكمية' : 'QTY'}</div>
+          <div>${isAr ? 'الصنف' : 'ITEM'}</div>
+          <div class="end">${isAr ? 'السعر' : 'PRICE'}</div>
+        </div>
+        ${itemRows}
+      </section>
+
+      <div class="rule"></div>
+      <section class="summary">
+        <div class="summary-row"><span>${isAr ? 'المجموع الفرعي' : 'Subtotal'}:</span><strong class="ltr">${escapeHtml(formatCurrency(receipt.subtotal, currency, lang))}</strong></div>
+        ${receipt.discount > 0 ? `<div class="summary-row"><span>${isAr ? 'الخصم' : 'Discount'}:</span><strong class="ltr">-${escapeHtml(formatCurrency(receipt.discount, currency, lang))}</strong></div>` : ''}
+        ${showTax && receipt.tax > 0 ? `<div class="summary-row"><span>${isAr ? 'الضريبة' : 'Tax'}:</span><strong class="ltr">${escapeHtml(formatCurrency(receipt.tax, currency, lang))}</strong></div>` : ''}
+        <div class="summary-row grand-total"><span>${isAr ? 'الإجمالي' : 'TOTAL'}:</span><strong class="ltr">${escapeHtml(formatCurrency(receipt.total, currency, lang))}</strong></div>
+        ${!receipt.isOpenOrder && paymentRows ? `<div class="payment-block"><div class="mini-title">${isAr ? 'الدفع' : 'PAYMENT'}</div>${paymentRows}</div>` : ''}
+        ${!receipt.isOpenOrder ? `<div class="summary-row paid-row"><span>${isAr ? 'المدفوع' : 'Paid'}:</span><strong class="ltr">${escapeHtml(formatCurrency(receipt.paid, currency, lang))}</strong></div>` : ''}
+        ${!receipt.isOpenOrder && receipt.change > 0 ? `<div class="summary-row"><span>${isAr ? 'الباقي' : 'Change'}:</span><strong class="ltr">${escapeHtml(formatCurrency(receipt.change, currency, lang))}</strong></div>` : ''}
+      </section>
+
+      <div class="rule"></div>
+      <footer>
+        ${s.receipt_footer ? `<div class="configured-footer">${escapeHtml(s.receipt_footer)}</div>` : ''}
+        <div>${isAr ? 'شكراً لزيارتكم' : 'Thank you for visiting.'}</div>
+        <div>${isAr ? 'نراكم قريباً!' : 'Thank you!'}</div>
+        <div class="footer-mark"><span></span><b>♥</b><span></span></div>
+        ${qrImg ? `<img src="${qrImg}" class="receipt-qr" alt="QR" />` : ''}
+      </footer>
+    </main>`;
 
   const pages = Array.from({ length: copies }, () => `<section class="receipt-page">${single}</section>`).join('\n');
+
   return `<!DOCTYPE html>
-    <html lang="${isAr ? 'ar' : 'en'}" dir="${isAr ? 'rtl' : 'ltr'}">
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>${escapeHtml(receipt.invoice)}</title>
-      ${printToken ? `<meta name="johns-print-auth" content="${escapeHtml(printToken)}">` : ''}
-      <style>
-        :root { color-scheme: light only; }
-        * { box-sizing: border-box; }
-        html, body {
-          margin: 0;
-          padding: 0;
-          width: ${width}mm;
-          min-width: ${width}mm;
-          max-width: ${width}mm;
-          background: #fff;
-          color: #000;
-          font-family: Arial, Tahoma, "Segoe UI", sans-serif;
-          font-size: ${bodyFontPx}px;
-          line-height: 1.35;
-          font-weight: 600;
-          letter-spacing: 0;
-          text-rendering: optimizeLegibility;
-          font-synthesis: none;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        body { overflow: visible; }
-        .receipt-page {
-          width: ${safeContentWidthMm}mm;
-          max-width: ${safeContentWidthMm}mm;
-          min-height: 0;
-          margin: 0 auto;
-          padding: 2mm ${sidePaddingMm}mm 3mm;
-          background: #fff;
-          color: #000;
-          page-break-after: always;
-          break-after: page;
-        }
-        .receipt-page:last-child { page-break-after: auto; break-after: auto; }
-        .center { text-align: center; }
-        .logo-wrap { margin: 0 auto 1.5mm; }
-        .receipt-logo {
-          display: block;
-          width: auto;
-          max-width: ${logoWidthMm}mm;
-          max-height: 18mm;
-          margin: 0 auto;
-          object-fit: contain;
-          filter: grayscale(100%) contrast(125%);
-        }
-        .header {
-          margin: 0 0 1mm;
-          font-size: ${compact ? 16 : 18}px;
-          line-height: 1.3;
-          font-weight: 800;
-          overflow-wrap: anywhere;
-        }
-        .sub {
-          margin: .5mm 0;
-          font-size: ${smallFontPx}px;
-          line-height: 1.45;
-          overflow-wrap: anywhere;
-        }
-        .branch-name { font-weight: 700; }
-        .open-order-label { margin: 1mm 0 1.5mm; font-size: ${compact ? 12 : 13}px; font-weight: 900; border: .3mm solid #000; padding: 1mm; }
-        .pre-wrap { white-space: pre-wrap; }
-        .divider {
-          width: 100%;
-          margin: 2mm 0;
-          border: 0;
-          border-top: .3mm dashed #000;
-        }
-        .divider.strong { border-top-style: solid; border-top-width: .45mm; }
-        .meta-row {
-          display: block;
-          margin: .8mm 0;
-          min-width: 0;
-          line-height: 1.4;
-        }
-        .meta-value { display: block; overflow-wrap: anywhere; }
-        .items-head,
-        .item-detail,
-        .money-row {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
-          column-gap: 1.2mm;
-          align-items: baseline;
-        }
-        .items-head {
-          margin-bottom: 1mm;
-          font-size: ${smallFontPx}px;
-          font-weight: 800;
-          border-bottom: .25mm solid #000;
-          padding-bottom: .7mm;
-        }
-        .item-row {
-          padding: 1.1mm 0;
-          border-bottom: .2mm dotted #777;
-          break-inside: avoid;
-          page-break-inside: avoid;
-        }
-        .item-row:last-of-type { border-bottom: 0; }
-        .item-name {
-          margin-bottom: .7mm;
-          font-size: ${itemFontPx}px;
-          line-height: 1.3;
-          font-weight: 800;
-          overflow-wrap: anywhere;
-          word-break: normal;
-        }
-        .item-detail { font-size: ${smallFontPx}px; line-height: 1.3; font-weight: 600; min-width: 0; }
-        .qty-price { overflow-wrap: anywhere; }
-        .money-row {
-          margin: .8mm 0;
-          font-size: ${bodyFontPx}px;
-          line-height: 1.3;
-          font-weight: 600;
-        }
-        .amount {
-          white-space: nowrap;
-          direction: ltr;
-          unicode-bidi: isolate;
-          font-variant-numeric: tabular-nums;
-          text-align: right;
-        }
-        .total-row {
-          margin: 1.3mm 0;
-          font-size: ${totalFontPx}px;
-          line-height: 1.25;
-          font-weight: 900;
-        }
-        .qr-wrap { margin: 3mm auto 1mm; break-inside: avoid; page-break-inside: avoid; }
-        .receipt-qr {
-          display: block;
-          width: ${qrWidthMm}mm;
-          height: ${qrWidthMm}mm;
-          margin: 0 auto;
-          image-rendering: pixelated;
-        }
-        .footer {
-          margin-top: 1.5mm;
-          text-align: center;
-          font-size: ${smallFontPx}px;
-          line-height: 1.5;
-          overflow-wrap: anywhere;
-        }
-        .thank-you { margin-top: 2mm; font-weight: 800; }
-        @page { margin: 0; }
-        @media print {
-          html,
-          body {
-            width: ${width}mm !important;
-            min-width: ${width}mm !important;
-            max-width: ${width}mm !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #fff !important;
-            color: #000 !important;
-          }
-          .receipt-page {
-            width: ${safeContentWidthMm}mm !important;
-            max-width: ${safeContentWidthMm}mm !important;
-            margin: 0 auto !important;
-            box-shadow: none !important;
-          }
-        }
-      </style>
-    </head>
-    <body>${pages}</body>
-    </html>`;
+<html lang="${isAr ? 'ar' : 'en'}" dir="${isAr ? 'rtl' : 'ltr'}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(receipt.invoice)}</title>
+  ${printToken ? `<meta name="johns-print-auth" content="${escapeHtml(printToken)}">` : ''}
+  <style>
+    :root { color-scheme: light only; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: ${width}mm;
+      min-width: ${width}mm;
+      max-width: ${width}mm;
+      background: #fff;
+      color: #000;
+      font-family: "Arial Narrow", Tahoma, Arial, "Segoe UI", sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body { overflow: visible; }
+    .receipt-page {
+      width: ${contentWidth}mm;
+      margin: 0 auto;
+      padding: ${compact ? 2.6 : 3.5}mm ${compact ? 2.2 : 3.2}mm ${compact ? 3.5 : 5}mm;
+      page-break-after: always;
+      break-after: page;
+      background: #fff;
+    }
+    .receipt-page:last-child { page-break-after: auto; break-after: auto; }
+    .brand-block { text-align: center; margin-bottom: ${compact ? 3 : 4.5}mm; }
+    .brand {
+      font-family: Arial, "Arial Black", Tahoma, sans-serif;
+      font-size: ${compact ? 25 : 31}px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -1.2px;
+      white-space: nowrap;
+    }
+    .restaurant {
+      margin-top: 1.1mm;
+      font-family: Arial, Tahoma, sans-serif;
+      font-size: ${compact ? 9 : 11}px;
+      line-height: 1;
+      letter-spacing: ${compact ? 3 : 4.2}px;
+      font-weight: 700;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    .title-band {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: ${compact ? 2 : 3}mm;
+      margin-top: ${compact ? 2 : 3}mm;
+    }
+    .title-band > span, .rule { border-top: .28mm solid #000; }
+    .document-title {
+      font-size: ${compact ? 17 : 21}px;
+      line-height: 1;
+      font-weight: 900;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .tagline {
+      margin-top: 1.2mm;
+      text-align: center;
+      font-size: ${compact ? 9 : 10.5}px;
+      line-height: 1.2;
+      font-weight: 500;
+    }
+    .store-info { margin-top: 1.5mm; text-align: center; }
+    .store-line {
+      margin: .3mm 0;
+      font-size: ${compact ? 8.5 : 9.5}px;
+      line-height: 1.2;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .meta-block { margin: ${compact ? 3.2 : 4.2}mm 0 ${compact ? 3 : 4}mm; }
+    .meta-row {
+      display: grid;
+      grid-template-columns: 30% minmax(0, 1fr);
+      gap: 2mm;
+      margin: ${compact ? .55 : .75}mm 0;
+      font-size: ${compact ? 10.5 : 12}px;
+      line-height: 1.25;
+    }
+    .meta-label { font-weight: 800; }
+    .meta-value { font-weight: 600; overflow-wrap: anywhere; }
+    .ltr { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+    .rule { width: 100%; margin: ${compact ? 2.2 : 3}mm 0; }
+    .section-title {
+      font-size: ${compact ? 18 : 21}px;
+      line-height: 1;
+      font-weight: 900;
+      margin-bottom: ${compact ? 2 : 2.5}mm;
+    }
+    .item-grid {
+      display: grid;
+      grid-template-columns: ${compact ? '9mm minmax(0,1fr) 17mm' : '11mm minmax(0,1fr) 20mm'};
+      column-gap: ${compact ? 1 : 1.6}mm;
+      align-items: baseline;
+    }
+    .item-head {
+      font-size: ${compact ? 9 : 10.5}px;
+      line-height: 1.1;
+      font-weight: 800;
+      margin-bottom: ${compact ? 1.5 : 2}mm;
+    }
+    .end { text-align: end; }
+    .item-row {
+      padding: ${compact ? 1.3 : 1.7}mm 0;
+      font-size: ${compact ? 11 : 12.5}px;
+      line-height: 1.22;
+      font-weight: 600;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .qty { text-align: center; }
+    .item-name { font-weight: 700; overflow-wrap: anywhere; }
+    .price { text-align: end; white-space: nowrap; font-weight: 700; }
+    .summary-row {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: 2mm;
+      align-items: baseline;
+      margin: ${compact ? .7 : .9}mm 0;
+      font-size: ${compact ? 10.5 : 12}px;
+      line-height: 1.2;
+    }
+    .summary-row strong { white-space: nowrap; }
+    .grand-total {
+      margin-top: ${compact ? 1.4 : 1.8}mm;
+      font-size: ${compact ? 18 : 22}px;
+      line-height: 1;
+      font-weight: 900;
+    }
+    .payment-block { margin-top: 2mm; padding-top: 1.5mm; border-top: .2mm solid #777; }
+    .mini-title { margin-bottom: 1mm; font-size: ${compact ? 9 : 10.5}px; font-weight: 900; letter-spacing: .4px; }
+    .payment-row, .paid-row { font-size: ${compact ? 9 : 10.5}px; }
+    footer {
+      padding-top: ${compact ? 2.5 : 3.5}mm;
+      text-align: center;
+      font-size: ${compact ? 10 : 11.5}px;
+      line-height: 1.35;
+      font-weight: 500;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .configured-footer { margin-bottom: 1.1mm; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .footer-mark {
+      display: grid;
+      grid-template-columns: 12mm auto 12mm;
+      justify-content: center;
+      align-items: center;
+      gap: 2mm;
+      margin-top: 2mm;
+    }
+    .footer-mark span { width: 12mm; border-top: .25mm solid #000; }
+    .footer-mark b { font-size: ${compact ? 11 : 13}px; line-height: 1; }
+    .receipt-qr {
+      display: block;
+      width: ${compact ? 15 : 18}mm;
+      height: ${compact ? 15 : 18}mm;
+      margin: 2.5mm auto 0;
+      image-rendering: pixelated;
+    }
+    @page { margin: 0; }
+    @media print {
+      html, body {
+        width: ${width}mm !important;
+        min-width: ${width}mm !important;
+        max-width: ${width}mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        color: #000 !important;
+      }
+      .receipt-page { width: ${contentWidth}mm !important; margin: 0 auto !important; }
+    }
+  </style>
+</head>
+<body>${pages}</body>
+</html>`;
 }
 
 export function buildKitchenTicketHtml(params: {
