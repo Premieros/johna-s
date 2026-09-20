@@ -15,7 +15,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO ''
-AS $
+AS $link_employee$
 BEGIN
   IF auth.uid() IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
@@ -59,14 +59,14 @@ EXCEPTION
   WHEN OTHERS THEN
     RETURN jsonb_build_object('success', false, 'error', 'TRANSACTION_FAILED', 'detail', SQLERRM);
 END;
-$;
+$link_employee$;
 
 CREATE OR REPLACE FUNCTION public.enforce_employee_only_credit_sale()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO pg_catalog, pg_temp
-AS $$
+AS $employee_credit_guard$
 BEGIN
   IF lower(COALESCE(NEW.payment_method, '')) = 'credit' THEN
     IF NEW.customer_id IS NULL
@@ -86,7 +86,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$;
+$employee_credit_guard$;
 
 REVOKE ALL ON FUNCTION public.enforce_employee_only_credit_sale()
   FROM PUBLIC, anon, authenticated;
