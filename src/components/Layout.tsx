@@ -360,7 +360,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <nav
         data-testid="mobile-bottom-nav"
-        className="fixed bottom-0 start-0 end-0 z-[55] grid grid-cols-5 border-t border-ui-border bg-ui-surface/95 px-1 pt-1 shadow-[0_-8px_28px_rgba(0,0,0,0.08)] backdrop-blur-xl md:hidden"
+        className="fixed bottom-0 start-0 end-0 z-[55] grid grid-flow-col auto-cols-fr border-t border-ui-border bg-ui-surface/95 px-1 pt-1 shadow-[0_-8px_28px_rgba(0,0,0,0.08)] backdrop-blur-xl md:hidden"
         aria-label={ar ? 'التنقل السريع' : 'Quick navigation'}
       >
         {mobilePrimaryItems.map((item) => (
