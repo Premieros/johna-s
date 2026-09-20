@@ -335,7 +335,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const handleSaveGeneral = async () => {
     setSavingGeneral(true);
     try {
-      await save({
+      const ok = await save({
         store_name: String(generalForm.store_name || ''),
         store_address: String(generalForm.store_address || ''),
         store_phone: String(generalForm.store_phone || ''),
@@ -354,6 +354,10 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
         pos_barcode_autofocus: Boolean(generalForm.pos_barcode_autofocus),
         low_stock_threshold: Number(generalForm.low_stock_threshold) || 5,
       });
+      if (!ok) {
+        show(ar ? 'فشل حفظ الإعدادات المركزية. لم يتم تطبيق التغيير.' : 'Failed to save enterprise settings. No change was applied.', 'error');
+        return;
+      }
       show(ar ? 'تم حفظ الإعدادات المركزية بنجاح' : 'Enterprise settings saved', 'success');
     } catch {
       show(ar ? 'فشل حفظ الإعدادات المركزية' : 'Failed to save enterprise settings', 'error');
@@ -366,7 +370,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     if (!targetBranchId) return;
     setSavingBranchCustom(true);
     try {
-      await saveBranchSettings(targetBranchId, {
+      const ok = await saveBranchSettings(targetBranchId, {
         receipt_header: branchForm.receipt_header ? String(branchForm.receipt_header) : null,
         receipt_footer: branchForm.receipt_footer ? String(branchForm.receipt_footer) : null,
         logo_url: branchForm.logo_url ? String(branchForm.logo_url) : null,
@@ -375,6 +379,10 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
         tax_enabled: branchForm.tax_enabled != null ? branchForm.tax_enabled === '1' : null,
         low_stock_threshold: branchForm.low_stock_threshold != null ? Number(branchForm.low_stock_threshold) : null,
       });
+      if (!ok) {
+        show(ar ? 'فشل حفظ تخصيصات الفرع. لم يتم تطبيق التغيير.' : 'Failed to save branch customizations. No change was applied.', 'error');
+        return;
+      }
       show(ar ? 'تم حفظ تخصيصات الفرع بنجاح' : 'Branch customization saved', 'success');
     } catch {
       show(ar ? 'فشل حفظ تخصيصات الفرع' : 'Failed to save branch customizations', 'error');
@@ -791,21 +799,26 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                   ]}
                 />
                 <Input
-                  label={ar ? 'نسبة الضريبة (%)' : 'Tax Rate (%)'}
+                  label={ar ? 'نسبة الضريبة الافتراضية (%)' : 'Default Tax Rate (%)'}
                   type="number"
                   step="0.1"
                   value={generalForm.tax_rate ?? 14}
                   onChange={(e) => setGeneralForm({ ...generalForm, tax_rate: parseFloat(e.target.value) || 0 })}
                 />
-                <Select
-                  label={ar ? 'تفعيل الضريبة' : 'Tax Status'}
-                  value={generalForm.tax_enabled || '1'}
-                  onChange={(e) => setGeneralForm({ ...generalForm, tax_enabled: e.target.value })}
-                  options={[
-                    { value: '1', label: ar ? 'مفعلة' : 'Enabled' },
-                    { value: '0', label: ar ? 'معطلة' : 'Disabled' },
-                  ]}
-                />
+                <div className="space-y-1">
+                  <Select
+                    label={ar ? 'حالة الضريبة الافتراضية' : 'Default Tax Status'}
+                    value={generalForm.tax_enabled || '1'}
+                    onChange={(e) => setGeneralForm({ ...generalForm, tax_enabled: e.target.value })}
+                    options={[
+                      { value: '1', label: ar ? 'مفعلة' : 'Enabled' },
+                      { value: '0', label: ar ? 'معطلة' : 'Disabled' },
+                    ]}
+                  />
+                  <p className="text-[11px] text-ui-subtle">
+                    {ar ? 'هذا هو الافتراضي للمنشأة. أي فرع لديه إعداد ضريبة مستقل سيستخدم إعداد الفرع حتى يتم ضبطه على «استخدام الافتراضي».' : 'This is the enterprise default. A branch tax override takes priority until that branch is set to inherit the default.'}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -870,6 +883,24 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 label={ar ? 'العملة الخاصة بالفرع' : 'Branch Currency'}
                 value={branchForm.currency || ''}
                 onChange={(e) => setBranchForm({ ...branchForm, currency: e.target.value })}
+              />
+              <Select
+                label={ar ? 'حالة ضريبة الفرع' : 'Branch Tax Status'}
+                value={branchForm.tax_enabled == null ? '' : String(branchForm.tax_enabled)}
+                onChange={(e) => setBranchForm({ ...branchForm, tax_enabled: e.target.value || null })}
+                options={[
+                  { value: '', label: ar ? 'استخدام الإعداد الافتراضي للمنشأة' : 'Inherit enterprise default' },
+                  { value: '1', label: ar ? 'مفعلة لهذا الفرع' : 'Enabled for this branch' },
+                  { value: '0', label: ar ? 'معطلة لهذا الفرع' : 'Disabled for this branch' },
+                ]}
+              />
+              <Input
+                label={ar ? 'نسبة ضريبة الفرع (%)' : 'Branch Tax Rate (%)'}
+                type="number"
+                step="0.1"
+                value={branchForm.tax_rate ?? ''}
+                onChange={(e) => setBranchForm({ ...branchForm, tax_rate: e.target.value === '' ? null : Number(e.target.value) })}
+                placeholder={ar ? 'فارغ = استخدام النسبة الافتراضية' : 'Blank = inherit default rate'}
               />
               <Textarea
                 label={ar ? 'ترويسة فاتورة الفرع' : 'Branch Receipt Header'}

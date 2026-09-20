@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft,
   Check,
@@ -54,6 +54,7 @@ interface CurrentOrderPanelProps {
   sessionSent: KitchenSendItem[];
   canDiscount?: boolean;
   canDeleteItem?: boolean;
+  discountShortcutToken?: number;
   perms?: PosPermissions;
   onSwitchOrderType: (ot: OrderType) => void;
   onGuestCountChange: (n: number | null) => void;
@@ -95,6 +96,7 @@ export function CurrentOrderPanel({
   sessionSent,
   canDiscount = true,
   canDeleteItem = true,
+  discountShortcutToken = 0,
   perms: permissionOverride,
   onSwitchOrderType,
   onGuestCountChange,
@@ -112,6 +114,13 @@ export function CurrentOrderPanel({
   const resolvedPermissions = usePosPermissions();
   const perms = permissionOverride ?? resolvedPermissions;
   const [showDiscount, setShowDiscount] = useState(false);
+
+  useEffect(() => {
+    if (discountShortcutToken > 0 && canDiscount && cart.length > 0) {
+      setShowDiscount(true);
+    }
+  }, [discountShortcutToken, canDiscount, cart.length]);
+
   const [splitItem, setSplitItem] = useState<CartItem | null>(null);
   const [selectedLineKeys, setSelectedLineKeys] = useState<Set<string>>(() => new Set());
   const [transferItemsOpen, setTransferItemsOpen] = useState(false);

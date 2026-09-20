@@ -201,7 +201,7 @@ export function PosTopBar({
           data-testid="pos-shift-button"
           onClick={openShiftManagement}
           className={`min-h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-black flex transition hover:shadow-ui-sm ${activeShift ? 'border-ui-success/40 bg-ui-success/10 text-ui-success hover:bg-ui-success/20' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning hover:bg-ui-warning/20'}`}
-          title={activeShift ? (isAr ? 'إدارة وإغلاق اليوم والوردية' : 'Manage Shift & Day Close') : (isAr ? 'فتح وردية' : 'Open Shift')}
+          title={activeShift ? (isAr ? 'إدارة وإغلاق اليوم والوردية' : 'Manage Shift & Day Close') : (isAr ? 'الذهاب لإدارة الشفتات وفتح وردية' : 'Go to shift management to open a shift')}
         >
           <Timer className="h-3.5 w-3.5" />
           <span className="hidden xl:inline">{activeShift ? (isAr ? 'نشطة' : t('open')) : t('noOpenShift')}</span>
@@ -254,7 +254,7 @@ export function PosTopBar({
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
               >
                 <CalendarCheck className="h-4 w-4 text-ui-accent" />
-                {activeShift ? (isAr ? 'إغلاق اليوم والوردية (Z-Report)' : 'Day & Shift Closing') : (isAr ? 'فتح وردية' : 'Open Shift')}
+                {activeShift ? (isAr ? 'إغلاق اليوم والوردية (Z-Report)' : 'Day & Shift Closing') : (isAr ? 'إدارة الشفتات / فتح وردية' : 'Shift Management / Open Shift')}
               </button>
             )}
             {perms.canChangeBranch && canChangeBranch && (

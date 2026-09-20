@@ -510,7 +510,7 @@ export function PurchasesPage() {
           <button title={t('cancel')} onClick={() => changeOrderStatus(p, 'cancelled')} className="p-1.5 rounded-md hover:bg-ui-page-alt dark:hover:bg-ui-page-alt text-ui-subtle"><X className="w-4 h-4" /></button>
         )}
         {['approved', 'submitted', 'partial'].includes(p.status) && can('purchases.receiving') && (
-          <button title={t('receive')} onClick={() => navigate('/purchases/receiving')} className="p-1.5 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-500"><PackageOpen className="w-4 h-4" /></button>
+          <button title={t('receive')} onClick={() => navigate(`/purchases/receiving?purchaseId=${encodeURIComponent(p.id)}`)} className="p-1.5 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-500"><PackageOpen className="w-4 h-4" /></button>
         )}
         {p.status === 'completed' && can('purchases.manage') && (
           <button
