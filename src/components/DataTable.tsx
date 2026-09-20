@@ -10,6 +10,8 @@ export interface Column<T> {
   filterValue?: (row: T) => unknown;
   exportValue?: (row: T) => unknown;
   hiddenByDefault?: boolean;
+  /** Keep this column in the compact phone card summary. */
+  mobilePriority?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -115,13 +117,13 @@ export function DataTable<T extends { id?: string }>({
         filter: 'فلتر', columns: 'الأعمدة', clear: 'مسح كل الفلاتر', clearColumn: 'مسح فلتر العمود',
         noData: 'لا توجد بيانات مطابقة', import: 'استيراد', export: 'تصدير', template: 'القالب',
         search: 'بحث', selectAll: 'تحديد الكل', blanks: '(فارغ)', sortAsc: 'فرز تصاعدي',
-        sortDesc: 'فرز تنازلي', values: 'القيم', contains: 'يحتوي على',
+        sortDesc: 'فرز تنازلي', values: 'القيم', contains: 'يحتوي على', details: 'التفاصيل',
       }
     : {
         filter: 'Filter', columns: 'Columns', clear: 'Clear all filters', clearColumn: 'Clear column filter',
         noData: 'No matching data', import: 'Import', export: 'Export', template: 'Template',
         search: 'Search', selectAll: 'Select all', blanks: '(Blanks)', sortAsc: 'Sort ascending',
-        sortDesc: 'Sort descending', values: 'Values', contains: 'Contains',
+        sortDesc: 'Sort descending', values: 'Values', contains: 'Contains', details: 'Details',
       };
 
   const visibleColumns = useMemo(
@@ -397,6 +399,19 @@ export function DataTable<T extends { id?: string }>({
 
   const allSelected = showCheckbox && selectedIds && displayData.length > 0 && displayData.every((r) => r.id && selectedIds.has(r.id));
 
+  const mobilePriorityColumns = (() => {
+    const explicit = visibleColumns.filter((col) => col.mobilePriority);
+    const base = explicit.length > 0
+      ? explicit
+      : visibleColumns.filter((col) => col.key !== 'actions').slice(0, 4);
+    const actions = visibleColumns.filter((col) => col.key === 'actions');
+    return [...base, ...actions.filter((col) => !base.some((item) => item.key === col.key))];
+  })();
+
+  const mobileSecondaryColumns = visibleColumns.filter(
+    (col) => !mobilePriorityColumns.some((primary) => primary.key === col.key),
+  );
+
   const toggleAll = () => {
     if (!onSelectionChange || !selectedIds) return;
     if (allSelected) {
@@ -547,7 +562,7 @@ export function DataTable<T extends { id?: string }>({
             )}
 
             <dl className="divide-y divide-ui-border">
-              {visibleColumns.map((col) => (
+              {mobilePriorityColumns.map((col) => (
                 <div
                   key={col.key}
                   className="grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-start gap-3 py-2 first:pt-0 last:pb-0"
@@ -559,6 +574,30 @@ export function DataTable<T extends { id?: string }>({
                 </div>
               ))}
             </dl>
+
+            {mobileSecondaryColumns.length > 0 && (
+              <details
+                className="mt-2 rounded-lg border border-ui-border bg-ui-page-alt/50"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center px-3 text-xs font-bold text-ui-primary">
+                  {labels.details} · {mobileSecondaryColumns.length}
+                </summary>
+                <dl className="divide-y divide-ui-border border-t border-ui-border px-3">
+                  {mobileSecondaryColumns.map((col) => (
+                    <div
+                      key={col.key}
+                      className="grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-start gap-3 py-2"
+                    >
+                      <dt className="min-w-0 break-words text-xs font-semibold text-ui-muted">{col.header}</dt>
+                      <dd className="min-w-0 break-words text-sm text-ui-text [&>*]:max-w-full">
+                        {renderCell(row, col)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            )}
           </div>
         ))}
       </div>
