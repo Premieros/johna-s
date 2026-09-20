@@ -3,6 +3,7 @@ import { Minus, Plus, X, Check, Tag } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/lib/format';
+import { ProductImage } from '@/features/catalog/components/ProductImage';
 import type { CartItem, Product, ProductModifierGroup } from '@/lib/types';
 
 interface ProductConfigModalProps {
@@ -150,7 +151,7 @@ export function ProductConfigModal({
         <div className="flex items-center justify-between border-b border-ui-border px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {product.image_url ? (
-              <img src={product.image_url} alt={product.name} className="h-9 w-9 shrink-0 rounded-xl bg-white object-contain p-0.5 sm:h-10 sm:w-10" />
+              <ProductImage src={product.image_url} name={product.name} className="h-9 w-9 shrink-0 rounded-xl bg-white sm:h-10 sm:w-10" imgClassName="h-9 w-9 shrink-0 rounded-xl bg-white object-contain p-0.5 sm:h-10 sm:w-10" />
             ) : (
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ui-primary-soft text-ui-accent sm:h-10 sm:w-10"><Tag className="h-5 w-5" /></div>
             )}

@@ -37,6 +37,20 @@ describe('POS product image and simplified workspace contracts', () => {
     expect(products).toContain('bg-white object-contain');
   });
 
+  it('renders sprite-backed product images as a single cached CSS frame without cropping', () => {
+    const image = source('src/features/catalog/components/ProductImage.tsx');
+    const modal = source('src/features/pos/components/catalog/ProductConfigModal.tsx');
+    const products = source('src/features/catalog/pages/ProductsPage.tsx');
+
+    expect(image).toContain("backgroundSize: '800% 3700%'");
+    expect(image).toContain('data-product-sprite-frame="true"');
+    expect(image).toContain('aspect-square');
+    expect(image).toContain('bg-white');
+    expect(image).toContain('resolveSpriteFrame');
+    expect(modal).toContain('<ProductImage');
+    expect(products).toContain('<ProductImage');
+  });
+
   it('keeps the simplified product and tables workspaces wired', () => {
     const browser = source('src/features/pos/components/catalog/ProductBrowser.tsx');
     const tables = source('src/features/pos/components/tables/PosTablesSidebar.tsx');
