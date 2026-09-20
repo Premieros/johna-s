@@ -28,7 +28,7 @@ describe('shift and user sales reporting contract', () => {
     const ownership = read('tests/integration/pos_operator_ownership.test.ts');
 
     expect(ownership).toContain('SELECT s.cashier_id, so.created_by, o.status AS order_status');
-    expect(ownership).toContain('expect(paymentAttribution.rows[0].cashier_id).toBe(ids.users.branch_manager)');
-    expect(ownership).toContain('expect(paymentAttribution.rows[0].created_by).toBe(ids.users.branch_manager)');
+    expect(ownership).toContain('expect(paymentAttribution.rows[0].cashier_id).toBe(captainId)');
+    expect(ownership).toContain('expect(paymentAttribution.rows[0].created_by).toBe(captainId)');
   });
 });
