@@ -18,6 +18,7 @@ import { formatFinancialCurrency, formatNumber, formatPercent } from '@/lib/form
 import {
   aggregatePaymentMethods,
   netSaleAmount,
+  netSaleDiscount,
   netSaleItemQuantity,
   type SalePaymentLike,
 } from '@/features/reporting/numericIntegrity';
@@ -451,7 +452,7 @@ export function DashboardDataPage() {
       sales: sales.reduce((sum, sale) => sum + netSaleAmount(sale), 0),
       payments: methods.reduce((sum, row) => sum + row.total, 0),
       returns: sales.reduce((sum, sale) => sum + Number(sale.refunded_amount || 0), 0),
-      discounts: sales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0),
+      discounts: sales.reduce((sum, sale) => sum + netSaleDiscount(sale), 0),
     };
   }, [sales, salePayments]);
   const previous = useMemo(() => {
@@ -461,7 +462,7 @@ export function DashboardDataPage() {
       sales: previousSales.reduce((sum, sale) => sum + netSaleAmount(sale), 0),
       payments: methods.reduce((sum, row) => sum + row.total, 0),
       returns: previousSales.reduce((sum, sale) => sum + Number(sale.refunded_amount || 0), 0),
-      discounts: previousSales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0),
+      discounts: previousSales.reduce((sum, sale) => sum + netSaleDiscount(sale), 0),
     };
   }, [previousSales, previousSalePayments]);
   const paymentRows = useMemo(() => aggregatePaymentMethods(sales, salePayments).slice(0, 5), [sales, salePayments]);
