@@ -51,7 +51,7 @@ export function Button({ variant = 'primary', size = 'md', children, className =
     <button
       ref={btnRef}
       type={type}
-      className={`relative overflow-hidden inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:ring-offset-1 focus-visible:ring-offset-ui-page disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`relative min-h-11 lg:min-h-0 touch-manipulation select-none overflow-hidden inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:ring-offset-1 focus-visible:ring-offset-ui-page disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
       onClick={handleClick}
       {...props}
     >
