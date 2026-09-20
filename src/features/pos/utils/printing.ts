@@ -476,6 +476,7 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
         accepted = await executeSilentPrint({
           printerName,
           html,
+          template: pending.template,
           paperWidthMm: widthMm,
         });
       }
