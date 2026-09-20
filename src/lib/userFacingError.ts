@@ -149,6 +149,18 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'تعذر إكمال إلغاء الصنف المرسل. حدّث الطلب وحاول مرة أخرى.',
     en: 'The sent-item void could not be completed. Refresh the order and retry.',
   },
+  ORDER_OPERATOR_REQUIRED: {
+    ar: 'الطلب مسجل على مستخدم آخر. يلزم امتلاك صلاحيات إدارة ونقل طلبات المستخدمين الآخرين لتنفيذ الإلغاء.',
+    en: 'This order belongs to another operator. Permission to manage and transfer other operators’ orders is required.',
+  },
+  SENT_ITEM_NOT_FOUND: {
+    ar: 'تعذر العثور على الصنف المرسل داخل الطلب. حدّث الطلب ثم حاول مرة أخرى.',
+    en: 'The sent kitchen item could not be found in this order. Refresh and retry.',
+  },
+  VOID_QUANTITY_EXCEEDS_SENT: {
+    ar: 'كمية الإلغاء أكبر من الكمية المتاحة للصنف المرسل.',
+    en: 'The void quantity exceeds the available sent quantity.',
+  },
   KITCHEN_EVENT_OVERAGE_REPAIR_FAILED: {
     ar: 'تعذر مزامنة سجل إرسال المطبخ مع المخزون. حدّث الطلب وحاول مرة أخرى.',
     en: 'Kitchen dispatch and inventory could not be reconciled. Refresh and retry.',
