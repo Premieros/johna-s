@@ -37,6 +37,13 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage('SUPPLIER_BRANCH_MISMATCH', 'ar')).toContain('المورد');
   });
 
+  it('explains order cancellation contract errors instead of falling back to a generic system error', () => {
+    expect(userFacingErrorMessage('REASON_REQUIRED', 'ar')).toContain('سبب');
+    expect(userFacingErrorMessage('SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID', 'ar')).toContain('Void');
+    expect(userFacingErrorMessage('ORDER_OPERATOR_REQUIRED', 'ar')).toContain('مستخدم آخر');
+    expect(userFacingErrorMessage('PERMISSION_DENIED:pos.cancel_order', 'ar')).toContain('إلغاء الطلبات');
+  });
+
   it('explains common database constraint errors without exposing SQL', () => {
     const duplicate = userFacingErrorMessage(
       'duplicate key value violates unique constraint "users_username_key" (SQLSTATE 23505)',
