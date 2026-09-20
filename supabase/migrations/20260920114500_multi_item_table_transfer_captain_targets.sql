@@ -636,7 +636,15 @@ DECLARE
   v_moved_line_subtotal numeric(14,4) := 0;
   v_ratio numeric(18,8) := 0;
   v_moved_discount numeric(14,4) := 0;
-  v_moved_tax numeric(14,4) := 0;
+  v_source_subtotal_after numeric(14,2) := 0;
+  v_target_subtotal_after numeric(14,2) := 0;
+  v_source_discount_after numeric(14,2) := 0;
+  v_target_discount_after numeric(14,2) := 0;
+  v_source_tax_after numeric(14,2) := 0;
+  v_target_tax_after numeric(14,2) := 0;
+  v_target_discount_before numeric(14,2) := 0;
+  v_tax_enabled boolean := false;
+  v_tax_rate numeric := 0;
   v_remaining integer := 0;
   v_moved_sent_count integer := 0;
   v_source_sent_remaining integer := 0;
@@ -706,8 +714,8 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','SAME_TABLE');
   END IF;
 
-  SELECT id,order_number,cashier_id
-  INTO v_target_order_id,v_target_order_number,v_target_owner_id
+  SELECT id,order_number,cashier_id,COALESCE(discount_amount,0)
+  INTO v_target_order_id,v_target_order_number,v_target_owner_id,v_target_discount_before
   FROM public.orders o
   WHERE o.table_id=p_target_table_id
     AND o.branch_id=v_order.branch_id
@@ -746,18 +754,19 @@ BEGIN
       NULL,
       0,0,'amount',0,0
     )
-    RETURNING id,cashier_id INTO v_target_order_id,v_target_owner_id;
+    RETURNING id,cashier_id,COALESCE(discount_amount,0)
+    INTO v_target_order_id,v_target_owner_id,v_target_discount_before;
 
     PERFORM set_config('app.pos_item_transfer_new_order_owner_id','',true);
     PERFORM set_config('app.pos_item_transfer_branch_id','',true);
   END IF;
 
-  SELECT COALESCE(sum(oi.quantity*oi.unit_price),0)
+  SELECT COALESCE(sum(COALESCE(oi.total,oi.quantity*oi.unit_price)),0)
   INTO v_source_line_subtotal
   FROM public.order_items oi
   WHERE oi.order_id=p_order_id;
 
-  SELECT COALESCE(sum(oi.quantity*oi.unit_price),0)
+  SELECT COALESCE(sum(COALESCE(oi.total,oi.quantity*oi.unit_price)),0)
   INTO v_moved_line_subtotal
   FROM public.order_items oi
   WHERE oi.order_id=p_order_id AND oi.id=ANY(v_item_ids);
@@ -767,8 +776,10 @@ BEGIN
       THEN LEAST(1,GREATEST(0,v_moved_line_subtotal/v_source_line_subtotal))
     ELSE 0
   END;
-  v_moved_discount := round(COALESCE(v_order.discount_amount,0)*v_ratio,4);
-  v_moved_tax := round(COALESCE(v_order.tax_amount,0)*v_ratio,4);
+  -- Allocate the source order-level discount with the moved merchandise.
+  -- Tax is NOT moved proportionally: it is recalculated authoritatively below
+  -- from each order's resulting subtotal/discount and branch tax settings.
+  v_moved_discount := round(COALESCE(v_order.discount_amount,0)*v_ratio,2);
 
   SELECT count(*)
   INTO v_moved_sent_count
@@ -799,20 +810,51 @@ BEGIN
   WHERE order_item_id=ANY(v_item_ids)
     AND order_id=p_order_id;
 
+  SELECT round(COALESCE(sum(COALESCE(oi.total,oi.quantity*oi.unit_price)),0),2)
+  INTO v_source_subtotal_after
+  FROM public.order_items oi
+  WHERE oi.order_id=p_order_id;
+
+  SELECT round(COALESCE(sum(COALESCE(oi.total,oi.quantity*oi.unit_price)),0),2)
+  INTO v_target_subtotal_after
+  FROM public.order_items oi
+  WHERE oi.order_id=v_target_order_id;
+
+  v_source_discount_after :=
+    LEAST(v_source_subtotal_after,GREATEST(round(COALESCE(v_order.discount_amount,0)-v_moved_discount,2),0));
+  v_target_discount_after :=
+    LEAST(v_target_subtotal_after,GREATEST(round(COALESCE(v_target_discount_before,0)+v_moved_discount,2),0));
+
+  SELECT COALESCE(t.tax_enabled,false),COALESCE(t.tax_rate,0)
+  INTO v_tax_enabled,v_tax_rate
+  FROM public._effective_branch_tax(v_order.branch_id) t;
+
+  v_source_tax_after := CASE
+    WHEN v_tax_enabled
+      THEN round(GREATEST(v_source_subtotal_after-v_source_discount_after,0)*v_tax_rate/100,2)
+    ELSE 0
+  END;
+  v_target_tax_after := CASE
+    WHEN v_tax_enabled
+      THEN round(GREATEST(v_target_subtotal_after-v_target_discount_after,0)*v_tax_rate/100,2)
+    ELSE 0
+  END;
+
   UPDATE public.orders
-  SET discount_amount=GREATEST(COALESCE(discount_amount,0)-v_moved_discount,0),
-      tax_amount=GREATEST(COALESCE(tax_amount,0)-v_moved_tax,0),
+  SET subtotal=v_source_subtotal_after,
+      discount_amount=v_source_discount_after,
+      tax_amount=v_source_tax_after,
+      total=round(GREATEST(v_source_subtotal_after-v_source_discount_after+v_source_tax_after,0),2),
       updated_at=now()
   WHERE id=p_order_id;
 
   UPDATE public.orders
-  SET discount_amount=COALESCE(discount_amount,0)+v_moved_discount,
-      tax_amount=COALESCE(tax_amount,0)+v_moved_tax,
+  SET subtotal=v_target_subtotal_after,
+      discount_amount=v_target_discount_after,
+      tax_amount=v_target_tax_after,
+      total=round(GREATEST(v_target_subtotal_after-v_target_discount_after+v_target_tax_after,0),2),
       updated_at=now()
   WHERE id=v_target_order_id;
-
-  PERFORM public._recalc_open_order_totals(p_order_id);
-  PERFORM public._recalc_open_order_totals(v_target_order_id);
 
   IF v_moved_sent_count > 0 THEN
     -- KDS reads order-level kitchen_status but item-level send rows. A moved
