@@ -17,12 +17,17 @@ describe('thermal customer receipt contract', () => {
   it('renders a dedicated black-and-white RTL-safe print layout', () => {
     expect(printing).toContain('<html lang="${isAr ? \'ar\' : \'en\'}" dir="${isAr ? \'rtl\' : \'ltr\'}">');
     expect(printing).toContain('<meta charset="utf-8" />');
-    expect(printing).toContain('font-family: Tahoma, Arial, "Segoe UI", sans-serif');
+    expect(printing).toContain('font-family: "Arial Narrow", Tahoma, Arial, "Segoe UI", sans-serif');
     expect(printing).toContain('background: #fff');
     expect(printing).toContain('color: #000');
     expect(printing).toContain('@media print');
     expect(printing).toContain('@page');
     expect(printing).toContain('width: ${width}mm !important');
+    expect(printing).toContain('class="brand"');
+    expect(printing).toContain('class="restaurant"');
+    expect(printing).toContain('class="title-band"');
+    expect(printing).toContain('class="item-grid item-head"');
+    expect(printing).toContain('class="summary-row grand-total"');
   });
 
   it('protects long item names and thermal page breaks', () => {
