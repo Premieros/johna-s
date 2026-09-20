@@ -1,3 +1,208 @@
+/* -------------------------------------------------------------------------- */
+/* Mobile interaction system                                                  */
+/* -------------------------------------------------------------------------- */
+/* Shared shell rules live here so phone sizing is consistent across every
+ * workspace. POS-specific presentation rules remain below and do not change
+ * permissions, routing, inventory or transaction behavior. */
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  [data-testid="app-shell"] {
+    min-height: 100dvh !important;
+  }
+
+  [data-testid="app-header"] {
+    height: calc(56px + env(safe-area-inset-top)) !important;
+    min-height: calc(56px + env(safe-area-inset-top)) !important;
+    padding-top: env(safe-area-inset-top) !important;
+    padding-inline: 0.5rem !important;
+    gap: 0.35rem !important;
+  }
+
+  [data-testid="app-header"] > div:first-child,
+  [data-testid="app-header"] > div:last-child {
+    min-width: 0 !important;
+    gap: 0.25rem !important;
+  }
+
+  [data-testid="sidebar-open"],
+  [data-testid="header-back-button"],
+  [data-testid="active-orders-button"],
+  [data-testid="user-menu-button"] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    touch-action: manipulation;
+  }
+
+  [data-testid="user-menu-button"] {
+    padding: 0.375rem !important;
+  }
+
+  [data-testid="user-menu-button"] > div:last-child {
+    display: none !important;
+  }
+
+  [data-testid="language-toggle"],
+  [data-testid="theme-toggle"],
+  [data-testid="sign-out-button"] {
+    display: none !important;
+  }
+
+  [data-testid="app-sidebar"] {
+    width: min(88vw, 320px) !important;
+    max-width: 320px !important;
+  }
+
+  [data-testid="app-navigation"] {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="mobile-sidebar-controls"] button,
+  [data-testid="mobile-sidebar-controls"] select,
+  [data-testid="app-navigation"] a,
+  [data-testid="app-navigation"] button {
+    touch-action: manipulation;
+  }
+
+  [data-testid="app-content-shell"] {
+    padding-top: calc(56px + env(safe-area-inset-top)) !important;
+    min-height: 100dvh !important;
+  }
+
+  [data-testid="app-main"] {
+    min-height: calc(100dvh - 56px - env(safe-area-inset-top)) !important;
+    padding: 0.75rem !important;
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="design-content-surface"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  [data-testid="design-content-surface"] > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  [data-testid="design-content-surface"] > * + * {
+    margin-top: 0.875rem !important;
+  }
+
+  [data-testid="mobile-bottom-nav"] {
+    min-height: calc(64px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: max(0.25rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="mobile-bottom-nav"] > a,
+  [data-testid="mobile-bottom-nav"] > button {
+    min-height: 54px !important;
+    touch-action: manipulation;
+  }
+
+  [data-testid="page-utility-controls"] {
+    bottom: calc(4.8rem + env(safe-area-inset-bottom)) !important;
+    inset-inline-end: 0.75rem !important;
+    flex-direction: row !important;
+    gap: 0.35rem !important;
+  }
+
+  [data-testid="page-utility-controls"] > button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  [data-testid="page-header"] {
+    min-width: 0 !important;
+  }
+
+  [data-testid="page-title"] {
+    overflow-wrap: anywhere;
+  }
+
+  [data-testid="page-description"] {
+    max-width: 100% !important;
+  }
+
+  [data-testid="page-actions"] {
+    scroll-snap-type: x proximity;
+  }
+
+  [data-testid="page-actions"] > * {
+    min-height: 44px !important;
+    flex: 0 0 auto !important;
+    scroll-snap-align: start;
+    touch-action: manipulation;
+  }
+
+  [data-testid="data-table-toolbar"] > *,
+  [data-testid="data-table-mobile-filters"] > * {
+    flex: 0 0 auto !important;
+    touch-action: manipulation;
+  }
+
+  [data-testid="data-table-toolbar"] button,
+  [data-testid="data-table-toolbar"] summary {
+    min-height: 44px !important;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  [data-testid="data-table-mobile-filters"] {
+    scroll-snap-type: x proximity;
+  }
+
+  [data-testid="data-table-mobile-filters"] > * {
+    scroll-snap-align: start;
+  }
+
+  [data-testid="modal-panel"] {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (max-width: 639px) {
+  [data-testid="branch-indicator"] {
+    max-width: 8rem !important;
+  }
+
+  [data-testid="data-table-filter-menu"] {
+    position: fixed !important;
+    inset-inline: 0.75rem !important;
+    bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    width: auto !important;
+    max-height: min(70dvh, 560px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    z-index: 90 !important;
+    border-radius: 1rem !important;
+  }
+}
+
+@media (max-width: 359px) {
+  [data-testid="app-main"] {
+    padding-inline: 0.625rem !important;
+  }
+
+  [data-testid="mobile-bottom-nav"] {
+    padding-inline: 0 !important;
+  }
+
+  [data-testid="mobile-bottom-nav"] > a,
+  [data-testid="mobile-bottom-nav"] > button {
+    font-size: 9px !important;
+    padding-inline: 0.125rem !important;
+  }
+}
+
 @media (max-width: 1023px) {
   [data-testid="app-sidebar"] {
     z-index: 70 !important;

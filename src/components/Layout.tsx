@@ -124,6 +124,27 @@ export function Layout({ children }: { children: ReactNode }) {
     return acc;
   }, {} as Record<MenuGroup, typeof visibleItems>), [visibleItems]);
 
+  const mobilePrimaryItems = useMemo(() => {
+    const priority = ['dashboard', 'pos', 'operations-center', 'inventory-center', 'sales'];
+    const picked = priority
+      .map((id) => visibleItems.find((item) => item.id === id))
+      .filter((item): item is (typeof visibleItems)[number] => !!item);
+
+    if (picked.length < 4) {
+      for (const item of visibleItems) {
+        if (picked.some((candidate) => candidate.id === item.id)) continue;
+        picked.push(item);
+        if (picked.length >= 4) break;
+      }
+    }
+
+    return picked.slice(0, 4);
+  }, [visibleItems]);
+
+  const mobilePrimaryRouteActive = mobilePrimaryItems.some((item) =>
+    location.pathname === item.route || location.pathname.startsWith(`${item.route}/`),
+  );
+
   return (
     <div dir={ar ? 'rtl' : 'ltr'} className="min-h-screen bg-ui-page text-ui-text overflow-x-hidden" data-testid="app-shell">
       <header data-testid="app-header" className="fixed top-0 start-0 end-0 lg:start-[260px] z-[60] flex h-[64px] items-center justify-between gap-3 liquid-glass-header px-4 shadow-ui-sm sm:px-6">
@@ -217,6 +238,86 @@ export function Layout({ children }: { children: ReactNode }) {
           <button data-testid="sidebar-close" type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'إغلاق القائمة' : 'Close sidebar'}><X className="h-5 w-5" /></button>
         </div>
         <nav data-testid="app-navigation" className="h-[calc(100%-56px)] overflow-y-auto px-3 py-4">
+          <section data-testid="mobile-sidebar-controls" className="mb-4 grid gap-3 rounded-2xl border border-ui-border bg-ui-surface/80 p-3 lg:hidden">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ui-primary-soft text-sm font-black text-ui-primary">
+                {(user?.full_name || user?.email || 'A').slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ui-text">
+                  {user?.full_name || user?.email || (ar ? 'مستخدم النظام' : 'System user')}
+                </p>
+                <p className="truncate text-xs text-ui-subtle">{user?.role || 'user'}</p>
+              </div>
+            </div>
+
+            <label className="grid gap-1">
+              <span className="text-[11px] font-bold text-ui-subtle">
+                {ar ? 'الفرع النشط' : 'Active branch'}
+              </span>
+              <select
+                data-testid="mobile-branch-select"
+                value={effectiveBranch || ''}
+                onChange={(event) => {
+                  if (event.target.value) setActiveBranchId(event.target.value);
+                }}
+                disabled={branches.length === 0 || !canSelectBranch}
+                className="min-h-11 w-full rounded-xl border border-ui-border bg-ui-page px-3 text-sm font-semibold text-ui-text outline-none focus:border-ui-primary disabled:cursor-default disabled:opacity-70"
+              >
+                {!effectiveBranch && <option value="">{ar ? 'اختر الفرع' : 'Select branch'}</option>}
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {lang === 'ar' ? branch.name : (branch.name_en || branch.name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                data-testid="mobile-language-toggle"
+                type="button"
+                onClick={() => setLang(ar ? 'en' : 'ar')}
+                className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-ui-border bg-ui-page text-xs font-bold text-ui-muted"
+              >
+                <Globe className="h-4 w-4" />
+                <span>{ar ? 'EN' : 'AR'}</span>
+              </button>
+              <button
+                data-testid="mobile-theme-toggle"
+                type="button"
+                onClick={toggleTheme}
+                className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-ui-border bg-ui-page text-xs font-bold text-ui-muted"
+              >
+                {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                <span>{ar ? 'المظهر' : 'Theme'}</span>
+              </button>
+              <button
+                data-testid="mobile-sign-out"
+                type="button"
+                onClick={signOut}
+                className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-ui-danger/30 bg-ui-danger-soft text-xs font-bold text-ui-danger"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>{ar ? 'خروج' : 'Exit'}</span>
+              </button>
+            </div>
+
+            {canOpenSettings && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  navigate(APP_ROUTES.settings);
+                }}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ui-primary-soft px-3 text-sm font-bold text-ui-primary"
+              >
+                <Settings className="h-4 w-4" />
+                {ar ? 'إعدادات الحساب والنظام' : 'Account & system settings'}
+              </button>
+            )}
+          </section>
+
           {(Object.keys(MENU_GROUPS) as MenuGroup[]).map((group) => {
             const items = grouped[group] ?? [];
             if (!items.length) return null;
@@ -250,12 +351,51 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {mobileOpen && <button data-testid="mobile-sidebar-backdrop" type="button" className="fixed inset-0 z-40 bg-ui-text/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-label={ar ? 'إغلاق' : 'Close'} />}
 
-      <div className="pt-[64px] lg:ms-[260px] min-h-screen">
+      <div data-testid="app-content-shell" className="pt-[64px] lg:ms-[260px] min-h-screen">
         <ReturnContextBanner />
         <main data-testid="app-main" className="min-h-[calc(100vh-64px)] bg-ui-page p-4 sm:p-6 lg:p-7">
           <div data-testid="design-content-surface" className="mx-auto min-h-[calc(100vh-64px)] w-full max-w-[1600px] space-y-5">{children}</div>
         </main>
       </div>
+
+      <nav
+        data-testid="mobile-bottom-nav"
+        className="fixed bottom-0 start-0 end-0 z-[55] grid grid-flow-col auto-cols-fr border-t border-ui-border bg-ui-surface/95 px-1 pt-1 shadow-[0_-8px_28px_rgba(0,0,0,0.08)] backdrop-blur-xl md:hidden"
+        aria-label={ar ? 'التنقل السريع' : 'Quick navigation'}
+      >
+        {mobilePrimaryItems.map((item) => (
+          <NavLink
+            key={item.id}
+            to={item.route}
+            data-testid={`mobile-nav-${item.id}`}
+            className={({ isActive }) =>
+              `flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-bold transition ${
+                isActive
+                  ? 'bg-ui-primary-soft text-ui-primary'
+                  : 'text-ui-subtle active:bg-ui-page-alt'
+              }`
+            }
+          >
+            <span className="flex h-6 items-center justify-center">{ICONS[item.icon]}</span>
+            <span className="w-full truncate text-center">
+              {item.label ? item.label[ar ? 'ar' : 'en'] : item.labelKey ? t(item.labelKey) : item.id}
+            </span>
+          </NavLink>
+        ))}
+        <button
+          data-testid="mobile-bottom-more"
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-bold transition ${
+            mobilePrimaryRouteActive ? 'text-ui-subtle' : 'bg-ui-primary-soft text-ui-primary'
+          }`}
+          aria-label={ar ? 'المزيد' : 'More'}
+        >
+          <span className="flex h-6 items-center justify-center"><Menu className="h-5 w-5" /></span>
+          <span>{ar ? 'المزيد' : 'More'}</span>
+        </button>
+      </nav>
+
       <PageUtilityControls />
       <CommandPalette />
     </div>

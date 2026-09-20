@@ -76,8 +76,8 @@ export function CommandPalette() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/35 p-4 backdrop-blur-sm" dir={ar ? 'rtl' : 'ltr'} onMouseDown={() => setOpen(false)}>
-      <div className="mx-auto mt-[10vh] max-w-2xl overflow-hidden rounded-2xl border border-ui-border bg-ui-surface shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+    <div data-testid="command-palette-overlay" className="fixed inset-0 z-[100] bg-black/35 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-sm sm:p-4" dir={ar ? 'rtl' : 'ltr'} onMouseDown={() => setOpen(false)}>
+      <div data-testid="command-palette-panel" className="mx-auto flex h-[min(88dvh,720px)] max-w-2xl flex-col overflow-hidden rounded-2xl border border-ui-border bg-ui-surface shadow-2xl sm:mt-[10vh] sm:h-auto" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-ui-border px-4">
           <Search className="h-5 w-5 text-ui-muted" />
           <input
@@ -97,7 +97,7 @@ export function CommandPalette() {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[55vh] overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:max-h-[55vh]">
           {items.length === 0 ? (
             <div className="p-8 text-center text-sm text-ui-muted">{ar ? 'لا توجد شاشة مطابقة أو مسموح بها.' : 'No matching allowed workspace.'}</div>
           ) : items.map((item, index) => (

@@ -38,16 +38,17 @@ export function Modal({ open, isOpen, onClose, title, children, size = 'md' }: M
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 animate-fade-in sm:items-center sm:p-4">
-      <div className="absolute inset-0 bg-ui-text/40 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
+    <div data-testid="modal-root" className="fixed inset-0 z-[70] flex items-end justify-center p-0 animate-fade-in sm:items-center sm:p-4">
+      <div data-testid="modal-backdrop" className="absolute inset-0 bg-ui-text/40 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
       <div
         ref={modalRef}
-        className={`relative flex max-h-[100dvh] w-full flex-col rounded-t-ui-xl liquid-glass-card shadow-2xl animate-scale-in sm:max-h-[90dvh] sm:rounded-ui-xl ${sizes[size]}`}
+        data-testid="modal-panel"
+        className={`relative flex h-[min(92dvh,760px)] max-h-[92dvh] w-full flex-col rounded-t-2xl liquid-glass-card shadow-2xl animate-scale-in sm:h-auto sm:max-h-[90dvh] sm:rounded-ui-xl ${sizes[size]}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-ui-border px-4 py-3 sm:px-6 sm:py-4">
+        <div data-testid="modal-header" className="sticky top-0 z-10 flex min-h-14 shrink-0 items-center justify-between border-b border-ui-border bg-ui-surface/95 px-4 py-2.5 backdrop-blur sm:static sm:min-h-0 sm:bg-transparent sm:px-6 sm:py-4">
           <h2 className="min-w-0 truncate pe-3 text-base font-bold tracking-tight text-ui-text sm:text-lg">{title}</h2>
           <button
             onClick={onClose}
@@ -57,7 +58,7 @@ export function Modal({ open, isOpen, onClose, title, children, size = 'md' }: M
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+        <div data-testid="modal-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
           {children}
         </div>
       </div>

@@ -292,7 +292,7 @@ export function DataTable<T extends { id?: string }>({
             <path fillRule="evenodd" d="M3.25 5.5a.75.75 0 01.75-.75h12a.75.75 0 01.53 1.28l-4.78 4.78v3.94a.75.75 0 01-.42.67l-2 1A.75.75 0 018.25 15v-4.19L3.47 6.03a.75.75 0 01-.22-.53z" clipRule="evenodd" />
           </svg>
         </summary>
-        <div className="absolute start-0 z-50 mt-1 w-72 rounded-xl border border-ui-border bg-ui-surface p-2 text-start normal-case tracking-normal shadow-xl">
+        <div data-testid="data-table-filter-menu" className="absolute start-0 z-50 mt-1 w-72 rounded-xl border border-ui-border bg-ui-surface p-2 text-start normal-case tracking-normal shadow-xl">
           <div className="grid gap-1 border-b border-ui-border pb-2">
             <button
               type="button"
@@ -426,7 +426,7 @@ export function DataTable<T extends { id?: string }>({
   return (
     <div data-testid="data-table" className="min-w-0 max-w-full">
       {(hasDataTools || enableColumnVisibility || hasActiveFilters) && (
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <div data-testid="data-table-toolbar" className="mb-3 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
           {onImportFile && (
             <>
               <input ref={importRef} type="file" accept={importAccept} className="hidden" onChange={handleImport} />
@@ -499,7 +499,7 @@ export function DataTable<T extends { id?: string }>({
 
       <div className="space-y-3 sm:hidden">
         {enableColumnFilters && visibleColumns.some((col) => col.filterable !== false && col.key !== 'actions') && (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm">
+          <div data-testid="data-table-mobile-filters" className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain rounded-xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleColumns.filter((col) => col.filterable !== false && col.key !== 'actions').map((col) => (
               <div key={col.key} className="flex items-center gap-1 rounded-lg border border-ui-border bg-ui-page px-2 py-1">
                 <span className="max-w-32 truncate text-xs font-semibold text-ui-muted">{col.header}</span>

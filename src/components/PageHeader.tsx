@@ -17,7 +17,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, actions, breadcrumbs }: PageHeaderProps) {
   return (
-    <div data-testid="page-header" className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+    <div data-testid="page-header" className="mb-4 flex min-w-0 flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-4 lg:mb-8">
       <div className="min-w-0">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav data-testid="page-breadcrumbs" aria-label="Breadcrumbs" className="mb-1.5 flex flex-wrap items-center gap-1 text-xs">
@@ -36,10 +36,17 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs }: PageHeader
             })}
           </nav>
         )}
-        <h1 data-testid="page-title" className="text-2xl font-bold text-ui-text tracking-tight">{title}</h1>
-        {subtitle && <p data-testid="page-description" className="text-sm text-ui-muted mt-1.5">{subtitle}</p>}
+        <h1 data-testid="page-title" className="text-xl font-bold tracking-tight text-ui-text sm:text-2xl">{title}</h1>
+        {subtitle && <p data-testid="page-description" className="mt-1 text-sm leading-5 text-ui-muted sm:mt-1.5">{subtitle}</p>}
       </div>
-      {actions && <div data-testid="page-actions" className="flex items-center gap-2 flex-wrap">{actions}</div>}
+      {actions && (
+        <div
+          data-testid="page-actions"
+          className="flex w-full min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0"
+        >
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
