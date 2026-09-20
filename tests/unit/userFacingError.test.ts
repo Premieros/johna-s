@@ -37,6 +37,32 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage('VOID_QUANTITY_EXCEEDS_SENT', 'ar')).toContain('كمية الإلغاء');
   });
 
+  it('explains POS transfer and cancellation guard codes without falling back to the generic system error', () => {
+    const cases = [
+      ['REASON_REQUIRED', 'سبب'],
+      ['SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID', 'Void'],
+      ['TARGET_ORDER_OPERATOR_REQUIRED', 'الطاولة المستهدفة'],
+      ['TARGET_ORDER_NOT_FOUND', 'الطلب'],
+      ['CROSS_BRANCH_ORDER_ITEM_MOVE', 'فرع'],
+      ['ORDER_TRANSFER_RPC_REQUIRED', 'النقل'],
+      ['POS_ADMIN_PERMISSION_REQUIRED', 'المستخدمين الآخرين'],
+      ['BRANCH_MISMATCH', 'فرع'],
+      ['ORDER_ITEM_NOT_FOUND', 'الصنف'],
+      ['ORDER_ITEMS_REQUIRED', 'صنف'],
+      ['TARGET_TABLE_NOT_FOUND', 'الطاولة'],
+      ['SAME_TABLE', 'طاولة مختلفة'],
+      ['SOURCE_NOT_DINE_IN', 'الصالة'],
+      ['NUMBERING_FAILED', 'رقم'],
+      ['TRANSACTION_FAILED', 'لم يتم اعتماد التغيير'],
+    ] as const;
+
+    for (const [code, expected] of cases) {
+      const message = userFacingErrorMessage(code, 'ar');
+      expect(message).toContain(expected);
+      expect(message).not.toContain('خطأ في النظام');
+    }
+  });
+
   it('explains inventory and purchase relationship errors', () => {
     expect(userFacingErrorMessage('INSUFFICIENT_STOCK', 'ar')).toContain('المخزون');
     expect(userFacingErrorMessage('WAREHOUSE_BRANCH_MISMATCH', 'ar')).toContain('المستودع');
