@@ -1,4 +1,5 @@
 import { supabase, shifts as shiftsApi } from '@/api';
+import { saleRemainingRatio } from '@/features/reporting/numericIntegrity';
 import type { ShiftClosingSummary } from './shiftClosingReport';
 
 type ShiftOperationRow = {
@@ -17,6 +18,7 @@ type SaleRow = {
   total: number;
   paid_amount: number;
   refunded_amount: number | null;
+  status: string | null;
   payment_method: string;
   order_type: string;
   customer?: { employee_user_id?: string | null } | null;
@@ -263,7 +265,7 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   if (saleIds.length > 0) {
     const { data: sales, error: salesErr } = await supabase
       .from('sales')
-      .select('id,subtotal,discount_amount,tax_amount,total,paid_amount,refunded_amount,payment_method,order_type,customer:customers(employee_user_id),sale_items(product_id,unit_name,quantity,unit_price,total,product:products(name,name_en))')
+      .select('id,subtotal,discount_amount,tax_amount,total,paid_amount,refunded_amount,status,payment_method,order_type,customer:customers(employee_user_id),sale_items(product_id,unit_name,quantity,unit_price,total,product:products(name,name_en))')
       .eq('branch_id', effectiveBranchId)
       .in('id', saleIds);
     if (salesErr) throw new Error(salesErr.message);
@@ -290,10 +292,11 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   }
 
   for (const sale of salesList) {
-    grossSales += Number(sale.subtotal || sale.total || 0);
-    totalDiscounts += Number(sale.discount_amount || 0);
-    totalTaxes += Number(sale.tax_amount || 0);
-    netSales += Number(sale.total || 0);
+    const remainingRatio = saleRemainingRatio(sale);
+    grossSales += Number(sale.subtotal || sale.total || 0) * remainingRatio;
+    totalDiscounts += Number(sale.discount_amount || 0) * remainingRatio;
+    totalTaxes += Number(sale.tax_amount || 0) * remainingRatio;
+    netSales += Math.max(0, Number(sale.total || 0) - Number(sale.refunded_amount || 0));
 
     const openAmount = Math.max(
       0,
@@ -310,7 +313,7 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
     const orderType = sale.order_type || 'takeaway';
     const order = orderTypeMap.get(orderType) || { count: 0, total: 0 };
     order.count += 1;
-    order.total += Number(sale.total || 0);
+    order.total += Math.max(0, Number(sale.total || 0) - Number(sale.refunded_amount || 0));
     orderTypeMap.set(orderType, order);
 
     for (const item of sale.sale_items || []) {
