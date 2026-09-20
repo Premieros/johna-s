@@ -448,7 +448,7 @@ export function DataTable<T extends { id?: string }>({
               <button
                 type="button"
                 onClick={() => importRef.current?.click()}
-                className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt"
+                className="ui-toolbar-action"
               >
                 {labels.import}
               </button>
@@ -459,7 +459,7 @@ export function DataTable<T extends { id?: string }>({
               type="button"
               onClick={handleExport}
               disabled={displayData.length === 0}
-              className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-toolbar-action"
             >
               {labels.export}
             </button>
@@ -468,7 +468,7 @@ export function DataTable<T extends { id?: string }>({
             <button
               type="button"
               onClick={handleTemplate}
-              className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt"
+              className="ui-toolbar-action"
             >
               {labels.template}
             </button>
@@ -480,14 +480,14 @@ export function DataTable<T extends { id?: string }>({
                 setFilters({});
                 setFilterSearches({});
               }}
-              className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt"
+              className="ui-toolbar-action"
             >
               {labels.clear}
             </button>
           )}
           {enableColumnVisibility && (
             <details className="relative">
-              <summary className="cursor-pointer list-none rounded-lg border border-ui-border bg-ui-surface px-3 py-2 text-xs font-medium text-ui-muted hover:bg-ui-page-alt">
+              <summary className="ui-toolbar-action cursor-pointer list-none">
                 {labels.columns}
               </summary>
               <div className="absolute end-0 z-40 mt-2 min-w-52 rounded-xl border border-ui-border bg-ui-surface p-2 shadow-lg">
