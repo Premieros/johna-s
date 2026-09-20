@@ -11,6 +11,7 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { formatDateTime } from '@/lib/format';
 import type { AuditLog } from '@/lib/types';
 
@@ -18,11 +19,13 @@ export function AuditLogPage() {
   const { t, lang } = useLanguage();
   const [search, setSearch] = useState('');
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
   const { branches } = useBranches();
   const { rows: items, loading, total, hasMore, loadMore, loadingMore } = usePaginatedRows<AuditLog>({
     table: 'audit_log',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 200,
   });
 
