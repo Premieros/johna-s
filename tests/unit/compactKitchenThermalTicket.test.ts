@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildStationTicketText } from '../../src/features/pos/services/localPrintAgent';
+import type { KitchenSendItem } from '../../src/features/pos/types';
 
 describe('compact kitchen thermal ticket', () => {
   it('keeps modifiers and notes directly under each item without wasting paper', () => {
@@ -15,7 +16,7 @@ describe('compact kitchen thermal ticket', () => {
             { option_name: 'بدون بصل', option_name_en: 'No Onion' },
           ],
           notes: 'Well done',
-        } as any,
+        } as unknown as KitchenSendItem,
       ],
       {
         orderNumber: "Johna's-00330",
@@ -50,7 +51,7 @@ describe('compact kitchen thermal ticket', () => {
           station_code: 'بار',
           modifiers: [{ option_name: 'بدون ثلج', option_name_en: 'No Ice' }],
           notes: 'ساقع',
-        } as any,
+        } as unknown as KitchenSendItem,
       ],
       {
         orderNumber: "Johna's-00331",
