@@ -5,6 +5,7 @@ import { Input } from '@/components/Input';
 import { formatCurrency } from '@/lib/format';
 import type { Language } from '@/lib/types';
 import type { ReportFilterKey, ReportFilters } from './reportFilters';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 
 interface FilterOption {
   value: string;
@@ -71,6 +72,7 @@ export function ReportFilterBar({
   onReportTypeChange,
 }: ReportFilterBarProps) {
   const { t } = useLanguage();
+  const history = useHistoryAccess();
 
   return (
     <Card className="mb-3 border-ui-border bg-ui-surface p-3 shadow-ui-sm">
@@ -117,10 +119,10 @@ export function ReportFilterBar({
                 <option value="today">{lang === 'ar' ? 'اليوم' : 'Today'}</option>
                 <option value="yesterday">{lang === 'ar' ? 'أمس' : 'Yesterday'}</option>
                 <option value="last7">{lang === 'ar' ? 'آخر 7 أيام' : 'Last 7 days'}</option>
-                <option value="last30">{lang === 'ar' ? 'آخر 30 يومًا' : 'Last 30 days'}</option>
-                <option value="this_month">{lang === 'ar' ? 'هذا الشهر' : 'This month'}</option>
-                <option value="last_month">{lang === 'ar' ? 'الشهر الماضي' : 'Last month'}</option>
-                <option value="this_year">{lang === 'ar' ? 'هذه السنة' : 'This year'}</option>
+                {history.unlimited && <option value="last30">{lang === 'ar' ? 'آخر 30 يومًا' : 'Last 30 days'}</option>}
+                {history.unlimited && <option value="this_month">{lang === 'ar' ? 'هذا الشهر' : 'This month'}</option>}
+                {history.unlimited && <option value="last_month">{lang === 'ar' ? 'الشهر الماضي' : 'Last month'}</option>}
+                {history.unlimited && <option value="this_year">{lang === 'ar' ? 'هذه السنة' : 'This year'}</option>}
               </select>
             </div>
           )}
@@ -130,7 +132,8 @@ export function ReportFilterBar({
               label={t('from')}
               type="date"
               value={from}
-              onChange={(e) => onFromChange(e.target.value)}
+              min={history.minDate}
+              onChange={(e) => onFromChange(history.clampRange(e.target.value, to).from)}
             />
           )}
 
@@ -139,7 +142,11 @@ export function ReportFilterBar({
               label={t('to')}
               type="date"
               value={to}
-              onChange={(e) => onToChange(e.target.value)}
+              onChange={(e) => {
+                const allowed = history.clampRange(from, e.target.value);
+                onFromChange(allowed.from);
+                onToChange(allowed.to);
+              }}
             />
           )}
 
