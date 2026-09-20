@@ -40,6 +40,7 @@ export function StockCountsPage() {
     table: 'stock_counts',
     select: '*, branch:branches(*), warehouse:warehouses(*), items:stock_count_items(*, product:products(*), raw_material:raw_materials(*)), created_user:users!stock_counts_created_by_fkey(id, full_name, email)',
     order: { column: 'created_at', ascending: false },
+    or: history.minIso ? `created_at.gte.${history.minIso},status.in.(draft,submitted,approved)` : undefined,
     pageSize: 100,
   });
 
