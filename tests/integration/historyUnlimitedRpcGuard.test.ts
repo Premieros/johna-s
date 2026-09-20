@@ -78,6 +78,20 @@ describe.skipIf(skip)('history.unlimited database guard', () => {
     expect(unlimited.rows[0]).toEqual({ min_date: null, from_date: '2020-01-01' });
   });
 
+  it('keeps current aging balances cumulative while clamping the requested as-of date', async () => {
+    const defs = await client.query<{ proname: string; def: string }>(
+      `SELECT p.proname, pg_get_functiondef(p.oid) AS def
+       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname = ANY($1::text[])`,
+      [['get_ar_aging','get_ap_aging','get_aging_summary','get_party_statement']],
+    );
+    for (const row of defs.rows) {
+      expect(row.def, row.proname).toContain('history_clamp_');
+      expect(row.def, row.proname).not.toContain('created_at AT TIME ZONE \'Africa/Cairo\')::date >= public.history_min_date()');
+      expect(row.def, row.proname).not.toContain('j.entry_date >= public.history_min_date()');
+    }
+  });
+
   it('wires database-side history guards into historical RPCs', async () => {
     const names = ["get_journals","get_general_ledger","get_income_statement","get_cash_flow","get_party_statement","get_trial_balance","get_trial_balance_summary","get_balance_sheet","get_ar_aging","get_ap_aging","get_aging_summary","get_order_margin","get_costing_sales_summary","get_waste_report","get_cost_history","get_raw_material_cost_history","get_supplier_price_impact"];
     const r = await client.query<{ proname: string; def: string }>(

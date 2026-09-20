@@ -232,6 +232,7 @@ FROM (
 $function$;
 
 -- Harden get_party_statement
+-- Rows are limited to the allowed range, but opening balance may aggregate older entries.
 CREATE OR REPLACE FUNCTION public.get_party_statement(p_branch_id uuid, p_side text, p_party_id uuid, p_from_date date DEFAULT NULL::date, p_to_date date DEFAULT NULL::date)
  RETURNS jsonb
  LANGUAGE sql
@@ -244,7 +245,6 @@ WITH lines AS (
   FROM public.journal_entry_lines jl
   JOIN public.journal_entries j ON j.id = jl.journal_entry_id
   WHERE j.branch_id = p_branch_id
-    AND (public.history_min_date() IS NULL OR j.entry_date >= public.history_min_date())
     AND (CASE WHEN p_side = 'ap' THEN jl.supplier_id ELSE jl.customer_id END) = p_party_id
     AND (public.history_clamp_to(p_to_date) IS NULL OR j.entry_date <= public.history_clamp_to(p_to_date))
 ), run AS (
@@ -362,6 +362,7 @@ FROM summary;
 $function$;
 
 -- Harden get_ar_aging
+-- Aging is a current balance view: older still-open debt remains in totals; only p_as_of is clamped.
 CREATE OR REPLACE FUNCTION public.get_ar_aging(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE sql
@@ -376,7 +377,6 @@ WITH source_rows AS (
   FROM public.sales s
   WHERE s.branch_id = p_branch_id
     AND s.status <> 'returned'
-    AND (public.history_min_date() IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date >= public.history_min_date())
     AND (s.created_at AT TIME ZONE 'Africa/Cairo')::date <= public.history_clamp_as_of(p_as_of)
     AND (s.total - COALESCE(s.paid_amount, 0) - COALESCE(s.refunded_amount, 0)) > 0
 
@@ -390,7 +390,6 @@ WITH source_rows AS (
   JOIN public.customers c ON c.id = e.customer_id
   WHERE e.branch_id = p_branch_id
     AND c.customer_type = 'employee'
-    AND (public.history_min_date() IS NULL OR (e.occurred_at AT TIME ZONE 'Africa/Cairo')::date >= public.history_min_date())
     AND (e.occurred_at AT TIME ZONE 'Africa/Cairo')::date <= public.history_clamp_as_of(p_as_of)
     AND (e.amount - e.settled_amount) > 0
 ), aggregated AS (
@@ -413,6 +412,7 @@ FROM aggregated a;
 $function$;
 
 -- Harden get_ap_aging
+-- Aging is a current balance view: older still-open debt remains in totals; only p_as_of is clamped.
 CREATE OR REPLACE FUNCTION public.get_ap_aging(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE sql
@@ -430,7 +430,6 @@ FROM (
   FROM public.purchases p
   JOIN public.suppliers s ON s.id = p.supplier_id
   WHERE p.branch_id = p_branch_id AND p.status = 'completed'
-    AND (public.history_min_date() IS NULL OR (p.created_at AT TIME ZONE 'Africa/Cairo')::date >= public.history_min_date())
     AND (p.created_at AT TIME ZONE 'Africa/Cairo')::date <= public.history_clamp_as_of(p_as_of)
     AND (p.total - COALESCE(p.paid_amount, 0) - COALESCE(p.returned_amount, 0)) > 0
   GROUP BY s.id, s.name, s.phone
@@ -438,6 +437,7 @@ FROM (
 $function$;
 
 -- Harden get_aging_summary
+-- Summary preserves older outstanding balances while preventing an out-of-policy as-of date.
 CREATE OR REPLACE FUNCTION public.get_aging_summary(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE sql
@@ -451,7 +451,6 @@ WITH ar_source AS (
   FROM public.sales s
   WHERE s.branch_id = p_branch_id
     AND s.status <> 'returned'
-    AND (public.history_min_date() IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date >= public.history_min_date())
     AND (s.created_at AT TIME ZONE 'Africa/Cairo')::date <= public.history_clamp_as_of(p_as_of)
     AND (s.total - COALESCE(s.paid_amount, 0) - COALESCE(s.refunded_amount, 0)) > 0
 
@@ -464,7 +463,6 @@ WITH ar_source AS (
   JOIN public.customers c ON c.id = e.customer_id
   WHERE e.branch_id = p_branch_id
     AND c.customer_type = 'employee'
-    AND (public.history_min_date() IS NULL OR (e.occurred_at AT TIME ZONE 'Africa/Cairo')::date >= public.history_min_date())
     AND (e.occurred_at AT TIME ZONE 'Africa/Cairo')::date <= public.history_clamp_as_of(p_as_of)
     AND (e.amount - e.settled_amount) > 0
 ), ar AS (
@@ -485,7 +483,6 @@ WITH ar_source AS (
   FROM public.purchases p
   WHERE p.branch_id = p_branch_id
     AND p.status = 'completed'
-    AND (public.history_min_date() IS NULL OR (p.created_at AT TIME ZONE 'Africa/Cairo')::date >= public.history_min_date())
     AND (p.created_at AT TIME ZONE 'Africa/Cairo')::date <= public.history_clamp_as_of(p_as_of)
     AND (p.total - COALESCE(p.paid_amount, 0) - COALESCE(p.returned_amount, 0)) > 0
 )
