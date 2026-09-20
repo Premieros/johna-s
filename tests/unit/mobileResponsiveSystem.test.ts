@@ -64,11 +64,18 @@ describe('mobile responsive UX system', () => {
     expect(mobileCss).toContain('position: fixed !important');
   });
 
-  it('preserves the existing POS mobile checkout contract', () => {
+  it('uses an explicit POS mobile dock and order sheet instead of the legacy hidden-panel checkout hack', () => {
     const mobileCss = read('src/mobile-layer-fix.css');
+    const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 
-    expect(mobileCss).toContain('.hidden:has([data-testid="pos-payment-confirm"])');
-    expect(mobileCss).toContain('height: 100dvh');
+    expect(workspace).toContain('data-testid="pos-mobile-command-dock"');
+    expect(workspace).toContain('data-testid="pos-mobile-order-sheet"');
+    expect(workspace).toContain('data-testid="pos-mobile-order-sheet-panel"');
+    expect(workspace).toContain('data-testid="pos-mobile-nav-order"');
+    expect(workspace).toContain('data-testid="pos-mobile-nav-orders"');
+    expect(workspace).toContain('data-testid="pos-mobile-nav-tables"');
+    expect(mobileCss).not.toContain('.hidden:has([data-testid="pos-payment-confirm"])');
+    expect(mobileCss).toContain('[data-testid="pos-mobile-order-sheet-panel"]');
     expect(mobileCss).toContain('input[data-testid^="pos-split-payment-"]');
   });
 });

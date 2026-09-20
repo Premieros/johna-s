@@ -36,12 +36,15 @@ describe('stabilization contracts', () => {
     expect(menu).toContain("en: 'Modifier Groups'");
   });
 
-  it('keeps mobile checkout visible and inside the phone safe area', () => {
+  it('keeps mobile checkout visible through the explicit phone order sheet and safe area', () => {
     const mobileCss = read('src/mobile-layer-fix.css');
+    const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 
-    expect(mobileCss).toContain('.hidden:has([data-testid="pos-payment-confirm"])');
+    expect(workspace).toContain('data-testid="pos-mobile-order-sheet"');
+    expect(workspace).toContain('data-testid="pos-mobile-order-sheet-panel"');
     expect(mobileCss).toContain('height: 100dvh');
     expect(mobileCss).toContain('env(safe-area-inset-bottom)');
+    expect(mobileCss).toContain('[data-testid="pos-payment-confirm"]');
     expect(mobileCss).toContain('input[data-testid^="pos-split-payment-"]');
   });
 });
