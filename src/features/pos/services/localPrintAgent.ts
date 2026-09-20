@@ -69,7 +69,7 @@ declare global {
     electronAPI?: {
       isElectron: boolean;
       getPrinters: () => Promise<Array<{ name: string; displayName?: string; isDefault?: boolean; status?: number }>>;
-      printSilent: (options: { html?: string; text?: string; printerName: string; copies?: number; paperWidthMm?: number }) => Promise<{ success: boolean; error?: string }>;
+      printSilent: (options: { html?: string; text?: string; template?: FixedThermalTemplate; printerName: string; copies?: number; paperWidthMm?: number }) => Promise<{ success: boolean; error?: string }>;
       kickDrawer: (printerName?: string) => Promise<{ success: boolean; error?: string }>;
       getSystemInfo: () => Promise<{ isElectron: boolean; platform: string; hostname: string }>;
     };
@@ -379,6 +379,7 @@ export async function executeSilentPrintDetailed(options: {
         printerName,
         text: options.text,
         html: options.html,
+        template: options.template,
         copies: Math.max(1, Math.min(5, Number(options.copies || 1))),
         paperWidthMm: Number(options.paperWidthMm || 80),
       });
