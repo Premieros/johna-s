@@ -26,6 +26,8 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
   const productId = randomUUID();
   const unitId = randomUUID();
   const tableId = randomUUID();
+  let captainA = '';
+  let captainB = '';
 
   const asUser = async (userId: string, sql: string, params: unknown[] = []) => {
     const res = await runAsPersist(client, userId, sql, params);
@@ -44,6 +46,31 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
     impersonationAvailable = await canImpersonate(client);
+
+    // Explicit branch-scoped Captain Order roles/users for operator-transfer targets.
+    await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,branch_id,is_active)
+       VALUES
+         ('qa_captain_a','كابتن اوردر QA A','cap-qa-a',
+          '["pos.view","pos.order.create","pos.order.edit","pos.send_kitchen"]'::jsonb,
+          'branch',$1::uuid,true),
+         ('qa_captain_b','كابتن اوردر QA B','cap-qa-b',
+          '["pos.view","pos.order.create","pos.order.edit","pos.send_kitchen"]'::jsonb,
+          'branch',$2::uuid,true)`,
+      [ids.branchA, ids.branchB],
+    );
+    await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
+    const captainUsers = await client.query<{ id: string; role: string }>(
+      `INSERT INTO public.users(id,email,username,full_name,role,branch_id,is_active)
+       VALUES
+         ($1,'captain-a@qa.test','captain-a','Captain A','qa_captain_a',$3::uuid,true),
+         ($2,'captain-b@qa.test','captain-b','Captain B','qa_captain_b',$4::uuid,true)
+       RETURNING id,role`,
+      [randomUUID(), randomUUID(), ids.branchA, ids.branchB],
+    );
+    await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
+    captainA = captainUsers.rows.find((row) => row.role === 'qa_captain_a')!.id;
+    captainB = captainUsers.rows.find((row) => row.role === 'qa_captain_b')!.id;
 
     // Captain-like cashier: may create/edit/send/print, but cannot transfer or manage users.
     await client.query(`
@@ -240,12 +267,28 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       `SELECT * FROM public.list_pos_order_transfer_targets($1)`,
       [orderId],
     );
-    expect(targets.some((row) => String(row.user_id || '') === ids.users.branch_manager)).toBe(true);
+    expect(targets.some((row) => String(row.user_id || '') === captainA)).toBe(true);
+    expect(targets.some((row) => String(row.user_id || '') === ids.users.branch_manager)).toBe(false);
+    expect(targets.some((row) => String(row.user_id || '') === captainB)).toBe(false);
+
+    const invalidManagerTarget = await rpc(
+      ids.users.branch_manager,
+      `SELECT public.transfer_order_operator($1,$2) AS r`,
+      [orderId, ids.users.branch_manager],
+    );
+    expect(invalidManagerTarget).toMatchObject({ success: false, error: 'TARGET_USER_NOT_BRANCH_CAPTAIN' });
+
+    const invalidOtherBranchCaptain = await rpc(
+      ids.users.branch_manager,
+      `SELECT public.transfer_order_operator($1,$2) AS r`,
+      [orderId, captainB],
+    );
+    expect(invalidOtherBranchCaptain).toMatchObject({ success: false, error: 'TARGET_USER_NOT_IN_BRANCH' });
 
     const transferred = await rpc(
       ids.users.branch_manager,
       `SELECT public.transfer_order_operator($1,$2) AS r`,
-      [orderId, ids.users.branch_manager],
+      [orderId, captainA],
     );
     expect(transferred.success, JSON.stringify(transferred)).toBe(true);
 
@@ -253,7 +296,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       `SELECT cashier_id FROM public.orders WHERE id=$1`,
       [orderId],
     );
-    expect(owner.rows[0].cashier_id).toBe(ids.users.branch_manager);
+    expect(owner.rows[0].cashier_id).toBe(captainA);
 
     // Original captain no longer owns it and cannot send it.
     const oldOwnerBlocked = await rpc(
@@ -315,8 +358,8 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
        LIMIT 1`,
       [sale.sale_id],
     );
-    expect(attribution.rows[0].cashier_id).toBe(ids.users.branch_manager);
-    expect(attribution.rows[0].salesperson_id).toBe(ids.users.branch_manager);
+    expect(attribution.rows[0].cashier_id).toBe(captainA);
+    expect(attribution.rows[0].salesperson_id).toBe(captainA);
     expect(attribution.rows[0].created_by).toBe(ids.users.super_admin);
 
     const audit = await client.query<{ n: string }>(
