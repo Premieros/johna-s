@@ -312,23 +312,23 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
   it('order_kitchen_sends is readable under RLS within the caller branch', async () => { const created = await createOrder(); expect(created.success).toBe(true); await sendToKitchen(created.order_id!); const r = await asUser(async () => client.query(`SELECT count(*)::int AS c FROM public.order_kitchen_sends WHERE order_id = $1`, [created.order_id])); expect(r.rows[0].c).toBe(1); });
   it('authorized manager can void a sent table item owned by another operator', async () => {
     const beforeRole = await client.query<{ permissions: unknown }>(
-      \`SELECT permissions FROM public.roles WHERE role='cashier'\`,
+      `SELECT permissions FROM public.roles WHERE role='cashier'`,
     );
     const originalPermissions = beforeRole.rows[0]?.permissions;
     const otherOperatorId = randomUUID();
 
     await client.query(
-      \`UPDATE public.roles
+      `UPDATE public.roles
           SET permissions = (
             COALESCE(permissions, '[]'::jsonb)
             || '["pos.void","pos.view","pos.order.edit","pos.order.transfer","users.manage"]'::jsonb
           )
-        WHERE role='cashier'\`,
+        WHERE role='cashier'`,
     );
     await client.query(
-      \`INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
-       VALUES ($1, $2, 'Other Table Operator', 'cashier', $3, true)\`,
-      [otherOperatorId, \`other-\${randomUUID()}@test.local\`, branchId],
+      `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
+       VALUES ($1, $2, 'Other Table Operator', 'cashier', $3, true)`,
+      [otherOperatorId, `other-${randomUUID()}@test.local`, branchId],
     );
 
     try {
@@ -342,7 +342,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
       const stockAfterSend = await batchQty();
 
       const line = await client.query<{ id: string }>(
-        \`SELECT id FROM public.order_items WHERE order_id=$1 AND product_id=$2 LIMIT 1\`,
+        `SELECT id FROM public.order_items WHERE order_id=$1 AND product_id=$2 LIMIT 1`,
         [orderId, prodA],
       );
       const orderItemId = line.rows[0]?.id;
@@ -350,42 +350,42 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
 
       // Fixture-only ownership change: model a manager opening a captain/cashier order.
       await client.query(
-        \`UPDATE public.orders SET cashier_id=$1 WHERE id=$2\`,
+        `UPDATE public.orders SET cashier_id=$1 WHERE id=$2`,
         [otherOperatorId, orderId],
       );
 
       const manageOthers = await asUser(async () => client.query<{ allowed: boolean }>(
-        \`SELECT public.can_manage_other_pos_orders() AS allowed\`,
+        `SELECT public.can_manage_other_pos_orders() AS allowed`,
       ));
       expect(manageOthers.rows[0].allowed).toBe(true);
 
       const voided = await asUser(async () => client.query(
-        \`SELECT public.cancel_sent_order_item_exact($1,$2,1,'customer cancelled item') AS r\`,
+        `SELECT public.cancel_sent_order_item_exact($1,$2,1,'customer cancelled item') AS r`,
         [orderId, orderItemId],
       ));
       expect(voided.rows[0].r.success, JSON.stringify(voided.rows[0].r)).toBe(true);
       expect(await batchQty()).toBe(stockAfterSend + 1);
 
       const sends = await client.query<{ c: number; qty: string }>(
-        \`SELECT count(*)::int AS c, COALESCE(max(sent_quantity),0)::text AS qty
+        `SELECT count(*)::int AS c, COALESCE(max(sent_quantity),0)::text AS qty
            FROM public.order_kitchen_sends
-          WHERE order_item_id=$1\`,
+          WHERE order_item_id=$1`,
         [orderItemId],
       );
       expect(Number(sends.rows[0].qty)).toBe(0);
 
       const audit = await client.query<{ c: number }>(
-        \`SELECT count(*)::int AS c
+        `SELECT count(*)::int AS c
            FROM public.audit_log
           WHERE action='SENT_ITEM_VOIDED'
             AND entity_id=$1
-            AND user_id=$2\`,
+            AND user_id=$2`,
         [orderItemId, cashierId],
       );
       expect(audit.rows[0].c).toBe(1);
     } finally {
       await client.query(
-        \`UPDATE public.roles SET permissions=$1::jsonb WHERE role='cashier'\`,
+        `UPDATE public.roles SET permissions=$1::jsonb WHERE role='cashier'`,
         [JSON.stringify(originalPermissions ?? [])],
       );
     }
