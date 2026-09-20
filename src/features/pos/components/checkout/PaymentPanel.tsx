@@ -61,6 +61,8 @@ export function PaymentPanel(p: PaymentPanelProps) {
   const selectedCustomer = p.customerId ? p.customers.find((c) => c.id === p.customerId) || null : null;
   const customerName = selectedCustomer?.name || '';
   const creditAllowed = selectedCustomer?.customer_type === 'employee';
+  const paymentMethod = p.paymentMethod;
+  const onPaymentMethodChange = p.onPaymentMethodChange;
   const plate = p.orderType === 'drive_thru' ? parseCarNotes(p.orderNotes).plate : '';
   const deliveryPhone = p.orderType === 'delivery' && !customerName ? parseDeliveryNotes(p.orderNotes).phone : '';
   const [splitMode, setSplitMode] = useState(false);
@@ -88,10 +90,10 @@ export function PaymentPanel(p: PaymentPanelProps) {
   useEffect(() => () => clearArmedSplitTender(), []);
 
   useEffect(() => {
-    if (p.paymentMethod === 'credit' && !creditAllowed) {
-      p.onPaymentMethodChange('cash');
+    if (paymentMethod === 'credit' && !creditAllowed) {
+      onPaymentMethodChange('cash');
     }
-  }, [creditAllowed, p.paymentMethod, p.onPaymentMethodChange]);
+  }, [creditAllowed, paymentMethod, onPaymentMethodChange]);
 
   const toggleSplit = () => {
     clearArmedSplitTender();
