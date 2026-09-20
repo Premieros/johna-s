@@ -902,10 +902,13 @@ export function usePosOrder(input: UsePosOrderInput) {
           isOpenOrder: true,
         };
         const text = buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr);
+        const fixedFormHtml = await buildReceiptHtml(openOrderReceipt, effSettings, lang, isAr, { authorize: false });
         const queued = await enqueueCloudOpenOrderPrint({
           orderId: persisted.orderId,
           payload: {
             text,
+            fixedFormHtml,
+            rendererVersion: 1,
             paperWidthMm: effSettings.receipt_width_mm || 80,
             copies: 1,
           },
