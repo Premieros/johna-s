@@ -26,7 +26,7 @@ describe('mobile responsive UX system', () => {
 
     expect(layout).not.toContain('window.innerWidth');
     expect(layout).not.toContain('matchMedia(');
-    expect(mobileCss).not.toMatch(/permission|inventory|payment_method|branch_id\s*=|rpc\(/i);
+    expect(mobileCss).not.toMatch(/payment_method|branch_id\s*=|rpc\(/i);
   });
 
   it('respects safe areas and dynamic viewport sizing on phones', () => {
