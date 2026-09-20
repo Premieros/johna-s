@@ -595,7 +595,7 @@ BEGIN
       v_cost:=CASE WHEN v_effect.quantity>0 THEN v_effect.total_cost/v_effect.quantity ELSE 0 END;
       v_batch:='KV-'||substr(replace(gen_random_uuid()::text,'-',''),1,12);
 
-      IF v_effect.target_type='inventory_unit' THEN
+      IF v_effect.target_type = 'inventory_unit' THEN
         v_res := public._restore_inventory_unit_consumption_source(
           'kitchen_send',
           v_event.id,
@@ -640,7 +640,7 @@ BEGIN
             'kitchen_void','kitchen_send',v_event.id,p_order_id::text,v_batch,auth.uid()
           );
         END IF;
-      ELSIF v_effect.target_type='raw_material' THEN
+      ELSIF v_effect.target_type = 'raw_material' THEN
         v_res:=public._raw_add(
           v_effect.target_id,v_event.branch_id,v_event.warehouse_id,v_restore,v_cost,v_batch,
           CURRENT_DATE,NULL,'kitchen_void','kitchen_send',v_event.id,p_order_id::text,auth.uid()
@@ -723,16 +723,16 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','INVALID_REFUND_ITEM');
   END IF;
 
-  IF EXISTS(SELECT 1 FROM public.sale_item_inventory_effects WHERE sale_item_id=p_sale_item_id) THEN
+  IF EXISTS(SELECT 1 FROM public.sale_item_inventory_effects WHERE sale_item_id = p_sale_item_id) THEN
     FOR v_effect IN
       SELECT * FROM public.sale_item_inventory_effects
-      WHERE sale_item_id=p_sale_item_id
+      WHERE sale_item_id = p_sale_item_id
       ORDER BY target_type,target_id
     LOOP
-      v_restore_qty:=ROUND(v_effect.quantity*p_refund_qty/v_item_qty,6);
+      v_restore_qty:=ROUND(v_effect.quantity * p_refund_qty / v_item_qty,6);
       IF v_restore_qty<=0 THEN CONTINUE; END IF;
 
-      IF v_effect.target_type='inventory_unit' THEN
+      IF v_effect.target_type = 'inventory_unit' THEN
         v_remaining:=v_restore_qty;
 
         IF v_source_order_item_id IS NOT NULL THEN
@@ -850,7 +850,7 @@ BEGIN
           END IF;
         END IF;
 
-      ELSIF v_effect.target_type='raw_material' THEN
+      ELSIF v_effect.target_type = 'raw_material' THEN
         SELECT COALESCE(
           SUM((-l.quantity)*COALESCE(l.unit_cost,0)) FILTER(WHERE l.quantity<0)
           /NULLIF(SUM(-l.quantity) FILTER(WHERE l.quantity<0),0),0
@@ -869,7 +869,7 @@ BEGIN
         IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN RETURN v_res; END IF;
         v_raws_restored:=v_raws_restored+v_restore_qty;
 
-      ELSIF v_effect.target_type='product' THEN
+      ELSIF v_effect.target_type = 'product' THEN
         SELECT COALESCE(
           SUM((-l.quantity)*COALESCE(l.unit_cost,0)) FILTER(WHERE l.quantity<0)
           /NULLIF(SUM(-l.quantity) FILTER(WHERE l.quantity<0),0),
