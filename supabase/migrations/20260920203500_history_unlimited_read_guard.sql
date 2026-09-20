@@ -1,8 +1,7 @@
 BEGIN;
 
--- Canonical historical-read guard. This migration does NOT grant
--- history.unlimited to any existing role. Super Admin remains the only
--- implicit bypass through public.can_permission().
+-- Canonical historical-read guard. No existing role is auto-granted
+-- history.unlimited. Super Admin remains the only implicit bypass.
 CREATE OR REPLACE FUNCTION public.history_business_date()
 RETURNS date
 LANGUAGE sql
@@ -105,7 +104,7 @@ GRANT EXECUTE ON FUNCTION public.history_date_start(date) TO authenticated, serv
 GRANT EXECUTE ON FUNCTION public.history_min_instant() TO authenticated, service_role;
 
 -- Harden get_journals
-CREATE OR REPLACE FUNCTION public.get_journals(p_branch_id uuid, p_from_date date, p_to_date date, p_reference_type text, p_search text)
+CREATE OR REPLACE FUNCTION public.get_journals(p_branch_id uuid, p_from_date date DEFAULT NULL::date, p_to_date date DEFAULT NULL::date, p_reference_type text DEFAULT NULL::text, p_search text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE sql
  STABLE
@@ -136,10 +135,10 @@ FROM (
                             OR j.reference_number ILIKE '%' || p_search || '%')
   GROUP BY j.id
 ) e;
-$function$
+$function$;
 
 -- Harden get_general_ledger
-CREATE OR REPLACE FUNCTION public.get_general_ledger(p_branch_id uuid, p_account_id uuid, p_from_date date, p_to_date date)
+CREATE OR REPLACE FUNCTION public.get_general_ledger(p_branch_id uuid, p_account_id uuid, p_from_date date DEFAULT NULL::date, p_to_date date DEFAULT NULL::date)
  RETURNS jsonb
  LANGUAGE sql
  STABLE
@@ -160,7 +159,7 @@ FROM (
     AND (public.history_clamp_from(p_from_date) IS NULL OR j.entry_date >= public.history_clamp_from(p_from_date))
     AND (public.history_clamp_to(p_to_date) IS NULL OR j.entry_date <= public.history_clamp_to(p_to_date))
 ) row;
-$function$
+$function$;
 
 -- Harden get_income_statement
 CREATE OR REPLACE FUNCTION public.get_income_statement(p_branch_id uuid, p_from_date date, p_to_date date DEFAULT CURRENT_DATE)
@@ -205,7 +204,7 @@ SELECT jsonb_build_object(
                     - COALESCE((SELECT SUM(debit - credit) FROM agg, cfg WHERE account_type = 'expense' AND account_id <> COALESCE(cfg.cogs_id, '00000000-0000-0000-0000-000000000000')), 0), 2)
 )
 FROM cfg;
-$function$
+$function$;
 
 -- Harden get_cash_flow
 CREATE OR REPLACE FUNCTION public.get_cash_flow(p_branch_id uuid, p_from_date date, p_to_date date DEFAULT CURRENT_DATE)
@@ -230,10 +229,10 @@ FROM (
   GROUP BY t.id, t.account_name, t.account_type, a.code
   HAVING COALESCE(SUM(CASE WHEN tx.to_account_id = t.id THEN tx.amount ELSE -tx.amount END), 0) <> 0
 ) row;
-$function$
+$function$;
 
 -- Harden get_party_statement
-CREATE OR REPLACE FUNCTION public.get_party_statement(p_branch_id uuid, p_side text, p_party_id uuid, p_from_date date, p_to_date date)
+CREATE OR REPLACE FUNCTION public.get_party_statement(p_branch_id uuid, p_side text, p_party_id uuid, p_from_date date DEFAULT NULL::date, p_to_date date DEFAULT NULL::date)
  RETURNS jsonb
  LANGUAGE sql
  STABLE
@@ -264,7 +263,7 @@ SELECT jsonb_build_object(
                         description, debit, credit, balance
                  FROM run WHERE public.history_clamp_from(p_from_date) IS NULL OR entry_date >= public.history_clamp_from(p_from_date)) r)
 );
-$function$
+$function$;
 
 -- Harden get_trial_balance
 CREATE OR REPLACE FUNCTION public.get_trial_balance(p_branch_id uuid, p_to_date date DEFAULT CURRENT_DATE)
@@ -290,7 +289,7 @@ FROM (
   GROUP BY a.code, a.name, a.name_en, a.account_type
   HAVING COALESCE(SUM(l.debit), 0) <> 0 OR COALESCE(SUM(l.credit), 0) <> 0
 ) row;
-$function$
+$function$;
 
 -- Harden get_trial_balance_summary
 CREATE OR REPLACE FUNCTION public.get_trial_balance_summary(p_branch_id uuid, p_to_date date DEFAULT CURRENT_DATE)
@@ -318,7 +317,7 @@ SELECT jsonb_build_object(
   'balanced', round(COALESCE((SELECT SUM(debit) FROM rows), 0), 2)
               = round(COALESCE((SELECT SUM(credit) FROM rows), 0), 2)
 );
-$function$
+$function$;
 
 -- Harden get_balance_sheet
 CREATE OR REPLACE FUNCTION public.get_balance_sheet(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
@@ -360,7 +359,7 @@ SELECT jsonb_build_object(
   'balanced', round(assets - (liabilities + capital + retained + net_income), 2) = 0
 )
 FROM summary;
-$function$
+$function$;
 
 -- Harden get_ar_aging
 CREATE OR REPLACE FUNCTION public.get_ar_aging(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
@@ -411,7 +410,7 @@ WITH source_rows AS (
 )
 SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.open_amount DESC, a.name), '[]'::jsonb)
 FROM aggregated a;
-$function$
+$function$;
 
 -- Harden get_ap_aging
 CREATE OR REPLACE FUNCTION public.get_ap_aging(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
@@ -436,7 +435,7 @@ FROM (
     AND (p.total - COALESCE(p.paid_amount, 0) - COALESCE(p.returned_amount, 0)) > 0
   GROUP BY s.id, s.name, s.phone
 ) row;
-$function$
+$function$;
 
 -- Harden get_aging_summary
 CREATE OR REPLACE FUNCTION public.get_aging_summary(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
@@ -507,10 +506,10 @@ SELECT jsonb_build_object(
     '90_plus', COALESCE((SELECT bucket_90_plus FROM ap), 0)
   )
 );
-$function$
+$function$;
 
 -- Harden get_order_margin
-CREATE OR REPLACE FUNCTION public.get_order_margin(p_branch_id uuid, p_from date, p_to date)
+CREATE OR REPLACE FUNCTION public.get_order_margin(p_branch_id uuid DEFAULT NULL::uuid, p_from date DEFAULT NULL::date, p_to date DEFAULT NULL::date)
  RETURNS TABLE(sale_id uuid, invoice_number text, branch_id uuid, sale_date date, total numeric, discount_amount numeric, cogs numeric, gross_margin numeric)
  LANGUAGE plpgsql
  STABLE
@@ -547,10 +546,10 @@ BEGIN
   ORDER BY s.created_at DESC
   LIMIT 500;
 END;
-$function$
+$function$;
 
 -- Harden get_costing_sales_summary
-CREATE OR REPLACE FUNCTION public.get_costing_sales_summary(p_branch_id uuid, p_from date, p_to date)
+CREATE OR REPLACE FUNCTION public.get_costing_sales_summary(p_branch_id uuid DEFAULT NULL::uuid, p_from date DEFAULT NULL::date, p_to date DEFAULT NULL::date)
  RETURNS jsonb
  LANGUAGE sql
  STABLE
@@ -625,7 +624,7 @@ SELECT jsonb_build_object(
   'ratio', CASE WHEN net_sales > 0 THEN ROUND(cogs * 100.0 / net_sales, 2) ELSE 0 END
 )
 FROM totals;
-$function$
+$function$;
 
 -- Harden get_waste_report
 CREATE OR REPLACE FUNCTION public.get_waste_report(p_branch_id uuid DEFAULT get_branch_id(), p_from_date date DEFAULT (CURRENT_DATE - '30 days'::interval), p_to_date date DEFAULT CURRENT_DATE)
@@ -643,10 +642,10 @@ BEGIN
   WHERE we.branch_id=p_branch_id AND we.status='approved' AND we.created_at >= public.history_date_start(public.history_clamp_from(p_from_date))
     AND we.created_at < public.history_date_start(public.history_clamp_to(p_to_date) + 1) GROUP BY wc.name,we.waste_type ORDER BY sum(we.total_cost) DESC;
 END;
-$function$
+$function$;
 
 -- Harden get_cost_history
-CREATE OR REPLACE FUNCTION public.get_cost_history(p_product_id uuid, p_limit integer)
+CREATE OR REPLACE FUNCTION public.get_cost_history(p_product_id uuid, p_limit integer DEFAULT 50)
  RETURNS TABLE(id uuid, product_id uuid, old_cost numeric, new_cost numeric, changed_at timestamp with time zone, changed_by text, source text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
@@ -673,10 +672,10 @@ AS $function$
     )
   ORDER BY ch.changed_at DESC
   LIMIT GREATEST(LEAST(COALESCE(p_limit, 50), 500), 1)
-$function$
+$function$;
 
 -- Harden get_raw_material_cost_history
-CREATE OR REPLACE FUNCTION public.get_raw_material_cost_history(p_raw_material_id uuid, p_branch_id uuid, p_limit integer)
+CREATE OR REPLACE FUNCTION public.get_raw_material_cost_history(p_raw_material_id uuid, p_branch_id uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 100)
  RETURNS TABLE(event_id text, raw_material_id uuid, raw_material_name text, branch_id uuid, unit_cost numeric, previous_cost numeric, change_amount numeric, change_pct numeric, price_source text, priced_at timestamp with time zone, reference_number text, source_detail text)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
@@ -756,7 +755,7 @@ BEGIN
     e.event_id DESC
   LIMIT GREATEST(LEAST(COALESCE(p_limit, 100), 500), 1);
 END;
-$function$
+$function$;
 
 -- Harden get_supplier_price_impact
 CREATE OR REPLACE FUNCTION public.get_supplier_price_impact(p_supplier_id uuid)
@@ -813,7 +812,7 @@ AS $function$
     AND (public.is_pos_admin() OR pc.branch_id = public.get_branch_id())
   GROUP BY rm.id
   ORDER BY 2 ASC, 3 ASC
-$function$
+$function$;
 
 -- Keep historical RPCs off PUBLIC/anon while retaining application/service access.
 REVOKE ALL ON FUNCTION public.get_aging_summary(uuid, date) FROM PUBLIC, anon;
