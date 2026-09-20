@@ -30,6 +30,8 @@ describe('POS multi-item table transfer and Captain Order target contract', () =
     expect(migration).toContain("'inventory_changed',false");
     expect(migration).toContain("'kds_reassigned',v_moved_sent_count>0");
     expect(migration).toContain("'kds_resent',false");
+    expect(migration).toContain("kitchen_status = CASE");
+    expect(migration).toContain("SET kitchen_status='pending'");
   });
 
   it('limits operator transfer targets to Captain Order users whose home branch matches the order branch', () => {
