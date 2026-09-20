@@ -55,7 +55,7 @@ export const INTERACTION_CONTRACTS: InteractionContract[] = [
   { testId: 'report-context-filter', file: 'src/features/reporting/ReportFilterBar.tsx', label: 'Contextual period filter dropdown', marker: 'data-testid="report-context-filter"' },
   { testId: 'button[data-report-type]', file: 'src/features/reporting/ReportFilterBar.tsx', label: 'Report-type quick-access buttons (deep-link contract)', marker: 'data-report-type={rt.key}' },
   { testId: 'button[data-report-type] (financial)', file: 'src/features/reporting/ReportFilterBar.tsx', label: 'Financial report-type buttons', marker: 'data-report-type={ft.key}' },
-  { testId: 'financial deep link', file: 'src/features/reporting/pages/ReportsPage.tsx', label: 'Financial selection navigates with view + period context', marker: 'navigate(`/financial-reports?view=${value}&from=${from}&to=${to}`)' },
+  { testId: 'financial deep link', file: 'src/features/reporting/pages/ReportsPage.tsx', label: 'Financial selection navigates with view + period context', marker: 'navigate(`/financial-reports?view=${value}&from=${allowed.from}&to=${allowed.to}`)' },
   { testId: 'reportType deep link', file: 'src/features/reporting/pages/ReportDeepLinkPage.tsx', label: '/reports?reportType=… resolves via button[data-report-type]', marker: 'button[data-report-type="' },
   { testId: 'financial-reports-page', file: 'src/features/accounting/pages/FinancialReportsPage.tsx', label: 'Financial reports surface', marker: 'testId="financial-reports-page"' },
   { testId: 'financial-reports-filters', file: 'src/features/accounting/pages/FinancialReportsPage.tsx', label: 'Financial reports filter panel', marker: 'testId="financial-reports-filters"' },

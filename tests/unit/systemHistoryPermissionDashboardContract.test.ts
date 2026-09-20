@@ -21,7 +21,8 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).toContain("can('purchases.view')");
     expect(dashboard).toContain("can('expenses.view')");
     expect(dashboard).toContain("can('shifts.view')");
-    expect(dashboard).toContain('data-testid="kpi-open-orders"');
+    expect(dashboard).toContain('testId="kpi-open-orders"');
+    expect(dashboard).toContain('data-testid={testId}');
     expect(dashboard).toContain("status', ['open', 'held']");
     expect(dashboard).not.toContain("role === 'branch_manager'");
     expect(dashboard).not.toContain("role === 'accountant'");

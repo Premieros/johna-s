@@ -54,7 +54,8 @@ describe('Reports Center contract (6H-P4)', () => {
   });
 
   it('navigates financial selections to the financial reports page with view + period context', () => {
-    expect(reportsSource).toContain('navigate(`/financial-reports?view=${value}&from=${from}&to=${to}`)');
+    expect(reportsSource).toContain('const allowed = history.clampRange(from, to)');
+    expect(reportsSource).toContain('navigate(`/financial-reports?view=${value}&from=${allowed.from}&to=${allowed.to}`)');
     expect(financialSource).toContain('useSearchParams');
     expect(financialSource).toContain("searchParams.get('view')");
     expect(financialSource).toContain("searchParams.get('from')");
