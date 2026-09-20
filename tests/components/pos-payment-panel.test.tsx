@@ -37,6 +37,15 @@ const productB: Product = {
 const customer: Customer = {
   id: 'cus-1',
   name: 'Omar',
+  branch_id: 'br',
+  customer_type: 'customer',
+} as Customer;
+
+const employeeCustomer: Customer = {
+  id: 'emp-1',
+  name: 'Mona Employee',
+  branch_id: 'br',
+  customer_type: 'employee',
 } as Customer;
 
 const baseProps = {
@@ -120,10 +129,26 @@ describe('PaymentPanel full receipt review (ERP-01 §5)', () => {
     expect(screen.getByText('ABC-1234')).toBeTruthy();
   });
 
-  it('credit payment keeps the workspace and hides the paid-amount input', () => {
-    render(<PaymentPanel {...baseProps} paymentMethod="credit" />);
+  it('blocks credit when no employee customer is selected', () => {
+    render(<PaymentPanel {...baseProps} customerId={customer.id} customers={[customer]} />);
+    const creditButton = screen.getByTestId('pos-payment-method-credit') as HTMLButtonElement;
+    expect(creditButton.disabled).toBe(true);
+    expect(screen.getByText('Credit payment is blocked for non-employees. Select a customer classified as Employee to enable credit.')).toBeTruthy();
+  });
+
+  it('allows credit for an employee customer and hides the paid-amount input', () => {
+    render(
+      <PaymentPanel
+        {...baseProps}
+        customerId={employeeCustomer.id}
+        customers={[employeeCustomer]}
+        paymentMethod="credit"
+      />,
+    );
     expect(screen.queryByText('Exact')).toBeNull();
-    expect(screen.getByTestId('pos-payment-method-credit')).toBeTruthy();
+    const creditButton = screen.getByTestId('pos-payment-method-credit') as HTMLButtonElement;
+    expect(creditButton.disabled).toBe(false);
+    expect(screen.getByText('Employee Credit')).toBeTruthy();
     expect(screen.getByTestId('pos-payment-confirm')).toBeTruthy();
   });
 
