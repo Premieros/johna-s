@@ -17,7 +17,7 @@ export function Input({ label, error, className = '', id, ...props }: InputProps
       {label && <label htmlFor={inputId} className="text-sm font-medium text-ui-text">{label}</label>}
       <input
         id={inputId}
-        className={`min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text placeholder-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${numericClass} ${error ? 'border-ui-danger focus-visible:ring-ui-danger' : ''} ${className}`}
+        className={`min-h-11 lg:min-h-0 min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text placeholder-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${numericClass} ${error ? 'border-ui-danger focus-visible:ring-ui-danger' : ''} ${className}`}
         {...props}
       />
       {error && <span className="text-xs text-ui-danger font-medium">{error}</span>}
@@ -44,7 +44,7 @@ export function Select({ label, className = '', id, children, options, ...props 
       {label && <label htmlFor={selectId} className="text-sm font-medium text-ui-text">{label}</label>}
       <select
         id={selectId}
-        className={`min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${className}`}
+        className={`min-h-11 lg:min-h-0 min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${className}`}
         {...props}
       >
         {options
@@ -71,7 +71,7 @@ export function Textarea({ label, className = '', id, ...props }: TextareaProps)
       {label && <label htmlFor={textareaId} className="text-sm font-medium text-ui-text">{label}</label>}
       <textarea
         id={textareaId}
-        className={`min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text placeholder-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${className}`}
+        className={`min-h-[96px] min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text placeholder-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${className}`}
         {...props}
       />
     </div>
