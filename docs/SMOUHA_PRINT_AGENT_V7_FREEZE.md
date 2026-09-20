@@ -20,6 +20,10 @@ Do **not** alter the behavior or signatures of these RPCs without explicit appro
 - `complete_cloud_print_job(uuid, uuid, boolean, text)`
 - `can_execute_cloud_print_kind(text)`
 
-`tests/integration/smouha_v7_print_agent_lock.test.ts` intentionally fails if those implementations drift. Do not update the expected hashes merely to make CI green; a hash change means the installed Smouha v7 compatibility contract changed.
+The integration guard hashes the raw, case-sensitive `pg_get_functiondef(...)` output so observable string-literal changes cannot slip through normalization.
+
+The guard also freezes the required `cloud_print_jobs` column names, PostgreSQL data types, and nullability expected by v7.
+
+`tests/integration/smouha_v7_print_agent_lock.test.ts` intentionally fails on contract drift. Do not update expected hashes or schema metadata merely to make CI green; a change means the installed Smouha v7 compatibility contract changed and requires an explicit migration/replacement plan.
 
 No production database migration is introduced by this freeze.
