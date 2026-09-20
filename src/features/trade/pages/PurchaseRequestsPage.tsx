@@ -165,12 +165,12 @@ export function PurchaseRequestsPage() {
     { key: 'actions', header: t('actions'), render: (r) => (
       <div className="flex items-center gap-1 justify-end">
         {r.status === 'draft' && can('purchases.manage') && (
-          <button title={t('submitRequest')} onClick={() => changeStatus(r.id, 'submitted')} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Send className="w-4 h-4" /></button>
+          <button title={t('submitRequest')} onClick={() => changeStatus(r.id, 'submitted')} className="ui-icon-action ui-icon-action-info"><Send className="w-4 h-4" /></button>
         )}
         {r.status === 'submitted' && can('purchases.manage') && (
           <>
             <button title={t('approveRequest')} onClick={() => changeStatus(r.id, 'approved')} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success"><Check className="w-4 h-4" /></button>
-            <button title={t('rejectRequest')} onClick={() => changeStatus(r.id, 'rejected')} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><X className="w-4 h-4" /></button>
+            <button title={t('rejectRequest')} onClick={() => changeStatus(r.id, 'rejected')} className="ui-icon-action ui-icon-action-danger"><X className="w-4 h-4" /></button>
           </>
         )}
         {r.status === 'approved' && can('purchases.rfq') && (
@@ -179,7 +179,7 @@ export function PurchaseRequestsPage() {
         {(r.status === 'draft' || r.status === 'submitted') && can('purchases.manage') && (
           <button title={t('cancel')} onClick={() => changeStatus(r.id, 'cancelled')} className="p-1.5 rounded-md hover:bg-ui-page-alt dark:hover:bg-ui-page-alt text-ui-subtle"><X className="w-4 h-4" /></button>
         )}
-        <button onClick={() => viewRequest(r)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Eye className="w-4 h-4" /></button>
+        <button onClick={() => viewRequest(r)} className="ui-icon-action ui-icon-action-info"><Eye className="w-4 h-4" /></button>
       </div>
     )},
   ];
