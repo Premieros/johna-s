@@ -260,7 +260,7 @@ function thermalColumns(left: unknown, right: unknown, columns: number): string 
 export function buildReceiptFixedTemplate(
   receipt: ReceiptData,
   s: Settings,
-  lang: Language,
+  _lang: Language,
   isAr: boolean,
 ): FixedThermalTemplate {
   const currency = safeThermalText(s.currency || 'EGP');
