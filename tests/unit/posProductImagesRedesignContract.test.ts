@@ -20,7 +20,10 @@ describe('POS product image and simplified workspace contracts', () => {
     expect(browser).toContain("can('products.edit')");
     expect(browser).not.toContain("can('products.manage')");
     expect(browser).toContain('uploadProductImage(file, product.branch_id, product.id)');
-    expect(browser).toContain("update({ image_url: publicUrl })");
+    expect(browser).toContain("image_url: publicUrl");
+    expect(browser).toContain("image_position_x: 0");
+    expect(browser).toContain("image_position_y: 0");
+    expect(browser).toContain("image_zoom: 1");
     expect(browser).toContain('invalidatePosCatalogCache()');
     expect(upload).toContain("PRODUCT_IMAGES_BUCKET = 'product-images'");
     expect(upload).toContain('5 * 1024 * 1024');
@@ -49,6 +52,27 @@ describe('POS product image and simplified workspace contracts', () => {
     expect(image).toContain('resolveSpriteFrame');
     expect(modal).toContain('<ProductImage');
     expect(products).toContain('<ProductImage');
+  });
+
+  it('supports persisted drag and zoom image framing without extra image requests', () => {
+    const browser = source('src/features/pos/components/catalog/ProductBrowser.tsx');
+    const image = source('src/features/catalog/components/ProductImage.tsx');
+    const editor = source('src/features/catalog/components/ProductImageAdjustModal.tsx');
+    const products = source('src/features/catalog/pages/ProductsPage.tsx');
+    const migration = source('supabase/migrations/20260920161000_product_image_positioning.sql');
+
+    expect(browser).toContain('product-image-adjust-');
+    expect(browser).toContain('handleImageViewSave');
+    expect(editor).toContain('onPointerMove={moveDrag}');
+    expect(editor).toContain('type="range"');
+    expect(editor).toContain("zoom: 1");
+    expect(image).toContain('positionX');
+    expect(image).toContain('positionY');
+    expect(image).toContain('transformOrigin');
+    expect(products).toContain('products-image-adjust-button');
+    expect(migration).toContain('image_position_x');
+    expect(migration).toContain('image_position_y');
+    expect(migration).toContain('image_zoom');
   });
 
   it('keeps the simplified product and tables workspaces wired', () => {

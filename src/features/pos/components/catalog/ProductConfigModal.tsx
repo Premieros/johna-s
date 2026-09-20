@@ -151,7 +151,7 @@ export function ProductConfigModal({
         <div className="flex items-center justify-between border-b border-ui-border px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {product.image_url ? (
-              <ProductImage src={product.image_url} name={product.name} className="h-9 w-9 shrink-0 rounded-xl bg-white sm:h-10 sm:w-10" imgClassName="h-9 w-9 shrink-0 rounded-xl bg-white object-contain p-0.5 sm:h-10 sm:w-10" />
+              <ProductImage src={product.image_url} name={product.name} className="h-9 w-9 shrink-0 rounded-xl bg-white sm:h-10 sm:w-10" imgClassName="h-9 w-9 shrink-0 rounded-xl bg-white object-contain p-0.5 sm:h-10 sm:w-10" positionX={product.image_position_x} positionY={product.image_position_y} zoom={product.image_zoom} />
             ) : (
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ui-primary-soft text-ui-accent sm:h-10 sm:w-10"><Tag className="h-5 w-5" /></div>
             )}

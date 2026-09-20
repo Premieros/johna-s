@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Download, Upload, Barcode as BarcodeIcon, QrCode } from 'lucide-react';
+import { Plus, Edit2, Trash2, Download, Upload, Barcode as BarcodeIcon, QrCode, Move } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -25,6 +25,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
 import { ProductImage } from '@/features/catalog/components/ProductImage';
+import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
 import type { Product, Category, ProductUnit, ProductComponentInput } from '@/lib/types';
 
 const UNIT_NAMES = ['piece', 'carton', 'box', 'pack', 'kg', 'liter', 'meter', 'gram'];
@@ -53,6 +54,7 @@ export function ProductsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [barcodeModal, setBarcodeModal] = useState<Product | null>(null);
   const [qrModal, setQrModal] = useState<string | null>(null);
+  const [imageAdjustOpen, setImageAdjustOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -63,7 +65,7 @@ export function ProductsPage() {
 
   const [form, setForm] = useState({
     name: '', name_en: '', barcode: '', sku: '', category_id: '', description: '',
-    cost_price: 0, sale_price: 0, wholesale_price: 0, image_url: '', is_active: true, low_stock_threshold: 5, min_stock: 0, max_stock: 0, reorder_point: 0, product_type: 'ready' as 'ready' | 'manufactured',
+    cost_price: 0, sale_price: 0, wholesale_price: 0, image_url: '', image_position_x: 0, image_position_y: 0, image_zoom: 1, is_active: true, low_stock_threshold: 5, min_stock: 0, max_stock: 0, reorder_point: 0, product_type: 'ready' as 'ready' | 'manufactured',
     branch_id: '',
   });
   const [units, setUnits] = useState<ProductUnit[]>([]);
@@ -115,7 +117,7 @@ export function ProductsPage() {
 
   const openEdit = async (p: Product) => {
     setEditing(p);
-    setForm({ name: p.name, name_en: p.name_en || '', barcode: p.barcode || '', sku: p.sku || '', category_id: p.category_id || '', description: p.description || '', cost_price: p.cost_price, sale_price: p.sale_price, wholesale_price: p.wholesale_price, image_url: p.image_url || '', is_active: p.is_active, low_stock_threshold: p.low_stock_threshold, min_stock: p.min_stock ?? 0, max_stock: p.max_stock ?? 0, reorder_point: p.reorder_point ?? 0, product_type: p.product_type || 'ready', branch_id: p.branch_id || branchFilter || '' });
+    setForm({ name: p.name, name_en: p.name_en || '', barcode: p.barcode || '', sku: p.sku || '', category_id: p.category_id || '', description: p.description || '', cost_price: p.cost_price, sale_price: p.sale_price, wholesale_price: p.wholesale_price, image_url: p.image_url || '', image_position_x: Number(p.image_position_x) || 0, image_position_y: Number(p.image_position_y) || 0, image_zoom: Number(p.image_zoom) || 1, is_active: p.is_active, low_stock_threshold: p.low_stock_threshold, min_stock: p.min_stock ?? 0, max_stock: p.max_stock ?? 0, reorder_point: p.reorder_point ?? 0, product_type: p.product_type || 'ready', branch_id: p.branch_id || branchFilter || '' });
     const [u, comps] = await Promise.all([
       supabase.from('product_units').select('*').eq('product_id', p.id),
       supabase.from('product_components').select('component_product_id, quantity').eq('product_id', p.id),
@@ -265,7 +267,7 @@ export function ProductsPage() {
   const removeUnit = (i: number) => setUnits(units.filter((_, idx) => idx !== i));
 
   const columns: Column<Product>[] = [
-    { key: 'name', header: t('productName'), render: (p) => <div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-ui-page-alt flex items-center justify-center flex-shrink-0">{p.image_url ? <ProductImage src={p.image_url} name={p.name} category={p.category?.name} className="h-full w-full rounded-lg bg-white" imgClassName="h-full w-full rounded-lg bg-white object-contain p-0.5" /> : <BarcodeIcon className="w-4 h-4 text-ui-subtle" />}</div><div><p className="font-medium text-ui-text">{p.name}</p><p className="text-xs text-ui-subtle">{p.barcode || '-'}</p></div>{p.product_type === 'manufactured' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">{t('manufactured')}</span>}</div> },
+    { key: 'name', header: t('productName'), render: (p) => <div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-ui-page-alt flex items-center justify-center flex-shrink-0">{p.image_url ? <ProductImage src={p.image_url} name={p.name} category={p.category?.name} className="h-full w-full rounded-lg bg-white" imgClassName="h-full w-full rounded-lg bg-white object-contain p-0.5" positionX={p.image_position_x} positionY={p.image_position_y} zoom={p.image_zoom} /> : <BarcodeIcon className="w-4 h-4 text-ui-subtle" />}</div><div><p className="font-medium text-ui-text">{p.name}</p><p className="text-xs text-ui-subtle">{p.barcode || '-'}</p></div>{p.product_type === 'manufactured' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">{t('manufactured')}</span>}</div> },
     { key: 'category', header: t('category'), render: (p) => p.category?.name || '-' },
     { key: 'branch', header: t('branch'), render: (p) => <BranchBadge name={branchLabel(p.branch_id)} /> },
     { key: 'cost_price', header: t('costPrice'), render: (p) => formatCurrency(p.cost_price, currency, lang) },
@@ -290,7 +292,33 @@ export function ProductsPage() {
             <Select label={t('category')} value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}><option value="">--</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
             <div><label className="block text-sm font-medium text-ui-muted mb-1">{t('productType')}</label><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setForm({ ...form, product_type: 'ready' })} className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors ${form.product_type === 'ready' ? 'bg-brand-600 text-white border-brand-600' : 'bg-ui-surface border-ui-border text-ui-text hover:border-brand-400'}`}>{t('withoutIngredients')}</button><button type="button" onClick={() => setForm({ ...form, product_type: 'manufactured' })} className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors ${form.product_type === 'manufactured' ? 'bg-purple-600 text-white border-purple-600' : 'bg-ui-surface border-ui-border text-ui-text hover:border-purple-400'}`}>{t('withIngredients')}</button></div></div>
             {branchFilter ? <div><label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label><div className="min-h-11 flex items-center"><BranchBadge name={branchLabel(form.branch_id || branchFilter)} /></div></div> : <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}><option value="">--</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>}
-            <Input label={t('image') + ' URL'} value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+            <div className="sm:col-span-2">
+              <Input label={t('image') + ' URL'} value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value, image_position_x: 0, image_position_y: 0, image_zoom: 1 })} />
+              {form.image_url && (
+                <div className="mt-2 flex items-center gap-3 rounded-xl border border-ui-border bg-ui-page-alt p-2">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-ui-border bg-white">
+                    <ProductImage
+                      src={form.image_url}
+                      name={form.name}
+                      category={categories.find((item) => item.id === form.category_id)?.name}
+                      className="h-full w-full bg-white"
+                      imgClassName="h-full w-full bg-white object-contain"
+                      positionX={form.image_position_x}
+                      positionY={form.image_position_y}
+                      zoom={form.image_zoom}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-ui-text">{lang === 'ar' ? 'عرض الصورة في شاشة البيع' : 'POS image preview'}</p>
+                    <p className="mt-1 text-[11px] font-medium text-ui-subtle">{lang === 'ar' ? 'يمكنك سحب الصورة داخل المربع وتكبيرها أو تصغيرها.' : 'Drag the image inside the square and adjust its size.'}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setImageAdjustOpen(true)} data-testid="products-image-adjust-button">
+                    <Move className="h-4 w-4" />
+                    {lang === 'ar' ? 'ضبط الصورة' : 'Adjust image'}
+                  </Button>
+                </div>
+              )}
+            </div>
             <Input label={t('costPrice')} type="number" step="0.01" value={form.cost_price || ''} onChange={(e) => setForm({ ...form, cost_price: parseFloat(e.target.value) || 0 })} />
             <Input label={t('salePrice')} type="number" step="0.01" value={form.sale_price || ''} onChange={(e) => setForm({ ...form, sale_price: parseFloat(e.target.value) || 0 })} />
             <Input label={t('wholesalePrice')} type="number" step="0.01" value={form.wholesale_price || ''} onChange={(e) => setForm({ ...form, wholesale_price: parseFloat(e.target.value) || 0 })} />
@@ -308,6 +336,19 @@ export function ProductsPage() {
       </Modal>
       <Modal open={!!barcodeModal} onClose={() => setBarcodeModal(null)} title={t('barcode')} size="sm">{barcodeModal && <div className="flex flex-col items-center gap-4"><p className="font-medium text-ui-text">{barcodeModal.name}</p><canvas ref={barcodeCanvasRef} className="rounded-lg bg-ui-surface p-2" /><Button variant="outline" onClick={() => window.print()}><BarcodeIcon className="w-4 h-4" /> {t('print')}</Button></div>}</Modal>
       <Modal open={!!qrModal} onClose={() => setQrModal(null)} title={t('generateQR')} size="sm">{qrDataUrl && <div className="flex flex-col items-center gap-4"><img src={qrDataUrl} alt="QR Code" className="w-48 h-48 rounded-lg" /><Button variant="outline" onClick={() => window.print()}><QrCode className="w-4 h-4" /> {t('print')}</Button></div>}</Modal>
+      <ProductImageAdjustModal
+        open={imageAdjustOpen}
+        src={form.image_url}
+        name={form.name}
+        category={categories.find((item) => item.id === form.category_id)?.name}
+        initial={{ x: form.image_position_x, y: form.image_position_y, zoom: form.image_zoom }}
+        isAr={lang === 'ar'}
+        onClose={() => setImageAdjustOpen(false)}
+        onSave={(view: ProductImageView) => {
+          setForm((current) => ({ ...current, image_position_x: view.x, image_position_y: view.y, image_zoom: view.zoom }));
+          setImageAdjustOpen(false);
+        }}
+      />
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove} title={t('delete')} message={t('confirmDelete')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
     </DesignSurface>
   );

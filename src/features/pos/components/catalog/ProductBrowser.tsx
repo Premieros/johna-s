@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ImagePlus, Loader2, LockKeyhole, Package, Plus, ScanBarcode, Search, ShoppingCart, SlidersHorizontal, Timer, X } from 'lucide-react';
+import { ImagePlus, Loader2, LockKeyhole, Move, Package, Plus, ScanBarcode, Search, ShoppingCart, SlidersHorizontal, Timer, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as api from '@/api';
 import { supabase } from '@/api';
@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { ProductImage } from '@/features/catalog/components/ProductImage';
+import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
 import { uploadProductImage } from '@/features/catalog/services/productImages';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
 import type { Category, Product, ProductComponent } from '@/lib/types';
@@ -43,6 +44,9 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
   const [shiftOpen, setShiftOpen] = useState(false);
   const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
   const [imageOverrides, setImageOverrides] = useState<Record<string, string>>({});
+  const [imageViewOverrides, setImageViewOverrides] = useState<Record<string, ProductImageView>>({});
+  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
+  const [savingImageView, setSavingImageView] = useState(false);
 
   const branchId = useMemo(() => products.find((product) => product.branch_id)?.branch_id || '', [products]);
   const filteredProducts = useMemo(() => products.filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!search || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(search.toLocaleLowerCase())))), [products, search, selectedCategory]);
@@ -105,9 +109,10 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
     setUploadingProductId(product.id);
     try {
       const { publicUrl } = await uploadProductImage(file, product.branch_id, product.id);
-      const { error } = await supabase.from('products').update({ image_url: publicUrl }).eq('id', product.id).eq('branch_id', product.branch_id);
+      const { error } = await supabase.from('products').update({ image_url: publicUrl, image_position_x: 0, image_position_y: 0, image_zoom: 1 }).eq('id', product.id).eq('branch_id', product.branch_id);
       if (error) throw error;
       setImageOverrides((current) => ({ ...current, [product.id]: publicUrl }));
+      setImageViewOverrides((current) => ({ ...current, [product.id]: { x: 0, y: 0, zoom: 1 } }));
       await invalidatePosCatalogCache();
       show(isAr ? 'تم رفع صورة المنتج' : 'Product photo uploaded', 'success');
     } catch (uploadError) {
@@ -115,6 +120,28 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
       show(message === 'IMAGE_TOO_LARGE' ? (isAr ? 'حجم الصورة يجب ألا يتجاوز 5MB' : 'Image must be 5MB or smaller') : message === 'INVALID_IMAGE_TYPE' ? (isAr ? 'اختر ملف صورة صالح' : 'Choose a valid image file') : message, 'error');
     } finally {
       setUploadingProductId(null);
+    }
+  };
+
+  const handleImageViewSave = async (view: ProductImageView) => {
+    const product = adjustingProduct;
+    if (!product || !product.branch_id || !can('products.edit') || savingImageView) return;
+    setSavingImageView(true);
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ image_position_x: view.x, image_position_y: view.y, image_zoom: view.zoom })
+        .eq('id', product.id)
+        .eq('branch_id', product.branch_id);
+      if (error) throw error;
+      setImageViewOverrides((current) => ({ ...current, [product.id]: view }));
+      await invalidatePosCatalogCache();
+      setAdjustingProduct(null);
+      show(isAr ? 'تم حفظ موضع وحجم الصورة' : 'Image position and size saved', 'success');
+    } catch (saveError) {
+      show(saveError instanceof Error ? saveError.message : String(saveError), 'error');
+    } finally {
+      setSavingImageView(false);
     }
   };
 
@@ -198,17 +225,29 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
               const categoryLabel = product.category_id ? categoryById[product.category_id] : '';
               const imageUrl = imageOverrides[product.id] || product.image_url;
               const uploading = uploadingProductId === product.id;
+              const imageView = imageViewOverrides[product.id] || { x: Number(product.image_position_x) || 0, y: Number(product.image_position_y) || 0, zoom: Number(product.image_zoom) || 1 };
               return (
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[210px] flex-col overflow-hidden rounded-[22px] border bg-ui-surface text-start shadow-ui-sm transition sm:min-h-[190px] ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-32 w-full overflow-hidden bg-white text-start sm:h-28 ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                    <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full bg-white object-contain p-1.5" />
+                    <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full bg-white object-contain p-1.5" positionX={imageView.x} positionY={imageView.y} zoom={imageView.zoom} />
                     {availabilityError && <span className="absolute end-2 top-2 rounded-lg bg-ui-danger/90 px-2 py-1 text-[9px] font-black text-white shadow-ui-sm">{availabilityErrorLabel(availabilityError)}</span>}
                   </button>
                   {can('products.edit') && (
-                    <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>
-                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                      <input data-testid={`product-image-upload-${product.id}`} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" className="hidden" disabled={!!uploadingProductId} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void handleImageUpload(product, file); }} />
-                    </label>
+                    <>
+                      <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                        <input data-testid={`product-image-upload-${product.id}`} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" className="hidden" disabled={!!uploadingProductId} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void handleImageUpload(product, file); }} />
+                      </label>
+                      <button
+                        type="button"
+                        data-testid={`product-image-adjust-${product.id}`}
+                        onClick={(event) => { event.stopPropagation(); setAdjustingProduct(product); }}
+                        className="absolute start-12 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary"
+                        title={isAr ? 'ضبط موضع وحجم الصورة' : 'Adjust image position and size'}
+                      >
+                        <Move className="h-4 w-4" />
+                      </button>
+                    </>
                   )}
                   <div className="flex flex-1 flex-col p-3">
                     <p className="line-clamp-2 min-h-10 text-[14px] font-black leading-5 text-ui-text" title={productLabel}>{productLabel}</p>
@@ -227,6 +266,17 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
           </div>
         )}
       </div>
+      <ProductImageAdjustModal
+        open={!!adjustingProduct}
+        src={adjustingProduct ? (imageOverrides[adjustingProduct.id] || adjustingProduct.image_url) : null}
+        name={adjustingProduct ? (isAr ? adjustingProduct.name : adjustingProduct.name_en || adjustingProduct.name) : ''}
+        category={adjustingProduct?.category_id ? categoryById[adjustingProduct.category_id] : ''}
+        initial={adjustingProduct ? (imageViewOverrides[adjustingProduct.id] || { x: Number(adjustingProduct.image_position_x) || 0, y: Number(adjustingProduct.image_position_y) || 0, zoom: Number(adjustingProduct.image_zoom) || 1 }) : { x: 0, y: 0, zoom: 1 }}
+        isAr={isAr}
+        saving={savingImageView}
+        onClose={() => setAdjustingProduct(null)}
+        onSave={(view) => { void handleImageViewSave(view); }}
+      />
     </section>
   );
 }

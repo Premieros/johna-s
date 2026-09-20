@@ -7,6 +7,9 @@ interface ProductImageProps {
   className?: string;
   imgClassName?: string;
   alt?: string;
+  positionX?: number | null;
+  positionY?: number | null;
+  zoom?: number | null;
 }
 
 const VISUALS: Array<{ terms: string[]; emoji: string; label: string }> = [
@@ -83,7 +86,11 @@ export function getApproximateProductVisual(name?: string | null, category?: str
   return VISUALS.find((entry) => entry.terms.some((term) => haystack.includes(term))) || { emoji: '🍽️', label: 'Food' };
 }
 
-export function ProductImage({ src, name, category, className = '', imgClassName = '', alt }: ProductImageProps) {
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function ProductImage({ src, name, category, className = '', imgClassName = '', alt, positionX = 0, positionY = 0, zoom = 1 }: ProductImageProps) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
 
@@ -91,6 +98,10 @@ export function ProductImage({ src, name, category, className = '', imgClassName
   const visual = getApproximateProductVisual(name, category);
   const fallbackLabel = category?.trim() || visual.label;
   const accessibleLabel = alt || name || fallbackLabel;
+  const safeX = clamp(Number(positionX) || 0, -50, 50);
+  const safeY = clamp(Number(positionY) || 0, -50, 50);
+  const safeZoom = clamp(Number(zoom) || 1, 0.5, 2.5);
+  const transform = `translate(${safeX}%, ${safeY}%) scale(${safeZoom})`;
 
   if (src && spriteFrame && !failed) {
     return (
@@ -109,6 +120,8 @@ export function ProductImage({ src, name, category, className = '', imgClassName
             backgroundRepeat: 'no-repeat',
             backgroundSize: '800% 3700%',
             backgroundPosition: spriteFrame.backgroundPosition,
+            transform,
+            transformOrigin: 'center',
           }}
         />
       </div>
@@ -116,7 +129,18 @@ export function ProductImage({ src, name, category, className = '', imgClassName
   }
 
   if (src && !failed) {
-    return <img src={src} alt={alt || name || ''} className={imgClassName || className} loading="lazy" onError={() => setFailed(true)} />;
+    return (
+      <div className={`flex h-full w-full items-center justify-center overflow-hidden bg-white ${className}`}>
+        <img
+          src={src}
+          alt={alt || name || ''}
+          className={imgClassName || 'h-full w-full object-contain'}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          style={{ transform, transformOrigin: 'center' }}
+        />
+      </div>
+    );
   }
 
   return (

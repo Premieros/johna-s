@@ -21,6 +21,9 @@ export interface Product {
   sale_price: number;
   wholesale_price: number;
   image_url: string | null;
+  image_position_x?: number | null;
+  image_position_y?: number | null;
+  image_zoom?: number | null;
   is_active: boolean;
   low_stock_threshold: number;
   min_stock: number;
