@@ -221,7 +221,7 @@ export function RfqsPage() {
     { key: 'actions', header: t('actions'), render: (r) => (
       <div className="flex items-center gap-1 justify-end">
         {r.status === 'draft' && can('purchases.manage') && (
-          <button title={t('submitRequest')} onClick={() => changeStatus(r.id, 'sent')} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Send className="w-4 h-4" /></button>
+          <button title={t('submitRequest')} onClick={() => changeStatus(r.id, 'sent')} className="ui-icon-action ui-icon-action-info"><Send className="w-4 h-4" /></button>
         )}
         {['draft', 'sent', 'received'].includes(r.status) && can('purchases.manage') && (
           <button title={t('recordQuotation')} onClick={() => openQuote(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning"><Plus className="w-4 h-4" /></button>
@@ -236,7 +236,7 @@ export function RfqsPage() {
           <button title={t('cancel')} onClick={() => changeStatus(r.id, 'cancelled')} className="p-1.5 rounded-md hover:bg-ui-page-alt dark:hover:bg-ui-page-alt text-ui-subtle"><X className="w-4 h-4" /></button>
         )}
         {r.status === 'received' && can('purchases.manage') && (
-          <button onClick={() => openComparison(r)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Eye className="w-4 h-4" /></button>
+          <button onClick={() => openComparison(r)} className="ui-icon-action ui-icon-action-info"><Eye className="w-4 h-4" /></button>
         )}
       </div>
     )},
