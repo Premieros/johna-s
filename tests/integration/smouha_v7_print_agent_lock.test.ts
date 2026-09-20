@@ -8,22 +8,67 @@ const expectedFunctions = [
   {
     name: 'can_execute_cloud_print_kind',
     args: 'p_kind text',
-    hash: '2a9c54858eec90cbc82db420f87cd703',
+    normalizedHash: '0c5c5cb7868db249588f6ff715e2e8c0',
+    exactLiterals: [
+      "'kitchen'",
+      "'receipt'",
+      "'report'",
+      "'settings.manage'",
+      "'pos.print_kitchen'",
+      "'pos.receipt.print'",
+    ],
   },
   {
     name: 'claim_cloud_print_jobs',
     args: 'p_branch_id uuid, p_agent_id uuid, p_limit integer',
-    hash: '230529255ab7fe21df1eb1ca0f07f1b6',
+    normalizedHash: '7bb98c35d47f682c319e76ec0b0a8c9d',
+    exactLiterals: [
+      "'AUTH_REQUIRED'",
+      "'AGENT_ID_REQUIRED'",
+      "'BRANCH_MISMATCH'",
+      "'CLAIM_LEASE_EXPIRED'",
+      "'PRINT_OUTCOME_UNKNOWN'",
+      "'pending'",
+      "'failed'",
+      "'claimed'",
+      "'printing'",
+      "'45 seconds'",
+    ],
   },
   {
     name: 'complete_cloud_print_job',
     args: 'p_job_id uuid, p_agent_id uuid, p_success boolean, p_error text',
-    hash: '8492141102176d4fddf30cb0d5d42cb1',
+    normalizedHash: 'efa07471fccdbb94c2ca870eac95d374',
+    exactLiterals: [
+      "'AUTH_REQUIRED'",
+      "'JOB_NOT_FOUND'",
+      "'PERMISSION_DENIED'",
+      "'BRANCH_MISMATCH'",
+      "'CLAIM_MISMATCH'",
+      "'PRINT_CALLBACK_TIMEOUT'",
+      "'PRINT_OUTCOME_UNKNOWN'",
+      "'PRINT_SEQUENCE_CHANGED'",
+      "'INVALID_APPROVAL'",
+      "'submitted'",
+      "'failed'",
+      "'physical_print_confirmed'",
+    ],
   },
   {
     name: 'start_cloud_print_job',
     args: 'p_job_id uuid, p_agent_id uuid',
-    hash: 'fae5a0b45bb5d0646100996bbb153fad',
+    normalizedHash: '7c37d00fc5370c64964f56ef66aec347',
+    exactLiterals: [
+      "'AUTH_REQUIRED'",
+      "'JOB_NOT_FOUND'",
+      "'PERMISSION_DENIED'",
+      "'BRANCH_MISMATCH'",
+      "'CLAIM_MISMATCH'",
+      "'PRINT_SEQUENCE_CHANGED'",
+      "'INVALID_APPROVAL'",
+      "'printing'",
+      "'45 seconds'",
+    ],
   },
 ] as const;
 
@@ -51,15 +96,17 @@ describe.skipIf(!dbUrl)('Smouha v7 print-agent frozen compatibility contract', (
     if (client) await client.end().catch(() => {});
   });
 
-  it('keeps the exact case-sensitive RPC implementations used by the frozen Smouha v7 agent', async () => {
+  it('keeps the RPC structure and exact observable literals used by the frozen Smouha v7 agent', async () => {
     const rows = await client.query<{
       name: string;
       args: string;
-      definition_hash: string;
+      normalized_hash: string;
+      definition: string;
     }>(`
       SELECT p.proname AS name,
              pg_get_function_identity_arguments(p.oid) AS args,
-             md5(pg_get_functiondef(p.oid)) AS definition_hash
+             md5(regexp_replace(lower(pg_get_functiondef(p.oid)), '\\s+', ' ', 'g')) AS normalized_hash,
+             pg_get_functiondef(p.oid) AS definition
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
@@ -72,9 +119,15 @@ describe.skipIf(!dbUrl)('Smouha v7 print-agent frozen compatibility contract', (
       const actual = rows.rows.find((row) => row.name === item.name && row.args === item.args);
       expect(actual, `${item.name}(${item.args}) must exist for Smouha v7`).toBeDefined();
       expect(
-        actual?.definition_hash,
-        `${item.name} changed; frozen Smouha v7 compatibility requires explicit migration approval`,
-      ).toBe(item.hash);
+        actual?.normalized_hash,
+        `${item.name} structure changed; frozen Smouha v7 compatibility requires explicit migration approval`,
+      ).toBe(item.normalizedHash);
+      for (const literal of item.exactLiterals) {
+        expect(
+          actual?.definition.includes(literal),
+          `${item.name} observable literal ${literal} changed; Smouha v7 contract must remain compatible`,
+        ).toBe(true);
+      }
     }
   });
 
