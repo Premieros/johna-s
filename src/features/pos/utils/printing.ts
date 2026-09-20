@@ -243,9 +243,8 @@ function thermalPaymentLabel(method: string, isAr: boolean): string {
 export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang: Language, isAr: boolean): string {
   const currency = safeThermalText(s.currency || 'EGP');
   const width = receiptWidthMm(s.receipt_width_mm || 80);
-  const columns = isCompactThermalWidth(width) ? 32 : 42;
-  const divider = '-'.repeat(columns);
-  const strongDivider = '='.repeat(columns);
+  const divider = '-'.repeat(isCompactThermalWidth(width) ? 32 : 42);
+  const strongDivider = '='.repeat(isCompactThermalWidth(width) ? 32 : 42);
   const lines: string[] = [];
   const row = (label: string, value: unknown) => lines.push(`${label}: ${safeThermalText(value)}`);
 
