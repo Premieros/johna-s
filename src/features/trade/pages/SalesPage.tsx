@@ -34,6 +34,7 @@ interface SaleRow {
   created_at: string;
   customer_id: string | null;
   branch_id: string;
+  is_archived: boolean;
   customer?: { name: string } | null;
   sale_items?: { id: string; product_id: string | null; unit_name: string; quantity: number; unit_price: number; discount_amount: number; refunded_quantity: number; refunded_amount: number; total: number; product?: { name: string } | null }[];
 }
@@ -47,9 +48,10 @@ export function SalesPage() {
   const history = useHistoryAccess();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, is_archived, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
+    filters: [{ column: 'is_archived', value: false }],
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
   });
@@ -72,6 +74,7 @@ export function SalesPage() {
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
   const canRequestPaymentApproval = user?.role === 'cashier';
   const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
+  const canArchiveReturnedSale = can('refunds.approve');
 
   async function loadMeta() {
     const { data: customersRes } = await supabase.from('customers').select('*').order('name');
@@ -235,17 +238,21 @@ export function SalesPage() {
   const remove = async () => {
     if (!deleteId) return;
     const sale = items.find((i) => i.id === deleteId);
-    if (sale?.status === 'completed') {
-      show(t('cannotDeleteCompleted'), 'error');
+    if (!sale || sale.status !== 'returned') {
+      show(isAr ? 'لا يمكن إخفاء إلا الفاتورة المرتجعة بالكامل' : 'Only fully returned sales can be archived', 'error');
       setDeleteId(null);
       return;
     }
     try {
-      await supabase.from('sale_items').delete().eq('sale_id', deleteId);
-      const { error } = await supabase.from('sales').delete().eq('id', deleteId);
+      const { data, error } = await api.trade.archiveReturnedSale({ p_sale_id: deleteId });
       if (error) { show(error.message, 'error'); return; }
-      await logAudit('delete', 'sales', deleteId);
-      show(t('deleteSuccess'), 'success');
+      const result = data as { success?: boolean; error?: string } | null;
+      if (!result?.success) {
+        show(result?.error || (isAr ? 'تعذر إخفاء الفاتورة المرتجعة' : 'Could not archive returned sale'), 'error');
+        return;
+      }
+      await logAudit('archive', 'sales', deleteId, { status: 'returned' });
+      show(isAr ? 'تم إخفاء الفاتورة المرتجعة مع الاحتفاظ بأثرها المالي' : 'Returned sale archived; financial history was preserved', 'success');
     } catch (err: unknown) {
       show(err instanceof Error ? err.message : 'Error', 'error');
     }
@@ -256,15 +263,19 @@ export function SalesPage() {
   const removeSelected = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const deletable = items.filter((i) => ids.includes(i.id) && i.status !== 'completed').map((i) => i.id);
-    const blocked = ids.length - deletable.length;
-    for (const id of deletable) {
-      await supabase.from('sale_items').delete().eq('sale_id', id);
-      await supabase.from('sales').delete().eq('id', id);
-      await logAudit('delete', 'sales', id);
+    const archivable = items.filter((i) => ids.includes(i.id) && i.status === 'returned').map((i) => i.id);
+    const blocked = ids.length - archivable.length;
+    let archived = 0;
+    for (const id of archivable) {
+      const { data, error } = await api.trade.archiveReturnedSale({ p_sale_id: id });
+      const result = data as { success?: boolean } | null;
+      if (!error && result?.success) {
+        archived += 1;
+        await logAudit('archive', 'sales', id, { status: 'returned' });
+      }
     }
-    if (blocked > 0) show(t('cannotDeleteCompleted'), 'error');
-    else show(t('deleteSuccess'), 'success');
+    if (blocked > 0) show(isAr ? `تم إخفاء ${archived} فاتورة مرتجعة، و${blocked} فاتورة غير مؤهلة` : `Archived ${archived} returned sales; ${blocked} were not eligible`, 'error');
+    else show(isAr ? 'تم إخفاء الفواتير المرتجعة مع الاحتفاظ بأثرها المالي' : 'Returned sales archived; financial history was preserved', 'success');
     setSelectedIds(new Set());
     setDeleteSelectedConfirm(false);
     reloadSales();
@@ -317,8 +328,8 @@ export function SalesPage() {
             <RotateCcw className="w-4 h-4" />
           </button>
         )}
-        {can('refunds.approve') && r.status !== 'completed' && (
-          <button onClick={() => setDeleteId(r.id)} className="ui-icon-action ui-icon-action-danger" title={t('delete')}>
+        {canArchiveReturnedSale && r.status === 'returned' && (
+          <button onClick={() => setDeleteId(r.id)} className="ui-icon-action ui-icon-action-danger" title={isAr ? 'إخفاء الفاتورة المرتجعة' : 'Archive returned sale'}>
             <Trash2 className="w-4 h-4" />
           </button>
         )}
@@ -492,9 +503,13 @@ export function SalesPage() {
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove}
-        title={t('deleteSale')} message={t('confirmDeleteSale')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
+        title={isAr ? 'إخفاء الفاتورة المرتجعة' : 'Archive returned sale'}
+        message={isAr ? 'ستختفي الفاتورة من شاشة المبيعات مع الاحتفاظ بأثر المرتجع والمخزون والقيود والطباعة.' : 'The sale will be hidden from the sales list while preserving refund, inventory, accounting and print history.'}
+        confirmLabel={isAr ? 'إخفاء' : 'Archive'} cancelLabel={t('cancel')} />
       <ConfirmDialog open={deleteSelectedConfirm} onClose={() => setDeleteSelectedConfirm(false)} onConfirm={removeSelected}
-        title={t('deleteSelected')} message={t('confirmDeleteAll')} confirmLabel={t('delete')} cancelLabel={t('cancel')} />
+        title={isAr ? 'إخفاء الفواتير المرتجعة' : 'Archive returned sales'}
+        message={isAr ? 'سيتم إخفاء الفواتير المرتجعة بالكامل فقط مع الاحتفاظ بأثرها المالي.' : 'Only fully returned sales will be archived; financial history is preserved.'}
+        confirmLabel={isAr ? 'إخفاء' : 'Archive'} cancelLabel={t('cancel')} />
     </DesignSurface>
   );
 }
