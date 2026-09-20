@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ShoppingCart, Printer, Barcode as BarcodeIcon } from 'lucide-react';
+import { ShoppingCart, Printer, Barcode as BarcodeIcon, Grid2X2, ListOrdered, Utensils } from 'lucide-react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -277,7 +277,7 @@ export function PosWorkspacePage() {
     pos.setPaymentMethod('cash');
     pos.setPaidAmount(pos.total);
     pos.setCheckoutOpen(true);
-    setMobileOrderOpen(false);
+    setMobileOrderOpen(true);
   }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id]);
 
   // Keyboard Shortcuts Hook
@@ -695,7 +695,7 @@ export function PosWorkspacePage() {
       canComplete={perms.canPay && !!effectiveBranch}
       canEditOrder={perms.canEditOrder}
       onComplete={() => { if (perms.canPay) void pos.completeSale(); }}
-      onBack={() => pos.setCheckoutOpen(false)}
+      onBack={() => { pos.setCheckoutOpen(false); setMobileOrderOpen(true); }}
       currency={pos.effCurrency}
       cart={pos.cart}
       orderNotes={pos.orderNotes}
@@ -755,7 +755,7 @@ export function PosWorkspacePage() {
   );
 
   return (
-    <div className="h-screen flex flex-col bg-ui-page text-ui-text overflow-hidden">
+    <div data-testid="pos-workspace" className="flex h-[100dvh] flex-col overflow-hidden bg-ui-page text-ui-text">
       <PosTopBar
         panel={panel}
         onPanel={(p) => {
@@ -809,9 +809,9 @@ export function PosWorkspacePage() {
       )}
 
       {/* Main Split-Screen Workspace */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div data-testid="pos-main-workspace" className="flex min-h-0 flex-1 overflow-hidden">
         {/* Tables-first landing stays available on phones, tablets, and desktop. */}
-        <div className="flex shrink-0 h-full">
+        <div data-testid="pos-tables-landing-shell" className="flex h-full shrink-0">
           <PosTablesSidebar
             tables={tables}
             ordersByTable={ordersByTable}
@@ -853,7 +853,7 @@ export function PosWorkspacePage() {
         </div>
 
         {/* Center: Product Browser with Fast Order Header Bar */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-ui-page">
+        <div data-testid="pos-catalog-shell" className="flex min-h-0 min-w-0 flex-1 flex-col bg-ui-page">
           <PosOrderHeaderBar
             orderNumber={pos.activeOrderNumber}
             orderId={pos.activeOrderId}
@@ -918,49 +918,131 @@ export function PosWorkspacePage() {
         </div>
 
         {/* Right Side: Cart / Order Panel / Checkout */}
-        <div className="hidden lg:flex w-[380px] xl:w-[410px] 2xl:w-[440px] flex-shrink-0 flex-col border-s border-ui-border bg-ui-surface shadow-ui-md">
+        <div data-testid="pos-desktop-order-panel" className="hidden w-[380px] flex-shrink-0 flex-col border-s border-ui-border bg-ui-surface shadow-ui-md lg:flex xl:w-[410px] 2xl:w-[440px]">
           {rightPanel}
         </div>
       </div>
 
-      {pos.cart.length > 0 && !mobileOrderOpen && !isCheckout && (
+      <nav
+        data-testid="pos-mobile-command-dock"
+        className="fixed bottom-0 start-0 end-0 z-40 grid grid-cols-4 border-t border-ui-border bg-ui-surface/95 px-1 pt-1 shadow-[0_-10px_30px_rgba(0,0,0,0.10)] backdrop-blur-xl lg:hidden"
+        aria-label={isAr ? 'تحكم شاشة البيع' : 'POS mobile controls'}
+      >
         <button
-          onClick={() => setMobileOrderOpen(true)}
-          className="lg:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+8px)] start-4 end-4 z-30 flex items-center justify-between gap-2 px-5 py-3.5 rounded-2xl bg-ui-primary text-ui-primary-fg border border-ui-border-strong shadow-ui-lg active:scale-[0.98] transition-all"
+          data-testid="pos-mobile-nav-catalog"
+          type="button"
+          onClick={() => {
+            pos.setCheckoutOpen(false);
+            setMobileOrderOpen(false);
+            setPanel(null);
+            window.setTimeout(() => barcodeRef.current?.focus(), 30);
+          }}
+          className="flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] font-black text-ui-muted active:bg-ui-page-alt"
         >
-          <span className="flex items-center gap-2 font-bold text-sm">
-            <ShoppingCart className="w-5 h-5 text-ui-accent" />
-            {isAr ? 'عرض السلة' : 'View Cart'}
-            <span className="px-2 py-0.5 rounded-full bg-ui-accent text-ui-primary-fg text-xs font-bold">
-              {pos.cart.length}
-            </span>
-          </span>
-          <span className="font-bold text-ui-accent">
-            {formatCurrency(pos.total, pos.effCurrency, lang)}
-          </span>
+          <Grid2X2 className="h-5 w-5" />
+          <span>{isAr ? 'المنتجات' : 'Menu'}</span>
         </button>
-      )}
 
-      {mobileOrderOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 flex items-end justify-center animate-fade-in">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOrderOpen(false)} />
-          <div className="relative w-full max-h-[92vh] bg-ui-surface rounded-t-2xl shadow-ui-xl overflow-hidden animate-slide-up flex flex-col">
-            <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-ui-border">
+        <button
+          data-testid="pos-mobile-nav-order"
+          type="button"
+          onClick={() => setMobileOrderOpen(true)}
+          disabled={!pos.activeOrderId && pos.cart.length === 0}
+          className="relative flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] font-black text-ui-muted active:bg-ui-page-alt disabled:opacity-40"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          <span>{isCheckout ? (isAr ? 'الدفع' : 'Pay') : (isAr ? 'الطلب' : 'Order')}</span>
+          {pos.cart.length > 0 && (
+            <span className="absolute end-[22%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-primary px-1 text-[9px] text-ui-primary-fg">
+              {pos.cart.reduce((sum, item) => sum + item.quantity, 0)}
+            </span>
+          )}
+        </button>
+
+        <button
+          data-testid="pos-mobile-nav-orders"
+          type="button"
+          onClick={() => {
+            setMobileOrderOpen(false);
+            setStartStep(null);
+            setOrdersCategory('all');
+            setPanel('orders');
+          }}
+          className="relative flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] font-black text-ui-muted active:bg-ui-page-alt"
+        >
+          <ListOrdered className="h-5 w-5" />
+          <span>{isAr ? 'الطلبات' : 'Orders'}</span>
+          {counts.active > 0 && (
+            <span className="absolute end-[22%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] text-white">
+              {counts.active}
+            </span>
+          )}
+        </button>
+
+        <button
+          data-testid="pos-mobile-nav-tables"
+          type="button"
+          onClick={() => {
+            setMobileOrderOpen(false);
+            setStartStep(null);
+            setPanel('tables');
+          }}
+          className="flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] font-black text-ui-muted active:bg-ui-page-alt"
+        >
+          <Utensils className="h-5 w-5" />
+          <span>{isAr ? 'الطاولات' : 'Tables'}</span>
+        </button>
+      </nav>
+
+      {(mobileOrderOpen || isCheckout) && (
+        <div
+          data-testid="pos-mobile-order-sheet"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 backdrop-blur-[1px] lg:hidden"
+        >
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label={isAr ? 'إغلاق الطلب' : 'Close order'}
+            onClick={() => {
+              if (isCheckout) pos.setCheckoutOpen(false);
+              setMobileOrderOpen(false);
+            }}
+          />
+          <section
+            data-testid="pos-mobile-order-sheet-panel"
+            className="relative flex h-[min(94dvh,820px)] max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-ui-border bg-ui-surface shadow-2xl"
+          >
+            <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-ui-border bg-ui-surface/95 px-3 backdrop-blur">
               <button
-                onClick={() => setMobileOrderOpen(false)}
-                className="p-2 rounded-lg text-ui-muted hover:bg-ui-page-alt"
+                data-testid="pos-mobile-order-close"
+                type="button"
+                onClick={() => {
+                  if (isCheckout) pos.setCheckoutOpen(false);
+                  setMobileOrderOpen(false);
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-ui-border bg-ui-page-alt text-ui-text"
+                aria-label={isAr ? 'رجوع للمنتجات' : 'Back to products'}
               >
-                <ShoppingCart className="w-5 h-5" />
+                <Grid2X2 className="h-5 w-5" />
               </button>
-              <span className="text-xs font-bold text-ui-muted">
-                {isAr ? 'اسحب لأسفل للإغلاق' : 'Order'}
-              </span>
-              <span className="text-sm font-black text-ui-accent">
+              <div className="min-w-0 flex-1 text-center">
+                <p className="truncate text-sm font-black text-ui-text">
+                  {isCheckout ? (isAr ? 'الدفع' : 'Checkout') : (isAr ? 'الطلب الحالي' : 'Current order')}
+                </p>
+                <p className="truncate text-[11px] font-bold text-ui-muted">
+                  {pos.activeOrderNumber ? `#${pos.activeOrderNumber}` : (isAr ? 'طلب جديد' : 'New order')}
+                  {' · '}
+                  {pos.cart.reduce((sum, item) => sum + item.quantity, 0)} {isAr ? 'صنف' : 'items'}
+                </p>
+              </div>
+              <span className="max-w-[34vw] truncate text-sm font-black text-ui-accent">
                 {formatCurrency(pos.total, pos.effCurrency, lang)}
               </span>
             </div>
-            <div className="flex-1 min-h-0 overflow-hidden">{rightPanel}</div>
-          </div>
+            <div className="min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom)]">
+              {rightPanel}
+            </div>
+          </section>
         </div>
       )}
 
