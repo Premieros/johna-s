@@ -20,6 +20,8 @@ describe('employee-only credit payment contract', () => {
   it('enforces employee-only credit at the sales table boundary', () => {
     const migration = read('supabase/migrations/20260920132500_employee_only_credit_sales.sql');
 
+    expect(migration).toContain("SET employee_user_id = p_employee_id");
+    expect(migration).toContain("customer_type = 'employee'");
     expect(migration).toContain("lower(COALESCE(NEW.payment_method, '')) = 'credit'");
     expect(migration).toContain("c.customer_type = 'employee'");
     expect(migration).toContain('c.branch_id = NEW.branch_id');
