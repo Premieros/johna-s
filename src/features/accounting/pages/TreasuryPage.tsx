@@ -15,6 +15,7 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
@@ -29,6 +30,7 @@ export function TreasuryPage() {
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const history = useHistoryAccess();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const isAr = lang === 'ar';
@@ -53,6 +55,7 @@ export function TreasuryPage() {
     select: '*, from_account:treasury_accounts!from_account_id(account_name), to_account:treasury_accounts!to_account_id(account_name)',
     order: { column: 'created_at', ascending: false },
     branch_id: effectiveBranchFilter,
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
     enabled: !!effectiveBranchFilter,
   });

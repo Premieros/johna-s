@@ -15,6 +15,7 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import type { JournalDto, ChartOfAccount } from '@/lib/types';
@@ -51,6 +52,7 @@ export function JournalPage() {
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const history = useHistoryAccess();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const [items, setItems] = useState<JournalDto[]>([]);
@@ -81,10 +83,13 @@ export function JournalPage() {
     setLoading(true);
     try {
       if (effectiveBranchFilter) {
+        const allowed = history.clampRange(from, to);
+        if (allowed.from !== from) setFrom(allowed.from);
+        if (allowed.to !== to) setTo(allowed.to);
         const { data } = await api.accounting.getJournals({
           p_branch_id: effectiveBranchFilter,
-          p_from_date: from || null,
-          p_to_date: to || null,
+          p_from_date: allowed.from || null,
+          p_to_date: allowed.to || null,
           p_reference_type: refType || null,
           p_search: search || null,
         });
@@ -95,7 +100,7 @@ export function JournalPage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveBranchFilter, from, to, refType, search]);
+  }, [effectiveBranchFilter, from, to, refType, search, history.unlimited]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -202,8 +207,8 @@ export function JournalPage() {
               <option value="">{t('allTypes')}</option>
               {Object.entries(REF_TYPE_KEYS).map(([value, key]) => <option key={value} value={value}>{t(key as never)}</option>)}
             </Select>
-            <Input label={t('from')} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            <Input label={t('to')} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />
+            <Input label={t('to')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
             {branches.length > 1 && (
               <div>
                 <label className="block text-sm font-medium text-ui-muted mb-1">{t('filterByBranch')}</label>

@@ -7,6 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
@@ -62,6 +63,7 @@ export function ShiftsPage() {
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const history = useHistoryAccess();
   const isAr = lang === 'ar';
 
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadShifts } = usePaginatedRows<Shift>({
@@ -69,6 +71,7 @@ export function ShiftsPage() {
     select: 'id, branch_id, cashier_id, opened_at, closed_at, opening_amount, expected_amount, actual_amount, difference, status, notes, created_at',
     order: { column: 'opened_at', ascending: false },
     branch_id: branchFilter,
+    or: history.minIso ? `opened_at.gte.${history.minIso},status.eq.open` : undefined,
     pageSize: 100,
   });
   const [search, setSearch] = useState('');

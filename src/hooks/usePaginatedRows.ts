@@ -22,6 +22,8 @@ export interface PaginatedQueryOptions {
   filters?: { column: string; value: unknown }[];
   /** Optional server-side text search over one or more plain columns. */
   search?: { term: string; columns: string[] };
+  /** Optional lower-bound filter, used by centralized historical-data access. */
+  min?: { column: string; value: string };
   /** Rows fetched per HTTP request. Default 200. */
   pageSize?: number;
   /** Set to false to keep the hook idle (e.g. no branch selected yet). Default true. */
@@ -50,7 +52,7 @@ function safeSearchTerm(value: string): string {
 }
 
 export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRowsResult<T> {
-  const { table, select = '*', order, branch_id, or, filters, search, pageSize = 200, enabled = true } = opts;
+  const { table, select = '*', order, branch_id, or, filters, search, min, pageSize = 200, enabled = true } = opts;
   const filterKey = JSON.stringify(filters ?? []);
   const searchKey = JSON.stringify({ term: search?.term ?? '', columns: search?.columns ?? [] });
   const orderKey = order?.column ?? '';
@@ -69,6 +71,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       if (branch_id) bq = bq.eq('branch_id', branch_id);
       if (or) bq = bq.or(or);
       for (const f of filters ?? []) bq = bq.eq(f.column, f.value);
+      if (min?.column && min.value) bq = bq.gte(min.column, min.value);
       const term = safeSearchTerm(search?.term ?? '');
       const columns = (search?.columns ?? []).filter((column) => /^[a-zA-Z0-9_]+$/.test(column));
       if (term && columns.length > 0) {
@@ -78,7 +81,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       return bq;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by stable serialized option values
-    [branch_id, or, filterKey, searchKey]
+    [branch_id, or, filterKey, searchKey, min?.column, min?.value]
   );
 
   const buildDataQuery = useCallback(

@@ -11,6 +11,7 @@ import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useColumnPreferences } from '../useColumnPreferences';
 import { ColumnPicker } from '../ColumnPicker';
 import { useCustomReports } from '../useCustomReports';
@@ -59,10 +60,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   /* REPORT-BRANCH-AUDIT-2026 */
   const { t, lang } = useLanguage();
   const can = useCan();
+  const history = useHistoryAccess();
   const navigate = useNavigate();
   const branchFilter = useBranchFilter();
   const [reportType, setReportType] = useState<ReportType>('sales');
-  const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const [from, setFrom] = useState(() => history.minDate || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [to, setTo] = useState(todayISO());
   const [period, setPeriod] = useState<PeriodKey>('custom');
   const [data, setData] = useState<Record<string, unknown>[]>([]);
@@ -132,7 +134,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   function handleReportTypeSelect(value: string) {
     if (financialTypes.some((f) => f.key === value)) {
-      navigate(`/financial-reports?view=${value}&from=${from}&to=${to}`);
+      const allowed = history.clampRange(from, to);
+      navigate(`/financial-reports?view=${value}&from=${allowed.from}&to=${allowed.to}`);
       return;
     }
     setFilters({});
@@ -169,9 +172,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       f = iso(new Date(now.getFullYear(), now.getMonth() - 1, 1));
       targetTo = iso(new Date(now.getFullYear(), now.getMonth(), 0));
     } else if (key === 'this_year') f = iso(new Date(now.getFullYear(), 0, 1));
-    setPeriod(key);
-    setFrom(f);
-    setTo(targetTo);
+    const allowed = history.clampRange(f, targetTo);
+    setPeriod(!history.unlimited && !['today', 'yesterday', 'last7', 'custom'].includes(key) ? 'last7' : key);
+    setFrom(allowed.from);
+    setTo(allowed.to);
   }
 
   useEffect(() => {
@@ -209,12 +213,15 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   useEffect(() => {
     void loadReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, from, to, effectiveBranchFilter, filters, branches]);
+  }, [reportType, from, to, effectiveBranchFilter, filters, branches, history.unlimited]);
 
   async function loadReport() {
     setLoading(true);
     try {
-      const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(from, to);
+      const allowed = history.clampRange(from, to);
+      if (allowed.from !== from) setFrom(allowed.from);
+      if (allowed.to !== to) setTo(allowed.to);
+      const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
 
       if (reportType === 'sales') {
         let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);

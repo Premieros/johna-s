@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
@@ -28,10 +29,12 @@ export function ExpensesPage() {
   const branchFilter = useBranchFilter();
   const { show } = useToast();
   const can = useCan();
+  const history = useHistoryAccess();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadExpenses } = usePaginatedRows<Expense>({
     table: 'expenses',
     order: { column: 'expense_date', ascending: false },
     branch_id: branchFilter,
+    min: history.minDate ? { column: 'expense_date', value: history.minDate } : undefined,
     pageSize: 100,
   });
   const { effectiveSettings } = useSettings();

@@ -13,6 +13,7 @@ import { Modal } from '@/components/Modal';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment } from '@/lib/types';
@@ -23,6 +24,7 @@ export function PaymentsPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
   const { effectiveSettings } = useSettings();
   const [tab, setTab] = useState<Tab>('ar');
   const [rows, setRows] = useState<ArAgingRow[]>([]);
@@ -36,6 +38,7 @@ export function PaymentsPage() {
     select: 'id, amount, payment_method, reference_number, notes, created_at, customer:customers(name)',
     order: { column: 'created_at', ascending: false },
     branch_id: effectiveBranchFilter,
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
     enabled: !!effectiveBranchFilter,
   });
@@ -44,6 +47,7 @@ export function PaymentsPage() {
     select: 'id, amount, payment_method, reference_number, notes, created_at, supplier:suppliers(name)',
     order: { column: 'created_at', ascending: false },
     branch_id: effectiveBranchFilter,
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
     enabled: !!effectiveBranchFilter,
   });

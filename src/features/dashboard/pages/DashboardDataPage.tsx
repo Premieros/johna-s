@@ -2,7 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNo
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpRight, BarChart3, CreditCard,
-  RefreshCw, RotateCcw, ShoppingBag, Tag, Wallet,
+  RefreshCw, ShoppingBag, Wallet, Clock3, ReceiptText,
+  Calculator, Armchair, CheckCircle2, Timer, ShoppingCart, Users, ChefHat,
+  Settings, History as HistoryIcon, Landmark,
 } from 'lucide-react';
 import { reporting, supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -11,6 +13,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useCan } from '@/lib/permissions';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { formatFinancialCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
   aggregatePaymentMethods,
@@ -43,6 +46,27 @@ type UnitStockBatch = { unit_id: string; branch_id: string | null; quantity: num
 type SaleItem = { quantity: number | null; refunded_quantity: number | null; product?: RelatedName | RelatedName[] | null };
 type Point = { label: string; sales: number; previous: number };
 type QuickStats = { sales: number | null; expenses: number | null; profit: number | null; lowStockCount: number | null };
+type ActiveOrderRow = {
+  id: string;
+  status: string | null;
+  order_type: string | null;
+  table_id: string | null;
+  branch_id: string | null;
+  order_items?: Array<{ quantity: number | null }> | null;
+};
+type DashboardOps = {
+  openOrders: number;
+  heldOrders: number;
+  openDineIn: number;
+  openTakeaway: number;
+  openDelivery: number;
+  occupiedTables: number;
+  availableTables: number;
+  openShifts: number;
+  purchases: number;
+  expenses: number;
+  activeUsers: number;
+};
 
 const rangeLabels: Record<Range, [string, string]> = {
   today: ['اليوم', 'Today'],
@@ -154,18 +178,19 @@ function Empty({ ar }: { ar: boolean }) {
   return <div className="flex min-h-[120px] items-center justify-center text-sm text-ui-subtle">{ar ? 'لا توجد بيانات فعلية للفترة المحددة' : 'No actual data for the selected period'}</div>;
 }
 
-function Metric({ testId, icon: Icon, title, value, display, previous, href, ar, enabled }: {
-  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href: string; ar: boolean; enabled: boolean;
+function Metric({ testId, icon: Icon, title, value, display, previous, href, ar, detail }: {
+  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href?: string; ar: boolean; detail?: ReactNode;
 }) {
   const change = previous > 0 ? ((value - previous) / previous) * 100 : null;
   const positive = (change ?? 0) >= 0;
   const content = <>
-    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{enabled && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
+    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{href && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
     <p className="mt-5 text-sm font-semibold text-ui-muted">{title}</p><p className="mt-1 text-3xl font-black tracking-tight text-ui-text">{display}</p>
+    {detail && <div className="mt-2 text-xs font-semibold text-ui-muted">{detail}</div>}
     <div className="mt-2 flex items-center gap-2 text-xs">{change === null ? <span className="text-ui-subtle">—</span> : <span className={`inline-flex items-center gap-0.5 font-bold ${positive ? 'text-ui-success' : 'text-ui-danger'}`}>{positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}{formatPercent(Math.abs(change), 1)}</span>}<span className="text-ui-subtle">{ar ? 'مقارنة بالفترة السابقة' : 'vs previous period'}</span></div>
   </>;
-  const className = `rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${enabled ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
-  if (!enabled) return <div data-testid={testId} aria-disabled="true" className={className}>{content}</div>;
+  const className = `rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${href ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
+  if (!href) return <div data-testid={testId} className={className}>{content}</div>;
   return <Link data-testid={testId} to={href} className={className}>{content}</Link>;
 }
 
@@ -173,14 +198,27 @@ export function DashboardDataPage() {
   const { lang } = useLanguage();
   const { user } = useAuth();
   const can = useCan();
+  const history = useHistoryAccess();
   const branchFilter = useBranchFilter();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const ar = lang === 'ar';
   const canCreateSale = can('pos.view') && can('pos.order.create');
+  const canViewPos = can('pos.view');
+  const canViewSales = can('sales.view') || can('reports.view');
   const canViewReports = can('reports.view');
   const canViewInventory = can('inventory.view');
-  const [range, setRange] = useState<Range>('month');
+  const canViewFloorPlan = can('floor_plan.view');
+  const canViewShifts = can('shifts.view');
+  const canViewPurchases = can('purchases.view');
+  const canViewExpenses = can('expenses.view');
+  const canViewUsers = can('users.view');
+  const canViewKds = can('pos.kds_view');
+  const canViewFinancial = can('reports.financial');
+  const canViewAudit = can('audit.view');
+  const canViewSettings = can('settings.manage');
+  const canViewTreasury = can('accounts.view');
+  const [range, setRange] = useState<Range>(() => history.unlimited ? 'month' : 'week');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,13 +229,37 @@ export function DashboardDataPage() {
   const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [quickStats, setQuickStats] = useState<QuickStats>({ sales: null, expenses: null, profit: null, lowStockCount: null });
+  const [ops, setOps] = useState<DashboardOps>({
+    openOrders: 0,
+    heldOrders: 0,
+    openDineIn: 0,
+    openTakeaway: 0,
+    openDelivery: 0,
+    occupiedTables: 0,
+    availableTables: 0,
+    openShifts: 0,
+    purchases: 0,
+    expenses: 0,
+    activeUsers: 0,
+  });
   const settings = effectiveSettings(branchFilter);
   const money = useCallback((value: number) => formatFinancialCurrency(value, settings?.currency || 'EGP', lang), [settings?.currency, lang]);
 
   const load = useCallback(async () => {
     setRefreshing(true);
     setError(null);
-    const window = periodWindow(range);
+    if (!canViewSales) {
+      setSales([]);
+      setPreviousSales([]);
+      setSalePayments([]);
+      setPreviousSalePayments([]);
+      setItems([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+    const window = periodWindow(effectiveRange);
     const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
     let currentQuery = supabase.from('sales').select(fields).gte('created_at', window.start.toISOString()).lte('created_at', window.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
     let previousQuery = supabase.from('sales').select(fields).gte('created_at', window.previousStart.toISOString()).lte('created_at', window.previousEnd.toISOString()).order('created_at', { ascending: false }).limit(5000);
@@ -232,32 +294,38 @@ export function DashboardDataPage() {
 
     setLoading(false);
     setRefreshing(false);
-  }, [ar, branchFilter, range]);
+  }, [ar, branchFilter, range, history.unlimited, canViewSales]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     void (async () => {
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      let salesQuery = supabase.from('sales').select('total,refunded_amount').gte('created_at', monthStart.toISOString()).lt('created_at', monthEnd.toISOString());
-      let rawMasterQuery = supabase.from('raw_materials').select('id,branch_id,name,min_stock,is_active').eq('is_active', true);
-      let rawBalanceQuery = supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity');
-      let unitMasterQuery = supabase.from('inventory_units').select('id,branch_id,name,min_stock,low_stock_threshold,is_active').eq('is_active', true);
-      let unitBatchQuery = supabase.from('inventory_unit_batches').select('unit_id,branch_id,quantity');
+      const monthStart = history.unlimited ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(history.minIso || now.toISOString());
+      const monthEnd = new Date(now);
+      let salesQuery = canViewSales
+        ? supabase.from('sales').select('total,refunded_amount').gte('created_at', monthStart.toISOString()).lt('created_at', monthEnd.toISOString())
+        : null;
+      let rawMasterQuery = canViewInventory ? supabase.from('raw_materials').select('id,branch_id,name,min_stock,is_active').eq('is_active', true) : null;
+      let rawBalanceQuery = canViewInventory ? supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity') : null;
+      let unitMasterQuery = canViewInventory ? supabase.from('inventory_units').select('id,branch_id,name,min_stock,low_stock_threshold,is_active').eq('is_active', true) : null;
+      let unitBatchQuery = canViewInventory ? supabase.from('inventory_unit_batches').select('unit_id,branch_id,quantity') : null;
       if (branchFilter) {
-        salesQuery = salesQuery.eq('branch_id', branchFilter);
-        rawMasterQuery = rawMasterQuery.eq('branch_id', branchFilter);
-        rawBalanceQuery = rawBalanceQuery.eq('branch_id', branchFilter);
-        unitMasterQuery = unitMasterQuery.eq('branch_id', branchFilter);
-        unitBatchQuery = unitBatchQuery.eq('branch_id', branchFilter);
+        if (salesQuery) salesQuery = salesQuery.eq('branch_id', branchFilter);
+        if (rawMasterQuery) rawMasterQuery = rawMasterQuery.eq('branch_id', branchFilter);
+        if (rawBalanceQuery) rawBalanceQuery = rawBalanceQuery.eq('branch_id', branchFilter);
+        if (unitMasterQuery) unitMasterQuery = unitMasterQuery.eq('branch_id', branchFilter);
+        if (unitBatchQuery) unitBatchQuery = unitBatchQuery.eq('branch_id', branchFilter);
       }
       const [salesResult, rawMastersResult, rawBalancesResult, unitMastersResult, unitBatchesResult] = await Promise.all([
-        salesQuery, rawMasterQuery, rawBalanceQuery, unitMasterQuery, unitBatchQuery,
+        salesQuery ?? Promise.resolve({ data: [], error: null }),
+        rawMasterQuery ?? Promise.resolve({ data: [], error: null }),
+        rawBalanceQuery ?? Promise.resolve({ data: [], error: null }),
+        unitMasterQuery ?? Promise.resolve({ data: [], error: null }),
+        unitBatchQuery ?? Promise.resolve({ data: [], error: null }),
       ]);
-      const salesValue = salesResult.error ? null : (salesResult.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + netSaleAmount(row), 0);
-      const stockQueryFailed = Boolean(rawMastersResult.error || rawBalancesResult.error || unitMastersResult.error || unitBatchesResult.error);
+      const salesValue = canViewSales && !salesResult.error ? (salesResult.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + netSaleAmount(row), 0) : null;
+      const stockQueryFailed = !canViewInventory || Boolean(rawMastersResult.error || rawBalancesResult.error || unitMastersResult.error || unitBatchesResult.error);
       const alerts = stockQueryFailed ? [] : buildStockAlerts(
         (rawMastersResult.data || []) as RawStockMaster[],
         (rawBalancesResult.data || []) as RawStockBalance[],
@@ -267,16 +335,110 @@ export function DashboardDataPage() {
       );
       setStockAlerts(alerts);
       const lowStockCount = stockQueryFailed ? null : alerts.length;
-      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const from = history.unlimited
+        ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        : (history.minDate || now.toISOString().slice(0, 10));
+      const to = now.toISOString().slice(0, 10);
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
-      const statements = await Promise.all(targetBranches.map((branch) => reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: from, p_to_date: to })));
+      const statements = canViewFinancial
+        ? await Promise.all(targetBranches.map((branch) => reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: from, p_to_date: to })))
+        : [];
       const validStatements = statements.filter((result) => !result.error && result.data);
-      const expenses = targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.expenses || 0), 0) : null;
-      const profit = targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
+      const expenses = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.expenses || 0), 0) : null;
+      const profit = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
       setQuickStats({ sales: salesValue, expenses, profit, lowStockCount });
     })();
-  }, [branchFilter, branches, settings?.low_stock_threshold]);
+  }, [branchFilter, branches, settings?.low_stock_threshold, history.unlimited, history.minDate, history.minIso, canViewSales, canViewInventory, canViewFinancial]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+      const window = periodWindow(effectiveRange);
+      const fromIso = window.start.toISOString();
+      const fromDate = fromIso.slice(0, 10);
+
+      const orderPromise = canViewPos
+        ? (() => {
+            let q = supabase
+              .from('orders')
+              .select('id,status,order_type,table_id,branch_id,order_items(quantity)')
+              .in('status', ['open', 'held'])
+              .limit(5000);
+            if (branchFilter) q = q.eq('branch_id', branchFilter);
+            return q;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const tablePromise = canViewFloorPlan
+        ? (() => {
+            let q = supabase.from('dining_tables').select('id,status,is_active,branch_id').eq('is_active', true);
+            if (branchFilter) q = q.eq('branch_id', branchFilter);
+            return q;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const shiftPromise = canViewShifts
+        ? (() => {
+            let q = supabase.from('shifts').select('id,branch_id,status').eq('status', 'open');
+            if (branchFilter) q = q.eq('branch_id', branchFilter);
+            return q;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const purchasePromise = canViewPurchases
+        ? (() => {
+            let q = supabase.from('purchases').select('total,returned_amount,branch_id,created_at').gte('created_at', fromIso);
+            if (branchFilter) q = q.eq('branch_id', branchFilter);
+            return q;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const expensePromise = canViewExpenses
+        ? (() => {
+            let q = supabase.from('expenses').select('amount,branch_id,expense_date,status').gte('expense_date', fromDate).neq('status', 'voided');
+            if (branchFilter) q = q.eq('branch_id', branchFilter);
+            return q;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const userPromise = canViewUsers
+        ? (() => {
+            let q = supabase.from('users').select('id,branch_id,is_active').eq('is_active', true);
+            if (branchFilter) q = q.eq('branch_id', branchFilter);
+            return q;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const [ordersRes, tablesRes, shiftsRes, purchasesRes, expensesRes, usersRes] = await Promise.all([
+        orderPromise, tablePromise, shiftPromise, purchasePromise, expensePromise, userPromise,
+      ]);
+      if (cancelled) return;
+
+      const activeOrders = ((ordersRes.data || []) as unknown as ActiveOrderRow[]).filter((order) =>
+        (order.order_items || []).some((item) => Number(item.quantity || 0) > 0),
+      );
+      const tables = (tablesRes.data || []) as Array<{ status: string | null; is_active: boolean | null }>;
+      setOps({
+        openOrders: activeOrders.length,
+        heldOrders: activeOrders.filter((order) => order.status === 'held').length,
+        openDineIn: activeOrders.filter((order) => order.order_type === 'dine_in').length,
+        openTakeaway: activeOrders.filter((order) => order.order_type === 'takeaway').length,
+        openDelivery: activeOrders.filter((order) => order.order_type === 'delivery').length,
+        occupiedTables: tables.filter((table) => table.status === 'occupied').length,
+        availableTables: tables.filter((table) => table.status === 'vacant').length,
+        openShifts: (shiftsRes.data || []).length,
+        purchases: (purchasesRes.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + Math.max(0, Number(row.total || 0) - Number(row.returned_amount || 0)), 0),
+        expenses: (expensesRes.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0),
+        activeUsers: (usersRes.data || []).length,
+      });
+    })();
+
+    return () => { cancelled = true; };
+  }, [
+    branchFilter, range, history.unlimited,
+    canViewPos, canViewFloorPlan, canViewShifts, canViewPurchases, canViewExpenses, canViewUsers,
+  ]);
 
   const current = useMemo(() => {
     const methods = aggregatePaymentMethods(sales, salePayments);
@@ -326,22 +488,23 @@ export function DashboardDataPage() {
   const lowStock = useMemo(() => stockAlerts.slice(0, 5), [stockAlerts]);
 
   const chart = useMemo<Point[]>(() => {
-    const window = periodWindow(range);
+    const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+    const window = periodWindow(effectiveRange);
     const currentMap = new Map<string, number>();
     const previousMap = new Map<string, number>();
-    const key = (date: Date) => range === 'today' ? String(date.getHours()) : range === 'year' ? String(date.getMonth()) : date.toISOString().slice(0, 10);
+    const key = (date: Date) => effectiveRange === 'today' ? String(date.getHours()) : effectiveRange === 'year' ? String(date.getMonth()) : date.toISOString().slice(0, 10);
     sales.forEach((sale) => currentMap.set(key(new Date(sale.created_at)), (currentMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
     previousSales.forEach((sale) => previousMap.set(key(new Date(sale.created_at)), (previousMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
-    if (range === 'today') return Array.from({ length: 24 }, (_, hour) => ({ label: `${String(hour).padStart(2, '0')}:00`, sales: currentMap.get(String(hour)) || 0, previous: previousMap.get(String(hour)) || 0 }));
-    if (range === 'year') return Array.from({ length: 12 }, (_, month) => ({ label: new Date(window.start.getFullYear(), month, 1).toLocaleDateString(ar ? 'ar-EG' : 'en-US', { month: 'short' }), sales: currentMap.get(String(month)) || 0, previous: previousMap.get(String(month)) || 0 }));
-    const dayCount = range === 'month' ? new Date(window.start.getFullYear(), window.start.getMonth() + 1, 0).getDate() : 7;
+    if (effectiveRange === 'today') return Array.from({ length: 24 }, (_, hour) => ({ label: `${String(hour).padStart(2, '0')}:00`, sales: currentMap.get(String(hour)) || 0, previous: previousMap.get(String(hour)) || 0 }));
+    if (effectiveRange === 'year') return Array.from({ length: 12 }, (_, month) => ({ label: new Date(window.start.getFullYear(), month, 1).toLocaleDateString(ar ? 'ar-EG' : 'en-US', { month: 'short' }), sales: currentMap.get(String(month)) || 0, previous: previousMap.get(String(month)) || 0 }));
+    const dayCount = effectiveRange === 'month' ? new Date(window.start.getFullYear(), window.start.getMonth() + 1, 0).getDate() : 7;
     return Array.from({ length: dayCount }, (_, index) => {
       const date = new Date(window.start); date.setDate(date.getDate() + index);
       const dateKey = date.toISOString().slice(0, 10);
       const prevDate = new Date(window.previousStart); prevDate.setDate(prevDate.getDate() + index);
       return { label: date.toLocaleDateString(ar ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }), sales: currentMap.get(dateKey) || 0, previous: previousMap.get(prevDate.toISOString().slice(0, 10)) || 0 };
     });
-  }, [ar, previousSales, range, sales]);
+  }, [ar, previousSales, range, sales, history.unlimited]);
 
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
   const recent = sales.slice(0, 5);
@@ -349,35 +512,50 @@ export function DashboardDataPage() {
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] bg-ui-page px-4 py-5 sm:px-7 sm:py-7" data-testid="dashboard-surface"><div className="mx-auto max-w-[1560px] space-y-6">
     <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-black text-ui-text">{ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome back, ${user?.full_name || 'Admin'}`}</h1><p className="mt-1 text-sm text-ui-muted">{ar ? 'بيانات فعلية من النظام حسب الفترة والفرع المحددين' : 'Live system data for the selected period and branch'}</p></div>{canCreateSale && <Link to="/pos" className="inline-flex items-center gap-2 rounded-xl bg-ui-primary px-4 py-2 text-sm font-bold text-ui-primary-fg"><ShoppingBag className="h-4 w-4" />{ar ? 'إنشاء بيع' : 'New sale'}</Link>}</section>
 
-    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month'}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
+    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month') : (ar ? 'الحد الأقصى للعرض: آخر 7 أيام' : 'Maximum visible history: last 7 days')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).filter((item) => history.unlimited || item === 'today' || item === 'week').map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
 
     {error && <div className="rounded-2xl border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm font-bold text-ui-danger">{error}</div>}
 
-    <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{ar ? 'ملخص الشهر الحالي' : 'Current month summary'}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي مبيعات الشهر' : 'Net sales this month'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.sales, money)}</p></div>
-      <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'المصروفات المحاسبية' : 'Accounting expenses'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.expenses, money)}</p></div>
-      <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي الربح المحاسبي' : 'Accounting net profit'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.profit, money)}</p></div>
-      <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'تنبيهات المخزون' : 'Low stock alerts'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.lowStockCount, (value) => formatNumber(value, 0))}</p></div>
-    </div></Card>
+    {(canViewSales || canViewFinancial || canViewInventory) && <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{history.unlimited ? (ar ? 'ملخص الشهر الحالي' : 'Current month summary') : (ar ? 'ملخص آخر 7 أيام' : 'Last 7 days summary')}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {canViewSales && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{history.unlimited ? (ar ? 'صافي مبيعات الشهر' : 'Net sales this month') : (ar ? 'صافي مبيعات آخر 7 أيام' : 'Net sales · last 7 days')}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.sales, money)}</p></div>}
+      {canViewFinancial && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'المصروفات المحاسبية' : 'Accounting expenses'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.expenses, money)}</p></div>}
+      {canViewFinancial && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي الربح المحاسبي' : 'Accounting net profit'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.profit, money)}</p></div>}
+      {canViewInventory && <div className="rounded-2xl bg-ui-page-alt p-4"><p className="text-xs text-ui-subtle">{ar ? 'تنبيهات المخزون' : 'Low stock alerts'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.lowStockCount, (value) => formatNumber(value, 0))}</p></div>}
+    </div></Card>}
 
     {loading ? <div className="flex h-64 items-center justify-center rounded-3xl border border-ui-border bg-ui-surface"><RefreshCw className="h-7 w-7 animate-spin text-ui-primary" /></div> : <>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric testId="kpi-orders" icon={ShoppingBag} title={ar ? 'الطلبات' : 'Orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href="/reports?reportType=detailed_invoices" ar={ar} enabled={canViewReports} />
-        <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />
-        <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href="/reports?reportType=sales_by_payment" ar={ar} enabled={canViewReports} />
-        <Metric testId="kpi-returns" icon={RotateCcw} title={ar ? 'المبالغ المرتجعة' : 'Return amount'} value={current.returns} display={money(current.returns)} previous={previous.returns} href="/reports?reportType=returns" ar={ar} enabled={canViewReports} />
-        <Metric testId="kpi-discounts" icon={Tag} title={ar ? 'إجمالي الخصومات' : 'Discount amount'} value={current.discounts} display={money(current.discounts)} previous={previous.discounts} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />
+      <section data-testid="dashboard-permission-kpis" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {canViewPos && <Metric testId="kpi-open-orders" icon={Clock3} title={ar ? 'إجمالي الطلبات المفتوحة' : 'Open orders'} value={ops.openOrders} display={formatNumber(ops.openOrders, 0)} previous={0} href={canViewFloorPlan ? '/floor-plan' : undefined} ar={ar} detail={<>{ar ? 'صالة' : 'Dine-in'} {formatNumber(ops.openDineIn, 0)} · {ar ? 'تيك أواي' : 'Take Away'} {formatNumber(ops.openTakeaway, 0)} · {ar ? 'دليفري' : 'Delivery'} {formatNumber(ops.openDelivery, 0)}</>} />}
+        {canViewSales && <Metric testId="kpi-orders" icon={ReceiptText} title={ar ? 'إجمالي الطلبات' : 'Total orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href={canViewReports ? '/reports?reportType=detailed_invoices' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-average-order" icon={Calculator} title={ar ? 'متوسط قيمة الطلب' : 'Average order'} value={current.orders ? current.sales / current.orders : 0} display={money(current.orders ? current.sales / current.orders : 0)} previous={previous.orders ? previous.sales / previous.orders : 0} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href={canViewReports ? '/reports?reportType=sales_by_payment' : undefined} ar={ar} />}
+        {canViewFloorPlan && <Metric testId="kpi-occupied-tables" icon={Armchair} title={ar ? 'الطاولات المشغولة' : 'Occupied tables'} value={ops.occupiedTables} display={formatNumber(ops.occupiedTables, 0)} previous={0} href="/floor-plan" ar={ar} />}
+        {canViewFloorPlan && <Metric testId="kpi-available-tables" icon={CheckCircle2} title={ar ? 'الطاولات المتاحة' : 'Available tables'} value={ops.availableTables} display={formatNumber(ops.availableTables, 0)} previous={0} href="/floor-plan" ar={ar} />}
+        {canViewShifts && <Metric testId="kpi-open-shifts" icon={Timer} title={ar ? 'الشفتات المفتوحة' : 'Open shifts'} value={ops.openShifts} display={formatNumber(ops.openShifts, 0)} previous={0} href="/shifts" ar={ar} />}
+        {canViewPurchases && <Metric testId="kpi-purchases" icon={ShoppingCart} title={ar ? 'المشتريات' : 'Purchases'} value={ops.purchases} display={money(ops.purchases)} previous={0} href="/purchases" ar={ar} />}
+        {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={money(ops.expenses)} previous={0} href="/expenses" ar={ar} />}
+        {canViewUsers && <Metric testId="kpi-active-users" icon={Users} title={ar ? 'المستخدمون النشطون' : 'Active users'} value={ops.activeUsers} display={formatNumber(ops.activeUsers, 0)} previous={0} href="/users" ar={ar} />}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
+      {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
       <div className="grid gap-5"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
-      <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>
+      <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>}
 
-      <section className="grid gap-5 xl:grid-cols-3"><Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'الفروع حسب صافي المبيعات' : 'Branches by net sales'}</h2>{branchRows.length ? branchRows.map(([name, row]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(row.orders, 0)} · {money(row.sales)}</span></div>) : <Empty ar={ar} />}</Card>
+      {canViewSales && <section className="grid gap-5 xl:grid-cols-3">{can('branches.manage') && <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'الفروع حسب صافي المبيعات' : 'Branches by net sales'}</h2>{branchRows.length ? branchRows.map(([name, row]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(row.orders, 0)} · {money(row.sales)}</span></div>) : <Empty ar={ar} />}</Card>}
       <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أكثر الأصناف مبيعًا' : 'Top selling items'}</h2>{productRows.length ? productRows.map(([name, qty]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(qty, 2)}</span></div>) : <Empty ar={ar} />}</Card>
-      <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أحدث الطلبات' : 'Recent orders'}</h2>{recent.length ? recent.map((sale) => <div key={sale.id} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{sale.invoice_number || '—'}</span><span className="text-ui-muted">{money(netSaleAmount(sale))}</span></div>) : <Empty ar={ar} />}</Card></section>
+      <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أحدث الطلبات' : 'Recent orders'}</h2>{recent.length ? recent.map((sale) => <div key={sale.id} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{sale.invoice_number || '—'}</span><span className="text-ui-muted">{money(netSaleAmount(sale))}</span></div>) : <Empty ar={ar} />}</Card></section>}
 
-      {lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row) => { const content = <><p className="truncate text-sm font-bold text-ui-text">{row.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(row.quantity, 3)} / {formatNumber(row.threshold, 3)}</p></>; return canViewInventory ? <Link key={row.key} to="/inventory" className="rounded-xl bg-ui-page-alt p-3">{content}</Link> : <div key={row.key} aria-disabled="true" className="rounded-xl bg-ui-page-alt p-3">{content}</div>; })}</div></Card>}
+      {(canViewKds || canViewTreasury || canViewAudit || canViewSettings) && (
+        <section data-testid="dashboard-permission-shortcuts" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {canViewKds && <Link to="/kitchen-display" className="rounded-2xl border border-ui-border bg-ui-surface p-4 font-black text-ui-text shadow-ui-sm"><ChefHat className="mb-2 h-5 w-5 text-ui-primary" />{ar ? 'شاشة المطبخ' : 'Kitchen display'}</Link>}
+          {canViewTreasury && <Link to="/treasury" className="rounded-2xl border border-ui-border bg-ui-surface p-4 font-black text-ui-text shadow-ui-sm"><Landmark className="mb-2 h-5 w-5 text-ui-primary" />{ar ? 'الخزينة' : 'Treasury'}</Link>}
+          {canViewAudit && <Link to="/audit-log" className="rounded-2xl border border-ui-border bg-ui-surface p-4 font-black text-ui-text shadow-ui-sm"><HistoryIcon className="mb-2 h-5 w-5 text-ui-primary" />{ar ? 'سجل العمليات' : 'Audit log'}</Link>}
+          {canViewSettings && <Link to="/settings" className="rounded-2xl border border-ui-border bg-ui-surface p-4 font-black text-ui-text shadow-ui-sm"><Settings className="mb-2 h-5 w-5 text-ui-primary" />{ar ? 'الإعدادات' : 'Settings'}</Link>}
+        </section>
+      )}
+
+      {canViewInventory && lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row) => <Link key={row.key} to="/inventory" className="rounded-xl bg-ui-page-alt p-3"><p className="truncate text-sm font-bold text-ui-text">{row.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(row.quantity, 3)} / {formatNumber(row.threshold, 3)}</p></Link>)}</div></Card>}
     </>}
   </div></div>;
 }

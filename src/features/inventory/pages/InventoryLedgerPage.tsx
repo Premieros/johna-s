@@ -3,6 +3,7 @@ import { BookOpenText } from 'lucide-react';
 import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { BranchBadge } from '@/components/BranchBadge';
@@ -20,11 +21,13 @@ interface LedgerRow {
 export function InventoryLedgerPage() {
   const { t, lang } = useLanguage();
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
 
   const { rows: rawRows, loading, error, total, hasMore, loadMore, loadingMore } = usePaginatedRows<InventoryLedgerEntry>({
     table: 'inventory_ledger',
     select: '*, product:products(*), raw_material:raw_materials(*), warehouse:warehouses(*)',
     order: { column: 'created_at', ascending: false },
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
   });
   const rows = useMemo<LedgerRow[]>(() => rawRows.map((entry) => ({ id: String(entry.id), entry })), [rawRows]);

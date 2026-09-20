@@ -34,6 +34,7 @@ import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
@@ -58,6 +59,7 @@ export function ImportExportCenterPage() {
   const isAr = lang === 'ar';
   const { user } = useAuth();
   const { show } = useToast();
+  const history = useHistoryAccess();
 
   // Active Main Tab
   const [activeTab, setActiveTab] = useState<'import' | 'export' | 'templates' | 'logs'>('import');
@@ -447,9 +449,15 @@ export function ImportExportCenterPage() {
   const handleExportExecution = async () => {
     setIsExporting(true);
     try {
+      const allowed = history.clampRange(exportFilters.startDate, exportFilters.endDate);
+      const safeFilters = {
+        ...exportFilters,
+        startDate: exportFilters.startDate || exportFilters.endDate ? allowed.from : (history.minDate || undefined),
+        endDate: exportFilters.endDate || (history.minDate ? allowed.to : undefined),
+      };
       const res = await ExportService.exportEntity(
         exportEntity,
-        exportFilters,
+        safeFilters,
         exportFormat,
         isAr ? 'ar' : 'en'
       );
@@ -1389,7 +1397,8 @@ export function ImportExportCenterPage() {
                     <input
                       type="date"
                       value={exportFilters.startDate || ''}
-                      onChange={(e) => setExportFilters({ ...exportFilters, startDate: e.target.value || undefined })}
+                      min={history.minDate}
+                      onChange={(e) => setExportFilters({ ...exportFilters, startDate: history.clampRange(e.target.value || undefined, exportFilters.endDate).from || undefined })}
                       className="w-full text-xs p-1.5 rounded-lg border border-border bg-background text-foreground"
                     />
                   </div>
@@ -1399,7 +1408,10 @@ export function ImportExportCenterPage() {
                     <input
                       type="date"
                       value={exportFilters.endDate || ''}
-                      onChange={(e) => setExportFilters({ ...exportFilters, endDate: e.target.value || undefined })}
+                      onChange={(e) => {
+                        const allowed = history.clampRange(exportFilters.startDate, e.target.value || undefined);
+                        setExportFilters({ ...exportFilters, startDate: allowed.from || undefined, endDate: allowed.to || undefined });
+                      }}
                       className="w-full text-xs p-1.5 rounded-lg border border-border bg-background text-foreground"
                     />
                   </div>
