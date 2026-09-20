@@ -76,7 +76,25 @@ export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem('premier:nav-collapsed-groups') || '{}') as Record<string, boolean>;
+        if (Object.keys(saved).length > 0) return saved;
+      } catch {
+        // Fall back to the compact default below.
+      }
+    }
+    return {
+      main: false,
+      centers: false,
+      catalog: true,
+      operations: true,
+      people: true,
+      finance: true,
+      admin: true,
+    };
+  });
   const ar = lang === 'ar';
   const branchFilter = useBranchFilter();
   const { counts } = useActiveOrders(branchFilter || user?.branch_id || '');
@@ -123,6 +141,25 @@ export function Layout({ children }: { children: ReactNode }) {
     (acc[item.group] ??= []).push(item);
     return acc;
   }, {} as Record<MenuGroup, typeof visibleItems>), [visibleItems]);
+
+  const activeMenuGroup = useMemo<MenuGroup | null>(() => {
+    const activeItem = visibleItems.find((item) =>
+      location.pathname === item.route || location.pathname.startsWith(`${item.route}/`),
+    );
+    return activeItem?.group ?? null;
+  }, [location.pathname, visibleItems]);
+
+  useEffect(() => {
+    if (!activeMenuGroup) return;
+    setCollapsed((current) => current[activeMenuGroup]
+      ? { ...current, [activeMenuGroup]: false }
+      : current);
+  }, [activeMenuGroup]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('premier:nav-collapsed-groups', JSON.stringify(collapsed));
+  }, [collapsed]);
 
   const mobilePrimaryItems = useMemo(() => {
     const priority = ['dashboard', 'pos', 'operations-center', 'inventory-center', 'sales'];
@@ -323,7 +360,7 @@ export function Layout({ children }: { children: ReactNode }) {
             if (!items.length) return null;
             return (
               <section key={group} data-testid={`nav-group-${group}`} className="mb-3">
-                <button data-testid={`nav-group-toggle-${group}`} type="button" onClick={() => setCollapsed((v) => ({ ...v, [group]: !v[group] }))} className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ui-subtle">
+                <button data-testid={`nav-group-toggle-${group}`} type="button" onClick={() => setCollapsed((v) => ({ ...v, [group]: !v[group] }))} className="flex min-h-9 w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ui-subtle transition hover:bg-ui-page-alt hover:text-ui-text">
                   <span>{MENU_GROUPS[group][ar ? 'ar' : 'en']}</span>
                   <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${collapsed[group] ? 'rotate-90' : ''}`} />
                 </button>
