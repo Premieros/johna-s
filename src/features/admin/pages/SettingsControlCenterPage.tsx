@@ -9,6 +9,7 @@ import {
   Save,
   Loader2,
   CalendarClock,
+  Percent,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/api';
@@ -26,7 +27,7 @@ import { findUiTheme, UI_THEMES } from '@/lib/themes';
 import type { BranchSettings } from '@/lib/types';
 import { APP_ROUTES } from '@/core/navigation/routes';
 
-type SettingsTab = 'branch_profile' | 'business_day' | 'branch_staff' | 'appearance' | 'language';
+type SettingsTab = 'branch_profile' | 'tax' | 'business_day' | 'branch_staff' | 'appearance' | 'language';
 
 interface UserRow {
   id: string;
@@ -40,7 +41,7 @@ export function SettingsControlCenterPage() {
   const { user } = useAuth();
   const { t, lang, setLang } = useLanguage();
   const { theme, setTheme, setUiTheme } = useTheme();
-  const { branchSettingsMap, saveBranchSettings } = useSettings();
+  const { settings, branchSettingsMap, saveBranchSettings } = useSettings();
   const { branches } = useBranches();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -134,6 +135,7 @@ export function SettingsControlCenterPage() {
 
   const SECTIONS: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'branch_profile', label: isAr ? 'بيانات الفرع والطباعة' : 'Branch Profile & Receipts', icon: <Store className="w-4 h-4" /> },
+    { key: 'tax', label: isAr ? 'الضريبة' : 'Tax', icon: <Percent className="w-4 h-4" /> },
     { key: 'business_day', label: isAr ? 'اليوم المالي والشفتات' : 'Business Day & Shifts', icon: <CalendarClock className="w-4 h-4" /> },
     { key: 'branch_staff', label: isAr ? 'طاقم عمل الفرع' : 'Branch Staff', icon: <Users className="w-4 h-4" /> },
     { key: 'appearance', label: isAr ? 'المظهر والثيم' : 'Appearance & Theme', icon: <Palette className="w-4 h-4" /> },
@@ -221,14 +223,6 @@ export function SettingsControlCenterPage() {
                   onChange={(e) => setBranchForm({ ...branchForm, logo_url: e.target.value })}
                   placeholder="https://..."
                 />
-                <Input
-                  label={isAr ? 'نسبة الضريبة الخاصة بالفرع (%)' : 'Branch Tax Rate (%)'}
-                  type="number"
-                  step="0.1"
-                  value={branchForm.tax_rate ?? ''}
-                  onChange={(e) => setBranchForm({ ...branchForm, tax_rate: e.target.value ? Number(e.target.value) : null })}
-                  placeholder={isAr ? 'اتركه فارغاً لاستخدام الافتراضي' : 'Leave empty to inherit'}
-                />
                 <div className="sm:col-span-2">
                   <Textarea
                     label={isAr ? 'ترويسة إيصال الفرع (Header)' : 'Branch Receipt Header'}
@@ -251,6 +245,68 @@ export function SettingsControlCenterPage() {
                 <Button onClick={saveBranchSpecific} disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>{isAr ? 'حفظ إعدادات الفرع' : 'Save Branch Profile'}</span>
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {active === 'tax' && (
+            <Card className="space-y-6 p-4 sm:p-6">
+              <div>
+                <h2 className="text-lg font-bold text-ui-text">{isAr ? 'إعدادات ضريبة الفرع' : 'Branch Tax Settings'}</h2>
+                <p className="text-xs text-ui-subtle">
+                  {isAr
+                    ? 'حدد بوضوح هل الفرع يرث إعداد المنشأة أم يملك حالة ونسبة ضريبة مستقلة.'
+                    : 'Choose whether this branch inherits the enterprise tax defaults or uses its own tax status and rate.'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3 text-xs text-ui-muted">
+                {isAr ? 'الإعداد الافتراضي للمنشأة: ' : 'Enterprise default: '}
+                <span className="font-black text-ui-text">
+                  {settings?.tax_enabled ? (isAr ? 'مفعلة' : 'Enabled') : (isAr ? 'معطلة' : 'Disabled')}
+                  {' · '}
+                  {Number(settings?.tax_rate || 0)}%
+                </span>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Select
+                  label={isAr ? 'حالة ضريبة الفرع' : 'Branch Tax Status'}
+                  value={branchForm.tax_enabled == null ? 'inherit' : branchForm.tax_enabled ? 'enabled' : 'disabled'}
+                  onChange={(e) => setBranchForm({
+                    ...branchForm,
+                    tax_enabled: e.target.value === 'inherit' ? null : e.target.value === 'enabled',
+                  })}
+                >
+                  <option value="inherit">{isAr ? 'استخدام الإعداد الافتراضي للمنشأة' : 'Inherit enterprise default'}</option>
+                  <option value="enabled">{isAr ? 'مفعلة لهذا الفرع' : 'Enabled for this branch'}</option>
+                  <option value="disabled">{isAr ? 'معطلة لهذا الفرع' : 'Disabled for this branch'}</option>
+                </Select>
+                <Input
+                  label={isAr ? 'نسبة ضريبة الفرع (%)' : 'Branch Tax Rate (%)'}
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={branchForm.tax_rate ?? ''}
+                  onChange={(e) => setBranchForm({
+                    ...branchForm,
+                    tax_rate: e.target.value === '' ? null : Number(e.target.value),
+                  })}
+                  placeholder={isAr ? 'فارغ = استخدام النسبة الافتراضية' : 'Blank = inherit default rate'}
+                />
+              </div>
+
+              <p className="text-xs font-semibold text-ui-subtle">
+                {isAr
+                  ? 'عند اختيار «استخدام الإعداد الافتراضي» للحالة وترك النسبة فارغة، يتبع الفرع إعداد المنشأة بالكامل.'
+                  : 'To fully inherit enterprise tax behavior, select “Inherit enterprise default” and leave the branch tax rate blank.'}
+              </p>
+
+              <div className="pt-4 border-t border-ui-border flex justify-end">
+                <Button onClick={saveBranchSpecific} disabled={saving}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{isAr ? 'حفظ إعدادات الضريبة' : 'Save Tax Settings'}</span>
                 </Button>
               </div>
             </Card>
