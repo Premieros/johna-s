@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION public.link_employee_credit_account(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO ''
+SET search_path TO public, pg_temp
 AS $link_employee$
 BEGIN
   IF auth.uid() IS NULL THEN
