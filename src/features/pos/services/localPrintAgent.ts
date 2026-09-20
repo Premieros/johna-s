@@ -582,6 +582,8 @@ export async function printKitchenStationsLocally(
     const results = await Promise.all(Object.entries(groups).map(([station, stationItems]) => executeSilentPrint({
       printerName: routes[station],
       text: buildStationTicketText(station, stationItems, ctx),
+      html: buildStationTicketHtml(station, stationItems, ctx, 80),
+      paperWidthMm: 80,
     })));
     return results.every(Boolean);
   }
