@@ -31,6 +31,12 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage('BRANCH_ACCESS_DENIED', 'ar')).toContain('الفروع المسموح');
   });
 
+  it('explains sent-item ownership void failures instead of showing a generic system error', () => {
+    expect(userFacingErrorMessage('ORDER_OPERATOR_REQUIRED', 'ar')).toContain('مستخدم آخر');
+    expect(userFacingErrorMessage('SENT_ITEM_NOT_FOUND', 'ar')).toContain('الصنف المرسل');
+    expect(userFacingErrorMessage('VOID_QUANTITY_EXCEEDS_SENT', 'ar')).toContain('كمية الإلغاء');
+  });
+
   it('explains inventory and purchase relationship errors', () => {
     expect(userFacingErrorMessage('INSUFFICIENT_STOCK', 'ar')).toContain('المخزون');
     expect(userFacingErrorMessage('WAREHOUSE_BRANCH_MISMATCH', 'ar')).toContain('المستودع');
