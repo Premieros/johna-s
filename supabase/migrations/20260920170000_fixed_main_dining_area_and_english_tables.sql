@@ -224,6 +224,335 @@ BEFORE DELETE ON public.dining_areas
 FOR EACH ROW
 EXECUTE FUNCTION private.guard_default_dining_area_delete();
 
+CREATE OR REPLACE FUNCTION private.guard_default_dining_area_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+BEGIN
+  IF OLD.is_default THEN
+    IF NOT NEW.is_default
+       OR NEW.name <> 'Main Area'
+       OR NEW.sort_order <> 0
+       OR NEW.branch_id <> OLD.branch_id THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'DEFAULT_DINING_AREA_FIXED',
+        DETAIL = 'Main Area identity is system-managed and cannot be changed.';
+    END IF;
+  ELSIF NEW.is_default THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'DEFAULT_DINING_AREA_FIXED',
+      DETAIL = 'Only the system provisioner may assign the default dining area.';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_guard_default_dining_area_update ON public.dining_areas;
+CREATE TRIGGER trg_guard_default_dining_area_update
+BEFORE UPDATE OF name, sort_order, is_default, branch_id ON public.dining_areas
+FOR EACH ROW
+EXECUTE FUNCTION private.guard_default_dining_area_update();
+
+CREATE OR REPLACE FUNCTION private.guard_default_dining_table_identity()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_old_default boolean := false;
+  v_new_default boolean := false;
+BEGIN
+  IF TG_OP = 'UPDATE' AND OLD.area_id IS NOT NULL THEN
+    SELECT COALESCE(a.is_default, false)
+    INTO v_old_default
+    FROM public.dining_areas a
+    WHERE a.id = OLD.area_id
+      AND a.branch_id = OLD.branch_id;
+    v_old_default := COALESCE(v_old_default, false);
+  END IF;
+
+  IF NEW.area_id IS NOT NULL THEN
+    SELECT COALESCE(a.is_default, false)
+    INTO v_new_default
+    FROM public.dining_areas a
+    WHERE a.id = NEW.area_id
+      AND a.branch_id = NEW.branch_id;
+    v_new_default := COALESCE(v_new_default, false);
+  END IF;
+
+  IF TG_OP = 'INSERT' AND v_new_default THEN
+    IF NEW.name !~ '^Table (0[1-9]|[1-4][0-9]|50)
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.dining_areas a
+    WHERE a.id = OLD.area_id
+      AND a.branch_id = OLD.branch_id
+      AND a.is_default
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'DEFAULT_DINING_TABLE_FIXED',
+      DETAIL = 'The 50 Main Area tables are system-managed and cannot be deleted.';
+  END IF;
+  RETURN OLD;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_guard_default_dining_table_delete ON public.dining_tables;
+CREATE TRIGGER trg_guard_default_dining_table_delete
+BEFORE DELETE ON public.dining_tables
+FOR EACH ROW
+EXECUTE FUNCTION private.guard_default_dining_table_delete();
+
+CREATE OR REPLACE FUNCTION public.floor_plan_add_table(
+  p_branch_id uuid,
+  p_name text,
+  p_capacity integer DEFAULT 4,
+  p_area_id uuid DEFAULT NULL,
+  p_shape text DEFAULT 'rect',
+  p_layout jsonb DEFAULT '{"x":0,"y":0,"w":120,"h":80}'::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_id uuid;
+  v_name text := btrim(coalesce(p_name, ''));
+  v_shape text := btrim(coalesce(p_shape, 'rect'));
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+  END IF;
+
+  IF NOT public.can_permission('floor_plan.manage') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'PERMISSION_DENIED');
+  END IF;
+
+  IF NOT public.user_may_access_branch(p_branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_NOT_FOUND');
+  END IF;
+
+  IF v_name = '' OR length(v_name) > 100 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVALID_TABLE_NAME');
+  END IF;
+
+  IF p_capacity IS NULL OR p_capacity < 1 OR p_capacity > 100 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVALID_CAPACITY');
+  END IF;
+
+  IF p_layout IS NULL OR jsonb_typeof(p_layout) <> 'object' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVALID_LAYOUT');
+  END IF;
+
+  IF p_area_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.dining_areas a
+    WHERE a.id = p_area_id AND a.branch_id = p_branch_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AREA_BRANCH_MISMATCH');
+  END IF;
+
+  IF p_area_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.dining_areas a
+    WHERE a.id = p_area_id
+      AND a.branch_id = p_branch_id
+      AND a.is_default
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DEFAULT_AREA_FIXED_50');
+  END IF;
+
+  INSERT INTO public.dining_tables (
+    branch_id, area_id, name, capacity, status, shape, layout, is_active, is_demo
+  ) VALUES (
+    p_branch_id, p_area_id, v_name, p_capacity, 'vacant', nullif(v_shape, ''), p_layout, true, false
+  )
+  RETURNING id INTO v_id;
+
+  RETURN jsonb_build_object('success', true, 'table_id', v_id);
+EXCEPTION
+  WHEN unique_violation THEN
+    RETURN jsonb_build_object('success', false, 'error', 'TABLE_NAME_EXISTS');
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.floor_plan_update_table(
+  p_table_id uuid,
+  p_name text DEFAULT NULL,
+  p_capacity integer DEFAULT NULL,
+  p_area_id uuid DEFAULT NULL,
+  p_shape text DEFAULT NULL,
+  p_layout jsonb DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_branch_id uuid;
+  v_current_area_id uuid;
+  v_current_name text;
+  v_current_default boolean := false;
+  v_name text;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+  END IF;
+
+  SELECT t.branch_id, t.area_id, t.name
+  INTO v_branch_id, v_current_area_id, v_current_name
+  FROM public.dining_tables t
+  WHERE t.id = p_table_id;
+
+  IF v_branch_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'TABLE_NOT_FOUND');
+  END IF;
+
+  IF NOT public.can_permission('floor_plan.manage') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'PERMISSION_DENIED');
+  END IF;
+
+  IF NOT public.user_may_access_branch(v_branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+  END IF;
+
+  SELECT COALESCE(a.is_default, false)
+  INTO v_current_default
+  FROM public.dining_areas a
+  WHERE a.id = v_current_area_id
+    AND a.branch_id = v_branch_id;
+
+  v_current_default := COALESCE(v_current_default, false);
+
+  IF p_name IS NOT NULL THEN
+    v_name := btrim(p_name);
+    IF v_name = '' OR length(v_name) > 100 THEN
+      RETURN jsonb_build_object('success', false, 'error', 'INVALID_TABLE_NAME');
+    END IF;
+  END IF;
+
+  IF v_current_default AND v_name IS NOT NULL AND v_name <> v_current_name THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DEFAULT_TABLE_IDENTITY_FIXED');
+  END IF;
+
+  IF v_current_default AND p_area_id IS NOT NULL AND p_area_id <> v_current_area_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DEFAULT_TABLE_IDENTITY_FIXED');
+  END IF;
+
+  IF NOT v_current_default AND p_area_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.dining_areas a
+    WHERE a.id = p_area_id
+      AND a.branch_id = v_branch_id
+      AND a.is_default
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DEFAULT_AREA_FIXED_50');
+  END IF;
+
+  IF p_capacity IS NOT NULL AND (p_capacity < 1 OR p_capacity > 100) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVALID_CAPACITY');
+  END IF;
+
+  IF p_layout IS NOT NULL AND jsonb_typeof(p_layout) <> 'object' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVALID_LAYOUT');
+  END IF;
+
+  IF p_area_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.dining_areas a
+    WHERE a.id = p_area_id AND a.branch_id = v_branch_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AREA_BRANCH_MISMATCH');
+  END IF;
+
+  UPDATE public.dining_tables
+  SET name = COALESCE(v_name, name),
+      capacity = COALESCE(p_capacity, capacity),
+      area_id = CASE WHEN p_area_id IS NULL THEN area_id ELSE p_area_id END,
+      shape = COALESCE(NULLIF(btrim(p_shape), ''), shape),
+      layout = COALESCE(p_layout, layout),
+      updated_at = now()
+  WHERE id = p_table_id
+    AND branch_id = v_branch_id;
+
+  RETURN jsonb_build_object('success', true, 'table_id', p_table_id);
+EXCEPTION
+  WHEN unique_violation THEN
+    RETURN jsonb_build_object('success', false, 'error', 'TABLE_NAME_EXISTS');
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION private.guard_default_dining_area_delete() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_default_dining_area_update() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_default_dining_table_identity() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_default_dining_table_delete() FROM PUBLIC, anon, authenticated;
+
+REVOKE ALL ON FUNCTION public.floor_plan_add_table(uuid,text,integer,uuid,text,jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.floor_plan_add_table(uuid,text,integer,uuid,text,jsonb) FROM anon;
+GRANT EXECUTE ON FUNCTION public.floor_plan_add_table(uuid,text,integer,uuid,text,jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.floor_plan_add_table(uuid,text,integer,uuid,text,jsonb) TO service_role;
+
+REVOKE ALL ON FUNCTION public.floor_plan_update_table(uuid,text,integer,uuid,text,jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.floor_plan_update_table(uuid,text,integer,uuid,text,jsonb) FROM anon;
+GRANT EXECUTE ON FUNCTION public.floor_plan_update_table(uuid,text,integer,uuid,text,jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.floor_plan_update_table(uuid,text,integer,uuid,text,jsonb) TO service_role;
+
+COMMENT ON COLUMN public.dining_areas.is_default IS
+  'True only for the branch Main Area that owns the fixed canonical Table 01..Table 50 set.';
+
+COMMENT ON FUNCTION private.ensure_default_dining_tables(uuid) IS
+  'Ensures one Main Area per branch and the fixed English-named Table 01..Table 50 canonical set.';
+
+COMMIT;
+ OR NOT NEW.is_active THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'DEFAULT_AREA_FIXED_50',
+        DETAIL = 'Main Area accepts only the canonical active Table 01..Table 50 set.';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND v_old_default THEN
+    IF NEW.area_id IS DISTINCT FROM OLD.area_id
+       OR NEW.name IS DISTINCT FROM OLD.name
+       OR NEW.is_active IS NOT TRUE THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'DEFAULT_DINING_TABLE_FIXED',
+        DETAIL = 'Main Area table identity, membership and active state are fixed.';
+    END IF;
+  ELSIF TG_OP = 'UPDATE' AND v_new_default THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'DEFAULT_AREA_FIXED_50',
+      DETAIL = 'Custom tables cannot be moved into Main Area.';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_guard_default_dining_table_identity ON public.dining_tables;
+CREATE TRIGGER trg_guard_default_dining_table_identity
+BEFORE INSERT OR UPDATE OF area_id, name, is_active ON public.dining_tables
+FOR EACH ROW
+EXECUTE FUNCTION private.guard_default_dining_table_identity();
+
 CREATE OR REPLACE FUNCTION private.guard_default_dining_table_delete()
 RETURNS trigger
 LANGUAGE plpgsql
