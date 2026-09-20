@@ -20,19 +20,27 @@ describe('unified thermal receipt text contract', () => {
     expect(printing).not.toContain('الدفع / PAYMENT');
   });
 
-  it('uses the same ticket hierarchy for kitchen text without prices', () => {
-    expect(localAgent).toContain("ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET'");
-    expect(localAgent).toContain("lines.push(ar ? 'المحطة' : 'STATION');");
-    expect(localAgent).toContain("ar ? 'الطلب' : 'Order'");
-    expect(localAgent).toContain("ar ? 'الوقت' : 'Time'");
-    expect(localAgent).toContain("ar ? 'النوع' : 'Type'");
-    expect(localAgent).toContain("ar ? 'الطاولة' : 'Table'");
-    expect(localAgent).toContain("ar ? 'الأصناف' : 'ITEMS'");
-    expect(localAgent).toContain("ar ? 'ملاحظة' : 'Note'");
-    expect(localAgent).toContain('modifierNames(item, ar)');
-    expect(localAgent).toContain('kitchenOrderTypeLabel(ctx.orderType, ar)');
-    expect(localAgent).not.toContain('END OF ORDER');
-    expect(localAgent).not.toContain('EGP');
+  it('keeps canonical kitchen text compact while layering the fixed form separately', () => {
+    const textStart = localAgent.indexOf('export function buildStationTicketText');
+    const formStart = localAgent.indexOf('function escapeFixedFormHtml', textStart);
+    const kitchenText = localAgent.slice(textStart, formStart);
+
+    expect(kitchenText).toContain("ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET'");
+    expect(kitchenText).toContain("lines.push(ar ? 'المحطة' : 'STATION');");
+    expect(kitchenText).toContain("ar ? 'الطلب' : 'Order'");
+    expect(kitchenText).toContain("ar ? 'الوقت' : 'Time'");
+    expect(kitchenText).toContain("ar ? 'النوع' : 'Type'");
+    expect(kitchenText).toContain("ar ? 'الطاولة' : 'Table'");
+    expect(kitchenText).toContain("ar ? 'الأصناف' : 'ITEMS'");
+    expect(kitchenText).toContain("ar ? 'ملاحظة' : 'Note'");
+    expect(kitchenText).toContain('modifierNames(item, ar)');
+    expect(kitchenText).toContain('kitchenOrderTypeLabel(ctx.orderType, ar)');
+    expect(kitchenText).not.toContain('END OF ORDER');
+    expect(kitchenText).not.toContain('EGP');
+
+    expect(localAgent).toContain('export function buildStationTicketHtml');
+    expect(localAgent).toContain('KITCHEN COPY');
+    expect(localAgent).toContain('END OF ORDER');
   });
 
   it('does not change printer routing, queue transport, retry, or execution contracts', () => {
