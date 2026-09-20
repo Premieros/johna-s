@@ -57,7 +57,7 @@ describe.skipIf(!dbUrl)('employee-only credit sale guard', () => {
     branchId: string;
     warehouseId: string;
   }) {
-    const savepoint = `sp_${randomUUID().replaceAll('-', '')}`;
+    const savepoint = `sp_${randomUUID().replace(/-/g, '')}`;
     await client.query(`SAVEPOINT ${savepoint}`);
     try {
       await insertSale({ ...params, method: 'credit' });
