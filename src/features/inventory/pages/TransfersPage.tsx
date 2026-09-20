@@ -42,7 +42,7 @@ export function TransfersPage() {
     order: { column: 'created_at', ascending: false },
     or: history.minIso
       ? (branchFilter
-          ? `and(branch_id.eq.${branchFilter},or(created_at.gte.${history.minIso},status.eq.pending)),and(to_branch_id.eq.${branchFilter},or(created_at.gte.${history.minIso},status.eq.pending))`
+          ? `and(branch_id.eq.${branchFilter},created_at.gte.${history.minIso}),and(branch_id.eq.${branchFilter},status.eq.pending),and(to_branch_id.eq.${branchFilter},created_at.gte.${history.minIso}),and(to_branch_id.eq.${branchFilter},status.eq.pending)`
           : `created_at.gte.${history.minIso},status.eq.pending`)
       : (branchFilter ? `branch_id.eq.${branchFilter},to_branch_id.eq.${branchFilter}` : undefined),
     pageSize: 100,
