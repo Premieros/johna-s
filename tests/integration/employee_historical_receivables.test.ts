@@ -61,7 +61,7 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     const before = await runAs(
       client,
       ids.users.branch_manager,
-      `SELECT public.get_employee_receivable_balances($1, current_date) AS result`,
+      `SELECT public.get_employee_receivable_balances($1, (now() AT TIME ZONE 'Africa/Cairo')::date) AS result`,
       [ids.branchA],
     );
     expect(before.error).toBeUndefined();
@@ -75,7 +75,7 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     const aging = await runAs(
       client,
       ids.users.branch_manager,
-      `SELECT public.get_ar_aging($1, current_date) AS result`,
+      `SELECT public.get_ar_aging($1, (now() AT TIME ZONE 'Africa/Cairo')::date) AS result`,
       [ids.branchA],
     );
     expect(aging.error).toBeUndefined();
@@ -89,7 +89,7 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     const summary = await runAs(
       client,
       ids.users.branch_manager,
-      `SELECT public.get_aging_summary($1, current_date) AS result`,
+      `SELECT public.get_aging_summary($1, (now() AT TIME ZONE 'Africa/Cairo')::date) AS result`,
       [ids.branchA],
     );
     expect(summary.error).toBeUndefined();
@@ -119,7 +119,7 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     const after = await runAs(
       client,
       ids.users.branch_manager,
-      `SELECT public.get_employee_receivable_balances($1, current_date) AS result`,
+      `SELECT public.get_employee_receivable_balances($1, (now() AT TIME ZONE 'Africa/Cairo')::date) AS result`,
       [ids.branchA],
     );
     const afterRows = (after.rows[0]?.result || []) as Array<Record<string, unknown>>;
