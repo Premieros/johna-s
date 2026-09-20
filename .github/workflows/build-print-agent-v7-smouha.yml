@@ -1,0 +1,56 @@
+name: Build Print Agent V7 Smouha Isolated
+
+on:
+  pull_request:
+    paths:
+      - 'electron/electron-builder.smouha-v7.json'
+      - '.github/workflows/build-print-agent-v7-smouha.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-smouha-v7:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install web dependencies including Windows native optionals
+        run: |
+          npm install --include=optional --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund @rollup/rollup-win32-x64-msvc@4.63.0
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Install frozen V7 Print Agent dependencies
+        working-directory: electron
+        run: npm install --include=optional --no-audit --no-fund
+
+      - name: Verify isolated printer queues
+        run: node electron/printerQueue.test.cjs
+
+      - name: Build isolated Smouha V7 installer and portable app
+        working-directory: electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --projectDir .. --config electron/electron-builder.smouha-v7.json --win
+
+      - name: Upload isolated Smouha V7 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: premier-print-agent-v7-smouha-isolated
+          path: |
+            electron/release-smouha-v7/*.exe
+            electron/release-smouha-v7/*.blockmap
+          if-no-files-found: error
+          retention-days: 14
