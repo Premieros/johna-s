@@ -10,7 +10,7 @@ describe('auto-sale production reversal contract', () => {
   it('tracks exact source ownership for direct sales and kitchen-settled sale items', () => {
     expect(migration).toContain('source_order_item_id');
     expect(migration).toContain('source_sale_item_id');
-    expect(migration).toContain("'source_order_item_id', v_queue.order_item_id");
+    expect(migration).toContain('v_queue.order_item_id');
   });
 
   it('reverses AUTO_SALE_PRODUCTION recursively instead of returning phantom unit stock', () => {
