@@ -72,10 +72,14 @@ async function login(page: Page) {
 }
 
 const viewports = [
+  { name: 'compact phone', width: 320, height: 720 },
   { name: 'small phone', width: 360, height: 800 },
+  { name: 'standard phone', width: 390, height: 844 },
+  { name: 'large phone', width: 430, height: 932 },
   { name: 'tablet portrait', width: 768, height: 1024 },
   { name: 'tablet landscape', width: 1024, height: 768 },
   { name: 'desktop browser', width: 1366, height: 768 },
+  { name: 'large desktop', width: 1920, height: 1080 },
 ];
 
 for (const viewport of viewports) {
@@ -131,4 +135,42 @@ test('critical shell and page actions remain clickable on a small phone', async 
   await expect(page.getByTestId('user-menu-button')).toBeVisible();
   await page.getByTestId('user-menu-button').click();
   await expect(page).toHaveURL(/#\/settings$/);
+});
+
+
+test('mobile thumb navigation and full controls remain reachable on a compact phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await mockAuthenticatedApp(page);
+  await login(page);
+
+  const quickNav = page.getByTestId('mobile-bottom-nav');
+  await expect(quickNav).toBeVisible();
+  await expect(page.getByTestId('mobile-nav-dashboard')).toBeVisible();
+  await expect(page.getByTestId('mobile-bottom-more')).toBeVisible();
+
+  await page.getByTestId('mobile-bottom-more').click();
+  await expect(page.getByTestId('mobile-sidebar-controls')).toBeVisible();
+  await expect(page.getByTestId('mobile-branch-select')).toBeVisible();
+  await expect(page.getByTestId('mobile-language-toggle')).toBeVisible();
+  await expect(page.getByTestId('mobile-theme-toggle')).toBeVisible();
+  await expect(page.getByTestId('mobile-sign-out')).toBeVisible();
+
+  const metrics = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    bottomNavBottom: Math.round(
+      window.innerHeight - (document.querySelector('[data-testid="mobile-bottom-nav"]')?.getBoundingClientRect().bottom || 0),
+    ),
+  }));
+  expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+  expect(Math.abs(metrics.bottomNavBottom)).toBeLessThanOrEqual(1);
+});
+
+test('phone-only bottom navigation gives way to the tablet shell at 768px', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await mockAuthenticatedApp(page);
+  await login(page);
+
+  await expect(page.getByTestId('mobile-bottom-nav')).toBeHidden();
+  await expect(page.getByTestId('sidebar-open')).toBeVisible();
 });
