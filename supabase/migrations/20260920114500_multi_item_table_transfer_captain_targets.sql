@@ -393,6 +393,222 @@ $function$;
 REVOKE ALL ON FUNCTION public.guard_pos_operator_ownership() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.guard_pos_operator_ownership() TO service_role;
 
+-- Allow the exact table-item transfer RPC to move an order-item row with
+-- pos.order.transfer. Outside that scoped context, existing split/edit rules stay unchanged.
+CREATE OR REPLACE FUNCTION public.enforce_pos_permission_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public','pg_temp'
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_is_service_role boolean := COALESCE(current_setting('role', true), '') = 'service_role';
+  v_print_only_mutation boolean := false;
+  v_item_transfer_context boolean := false;
+BEGIN
+  IF v_is_service_role OR v_uid IS NULL THEN
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_TABLE_NAME='sales' THEN
+    IF TG_OP='INSERT' AND NOT public.can_permission('pos.payment.take') THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.payment.take';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_TABLE_NAME='order_kitchen_sends' THEN
+    IF NOT public.can_permission('pos.send_kitchen') THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.send_kitchen';
+    END IF;
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_TABLE_NAME='orders' THEN
+    IF TG_OP='INSERT' THEN
+      IF NOT public.can_permission('pos.order.create') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.create'; END IF;
+      RETURN NEW;
+    END IF;
+    IF TG_OP='DELETE' THEN
+      IF NOT public.can_permission('pos.cancel_order') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.cancel_order'; END IF;
+      RETURN OLD;
+    END IF;
+
+    v_print_only_mutation :=
+      (NEW.print_status IS DISTINCT FROM OLD.print_status OR NEW.printed_at IS DISTINCT FROM OLD.printed_at)
+      AND (to_jsonb(NEW)-ARRAY['print_status','printed_at','updated_at']::text[])
+        = (to_jsonb(OLD)-ARRAY['print_status','printed_at','updated_at']::text[]);
+    IF v_print_only_mutation THEN
+      IF NOT public.can_permission('pos.receipt.print') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.receipt.print'; END IF;
+      RETURN NEW;
+    END IF;
+
+    IF NEW.kitchen_status IS DISTINCT FROM OLD.kitchen_status
+       AND (to_jsonb(NEW)-ARRAY['kitchen_status','kitchen_sent_at','kitchen_ready_at','updated_at']::text[])
+         = (to_jsonb(OLD)-ARRAY['kitchen_status','kitchen_sent_at','kitchen_ready_at','updated_at']::text[]) THEN
+      IF OLD.kitchen_status='pending'
+         AND NEW.kitchen_status='sent'
+         AND public.can_permission('pos.send_kitchen')
+         AND EXISTS(SELECT 1 FROM public.order_kitchen_sends s WHERE s.order_id=OLD.id) THEN
+        RETURN NEW;
+      END IF;
+      IF NOT public.can_permission('pos.kds_update') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.kds_update'; END IF;
+      RETURN NEW;
+    END IF;
+
+    IF NEW.station IS DISTINCT FROM OLD.station
+       AND (to_jsonb(NEW)-ARRAY['station','updated_at']::text[])=(to_jsonb(OLD)-ARRAY['station','updated_at']::text[]) THEN
+      IF NOT public.can_permission('pos.kds_update') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.kds_update'; END IF;
+      RETURN NEW;
+    END IF;
+
+    IF NEW.status IS DISTINCT FROM OLD.status THEN
+      IF NEW.status='cancelled' AND NOT public.can_permission('pos.cancel_order') THEN
+        -- Empty-source cancellation created by the exact item-transfer RPC is structural,
+        -- not a user void/cancel action.
+        IF NOT (
+          COALESCE(current_setting('app.pos_item_transfer_source_order_id',true),'')=OLD.id::text
+          AND public.can_permission('pos.order.transfer')
+        ) THEN
+          RAISE EXCEPTION 'PERMISSION_DENIED:pos.cancel_order';
+        END IF;
+      ELSIF NEW.status='completed' THEN
+        IF NOT public.can_permission('pos.payment.take') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.payment.take'; END IF;
+        IF NOT public.can_permission('pos.order.edit')
+           AND (to_jsonb(NEW)-ARRAY['status','payment_status','payment_at','updated_at']::text[])
+             IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['status','payment_status','payment_at','updated_at']::text[]) THEN
+          RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit';
+        END IF;
+      ELSIF NEW.status IN ('open','held') AND NOT public.can_permission('pos.hold') THEN
+        RAISE EXCEPTION 'PERMISSION_DENIED:pos.hold';
+      END IF;
+    END IF;
+
+    IF NEW.table_id IS DISTINCT FROM OLD.table_id
+       AND OLD.table_id IS NOT NULL
+       AND NOT public.can_permission('pos.order.transfer') THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.transfer';
+    END IF;
+
+    IF NEW.status IS NOT DISTINCT FROM OLD.status
+       AND NEW.table_id IS NOT DISTINCT FROM OLD.table_id
+       AND NOT public.can_permission('pos.order.edit') THEN
+      -- Recalculation/status bookkeeping inside the exact item transfer is permitted
+      -- by transfer permission without broad edit permission.
+      IF NOT (
+        (
+          COALESCE(current_setting('app.pos_item_transfer_source_order_id',true),'')=OLD.id::text
+          OR COALESCE(current_setting('app.pos_item_transfer_target_order_id',true),'')=OLD.id::text
+        )
+        AND public.can_permission('pos.order.transfer')
+      ) THEN
+        RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_TABLE_NAME='order_items' THEN
+    IF TG_OP='INSERT' THEN
+      IF NOT public.can_permission('pos.order.create') AND NOT public.can_permission('pos.order.edit') THEN
+        RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit';
+      END IF;
+      RETURN NEW;
+    END IF;
+    IF TG_OP='DELETE' THEN
+      IF NOT public.can_permission('pos.void') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.void'; END IF;
+      RETURN OLD;
+    END IF;
+
+    IF NEW.order_id IS DISTINCT FROM OLD.order_id THEN
+      v_item_transfer_context :=
+        COALESCE(current_setting('app.pos_item_transfer_source_order_id',true),'')=OLD.order_id::text
+        AND COALESCE(current_setting('app.pos_item_transfer_target_order_id',true),'')=NEW.order_id::text
+        AND COALESCE(current_setting('app.pos_item_transfer_item_ids',true),'') LIKE '%' || OLD.id::text || '%'
+        AND public.can_permission('pos.order.transfer');
+
+      IF NOT v_item_transfer_context AND NOT public.can_permission('pos.order.split') THEN
+        RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.split';
+      END IF;
+    ELSIF NOT public.can_permission('pos.order.edit') THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.enforce_pos_permission_mutation() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enforce_pos_permission_mutation() TO service_role;
+
+-- Preserve the existing kitchen-send ownership boundary, but permit order_id
+-- reassignment only for selected lines inside transfer_order_items_to_table.
+CREATE OR REPLACE FUNCTION public.guard_kitchen_send_operator_ownership()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public','pg_temp'
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_is_service_role boolean :=
+    COALESCE(current_setting('role',true),'')='service_role'
+    OR COALESCE(current_setting('request.jwt.claim.role',true),'')='service_role';
+  v_is_db_admin boolean :=
+    COALESCE(current_setting('role',true),'') IN ('','none','postgres','supabase_admin')
+    AND session_user IN ('postgres','supabase_admin');
+  v_order_id uuid;
+  v_owner_id uuid;
+  v_branch_id uuid;
+  v_item_transfer_context boolean := false;
+BEGIN
+  IF v_is_service_role OR v_is_db_admin THEN
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+  IF public.is_pos_admin() THEN
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP='UPDATE' AND NEW.order_id IS DISTINCT FROM OLD.order_id THEN
+    v_item_transfer_context :=
+      COALESCE(current_setting('app.pos_item_transfer_source_order_id',true),'')=OLD.order_id::text
+      AND COALESCE(current_setting('app.pos_item_transfer_target_order_id',true),'')=NEW.order_id::text
+      AND COALESCE(current_setting('app.pos_item_transfer_item_ids',true),'') LIKE '%' || OLD.order_item_id::text || '%'
+      AND public.can_permission('pos.order.transfer');
+
+    IF v_item_transfer_context THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  v_order_id := CASE WHEN TG_OP='DELETE' THEN OLD.order_id ELSE NEW.order_id END;
+
+  SELECT o.cashier_id,o.branch_id
+  INTO v_owner_id,v_branch_id
+  FROM public.orders o
+  WHERE o.id=v_order_id;
+
+  IF v_branch_id IS NULL THEN RAISE EXCEPTION 'ORDER_NOT_FOUND'; END IF;
+  IF NOT public.user_may_access_branch(v_branch_id) THEN RAISE EXCEPTION 'BRANCH_MISMATCH'; END IF;
+  IF v_owner_id IS DISTINCT FROM v_uid THEN RAISE EXCEPTION 'ORDER_OPERATOR_REQUIRED'; END IF;
+
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.guard_kitchen_send_operator_ownership() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.guard_kitchen_send_operator_ownership() TO service_role;
+
 CREATE OR REPLACE FUNCTION public.transfer_order_items_to_table(
   p_order_id uuid,
   p_order_item_ids uuid[],
@@ -562,6 +778,7 @@ BEGIN
   PERFORM set_config('app.pos_item_transfer_target_order_id',v_target_order_id::text,true);
   PERFORM set_config('app.pos_item_transfer_source_table_id',v_order.table_id::text,true);
   PERFORM set_config('app.pos_item_transfer_target_table_id',p_target_table_id::text,true);
+  PERFORM set_config('app.pos_item_transfer_item_ids',array_to_string(v_item_ids,','),true);
 
   UPDATE public.order_items
   SET order_id=v_target_order_id
@@ -662,6 +879,7 @@ BEGIN
   PERFORM set_config('app.pos_item_transfer_target_order_id','',true);
   PERFORM set_config('app.pos_item_transfer_source_table_id','',true);
   PERFORM set_config('app.pos_item_transfer_target_table_id','',true);
+  PERFORM set_config('app.pos_item_transfer_item_ids','',true);
 
   INSERT INTO public.audit_log(user_id,action,entity,entity_id,details,branch_id)
   VALUES(
