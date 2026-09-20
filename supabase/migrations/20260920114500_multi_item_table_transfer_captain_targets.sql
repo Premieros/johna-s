@@ -207,6 +207,8 @@ DECLARE
   v_new_branch_id uuid;
   v_transfer_context boolean:=false;
   v_item_transfer_context boolean:=false;
+  v_order_item_transfer_context boolean:=false;
+  v_table_item_transfer_context boolean:=false;
   v_new_order_item_transfer_context boolean:=false;
   v_owner_mutation boolean:=false;
 BEGIN
@@ -253,6 +255,14 @@ BEGIN
 
     IF NOT public.user_may_access_branch(OLD.branch_id) THEN RAISE EXCEPTION 'BRANCH_MISMATCH'; END IF;
 
+    v_order_item_transfer_context :=
+      (
+        COALESCE(current_setting('app.pos_item_transfer_source_order_id',true),'')=OLD.id::text
+        OR COALESCE(current_setting('app.pos_item_transfer_target_order_id',true),'')=OLD.id::text
+      )
+      AND COALESCE(current_setting('app.pos_item_transfer_branch_id',true),'')=OLD.branch_id::text
+      AND public.can_permission('pos.order.transfer');
+
     v_owner_mutation:=
       (to_jsonb(NEW)-ARRAY['kitchen_status','kitchen_sent_at','kitchen_ready_at','station','print_status','printed_at','updated_at']::text[])
       IS DISTINCT FROM
@@ -274,7 +284,10 @@ BEGIN
       RETURN NEW;
     END IF;
 
-    IF v_owner_mutation AND OLD.cashier_id IS DISTINCT FROM v_uid AND NOT v_can_manage_others THEN
+    IF v_owner_mutation
+       AND OLD.cashier_id IS DISTINCT FROM v_uid
+       AND NOT v_can_manage_others
+       AND NOT v_order_item_transfer_context THEN
       RAISE EXCEPTION 'ORDER_OPERATOR_REQUIRED';
     END IF;
     IF NEW.table_id IS DISTINCT FROM OLD.table_id AND NOT public.can_permission('pos.order.transfer') THEN
@@ -326,12 +339,22 @@ BEGIN
   END IF;
 
   IF TG_TABLE_NAME='dining_tables' THEN
+    v_table_item_transfer_context :=
+      (
+        COALESCE(current_setting('app.pos_item_transfer_source_table_id',true),'')=OLD.id::text
+        OR COALESCE(current_setting('app.pos_item_transfer_target_table_id',true),'')=OLD.id::text
+      )
+      AND COALESCE(current_setting('app.pos_item_transfer_branch_id',true),'')=OLD.branch_id::text
+      AND public.can_permission('pos.order.transfer');
+
     IF TG_OP='DELETE' THEN
-      IF NOT v_can_manage_others AND EXISTS(
-        SELECT 1 FROM public.orders o
-        WHERE o.table_id=OLD.id AND o.status IN('open','held')
-          AND o.cashier_id IS DISTINCT FROM v_uid
-      ) THEN
+      IF NOT v_can_manage_others
+         AND NOT v_table_item_transfer_context
+         AND EXISTS(
+           SELECT 1 FROM public.orders o
+           WHERE o.table_id=OLD.id AND o.status IN('open','held')
+             AND o.cashier_id IS DISTINCT FROM v_uid
+         ) THEN
         RAISE EXCEPTION 'TABLE_OPERATOR_REQUIRED';
       END IF;
       RETURN OLD;
@@ -339,11 +362,13 @@ BEGIN
     IF NEW.status IS DISTINCT FROM OLD.status
        OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
        OR NEW.is_active IS DISTINCT FROM OLD.is_active THEN
-      IF NOT v_can_manage_others AND EXISTS(
-        SELECT 1 FROM public.orders o
-        WHERE o.table_id=OLD.id AND o.status IN('open','held')
-          AND o.cashier_id IS DISTINCT FROM v_uid
-      ) THEN
+      IF NOT v_can_manage_others
+         AND NOT v_table_item_transfer_context
+         AND EXISTS(
+           SELECT 1 FROM public.orders o
+           WHERE o.table_id=OLD.id AND o.status IN('open','held')
+             AND o.cashier_id IS DISTINCT FROM v_uid
+         ) THEN
         RAISE EXCEPTION 'TABLE_OPERATOR_REQUIRED';
       END IF;
     END IF;
@@ -472,6 +497,9 @@ BEGIN
 
     PERFORM set_config('app.pos_item_transfer_new_order_owner_id',COALESCE(v_order.cashier_id,v_uid)::text,true);
     PERFORM set_config('app.pos_item_transfer_branch_id',v_order.branch_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_source_order_id',p_order_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_source_table_id',v_order.table_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_target_table_id',p_target_table_id::text,true);
 
     INSERT INTO public.orders(
       order_number,branch_id,order_type,status,table_id,customer_id,
@@ -518,8 +546,11 @@ BEGIN
   FROM public.order_kitchen_sends s
   WHERE s.order_item_id=ANY(v_item_ids);
 
+  PERFORM set_config('app.pos_item_transfer_branch_id',v_order.branch_id::text,true);
   PERFORM set_config('app.pos_item_transfer_source_order_id',p_order_id::text,true);
   PERFORM set_config('app.pos_item_transfer_target_order_id',v_target_order_id::text,true);
+  PERFORM set_config('app.pos_item_transfer_source_table_id',v_order.table_id::text,true);
+  PERFORM set_config('app.pos_item_transfer_target_table_id',p_target_table_id::text,true);
 
   UPDATE public.order_items
   SET order_id=v_target_order_id
@@ -537,9 +568,6 @@ BEGIN
   SET order_id=v_target_order_id
   WHERE order_item_id=ANY(v_item_ids)
     AND order_id=p_order_id;
-
-  PERFORM set_config('app.pos_item_transfer_source_order_id','',true);
-  PERFORM set_config('app.pos_item_transfer_target_order_id','',true);
 
   UPDATE public.orders
   SET discount_amount=GREATEST(COALESCE(discount_amount,0)-v_moved_discount,0),
@@ -582,6 +610,13 @@ BEGIN
       WHERE id=v_source_table_id;
     END IF;
   END IF;
+
+  PERFORM set_config('app.pos_item_transfer_new_order_owner_id','',true);
+  PERFORM set_config('app.pos_item_transfer_branch_id','',true);
+  PERFORM set_config('app.pos_item_transfer_source_order_id','',true);
+  PERFORM set_config('app.pos_item_transfer_target_order_id','',true);
+  PERFORM set_config('app.pos_item_transfer_source_table_id','',true);
+  PERFORM set_config('app.pos_item_transfer_target_table_id','',true);
 
   INSERT INTO public.audit_log(user_id,action,entity,entity_id,details,branch_id)
   VALUES(
