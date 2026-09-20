@@ -12,6 +12,7 @@ import { formatCurrency, todayISO, formatDate } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import type {
   TrialBalanceRow, GeneralLedgerRow, TrialBalanceSummary,
   IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow,
@@ -26,14 +27,15 @@ export function FinancialReportsPage() {
   const branchFilter = useBranchFilter();
   const isAr = lang === 'ar';
   const [searchParams] = useSearchParams();
+  const history = useHistoryAccess();
 
   const requestedView = searchParams.get('view');
   const validViews: View[] = ['trial_balance', 'ledger', 'income', 'balance_sheet', 'ar_aging', 'ap_aging', 'aging_summary', 'cash_flow', 'party_statement'];
   const initialView = validViews.includes(requestedView as View) ? (requestedView as View) : 'trial_balance';
 
   const [view, setView] = useState<View>(initialView);
-  const [from, setFrom] = useState(() => searchParams.get('from') || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
-  const [to, setTo] = useState(() => searchParams.get('to') || todayISO());
+  const [from, setFrom] = useState(() => history.clampRange(searchParams.get('from') || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), searchParams.get('to') || todayISO()).from);
+  const [to, setTo] = useState(() => history.clampRange(searchParams.get('from'), searchParams.get('to') || todayISO()).to);
   const [loading, setLoading] = useState(false);
   const { effectiveSettings } = useSettings();
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
@@ -80,10 +82,15 @@ export function FinancialReportsPage() {
     }
     setLoading(true);
     try {
+      const allowed = history.clampRange(from, to);
+      if (allowed.from !== from) setFrom(allowed.from);
+      if (allowed.to !== to) setTo(allowed.to);
+      const safeFrom = allowed.from;
+      const safeTo = allowed.to;
       if (view === 'trial_balance') {
         const [{ data }, { data: summary }] = await Promise.all([
-          api.reporting.getTrialBalance({ p_branch_id: effectiveBranchFilter, p_to_date: to }),
-          api.reporting.getTrialBalanceSummary({ p_branch_id: effectiveBranchFilter, p_to_date: to }),
+          api.reporting.getTrialBalance({ p_branch_id: effectiveBranchFilter, p_to_date: safeTo }),
+          api.reporting.getTrialBalanceSummary({ p_branch_id: effectiveBranchFilter, p_to_date: safeTo }),
         ]);
         setTb((data as TrialBalanceRow[]) || []);
         setTbSummary((summary as TrialBalanceSummary) || null);
@@ -91,42 +98,42 @@ export function FinancialReportsPage() {
         const { data } = await api.reporting.getGeneralLedger( {
           p_branch_id: effectiveBranchFilter,
           p_account_id: accountId || null,
-          p_from_date: from,
-          p_to_date: to,
+          p_from_date: safeFrom,
+          p_to_date: safeTo,
         });
         setGl((data as GeneralLedgerRow[]) || []);
       } else if (view === 'income') {
-        const { data } = await api.reporting.getIncomeStatement( { p_branch_id: effectiveBranchFilter, p_from_date: from, p_to_date: to });
+        const { data } = await api.reporting.getIncomeStatement( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo });
         setIncome((data as IncomeStatementResult) || null);
       } else if (view === 'balance_sheet') {
-        const { data } = await api.reporting.getBalanceSheet( { p_branch_id: effectiveBranchFilter, p_as_of: to });
+        const { data } = await api.reporting.getBalanceSheet( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
         setSheet((data as BalanceSheetResult) || null);
       } else if (view === 'ar_aging') {
-        const { data } = await api.reporting.getArAging( { p_branch_id: effectiveBranchFilter, p_as_of: to });
+        const { data } = await api.reporting.getArAging( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
         setArAging((data as ArAgingRow[]) || []);
       } else if (view === 'ap_aging') {
-        const { data } = await api.reporting.getApAging( { p_branch_id: effectiveBranchFilter, p_as_of: to });
+        const { data } = await api.reporting.getApAging( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
         setApAging((data as ApAgingRow[]) || []);
       } else if (view === 'aging_summary') {
-        const { data } = await api.reporting.getAgingSummary( { p_branch_id: effectiveBranchFilter, p_as_of: to });
+        const { data } = await api.reporting.getAgingSummary( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
         setAgingSummary((data as AgingSummaryResult) || null);
       } else if (view === 'cash_flow') {
-        const { data } = await api.reporting.getCashFlow( { p_branch_id: effectiveBranchFilter, p_from_date: from, p_to_date: to });
+        const { data } = await api.reporting.getCashFlow( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo });
         setCashFlow((data as CashFlowRow[]) || []);
       } else if (view === 'party_statement') {
         const { data } = await api.reporting.getPartyStatement( {
           p_branch_id: effectiveBranchFilter,
           p_side: partySide,
           p_party_id: partyId || null,
-          p_from_date: from || null,
-          p_to_date: to || null,
+          p_from_date: safeFrom || null,
+          p_to_date: safeTo || null,
         });
         setPartyStmt((data as PartyStatementResult) || null);
       }
     } finally {
       setLoading(false);
     }
-  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId]);
+  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId, history.unlimited]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -190,8 +197,8 @@ export function FinancialReportsPage() {
             ))}
           </div>
           <div className="flex flex-wrap items-end gap-4">
-            {(view === 'ledger' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}
-            <Input label={view === 'income' || view === 'ledger' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            {(view === 'ledger' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
+            <Input label={view === 'income' || view === 'ledger' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
             {view === 'ledger' && accounts.length > 0 && (
               <Select label={t('accountName')} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">{t('allAccounts')}</option>
