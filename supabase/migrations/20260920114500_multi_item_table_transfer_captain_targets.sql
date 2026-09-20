@@ -175,7 +175,9 @@ BEGIN
     jsonb_build_object(
       'from_cashier_id',v_order.cashier_id,
       'to_cashier_id',p_target_user_id,
-      'table_id',v_order.table_id
+      'table_id',v_order.table_id,
+      'transferred_by',v_executor_id,
+      'transferred_at',now()
     ),
     v_order.branch_id
   );
