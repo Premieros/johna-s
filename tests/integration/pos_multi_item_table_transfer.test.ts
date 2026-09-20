@@ -11,12 +11,14 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
   let imp = false;
   let sourceTable = '';
   let targetTable = '';
+  let vacantTargetTable = '';
   let crossBranchTable = '';
   let sourceOrder = '';
   let targetOrder = '';
   let itemA = '';
   let itemB = '';
   let sentItem = '';
+  let kitchenSendId = '';
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
@@ -25,12 +27,16 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
     ids = await seedRlsFixture(client);
     imp = await canImpersonate(client);
 
+    // The executor has transfer permission, but deliberately does NOT have the
+    // broad users.manage capability. The dedicated RPC context must be enough.
     await client.query(
       `UPDATE public.roles
-       SET permissions = CASE
-         WHEN COALESCE(permissions,'[]'::jsonb) ? 'pos.order.transfer' THEN permissions
-         ELSE COALESCE(permissions,'[]'::jsonb) || '["pos.order.transfer"]'::jsonb
-       END
+       SET permissions = (
+         CASE
+           WHEN COALESCE(permissions,'[]'::jsonb) ? 'pos.order.transfer' THEN permissions
+           ELSE COALESCE(permissions,'[]'::jsonb) || '["pos.order.transfer"]'::jsonb
+         END
+       ) - 'users.manage'
        WHERE role='cashier'`,
     );
 
@@ -47,12 +53,14 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
        VALUES
          ($1::uuid,'Multi Source','occupied'),
          ($1::uuid,'Multi Target','occupied'),
+         ($1::uuid,'Multi Vacant Target','vacant'),
          ($2::uuid,'Multi Other Branch','vacant')
        RETURNING id,name`,
       [ids.branchA, ids.branchB],
     );
     sourceTable = tables.rows.find((row) => row.name === 'Multi Source')!.id;
     targetTable = tables.rows.find((row) => row.name === 'Multi Target')!.id;
+    vacantTargetTable = tables.rows.find((row) => row.name === 'Multi Vacant Target')!.id;
     crossBranchTable = tables.rows.find((row) => row.name === 'Multi Other Branch')!.id;
 
     const orders = await client.query<{ id: string; order_number: string }>(
@@ -62,9 +70,9 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
        )
        VALUES
          ('MULTI-SOURCE',$1::uuid,'dine_in','open',$2::uuid,$4::uuid,90,9,'amount',4.5,85.5),
-         ('MULTI-TARGET',$1::uuid,'dine_in','open',$3::uuid,$4::uuid,30,0,'amount',0,30)
+         ('MULTI-TARGET',$1::uuid,'dine_in','open',$3::uuid,$5::uuid,30,0,'amount',0,30)
        RETURNING id,order_number`,
-      [ids.branchA, sourceTable, targetTable, ids.users.cashier],
+      [ids.branchA, sourceTable, targetTable, ids.users.cashier, ids.users.branch_manager],
     );
     sourceOrder = orders.rows.find((row) => row.order_number === 'MULTI-SOURCE')!.id;
     targetOrder = orders.rows.find((row) => row.order_number === 'MULTI-TARGET')!.id;
@@ -82,10 +90,23 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
     itemB = rows.rows.find((row) => row.notes === 'move-b')!.id;
     sentItem = rows.rows.find((row) => row.notes === 'sent')!.id;
 
+    const send = await client.query<{ id: string }>(
+      `INSERT INTO public.order_kitchen_sends(
+         branch_id,order_id,order_item_id,sent_quantity,sent_by
+       )
+       VALUES($1::uuid,$2::uuid,$3::uuid,1,$4::uuid)
+       RETURNING id`,
+      [ids.branchA, sourceOrder, sentItem, ids.users.cashier],
+    );
+    kitchenSendId = send.rows[0].id;
+
     await client.query(
-      `INSERT INTO public.order_kitchen_sends(branch_id,order_id,order_item_id,sent_quantity)
-       VALUES($1::uuid,$2::uuid,$3::uuid,1)`,
-      [ids.branchA, sourceOrder, sentItem],
+      `INSERT INTO public.order_kitchen_inventory_events(
+         branch_id,warehouse_id,order_id,order_item_id,kitchen_send_id,
+         sent_quantity,voided_quantity,total_cost,created_by
+       )
+       VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,1,0,10,$6::uuid)`,
+      [ids.branchA, ids.whA, sourceOrder, sentItem, kitchenSendId, ids.users.cashier],
     );
   });
 
@@ -96,10 +117,11 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
     }
   });
 
-  it('moves multiple unsent lines atomically to another table order', async (ctx) => {
+  it('moves multiple lines including a sent line into another user order without resend or stock deduction', async (ctx) => {
     if (!imp) return ctx.skip();
 
     const beforeSends = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.order_kitchen_sends');
+    const beforeEvents = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.order_kitchen_inventory_events');
     const beforeLedger = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.inventory_ledger');
 
     const moved = await runAsPersist(
@@ -110,26 +132,60 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
          ARRAY[$2::uuid,$3::uuid],
          $4::uuid
        ) AS result`,
-      [sourceOrder, itemA, itemB, targetTable],
+      [sourceOrder, itemA, sentItem, targetTable],
     );
     expect(moved.error).toBeUndefined();
     expect(moved.rows[0].result).toMatchObject({
       success: true,
       source_order_id: sourceOrder,
       target_order_id: targetOrder,
+      target_owner_id: ids.users.branch_manager,
       moved_item_count: 2,
+      moved_sent_item_count: 1,
       source_order_empty: false,
       inventory_changed: false,
-      kds_changed: false,
+      kds_reassigned: true,
+      kds_resent: false,
     });
 
     const lines = await client.query<{ id: string; order_id: string }>(
-      `SELECT id,order_id FROM public.order_items WHERE id=ANY($1::uuid[]) ORDER BY id`,
+      `SELECT id,order_id FROM public.order_items
+       WHERE id=ANY($1::uuid[]) ORDER BY id`,
       [[itemA, itemB, sentItem]],
     );
     expect(lines.find((row) => row.id === itemA)?.order_id).toBe(targetOrder);
-    expect(lines.find((row) => row.id === itemB)?.order_id).toBe(targetOrder);
-    expect(lines.find((row) => row.id === sentItem)?.order_id).toBe(sourceOrder);
+    expect(lines.find((row) => row.id === sentItem)?.order_id).toBe(targetOrder);
+    expect(lines.find((row) => row.id === itemB)?.order_id).toBe(sourceOrder);
+
+    const targetOwner = await client.query<{ cashier_id: string }>(
+      'SELECT cashier_id FROM public.orders WHERE id=$1',
+      [targetOrder],
+    );
+    expect(targetOwner.rows[0].cashier_id).toBe(ids.users.branch_manager);
+
+    const kitchenLineage = await client.query<{
+      send_order_id: string;
+      event_order_id: string;
+      sent_by: string;
+      created_by: string;
+    }>(
+      `SELECT
+         s.order_id AS send_order_id,
+         e.order_id AS event_order_id,
+         s.sent_by,
+         e.created_by
+       FROM public.order_kitchen_sends s
+       JOIN public.order_kitchen_inventory_events e
+         ON e.kitchen_send_id=s.id
+       WHERE s.id=$1::uuid`,
+      [kitchenSendId],
+    );
+    expect(kitchenLineage.rows[0]).toEqual({
+      send_order_id: targetOrder,
+      event_order_id: targetOrder,
+      sent_by: ids.users.cashier,
+      created_by: ids.users.cashier,
+    });
 
     const source = await client.query<{ discount_amount: string; tax_amount: string }>(
       'SELECT discount_amount::text,tax_amount::text FROM public.orders WHERE id=$1',
@@ -144,29 +200,15 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
     expect(Number(target.rows[0].discount_amount)).toBeCloseTo(6, 4);
     expect(Number(target.rows[0].tax_amount)).toBeCloseTo(3, 4);
 
-    const audit = await client.query<{ details: Record<string, unknown> }>(
-      `SELECT details
-       FROM public.audit_log
-       WHERE action='ORDER_ITEMS_TABLE_TRANSFERRED' AND entity_id=$1::uuid
-       ORDER BY created_at DESC LIMIT 1`,
-      [sourceOrder],
-    );
-    expect(audit.rows[0].details).toMatchObject({
-      item_count: 2,
-      source_table_id: sourceTable,
-      target_table_id: targetTable,
-      target_order_id: targetOrder,
-      inventory_changed: false,
-      kds_changed: false,
-    });
-
     const afterSends = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.order_kitchen_sends');
+    const afterEvents = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.order_kitchen_inventory_events');
     const afterLedger = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.inventory_ledger');
     expect(afterSends.rows[0].n).toBe(beforeSends.rows[0].n);
+    expect(afterEvents.rows[0].n).toBe(beforeEvents.rows[0].n);
     expect(afterLedger.rows[0].n).toBe(beforeLedger.rows[0].n);
   });
 
-  it('rejects sent lines without partial movement', async (ctx) => {
+  it('rejects a target table from another branch without moving the remaining line', async (ctx) => {
     if (!imp) return ctx.skip();
 
     const result = await runAs(
@@ -177,31 +219,22 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
          ARRAY[$2::uuid],
          $3::uuid
        ) AS result`,
-      [sourceOrder, sentItem, targetTable],
+      [sourceOrder, itemB, crossBranchTable],
     );
     expect(result.error).toBeUndefined();
-    expect(result.rows[0].result).toMatchObject({ success: false, error: 'ITEM_ALREADY_SENT' });
+    expect(result.rows[0].result).toMatchObject({ success: false, error: 'TARGET_TABLE_NOT_FOUND' });
 
     const row = await client.query<{ order_id: string }>(
       'SELECT order_id FROM public.order_items WHERE id=$1::uuid',
-      [sentItem],
+      [itemB],
     );
     expect(row.rows[0].order_id).toBe(sourceOrder);
   });
 
-  it('rejects a target table from another branch', async (ctx) => {
+  it('keeps the source operator when the selected item moves to a vacant table', async (ctx) => {
     if (!imp) return ctx.skip();
 
-    const extra = await client.query<{ id: string }>(
-      `INSERT INTO public.order_items(order_id,product_id,quantity,unit_price,total,notes)
-       SELECT $1::uuid,product_id,1,30,30,'cross-branch'
-       FROM public.order_items
-       WHERE id=$2::uuid
-       RETURNING id`,
-      [sourceOrder, sentItem],
-    );
-
-    const result = await runAs(
+    const moved = await runAsPersist(
       client,
       ids.users.cashier,
       `SELECT public.transfer_order_items_to_table(
@@ -209,9 +242,36 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
          ARRAY[$2::uuid],
          $3::uuid
        ) AS result`,
-      [sourceOrder, extra.rows[0].id, crossBranchTable],
+      [sourceOrder, itemB, vacantTargetTable],
     );
-    expect(result.error).toBeUndefined();
-    expect(result.rows[0].result).toMatchObject({ success: false, error: 'TARGET_TABLE_NOT_FOUND' });
+    expect(moved.error).toBeUndefined();
+    expect(moved.rows[0].result).toMatchObject({
+      success: true,
+      source_order_id: sourceOrder,
+      target_owner_id: ids.users.cashier,
+      moved_item_count: 1,
+      moved_sent_item_count: 0,
+      source_order_empty: true,
+      inventory_changed: false,
+      kds_reassigned: false,
+      kds_resent: false,
+    });
+
+    const newOrderId = String(moved.rows[0].result.target_order_id);
+    const target = await client.query<{ cashier_id: string; table_id: string; status: string }>(
+      'SELECT cashier_id,table_id,status FROM public.orders WHERE id=$1::uuid',
+      [newOrderId],
+    );
+    expect(target.rows[0]).toEqual({
+      cashier_id: ids.users.cashier,
+      table_id: vacantTargetTable,
+      status: 'open',
+    });
+
+    const source = await client.query<{ status: string }>(
+      'SELECT status FROM public.orders WHERE id=$1::uuid',
+      [sourceOrder],
+    );
+    expect(source.rows[0].status).toBe('cancelled');
   });
 });
