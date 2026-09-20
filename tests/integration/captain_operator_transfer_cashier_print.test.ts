@@ -283,7 +283,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       `SELECT public.transfer_order_operator($1,$2) AS r`,
       [orderId, captainB],
     );
-    expect(invalidOtherBranchCaptain).toMatchObject({ success: false, error: 'TARGET_USER_NOT_BRANCH_CAPTAIN' });
+    expect(invalidOtherBranchCaptain).toMatchObject({ success: false, error: 'TARGET_USER_NOT_IN_BRANCH' });
 
     const transferred = await rpc(
       ids.users.branch_manager,
