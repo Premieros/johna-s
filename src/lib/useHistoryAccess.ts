@@ -24,15 +24,17 @@ export function clampHistoryRange(
   now = new Date(),
 ): { from: string; to: string; clamped: boolean } {
   const today = now.toISOString().slice(0, 10);
-  const targetTo = to || today;
-  if (unlimited) return { from: from || '', to: targetTo, clamped: false };
+  const requestedTo = to || today;
+  if (unlimited) return { from: from || '', to: requestedTo, clamped: false };
 
-  const cutoff = historyCutoffDate(new Date(`${targetTo}T12:00:00Z`));
+  const cutoff = historyCutoffDate(now);
+  const targetTo = requestedTo < cutoff ? cutoff : requestedTo;
   const requestedFrom = from || cutoff;
+  const targetFrom = requestedFrom < cutoff ? cutoff : requestedFrom;
   return {
-    from: requestedFrom < cutoff ? cutoff : requestedFrom,
+    from: targetFrom > targetTo ? targetTo : targetFrom,
     to: targetTo,
-    clamped: requestedFrom < cutoff,
+    clamped: requestedFrom < cutoff || requestedTo < cutoff || targetFrom > targetTo,
   };
 }
 
