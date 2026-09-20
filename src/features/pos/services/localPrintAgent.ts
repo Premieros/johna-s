@@ -220,6 +220,205 @@ export function buildStationTicketText(
   return lines.join('\r\n');
 }
 
+function escapeFixedFormHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export function buildStationTicketHtml(
+  station: string,
+  items: KitchenSendItem[],
+  ctx: LocalKitchenPrintContext,
+  paperWidthMm = 80,
+): string {
+  const width = Number(paperWidthMm) <= 60 ? 58 : 80;
+  const compact = width === 58;
+  const ar = ctx.isAr;
+  const typeLabel = ctx.orderType ? kitchenOrderTypeLabel(ctx.orderType, ar) : '';
+  const time = kitchenTime(ar);
+  const estimatedItemMm = items.reduce((sum, item) => {
+    const modifiers = modifierNames(item, ar).length;
+    const hasNote = Boolean(item.notes?.trim());
+    return sum + (compact ? 7 : 8.5) + modifiers * (compact ? 3.2 : 3.6) + (hasNote ? (compact ? 5 : 5.5) : 0);
+  }, 0);
+  const pageHeightMm = Math.max(compact ? 55 : 62, Math.ceil((compact ? 42 : 48) + estimatedItemMm));
+
+  const rows = items.map((item) => {
+    const qty = Number(item.quantity || 0);
+    const modifiers = modifierNames(item, ar)
+      .map((modifier) => `<div class="modifier">+ ${escapeFixedFormHtml(modifier)}</div>`)
+      .join('');
+    const note = item.notes?.trim()
+      ? `<div class="note"><strong>${ar ? 'ملاحظة' : 'NOTE'}:</strong> ${escapeFixedFormHtml(item.notes.trim())}</div>`
+      : '';
+    return `
+      <section class="k-item">
+        <div class="k-item-line">
+          <div class="k-qty ltr">${escapeFixedFormHtml(qty)}</div>
+          <div class="k-name">${escapeFixedFormHtml(item.product_name || '—')}</div>
+        </div>
+        ${modifiers}
+        ${note}
+      </section>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="${ar ? 'ar' : 'en'}" dir="${ar ? 'rtl' : 'ltr'}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET'}</title>
+  <style>
+    :root { color-scheme: light only; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: ${width}mm; min-width: ${width}mm; max-width: ${width}mm;
+      background: #fff; color: #000;
+      font-family: "Arial Narrow", Tahoma, Arial, "Segoe UI", sans-serif;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .ticket {
+      width: ${width}mm;
+      padding: ${compact ? 2.5 : 3.2}mm ${compact ? 2.4 : 3}mm ${compact ? 2.8 : 3.5}mm;
+      background: #fff;
+    }
+    .brand { text-align: center; margin-bottom: ${compact ? 2.4 : 3}mm; }
+    .brand-name {
+      font-family: Arial, "Arial Black", Tahoma, sans-serif;
+      font-size: ${compact ? 24 : 29}px;
+      line-height: 1; font-weight: 900; letter-spacing: -1px; white-space: nowrap;
+    }
+    .restaurant {
+      margin-top: .9mm; font-family: Arial, Tahoma, sans-serif;
+      font-size: ${compact ? 8.5 : 10}px; line-height: 1;
+      letter-spacing: ${compact ? 2.8 : 3.8}px; font-weight: 700;
+      direction: ltr; unicode-bidi: isolate;
+    }
+    .title-band {
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+      gap: ${compact ? 1.7 : 2.5}mm; margin-top: ${compact ? 1.4 : 2}mm;
+    }
+    .title-band span, .rule { border-top: .28mm solid #000; }
+    .ticket-title {
+      font-size: ${compact ? 16 : 19}px; line-height: 1; font-weight: 900;
+      white-space: nowrap; text-align: center;
+    }
+    .copy-label {
+      margin-top: .9mm; text-align: center;
+      font-size: ${compact ? 8.5 : 10}px; line-height: 1;
+      font-weight: 800; letter-spacing: ${compact ? 1.7 : 2.3}px;
+    }
+    .meta { margin: ${compact ? 2.5 : 3.2}mm 0 ${compact ? 2 : 2.6}mm; }
+    .meta-row {
+      display: grid; grid-template-columns: ${compact ? '29%' : '30%'} minmax(0,1fr);
+      gap: 1.7mm; margin: ${compact ? .45 : .6}mm 0;
+      font-size: ${compact ? 10.5 : 12}px; line-height: 1.2;
+    }
+    .meta-label { font-weight: 800; }
+    .meta-value { font-weight: 650; overflow-wrap: anywhere; }
+    .ltr { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+    .rule { width: 100%; margin: ${compact ? 1.8 : 2.4}mm 0; }
+    .items-title {
+      font-size: ${compact ? 17 : 20}px; line-height: 1; font-weight: 900;
+      margin-bottom: ${compact ? 1.4 : 1.8}mm;
+    }
+    .columns {
+      display: grid; grid-template-columns: ${compact ? '9mm minmax(0,1fr)' : '11mm minmax(0,1fr)'};
+      gap: 1.2mm; margin-bottom: ${compact ? .9 : 1.2}mm;
+      font-size: ${compact ? 8.5 : 10}px; font-weight: 800;
+    }
+    .k-item {
+      padding: ${compact ? .9 : 1.2}mm 0;
+      break-inside: avoid; page-break-inside: avoid;
+    }
+    .k-item-line {
+      display: grid; grid-template-columns: ${compact ? '9mm minmax(0,1fr)' : '11mm minmax(0,1fr)'};
+      gap: 1.2mm; align-items: baseline;
+    }
+    .k-qty {
+      text-align: center; font-size: ${compact ? 14 : 17}px; line-height: 1;
+      font-weight: 900;
+    }
+    .k-name {
+      font-size: ${compact ? 14 : 17}px; line-height: 1.1;
+      font-weight: 900; overflow-wrap: anywhere;
+    }
+    .modifier {
+      margin-top: .55mm;
+      padding-inline-start: ${compact ? 10.2 : 12.2}mm;
+      font-size: ${compact ? 10 : 11.5}px; line-height: 1.15; font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .note {
+      margin: ${compact ? .7 : .9}mm 0 0 ${ar ? '0' : (compact ? '10.2mm' : '12.2mm')};
+      ${ar ? `margin-right:${compact ? '10.2mm' : '12.2mm'};` : ''}
+      padding: ${compact ? .7 : .9}mm;
+      border: .25mm solid #000;
+      font-size: ${compact ? 9.5 : 11}px; line-height: 1.2; font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .end {
+      margin-top: ${compact ? 2.2 : 3}mm;
+      text-align: center; font-size: ${compact ? 12 : 14}px; line-height: 1;
+      font-weight: 900;
+    }
+    .end-mark {
+      display: grid; grid-template-columns: 10mm auto 10mm; justify-content: center;
+      align-items: center; gap: 1.6mm; margin-top: 1.4mm;
+    }
+    .end-mark span { width: 10mm; border-top: .25mm solid #000; }
+    .end-mark b { font-size: ${compact ? 12 : 14}px; line-height: 1; }
+    @page { size: ${width}mm ${pageHeightMm}mm; margin: 0; }
+    @media print {
+      html, body, .ticket {
+        width: ${width}mm !important; min-width: ${width}mm !important; max-width: ${width}mm !important;
+        margin: 0 !important; background: #fff !important; color: #000 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="ticket">
+    <header class="brand">
+      <div class="brand-name">JOHNA'S</div>
+      <div class="restaurant">RESTAURANT</div>
+    </header>
+
+    <div class="title-band">
+      <span></span><div class="ticket-title">${ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET'}</div><span></span>
+    </div>
+    <div class="copy-label">${ar ? 'نسخة المطبخ' : 'KITCHEN COPY'}</div>
+
+    <section class="meta">
+      <div class="meta-row"><div class="meta-label">${ar ? 'المحطة' : 'Station'}:</div><div class="meta-value">${escapeFixedFormHtml(station)}</div></div>
+      ${ctx.orderNumber ? `<div class="meta-row"><div class="meta-label">${ar ? 'رقم الطلب' : 'Order'}:</div><div class="meta-value ltr">${escapeFixedFormHtml(ctx.orderNumber)}</div></div>` : ''}
+      <div class="meta-row"><div class="meta-label">${ar ? 'الوقت' : 'Time'}:</div><div class="meta-value ltr">${escapeFixedFormHtml(time)}</div></div>
+      ${typeLabel ? `<div class="meta-row"><div class="meta-label">${ar ? 'النوع' : 'Type'}:</div><div class="meta-value">${escapeFixedFormHtml(typeLabel)}</div></div>` : ''}
+      ${ctx.tableName ? `<div class="meta-row"><div class="meta-label">${ar ? 'الطاولة' : 'Table'}:</div><div class="meta-value">${escapeFixedFormHtml(ctx.tableName)}</div></div>` : ''}
+      ${ctx.guestCount ? `<div class="meta-row"><div class="meta-label">${ar ? 'الأفراد' : 'Guests'}:</div><div class="meta-value ltr">${escapeFixedFormHtml(ctx.guestCount)}</div></div>` : ''}
+    </section>
+
+    <div class="rule"></div>
+    <section>
+      <div class="items-title">${ar ? 'الأصناف' : 'ITEMS'}</div>
+      <div class="columns"><div>${ar ? 'الكمية' : 'QTY'}</div><div>${ar ? 'الصنف' : 'ITEM'}</div></div>
+      ${rows}
+    </section>
+    <div class="rule"></div>
+    <footer class="end">
+      <div>${ar ? 'نهاية الطلب' : 'END OF ORDER'}</div>
+      <div class="end-mark"><span></span><b>♨</b><span></span></div>
+    </footer>
+  </main>
+</body>
+</html>`;
+}
+
 async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), PRINT_TIMEOUT_MS);
@@ -383,6 +582,8 @@ export async function printKitchenStationsLocally(
     const results = await Promise.all(Object.entries(groups).map(([station, stationItems]) => executeSilentPrint({
       printerName: routes[station],
       text: buildStationTicketText(station, stationItems, ctx),
+      html: buildStationTicketHtml(station, stationItems, ctx, 80),
+      paperWidthMm: 80,
     })));
     return results.every(Boolean);
   }

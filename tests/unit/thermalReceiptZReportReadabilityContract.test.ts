@@ -31,13 +31,17 @@ describe('thermal receipt and Z-report readability contract', () => {
     expect(wrapperHook).toContain('extended.payments || []');
   });
 
-  it('queues open checks as text and never sends receipt/report HTML to the legacy thermal transport', () => {
+  it('keeps canonical text for legacy thermal transport and layers fixed forms for capable agents', () => {
     expect(baseHook).toContain('buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr)');
+    expect(baseHook).toContain('fixedFormHtml');
+    expect(baseHook).toContain('rendererVersion: 1');
     expect(baseHook).toContain('copies: 1');
     expect(wrapperHook).toContain('buildReceiptThermalText(receipt, input.effSettings, lang, isAr)');
+    expect(wrapperHook).toContain('fixedFormHtml');
     expect(wrapperHook).toContain('enqueueCloudOpenOrderPrint({');
     expect(agent).toContain("const isThermalDocument = job.kind === 'receipt' || job.kind === 'report'");
-    expect(agent).toContain('html: isThermalDocument ? undefined : job.payload?.html');
+    expect(agent).toContain("const fixedFormHtml = job.payload?.rendererVersion === 1");
+    expect(agent).toContain('html: fixedFormHtml || (isThermalDocument ? undefined : job.payload?.html)');
     expect(localAgent).toContain("text: options.text || (options.html ? htmlToThermalText(options.html) : '')");
   });
 

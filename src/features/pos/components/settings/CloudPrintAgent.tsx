@@ -60,10 +60,13 @@ async function executeJob(job: CloudPrintJob, agentId: string, printerName: stri
   const legacyText = isThermalDocument && !job.payload?.text && job.payload?.html
     ? legacyThermalHtmlToText(job.payload.html)
     : '';
+  const fixedFormHtml = job.payload?.rendererVersion === 1
+    ? job.payload?.fixedFormHtml?.trim() || ''
+    : '';
   const result = await executeSilentPrintDetailed({
     printerName,
     text: job.payload?.text || legacyText || undefined,
-    html: isThermalDocument ? undefined : job.payload?.html,
+    html: fixedFormHtml || (isThermalDocument ? undefined : job.payload?.html),
     copies: Math.max(1, Math.min(5, Number(job.payload?.copies || 1))),
     paperWidthMm: Number(job.payload?.paperWidthMm || 80),
   });

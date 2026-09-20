@@ -1,12 +1,12 @@
 import { supabase, shifts as shiftsApi, pos as apiPos } from '@/api';
 import type { KitchenSendItem } from '../types';
-import { buildStationTicketText, groupKitchenItemsByStation, type LocalKitchenPrintContext } from './localPrintAgent';
+import { buildStationTicketHtml, buildStationTicketText, groupKitchenItemsByStation, type LocalKitchenPrintContext } from './localPrintAgent';
 
 const STORAGE_AGENT_ENABLED_KEY = 'johns_pos_cloud_print_agent_enabled';
 const STORAGE_AGENT_BRANCH_KEY = 'johns_pos_cloud_print_agent_branch_id';
 const STORAGE_AGENT_ID_KEY = 'johns_pos_cloud_print_agent_id';
 
-export interface CloudPrintPayload { text?: string; html?: string; paperWidthMm?: number; copies?: number; }
+export interface CloudPrintPayload { text?: string; html?: string; fixedFormHtml?: string; rendererVersion?: number; paperWidthMm?: number; copies?: number; }
 export interface CloudPrintJob {
   id: string; branch_id: string; kind: 'kitchen' | 'receipt' | 'test' | 'report'; station_code: string;
   payload: CloudPrintPayload; sale_id?: string | null; expected_print_number?: number | null;
@@ -81,7 +81,14 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
       ? deltaIdentities.join(',')
       : `${safeText(params.context.orderNumber)}:${fallbackIdentities.join(',')}`;
     const idempotencyKey = `kitchen:${station}:${keySeed}`;
-    const payload = { text: buildStationTicketText(station, stationItems, params.context), paperWidthMm: Number(params.paperWidthMm || 80), copies: 1 };
+    const paperWidthMm = Number(params.paperWidthMm || 80);
+    const payload = {
+      text: buildStationTicketText(station, stationItems, params.context),
+      fixedFormHtml: buildStationTicketHtml(station, stationItems, params.context, paperWidthMm),
+      rendererVersion: 1,
+      paperWidthMm,
+      copies: 1,
+    };
 
     let lastError = '';
     for (let attempt = 1; attempt <= KITCHEN_ENQUEUE_MAX_ATTEMPTS; attempt += 1) {
