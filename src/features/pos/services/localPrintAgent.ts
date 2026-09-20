@@ -30,6 +30,40 @@ export interface SilentPrintResult {
   error?: string;
 }
 
+export interface FixedThermalTemplateItem {
+  qty: string;
+  name: string;
+  price?: string;
+  total?: string;
+  modifiers?: string[];
+  notes?: string;
+}
+
+export interface FixedThermalTemplateRow {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}
+
+export interface FixedThermalTemplate {
+  version: 1;
+  kind: 'customer' | 'kitchen';
+  isAr: boolean;
+  paperWidthMm: number;
+  storeName: string;
+  storeSubtitle: string;
+  title: string;
+  subtitle?: string;
+  slogan?: string;
+  branchName?: string;
+  station?: string;
+  meta: FixedThermalTemplateRow[];
+  itemsHeading: string;
+  items: FixedThermalTemplateItem[];
+  totals?: FixedThermalTemplateRow[];
+  footerLines?: string[];
+}
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -91,6 +125,20 @@ function kitchenTime(isAr: boolean): string {
     minute: '2-digit',
     hour12: false,
   }).format(new Date());
+}
+
+function kitchenDateTime(): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
 }
 
 function readBoolean(key: string, defaultValue: boolean): boolean {
@@ -179,6 +227,42 @@ export function groupKitchenItemsByStation(items: KitchenSendItem[]): Record<str
     (groups[station] ||= []).push(item);
   }
   return groups;
+}
+
+export function buildKitchenFixedTemplate(
+  station: string,
+  items: KitchenSendItem[],
+  ctx: LocalKitchenPrintContext,
+  paperWidthMm = 80,
+): FixedThermalTemplate {
+  const ar = ctx.isAr;
+  const meta: FixedThermalTemplateRow[] = [];
+  if (ctx.orderNumber) meta.push({ label: ar ? 'رقم الطلب' : 'Order', value: safeText(ctx.orderNumber), emphasis: true });
+  meta.push({ label: ar ? 'التاريخ' : 'Date', value: kitchenDateTime() });
+  if (ctx.orderType) meta.push({ label: ar ? 'النوع' : 'Type', value: kitchenOrderTypeLabel(ctx.orderType, ar) });
+  if (ctx.tableName) meta.push({ label: ar ? 'الطاولة' : 'Table', value: safeText(ctx.tableName), emphasis: true });
+  if (ctx.guestCount) meta.push({ label: ar ? 'عدد الأفراد' : 'Guests', value: String(ctx.guestCount) });
+
+  return {
+    version: 1,
+    kind: 'kitchen',
+    isAr: ar,
+    paperWidthMm: Number(paperWidthMm || 80),
+    storeName: "JOHNA'S",
+    storeSubtitle: 'RESTAURANT',
+    title: ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET',
+    subtitle: ar ? 'نسخة المطبخ' : 'KITCHEN COPY',
+    station: safeText(station),
+    meta,
+    itemsHeading: ar ? 'الأصناف' : 'ITEMS',
+    items: items.map((item) => ({
+      qty: String(Number(item.quantity || 0)),
+      name: safeText(item.product_name || '—'),
+      modifiers: modifierNames(item, ar),
+      notes: item.notes?.trim() ? safeText(item.notes) : undefined,
+    })),
+    footerLines: [ar ? 'نهاية الطلب' : 'END OF ORDER'],
+  };
 }
 
 export function buildStationTicketText(
@@ -281,6 +365,7 @@ export async function executeSilentPrintDetailed(options: {
   printerName: string;
   text?: string;
   html?: string;
+  template?: FixedThermalTemplate;
   copies?: number;
   paperWidthMm?: number;
 }): Promise<SilentPrintResult> {
@@ -313,6 +398,7 @@ export async function executeSilentPrintDetailed(options: {
         station: 'custom',
         printer: printerName,
         text: options.text || (options.html ? htmlToThermalText(options.html) : ''),
+        template: options.template,
       }),
     });
     if (!response.ok) return { success: false, error: `LOCAL_AGENT_HTTP_${response.status}` };
@@ -330,6 +416,7 @@ export async function executeSilentPrint(options: {
   printerName: string;
   text?: string;
   html?: string;
+  template?: FixedThermalTemplate;
   copies?: number;
   paperWidthMm?: number;
 }): Promise<boolean> {
@@ -383,6 +470,7 @@ export async function printKitchenStationsLocally(
     const results = await Promise.all(Object.entries(groups).map(([station, stationItems]) => executeSilentPrint({
       printerName: routes[station],
       text: buildStationTicketText(station, stationItems, ctx),
+      template: buildKitchenFixedTemplate(station, stationItems, ctx),
     })));
     return results.every(Boolean);
   }
@@ -404,6 +492,7 @@ export async function printKitchenStationsLocally(
           body: JSON.stringify({
             station,
             text: buildStationTicketText(station, stationItems, ctx),
+            template: buildKitchenFixedTemplate(station, stationItems, ctx),
           }),
         });
         if (!response.ok) return false;
