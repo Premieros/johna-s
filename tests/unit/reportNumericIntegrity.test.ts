@@ -4,6 +4,8 @@ import {
   allocateSaleNetRevenue,
   netPurchaseAmount,
   netSaleAmount,
+  netSaleDiscount,
+  saleRemainingRatio,
   netSaleItemQuantity,
   netSaleItemRevenue,
   netSalePayment,
@@ -18,6 +20,14 @@ describe('report numeric integrity', () => {
     expect(netSaleItemQuantity({ quantity: 4, refunded_quantity: 1 })).toBe(3);
     expect(netSaleItemRevenue({ total: 400, refunded_amount: 100 })).toBe(300);
     expect(netSaleAmount({ total: 100, refunded_amount: 150 })).toBe(0);
+  });
+
+  it('removes or prorates discounts after returns', () => {
+    expect(saleRemainingRatio({ total: 80, refunded_amount: 80, status: 'returned' })).toBe(0);
+    expect(netSaleDiscount({ total: 80, refunded_amount: 80, discount_amount: 20, status: 'returned' })).toBe(0);
+    expect(netSaleDiscount({ total: 80, refunded_amount: 20, discount_amount: 20, status: 'completed' })).toBeCloseTo(15, 10);
+    expect(netSaleDiscount({ total: 0, refunded_amount: 0, discount_amount: 100, status: 'returned' })).toBe(0);
+    expect(netSaleDiscount({ total: 0, refunded_amount: 0, discount_amount: 100, status: 'completed' })).toBe(100);
   });
 
   it('allocates authoritative sale net revenue across items after header discounts', () => {

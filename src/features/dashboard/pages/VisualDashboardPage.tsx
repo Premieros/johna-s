@@ -15,6 +15,7 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
   aggregatePaymentMethods,
   netSaleAmount,
+  netSaleDiscount,
   netSaleItemQuantity,
   type SalePaymentLike,
 } from '@/features/reporting/numericIntegrity';
@@ -77,7 +78,7 @@ function summarize(rows: Sale[], payments: SalePaymentLike[]) {
     sales: rows.reduce((sum, row) => sum + netSaleAmount(row), 0),
     payments: paymentTotal,
     returns: rows.reduce((sum, row) => sum + Number(row.refunded_amount || 0), 0),
-    discounts: rows.reduce((sum, row) => sum + Number(row.discount_amount || 0), 0),
+    discounts: rows.reduce((sum, row) => sum + netSaleDiscount(row), 0),
     orders: rows.length,
   };
 }
