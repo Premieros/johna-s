@@ -58,7 +58,11 @@ export function PaymentPanel(p: PaymentPanelProps) {
   const isAr = lang === 'ar';
   const round = Math.ceil((p.total || 0) / 50) * 50;
   const quick = [50, 100, 200, 500];
-  const customerName = p.customerId ? p.customers.find((c) => c.id === p.customerId)?.name || '' : '';
+  const selectedCustomer = p.customerId ? p.customers.find((c) => c.id === p.customerId) || null : null;
+  const customerName = selectedCustomer?.name || '';
+  const creditAllowed = selectedCustomer?.customer_type === 'employee';
+  const paymentMethod = p.paymentMethod;
+  const onPaymentMethodChange = p.onPaymentMethodChange;
   const plate = p.orderType === 'drive_thru' ? parseCarNotes(p.orderNotes).plate : '';
   const deliveryPhone = p.orderType === 'delivery' && !customerName ? parseDeliveryNotes(p.orderNotes).phone : '';
   const [splitMode, setSplitMode] = useState(false);
@@ -85,6 +89,12 @@ export function PaymentPanel(p: PaymentPanelProps) {
 
   useEffect(() => () => clearArmedSplitTender(), []);
 
+  useEffect(() => {
+    if (paymentMethod === 'credit' && !creditAllowed) {
+      onPaymentMethodChange('cash');
+    }
+  }, [creditAllowed, paymentMethod, onPaymentMethodChange]);
+
   const toggleSplit = () => {
     clearArmedSplitTender();
     armedRef.current = false;
@@ -110,6 +120,9 @@ export function PaymentPanel(p: PaymentPanelProps) {
   };
 
   const complete = () => {
+    if (!splitMode && p.paymentMethod === 'credit' && !creditAllowed) {
+      return;
+    }
     if (splitMode) {
       if (!splitValid) return;
       armSplitTender(splitPayments);
@@ -296,19 +309,39 @@ export function PaymentPanel(p: PaymentPanelProps) {
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">
-                {METHODS.map((m) => (
-                  <button
-                    data-testid={`pos-payment-method-${m}`}
-                    key={m}
-                    onClick={() => p.onPaymentMethodChange(m)}
-                    className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-ui-surface text-sm font-black shadow-ui-sm transition active:scale-[.98] ${p.paymentMethod === m ? 'border-ui-primary bg-ui-primary-soft text-ui-accent shadow-ui-lg' : 'border-ui-border text-ui-muted'}`}
-                  >
-                    {ICONS[m]}
-                    {m === 'card' && isAr ? 'فيزا / بطاقة' : t(m)}
-                    {p.paymentMethod === m && <CheckCircle2 className="h-4 w-4 text-ui-accent" />}
-                  </button>
-                ))}
+                {METHODS.map((m) => {
+                  const isCreditBlocked = m === 'credit' && !creditAllowed;
+                  return (
+                    <button
+                      data-testid={`pos-payment-method-${m}`}
+                      key={m}
+                      disabled={isCreditBlocked}
+                      aria-disabled={isCreditBlocked}
+                      title={isCreditBlocked ? (isAr ? 'الدفع الآجل متاح للموظفين فقط' : 'Credit payment is available to employees only') : undefined}
+                      onClick={() => {
+                        if (!isCreditBlocked) p.onPaymentMethodChange(m);
+                      }}
+                      className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-ui-surface text-sm font-black shadow-ui-sm transition ${isCreditBlocked ? 'cursor-not-allowed opacity-45' : 'active:scale-[.98]'} ${p.paymentMethod === m ? 'border-ui-primary bg-ui-primary-soft text-ui-accent shadow-ui-lg' : 'border-ui-border text-ui-muted'}`}
+                    >
+                      {ICONS[m]}
+                      {m === 'credit'
+                        ? (isAr ? 'آجل موظف' : 'Employee Credit')
+                        : m === 'card' && isAr
+                          ? 'فيزا / بطاقة'
+                          : t(m)}
+                      {p.paymentMethod === m && <CheckCircle2 className="h-4 w-4 text-ui-accent" />}
+                    </button>
+                  );
+                })}
               </div>
+
+              {!creditAllowed && (
+                <div className="rounded-2xl border border-ui-warning/30 bg-ui-warning/10 px-4 py-3 text-xs font-bold text-ui-warning">
+                  {isAr
+                    ? 'الدفع الآجل ممنوع لغير الموظفين. اختر حساب عميل مصنف «موظف» لتفعيل الآجل.'
+                    : 'Credit payment is blocked for non-employees. Select a customer classified as Employee to enable credit.'}
+                </div>
+              )}
 
               {p.paymentMethod !== 'credit' && (
                 <div className="rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui-sm">
@@ -343,7 +376,7 @@ export function PaymentPanel(p: PaymentPanelProps) {
             size="lg"
             className="w-full !min-h-14 !rounded-2xl !bg-ui-success text-lg font-black shadow-ui-xl"
             onClick={complete}
-            disabled={p.completing || !p.canComplete || (splitMode && !splitValid)}
+            disabled={p.completing || !p.canComplete || (splitMode && !splitValid) || (!splitMode && p.paymentMethod === 'credit' && !creditAllowed)}
           >
             {p.completing
               ? (isAr ? 'جاري المعالجة...' : 'Processing...')

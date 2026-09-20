@@ -756,6 +756,22 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (cart.length === 0 || completing) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }
+    if (paymentMethod === 'credit') {
+      const creditCustomer = customers.find((customer) =>
+        customer.id === customerId
+        && customer.branch_id === branchId
+        && customer.customer_type === 'employee'
+      );
+      if (!creditCustomer) {
+        show(
+          isAr
+            ? 'الدفع الآجل مسموح للموظفين فقط. اختر حساب عميل مصنف كموظف.'
+            : 'Credit payment is allowed for employees only. Select a customer classified as Employee.',
+          'error',
+        );
+        return false;
+      }
+    }
     if (orderType === 'dine_in' && !tableId) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
       return false;
