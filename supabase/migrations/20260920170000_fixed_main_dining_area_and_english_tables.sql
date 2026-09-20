@@ -201,6 +201,24 @@ BEGIN
 END;
 $backfill$;
 
+CREATE OR REPLACE FUNCTION private.mark_branch_hard_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+BEGIN
+  PERFORM set_config('app.branch_hard_delete_id', OLD.id::text, true);
+  RETURN OLD;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_mark_branch_hard_delete ON public.branches;
+CREATE TRIGGER trg_mark_branch_hard_delete
+BEFORE DELETE ON public.branches
+FOR EACH ROW
+EXECUTE FUNCTION private.mark_branch_hard_delete();
+
 CREATE OR REPLACE FUNCTION private.guard_default_dining_area_delete()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -208,7 +226,8 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $function$
 BEGIN
-  IF OLD.is_default THEN
+  IF OLD.is_default
+     AND current_setting('app.branch_hard_delete_id', true) IS DISTINCT FROM OLD.branch_id::text THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'DEFAULT_DINING_AREA_FIXED',
@@ -539,6 +558,7 @@ EXCEPTION
 END;
 $function$;
 
+REVOKE ALL ON FUNCTION private.mark_branch_hard_delete() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.guard_default_dining_area_delete() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.guard_default_dining_area_update() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.guard_default_dining_table_identity() FROM PUBLIC, anon, authenticated;
