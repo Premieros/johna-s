@@ -133,11 +133,10 @@ export function CurrentOrderPanel({
   const selectedCanSplit = perms.canSplitOrder && !!activeOrderId && !!selectedItem && (selectedSent?.sentQty || 0) === 0 && selectedMatches.length === 1;
   const selectedTransferLines = useMemo<TransferItemLine[]>(() => selectedItems.flatMap((item) => {
     const lineKey = cartLineKey(item);
-    const sent = sentState[lineKey];
     const matches = orderItems.filter((row) => orderItemLineKey(row) === lineKey);
-    if ((sent?.sentQty || 0) > 0 || matches.length !== 1) return [];
+    if (matches.length !== 1) return [];
     return [{ item, orderItemId: matches[0].id }];
-  }), [selectedItems, sentState, orderItems]);
+  }), [selectedItems, orderItems]);
   const selectedCanTransfer =
     perms.canTransferOrder &&
     orderType === 'dine_in' &&
