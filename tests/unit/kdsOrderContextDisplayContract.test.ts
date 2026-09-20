@@ -8,8 +8,10 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 describe('KDS table and operator display contract', () => {
   it('loads table/operator context in one batch and renders both labels', () => {
     const page = read('src/features/inventory/pages/KitchenDisplayPage.tsx');
-    expect(page).toContain("supabase.rpc('get_kitchen_order_context'");
+    const api = read('src/api/domains/catalog.ts');
+    expect(page).toContain('catalog.getKitchenOrderContext');
     expect(page).toContain('p_order_ids: orderIds');
+    expect(api).toContain("rpc('get_kitchen_order_context', p)");
     expect(page).toContain('data-testid="kds-table-name"');
     expect(page).toContain('data-testid="kds-operator-name"');
     expect(page).toContain("context?.table_name");
