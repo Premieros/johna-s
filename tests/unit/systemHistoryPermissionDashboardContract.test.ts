@@ -24,6 +24,10 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).toContain('testId="kpi-open-orders"');
     expect(dashboard).toContain('data-testid={testId}');
     expect(dashboard).toContain("status', ['open', 'held']");
+    expect(dashboard).toContain('openDineIn');
+    expect(dashboard).toContain('openTakeaway');
+    expect(dashboard).toContain('openDelivery');
+    expect(dashboard).not.toContain('aria-disabled="true"');
     expect(dashboard).not.toContain("role === 'branch_manager'");
     expect(dashboard).not.toContain("role === 'accountant'");
   });

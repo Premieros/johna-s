@@ -57,6 +57,9 @@ type ActiveOrderRow = {
 type DashboardOps = {
   openOrders: number;
   heldOrders: number;
+  openDineIn: number;
+  openTakeaway: number;
+  openDelivery: number;
   occupiedTables: number;
   availableTables: number;
   openShifts: number;
@@ -175,18 +178,19 @@ function Empty({ ar }: { ar: boolean }) {
   return <div className="flex min-h-[120px] items-center justify-center text-sm text-ui-subtle">{ar ? 'لا توجد بيانات فعلية للفترة المحددة' : 'No actual data for the selected period'}</div>;
 }
 
-function Metric({ testId, icon: Icon, title, value, display, previous, href, ar, enabled }: {
-  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href: string; ar: boolean; enabled: boolean;
+function Metric({ testId, icon: Icon, title, value, display, previous, href, ar, detail }: {
+  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href?: string; ar: boolean; detail?: ReactNode;
 }) {
   const change = previous > 0 ? ((value - previous) / previous) * 100 : null;
   const positive = (change ?? 0) >= 0;
   const content = <>
-    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{enabled && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
+    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{href && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
     <p className="mt-5 text-sm font-semibold text-ui-muted">{title}</p><p className="mt-1 text-3xl font-black tracking-tight text-ui-text">{display}</p>
+    {detail && <div className="mt-2 text-xs font-semibold text-ui-muted">{detail}</div>}
     <div className="mt-2 flex items-center gap-2 text-xs">{change === null ? <span className="text-ui-subtle">—</span> : <span className={`inline-flex items-center gap-0.5 font-bold ${positive ? 'text-ui-success' : 'text-ui-danger'}`}>{positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}{formatPercent(Math.abs(change), 1)}</span>}<span className="text-ui-subtle">{ar ? 'مقارنة بالفترة السابقة' : 'vs previous period'}</span></div>
   </>;
-  const className = `rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${enabled ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
-  if (!enabled) return <div data-testid={testId} aria-disabled="true" className={className}>{content}</div>;
+  const className = `rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${href ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
+  if (!href) return <div data-testid={testId} className={className}>{content}</div>;
   return <Link data-testid={testId} to={href} className={className}>{content}</Link>;
 }
 
@@ -228,6 +232,9 @@ export function DashboardDataPage() {
   const [ops, setOps] = useState<DashboardOps>({
     openOrders: 0,
     heldOrders: 0,
+    openDineIn: 0,
+    openTakeaway: 0,
+    openDelivery: 0,
     occupiedTables: 0,
     availableTables: 0,
     openShifts: 0,
@@ -415,6 +422,9 @@ export function DashboardDataPage() {
       setOps({
         openOrders: activeOrders.length,
         heldOrders: activeOrders.filter((order) => order.status === 'held').length,
+        openDineIn: activeOrders.filter((order) => order.order_type === 'dine_in').length,
+        openTakeaway: activeOrders.filter((order) => order.order_type === 'takeaway').length,
+        openDelivery: activeOrders.filter((order) => order.order_type === 'delivery').length,
         occupiedTables: tables.filter((table) => table.status === 'occupied').length,
         availableTables: tables.filter((table) => table.status === 'vacant').length,
         openShifts: (shiftsRes.data || []).length,
@@ -515,17 +525,17 @@ export function DashboardDataPage() {
 
     {loading ? <div className="flex h-64 items-center justify-center rounded-3xl border border-ui-border bg-ui-surface"><RefreshCw className="h-7 w-7 animate-spin text-ui-primary" /></div> : <>
       <section data-testid="dashboard-permission-kpis" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {canViewPos && <Metric testId="kpi-open-orders" icon={Clock3} title={ar ? 'إجمالي الطلبات المفتوحة' : 'Open orders'} value={ops.openOrders} display={formatNumber(ops.openOrders, 0)} previous={0} href="/floor-plan" ar={ar} enabled={canViewPos} />}
-        {canViewSales && <Metric testId="kpi-orders" icon={ReceiptText} title={ar ? 'إجمالي الطلبات' : 'Total orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href="/reports?reportType=detailed_invoices" ar={ar} enabled={canViewReports} />}
-        {canViewSales && <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />}
-        {canViewSales && <Metric testId="kpi-average-order" icon={Calculator} title={ar ? 'متوسط قيمة الطلب' : 'Average order'} value={current.orders ? current.sales / current.orders : 0} display={money(current.orders ? current.sales / current.orders : 0)} previous={previous.orders ? previous.sales / previous.orders : 0} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />}
-        {canViewSales && <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href="/reports?reportType=sales_by_payment" ar={ar} enabled={canViewReports} />}
-        {canViewFloorPlan && <Metric testId="kpi-occupied-tables" icon={Armchair} title={ar ? 'الطاولات المشغولة' : 'Occupied tables'} value={ops.occupiedTables} display={formatNumber(ops.occupiedTables, 0)} previous={0} href="/floor-plan" ar={ar} enabled={canViewPos} />}
-        {canViewFloorPlan && <Metric testId="kpi-available-tables" icon={CheckCircle2} title={ar ? 'الطاولات المتاحة' : 'Available tables'} value={ops.availableTables} display={formatNumber(ops.availableTables, 0)} previous={0} href="/floor-plan" ar={ar} enabled={canViewPos} />}
-        {canViewShifts && <Metric testId="kpi-open-shifts" icon={Timer} title={ar ? 'الشفتات المفتوحة' : 'Open shifts'} value={ops.openShifts} display={formatNumber(ops.openShifts, 0)} previous={0} href="/shifts" ar={ar} enabled={canViewShifts} />}
-        {canViewPurchases && <Metric testId="kpi-purchases" icon={ShoppingCart} title={ar ? 'المشتريات' : 'Purchases'} value={ops.purchases} display={money(ops.purchases)} previous={0} href="/purchases" ar={ar} enabled={canViewPurchases} />}
-        {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={money(ops.expenses)} previous={0} href="/expenses" ar={ar} enabled={canViewExpenses} />}
-        {canViewUsers && <Metric testId="kpi-active-users" icon={Users} title={ar ? 'المستخدمون النشطون' : 'Active users'} value={ops.activeUsers} display={formatNumber(ops.activeUsers, 0)} previous={0} href="/users" ar={ar} enabled={canViewUsers} />}
+        {canViewPos && <Metric testId="kpi-open-orders" icon={Clock3} title={ar ? 'إجمالي الطلبات المفتوحة' : 'Open orders'} value={ops.openOrders} display={formatNumber(ops.openOrders, 0)} previous={0} href={canViewFloorPlan ? '/floor-plan' : undefined} ar={ar} detail={<>{ar ? 'صالة' : 'Dine-in'} {formatNumber(ops.openDineIn, 0)} · {ar ? 'تيك أواي' : 'Take Away'} {formatNumber(ops.openTakeaway, 0)} · {ar ? 'دليفري' : 'Delivery'} {formatNumber(ops.openDelivery, 0)}</>} />}
+        {canViewSales && <Metric testId="kpi-orders" icon={ReceiptText} title={ar ? 'إجمالي الطلبات' : 'Total orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href={canViewReports ? '/reports?reportType=detailed_invoices' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-average-order" icon={Calculator} title={ar ? 'متوسط قيمة الطلب' : 'Average order'} value={current.orders ? current.sales / current.orders : 0} display={money(current.orders ? current.sales / current.orders : 0)} previous={previous.orders ? previous.sales / previous.orders : 0} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href={canViewReports ? '/reports?reportType=sales_by_payment' : undefined} ar={ar} />}
+        {canViewFloorPlan && <Metric testId="kpi-occupied-tables" icon={Armchair} title={ar ? 'الطاولات المشغولة' : 'Occupied tables'} value={ops.occupiedTables} display={formatNumber(ops.occupiedTables, 0)} previous={0} href="/floor-plan" ar={ar} />}
+        {canViewFloorPlan && <Metric testId="kpi-available-tables" icon={CheckCircle2} title={ar ? 'الطاولات المتاحة' : 'Available tables'} value={ops.availableTables} display={formatNumber(ops.availableTables, 0)} previous={0} href="/floor-plan" ar={ar} />}
+        {canViewShifts && <Metric testId="kpi-open-shifts" icon={Timer} title={ar ? 'الشفتات المفتوحة' : 'Open shifts'} value={ops.openShifts} display={formatNumber(ops.openShifts, 0)} previous={0} href="/shifts" ar={ar} />}
+        {canViewPurchases && <Metric testId="kpi-purchases" icon={ShoppingCart} title={ar ? 'المشتريات' : 'Purchases'} value={ops.purchases} display={money(ops.purchases)} previous={0} href="/purchases" ar={ar} />}
+        {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={money(ops.expenses)} previous={0} href="/expenses" ar={ar} />}
+        {canViewUsers && <Metric testId="kpi-active-users" icon={Users} title={ar ? 'المستخدمون النشطون' : 'Active users'} value={ops.activeUsers} display={formatNumber(ops.activeUsers, 0)} previous={0} href="/users" ar={ar} />}
       </section>
 
       {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
@@ -545,7 +555,7 @@ export function DashboardDataPage() {
         </section>
       )}
 
-      {lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row) => { const content = <><p className="truncate text-sm font-bold text-ui-text">{row.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(row.quantity, 3)} / {formatNumber(row.threshold, 3)}</p></>; return canViewInventory ? <Link key={row.key} to="/inventory" className="rounded-xl bg-ui-page-alt p-3">{content}</Link> : <div key={row.key} aria-disabled="true" className="rounded-xl bg-ui-page-alt p-3">{content}</div>; })}</div></Card>}
+      {canViewInventory && lowStock.length > 0 && <Card className="border-ui-warning/30"><div className="mb-3 flex items-center gap-2 font-black text-ui-warning"><AlertTriangle className="h-5 w-5" />{ar ? 'تنبيه المخزون المنخفض' : 'Low stock alert'}</div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{lowStock.map((row) => <Link key={row.key} to="/inventory" className="rounded-xl bg-ui-page-alt p-3"><p className="truncate text-sm font-bold text-ui-text">{row.name || '—'}</p><p className="mt-1 text-xs text-ui-warning">{formatNumber(row.quantity, 3)} / {formatNumber(row.threshold, 3)}</p></Link>)}</div></Card>}
     </>}
   </div></div>;
 }
