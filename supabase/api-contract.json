@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-19T11:14:00.043Z",
+  "generated_at": "2026-09-20T15:05:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -333,6 +333,44 @@
       ]
     },
     {
+      "name": "enqueue_cloud_open_order_print",
+      "params": [
+        "idempotency_key",
+        "order_id",
+        "payload"
+      ]
+    },
+    {
+      "name": "enqueue_cloud_report_print",
+      "params": [
+        "branch_id",
+        "idempotency_key",
+        "payload"
+      ]
+    },
+    {
+      "name": "floor_plan_add_table",
+      "params": [
+        "area_id",
+        "branch_id",
+        "capacity",
+        "layout",
+        "name",
+        "shape"
+      ]
+    },
+    {
+      "name": "floor_plan_update_table",
+      "params": [
+        "area_id",
+        "capacity",
+        "layout",
+        "name",
+        "shape",
+        "table_id"
+      ]
+    },
+    {
       "name": "force_close_shift",
       "params": [
         "actual_amount",
@@ -410,6 +448,13 @@
       ]
     },
     {
+      "name": "get_day_closing_report",
+      "params": [
+        "branch_id",
+        "day"
+      ]
+    },
+    {
       "name": "get_employee_credit_balances",
       "params": [
         "branch_id"
@@ -448,6 +493,13 @@
         "reference_type",
         "search",
         "to_date"
+      ]
+    },
+    {
+      "name": "get_kitchen_order_context",
+      "params": [
+        "branch_id",
+        "order_ids"
       ]
     },
     {
@@ -528,13 +580,6 @@
       ]
     },
     {
-      "name": "get_day_closing_report",
-      "params": [
-        "branch_id",
-        "day"
-      ]
-    },
-    {
       "name": "get_shift_closing_report",
       "params": [
         "shift_id"
@@ -544,28 +589,6 @@
       "name": "get_shift_sale_tenders",
       "params": [
         "shift_id"
-      ]
-    },
-    {
-      "name": "enqueue_cloud_open_order_print",
-      "params": [
-        "idempotency_key",
-        "order_id",
-        "payload"
-      ]
-    },
-    {
-      "name": "enqueue_cloud_report_print",
-      "params": [
-        "branch_id",
-        "idempotency_key",
-        "payload"
-      ]
-    },
-    {
-      "name": "try_auto_close_branch_shift",
-      "params": [
-        "branch_id"
       ]
     },
     {
@@ -995,6 +1018,12 @@
       "params": [
         "order_id",
         "target_user_id"
+      ]
+    },
+    {
+      "name": "try_auto_close_branch_shift",
+      "params": [
+        "branch_id"
       ]
     },
     {
