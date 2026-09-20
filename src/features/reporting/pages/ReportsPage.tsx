@@ -759,6 +759,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const allColumns = data.length > 0 ? Object.keys(data[0]) : [];
   const columns = visibleColumns ? allColumns.filter((column) => visibleColumns.includes(column)) : allColumns;
   const hiddenCount = visibleColumns ? allColumns.length - columns.length : 0;
+  const reportMobilePrimaryColumns = columns.slice(0, 4);
+  const reportMobileSecondaryColumns = columns.slice(4);
   const allDefault = lang === 'ar' ? 'الكل' : 'All';
   const orderTypeLabels: Record<string, string> = { dine_in: t('dineIn'), takeaway: t('takeaway'), delivery: t('delivery'), drive_thru: t('driveThru') };
   const paymentMethodLabels: Record<string, string> = { cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit') };
@@ -881,33 +883,76 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         ) : data.length === 0 ? (
           <div className="text-center py-12 text-ui-subtle text-sm">{t('noData')}</div>
         ) : (
-          <div className="overflow-x-auto">
+          <div>
             {data.length >= 5000 && (
-              <div className="text-xs text-ui-warning bg-ui-warning-soft border border-ui-warning/20 rounded-lg px-3 py-2 mb-3">
+              <div className="mb-3 rounded-lg border border-ui-warning/20 bg-ui-warning-soft px-3 py-2 text-xs text-ui-warning">
                 {lang === 'ar' ? 'تم عرض أول 5,000 سجل. استخدم الفلاتر لتضييق النتائج.' : 'Showing first 5,000 records. Use filters to narrow results.'}
               </div>
             )}
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-ui-border">
-                  {columns.map((key) => <th key={key} className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{key}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((row, index) => (
-                  <tr key={index} className="border-b border-ui-border/60 hover:bg-ui-page-alt">
-                    {columns.map((key, columnIndex) => {
+
+            <div data-testid="reports-mobile-results" className="space-y-2 sm:hidden">
+              {data.map((row, index) => (
+                <article key={index} className="rounded-xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
+                  <dl className="divide-y divide-ui-border">
+                    {reportMobilePrimaryColumns.map((key) => {
                       const value = row[key];
                       return (
-                        <td key={columnIndex} className="px-4 py-3 text-ui-text">
-                          {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
-                        </td>
+                        <div key={key} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-3 py-2 first:pt-0 last:pb-0">
+                          <dt className="break-words text-xs font-semibold text-ui-muted">{key}</dt>
+                          <dd className="break-words text-sm text-ui-text">
+                            {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
+                          </dd>
+                        </div>
                       );
                     })}
+                  </dl>
+                  {reportMobileSecondaryColumns.length > 0 && (
+                    <details className="mt-2 rounded-lg border border-ui-border bg-ui-page-alt/50">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center px-3 text-xs font-bold text-ui-primary">
+                        {lang === 'ar' ? 'التفاصيل' : 'Details'} · {reportMobileSecondaryColumns.length}
+                      </summary>
+                      <dl className="divide-y divide-ui-border border-t border-ui-border px-3">
+                        {reportMobileSecondaryColumns.map((key) => {
+                          const value = row[key];
+                          return (
+                            <div key={key} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-3 py-2">
+                              <dt className="break-words text-xs font-semibold text-ui-muted">{key}</dt>
+                              <dd className="break-words text-sm text-ui-text">
+                                {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
+                              </dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    </details>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-ui-border">
+                    {columns.map((key) => <th key={key} className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{key}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.map((row, index) => (
+                    <tr key={index} className="border-b border-ui-border/60 hover:bg-ui-page-alt">
+                      {columns.map((key, columnIndex) => {
+                        const value = row[key];
+                        return (
+                          <td key={columnIndex} className="px-4 py-3 text-ui-text">
+                            {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Card>
