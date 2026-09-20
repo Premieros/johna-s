@@ -41,6 +41,24 @@ describe.skipIf(!dbUrl)('thermal print payload guard', () => {
     expect(rows[0].payload.html).toBeUndefined();
   });
 
+  it('preserves the versioned fixed form while canonical text remains authoritative', async () => {
+    const fixedFormHtml = '<main class="fixed-receipt"><strong>FORM</strong></main>';
+    const { rows } = await client.query<{ payload: { text?: string; html?: string; fixedFormHtml?: string; rendererVersion?: number } }>(
+      `SELECT public._normalize_thermal_print_payload($1::jsonb) AS payload`,
+      [JSON.stringify({
+        text: 'READY RECEIPT',
+        html: '<style>legacy</style><div>legacy</div>',
+        fixedFormHtml,
+        rendererVersion: 1,
+        copies: 1,
+      })],
+    );
+    expect(rows[0].payload.text).toBe('READY RECEIPT');
+    expect(rows[0].payload.html).toBeUndefined();
+    expect(rows[0].payload.fixedFormHtml).toBe(fixedFormHtml);
+    expect(rows[0].payload.rendererVersion).toBe(1);
+  });
+
   it('installs a queue-boundary trigger for receipt and report jobs', async () => {
     const { rows } = await client.query<{ def: string }>(
       `SELECT pg_get_triggerdef(oid) AS def
