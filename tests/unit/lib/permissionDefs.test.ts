@@ -151,8 +151,11 @@ describe('permission model integrity', () => {
     }
   });
 
-  it('reference templates for super_admin and owner cover the full permission catalog', () => {
+  it('does not auto-grant the new history permission to existing role templates', () => {
     expect(DEFAULT_ROLE_PERMISSIONS.super_admin).toHaveLength(ALL_PERMISSIONS.length);
-    expect(DEFAULT_ROLE_PERMISSIONS.owner).toHaveLength(ALL_PERMISSIONS.length);
+    expect(DEFAULT_ROLE_PERMISSIONS.owner).toHaveLength(ALL_PERMISSIONS.length - 1);
+    expect(DEFAULT_ROLE_PERMISSIONS.owner).not.toContain('history.unlimited');
+    expect(DEFAULT_ROLE_PERMISSIONS.branch_manager).not.toContain('history.unlimited');
+    expect(DEFAULT_ROLE_PERMISSIONS.accountant).not.toContain('history.unlimited');
   });
 });

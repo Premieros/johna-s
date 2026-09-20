@@ -39,6 +39,11 @@ function partsAt(date: Date): DateParts {
   };
 }
 
+export function businessDateISO(date = new Date()): string {
+  const parts = partsAt(date);
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
 function cairoLocalDateTimeToUtc(date: string, hour = 0, minute = 0, second = 0): Date {
   const target = parseIsoDate(date);
   const targetAsUtc = Date.UTC(target.year, target.month - 1, target.day, hour, minute, second);

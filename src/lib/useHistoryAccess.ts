@@ -1,20 +1,16 @@
 import { useMemo } from 'react';
 import { useCan } from '@/lib/permissions';
+import { addIsoDays, businessDateISO, reportDateRangeUtc } from '@/lib/businessTime';
 
 export const LIMITED_HISTORY_DAYS = 7;
 
 export function historyCutoffDate(now = new Date()): string {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - (LIMITED_HISTORY_DAYS - 1));
-  return d.toISOString().slice(0, 10);
+  return addIsoDays(businessDateISO(now), -(LIMITED_HISTORY_DAYS - 1));
 }
 
 export function historyCutoffIso(now = new Date()): string {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - (LIMITED_HISTORY_DAYS - 1));
-  return d.toISOString();
+  const cutoff = historyCutoffDate(now);
+  return reportDateRangeUtc(cutoff, cutoff).startIso;
 }
 
 export function clampHistoryRange(
@@ -23,7 +19,7 @@ export function clampHistoryRange(
   unlimited: boolean,
   now = new Date(),
 ): { from: string; to: string; clamped: boolean } {
-  const today = now.toISOString().slice(0, 10);
+  const today = businessDateISO(now);
   const requestedTo = to || today;
   if (unlimited) return { from: from || '', to: requestedTo, clamped: false };
 

@@ -9,7 +9,7 @@ describe('permission-aware dashboard and system history contract', () => {
   it('registers one canonical unlimited-history capability', () => {
     const permissions = read('src/lib/permissionDefs.ts');
     expect(permissions).toContain("'history.unlimited'");
-    expect(permissions).toContain("عرض السجل الكامل بدون حد زمني");
+    expect(permissions).toContain("عرض السجل التاريخي الكامل");
     expect(permissions).toContain("Historical Data Access");
   });
 
