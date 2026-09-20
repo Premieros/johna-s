@@ -411,6 +411,7 @@ DECLARE
   v_moved_tax numeric(14,4) := 0;
   v_remaining integer := 0;
   v_moved_sent_count integer := 0;
+  v_source_sent_remaining integer := 0;
   v_target_owner_id uuid;
 BEGIN
   IF v_uid IS NULL THEN
@@ -583,6 +584,40 @@ BEGIN
 
   PERFORM public._recalc_open_order_totals(p_order_id);
   PERFORM public._recalc_open_order_totals(v_target_order_id);
+
+  IF v_moved_sent_count > 0 THEN
+    -- KDS reads order-level kitchen_status but item-level send rows. A moved
+    -- sent line must therefore keep the target order visible without creating
+    -- another send/print/inventory event.
+    UPDATE public.orders
+    SET kitchen_status = CASE
+          WHEN kitchen_status IN ('sent','cooking','ready') THEN kitchen_status
+          ELSE 'sent'
+        END,
+        kitchen_sent_at = COALESCE(kitchen_sent_at, (
+          SELECT min(s.sent_at)
+          FROM public.order_kitchen_sends s
+          WHERE s.order_id=v_target_order_id
+        )),
+        updated_at=now()
+    WHERE id=v_target_order_id;
+
+    SELECT count(*)
+    INTO v_source_sent_remaining
+    FROM public.order_kitchen_sends s
+    WHERE s.order_id=p_order_id
+      AND COALESCE(s.sent_quantity,0)>0;
+
+    IF v_source_sent_remaining=0 THEN
+      UPDATE public.orders
+      SET kitchen_status='pending',
+          kitchen_sent_at=NULL,
+          kitchen_ready_at=NULL,
+          updated_at=now()
+      WHERE id=p_order_id
+        AND status IN ('open','held');
+    END IF;
+  END IF;
 
   UPDATE public.dining_tables
   SET status='occupied',updated_at=now()
