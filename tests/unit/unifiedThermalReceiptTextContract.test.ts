@@ -35,12 +35,12 @@ describe('unified thermal receipt text contract', () => {
     expect(localAgent).toContain("export const PRINT_AGENT_URL = 'http://127.0.0.1:17654';");
     expect(localAgent).toContain('export async function executeSilentPrintDetailed');
     expect(localAgent).toContain('export async function printKitchenStationsLocally');
-    expect(localAgent).toContain("fetchWithTimeout(\`\${PRINT_AGENT_URL}/print\`");
+    expect(localAgent).toContain('fetchWithTimeout(`${PRINT_AGENT_URL}/print`');
     expect(localAgent).toContain('text: buildStationTicketText(station, stationItems, ctx)');
     expect(cloudPrint).toContain('Object.entries(groupKitchenItemsByStation(params.items))');
     expect(cloudPrint).toContain('p_station_code: station');
     expect(cloudPrint).toContain("supabase.rpc('enqueue_cloud_kitchen_print'");
     expect(cloudPrint).toContain('KITCHEN_ENQUEUE_MAX_ATTEMPTS = 3');
-    expect(cloudPrint).toContain('idempotencyKey = \`kitchen:\${station}:\${keySeed}\`');
+    expect(cloudPrint).toContain('idempotencyKey = `kitchen:${station}:${keySeed}`');
   });
 });
