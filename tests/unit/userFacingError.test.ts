@@ -37,6 +37,16 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage('VOID_QUANTITY_EXCEEDS_SENT', 'ar')).toContain('كمية الإلغاء');
   });
 
+  it('explains transfer and controlled cancellation failures instead of falling back to the generic system error', () => {
+    expect(userFacingErrorMessage('REASON_REQUIRED', 'ar')).toContain('سبب');
+    expect(userFacingErrorMessage('SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID', 'ar')).toContain('Void');
+    expect(userFacingErrorMessage('TARGET_ORDER_OPERATOR_REQUIRED', 'ar')).toContain('مستخدم آخر');
+    expect(userFacingErrorMessage('TARGET_ORDER_NOT_FOUND', 'ar')).toContain('الطلب الهدف');
+    expect(userFacingErrorMessage('CROSS_BRANCH_ORDER_ITEM_MOVE', 'ar')).toContain('فرعين');
+    expect(userFacingErrorMessage('ORDER_TRANSFER_RPC_REQUIRED', 'ar')).toContain('زر النقل');
+    expect(userFacingErrorMessage('TRANSACTION_FAILED', 'ar')).toContain('لم يتم اعتماد تغيير جزئي');
+  });
+
   it('explains inventory and purchase relationship errors', () => {
     expect(userFacingErrorMessage('INSUFFICIENT_STOCK', 'ar')).toContain('المخزون');
     expect(userFacingErrorMessage('WAREHOUSE_BRANCH_MISMATCH', 'ar')).toContain('المستودع');

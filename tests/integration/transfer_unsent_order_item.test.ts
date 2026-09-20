@@ -6,7 +6,7 @@ import { canImpersonate, runAs, runAsPersist, seedRlsFixture, type RlsIds } from
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
-describe.skipIf(skip)('transfer unsent order item between tables', () => {
+describe.skipIf(skip)('legacy single-item table transfer delegates to canonical transfer flow', () => {
   let client: pg.Client;
   let ids: RlsIds;
   let imp = false;
@@ -151,14 +151,15 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
     const audit = await client.query<{ user_id: string; details: Record<string, unknown> }>(
       `SELECT user_id, details
        FROM public.audit_log
-       WHERE action = 'ORDER_ITEM_TABLE_TRANSFERRED'
+       WHERE action = 'ORDER_ITEMS_TABLE_TRANSFERRED'
          AND entity_id = $1::uuid
        ORDER BY created_at DESC
        LIMIT 1`,
-      [movableItem],
+      [sourceOrder],
     );
     expect(audit.rows[0].user_id).toBe(ids.users.cashier);
-    expect(audit.rows[0].details).toMatchObject({ source_order_id: sourceOrder, target_order_id: targetOrder });
+    expect(audit.rows[0].details).toMatchObject({ source_table_id: sourceTable, target_table_id: targetTable, target_order_id: targetOrder });
+    expect(audit.rows[0].details.order_item_ids).toContain(movableItem);
 
     const afterSends = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.order_kitchen_sends');
     const afterLedger = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.inventory_ledger');
@@ -166,18 +167,38 @@ describe.skipIf(skip)('transfer unsent order item between tables', () => {
     expect(afterLedger.rows[0].count).toBe(beforeLedger.rows[0].count);
   });
 
-  guarded('rejects a line that has already been sent to kitchen', async () => {
-    const result = await runAs(
+  guarded('moves a sent line through the canonical transfer flow without resending or rededucting stock', async () => {
+    const beforeSends = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.order_kitchen_sends');
+    const beforeLedger = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.inventory_ledger');
+
+    const result = await runAsPersist(
       client,
       ids.users.cashier,
       'SELECT public.transfer_order_item_to_table($1::uuid, $2::uuid, $3::uuid) AS result',
       [sourceOrder, sentItem, targetTable],
     );
     expect(result.error).toBeUndefined();
-    expect(result.rows[0].result).toMatchObject({ success: false, error: 'ITEM_ALREADY_SENT' });
+    expect(result.rows[0].result).toMatchObject({
+      success: true,
+      source_order_id: sourceOrder,
+      target_order_id: targetOrder,
+      moved_item_id: sentItem,
+      moved_sent_item_count: 1,
+      inventory_changed: false,
+      kds_changed: true,
+      kds_resent: false,
+    });
 
     const row = await client.query<{ order_id: string }>('SELECT order_id FROM public.order_items WHERE id = $1::uuid', [sentItem]);
-    expect(row.rows[0].order_id).toBe(sourceOrder);
+    expect(row.rows[0].order_id).toBe(targetOrder);
+
+    const send = await client.query<{ order_id: string }>('SELECT order_id FROM public.order_kitchen_sends WHERE order_item_id = $1::uuid', [sentItem]);
+    expect(send.rows[0].order_id).toBe(targetOrder);
+
+    const afterSends = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.order_kitchen_sends');
+    const afterLedger = await client.query<{ count: string }>('SELECT count(*)::text AS count FROM public.inventory_ledger');
+    expect(afterSends.rows[0].count).toBe(beforeSends.rows[0].count);
+    expect(afterLedger.rows[0].count).toBe(beforeLedger.rows[0].count);
   });
 
   guarded('does not allow a target table from another branch', async () => {
