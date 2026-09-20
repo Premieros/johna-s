@@ -152,7 +152,7 @@ export function CurrentOrderPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-ui-surface text-ui-text">
+    <div data-testid="pos-current-order-panel" className="flex h-full min-h-0 flex-col bg-ui-surface text-ui-text">
       <div className="shrink-0 border-b border-ui-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ui-primary-soft">
