@@ -201,6 +201,10 @@ export function PosWorkspacePage() {
     if (pos.receiptSaleId && effectiveBranch) void loadStock(effectiveBranch);
   }, [pos.receiptSaleId, effectiveBranch, loadStock]);
 
+  useEffect(() => {
+    if (pos.receiptSaleId) setMobileOrderOpen(false);
+  }, [pos.receiptSaleId]);
+
   const live = useActiveOrders(effectiveBranch);
 
   useEffect(() => {
