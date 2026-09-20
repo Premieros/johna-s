@@ -4,7 +4,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import { formatCurrency } from '@/lib/format';
-import type { DiningTable, Order } from '@/lib/types';
+import type { DiningArea, DiningTable, Order } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
 import { orderOperatorName } from '../../utils/operatorName';
 import { usePosPermissions } from '../../hooks/usePosPermissions';
@@ -15,6 +15,7 @@ interface TablesPanelProps {
   open: boolean;
   onClose: () => void;
   tables: DiningTable[];
+  areas: DiningArea[];
   ordersByTable: Record<string, Order[]>;
   kitchenSendsByOrder?: Record<string, OrderKitchenSend[]>;
   currency: string;
@@ -23,24 +24,39 @@ interface TablesPanelProps {
   onStart: (table: DiningTable, guests: number) => void;
 }
 
-export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSendsByOrder = {}, currency, onResume, onPay, onStart }: TablesPanelProps) {
+export function TablesPanel({ open, onClose, tables, areas, ordersByTable, kitchenSendsByOrder = {}, currency, onResume, onPay, onStart }: TablesPanelProps) {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const perms = usePosPermissions();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<TableFilter>('all');
+  const [selectedAreaId, setSelectedAreaId] = useState('');
   const [selected, setSelected] = useState<DiningTable | null>(null);
   const [guests, setGuests] = useState(2);
 
-  const occupiedCount = useMemo(
-    () => tables.filter((table) => (ordersByTable[table.id] || []).length > 0 || table.status === 'occupied').length,
-    [tables, ordersByTable],
+  const orderedAreas = useMemo(
+    () => [...areas].sort((a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)) || a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
+    [areas],
   );
-  const availableCount = Math.max(0, tables.length - occupiedCount);
+
+  const activeAreaId = selectedAreaId && orderedAreas.some((area) => area.id === selectedAreaId)
+    ? selectedAreaId
+    : (orderedAreas.find((area) => area.is_default)?.id || orderedAreas[0]?.id || '');
+
+  const areaTables = useMemo(
+    () => activeAreaId ? tables.filter((table) => table.area_id === activeAreaId) : tables,
+    [tables, activeAreaId],
+  );
+
+  const occupiedCount = useMemo(
+    () => areaTables.filter((table) => (ordersByTable[table.id] || []).length > 0 || table.status === 'occupied').length,
+    [areaTables, ordersByTable],
+  );
+  const availableCount = Math.max(0, areaTables.length - occupiedCount);
 
   const visibleTables = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return tables.filter((table) => {
+    return areaTables.filter((table) => {
       const orders = ordersByTable[table.id] || [];
       const occupied = orders.length > 0 || table.status === 'occupied';
       if (filter === 'available' && occupied) return false;
@@ -50,7 +66,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSends
         order.order_number?.toLowerCase().includes(q) || orderOperatorName(order)?.toLowerCase().includes(q)
       ));
     });
-  }, [tables, ordersByTable, search, filter]);
+  }, [areaTables, ordersByTable, search, filter]);
 
   const chooseTable = (table: DiningTable) => {
     setSelected(table);
@@ -60,7 +76,7 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSends
   if (!open) return null;
 
   const filters: Array<{ id: TableFilter; label: string; count: number }> = [
-    { id: 'all', label: isAr ? 'الكل' : 'All', count: tables.length },
+    { id: 'all', label: isAr ? 'الكل' : 'All', count: areaTables.length },
     { id: 'available', label: isAr ? 'متاحة' : 'Available', count: availableCount },
     { id: 'occupied', label: isAr ? 'مشغولة' : 'Occupied', count: occupiedCount },
   ];
@@ -81,6 +97,26 @@ export function TablesPanel({ open, onClose, tables, ordersByTable, kitchenSends
               <X className="h-4 w-4" />
             </button>
           </div>
+
+          {orderedAreas.length > 0 && (
+            <div data-testid="pos-table-drawer-area-tabs" className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {orderedAreas.map((area) => {
+                const count = tables.filter((table) => table.area_id === area.id && table.is_active).length;
+                const active = activeAreaId === area.id;
+                return (
+                  <button
+                    key={area.id}
+                    type="button"
+                    onClick={() => setSelectedAreaId(area.id)}
+                    className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[10px] font-black transition ${active ? 'border-ui-primary bg-ui-primary text-ui-primary-fg' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary'}`}
+                  >
+                    <span>{area.name}</span>
+                    <span className="opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="relative mt-3">
             <Search className="absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ui-muted" />
