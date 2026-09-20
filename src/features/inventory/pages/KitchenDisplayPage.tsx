@@ -109,7 +109,7 @@ export function KitchenDisplayPage() {
         return;
       }
 
-      const { data: contextRows, error: contextError } = await supabase.rpc('get_kitchen_order_context', {
+      const { data: contextRows, error: contextError } = await catalog.getKitchenOrderContext({
         p_order_ids: orderIds,
         p_branch_id: branchFilter,
       });
