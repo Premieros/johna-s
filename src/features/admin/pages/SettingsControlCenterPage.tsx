@@ -18,7 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useToast } from '@/components/Toast';
-import { Card } from '@/components/PageHeader';
+import { Card, PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { Input, Select, Textarea } from '@/components/Input';
 import { logAudit } from '@/lib/audit';
@@ -168,40 +168,33 @@ export function SettingsControlCenterPage() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-ui-border pb-4">
-        <div>
-          <h1 className="text-2xl font-black text-ui-text tracking-tight">{t('settings')}</h1>
-          <p className="text-xs text-ui-subtle mt-0.5">
-            {isAr ? 'إدارة وتخصيص إعدادات الفرع، الإيصالات، والمظهر' : 'Manage branch configurations, receipts, and appearance'}
-          </p>
-        </div>
-
-        {branches.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-ui-subtle">{isAr ? 'الفرع:' : 'Branch:'}</span>
-            <div className="w-52">
-              <Select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {isAr ? b.name : b.name_en || b.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+      <PageHeader
+        title={t('settings')}
+        subtitle={isAr ? 'إدارة وتخصيص إعدادات الفرع، الإيصالات، والمظهر' : 'Manage branch configurations, receipts, and appearance'}
+        actions={branches.length > 1 ? (
+          <div className="w-52 shrink-0">
+            <Select
+              value={selectedBranchId}
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+              aria-label={isAr ? 'الفرع النشط للإعدادات' : 'Settings branch'}
+            >
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {isAr ? b.name : b.name_en || b.name}
+                </option>
+              ))}
+            </Select>
           </div>
-        )}
-      </div>
+        ) : undefined}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="space-y-1 md:col-span-1">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4 md:gap-6">
+        <div data-testid="settings-section-rail" className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:col-span-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
           {SECTIONS.map((sec) => (
             <button
               key={sec.key}
               onClick={() => setActive(sec.key)}
-              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition text-start ${
+              className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition text-start md:w-full md:gap-3 md:py-3 ${
                 active === sec.key
                   ? 'bg-brand-600 text-white shadow-sm shadow-brand-500/20'
                   : 'bg-ui-surface hover:bg-ui-page-alt text-ui-muted hover:text-ui-text border border-ui-border/50'
@@ -215,7 +208,7 @@ export function SettingsControlCenterPage() {
 
         <div className="md:col-span-3 space-y-6">
           {active === 'branch_profile' && (
-            <Card className="p-6 space-y-6">
+            <Card className="space-y-6 p-4 sm:p-6">
               <div>
                 <h2 className="text-lg font-bold text-ui-text">{isAr ? 'بيانات وطباعة إيصالات الفرع' : 'Branch Profile & Receipts'}</h2>
                 <p className="text-xs text-ui-subtle">{isAr ? 'تخصيص الإيصالات والطباعة الحرارية الخاصة بهذا الفرع' : 'Customize receipt texts and thermal layout for this branch'}</p>
@@ -264,7 +257,7 @@ export function SettingsControlCenterPage() {
           )}
 
           {active === 'business_day' && (
-            <Card className="p-6 space-y-6">
+            <Card className="space-y-6 p-4 sm:p-6">
               <div>
                 <h2 className="text-lg font-bold text-ui-text">{isAr ? 'تعريف بداية ونهاية اليوم المالي' : 'Business Day Boundaries'}</h2>
                 <p className="text-xs text-ui-subtle">
@@ -359,7 +352,7 @@ export function SettingsControlCenterPage() {
           )}
 
           {active === 'branch_staff' && (
-            <Card className="p-6 space-y-4">
+            <Card className="space-y-4 p-4 sm:p-6">
               <div>
                 <h2 className="text-lg font-bold text-ui-text">{isAr ? 'طاقم عمل الفرع' : 'Branch Staff'}</h2>
                 <p className="text-xs text-ui-subtle">{isAr ? 'الموظفون المعينون للعمل في هذا الفرع' : 'Team members assigned to this branch location'}</p>
@@ -411,7 +404,7 @@ export function SettingsControlCenterPage() {
           )}
 
           {active === 'appearance' && (
-            <Card className="p-6 space-y-6">
+            <Card className="space-y-6 p-4 sm:p-6">
               <div>
                 <h2 className="text-lg font-bold text-ui-text">{isAr ? 'المظهر وسمات الواجهة' : 'Appearance & Themes'}</h2>
                 <p className="text-xs text-ui-subtle">{isAr ? 'اختر السمة واللون المفضل لواجهة الاستخدام' : 'Select your preferred visual style and theme mode'}</p>
@@ -458,7 +451,7 @@ export function SettingsControlCenterPage() {
           )}
 
           {active === 'language' && (
-            <Card className="p-6 space-y-4">
+            <Card className="space-y-4 p-4 sm:p-6">
               <div>
                 <h2 className="text-lg font-bold text-ui-text">{isAr ? 'لغة واجهة الاستخدام' : 'Language & Localization'}</h2>
                 <p className="text-xs text-ui-subtle">{isAr ? 'اختر اللغة المفضلة للنظام' : 'Select interface language'}</p>
