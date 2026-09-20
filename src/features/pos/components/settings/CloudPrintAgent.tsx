@@ -64,6 +64,7 @@ async function executeJob(job: CloudPrintJob, agentId: string, printerName: stri
     printerName,
     text: job.payload?.text || legacyText || undefined,
     html: isThermalDocument ? undefined : job.payload?.html,
+    template: job.payload?.template,
     copies: Math.max(1, Math.min(5, Number(job.payload?.copies || 1))),
     paperWidthMm: Number(job.payload?.paperWidthMm || 80),
   });
