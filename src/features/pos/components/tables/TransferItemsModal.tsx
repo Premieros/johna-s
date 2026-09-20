@@ -96,11 +96,9 @@ export function TransferItemsModal({
       if (!data?.success) {
         const code = data?.error || '';
         setError(
-          code === 'ITEM_ALREADY_SENT'
-            ? (isAr ? 'يوجد صنف محدد تم إرساله للمطبخ؛ لا يمكن نقله بين الطلبات.' : 'A selected item was already sent to kitchen and cannot be moved.')
-            : code === 'PERMISSION_DENIED'
-              ? (isAr ? 'لا تملك صلاحية نقل الأصناف بين الطاولات.' : 'You do not have permission to move items between tables.')
-              : data?.detail || code || (isAr ? 'تعذر نقل الأصناف.' : 'Could not move the selected items.'),
+          code === 'PERMISSION_DENIED'
+            ? (isAr ? 'لا تملك صلاحية نقل الأصناف بين الطاولات.' : 'You do not have permission to move items between tables.')
+            : data?.detail || code || (isAr ? 'تعذر نقل الأصناف.' : 'Could not move the selected items.'),
         );
         return;
       }
@@ -129,8 +127,8 @@ export function TransferItemsModal({
           </div>
           <p className="mt-2 text-[10px] font-bold text-ui-subtle">
             {isAr
-              ? 'يتم نقل الأصناف المحددة فقط. لا يتغير المخزون ولا سجل إرسال المطبخ.'
-              : 'Only the selected lines move. Inventory and kitchen-send history are unchanged.'}
+              ? 'يتم نقل الأصناف المحددة حتى لو كانت مرسلة للمطبخ. ينتقل سجل المطبخ معها دون إعادة إرسال أو خصم مخزون جديد.'
+              : 'Selected lines move even after kitchen send. Their kitchen history follows them without re-sending or another stock deduction.'}
           </p>
         </div>
 
