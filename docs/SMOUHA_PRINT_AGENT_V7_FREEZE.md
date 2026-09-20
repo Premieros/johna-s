@@ -20,10 +20,13 @@ Do **not** alter the behavior or signatures of these RPCs without explicit appro
 - `complete_cloud_print_job(uuid, uuid, boolean, text)`
 - `can_execute_cloud_print_kind(text)`
 
-The integration guard hashes the raw, case-sensitive `pg_get_functiondef(...)` output so observable string-literal changes cannot slip through normalization.
+The integration guard combines two protections:
+
+1. A normalized structural fingerprint, which ignores PostgreSQL formatting/casing differences outside the observable contract.
+2. Exact case-sensitive checks for the error/status/permission literals consumed by or observable to the frozen v7 agent.
 
 The guard also freezes the required `cloud_print_jobs` column names, PostgreSQL data types, and nullability expected by v7.
 
-`tests/integration/smouha_v7_print_agent_lock.test.ts` intentionally fails on contract drift. Do not update expected hashes or schema metadata merely to make CI green; a change means the installed Smouha v7 compatibility contract changed and requires an explicit migration/replacement plan.
+Do not update the expected fingerprints, exact literals, or schema metadata merely to make CI green. A contract change requires an explicit Smouha v7 migration/replacement plan.
 
 No production database migration is introduced by this freeze.
