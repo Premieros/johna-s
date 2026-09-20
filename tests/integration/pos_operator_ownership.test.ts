@@ -28,6 +28,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
   const productId = randomUUID();
   const unitId = randomUUID();
   const tableId = randomUUID();
+  const captainId = randomUUID();
 
   const asUser = async (userId: string, sql: string, params: unknown[] = []) => {
     const result = await runAsPersist(client, userId, sql, params);
@@ -57,7 +58,28 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     ids = await seedRlsFixture(client);
     impersonationAvailable = await canImpersonate(client);
 
-    // Both operators have the same normal POS capabilities. User B intentionally
+    // Add one explicit Captain Order target in branch A. Operator transfer now
+    // targets Captain Order users only; the executor remains permission-first.
+    await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,branch_id,is_active)
+       VALUES(
+         'qa_owner_captain',
+         'كابتن اوردر QA Ownership',
+         'cap-qa-ownership',
+         '["pos.view","pos.order.create","pos.order.edit","pos.hold","pos.send_kitchen","pos.payment.take","pos.cancel_order","shifts.open"]'::jsonb,
+         'branch',$1::uuid,true
+       )`,
+      [ids.branchA],
+    );
+    await client.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
+    await client.query(
+      `INSERT INTO public.users(id,email,username,full_name,role,branch_id,is_active)
+       VALUES($1,'owner-captain@qa.test','owner-captain','Ownership Captain','qa_owner_captain',$2::uuid,true)`,
+      [captainId, ids.branchA],
+    );
+    await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
+
+    // Both original operators have the same normal POS capabilities. User B intentionally
     // starts without pos.order.transfer so transfer denial is permission-specific.
     await client.query(`
       UPDATE public.roles
@@ -206,7 +228,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
 
     const blockedInvoice = `OWN-BLOCK-${randomUUID()}`;
     const deniedPay = await rpc(
-      ids.users.branch_manager,
+      captainId,
       `SELECT public.process_sale(
          p_invoice_number := $1,
          p_branch_id := $2,
@@ -297,18 +319,18 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     const transferred = await rpc(
       ids.users.branch_manager,
       `SELECT public.transfer_order_operator($1, $2) AS r`,
-      [orderId, ids.users.branch_manager],
+      [orderId, captainId],
     );
     expect(transferred.success).toBe(true);
     expect(transferred.from_cashier_id).toBe(ids.users.cashier);
-    expect(transferred.to_cashier_id).toBe(ids.users.branch_manager);
+    expect(transferred.to_cashier_id).toBe(captainId);
     expect(transferred.transferred_by).toBe(ids.users.branch_manager);
 
     const afterTransfer = await client.query<{ cashier_id: string }>(
       `SELECT cashier_id FROM public.orders WHERE id = $1`,
       [orderId],
     );
-    expect(afterTransfer.rows[0].cashier_id).toBe(ids.users.branch_manager);
+    expect(afterTransfer.rows[0].cashier_id).toBe(captainId);
 
     const audit = await client.query<{
       user_id: string;
@@ -331,7 +353,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     expect(audit.rows).toHaveLength(1);
     expect(audit.rows[0].user_id).toBe(ids.users.branch_manager);
     expect(audit.rows[0].from_cashier_id).toBe(ids.users.cashier);
-    expect(audit.rows[0].to_cashier_id).toBe(ids.users.branch_manager);
+    expect(audit.rows[0].to_cashier_id).toBe(captainId);
     expect(audit.rows[0].transferred_by).toBe(ids.users.branch_manager);
     expect(audit.rows[0].transferred_at).toBeTruthy();
 
@@ -350,13 +372,13 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
       [ids.branchA, orderId],
     );
     expect(labelsB).toHaveLength(1);
-    expect(labelsB[0].cashier_id).toBe(ids.users.branch_manager);
-    expect(labelsB[0].operator_name).toBe('Branch Mgr');
+    expect(labelsB[0].cashier_id).toBe(captainId);
+    expect(labelsB[0].operator_name).toBe('Ownership Captain');
 
     // B now owns the order and can send the outstanding kitchen delta. The new
     // inventory event and latest send attribution belong to B, while payment is
     // also attributed to B inside the same shared branch shift.
-    const secondSend = await rpc(ids.users.branch_manager, `SELECT public.send_to_kitchen($1) AS r`, [orderId]);
+    const secondSend = await rpc(captainId, `SELECT public.send_to_kitchen($1) AS r`, [orderId]);
     expect(secondSend.success).toBe(true);
     expect(secondSend.items_sent_count).toBe(1);
     expect(await batchQty()).toBe(stockBefore - 2);
@@ -367,10 +389,10 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
         WHERE order_id = $1
           AND created_by = $2
         LIMIT 1`,
-      [orderId, ids.users.branch_manager],
+      [orderId, captainId],
     );
     expect(kitchenAttribution.rows).toHaveLength(1);
-    expect(kitchenAttribution.rows[0].created_by).toBe(ids.users.branch_manager);
+    expect(kitchenAttribution.rows[0].created_by).toBe(captainId);
 
     const invoice = `OWN-OK-${randomUUID()}`;
     const paid = await rpc(
@@ -396,7 +418,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
          p_table_id := $7,
          p_order_id := $8
        ) AS r`,
-      [invoice, ids.branchA, ids.shiftA, ids.whA, ids.users.branch_manager, item2, tableId, orderId],
+      [invoice, ids.branchA, ids.shiftA, ids.whA, captainId, item2, tableId, orderId],
     );
     expect(paid.success, JSON.stringify(paid)).toBe(true);
     expect(paid.sale_id).toBeTruthy();
@@ -410,8 +432,8 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
         WHERE s.id = $1`,
       [paid.sale_id, orderId],
     );
-    expect(paymentAttribution.rows[0].cashier_id).toBe(ids.users.branch_manager);
-    expect(paymentAttribution.rows[0].created_by).toBe(ids.users.branch_manager);
+    expect(paymentAttribution.rows[0].cashier_id).toBe(captainId);
+    expect(paymentAttribution.rows[0].created_by).toBe(captainId);
     expect(paymentAttribution.rows[0].order_status).toBe('completed');
   });
 
