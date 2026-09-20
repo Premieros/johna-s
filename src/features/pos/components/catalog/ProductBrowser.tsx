@@ -167,7 +167,7 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
         {!canAddToCart && hasBranch && shiftChecked && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-ui-warning/30 bg-ui-warning/10 px-3 py-2.5">
             <div className="flex min-w-0 items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-ui-warning" /><p className="text-[11px] font-black text-ui-text">{isAr ? 'لا يمكن الإضافة بدون شفت مفتوح' : 'Open a shift before adding items'}</p></div>
-            {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-full bg-ui-warning px-3 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'فتح الشفت' : 'Open shift'}</button>}
+            {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-full bg-ui-warning px-3 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'الذهاب للشفتات' : 'Go to shifts'}</button>}
           </div>
         )}
         {renderSearch(true)}
@@ -178,7 +178,7 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
         {!canAddToCart && hasBranch && shiftChecked && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-ui-warning/30 bg-ui-warning/10 px-3 py-2">
             <div className="flex min-w-0 items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-ui-warning" /><p className="truncate text-[11px] font-black text-ui-text">{isAr ? 'ممنوع إضافة منتجات بدون شفت مفتوح' : 'An open shift is required before adding products'}</p></div>
-            {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-lg bg-ui-warning px-2.5 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'فتح الشفت' : 'Open shift'}</button>}
+            {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-lg bg-ui-warning px-2.5 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'الذهاب للشفتات' : 'Go to shifts'}</button>}
           </div>
         )}
         <div className="flex gap-2">
