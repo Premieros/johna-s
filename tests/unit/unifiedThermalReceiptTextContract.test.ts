@@ -9,9 +9,11 @@ describe('unified thermal receipt text contract', () => {
   it('uses one visual text structure while keeping Arabic and English separate', () => {
     expect(printing).toContain("isAr ? 'حساب مبدئي' : 'OPEN CHECK'");
     expect(printing).toContain("isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'");
-    expect(printing).toContain("lines.push(isAr ? 'الأصناف' : 'ITEMS');");
-    expect(printing).toContain("lines.push(isAr ? 'الدفع' : 'PAYMENT');");
-    expect(printing).toContain("const strongDivider = '='.repeat(isCompactThermalWidth(width) ? 32 : 42);");
+    expect(printing).toContain("lines.push(heading(isAr ? 'الأصناف' : 'ITEMS'));");
+    expect(printing).toContain("lines.push(heading(isAr ? 'الدفع' : 'PAYMENT'));");
+    expect(printing).toContain("function thermalCenter");
+    expect(printing).toContain("function thermalColumns");
+    expect(printing).toContain("const columns = isCompactThermalWidth(width) ? 32 : 42;");
     expect(printing).not.toContain('*** حساب مبدئي / OPEN CHECK ***');
     expect(printing).not.toContain('*** إيصال دفع / PAYMENT RECEIPT ***');
     expect(printing).not.toContain('الأصناف / ITEMS');
@@ -20,14 +22,16 @@ describe('unified thermal receipt text contract', () => {
 
   it('uses the same ticket hierarchy for kitchen text without prices', () => {
     expect(localAgent).toContain("ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET'");
-    expect(localAgent).toContain("ar ? `المحطة: ${safeText(station)}` : `Station: ${safeText(station)}`");
+    expect(localAgent).toContain("lines.push(ar ? 'المحطة' : 'STATION');");
     expect(localAgent).toContain("ar ? 'الطلب' : 'Order'");
-    expect(localAgent).toContain("ar ? 'التاريخ' : 'Date'");
+    expect(localAgent).toContain("ar ? 'الوقت' : 'Time'");
     expect(localAgent).toContain("ar ? 'النوع' : 'Type'");
     expect(localAgent).toContain("ar ? 'الطاولة' : 'Table'");
     expect(localAgent).toContain("ar ? 'الأصناف' : 'ITEMS'");
     expect(localAgent).toContain("ar ? 'ملاحظة' : 'Note'");
-    expect(localAgent).toContain("const strongDivider = '================================';");
+    expect(localAgent).toContain('modifierNames(item, ar)');
+    expect(localAgent).toContain('kitchenOrderTypeLabel(ctx.orderType, ar)');
+    expect(localAgent).not.toContain('END OF ORDER');
     expect(localAgent).not.toContain('EGP');
   });
 
