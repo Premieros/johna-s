@@ -1,0 +1,37 @@
+{
+  "appId": "com.premieros.printagent.v7.smouha",
+  "productName": "Premier Print Agent V7 - Smouha",
+  "directories": {
+    "output": "electron/release-smouha-v7"
+  },
+  "files": [
+    "electron/**/*",
+    "dist/**/*"
+  ],
+  "extraMetadata": {
+    "name": "premier-print-agent-v7-smouha",
+    "main": "electron/main.cjs"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "requestedExecutionLevel": "asInvoker",
+    "artifactName": "Premier-Print-Agent-V7-Smouha-${version}-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Premier Print Agent V7 - Smouha"
+  },
+  "electronVersion": "38.1.0"
+}
