@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpRight, BarChart3, CreditCard,
   RefreshCw, ShoppingBag, Wallet, Clock3, ReceiptText,
-  Calculator, Armchair, CircleCheckBig, Timer, ShoppingCart, Users, ChefHat,
+  Calculator, Armchair, CheckCircle2, Timer, ShoppingCart, Users, ChefHat,
   Settings, History as HistoryIcon, Landmark,
 } from 'lucide-react';
 import { reporting, supabase } from '@/api';
