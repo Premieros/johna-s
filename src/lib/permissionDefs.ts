@@ -11,7 +11,7 @@ export type { Role };
  * Super Admin remains the only implicit platform-wide bypass.
  */
 export type Permission =
-  | 'dashboard.view'
+  | 'dashboard.view' | 'history.unlimited'
   | 'pos.view' | 'pos.order.create' | 'pos.order.edit' | 'pos.payment.take'
   | 'pos.order.split' | 'pos.order.transfer' | 'pos.receipt.print'
   | 'pos.discount' | 'pos.change_price' | 'pos.reprint'
@@ -56,7 +56,7 @@ export type Permission =
   | 'branches.manage';
 
 export const ALL_PERMISSIONS: Permission[] = [
-  'dashboard.view',
+  'dashboard.view', 'history.unlimited',
   'pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take',
   'pos.order.split', 'pos.order.transfer', 'pos.receipt.print',
   'pos.discount', 'pos.change_price', 'pos.reprint', 'pos.hold', 'pos.send_kitchen',
@@ -91,6 +91,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 
 export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> = {
   'dashboard.view': { ar: 'عرض لوحة التحكم', en: 'View Dashboard' },
+  'history.unlimited': { ar: 'عرض السجل الكامل بدون حد زمني', en: 'View Unlimited Historical Data' },
   'pos.view': { ar: 'عرض شاشة نقطة البيع', en: 'View POS' },
   'pos.order.create': { ar: 'إنشاء طلب من نقطة البيع', en: 'Create POS Orders' },
   'pos.order.edit': { ar: 'تعديل طلب من نقطة البيع', en: 'Edit POS Orders' },
@@ -211,6 +212,7 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'dashboard', ar: 'لوحة التحكم', en: 'Dashboard', permissions: ['dashboard.view'] },
+  { key: 'data_access', ar: 'نطاق البيانات التاريخية', en: 'Historical Data Access', permissions: ['history.unlimited'] },
   { key: 'pos', ar: 'نقطة البيع', en: 'POS', permissions: ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print', 'pos.discount', 'pos.change_price', 'pos.reprint', 'pos.hold', 'pos.send_kitchen', 'pos.kds_view', 'pos.kds_update', 'pos.print_kitchen', 'pos.void', 'pos.cancel_order', 'pos.change_branch', 'floor_plan.view', 'floor_plan.manage'] },
   { key: 'products', ar: 'المنتجات', en: 'Products', permissions: ['products.view', 'products.create', 'products.edit', 'products.delete', 'products.modifiers.manage', 'products.print', 'products.export', 'products.import'] },
   { key: 'categories', ar: 'الأصناف', en: 'Categories', permissions: ['categories.view', 'categories.manage'] },
