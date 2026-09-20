@@ -15,4 +15,5 @@ export const trade = {
   deletePurchase(p: { p_purchase_id: string }): ApiResult<RpcResult> { return rpc('delete_purchase_invoice', p); },
   processPurchaseReturn(p: { p_purchase_id: string; p_items?: { purchase_item_id: string; quantity: number }[] | null; p_reason?: string | null }): ApiResult<RpcResult & { returned_amount?: number; fully_returned?: boolean }> { return rpc('process_purchase_return', p); },
   processRefund(p: { p_sale_id: string; p_items: RefundItemInput[]; p_reason: string | null }): ApiResult<RpcResult> { return rpc('process_refund', p); },
+  archiveReturnedSale(p: { p_sale_id: string }): ApiResult<RpcResult & { archived?: boolean; sale_id?: string }> { return rpc('archive_returned_sale', p); },
 };
