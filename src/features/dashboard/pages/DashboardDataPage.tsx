@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpRight, BarChart3, CreditCard,
   RefreshCw, RotateCcw, ShoppingBag, Tag, Wallet,
 } from 'lucide-react';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { reporting, supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -60,6 +59,12 @@ const paymentLabels: Record<string, [string, string]> = {
   bank: ['تحويل بنكي', 'Bank transfer'], instapay: ['InstaPay', 'InstaPay'], wallet: ['محفظة إلكترونية', 'Wallet'],
   split: ['مختلط غير موزع', 'Unallocated split'], other: ['أخرى', 'Other'],
 };
+
+const DashboardSalesChart = lazy(() =>
+  import('../components/DashboardSalesChart').then((module) => ({
+    default: module.DashboardSalesChart,
+  })),
+);
 
 function relation<T extends RelatedName>(value: T | T[] | null | undefined): T | undefined {
   return Array.isArray(value) ? value[0] : value || undefined;
@@ -364,7 +369,7 @@ export function DashboardDataPage() {
         <Metric testId="kpi-discounts" icon={Tag} title={ar ? 'إجمالي الخصومات' : 'Discount amount'} value={current.discounts} display={money(current.discounts)} previous={previous.discounts} href="/reports?reportType=sales" ar={ar} enabled={canViewReports} />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={chart}><XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(value) => money(Number(value || 0))} /><Area type="monotone" dataKey="sales" stroke="currentColor" fill="currentColor" fillOpacity={0.12} /></AreaChart></ResponsiveContainer> : <Empty ar={ar} />}</div></Card>
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
       <div className="grid gap-5"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
       <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>
 
