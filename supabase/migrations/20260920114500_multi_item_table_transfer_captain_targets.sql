@@ -185,6 +185,179 @@ $function$;
 REVOKE ALL ON FUNCTION public.transfer_order_operator(uuid,uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.transfer_order_operator(uuid,uuid) TO authenticated, service_role;
 
+-- Extend the ownership guard only for the exact item-transfer RPC context.
+-- This keeps Permission-First authorization on pos.order.transfer without
+-- granting users.manage or a general cross-user mutation bypass.
+CREATE OR REPLACE FUNCTION public.guard_pos_operator_ownership()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public','pg_temp'
+AS $function$
+DECLARE
+  v_uid uuid:=auth.uid();
+  v_is_service_role boolean:=COALESCE(current_setting('role',true),'')='service_role'
+    OR COALESCE(current_setting('request.jwt.claim.role',true),'')='service_role';
+  v_is_db_admin boolean:=COALESCE(current_setting('role',true),'') IN('','none','postgres','supabase_admin')
+    AND session_user IN('postgres','supabase_admin');
+  v_can_manage_others boolean:=false;
+  v_owner_id uuid;
+  v_branch_id uuid;
+  v_new_owner_id uuid;
+  v_new_branch_id uuid;
+  v_transfer_context boolean:=false;
+  v_item_transfer_context boolean:=false;
+  v_new_order_item_transfer_context boolean:=false;
+  v_owner_mutation boolean:=false;
+BEGIN
+  IF v_is_service_role OR v_is_db_admin THEN
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+
+  IF public.is_pos_admin() THEN
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  v_can_manage_others:=public.can_manage_other_pos_orders();
+
+  IF TG_TABLE_NAME='orders' THEN
+    IF TG_OP='INSERT' THEN
+      IF NOT public.user_may_access_branch(NEW.branch_id) THEN
+        RAISE EXCEPTION 'BRANCH_MISMATCH';
+      END IF;
+      IF NEW.cashier_id IS NULL THEN
+        NEW.cashier_id:=v_uid;
+      ELSIF NEW.cashier_id IS DISTINCT FROM v_uid THEN
+        v_new_order_item_transfer_context :=
+          COALESCE(current_setting('app.pos_item_transfer_new_order_owner_id',true),'')=NEW.cashier_id::text
+          AND COALESCE(current_setting('app.pos_item_transfer_branch_id',true),'')=NEW.branch_id::text
+          AND public.can_permission('pos.order.transfer');
+        IF NOT v_new_order_item_transfer_context THEN
+          RAISE EXCEPTION 'ORDER_OPERATOR_ASSIGNMENT_FORBIDDEN';
+        END IF;
+      END IF;
+      RETURN NEW;
+    END IF;
+
+    IF TG_OP='DELETE' THEN
+      IF NOT public.user_may_access_branch(OLD.branch_id) THEN RAISE EXCEPTION 'BRANCH_MISMATCH'; END IF;
+      IF OLD.cashier_id IS DISTINCT FROM v_uid AND NOT v_can_manage_others THEN
+        RAISE EXCEPTION 'ORDER_OPERATOR_REQUIRED';
+      END IF;
+      RETURN OLD;
+    END IF;
+
+    IF NOT public.user_may_access_branch(OLD.branch_id) THEN RAISE EXCEPTION 'BRANCH_MISMATCH'; END IF;
+
+    v_owner_mutation:=
+      (to_jsonb(NEW)-ARRAY['kitchen_status','kitchen_sent_at','kitchen_ready_at','station','print_status','printed_at','updated_at']::text[])
+      IS DISTINCT FROM
+      (to_jsonb(OLD)-ARRAY['kitchen_status','kitchen_sent_at','kitchen_ready_at','station','print_status','printed_at','updated_at']::text[]);
+
+    IF NEW.cashier_id IS DISTINCT FROM OLD.cashier_id THEN
+      v_transfer_context:=
+        COALESCE(current_setting('app.pos_operator_transfer_order_id',true),'')=OLD.id::text
+        AND COALESCE(current_setting('app.pos_operator_transfer_target_id',true),'')=COALESCE(NEW.cashier_id::text,'')
+        AND public.can_permission('pos.order.transfer');
+      IF NOT v_transfer_context THEN RAISE EXCEPTION 'ORDER_TRANSFER_RPC_REQUIRED'; END IF;
+      IF
+        (to_jsonb(NEW)-ARRAY['cashier_id','kitchen_status','kitchen_sent_at','kitchen_ready_at','station','print_status','printed_at','updated_at']::text[])
+        IS DISTINCT FROM
+        (to_jsonb(OLD)-ARRAY['cashier_id','kitchen_status','kitchen_sent_at','kitchen_ready_at','station','print_status','printed_at','updated_at']::text[])
+      THEN
+        RAISE EXCEPTION 'ORDER_TRANSFER_MUTATION_SCOPE';
+      END IF;
+      RETURN NEW;
+    END IF;
+
+    IF v_owner_mutation AND OLD.cashier_id IS DISTINCT FROM v_uid AND NOT v_can_manage_others THEN
+      RAISE EXCEPTION 'ORDER_OPERATOR_REQUIRED';
+    END IF;
+    IF NEW.table_id IS DISTINCT FROM OLD.table_id AND NOT public.can_permission('pos.order.transfer') THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.transfer';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_TABLE_NAME='order_items' THEN
+    IF TG_OP='INSERT' THEN
+      SELECT o.cashier_id,o.branch_id INTO v_owner_id,v_branch_id
+      FROM public.orders o WHERE o.id=NEW.order_id;
+      IF v_branch_id IS NULL THEN RAISE EXCEPTION 'ORDER_NOT_FOUND'; END IF;
+      IF NOT public.user_may_access_branch(v_branch_id) THEN RAISE EXCEPTION 'BRANCH_MISMATCH'; END IF;
+      IF v_owner_id IS DISTINCT FROM v_uid AND NOT v_can_manage_others THEN
+        RAISE EXCEPTION 'ORDER_OPERATOR_REQUIRED';
+      END IF;
+      RETURN NEW;
+    END IF;
+
+    SELECT o.cashier_id,o.branch_id INTO v_owner_id,v_branch_id
+    FROM public.orders o WHERE o.id=OLD.order_id;
+    IF v_branch_id IS NULL THEN RAISE EXCEPTION 'ORDER_NOT_FOUND'; END IF;
+    IF NOT public.user_may_access_branch(v_branch_id) THEN RAISE EXCEPTION 'BRANCH_MISMATCH'; END IF;
+
+    IF TG_OP='UPDATE' AND NEW.order_id IS DISTINCT FROM OLD.order_id THEN
+      v_item_transfer_context :=
+        COALESCE(current_setting('app.pos_item_transfer_source_order_id',true),'')=OLD.order_id::text
+        AND COALESCE(current_setting('app.pos_item_transfer_target_order_id',true),'')=NEW.order_id::text
+        AND public.can_permission('pos.order.transfer');
+    END IF;
+
+    IF v_owner_id IS DISTINCT FROM v_uid AND NOT v_can_manage_others AND NOT v_item_transfer_context THEN
+      RAISE EXCEPTION 'ORDER_OPERATOR_REQUIRED';
+    END IF;
+
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+
+    IF NEW.order_id IS DISTINCT FROM OLD.order_id THEN
+      SELECT o.cashier_id,o.branch_id INTO v_new_owner_id,v_new_branch_id
+      FROM public.orders o WHERE o.id=NEW.order_id;
+      IF v_new_branch_id IS NULL THEN RAISE EXCEPTION 'TARGET_ORDER_NOT_FOUND'; END IF;
+      IF v_new_branch_id IS DISTINCT FROM v_branch_id THEN RAISE EXCEPTION 'CROSS_BRANCH_ORDER_ITEM_MOVE'; END IF;
+      IF v_new_owner_id IS DISTINCT FROM v_uid AND NOT v_can_manage_others AND NOT v_item_transfer_context THEN
+        RAISE EXCEPTION 'TARGET_ORDER_OPERATOR_REQUIRED';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_TABLE_NAME='dining_tables' THEN
+    IF TG_OP='DELETE' THEN
+      IF NOT v_can_manage_others AND EXISTS(
+        SELECT 1 FROM public.orders o
+        WHERE o.table_id=OLD.id AND o.status IN('open','held')
+          AND o.cashier_id IS DISTINCT FROM v_uid
+      ) THEN
+        RAISE EXCEPTION 'TABLE_OPERATOR_REQUIRED';
+      END IF;
+      RETURN OLD;
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR NEW.is_active IS DISTINCT FROM OLD.is_active THEN
+      IF NOT v_can_manage_others AND EXISTS(
+        SELECT 1 FROM public.orders o
+        WHERE o.table_id=OLD.id AND o.status IN('open','held')
+          AND o.cashier_id IS DISTINCT FROM v_uid
+      ) THEN
+        RAISE EXCEPTION 'TABLE_OPERATOR_REQUIRED';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.guard_pos_operator_ownership() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.guard_pos_operator_ownership() TO service_role;
+
 CREATE OR REPLACE FUNCTION public.transfer_order_items_to_table(
   p_order_id uuid,
   p_order_item_ids uuid[],
@@ -212,6 +385,8 @@ DECLARE
   v_moved_discount numeric(14,4) := 0;
   v_moved_tax numeric(14,4) := 0;
   v_remaining integer := 0;
+  v_moved_sent_count integer := 0;
+  v_target_owner_id uuid;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
@@ -263,18 +438,6 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','ORDER_ITEM_NOT_FOUND');
   END IF;
 
-  IF EXISTS (
-    SELECT 1
-    FROM public.order_kitchen_sends s
-    WHERE s.order_item_id=ANY(v_item_ids)
-  ) THEN
-    RETURN jsonb_build_object(
-      'success',false,
-      'error','ITEM_ALREADY_SENT',
-      'detail','Sent kitchen lines remain attached to their original order.'
-    );
-  END IF;
-
   SELECT * INTO v_target
   FROM public.dining_tables t
   WHERE t.id=p_target_table_id
@@ -289,8 +452,8 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','SAME_TABLE');
   END IF;
 
-  SELECT id,order_number
-  INTO v_target_order_id,v_target_order_number
+  SELECT id,order_number,cashier_id
+  INTO v_target_order_id,v_target_order_number,v_target_owner_id
   FROM public.orders o
   WHERE o.table_id=p_target_table_id
     AND o.branch_id=v_order.branch_id
@@ -306,6 +469,9 @@ BEGIN
       RETURN jsonb_build_object('success',false,'error','NUMBERING_FAILED','detail',v_number->>'error');
     END IF;
     v_target_order_number := v_number->>'number';
+
+    PERFORM set_config('app.pos_item_transfer_new_order_owner_id',COALESCE(v_order.cashier_id,v_uid)::text,true);
+    PERFORM set_config('app.pos_item_transfer_branch_id',v_order.branch_id::text,true);
 
     INSERT INTO public.orders(
       order_number,branch_id,order_type,status,table_id,customer_id,
@@ -323,7 +489,10 @@ BEGIN
       NULL,
       0,0,'amount',0,0
     )
-    RETURNING id INTO v_target_order_id;
+    RETURNING id,cashier_id INTO v_target_order_id,v_target_owner_id;
+
+    PERFORM set_config('app.pos_item_transfer_new_order_owner_id','',true);
+    PERFORM set_config('app.pos_item_transfer_branch_id','',true);
   END IF;
 
   SELECT COALESCE(sum(oi.quantity*oi.unit_price),0)
@@ -344,9 +513,33 @@ BEGIN
   v_moved_discount := round(COALESCE(v_order.discount_amount,0)*v_ratio,4);
   v_moved_tax := round(COALESCE(v_order.tax_amount,0)*v_ratio,4);
 
+  SELECT count(*)
+  INTO v_moved_sent_count
+  FROM public.order_kitchen_sends s
+  WHERE s.order_item_id=ANY(v_item_ids);
+
+  PERFORM set_config('app.pos_item_transfer_source_order_id',p_order_id::text,true);
+  PERFORM set_config('app.pos_item_transfer_target_order_id',v_target_order_id::text,true);
+
   UPDATE public.order_items
   SET order_id=v_target_order_id
   WHERE order_id=p_order_id AND id=ANY(v_item_ids);
+
+  -- Preserve the original kitchen execution and stock deduction while moving
+  -- its order/table ownership. sent_by/created_by/timestamps/quantities remain
+  -- unchanged; only the owning order reference follows the moved line.
+  UPDATE public.order_kitchen_sends
+  SET order_id=v_target_order_id
+  WHERE order_item_id=ANY(v_item_ids)
+    AND order_id=p_order_id;
+
+  UPDATE public.order_kitchen_inventory_events
+  SET order_id=v_target_order_id
+  WHERE order_item_id=ANY(v_item_ids)
+    AND order_id=p_order_id;
+
+  PERFORM set_config('app.pos_item_transfer_source_order_id','',true);
+  PERFORM set_config('app.pos_item_transfer_target_order_id','',true);
 
   UPDATE public.orders
   SET discount_amount=GREATEST(COALESCE(discount_amount,0)-v_moved_discount,0),
@@ -402,8 +595,11 @@ BEGIN
       'source_table_id',v_source_table_id,
       'target_table_id',p_target_table_id,
       'target_order_id',v_target_order_id,
+      'target_owner_id',v_target_owner_id,
+      'moved_sent_item_count',v_moved_sent_count,
       'inventory_changed',false,
-      'kds_changed',false
+      'kds_reassigned',v_moved_sent_count>0,
+      'kds_resent',false
     ),
     v_order.branch_id
   );
@@ -414,9 +610,12 @@ BEGIN
     'target_order_id',v_target_order_id,
     'target_order_number',v_target_order_number,
     'moved_item_count',v_requested_count,
+    'moved_sent_item_count',v_moved_sent_count,
+    'target_owner_id',v_target_owner_id,
     'source_order_empty',v_remaining=0,
     'inventory_changed',false,
-    'kds_changed',false
+    'kds_reassigned',v_moved_sent_count>0,
+    'kds_resent',false
   );
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object('success',false,'error','TRANSACTION_FAILED','detail',SQLERRM);
