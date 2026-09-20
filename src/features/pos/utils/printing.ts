@@ -8,6 +8,7 @@ import {
   getLocalPrinterRoutes,
   isRunningInElectron,
   isSilentPrintEnabled,
+  type FixedThermalTemplate,
 } from '../services/localPrintAgent';
 
 export const THERMAL_RECEIPT_PRESET_WIDTHS_MM = [58, 80] as const;
@@ -49,6 +50,7 @@ type ReceiptPrintAuthorization = {
 type PendingReceiptPrint = {
   authorization: ReceiptPrintAuthorization;
   plainText: string;
+  template: FixedThermalTemplate;
 };
 
 type ApprovalRow = {
@@ -255,6 +257,74 @@ function thermalColumns(left: unknown, right: unknown, columns: number): string 
   return `${lhs}${' '.repeat(gap)}${rhs}`;
 }
 
+export function buildReceiptFixedTemplate(
+  receipt: ReceiptData,
+  s: Settings,
+  lang: Language,
+  isAr: boolean,
+): FixedThermalTemplate {
+  const currency = safeThermalText(s.currency || 'EGP');
+  const width = receiptWidthMm(s.receipt_width_mm || 80);
+  const meta: Array<{ label: string; value: string; emphasis?: boolean }> = [];
+
+  meta.push({
+    label: receipt.isOpenOrder ? (isAr ? 'رقم الطلب' : 'Order') : (isAr ? 'رقم الفاتورة' : 'Invoice'),
+    value: safeThermalText(receipt.invoice),
+    emphasis: true,
+  });
+  meta.push({ label: isAr ? 'التاريخ' : 'Date', value: thermalDateTime(receipt.date) });
+  if (receipt.orderTypeLabel) meta.push({ label: isAr ? 'النوع' : 'Type', value: safeThermalText(receipt.orderTypeLabel) });
+  if (receipt.tableName) meta.push({ label: isAr ? 'الطاولة' : 'Table', value: safeThermalText(receipt.tableName), emphasis: true });
+  if (receipt.guestCount) meta.push({ label: isAr ? 'عدد الأفراد' : 'Guests', value: String(receipt.guestCount) });
+  if (receipt.customerName) meta.push({ label: isAr ? 'العميل' : 'Customer', value: safeThermalText(receipt.customerName) });
+  if (receipt.operatorName) meta.push({ label: isAr ? 'المستخدم' : 'User', value: safeThermalText(receipt.operatorName) });
+
+  const totals: Array<{ label: string; value: string; emphasis?: boolean }> = [
+    { label: isAr ? 'المجموع الفرعي' : 'Subtotal', value: thermalMoney(receipt.subtotal, currency) },
+  ];
+  if (receipt.discount > 0) totals.push({ label: isAr ? 'الخصم' : 'Discount', value: `-${thermalMoney(receipt.discount, currency)}` });
+  if (s.receipt_show_tax !== false && receipt.tax > 0) totals.push({ label: isAr ? 'الضريبة' : 'Tax', value: thermalMoney(receipt.tax, currency) });
+  totals.push({ label: isAr ? 'الإجمالي' : 'TOTAL', value: thermalMoney(receipt.total, currency), emphasis: true });
+
+  if (!receipt.isOpenOrder) {
+    for (const payment of (receipt.payments || []).filter((entry) => safeThermalText(entry.method))) {
+      totals.push({ label: thermalPaymentLabel(payment.method, isAr), value: thermalMoney(payment.amount, currency) });
+    }
+    totals.push({ label: isAr ? 'المدفوع' : 'Paid', value: thermalMoney(receipt.paid, currency) });
+    if (receipt.change > 0) totals.push({ label: isAr ? 'الباقي' : 'Change', value: thermalMoney(receipt.change, currency) });
+  }
+
+  const configuredFooter = safeThermalText(s.receipt_footer);
+  const defaultThanks = isAr ? 'شكراً لزيارتكم' : 'Thank you for visiting';
+  const footerLines = configuredFooter && configuredFooter.toLocaleLowerCase() !== defaultThanks.toLocaleLowerCase()
+    ? [configuredFooter, defaultThanks]
+    : [defaultThanks];
+
+  return {
+    version: 1,
+    kind: 'customer',
+    isAr,
+    paperWidthMm: width,
+    storeName: safeThermalText(s.store_name || "JOHNA'S").toUpperCase(),
+    storeSubtitle: 'RESTAURANT',
+    title: receipt.isOpenOrder
+      ? (isAr ? 'الحساب المفتوح' : 'OPEN CHECK')
+      : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'),
+    slogan: safeThermalText(s.receipt_header) || (isAr ? 'الأكل الجيد يجمع الناس' : 'Good Food Brings People Together'),
+    branchName: safeThermalText(receipt.branchName),
+    meta,
+    itemsHeading: isAr ? 'الأصناف' : 'ITEMS',
+    items: receipt.items.map((item) => ({
+      qty: thermalNumber(item.qty, 3),
+      name: safeThermalText(item.name),
+      price: thermalMoney(item.price, currency),
+      total: thermalMoney(item.total, currency),
+    })),
+    totals,
+    footerLines,
+  };
+}
+
 export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang: Language, isAr: boolean): string {
   const currency = safeThermalText(s.currency || 'EGP');
   const width = receiptWidthMm(s.receipt_width_mm || 80);
@@ -353,6 +423,7 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
           approvalRequestId: pending.authorization.approvalRequestId,
           payload: {
             text: pending.plainText,
+            template: pending.template,
             paperWidthMm: widthMm,
             copies: 1,
           },
@@ -368,6 +439,7 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
           const accepted = await executeSilentPrint({
             printerName,
             text: pending.plainText,
+            template: pending.template,
             paperWidthMm: widthMm,
           });
           if (accepted) {
@@ -451,6 +523,7 @@ export async function buildReceiptHtml(
     pendingReceiptPrints.set(printToken, {
       authorization,
       plainText: buildReceiptThermalText(receipt, s, lang, isAr),
+      template: buildReceiptFixedTemplate(receipt, s, lang, isAr),
     });
     const tokenToDelete = printToken;
     window.setTimeout(() => pendingReceiptPrints.delete(tokenToDelete), 60_000);
