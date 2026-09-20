@@ -11,7 +11,7 @@ import {
   CalendarClock,
   Percent,
   LockKeyhole,
-  LockOpen,
+  Unlock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/api';
@@ -558,7 +558,7 @@ export function SettingsControlCenterPage() {
                   data-testid="language-lock-button"
                   className="shrink-0"
                 >
-                  {languageLocked ? <LockOpen className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+                  {languageLocked ? <Unlock className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
                   {languageLocked ? (isAr ? 'إلغاء التثبيت' : 'Unlock language') : (isAr ? 'تثبيت اللغة' : 'Lock language')}
                 </Button>
               </div>
