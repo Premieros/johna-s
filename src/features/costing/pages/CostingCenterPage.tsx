@@ -5,6 +5,7 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
@@ -27,6 +28,7 @@ export function CostingCenterPage() {
   const isAr = lang === 'ar';
   const { show } = useToast();
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
 
   const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<CostingOverviewRow[]>([]);
@@ -44,7 +46,7 @@ export function CostingCenterPage() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [supplierId, setSupplierId] = useState('');
-  const [fromDate, setFromDate] = useState('');
+  const [fromDate, setFromDate] = useState(() => history.minDate || '');
   const [toDate, setToDate] = useState('');
   const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
@@ -64,7 +66,7 @@ export function CostingCenterPage() {
     const s = (sp.data as { id: string; name: string }[] | null) || [];
     setSuppliers(s);
     if (s.length > 0) setSupplierId(s[0].id);
-  }, [show]);
+  }, [show, history.unlimited, history.minIso]);
 
   const loadRawMaterialUnits = useCallback(async () => {
     const [materialsRes, unitsRes] = await Promise.all([
@@ -92,7 +94,7 @@ export function CostingCenterPage() {
     setError(null);
     const [res, summaryRes] = await Promise.all([
       api.costing.getOverview({ p_branch_id: effBranch }),
-      api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: null, p_to: null }),
+      api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: history.minDate || null, p_to: null }),
     ]);
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     setOverview(res.data || []);
@@ -107,16 +109,19 @@ export function CostingCenterPage() {
       setSalesCostSummary({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
     }
     setLoading(false);
-  }, [effBranch, show]);
+  }, [effBranch, show, history.minDate]);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await api.costing.getOrderMargin({ p_branch_id: effBranch, p_from: fromDate || null, p_to: toDate || null });
+    const allowed = history.clampRange(fromDate, toDate);
+    if (allowed.from !== fromDate) setFromDate(allowed.from);
+    if (allowed.to !== toDate) setToDate(allowed.to);
+    const res = await api.costing.getOrderMargin({ p_branch_id: effBranch, p_from: allowed.from || null, p_to: allowed.to || null });
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     setOrders(res.data || []);
     setLoading(false);
-  }, [effBranch, fromDate, toDate, show]);
+  }, [effBranch, fromDate, toDate, show, history.unlimited]);
 
   const loadSupplierImpact = useCallback(async () => {
     if (!supplierId) { setSupplierImpact([]); return; }
@@ -156,7 +161,7 @@ export function CostingCenterPage() {
       show(res.error.message, 'error');
       return;
     }
-    setRawHistory(res.data || []);
+    setRawHistory((res.data || []).filter((row) => history.unlimited || !history.minIso || row.priced_at >= history.minIso));
   }, [show]);
 
   useEffect(() => { void loadBranches(); }, [loadBranches]);
@@ -350,7 +355,7 @@ export function CostingCenterPage() {
       </>}
 
       {tab === 'orders' && <DesignPanel testId="order-margin-panel">
-        <div className="flex flex-col sm:flex-row gap-3 mb-4"><input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm" /><input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm" /><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44"><option value="">{t('allBranches')}</option>{visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select><Button size="sm" onClick={() => void loadOrders()}>{t('search')}</Button></div>
+        <div className="flex flex-col sm:flex-row gap-3 mb-4"><input type="date" value={fromDate} min={history.minDate} onChange={(e) => setFromDate(history.clampRange(e.target.value, toDate).from)} className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm" /><input type="date" value={toDate} onChange={(e) => { const allowed = history.clampRange(fromDate, e.target.value); setFromDate(allowed.from); setToDate(allowed.to); }} className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm" /><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44"><option value="">{t('allBranches')}</option>{visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select><Button size="sm" onClick={() => void loadOrders()}>{t('search')}</Button></div>
         <DataTable columns={orderColumns} data={orders.map((r) => ({ ...r, id: r.sale_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
       </DesignPanel>}
 
