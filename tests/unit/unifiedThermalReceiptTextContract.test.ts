@@ -11,7 +11,7 @@ describe('unified thermal receipt text contract', () => {
     expect(printing).toContain("isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'");
     expect(printing).toContain("lines.push(isAr ? 'الأصناف' : 'ITEMS');");
     expect(printing).toContain("lines.push(isAr ? 'الدفع' : 'PAYMENT');");
-    expect(printing).toContain("const strongDivider = '='.repeat(columns);");
+    expect(printing).toContain("const strongDivider = '='.repeat(isCompactThermalWidth(width) ? 32 : 42);");
     expect(printing).not.toContain('*** حساب مبدئي / OPEN CHECK ***');
     expect(printing).not.toContain('*** إيصال دفع / PAYMENT RECEIPT ***');
     expect(printing).not.toContain('الأصناف / ITEMS');
@@ -20,7 +20,7 @@ describe('unified thermal receipt text contract', () => {
 
   it('uses the same ticket hierarchy for kitchen text without prices', () => {
     expect(localAgent).toContain("ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET'");
-    expect(localAgent).toContain("ar ? 'المحطة' : 'Station'");
+    expect(localAgent).toContain("ar ? `المحطة: ${safeText(station)}` : `Station: ${safeText(station)}`");
     expect(localAgent).toContain("ar ? 'الطلب' : 'Order'");
     expect(localAgent).toContain("ar ? 'التاريخ' : 'Date'");
     expect(localAgent).toContain("ar ? 'النوع' : 'Type'");
