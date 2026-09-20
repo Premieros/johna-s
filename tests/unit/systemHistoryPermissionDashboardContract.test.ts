@@ -22,6 +22,13 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).toContain("can('expenses.view')");
     expect(dashboard).toContain("can('shifts.view')");
     expect(dashboard).toContain('testId="kpi-open-orders"');
+    expect(dashboard).toContain('testId="kpi-open-order-value"');
+    expect(dashboard).toContain('testId="kpi-discounts"');
+    expect(dashboard).toContain('testId="kpi-returns"');
+    expect(dashboard).toContain('testId="kpi-expenses"');
+    expect(dashboard).toContain('openOrderValue: activeOrders.reduce');
+    expect(dashboard).toContain('current.discounts');
+    expect(dashboard).toContain('current.returns');
     expect(dashboard).toContain('data-testid={testId}');
     expect(dashboard).toContain("status', ['open', 'held']");
     expect(dashboard).toContain('openDineIn');

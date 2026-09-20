@@ -52,10 +52,12 @@ type ActiveOrderRow = {
   order_type: string | null;
   table_id: string | null;
   branch_id: string | null;
+  total: number | null;
   order_items?: Array<{ quantity: number | null }> | null;
 };
 type DashboardOps = {
   openOrders: number;
+  openOrderValue: number;
   heldOrders: number;
   openDineIn: number;
   openTakeaway: number;
@@ -231,6 +233,7 @@ export function DashboardDataPage() {
   const [quickStats, setQuickStats] = useState<QuickStats>({ sales: null, expenses: null, profit: null, lowStockCount: null });
   const [ops, setOps] = useState<DashboardOps>({
     openOrders: 0,
+    openOrderValue: 0,
     heldOrders: 0,
     openDineIn: 0,
     openTakeaway: 0,
@@ -362,7 +365,7 @@ export function DashboardDataPage() {
         ? (() => {
             let q = supabase
               .from('orders')
-              .select('id,status,order_type,table_id,branch_id,order_items(quantity)')
+              .select('id,status,order_type,table_id,branch_id,total,order_items(quantity)')
               .in('status', ['open', 'held'])
               .limit(5000);
             if (branchFilter) q = q.eq('branch_id', branchFilter);
@@ -421,6 +424,7 @@ export function DashboardDataPage() {
       const tables = (tablesRes.data || []) as Array<{ status: string | null; is_active: boolean | null }>;
       setOps({
         openOrders: activeOrders.length,
+        openOrderValue: activeOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
         heldOrders: activeOrders.filter((order) => order.status === 'held').length,
         openDineIn: activeOrders.filter((order) => order.order_type === 'dine_in').length,
         openTakeaway: activeOrders.filter((order) => order.order_type === 'takeaway').length,
@@ -526,10 +530,13 @@ export function DashboardDataPage() {
     {loading ? <div className="flex h-64 items-center justify-center rounded-3xl border border-ui-border bg-ui-surface"><RefreshCw className="h-7 w-7 animate-spin text-ui-primary" /></div> : <>
       <section data-testid="dashboard-permission-kpis" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {canViewPos && <Metric testId="kpi-open-orders" icon={Clock3} title={ar ? 'إجمالي الطلبات المفتوحة' : 'Open orders'} value={ops.openOrders} display={formatNumber(ops.openOrders, 0)} previous={0} href={canViewFloorPlan ? '/floor-plan' : undefined} ar={ar} detail={<>{ar ? 'صالة' : 'Dine-in'} {formatNumber(ops.openDineIn, 0)} · {ar ? 'تيك أواي' : 'Take Away'} {formatNumber(ops.openTakeaway, 0)} · {ar ? 'دليفري' : 'Delivery'} {formatNumber(ops.openDelivery, 0)}</>} />}
+        {canViewPos && <Metric testId="kpi-open-order-value" icon={Wallet} title={ar ? 'قيمة الطلبات المفتوحة' : 'Open order value'} value={ops.openOrderValue} display={money(ops.openOrderValue)} previous={0} href={canViewFloorPlan ? '/floor-plan' : undefined} ar={ar} />}
         {canViewSales && <Metric testId="kpi-orders" icon={ReceiptText} title={ar ? 'إجمالي الطلبات' : 'Total orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href={canViewReports ? '/reports?reportType=detailed_invoices' : undefined} ar={ar} />}
         {canViewSales && <Metric testId="kpi-net-sales" icon={Wallet} title={ar ? 'صافي المبيعات' : 'Net sales'} value={current.sales} display={money(current.sales)} previous={previous.sales} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
         {canViewSales && <Metric testId="kpi-average-order" icon={Calculator} title={ar ? 'متوسط قيمة الطلب' : 'Average order'} value={current.orders ? current.sales / current.orders : 0} display={money(current.orders ? current.sales / current.orders : 0)} previous={previous.orders ? previous.sales / previous.orders : 0} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
         {canViewSales && <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href={canViewReports ? '/reports?reportType=sales_by_payment' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-discounts" icon={Calculator} title={ar ? 'الخصومات' : 'Discounts'} value={current.discounts} display={money(current.discounts)} previous={previous.discounts} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-returns" icon={ReceiptText} title={ar ? 'المرتجعات' : 'Returns'} value={current.returns} display={money(current.returns)} previous={previous.returns} href={canViewReports ? '/reports?reportType=returns' : undefined} ar={ar} />}
         {canViewFloorPlan && <Metric testId="kpi-occupied-tables" icon={Armchair} title={ar ? 'الطاولات المشغولة' : 'Occupied tables'} value={ops.occupiedTables} display={formatNumber(ops.occupiedTables, 0)} previous={0} href="/floor-plan" ar={ar} />}
         {canViewFloorPlan && <Metric testId="kpi-available-tables" icon={CheckCircle2} title={ar ? 'الطاولات المتاحة' : 'Available tables'} value={ops.availableTables} display={formatNumber(ops.availableTables, 0)} previous={0} href="/floor-plan" ar={ar} />}
         {canViewShifts && <Metric testId="kpi-open-shifts" icon={Timer} title={ar ? 'الشفتات المفتوحة' : 'Open shifts'} value={ops.openShifts} display={formatNumber(ops.openShifts, 0)} previous={0} href="/shifts" ar={ar} />}
