@@ -3,7 +3,6 @@ import { Trash2, FileText, Edit2, RotateCcw } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -25,6 +24,9 @@ import type { Customer } from '@/lib/types';
 interface SaleRow {
   id: string;
   invoice_number: string;
+  subtotal: number;
+  discount_amount: number;
+  tax_amount: number;
   total: number;
   paid_amount: number;
   refunded_amount: number;
@@ -41,13 +43,12 @@ interface SaleRow {
 export function SalesPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const history = useHistoryAccess();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
@@ -70,8 +71,12 @@ export function SalesPage() {
   const isAr = lang === 'ar';
   const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
-  const canRequestPaymentApproval = user?.role === 'cashier';
-  const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
+  const canRequestPaymentApproval = can('sales.payment.receive') && !can('refunds.approve');
+  const canEditSaleMetadata = can('refunds.approve');
+  const canEditSale = canEditSaleMetadata || canRequestPaymentApproval;
+
+  const hasRefundableQuantity = (sale: SaleRow): boolean =>
+    (sale.sale_items || []).some((item) => Number(item.quantity || 0) > Number(item.refunded_quantity || 0));
 
   async function loadMeta() {
     const { data: customersRes } = await supabase.from('customers').select('*').order('name');
@@ -111,7 +116,9 @@ export function SalesPage() {
 
   const refundLineTotal = (item: NonNullable<SaleRow['sale_items']>[number]): number => {
     const q = Math.max(0, Math.min(parseFloat(refundQty[item.id] || '0') || 0, item.quantity - (item.refunded_quantity || 0)));
-    return Math.round((item.total || 0) * q / (item.quantity || 1) * 100) / 100;
+    const basis = Math.round((item.total || 0) * q / (item.quantity || 1) * 100) / 100;
+    if (!refundSale || Number(refundSale.subtotal || 0) <= 0) return 0;
+    return Math.round(basis * Math.max(0, Number(refundSale.total || 0)) / Number(refundSale.subtotal) * 100) / 100;
   };
 
   const refundTotal = () => {
@@ -175,6 +182,11 @@ export function SalesPage() {
   const saveSaleEdit = async () => {
     if (!viewSale) return;
 
+    if (editForm.status === 'returned' && viewSale.status !== 'returned') {
+      show(isAr ? 'استخدم مسار المرتجع؛ لا يمكن تحويل الفاتورة إلى مرتجعة يدويًا.' : 'Use the refund workflow; a sale cannot be marked returned manually.', 'error');
+      return;
+    }
+
     const paymentChanged = editForm.payment_method !== viewSale.payment_method;
     if (paymentChanged) {
       if (editForm.payment_method === 'credit') {
@@ -217,7 +229,7 @@ export function SalesPage() {
       }
     }
 
-    if (user?.role !== 'cashier') {
+    if (canEditSaleMetadata) {
       const { error } = await supabase.from('sales').update({
         customer_id: editForm.customer_id || null,
         status: editForm.status,
@@ -235,13 +247,12 @@ export function SalesPage() {
   const remove = async () => {
     if (!deleteId) return;
     const sale = items.find((i) => i.id === deleteId);
-    if (sale?.status === 'completed') {
-      show(t('cannotDeleteCompleted'), 'error');
+    if (sale?.status !== 'pending') {
+      show(isAr ? 'الفواتير المرحلة أو المرتجعة تُحفظ للتدقيق ولا تُحذف. استخدم مسار المرتجع أو إصلاح المرتجع.' : 'Posted or returned invoices are audit records and cannot be deleted. Use the refund workflow.', 'error');
       setDeleteId(null);
       return;
     }
     try {
-      await supabase.from('sale_items').delete().eq('sale_id', deleteId);
       const { error } = await supabase.from('sales').delete().eq('id', deleteId);
       if (error) { show(error.message, 'error'); return; }
       await logAudit('delete', 'sales', deleteId);
@@ -256,10 +267,9 @@ export function SalesPage() {
   const removeSelected = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const deletable = items.filter((i) => ids.includes(i.id) && i.status !== 'completed').map((i) => i.id);
+    const deletable = items.filter((i) => ids.includes(i.id) && i.status === 'pending').map((i) => i.id);
     const blocked = ids.length - deletable.length;
     for (const id of deletable) {
-      await supabase.from('sale_items').delete().eq('sale_id', id);
       await supabase.from('sales').delete().eq('id', id);
       await logAudit('delete', 'sales', id);
     }
@@ -303,6 +313,11 @@ export function SalesPage() {
             {isAr ? `مرتجع ${formatCurrency(r.refunded_amount, currency, lang)}` : `Refunded ${formatCurrency(r.refunded_amount, currency, lang)}`}
           </span>
         )}
+        {r.status === 'returned' && hasRefundableQuantity(r) && (
+          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-ui-warning-soft text-ui-warning">
+            {isAr ? 'يحتاج إصلاح المرتجع' : 'Refund repair required'}
+          </span>
+        )}
       </div>
     )},
     { key: 'actions', header: t('actions'), render: (r) => (
@@ -312,12 +327,12 @@ export function SalesPage() {
             <Edit2 className="w-4 h-4" />
           </button>
         )}
-        {canOpenRefund && r.status !== 'returned' && (r.refunded_amount || 0) < r.total && (
-          <button onClick={() => openRefund(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning" title={isAr ? 'مرتجع' : 'Refund'}>
+        {canOpenRefund && hasRefundableQuantity(r) && (
+          <button onClick={() => openRefund(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning" title={r.status === 'returned' ? (isAr ? 'إصلاح المرتجع' : 'Repair refund') : (isAr ? 'مرتجع' : 'Refund')}>
             <RotateCcw className="w-4 h-4" />
           </button>
         )}
-        {can('refunds.approve') && r.status !== 'completed' && (
+        {can('refunds.approve') && r.status === 'pending' && (
           <button onClick={() => setDeleteId(r.id)} className="ui-icon-action ui-icon-action-danger" title={t('delete')}>
             <Trash2 className="w-4 h-4" />
           </button>
@@ -362,7 +377,7 @@ export function SalesPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Select label={t('customer')} value={editForm.customer_id} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, customer_id: e.target.value })}>
+              <Select label={t('customer')} value={editForm.customer_id} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, customer_id: e.target.value })}>
                 <option value="">--</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
@@ -372,14 +387,14 @@ export function SalesPage() {
                 <option value="transfer">{t('transfer')}</option>
                 <option value="credit" disabled>{t('credit')}</option>
               </Select>
-              <Select label={t('status')} value={editForm.status} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+              <Select label={t('status')} value={editForm.status} disabled={!canEditSaleMetadata || viewSale.status === 'returned'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
                 <option value="completed">{isAr ? 'مكتملة' : 'Completed'}</option>
                 <option value="pending">{isAr ? 'قيد الانتظار' : 'Pending'}</option>
-                <option value="returned">{isAr ? 'مرتجعة' : 'Returned'}</option>
+                {viewSale.status === 'returned' && <option value="returned">{isAr ? 'مرتجعة' : 'Returned'}</option>}
               </Select>
               <div />
             </div>
-            <Textarea label={t('notes')} value={editForm.notes} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} />
+            <Textarea label={t('notes')} value={editForm.notes} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} />
 
             {viewSale.sale_items && viewSale.sale_items.length > 0 && (
               <div>
@@ -426,7 +441,7 @@ export function SalesPage() {
       </Modal>
 
       {/* Refund Modal */}
-      <Modal open={!!refundSale} onClose={() => setRefundSale(null)} title={isAr ? 'مرتجع الفاتورة' : 'Invoice Refund'} size="lg">
+      <Modal open={!!refundSale} onClose={() => setRefundSale(null)} title={refundSale?.status === 'returned' ? (isAr ? 'إصلاح المرتجع' : 'Repair Refund') : (isAr ? 'مرتجع الفاتورة' : 'Invoice Refund')} size="lg">
         {refundSale && (
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-ui-page-alt rounded-lg">
