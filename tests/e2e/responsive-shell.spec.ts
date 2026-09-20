@@ -117,8 +117,11 @@ test('critical shell and page actions remain clickable on a small phone', async 
   await page.getByTestId('sidebar-close').click();
   await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeHidden();
 
-  await expect(page.getByTestId('theme-toggle')).toBeVisible();
-  await page.getByTestId('theme-toggle').click();
+  await page.getByTestId('sidebar-open').click();
+  await expect(page.getByTestId('mobile-theme-toggle')).toBeVisible();
+  await page.getByTestId('mobile-theme-toggle').click();
+  await page.getByTestId('sidebar-close').click();
+  await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeHidden();
 
   await expect(page.getByTestId('active-orders-button')).toBeVisible();
   await page.getByTestId('active-orders-button').click();
