@@ -56,6 +56,6 @@ describe.skipIf(skip)('returned sales archive and closing report database contra
       expect(row.def, row.proname).toContain('discount_amount');
     }
     const day = defs.rows.find((row) => row.proname === '_build_day_closing_report')!;
-    expect(day.def).toContain("'discount_amount', s.discount_amount");
+    expect(day.def).toContain("'discount_amount',s.discount_amount");
   });
 });
