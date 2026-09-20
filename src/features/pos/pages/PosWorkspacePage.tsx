@@ -921,9 +921,58 @@ export function PosWorkspacePage() {
           </div>
         </div>
 
-        {/* Right Side: Cart / Order Panel / Checkout */}
-        <div data-testid="pos-desktop-order-panel" className="hidden w-[380px] flex-shrink-0 flex-col border-s border-ui-border bg-ui-surface shadow-ui-md lg:flex xl:w-[410px] 2xl:w-[440px]">
-          {rightPanel}
+        {/* One responsive order panel: desktop sidebar, mobile bottom sheet. */}
+        <div
+          data-testid="pos-mobile-order-sheet"
+          className={`${mobileOrderOpen || isCheckout
+            ? 'fixed inset-0 z-[60] flex items-end justify-center bg-black/45 backdrop-blur-[1px]'
+            : 'hidden'
+          } lg:static lg:z-auto lg:flex lg:w-[380px] lg:flex-shrink-0 lg:items-stretch lg:justify-stretch lg:bg-transparent lg:backdrop-blur-none xl:w-[410px] 2xl:w-[440px]`}
+        >
+          <button
+            type="button"
+            className="absolute inset-0 lg:hidden"
+            aria-label={isAr ? 'إغلاق الطلب' : 'Close order'}
+            onClick={() => {
+              if (isCheckout) pos.setCheckoutOpen(false);
+              setMobileOrderOpen(false);
+            }}
+          />
+          <section
+            data-testid="pos-mobile-order-sheet-panel"
+            className="relative flex h-[min(94dvh,820px)] max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-ui-border bg-ui-surface shadow-2xl lg:h-full lg:max-h-none lg:rounded-none lg:border-s lg:border-t-0 lg:shadow-ui-md"
+          >
+            <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-ui-border bg-ui-surface/95 px-3 backdrop-blur lg:hidden">
+              <button
+                data-testid="pos-mobile-order-close"
+                type="button"
+                onClick={() => {
+                  if (isCheckout) pos.setCheckoutOpen(false);
+                  setMobileOrderOpen(false);
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-ui-border bg-ui-page-alt text-ui-text"
+                aria-label={isAr ? 'رجوع للمنتجات' : 'Back to products'}
+              >
+                <Grid2X2 className="h-5 w-5" />
+              </button>
+              <div className="min-w-0 flex-1 text-center">
+                <p className="truncate text-sm font-black text-ui-text">
+                  {isCheckout ? (isAr ? 'الدفع' : 'Checkout') : (isAr ? 'الطلب الحالي' : 'Current order')}
+                </p>
+                <p className="truncate text-[11px] font-bold text-ui-muted">
+                  {pos.activeOrderNumber ? `#${pos.activeOrderNumber}` : (isAr ? 'طلب جديد' : 'New order')}
+                  {' · '}
+                  {pos.cart.reduce((sum, item) => sum + item.quantity, 0)} {isAr ? 'صنف' : 'items'}
+                </p>
+              </div>
+              <span className="max-w-[34vw] truncate text-sm font-black text-ui-accent">
+                {formatCurrency(pos.total, pos.effCurrency, lang)}
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom)] lg:pb-0">
+              {rightPanel}
+            </div>
+          </section>
         </div>
       </div>
 
@@ -997,58 +1046,6 @@ export function PosWorkspacePage() {
           <span>{isAr ? 'الطاولات' : 'Tables'}</span>
         </button>
       </nav>
-
-      {(mobileOrderOpen || isCheckout) && (
-        <div
-          data-testid="pos-mobile-order-sheet"
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 backdrop-blur-[1px] lg:hidden"
-        >
-          <button
-            type="button"
-            className="absolute inset-0"
-            aria-label={isAr ? 'إغلاق الطلب' : 'Close order'}
-            onClick={() => {
-              if (isCheckout) pos.setCheckoutOpen(false);
-              setMobileOrderOpen(false);
-            }}
-          />
-          <section
-            data-testid="pos-mobile-order-sheet-panel"
-            className="relative flex h-[min(94dvh,820px)] max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-ui-border bg-ui-surface shadow-2xl"
-          >
-            <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-ui-border bg-ui-surface/95 px-3 backdrop-blur">
-              <button
-                data-testid="pos-mobile-order-close"
-                type="button"
-                onClick={() => {
-                  if (isCheckout) pos.setCheckoutOpen(false);
-                  setMobileOrderOpen(false);
-                }}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-ui-border bg-ui-page-alt text-ui-text"
-                aria-label={isAr ? 'رجوع للمنتجات' : 'Back to products'}
-              >
-                <Grid2X2 className="h-5 w-5" />
-              </button>
-              <div className="min-w-0 flex-1 text-center">
-                <p className="truncate text-sm font-black text-ui-text">
-                  {isCheckout ? (isAr ? 'الدفع' : 'Checkout') : (isAr ? 'الطلب الحالي' : 'Current order')}
-                </p>
-                <p className="truncate text-[11px] font-bold text-ui-muted">
-                  {pos.activeOrderNumber ? `#${pos.activeOrderNumber}` : (isAr ? 'طلب جديد' : 'New order')}
-                  {' · '}
-                  {pos.cart.reduce((sum, item) => sum + item.quantity, 0)} {isAr ? 'صنف' : 'items'}
-                </p>
-              </div>
-              <span className="max-w-[34vw] truncate text-sm font-black text-ui-accent">
-                {formatCurrency(pos.total, pos.effCurrency, lang)}
-              </span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom)]">
-              {rightPanel}
-            </div>
-          </section>
-        </div>
-      )}
 
       <ActiveOrdersDrawer
         open={panel === 'orders'}
