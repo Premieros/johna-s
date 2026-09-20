@@ -134,6 +134,16 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','SAME_OPERATOR');
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.users u
+    WHERE u.id=p_target_user_id
+      AND u.is_active=true
+      AND u.branch_id=v_order.branch_id
+  ) THEN
+    RETURN jsonb_build_object('success',false,'error','TARGET_USER_NOT_IN_BRANCH');
+  END IF;
+
   IF NOT public._is_branch_captain_order_user(p_target_user_id, v_order.branch_id) THEN
     RETURN jsonb_build_object('success',false,'error','TARGET_USER_NOT_BRANCH_CAPTAIN');
   END IF;
