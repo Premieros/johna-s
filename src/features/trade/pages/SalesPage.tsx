@@ -74,7 +74,7 @@ export function SalesPage() {
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
   const canRequestPaymentApproval = user?.role === 'cashier';
   const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
-  const canArchiveReturnedSale = can('refunds.approve') || can('sales.manage');
+  const canArchiveReturnedSale = can('refunds.approve');
 
   async function loadMeta() {
     const { data: customersRes } = await supabase.from('customers').select('*').order('name');
@@ -238,7 +238,7 @@ export function SalesPage() {
   const remove = async () => {
     if (!deleteId) return;
     const sale = items.find((i) => i.id === deleteId);
-    if (!sale || sale.status !== 'returned' || (sale.refunded_amount || 0) < sale.total) {
+    if (!sale || sale.status !== 'returned') {
       show(isAr ? 'لا يمكن إخفاء إلا الفاتورة المرتجعة بالكامل' : 'Only fully returned sales can be archived', 'error');
       setDeleteId(null);
       return;
@@ -263,7 +263,7 @@ export function SalesPage() {
   const removeSelected = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const archivable = items.filter((i) => ids.includes(i.id) && i.status === 'returned' && (i.refunded_amount || 0) >= i.total).map((i) => i.id);
+    const archivable = items.filter((i) => ids.includes(i.id) && i.status === 'returned').map((i) => i.id);
     const blocked = ids.length - archivable.length;
     let archived = 0;
     for (const id of archivable) {
@@ -328,7 +328,7 @@ export function SalesPage() {
             <RotateCcw className="w-4 h-4" />
           </button>
         )}
-        {canArchiveReturnedSale && r.status === 'returned' && (r.refunded_amount || 0) >= r.total && (
+        {canArchiveReturnedSale && r.status === 'returned' && (
           <button onClick={() => setDeleteId(r.id)} className="ui-icon-action ui-icon-action-danger" title={isAr ? 'إخفاء الفاتورة المرتجعة' : 'Archive returned sale'}>
             <Trash2 className="w-4 h-4" />
           </button>
