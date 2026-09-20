@@ -237,25 +237,29 @@ function thermalPaymentLabel(method: string, isAr: boolean): string {
     credit: ['آجل', 'CREDIT'],
   };
   const label = labels[key];
-  return label ? (isAr ? `${label[0]} / ${label[1]}` : label[1]) : safeThermalText(method).toUpperCase();
+  return label ? (isAr ? label[0] : label[1]) : safeThermalText(method).toUpperCase();
 }
 
 export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang: Language, isAr: boolean): string {
   const currency = safeThermalText(s.currency || 'EGP');
   const width = receiptWidthMm(s.receipt_width_mm || 80);
-  const divider = '-'.repeat(isCompactThermalWidth(width) ? 32 : 42);
+  const columns = isCompactThermalWidth(width) ? 32 : 42;
+  const divider = '-'.repeat(columns);
+  const strongDivider = '='.repeat(columns);
   const lines: string[] = [];
   const row = (label: string, value: unknown) => lines.push(`${label}: ${safeThermalText(value)}`);
 
   const storeName = safeThermalText(s.store_name);
   if (storeName) lines.push(storeName);
   lines.push(receipt.isOpenOrder
-    ? (isAr ? '*** حساب مبدئي / OPEN CHECK ***' : '*** OPEN CHECK ***')
-    : (isAr ? '*** إيصال دفع / PAYMENT RECEIPT ***' : '*** PAYMENT RECEIPT ***'));
+    ? (isAr ? 'حساب مبدئي' : 'OPEN CHECK')
+    : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'));
+
   if (s.store_address) lines.push(safeThermalText(s.store_address));
   if (s.store_phone) row(isAr ? 'هاتف' : 'Tel', s.store_phone);
   row(isAr ? 'الفرع' : 'Branch', receipt.branchName);
-  lines.push(divider);
+
+  lines.push(strongDivider);
   row(receipt.isOpenOrder ? (isAr ? 'الطلب' : 'Order') : (isAr ? 'الفاتورة' : 'Invoice'), receipt.invoice);
   row(isAr ? 'التاريخ' : 'Date', thermalDateTime(receipt.date));
   if (receipt.orderTypeLabel) row(isAr ? 'النوع' : 'Type', receipt.orderTypeLabel);
@@ -265,13 +269,15 @@ export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang
   if (receipt.customerName) row(isAr ? 'العميل' : 'Customer', receipt.customerName);
   if (receipt.operatorName) row(isAr ? 'المستخدم' : 'User', receipt.operatorName);
 
-  lines.push(divider, isAr ? 'الأصناف / ITEMS' : 'ITEMS');
+  lines.push(divider);
+  lines.push(isAr ? 'الأصناف' : 'ITEMS');
+  lines.push(divider);
   for (const item of receipt.items) {
     lines.push(safeThermalText(item.name));
     lines.push(`${thermalNumber(item.qty, 3)} x ${thermalMoney(item.price, currency)} = ${thermalMoney(item.total, currency)}`);
   }
 
-  lines.push(divider);
+  lines.push(strongDivider);
   row(isAr ? 'المجموع الفرعي' : 'Subtotal', thermalMoney(receipt.subtotal, currency));
   if (receipt.discount > 0) row(isAr ? 'الخصم' : 'Discount', `-${thermalMoney(receipt.discount, currency)}`);
   if (s.receipt_show_tax !== false && receipt.tax > 0) row(isAr ? 'الضريبة' : 'Tax', thermalMoney(receipt.tax, currency));
@@ -280,7 +286,9 @@ export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang
   if (!receipt.isOpenOrder) {
     const payments = (receipt.payments || []).filter((payment) => String(payment.method || '').trim());
     if (payments.length > 0) {
-      lines.push(divider, isAr ? 'الدفع / PAYMENT' : 'PAYMENT');
+      lines.push(divider);
+      lines.push(isAr ? 'الدفع' : 'PAYMENT');
+      lines.push(divider);
       for (const payment of payments) {
         row(thermalPaymentLabel(payment.method, isAr), thermalMoney(payment.amount, currency));
       }
@@ -289,9 +297,9 @@ export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang
     if (receipt.change > 0) row(isAr ? 'الباقي' : 'Change', thermalMoney(receipt.change, currency));
   }
 
-  lines.push(divider);
+  lines.push(strongDivider);
   if (s.receipt_footer) lines.push(safeThermalText(s.receipt_footer));
-  lines.push(isAr ? 'شكراً لزيارتكم' : 'Thank you!');
+  lines.push(isAr ? 'شكراً لزيارتكم' : 'Thank you for visiting.');
   const one = `${lines.join('\r\n')}\r\n\r\n`;
   const copies = Math.max(1, Math.min(5, s.receipt_copies || 1));
   return Array.from({ length: copies }, () => one).join('\r\n\f\r\n');
