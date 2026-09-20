@@ -37,6 +37,7 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
   'pos.view': { ar: 'عرض نقطة البيع', en: 'View POS' },
   'pos.order.create': { ar: 'إنشاء الطلبات', en: 'Create orders' },
   'pos.order.edit': { ar: 'تعديل الطلبات', en: 'Edit orders' },
+  'pos.order.transfer': { ar: 'نقل الطلبات والأصناف بين الطاولات', en: 'Transfer orders and items between tables' },
   'pos.send_kitchen': { ar: 'إرسال الطلب للمطبخ', en: 'Send orders to kitchen' },
   'pos.receipt.print': { ar: 'طباعة الإيصالات', en: 'Print receipts' },
   'settings.manage': { ar: 'إدارة الإعدادات', en: 'Manage settings' },
@@ -168,6 +169,74 @@ const messages: Record<string, { ar: string; en: string }> = {
   ITEM_ALREADY_SENT: {
     ar: 'لا يمكن تنفيذ هذه العملية لأن الصنف أُرسل للمطبخ بالفعل.',
     en: 'This action cannot be completed because the item was already sent to kitchen.',
+  },
+  REASON_REQUIRED: {
+    ar: 'اكتب سببًا واضحًا للعملية قبل المتابعة.',
+    en: 'Enter a clear reason before continuing.',
+  },
+  SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID: {
+    ar: 'الطلب يحتوي على أصناف أُرسلت للمطبخ. ألغِ الأصناف المرسلة عبر مسار Void المعتمد أولًا.',
+    en: 'This order contains items already sent to kitchen. Void the sent items through the approved flow first.',
+  },
+  TARGET_ORDER_OPERATOR_REQUIRED: {
+    ar: 'الطاولة المستهدفة عليها طلب لمستخدم آخر. يلزم امتلاك صلاحية نقل الطلبات والأصناف لإكمال النقل.',
+    en: 'The target table has an order owned by another operator. Transfer permission is required to continue.',
+  },
+  TARGET_ORDER_NOT_FOUND: {
+    ar: 'تعذر العثور على الطلب الموجود على الطاولة المستهدفة. حدّث الطاولات وحاول مرة أخرى.',
+    en: 'The order on the target table could not be found. Refresh the tables and retry.',
+  },
+  CROSS_BRANCH_ORDER_ITEM_MOVE: {
+    ar: 'لا يمكن نقل الصنف إلى طلب تابع لفرع آخر.',
+    en: 'An order item cannot be moved to an order in another branch.',
+  },
+  ORDER_TRANSFER_RPC_REQUIRED: {
+    ar: 'يجب تنفيذ النقل من خلال أمر النقل المعتمد في نقطة البيع، وليس بتعديل الطلب مباشرة.',
+    en: 'Use the approved POS transfer action instead of changing the order directly.',
+  },
+  POS_ADMIN_PERMISSION_REQUIRED: {
+    ar: 'يلزم امتلاك صلاحية إدارة طلبات المستخدمين الآخرين لإكمال هذه العملية.',
+    en: 'Permission to manage other operators’ orders is required for this action.',
+  },
+  BRANCH_MISMATCH: {
+    ar: 'العملية تخص فرعًا خارج الفرع الحالي أو الفروع المسموح لك بها.',
+    en: 'This action belongs to a different branch or one outside your allowed scope.',
+  },
+  ORDER_NOT_FOUND: {
+    ar: 'تعذر العثور على الطلب. حدّث الشاشة ثم حاول مرة أخرى.',
+    en: 'The order could not be found. Refresh the screen and retry.',
+  },
+  ORDER_ITEM_NOT_FOUND: {
+    ar: 'تعذر العثور على سطر الصنف داخل الطلب. حدّث الطلب ثم حاول مرة أخرى.',
+    en: 'The order item could not be found. Refresh the order and retry.',
+  },
+  ORDER_ITEMS_REQUIRED: {
+    ar: 'حدد صنفًا واحدًا على الأقل لإكمال النقل.',
+    en: 'Select at least one item to complete the transfer.',
+  },
+  TARGET_TABLE_NOT_FOUND: {
+    ar: 'الطاولة المستهدفة غير متاحة في الفرع الحالي. حدّث الطاولات وحاول مرة أخرى.',
+    en: 'The target table is not available in the current branch. Refresh the tables and retry.',
+  },
+  SAME_TABLE: {
+    ar: 'اختر طاولة مختلفة عن الطاولة الحالية.',
+    en: 'Choose a table different from the current table.',
+  },
+  SOURCE_NOT_DINE_IN: {
+    ar: 'نقل الأصناف بين الطاولات متاح فقط لطلبات الصالة المرتبطة بطاولة.',
+    en: 'Item transfer between tables is only available for dine-in table orders.',
+  },
+  NUMBERING_FAILED: {
+    ar: 'تعذر إنشاء رقم للطلب الجديد. لم يتم إكمال النقل؛ حاول مرة أخرى.',
+    en: 'A new order number could not be created. The transfer was not completed; retry.',
+  },
+  USER_NOT_FOUND: {
+    ar: 'المستخدم الحالي غير موجود أو غير نشط. أعد تسجيل الدخول أو تواصل مع مسؤول النظام.',
+    en: 'The current user does not exist or is inactive. Sign in again or contact the administrator.',
+  },
+  TRANSACTION_FAILED: {
+    ar: 'تعذر إكمال العملية بسبب تعارض أثناء التنفيذ. لم يتم اعتماد التغيير؛ حدّث الشاشة وحاول مرة أخرى.',
+    en: 'The operation failed during execution. The change was not committed; refresh and retry.',
   },
   MODIFIER_GROUP_HAS_OPEN_ORDERS: {
     ar: 'لا يمكن تعديل أو حذف مجموعة الإضافات لأنها مستخدمة في طلبات مفتوحة.',
