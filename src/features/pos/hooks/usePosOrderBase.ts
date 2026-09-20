@@ -446,9 +446,9 @@ export function usePosOrder(input: UsePosOrderInput) {
         return false;
       }
 
-      const { data, error } = await api.pos.transferOrderItemToTable({
+      const { data, error } = await api.pos.transferOrderItemsToTable({
         p_order_id: activeOrderId,
-        p_order_item_id: matches[0].id,
+        p_order_item_ids: [matches[0].id],
         p_target_table_id: targetTableId,
       });
       if (error) {
@@ -458,10 +458,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       const result = data as (RpcResult & { source_order_empty?: boolean }) | null;
       if (!result?.success) {
-        const message = result?.error === 'ITEM_ALREADY_SENT'
-          ? (isAr ? 'لا يمكن نقل صنف تم إرساله للمطبخ.' : 'A line already sent to kitchen cannot be moved.')
-          : result?.detail || result?.error || t('error');
-        show(message, 'error');
+        show(result?.error || result?.detail || t('error'), 'error');
         return false;
       }
 
