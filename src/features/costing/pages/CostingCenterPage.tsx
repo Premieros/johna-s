@@ -66,7 +66,7 @@ export function CostingCenterPage() {
     const s = (sp.data as { id: string; name: string }[] | null) || [];
     setSuppliers(s);
     if (s.length > 0) setSupplierId(s[0].id);
-  }, [show, history.unlimited, history.minIso]);
+  }, [show]);
 
   const loadRawMaterialUnits = useCallback(async () => {
     const [materialsRes, unitsRes] = await Promise.all([
@@ -162,7 +162,7 @@ export function CostingCenterPage() {
       return;
     }
     setRawHistory((res.data || []).filter((row) => history.unlimited || !history.minIso || row.priced_at >= history.minIso));
-  }, [show]);
+  }, [show, history.unlimited, history.minIso]);
 
   useEffect(() => { void loadBranches(); }, [loadBranches]);
   useEffect(() => { void loadSuppliers(); }, [loadSuppliers]);
