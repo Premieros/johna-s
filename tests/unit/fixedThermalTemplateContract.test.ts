@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { Settings } from '@/lib/types';
 import type { KitchenSendItem } from '../../src/features/pos/types';
 import { buildReceiptFixedTemplate } from '../../src/features/pos/utils/printing';
-import { buildKitchenFixedTemplate } from '../../src/features/pos/services/localPrintAgent';
+import { buildFixedThermalTemplateHtml, buildKitchenFixedTemplate } from '../../src/features/pos/services/localPrintAgent';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
@@ -102,6 +102,40 @@ describe('fixed thermal receipt template contract', () => {
     });
     expect(template.totals).toBeUndefined();
     expect(template.footerLines).toEqual(['END OF ORDER']);
+  });
+
+  it('converts the same fixed form to HTML for the already-installed Electron agent', () => {
+    const template = buildKitchenFixedTemplate('Main Kitchen', [{
+      send_id: 'send-2',
+      order_item_id: 'oi-2',
+      product_id: 'p-2',
+      product_name: 'Burger',
+      unit_name: null,
+      station_code: 'main',
+      quantity: 1,
+      current_quantity: 1,
+      unit_price: 100,
+      discount_amount: 0,
+      bonus_quantity: 0,
+      total: 100,
+      notes: 'No salt',
+      modifiers: [{ option_name: 'جبنة', option_name_en: 'Cheese' }],
+    } as unknown as KitchenSendItem], {
+      orderNumber: "Johna's-003308",
+      tableName: 'Table 05',
+      orderType: 'dine_in',
+      guestCount: 1,
+      isAr: false,
+    }, 80);
+
+    const html = buildFixedThermalTemplateHtml(template);
+    expect(html).toContain('width: 80mm');
+    expect(html).toContain('font-family: "Arial Narrow"');
+    expect(html).toContain('KITCHEN TICKET');
+    expect(html).toContain('Main Kitchen');
+    expect(html).toContain('+ Cheese');
+    expect(html).toContain('Note: No salt');
+    expect(html).toContain('END OF ORDER');
   });
 
   it('renders with fixed Windows typography and only uses text fallback before template submission', () => {
