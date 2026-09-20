@@ -171,16 +171,18 @@ export function PosTopBar({
 
       {pendingCount > 0 && (
         <button
+          data-testid="pos-offline-queue-button"
           onClick={triggerSync}
           disabled={syncing || !online}
           className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-black transition animate-pulse ${online ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20' : 'border-ui-danger/40 bg-ui-danger/10 text-ui-danger'}`}
           title={isAr ? 'فواتير تم حفظها أثناء انقطاع النت في انتظار المزامنة' : 'Queued offline sales pending sync'}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-          <span>
+          <span className="hidden sm:inline">
             {pendingCount} {isAr ? 'فواتير أوفلاين معلقة' : 'offline sales queued'}
             {online && !syncing && ` (${isAr ? 'مزامنة' : 'Sync'})`}
           </span>
+          <span className="sm:hidden">{pendingCount}</span>
         </button>
       )}
 
@@ -226,6 +228,26 @@ export function PosTopBar({
               {t('activeOrders')}
               {counts.activeOrders > 0 && <span className="ms-auto rounded-full bg-ui-primary px-2 py-0.5 text-[10px] text-ui-primary-fg">{counts.activeOrders}</span>}
             </button>
+            <button
+              data-testid="pos-more-tables"
+              onClick={() => { onPanel('tables'); setMore(false); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              {isAr ? 'الطاولات' : 'Tables'}
+              {counts.occupiedTables > 0 && <span className="ms-auto rounded-full bg-ui-warning px-2 py-0.5 text-[10px] text-white">{counts.occupiedTables}</span>}
+            </button>
+            {perms.canViewKitchen && (
+              <button
+                data-testid="pos-more-kitchen"
+                onClick={() => { onPanel('kitchen'); setMore(false); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold hover:bg-ui-page-alt"
+              >
+                <ChefHat className="h-4 w-4" />
+                {isAr ? 'المطبخ' : 'Kitchen'}
+                {counts.kitchenOrders > 0 && <span className="ms-auto rounded-full bg-ui-primary px-2 py-0.5 text-[10px] text-ui-primary-fg">{counts.kitchenOrders}</span>}
+              </button>
+            )}
             {canManageCurrentShift && (
               <button
                 onClick={() => { openShiftManagement(); setMore(false); }}
