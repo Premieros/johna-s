@@ -11,6 +11,7 @@ describe('POS multi-item table transfer and Captain Order target contract', () =
     expect(panel).toContain('toggleSelectedLine');
     expect(panel).toContain('selectedItems.length');
     expect(panel).toContain('pos-selected-transfer-items');
+    expect(panel).not.toContain("(sent?.sentQty || 0) > 0");
     expect(panel).toContain('<TransferItemsModal');
     expect(panel).not.toMatch(/\bselectedLineKey\b/);
   });
@@ -24,9 +25,11 @@ describe('POS multi-item table transfer and Captain Order target contract', () =
     expect(modal).toContain('transferOrderItemsToTable');
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.transfer_order_items_to_table');
     expect(migration).toContain("can_permission('pos.order.transfer')");
-    expect(migration).toContain("'ITEM_ALREADY_SENT'");
+    expect(migration).toContain("UPDATE public.order_kitchen_sends");
+    expect(migration).toContain("UPDATE public.order_kitchen_inventory_events");
     expect(migration).toContain("'inventory_changed',false");
-    expect(migration).toContain("'kds_changed',false");
+    expect(migration).toContain("'kds_reassigned',v_moved_sent_count>0");
+    expect(migration).toContain("'kds_resent',false");
   });
 
   it('limits operator transfer targets to Captain Order users whose home branch matches the order branch', () => {
