@@ -5,6 +5,7 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -52,6 +53,7 @@ export function RfqsPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
   const { show } = useToast();
   const can = useCan();
   const { branches } = useBranches();
@@ -62,6 +64,7 @@ export function RfqsPage() {
     select: '*',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
+    or: history.minIso ? `created_at.gte.${history.minIso},status.in.(draft,sent,received)` : undefined,
     pageSize: 100,
   });
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
