@@ -282,26 +282,34 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
   });
 
-  test('keeps cart, totals, payment method, and confirmation usable on a small phone', async ({ page }) => {
+  test('keeps the rebuilt mobile POS dock, order sheet, totals, and payment usable on a small phone', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.getByTestId('pos-start-quick-order').click();
 
+    await expect(page.getByTestId('pos-mobile-command-dock')).toBeVisible();
     const productCard = page.getByTestId(`pos-product-card-${PRODUCT_ID}`);
     await productCard.getByRole('button', { name: /^(إضافة|Add)$/i }).click();
-    await page.getByRole('button', { name: /عرض السلة|View Cart/i }).click();
+
+    await page.getByTestId('pos-mobile-nav-order').click();
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toBeVisible();
     await expect(page.locator(`[data-testid="pos-cart-qty-${PRODUCT_ID}"]:visible`)).toHaveText('1');
     await expect(page.locator('[data-testid="pos-total-value"]:visible')).toContainText('100');
 
-    const mobileCart = page.locator('div.lg\\:hidden.fixed.inset-0.z-40');
-    await expect(mobileCart).toBeVisible();
-    const mobileCartClose = mobileCart.locator('> div.relative > div:first-child > button').first();
-    await expect(mobileCartClose).toBeVisible();
-    await mobileCartClose.click();
-    await expect(mobileCart).toBeHidden();
+    const sheet = page.getByTestId('pos-mobile-order-sheet-panel');
+    const sheetBounds = await sheet.boundingBox();
+    expect(sheetBounds).not.toBeNull();
+    expect(sheetBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(sheetBounds!.x + sheetBounds!.width).toBeLessThanOrEqual(361);
+
+    await page.getByTestId('pos-mobile-order-close').click();
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toBeHidden();
 
     await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
     await sendCurrentOrderToKitchen(page);
     await page.getByTestId('pos-action-pay').click();
+
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toBeVisible();
+    await expect(page.getByTestId('pos-payment-panel')).toBeVisible();
     await expect(page.getByTestId('pos-payment-method-cash')).toBeVisible();
     await expect(page.getByTestId('pos-payment-confirm')).toBeVisible();
 
@@ -309,12 +317,40 @@ test.describe('POS action-level', () => {
     expect(checkoutBounds).not.toBeNull();
     expect(checkoutBounds!.x).toBeGreaterThanOrEqual(0);
     expect(checkoutBounds!.x + checkoutBounds!.width).toBeLessThanOrEqual(361);
-    const widths = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth }));
+
+    const widths = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+      dockBottom: Math.round(
+        window.innerHeight - (document.querySelector('[data-testid="pos-mobile-command-dock"]')?.getBoundingClientRect().bottom || 0),
+      ),
+    }));
     expect(widths.document).toBeLessThanOrEqual(widths.viewport + 1);
+    expect(Math.abs(widths.dockBottom)).toBeLessThanOrEqual(1);
 
     await page.getByTestId('pos-payment-method-cash').click();
     await page.getByTestId('pos-payment-confirm').click();
     await expect.poll(() => rpcCalls.includes('process_sale'), { timeout: 10000 }).toBe(true);
+  });
+
+  test('keeps fullscreen POS inside compact, standard, and large phone widths', async ({ page }) => {
+    for (const viewport of [
+      { width: 320, height: 720 },
+      { width: 390, height: 844 },
+      { width: 430, height: 932 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(page.getByTestId('pos-workspace')).toBeVisible();
+      await expect(page.getByTestId('pos-mobile-command-dock')).toBeVisible();
+
+      const metrics = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        document: document.documentElement.scrollWidth,
+        body: document.body.scrollWidth,
+      }));
+      expect(metrics.document).toBeLessThanOrEqual(metrics.viewport + 1);
+      expect(metrics.body).toBeLessThanOrEqual(metrics.viewport + 1);
+    }
   });
 
   test('shares the active branch between fullscreen POS and the global header selector', async ({ page }) => {
