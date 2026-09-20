@@ -87,6 +87,28 @@ export const floorPlan = {
     return rpc<RpcResult>('update_order', p);
   },
 
+  async addTable(p: {
+    p_branch_id: string;
+    p_name: string;
+    p_capacity?: number;
+    p_area_id?: string | null;
+    p_shape?: string;
+    p_layout?: Record<string, number>;
+  }): ApiResult<RpcResult & { table_id?: string }> {
+    return rpc<RpcResult & { table_id?: string }>('floor_plan_add_table', p);
+  },
+
+  async updateTable(p: {
+    p_table_id: string;
+    p_name?: string | null;
+    p_capacity?: number | null;
+    p_area_id?: string | null;
+    p_shape?: string | null;
+    p_layout?: Record<string, number> | null;
+  }): ApiResult<RpcResult & { table_id?: string }> {
+    return rpc<RpcResult & { table_id?: string }>('floor_plan_update_table', p);
+  },
+
   async setTableStatus(p: { p_table_id: string; p_status: string }): ApiResult<RpcResult> {
     return rpc<RpcResult>('set_table_status', p);
   },
