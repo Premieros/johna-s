@@ -14,7 +14,7 @@ import { useCan, isAdminRole } from '../lib/permissions';
 import { useBranchFilter } from '../lib/useBranchFilter';
 import { useActiveBranchId } from '../lib/activeBranch';
 import { useBranches } from '@/hooks/useBranches';
-import { useActiveOrders } from '../features/pos/hooks/useActiveOrders';
+import { useActiveOrderCount } from '../features/pos/hooks/useActiveOrderCount';
 import { Logo } from './Logo';
 import { ApprovalInbox } from './ApprovalInbox';
 import { APP_ROUTES } from '@/core/navigation/routes';
@@ -97,7 +97,7 @@ export function Layout({ children }: { children: ReactNode }) {
   });
   const ar = lang === 'ar';
   const branchFilter = useBranchFilter();
-  const { counts } = useActiveOrders(branchFilter || user?.branch_id || '');
+  const activeOrderCount = useActiveOrderCount(branchFilter || user?.branch_id || '');
 
   const isAdmin = isAdminRole(user?.role);
   const canViewFloorPlan = can('floor_plan.view');
@@ -238,7 +238,7 @@ export function Layout({ children }: { children: ReactNode }) {
           {canViewFloorPlan && (
             <button data-testid="active-orders-button" type="button" onClick={() => navigate(APP_ROUTES.floorPlan)} className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label={ar ? 'الطلبات النشطة' : 'Active orders'}>
               <Activity className="h-5 w-5" />
-              {counts.active > 0 && <span data-testid="active-orders-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">{counts.active}</span>}
+              {activeOrderCount > 0 && <span data-testid="active-orders-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">{activeOrderCount}</span>}
             </button>
           )}
           <div className="hidden h-6 w-px bg-ui-border sm:block" />
