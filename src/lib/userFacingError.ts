@@ -39,6 +39,7 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
   'pos.order.edit': { ar: 'تعديل الطلبات', en: 'Edit orders' },
   'pos.send_kitchen': { ar: 'إرسال الطلب للمطبخ', en: 'Send orders to kitchen' },
   'pos.receipt.print': { ar: 'طباعة الإيصالات', en: 'Print receipts' },
+  'pos.cancel_order': { ar: 'إلغاء الطلبات', en: 'Cancel orders' },
   'settings.manage': { ar: 'إدارة الإعدادات', en: 'Manage settings' },
   'recipes.manage': { ar: 'إدارة الوصفات', en: 'Manage recipes' },
   'products.create': { ar: 'إنشاء المنتجات', en: 'Create products' },
@@ -136,6 +137,18 @@ const messages: Record<string, { ar: string; en: string }> = {
   OPEN_ORDERS_EXIST: {
     ar: 'لا يمكن الإغلاق لأن هناك طلبات مفتوحة. أغلق أو عالج الطلبات أولًا.',
     en: 'Closing is blocked because there are open orders. Resolve them first.',
+  },
+  REASON_REQUIRED: {
+    ar: 'يجب كتابة سبب واضح لإلغاء الطلب قبل التنفيذ.',
+    en: 'A clear cancellation reason is required before the order can be cancelled.',
+  },
+  SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID: {
+    ar: 'الطلب يحتوي أصنافًا أُرسلت للمطبخ. ألغِ الأصناف المرسلة من مسار Void أولًا ثم ألغِ الطلب.',
+    en: 'This order contains items already sent to kitchen. Void the sent items first, then cancel the order.',
+  },
+  ORDER_OPERATOR_REQUIRED: {
+    ar: 'الطلب مسجل على مستخدم آخر. انقل مسؤولية الطلب إلى المستخدم الصحيح أو استخدم صلاحية إدارة طلبات الآخرين.',
+    en: 'This order belongs to another operator. Transfer ownership to the correct user or use the required manage-others permission.',
   },
   SENT_ITEM_APPROVAL_REQUIRED: {
     ar: 'هذا الصنف أُرسل للمطبخ بالفعل، وتعديله يحتاج مسار الموافقة.',
