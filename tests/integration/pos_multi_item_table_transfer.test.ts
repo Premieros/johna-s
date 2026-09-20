@@ -194,18 +194,39 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
       created_by: ids.users.cashier,
     });
 
-    const source = await client.query<{ discount_amount: string; tax_amount: string }>(
-      'SELECT discount_amount::text,tax_amount::text FROM public.orders WHERE id=$1',
+    const source = await client.query<{ subtotal: string; discount_amount: string; tax_amount: string; total: string }>(
+      'SELECT subtotal::text,discount_amount::text,tax_amount::text,total::text FROM public.orders WHERE id=$1',
       [sourceOrder],
     );
-    const target = await client.query<{ discount_amount: string; tax_amount: string }>(
-      'SELECT discount_amount::text,tax_amount::text FROM public.orders WHERE id=$1',
+    const target = await client.query<{ subtotal: string; discount_amount: string; tax_amount: string; total: string }>(
+      'SELECT subtotal::text,discount_amount::text,tax_amount::text,total::text FROM public.orders WHERE id=$1',
       [targetOrder],
     );
+    const tax = await client.query<{ tax_enabled: boolean; tax_rate: string }>(
+      'SELECT tax_enabled,tax_rate::text FROM public._effective_branch_tax($1::uuid)',
+      [ids.branchA],
+    );
+    const expectedTax = (subtotal: number, discount: number) =>
+      tax.rows[0].tax_enabled
+        ? Math.round(((subtotal - discount) * Number(tax.rows[0].tax_rate || 0) / 100) * 100) / 100
+        : 0;
+
     expect(Number(source.rows[0].discount_amount)).toBeCloseTo(3, 4);
-    expect(Number(source.rows[0].tax_amount)).toBeCloseTo(1.5, 4);
     expect(Number(target.rows[0].discount_amount)).toBeCloseTo(6, 4);
-    expect(Number(target.rows[0].tax_amount)).toBeCloseTo(3, 4);
+
+    const sourceSubtotal = Number(source.rows[0].subtotal);
+    const sourceDiscount = Number(source.rows[0].discount_amount);
+    const sourceTax = Number(source.rows[0].tax_amount);
+    const sourceTotal = Number(source.rows[0].total);
+    expect(sourceTax).toBeCloseTo(expectedTax(sourceSubtotal, sourceDiscount), 2);
+    expect(sourceTotal).toBeCloseTo(sourceSubtotal - sourceDiscount + sourceTax, 2);
+
+    const targetSubtotal = Number(target.rows[0].subtotal);
+    const targetDiscount = Number(target.rows[0].discount_amount);
+    const targetTax = Number(target.rows[0].tax_amount);
+    const targetTotal = Number(target.rows[0].total);
+    expect(targetTax).toBeCloseTo(expectedTax(targetSubtotal, targetDiscount), 2);
+    expect(targetTotal).toBeCloseTo(targetSubtotal - targetDiscount + targetTax, 2);
 
     const afterSends = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.order_kitchen_sends');
     const afterEvents = await client.query<{ n: string }>('SELECT count(*)::text n FROM public.order_kitchen_inventory_events');
