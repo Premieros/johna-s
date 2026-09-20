@@ -64,6 +64,7 @@ export function ActiveOrdersPage() {
 
   const effectiveBranch = branchFilter || user?.branch_id || '';
   const canManage = can('floor_plan.manage');
+  const canCancelOrder = can('pos.cancel_order');
   const canReassignCashier = can('pos.order.transfer') && can('pos.order.edit') && can('users.manage');
 
   const { orders, tables, counts, ordersByTable, itemsByOrder, loading, error } = useActiveOrders(effectiveBranch);
@@ -164,16 +165,42 @@ export function ActiveOrdersPage() {
   };
 
   const setOrderStatus = async (order: Order, status: 'open' | 'held' | 'completed' | 'cancelled') => {
-    setBusy(true);
-    const { data, error } = await api.floorPlan.setOrderStatus({ p_order_id: order.id, p_status: status });
-    if (error) { show(error.message, 'error'); }
-    else if (!(data as RpcResult | null)?.success) {
-      const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
-    } else {
-      show(status === 'cancelled' ? t('cancelOrder') : t('saveSuccess'), 'success');
+    if (status === 'cancelled' && !canCancelOrder) return;
+
+    let notes: string | undefined;
+    if (status === 'cancelled') {
+      const entered = window.prompt(
+        isAr ? 'اكتب سبب إلغاء الطلب (مطلوب):' : 'Enter the cancellation reason (required):',
+        '',
+      );
+      if (entered === null) return;
+      notes = entered.trim();
+      if (notes.length < 3) {
+        show(
+          isAr ? 'اكتب سببًا واضحًا للإلغاء (3 أحرف على الأقل).' : 'Enter a clear cancellation reason (at least 3 characters).',
+          'error',
+        );
+        return;
+      }
     }
-    setBusy(false);
+
+    setBusy(true);
+    try {
+      const { data, error } = await api.floorPlan.setOrderStatus({
+        p_order_id: order.id,
+        p_status: status,
+        ...(notes ? { p_notes: notes } : {}),
+      });
+      if (error) { show(error.message, 'error'); }
+      else if (!(data as RpcResult | null)?.success) {
+        const r = data as RpcResult | null;
+        show(r?.detail || r?.error || t('error'), 'error');
+      } else {
+        show(status === 'cancelled' ? t('cancelOrder') : t('saveSuccess'), 'success');
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const createArea = async () => {
@@ -368,7 +395,7 @@ export function ActiveOrdersPage() {
                       <div className="flex flex-wrap gap-1.5">
                         <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-3.5 h-3.5" /> {t('resumeOrder')}</Button>
                         <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-3.5 h-3.5" /> {t('payOrder')}</Button>
-                        <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>
+                        {canCancelOrder && <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>}
                       </div>
                     </div>
                   ))
