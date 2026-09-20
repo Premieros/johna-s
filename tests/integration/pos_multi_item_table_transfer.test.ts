@@ -135,7 +135,7 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
       [sourceOrder, itemA, sentItem, targetTable],
     );
     expect(moved.error).toBeUndefined();
-    expect(moved.rows[0].result).toMatchObject({
+    expect(moved.rows[0].result, JSON.stringify(moved.rows[0].result)).toMatchObject({
       success: true,
       source_order_id: sourceOrder,
       target_order_id: targetOrder,
