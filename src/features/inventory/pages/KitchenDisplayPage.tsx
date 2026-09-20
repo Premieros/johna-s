@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, ChefHat, CheckCircle2, UtensilsCrossed, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
+import { RefreshCw, ChefHat, CheckCircle2, UtensilsCrossed, Volume2, VolumeX, AlertTriangle, User } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
@@ -61,6 +61,7 @@ export function KitchenDisplayPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [orderContext, setOrderContext] = useState<Record<string, { table_name: string | null; operator_name: string | null }>>({});
   const prevCountRef = useRef(0);
 
   const loadStations = useCallback(async () => {
@@ -99,6 +100,28 @@ export function KitchenDisplayPage() {
       if (soundEnabled && prevCountRef.current > 0 && newItems.length > prevCountRef.current) playBeep();
       prevCountRef.current = newItems.length;
       setItems(newItems);
+
+      const orderIds = [...new Set(newItems.map((item) => item.order_id).filter(Boolean))];
+      if (orderIds.length === 0) {
+        setOrderContext({});
+        setLoadError('');
+        return;
+      }
+
+      const { data: contextRows, error: contextError } = await supabase.rpc('get_kitchen_order_context', {
+        p_order_ids: orderIds,
+        p_branch_id: branchFilter,
+      });
+      if (contextError) {
+        setLoadError(errorMessage(contextError));
+        return;
+      }
+
+      const nextContext: Record<string, { table_name: string | null; operator_name: string | null }> = {};
+      for (const row of (contextRows ?? []) as { order_id: string; table_name: string | null; operator_name: string | null }[]) {
+        nextContext[row.order_id] = { table_name: row.table_name, operator_name: row.operator_name };
+      }
+      setOrderContext(nextContext);
       setLoadError('');
     } catch (error) {
       // Never turn a KDS transport/permission failure into a fake empty queue.
@@ -185,7 +208,10 @@ export function KitchenDisplayPage() {
         {loading && !items.length && !loadError && <div className="text-ui-muted py-8 text-center">{ar ? 'جاري التحميل...' : 'Loading...'}</div>}
 
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {items.map(item => (
+          {items.map(item => {
+            const context = orderContext[item.order_id];
+            const tableLabel = context?.table_name || (item.table_number ? `Table ${String(item.table_number).padStart(2, '0')}` : null);
+            return (
             <div key={`${item.order_id}-${item.station}`} className={`rounded-2xl border bg-ui-surface p-3 sm:p-4 shadow-ui-sm transition-all ${item.kitchen_status === 'cooking' ? 'border-ui-warning/40 ring-1 ring-ui-warning' : item.kitchen_status === 'ready' ? 'border-ui-success/40 ring-1 ring-ui-success' : 'border-ui-border'}`}>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="font-bold text-ui-text text-base sm:text-lg">#{item.order_number}</span>
@@ -193,7 +219,18 @@ export function KitchenDisplayPage() {
               </div>
               <div className="flex items-center gap-2 mb-3 text-xs sm:text-sm text-ui-muted flex-wrap">
                 <span className="rounded bg-ui-primary-soft px-2 py-0.5 text-ui-primary font-semibold">{stationName(item.station)}</span>
-                {item.table_number && <span>{ar ? 'طاولة' : 'T'} {item.table_number}</span>}
+                {tableLabel && (
+                  <span data-testid="kds-table-name" className="inline-flex items-center gap-1 font-black text-ui-text">
+                    <UtensilsCrossed className="h-3.5 w-3.5" />
+                    {ar ? 'الطاولة:' : 'Table:'} {tableLabel}
+                  </span>
+                )}
+                {context?.operator_name && (
+                  <span data-testid="kds-operator-name" className="inline-flex items-center gap-1 font-black text-ui-text">
+                    <User className="h-3.5 w-3.5" />
+                    {ar ? 'المستخدم:' : 'User:'} {context.operator_name}
+                  </span>
+                )}
                 {item.guest_count && <span>{ar ? 'ضيوف' : 'G'}: {item.guest_count}</span>}
               </div>
               <ul className="space-y-1.5 mb-3">
@@ -219,7 +256,8 @@ export function KitchenDisplayPage() {
                 {item.kitchen_status === 'ready' && <button onClick={() => void handleKitchenStatus(item.order_id, 'served')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-info text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><UtensilsCrossed className="h-5 w-5" /> {ar ? 'تم التقديم' : 'Served'}</button>}
               </div>}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {!loading && !items.length && !loadError && <div className="text-center py-16 text-ui-muted"><ChefHat className="h-12 w-12 mx-auto mb-3 opacity-30" /><div className="text-lg">{ar ? 'لا توجد طلبات نشطة ضمن المحطات المسموح بها' : 'No active orders in your allowed stations'}</div></div>}
