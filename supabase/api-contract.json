@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T15:05:00.000Z",
+  "generated_at": "2026-09-21T00:15:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -82,6 +82,12 @@
       "name": "approve_warehouse_transfer",
       "params": [
         "transfer_id"
+      ]
+    },
+    {
+      "name": "archive_returned_sale",
+      "params": [
+        "sale_id"
       ]
     },
     {
