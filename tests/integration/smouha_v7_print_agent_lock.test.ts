@@ -4,27 +4,39 @@ import { getDbUrl, openDb } from './db';
 
 const dbUrl = getDbUrl();
 
-const expected = [
+const expectedFunctions = [
   {
     name: 'can_execute_cloud_print_kind',
     args: 'p_kind text',
-    hash: '0c5c5cb7868db249588f6ff715e2e8c0',
+    hash: '2a9c54858eec90cbc82db420f87cd703',
   },
   {
     name: 'claim_cloud_print_jobs',
     args: 'p_branch_id uuid, p_agent_id uuid, p_limit integer',
-    hash: '7bb98c35d47f682c319e76ec0b0a8c9d',
+    hash: '230529255ab7fe21df1eb1ca0f07f1b6',
   },
   {
     name: 'complete_cloud_print_job',
     args: 'p_job_id uuid, p_agent_id uuid, p_success boolean, p_error text',
-    hash: 'efa07471fccdbb94c2ca870eac95d374',
+    hash: '8492141102176d4fddf30cb0d5d42cb1',
   },
   {
     name: 'start_cloud_print_job',
     args: 'p_job_id uuid, p_agent_id uuid',
-    hash: '7c37d00fc5370c64964f56ef66aec347',
+    hash: 'fae5a0b45bb5d0646100996bbb153fad',
   },
+] as const;
+
+const expectedColumns = [
+  { column_name: 'attempts', data_type: 'integer', is_nullable: 'NO' },
+  { column_name: 'branch_id', data_type: 'uuid', is_nullable: 'NO' },
+  { column_name: 'claimed_agent_id', data_type: 'uuid', is_nullable: 'YES' },
+  { column_name: 'created_at', data_type: 'timestamp with time zone', is_nullable: 'NO' },
+  { column_name: 'id', data_type: 'uuid', is_nullable: 'NO' },
+  { column_name: 'kind', data_type: 'text', is_nullable: 'NO' },
+  { column_name: 'payload', data_type: 'jsonb', is_nullable: 'NO' },
+  { column_name: 'station_code', data_type: 'text', is_nullable: 'NO' },
+  { column_name: 'status', data_type: 'text', is_nullable: 'NO' },
 ] as const;
 
 describe.skipIf(!dbUrl)('Smouha v7 print-agent frozen compatibility contract', () => {
@@ -39,7 +51,7 @@ describe.skipIf(!dbUrl)('Smouha v7 print-agent frozen compatibility contract', (
     if (client) await client.end().catch(() => {});
   });
 
-  it('keeps the RPC implementations used by the frozen Smouha v7 agent unchanged', async () => {
+  it('keeps the exact case-sensitive RPC implementations used by the frozen Smouha v7 agent', async () => {
     const rows = await client.query<{
       name: string;
       args: string;
@@ -47,55 +59,40 @@ describe.skipIf(!dbUrl)('Smouha v7 print-agent frozen compatibility contract', (
     }>(`
       SELECT p.proname AS name,
              pg_get_function_identity_arguments(p.oid) AS args,
-             md5(regexp_replace(lower(pg_get_functiondef(p.oid)), '\\s+', ' ', 'g')) AS definition_hash
+             md5(pg_get_functiondef(p.oid)) AS definition_hash
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
         AND p.proname = ANY($1::text[])
       ORDER BY p.proname
-    `, [expected.map((item) => item.name)]);
+    `, [expectedFunctions.map((item) => item.name)]);
 
-    expect(rows.rows).toHaveLength(expected.length);
-    for (const item of expected) {
+    expect(rows.rows).toHaveLength(expectedFunctions.length);
+    for (const item of expectedFunctions) {
       const actual = rows.rows.find((row) => row.name === item.name && row.args === item.args);
       expect(actual, `${item.name}(${item.args}) must exist for Smouha v7`).toBeDefined();
-      expect(actual?.definition_hash, `${item.name} changed; frozen Smouha v7 compatibility requires explicit migration approval`).toBe(item.hash);
+      expect(
+        actual?.definition_hash,
+        `${item.name} changed; frozen Smouha v7 compatibility requires explicit migration approval`,
+      ).toBe(item.hash);
     }
   });
 
-  it('keeps the queue fields required by the Smouha v7 agent', async () => {
-    const rows = await client.query<{ column_name: string; data_type: string; is_nullable: string }>(`
+  it('keeps queue field names, types, and nullability required by the Smouha v7 agent', async () => {
+    const rows = await client.query<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+    }>(`
       SELECT column_name, data_type, is_nullable
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = 'cloud_print_jobs'
         AND column_name = ANY($1::text[])
       ORDER BY column_name
-    `, [[
-      'id',
-      'branch_id',
-      'kind',
-      'station_code',
-      'payload',
-      'status',
-      'claimed_agent_id',
-      'attempts',
-      'created_at'
-    ]]);
+    `, [expectedColumns.map((item) => item.column_name)]);
 
-    const present = new Set(rows.rows.map((row) => row.column_name));
-    for (const required of [
-      'id',
-      'branch_id',
-      'kind',
-      'station_code',
-      'payload',
-      'status',
-      'claimed_agent_id',
-      'attempts',
-      'created_at',
-    ]) {
-      expect(present.has(required), `cloud_print_jobs.${required} is required by Smouha v7`).toBe(true);
-    }
+    expect(rows.rows).toHaveLength(expectedColumns.length);
+    expect(rows.rows).toEqual(expectedColumns);
   });
 });
