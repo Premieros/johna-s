@@ -133,7 +133,7 @@ export function PaymentPanel(p: PaymentPanelProps) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-ui-page">
+    <div data-testid="pos-payment-panel" className="flex h-full min-h-0 flex-col bg-ui-page">
       <div className="flex items-center justify-between border-b border-ui-border bg-ui-surface px-4 py-4">
         <button onClick={back} className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-ui-page-alt">
           <ArrowLeft className={`h-5 w-5 ${isAr ? '' : 'rotate-180'}`} />
