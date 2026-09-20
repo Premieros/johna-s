@@ -165,24 +165,37 @@ export function buildStationTicketText(
 ): string {
   const lines: string[] = [];
   const ar = ctx.isAr;
-  lines.push('================================');
-  lines.push(ar ? `محطة: ${station}` : `Station: ${station}`);
-  if (ctx.orderNumber) lines.push(`${ar ? 'طلب' : 'Order'}: ${safeText(ctx.orderNumber)}`);
-  if (ctx.tableName) lines.push(`${ar ? 'طاولة' : 'Table'}: ${safeText(ctx.tableName)}`);
+  const divider = '--------------------------------';
+  const strongDivider = '================================';
+
+  lines.push(ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET');
+  lines.push(ar ? `المحطة: ${safeText(station)}` : `Station: ${safeText(station)}`);
+  lines.push(strongDivider);
+
+  if (ctx.orderNumber) lines.push(`${ar ? 'الطلب' : 'Order'}: ${safeText(ctx.orderNumber)}`);
+  lines.push(`${ar ? 'التاريخ' : 'Date'}: ${new Date().toLocaleString(ar ? 'ar-EG' : 'en-US')}`);
   if (ctx.orderType) lines.push(`${ar ? 'النوع' : 'Type'}: ${safeText(ctx.orderType)}`);
-  if (ctx.guestCount) lines.push(`${ar ? 'ضيوف' : 'Guests'}: ${ctx.guestCount}`);
-  lines.push(new Date().toLocaleString(ar ? 'ar-EG' : 'en-US'));
-  lines.push('--------------------------------');
+  if (ctx.tableName) lines.push(`${ar ? 'الطاولة' : 'Table'}: ${safeText(ctx.tableName)}`);
+  if (ctx.guestCount) lines.push(`${ar ? 'الأفراد' : 'Guests'}: ${ctx.guestCount}`);
+
+  lines.push(divider);
+  lines.push(ar ? 'الأصناف' : 'ITEMS');
+  lines.push(divider);
 
   for (const item of items) {
     const qty = Number(item.quantity || 0);
     lines.push(`${qty} x ${safeText(item.product_name || '—')}`);
-    for (const modifier of modifierNames(item)) lines.push(`  + ${modifier}`);
-    if (item.notes?.trim()) lines.push(`  * ${safeText(item.notes)}`);
+    for (const modifier of modifierNames(item)) {
+      lines.push(`  + ${modifier}`);
+    }
+    if (item.notes?.trim()) {
+      lines.push(`  ${ar ? 'ملاحظة' : 'Note'}: ${safeText(item.notes)}`);
+    }
     lines.push('');
   }
 
-  lines.push('================================');
+  lines.push(strongDivider);
+  lines.push(ar ? 'نهاية الطلب' : 'END OF ORDER');
   lines.push('');
   lines.push('');
   return lines.join('\r\n');

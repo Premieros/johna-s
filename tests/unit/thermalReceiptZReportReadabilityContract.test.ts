@@ -13,12 +13,13 @@ const migration = fs.readFileSync('supabase/migrations/20260918231500_thermal_pr
 describe('thermal receipt and Z-report readability contract', () => {
   it('uses stable ASCII numbers/dates and explicit tender labels on payment receipts', () => {
     expect(printing).toContain('export function buildReceiptThermalText');
-    expect(printing).toContain("*** إيصال دفع / PAYMENT RECEIPT ***");
+    expect(printing).toContain("isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'");
     expect(printing).toContain("timeZone: 'Africa/Cairo'");
     expect(printing).toContain("new Intl.NumberFormat('en-US'");
     expect(printing).toContain("cash: ['نقدي', 'CASH']");
     expect(printing).toContain("card: ['بطاقة', 'CARD']");
-    expect(printing).toContain("isAr ? 'الدفع / PAYMENT' : 'PAYMENT'");
+    expect(printing).toContain("lines.push(isAr ? 'الدفع' : 'PAYMENT');");
+    expect(printing).not.toContain('الدفع / PAYMENT');
     expect(printing).toContain("payments?: Array<{ method: string; amount: number }>");
   });
 

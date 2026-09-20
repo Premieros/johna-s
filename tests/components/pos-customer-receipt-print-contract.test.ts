@@ -40,7 +40,8 @@ describe('POS customer receipt print contract', () => {
     expect(hook).toContain('text,');
     expect(hook).not.toContain('payload: {\n            html,');
     expect(printing).toContain('options?: { authorize?: boolean }');
-    expect(printing).toContain('*** حساب مبدئي / OPEN CHECK ***');
+    expect(printing).toContain("isAr ? 'حساب مبدئي' : 'OPEN CHECK'");
+    expect(printing).not.toContain('*** حساب مبدئي / OPEN CHECK ***');
   });
 
   it('keeps the existing single-print and manager-approved reprint authorization', () => {
