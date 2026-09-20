@@ -64,10 +64,33 @@ function htmlToThermalText(html: string): string {
   }
 }
 
-function modifierNames(item: KitchenSendItem): string[] {
+function modifierNames(item: KitchenSendItem, isAr: boolean): string[] {
   return (item.modifiers || [])
-    .map((m) => safeText(m.option_name || m.option_name_en))
+    .map((m) => safeText(isAr ? (m.option_name || m.option_name_en) : (m.option_name_en || m.option_name)))
     .filter(Boolean);
+}
+
+function kitchenOrderTypeLabel(value: unknown, isAr: boolean): string {
+  const key = safeText(value).toLowerCase().replace(/[ -]+/g, '_');
+  const labels: Record<string, [string, string]> = {
+    dine_in: ['داخل الصالة', 'Dine In'],
+    takeaway: ['تيك أواي', 'Take Away'],
+    take_away: ['تيك أواي', 'Take Away'],
+    drive_thru: ['درايف ثرو', 'Drive Thru'],
+    delivery: ['توصيل', 'Delivery'],
+    quick_order: ['طلب سريع', 'Quick Order'],
+  };
+  const label = labels[key];
+  return label ? (isAr ? label[0] : label[1]) : safeText(value);
+}
+
+function kitchenTime(isAr: boolean): string {
+  return new Intl.DateTimeFormat(isAr ? 'ar-EG' : 'en-GB', {
+    timeZone: 'Africa/Cairo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
 }
 
 function readBoolean(key: string, defaultValue: boolean): boolean {
@@ -163,40 +186,36 @@ export function buildStationTicketText(
   items: KitchenSendItem[],
   ctx: LocalKitchenPrintContext,
 ): string {
-  const lines: string[] = [];
   const ar = ctx.isAr;
   const divider = '--------------------------------';
-  const strongDivider = '================================';
+  const lines: string[] = [];
 
   lines.push(ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET');
-  lines.push(ar ? `المحطة: ${safeText(station)}` : `Station: ${safeText(station)}`);
-  lines.push(strongDivider);
+  lines.push(ar ? 'المحطة' : 'STATION');
+  lines.push(safeText(station));
+  lines.push(divider);
 
   if (ctx.orderNumber) lines.push(`${ar ? 'الطلب' : 'Order'}: ${safeText(ctx.orderNumber)}`);
-  lines.push(`${ar ? 'التاريخ' : 'Date'}: ${new Date().toLocaleString(ar ? 'ar-EG' : 'en-US')}`);
-  if (ctx.orderType) lines.push(`${ar ? 'النوع' : 'Type'}: ${safeText(ctx.orderType)}`);
   if (ctx.tableName) lines.push(`${ar ? 'الطاولة' : 'Table'}: ${safeText(ctx.tableName)}`);
+  if (ctx.orderType) lines.push(`${ar ? 'النوع' : 'Type'}: ${kitchenOrderTypeLabel(ctx.orderType, ar)}`);
+  lines.push(`${ar ? 'الوقت' : 'Time'}: ${kitchenTime(ar)}`);
   if (ctx.guestCount) lines.push(`${ar ? 'الأفراد' : 'Guests'}: ${ctx.guestCount}`);
 
   lines.push(divider);
   lines.push(ar ? 'الأصناف' : 'ITEMS');
-  lines.push(divider);
 
   for (const item of items) {
     const qty = Number(item.quantity || 0);
     lines.push(`${qty} x ${safeText(item.product_name || '—')}`);
-    for (const modifier of modifierNames(item)) {
-      lines.push(`  + ${modifier}`);
+    for (const modifier of modifierNames(item, ar)) {
+      lines.push(`+ ${modifier}`);
     }
     if (item.notes?.trim()) {
-      lines.push(`  ${ar ? 'ملاحظة' : 'Note'}: ${safeText(item.notes)}`);
+      lines.push(`${ar ? 'ملاحظة' : 'Note'}: ${safeText(item.notes)}`);
     }
-    lines.push('');
   }
 
-  lines.push(strongDivider);
-  lines.push(ar ? 'نهاية الطلب' : 'END OF ORDER');
-  lines.push('');
+  lines.push(divider);
   lines.push('');
   return lines.join('\r\n');
 }
