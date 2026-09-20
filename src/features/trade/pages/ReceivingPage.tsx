@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PackageOpen, Save, History, Trophy } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -30,6 +31,7 @@ type Tab = 'backorders' | 'receipts' | 'evaluation';
 export function ReceivingPage() {
   const { t, lang } = useLanguage();
   const branchFilter = useBranchFilter();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { show } = useToast();
   const can = useCan();
   const { branches } = useBranches();
@@ -76,6 +78,25 @@ export function ReceivingPage() {
     loadReceipts();
   }, [loadBackorders, loadReceipts]);
 
+  useEffect(() => {
+    const purchaseId = searchParams.get('purchaseId');
+    if (!purchaseId || boLoading || backorders.length === 0) return;
+    const target = backorders.find((row) => row.purchase_id === purchaseId);
+    if (target) {
+      openReceive(target);
+    } else {
+      show(
+        lang === 'ar'
+          ? 'لا توجد بنود متبقية قابلة للاستلام لهذا أمر الشراء.'
+          : 'No remaining receivable items were found for this purchase order.',
+        'error',
+      );
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('purchaseId');
+    setSearchParams(next, { replace: true });
+  }, [backorders, boLoading, lang, openReceive, searchParams, setSearchParams, show]);
+
   const openTab = (next: Tab) => {
     setTab(next);
     if (next === 'evaluation') loadEvaluation();
@@ -83,18 +104,20 @@ export function ReceivingPage() {
     if (next === 'backorders') loadBackorders();
   };
 
-  const openReceive = async (row: PurchaseBackorderRow) => {
+  const openReceive = useCallback((row: PurchaseBackorderRow) => {
+    const purchaseRows = backorders.filter((candidate) => candidate.purchase_id === row.purchase_id);
+    const rows = purchaseRows.length > 0 ? purchaseRows : [row];
     setReceiveModal(row);
-    setLines([{
-      purchase_item_id: row.purchase_item_id,
-      name: row.item_name,
-      unit_name: row.unit_name,
-      ordered: row.ordered_quantity,
-      received: row.received_quantity,
-      unit_cost: row.unit_cost,
+    setLines(rows.map((line) => ({
+      purchase_item_id: line.purchase_item_id,
+      name: line.item_name,
+      unit_name: line.unit_name,
+      ordered: line.ordered_quantity,
+      received: line.received_quantity,
+      unit_cost: line.unit_cost,
       qty: '',
-    }]);
-  };
+    })));
+  }, [backorders]);
 
   const updateQty = (i: number, qty: string) => setLines(lines.map((l, idx) => idx === i ? { ...l, qty } : l));
 
