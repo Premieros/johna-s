@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bike, Car, ListOrdered, Search, ShoppingBag, Utensils } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
-import type { DiningTable, Order, OrderItem } from '@/lib/types';
+import type { DiningArea, DiningTable, Order, OrderItem } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
 import { TableCard } from './TableCard';
 
@@ -9,6 +9,7 @@ type TableFilter = 'all' | 'available' | 'occupied';
 
 interface PosTablesSidebarProps {
   tables: DiningTable[];
+  areas: DiningArea[];
   ordersByTable: Record<string, Order[]>;
   itemsByOrder: Record<string, OrderItem[]>;
   kitchenSendsByOrder: Record<string, OrderKitchenSend[]>;
@@ -31,6 +32,7 @@ interface PosTablesSidebarProps {
 export function PosTablesSidebar(props: PosTablesSidebarProps) {
   const {
     tables,
+    areas,
     ordersByTable,
     itemsByOrder,
     kitchenSendsByOrder,
@@ -53,6 +55,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<TableFilter>('all');
   const [flowStarted, setFlowStarted] = useState(false);
+  const [selectedAreaId, setSelectedAreaId] = useState('');
 
   useEffect(() => {
     const handleExternalFlowStart = () => setFlowStarted(true);
@@ -65,15 +68,37 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
     };
   }, []);
 
-  const occupiedCount = useMemo(
-    () => tables.filter((table) => (ordersByTable[table.id] || []).length > 0 || table.status === 'occupied').length,
-    [tables, ordersByTable],
+  const orderedAreas = useMemo(
+    () => [...areas].sort((a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)) || a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
+    [areas],
   );
-  const availableCount = Math.max(0, tables.length - occupiedCount);
+
+  useEffect(() => {
+    if (orderedAreas.length === 0) {
+      setSelectedAreaId('');
+      return;
+    }
+    setSelectedAreaId((current) => (
+      current && orderedAreas.some((area) => area.id === current)
+        ? current
+        : (orderedAreas.find((area) => area.is_default)?.id || orderedAreas[0].id)
+    ));
+  }, [orderedAreas]);
+
+  const areaTables = useMemo(
+    () => selectedAreaId ? tables.filter((table) => table.area_id === selectedAreaId) : tables,
+    [tables, selectedAreaId],
+  );
+
+  const occupiedCount = useMemo(
+    () => areaTables.filter((table) => (ordersByTable[table.id] || []).length > 0 || table.status === 'occupied').length,
+    [areaTables, ordersByTable],
+  );
+  const availableCount = Math.max(0, areaTables.length - occupiedCount);
 
   const filteredTables = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return tables.filter((table) => {
+    return areaTables.filter((table) => {
       const orders = ordersByTable[table.id] || [];
       const occupied = orders.length > 0 || table.status === 'occupied';
       if (filter === 'available' && occupied) return false;
@@ -81,7 +106,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
       if (!q) return true;
       return table.name.toLowerCase().includes(q) || orders.some((order) => order.order_number?.toLowerCase().includes(q));
     });
-  }, [tables, ordersByTable, searchQuery, filter]);
+  }, [areaTables, ordersByTable, searchQuery, filter]);
 
   // The POS is tables-first. Once a real table/order is selected, or the
   // operator explicitly starts a quick non-table order, the landing disappears
@@ -98,7 +123,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
   }
 
   const filters: Array<{ id: TableFilter; ar: string; en: string; count: number }> = [
-    { id: 'all', ar: 'الكل', en: 'All', count: tables.length },
+    { id: 'all', ar: 'الكل', en: 'All', count: areaTables.length },
     { id: 'available', ar: 'متاحة', en: 'Available', count: availableCount },
     { id: 'occupied', ar: 'مشغولة', en: 'Occupied', count: occupiedCount },
   ];
@@ -176,6 +201,27 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
             )}
           </div>
         </div>
+
+        {orderedAreas.length > 0 && (
+          <div data-testid="pos-table-area-tabs" className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {orderedAreas.map((area) => {
+              const count = tables.filter((table) => table.area_id === area.id && table.is_active).length;
+              const active = selectedAreaId === area.id;
+              return (
+                <button
+                  key={area.id}
+                  type="button"
+                  data-testid={`pos-table-area-${area.id}`}
+                  onClick={() => setSelectedAreaId(area.id)}
+                  className={`flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-xs font-black transition ${active ? 'border-ui-primary bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}
+                >
+                  <span>{area.name}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20' : 'bg-ui-surface'}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">

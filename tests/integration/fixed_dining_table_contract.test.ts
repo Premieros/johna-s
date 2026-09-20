@@ -55,9 +55,50 @@ describe.skipIf(!dbUrl)('fixed dining table contract', () => {
 
       expect(tables.rows).toHaveLength(50);
       expect(tables.rows.map((row) => row.name)).toEqual(
-        Array.from({ length: 50 }, (_, index) => `طاولة ${String(index + 1).padStart(2, '0')}`),
+        Array.from({ length: 50 }, (_, index) => `Table ${String(index + 1).padStart(2, '0')}`),
       );
       expect(tables.rows.some((row) => /^\d+$/.test(row.name))).toBe(false);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('marks Main Area as the only default area and protects its fixed 50 table identities', async () => {
+    await client.query('BEGIN');
+    try {
+      const branch = await client.query<{ id: string }>(
+        `INSERT INTO public.branches(name, is_active) VALUES ($1, true) RETURNING id`,
+        [`fixed-main-area-${Date.now()}`],
+      );
+      const branchId = branch.rows[0].id;
+      const area = await client.query<{ id: string; name: string; is_default: boolean }>(
+        `SELECT id,name,is_default FROM public.dining_areas WHERE branch_id=$1 ORDER BY is_default DESC,sort_order`,
+        [branchId],
+      );
+      expect(area.rows.filter((row) => row.is_default)).toHaveLength(1);
+      expect(area.rows[0]).toMatchObject({ name: 'Main Area', is_default: true });
+
+      await client.query('SAVEPOINT reject_extra_default_table');
+      await expect(client.query(
+        `INSERT INTO public.dining_tables(branch_id,area_id,name,capacity,status,is_active)
+         VALUES($1,$2,'Table 51',4,'vacant',true)`,
+        [branchId, area.rows[0].id],
+      )).rejects.toThrow(/DEFAULT_AREA_FIXED_50/);
+      await client.query('ROLLBACK TO SAVEPOINT reject_extra_default_table');
+
+      await client.query('SAVEPOINT reject_default_table_delete');
+      await expect(client.query(
+        `DELETE FROM public.dining_tables WHERE branch_id=$1 AND name='Table 01'`,
+        [branchId],
+      )).rejects.toThrow(/DEFAULT_DINING_TABLE_FIXED/);
+      await client.query('ROLLBACK TO SAVEPOINT reject_default_table_delete');
+
+      await client.query('SAVEPOINT reject_default_area_delete');
+      await expect(client.query(
+        `DELETE FROM public.dining_areas WHERE id=$1`,
+        [area.rows[0].id],
+      )).rejects.toThrow(/DEFAULT_DINING_AREA_FIXED/);
+      await client.query('ROLLBACK TO SAVEPOINT reject_default_area_delete');
     } finally {
       await client.query('ROLLBACK');
     }

@@ -13,6 +13,9 @@ interface LanguageContextValue {
   lang: Language;
   setLang: (l: Language) => void;
   applySystemLang: (l: Language) => void;
+  languageLocked: boolean;
+  lockLanguagePreference: () => void;
+  unlockLanguagePreference: () => void;
   t: (key: TranslationKey) => string;
   dir: 'rtl' | 'ltr';
 }
@@ -24,6 +27,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     return (saved as Language) || 'ar';
   });
+  const [languageLocked, setLanguageLocked] = useState<boolean>(() => hasLockedLanguagePreference());
 
   const dir: 'rtl' | 'ltr' = lang === 'ar' ? 'rtl' : 'ltr';
 
@@ -35,7 +39,19 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const setLang = useCallback((l: Language) => {
     localStorage.setItem(LANGUAGE_PREFERENCE_LOCK_KEY, '1');
+    setLanguageLocked(true);
     setLangState(l);
+  }, []);
+
+  const lockLanguagePreference = useCallback(() => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    localStorage.setItem(LANGUAGE_PREFERENCE_LOCK_KEY, '1');
+    setLanguageLocked(true);
+  }, [lang]);
+
+  const unlockLanguagePreference = useCallback(() => {
+    localStorage.removeItem(LANGUAGE_PREFERENCE_LOCK_KEY);
+    setLanguageLocked(false);
   }, []);
 
   const applySystemLang = useCallback((l: Language) => {
@@ -45,8 +61,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const t = useCallback((key: TranslationKey) => translate(lang, key), [lang]);
 
   const value = useMemo(
-    () => ({ lang, setLang, applySystemLang, t, dir }),
-    [lang, setLang, applySystemLang, t, dir]
+    () => ({ lang, setLang, applySystemLang, languageLocked, lockLanguagePreference, unlockLanguagePreference, t, dir }),
+    [lang, setLang, applySystemLang, languageLocked, lockLanguagePreference, unlockLanguagePreference, t, dir]
   );
 
   return (

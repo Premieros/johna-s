@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { UtensilsCrossed, X, Users, Check } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import type { DiningArea, DiningTable } from '@/lib/types';
@@ -23,6 +23,19 @@ export function TableSelectModal({
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const [selectedAreaId, setSelectedAreaId] = useState<string>('');
+  const orderedAreas = useMemo(
+    () => [...areas].sort((a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)) || a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
+    [areas],
+  );
+
+  useEffect(() => {
+    if (!isOpen || orderedAreas.length === 0) return;
+    setSelectedAreaId((current) => (
+      current && orderedAreas.some((area) => area.id === current)
+        ? current
+        : (orderedAreas.find((area) => area.is_default)?.id || orderedAreas[0].id)
+    ));
+  }, [isOpen, orderedAreas]);
 
   if (!isOpen) return null;
 
@@ -66,7 +79,7 @@ export function TableSelectModal({
             >
               {isAr ? 'كل الصالات' : 'All Areas'}
             </button>
-            {areas.map((area) => (
+            {orderedAreas.map((area) => (
               <button
                 key={area.id}
                 onClick={() => setSelectedAreaId(area.id)}

@@ -21,7 +21,7 @@ describe.skipIf(skip)('default dining tables baseline', () => {
     await client.end();
   });
 
-  it('creates 50 organized default tables and still allows additional tables', async () => {
+  it('creates a fixed 50-table Main Area and still allows custom tables in custom areas', async () => {
     const branchId = randomUUID();
     await client.query(
       `INSERT INTO public.branches(id,name,is_active) VALUES($1,$2,true)`,
@@ -37,7 +37,7 @@ describe.skipIf(skip)('default dining tables baseline', () => {
       `SELECT
          COUNT(*)::text AS total,
          COUNT(*) FILTER (WHERE is_active)::text AS active,
-         COUNT(*) FILTER (WHERE name ~ '^طاولة [0-9]{2}$')::text AS named_defaults,
+         COUNT(*) FILTER (WHERE name ~ '^Table [0-9]{2}$')::text AS named_defaults,
          COUNT(DISTINCT area_id)::text AS areas
        FROM public.dining_tables
        WHERE branch_id=$1`,
@@ -64,21 +64,36 @@ describe.skipIf(skip)('default dining tables baseline', () => {
     expect(Number(layout.rows[0].max_x)).toBeGreaterThan(Number(layout.rows[0].min_x));
     expect(Number(layout.rows[0].max_y)).toBeGreaterThan(Number(layout.rows[0].min_y));
 
-    const area = await client.query<{ id: string }>(
-      `SELECT id FROM public.dining_areas WHERE branch_id=$1 ORDER BY sort_order,created_at LIMIT 1`,
+    const area = await client.query<{ id: string; name: string; is_default: boolean }>(
+      `SELECT id,name,is_default
+       FROM public.dining_areas
+       WHERE branch_id=$1
+         AND is_default=true`,
       [branchId],
     );
+    expect(area.rows).toHaveLength(1);
+    expect(area.rows[0]).toMatchObject({ name: 'Main Area', is_default: true });
 
+    const customArea = await client.query<{ id: string }>(
+      `INSERT INTO public.dining_areas(branch_id,name,sort_order)
+       VALUES($1,'Terrace',10)
+       RETURNING id`,
+      [branchId],
+    );
     await client.query(
       `INSERT INTO public.dining_tables(branch_id,area_id,name,capacity,status,is_active)
        VALUES($1,$2,'VIP 51',6,'vacant',true)`,
-      [branchId, area.rows[0].id],
+      [branchId, customArea.rows[0].id],
     );
 
-    const afterCustom = await client.query<{ total: string }>(
-      `SELECT COUNT(*)::text AS total FROM public.dining_tables WHERE branch_id=$1`,
-      [branchId],
+    const afterCustom = await client.query<{ total: string; main_total: string }>(
+      `SELECT
+         COUNT(*)::text AS total,
+         COUNT(*) FILTER (WHERE area_id=$2)::text AS main_total
+       FROM public.dining_tables
+       WHERE branch_id=$1`,
+      [branchId, area.rows[0].id],
     );
-    expect(afterCustom.rows[0].total).toBe('51');
+    expect(afterCustom.rows[0]).toMatchObject({ total: '51', main_total: '50' });
   });
 });

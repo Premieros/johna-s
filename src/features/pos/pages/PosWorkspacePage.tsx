@@ -503,6 +503,39 @@ export function PosWorkspacePage() {
   }, [effectiveBranch, loadStock]);
 
   useEffect(() => {
+    if (!effectiveBranch) {
+      setDiningAreas([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const refreshAreas = async () => {
+      const { data, error } = await supabase
+        .from('dining_areas')
+        .select('*')
+        .eq('branch_id', effectiveBranch)
+        .order('sort_order')
+        .order('name');
+      if (!cancelled && !error) setDiningAreas((data as DiningArea[]) || []);
+    };
+
+    const channel = supabase
+      .channel(`pos-dining-areas-${effectiveBranch}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dining_areas', filter: `branch_id=eq.${effectiveBranch}` },
+        () => { void refreshAreas(); },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [effectiveBranch]);
+
+
+  useEffect(() => {
     let cancelled = false;
     const manufactured = products.filter((p) => p.product_type === 'manufactured');
     if (manufactured.length === 0) {
@@ -821,6 +854,7 @@ export function PosWorkspacePage() {
         <div data-testid="pos-tables-landing-shell" className="flex h-full shrink-0">
           <PosTablesSidebar
             tables={tables}
+            areas={diningAreas}
             ordersByTable={ordersByTable}
             itemsByOrder={itemsByOrder}
             kitchenSendsByOrder={kitchenSendsByOrder}
@@ -1069,6 +1103,7 @@ export function PosWorkspacePage() {
         open={panel === 'tables'}
         onClose={() => setPanel(null)}
         tables={tables}
+        areas={diningAreas}
         ordersByTable={ordersByTable}
         currency={pos.effCurrency}
         onResume={(o) => openOrderWorkspace(o.id)}

@@ -112,12 +112,21 @@ export function TableFloorPlan({ areas, tables, ordersByTable, canManage, curren
               </h3>
               {canManage && (
                 <div className="flex items-center gap-1">
-                  <button onClick={() => onAddTable(area.id)} className="p-1.5 rounded-lg text-ui-subtle hover:text-ui-accent hover:bg-ui-page-alt" title={t('addTable')}>
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => onDeleteArea(area)} className="p-1.5 rounded-lg text-ui-subtle hover:text-ui-danger hover:bg-ui-danger/10" title={isAr ? 'حذف المنطقة' : 'Delete area'}>
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {!area.is_default && (
+                    <>
+                      <button onClick={() => onAddTable(area.id)} className="p-1.5 rounded-lg text-ui-subtle hover:text-ui-accent hover:bg-ui-page-alt" title={t('addTable')}>
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => onDeleteArea(area)} className="p-1.5 rounded-lg text-ui-subtle hover:text-ui-danger hover:bg-ui-danger/10" title={isAr ? 'حذف المنطقة' : 'Delete area'}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                  {area.is_default && (
+                    <span data-testid="default-dining-area-fixed" className="rounded-full border border-ui-border bg-ui-page-alt px-2 py-1 text-[10px] font-black text-ui-muted">
+                      {isAr ? 'ثابتة · 50 طاولة' : 'Fixed · 50 tables'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

@@ -64,6 +64,7 @@ export function ActiveOrdersPage() {
 
   const effectiveBranch = branchFilter || user?.branch_id || '';
   const canManage = can('floor_plan.manage');
+  const editTargetIsDefault = !!editTarget && areas.some((area) => area.id === editTarget.area_id && area.is_default);
   const canReassignCashier = can('pos.order.transfer') && can('pos.order.edit') && can('users.manage');
 
   const { orders, tables, counts, ordersByTable, itemsByOrder, loading, error } = useActiveOrders(effectiveBranch);
@@ -193,22 +194,41 @@ export function ActiveOrdersPage() {
 
   const saveTable = async () => {
     if (!tableForm.name.trim()) { show(t('required'), 'error'); return; }
-    const payload = {
-      name: tableForm.name.trim(),
-      branch_id: effectiveBranch,
-      area_id: tableForm.area_id || null,
-      capacity: Number(tableForm.capacity) || 4,
-      layout: {
-        x: Number(tableForm.x) || 0,
-        y: Number(tableForm.y) || 0,
-        w: Math.max(70, Number(tableForm.w) || 120),
-        h: Math.max(46, Number(tableForm.h) || 80),
-      },
+    const layout = {
+      x: Number(tableForm.x) || 0,
+      y: Number(tableForm.y) || 0,
+      w: Math.max(70, Number(tableForm.w) || 120),
+      h: Math.max(46, Number(tableForm.h) || 80),
     };
-    const { error } = editTarget
-      ? await supabase.from('dining_tables').update(payload).eq('id', editTarget.id)
-      : await supabase.from('dining_tables').insert(payload);
+    const { data, error } = editTarget
+      ? await api.floorPlan.updateTable({
+          p_table_id: editTarget.id,
+          p_name: tableForm.name.trim(),
+          p_capacity: Number(tableForm.capacity) || 4,
+          p_area_id: tableForm.area_id || null,
+          p_shape: editTarget.shape || 'rect',
+          p_layout: layout,
+        })
+      : await api.floorPlan.addTable({
+          p_branch_id: effectiveBranch,
+          p_name: tableForm.name.trim(),
+          p_capacity: Number(tableForm.capacity) || 4,
+          p_area_id: tableForm.area_id || null,
+          p_shape: 'rect',
+          p_layout: layout,
+        });
     if (error) { show(error.message, 'error'); return; }
+    const result = data as RpcResult | null;
+    if (!result?.success) {
+      const code = result?.error || t('error');
+      const message = code === 'DEFAULT_AREA_FIXED_50'
+        ? (isAr ? 'المنطقة الأساسية ثابتة على 50 طاولة. أضف الطاولة إلى منطقة أخرى.' : 'Main Area is fixed at 50 tables. Add the table to another area.')
+        : code === 'DEFAULT_TABLE_IDENTITY_FIXED'
+          ? (isAr ? 'اسم ومكان الطاولة الأساسية ثابتان.' : 'The default table name and area are fixed.')
+          : (result?.detail || code);
+      show(message, 'error');
+      return;
+    }
     show(t('saveSuccess'), 'success');
     setTableModal(false);
     setEditTarget(null);
@@ -222,6 +242,10 @@ export function ActiveOrdersPage() {
   };
 
   const deleteArea = async (area: DiningArea) => {
+    if (area.is_default) {
+      show(isAr ? 'المنطقة الأساسية ثابتة ولا يمكن حذفها.' : 'Main Area is fixed and cannot be deleted.', 'error');
+      return;
+    }
     if (!window.confirm(isAr ? `حذف المنطقة "${area.name}"؟` : `Delete area "${area.name}"?`)) return;
     const { error } = await supabase.from('dining_areas').delete().eq('id', area.id);
     if (error) { show(error.message, 'error'); return; }
@@ -384,6 +408,7 @@ export function ActiveOrdersPage() {
           const st = STATUS_STYLES[tableTarget.status] || STATUS_STYLES.vacant;
           const tableOrders = ordersByTable[tableTarget.id] || [];
           const area = areas.find((a) => a.id === tableTarget.area_id);
+          const isDefaultTable = Boolean(area?.is_default);
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -446,7 +471,9 @@ export function ActiveOrdersPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => { setEditTarget(tableTarget); setTableModal(true); setTableTarget(null); }}><Pencil className="w-4 h-4" /> {isAr ? 'تعديل' : 'Edit'}</Button>
-                    <Button variant="danger" className="flex-1" onClick={() => { deleteTable(tableTarget); setTableTarget(null); }}><Trash2 className="w-4 h-4" /> {isAr ? 'حذف' : 'Delete'}</Button>
+                    {!isDefaultTable && (
+                      <Button variant="danger" className="flex-1" onClick={() => { deleteTable(tableTarget); setTableTarget(null); }}><Trash2 className="w-4 h-4" /> {isAr ? 'حذف' : 'Delete'}</Button>
+                    )}
                   </div>
                 </>
               )}
@@ -470,7 +497,7 @@ export function ActiveOrdersPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-ui-muted mb-1.5">{t('tableName')}</label>
-              <input value={tableForm.name} onChange={(e) => setTableForm({ ...tableForm, name: e.target.value })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring" />
+              <input value={tableForm.name} disabled={editTargetIsDefault} onChange={(e) => setTableForm({ ...tableForm, name: e.target.value })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring disabled:cursor-not-allowed disabled:opacity-60" />
             </div>
             <div>
               <label className="block text-sm font-medium text-ui-muted mb-1.5">{t('capacity')}</label>
@@ -479,9 +506,9 @@ export function ActiveOrdersPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-ui-muted mb-1.5">{isAr ? 'المنطقة' : 'Area'}</label>
-            <select value={tableForm.area_id} onChange={(e) => setTableForm({ ...tableForm, area_id: e.target.value })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring">
+            <select value={tableForm.area_id} disabled={editTargetIsDefault} onChange={(e) => setTableForm({ ...tableForm, area_id: e.target.value })} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring disabled:cursor-not-allowed disabled:opacity-60">
               <option value="">{isAr ? 'بدون منطقة' : 'No area'}</option>
-              {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {areas.map((a) => <option key={a.id} value={a.id} disabled={!editTargetIsDefault && Boolean(a.is_default)}>{a.name}{a.is_default ? (isAr ? ' (ثابتة)' : ' (Fixed)') : ''}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-4 gap-3">
