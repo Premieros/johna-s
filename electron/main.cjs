@@ -145,6 +145,257 @@ function textToPrintableHtml(text, widthMm) {
 </html>`, widthMm);
 }
 
+function normalizeFixedThermalTemplate(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (Number(value.version) !== 1) return null;
+  if (value.kind !== 'customer' && value.kind !== 'kitchen') return null;
+  if (!Array.isArray(value.meta) || !Array.isArray(value.items)) return null;
+  const paperWidthMm = normalizeThermalWidthMm(value.paperWidthMm);
+  return { ...value, paperWidthMm };
+}
+
+function fixedTemplateToHtml(template) {
+  const t = normalizeFixedThermalTemplate(template);
+  if (!t) return '';
+  const ar = Boolean(t.isAr);
+  const kitchen = t.kind === 'kitchen';
+  const dir = ar ? 'rtl' : 'ltr';
+  const e = escapeHtml;
+  const meta = Array.isArray(t.meta) ? t.meta : [];
+  const items = Array.isArray(t.items) ? t.items : [];
+  const totals = Array.isArray(t.totals) ? t.totals : [];
+  const footerLines = Array.isArray(t.footerLines) ? t.footerLines : [];
+
+  const metaRows = [
+    ...(kitchen && t.station ? [{ label: ar ? 'المحطة' : 'Station', value: t.station, emphasis: true }] : []),
+    ...meta,
+  ].map((row) => `
+    <div class="meta-row ${row?.emphasis ? 'emphasis' : ''}">
+      <div class="meta-label">${e(row?.label || '')}:</div>
+      <div class="meta-value">${e(row?.value || '')}</div>
+    </div>`).join('');
+
+  const customerItems = items.map((item) => `
+    <div class="item-row customer-item">
+      <div class="qty">${e(item?.qty || '')}</div>
+      <div class="item-name">${e(item?.name || '')}</div>
+      <div class="price">${e(item?.total || item?.price || '')}</div>
+    </div>`).join('');
+
+  const kitchenItems = items.map((item) => {
+    const modifiers = Array.isArray(item?.modifiers)
+      ? item.modifiers.map((modifier) => `<div class="modifier">+ ${e(modifier || '')}</div>`).join('')
+      : '';
+    const note = item?.notes
+      ? `<div class="note">${ar ? 'ملاحظة' : 'Note'}: ${e(item.notes)}</div>`
+      : '';
+    return `
+      <div class="kitchen-item">
+        <div class="kitchen-main"><span class="qty">${e(item?.qty || '')}</span><span class="item-name">${e(item?.name || '')}</span></div>
+        ${modifiers}
+        ${note}
+      </div>`;
+  }).join('');
+
+  const totalRows = totals.map((row) => `
+    <div class="total-row ${row?.emphasis ? 'grand-total' : ''}">
+      <span>${e(row?.label || '')}:</span>
+      <span>${e(row?.value || '')}</span>
+    </div>`).join('');
+
+  const footer = footerLines.map((line, index) => `
+    <div class="footer-line ${kitchen && index === 0 ? 'kitchen-end' : ''}">${e(line || '')}</div>`
+  ).join('');
+
+  return applyThermalLayout(`<!doctype html>
+<html lang="${ar ? 'ar' : 'en'}" dir="${dir}">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    font-family: "Arial Narrow", "Segoe UI", Tahoma, Arial, sans-serif !important;
+    direction: ${dir};
+    background: #fff;
+    color: #000;
+  }
+  body { margin: 0; padding: 0; }
+  .receipt {
+    width: 100%;
+    padding: ${kitchen ? '3.2mm 4mm 3mm' : '4.5mm 5mm 4mm'};
+    font-size: ${kitchen ? '9.5pt' : '10pt'};
+    line-height: 1.22;
+  }
+  .brand {
+    text-align: center;
+    font-family: Arial, "Segoe UI", sans-serif;
+    font-size: ${kitchen ? '22pt' : '26pt'};
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    margin: 0 0 1.2mm;
+  }
+  .brand-sub {
+    text-align: center;
+    font-family: Arial, "Segoe UI", sans-serif;
+    font-size: ${kitchen ? '7.3pt' : '8pt'};
+    font-weight: 600;
+    letter-spacing: 3.2px;
+    margin-bottom: ${kitchen ? '3mm' : '4mm'};
+  }
+  .title-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 2.2mm;
+    align-items: center;
+    margin-bottom: ${kitchen ? '1.2mm' : '1.6mm'};
+  }
+  .title-rule { height: .25mm; background: #111; }
+  .title {
+    font-size: ${kitchen ? '14pt' : '15pt'};
+    font-weight: 900;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .subtitle, .slogan, .branch {
+    text-align: center;
+    font-size: ${kitchen ? '8pt' : '8.5pt'};
+    margin-top: .8mm;
+  }
+  .subtitle { font-weight: 700; letter-spacing: 2px; }
+  .slogan { font-weight: 500; }
+  .branch { font-weight: 600; }
+  .meta {
+    margin-top: ${kitchen ? '3mm' : '5mm'};
+    margin-bottom: ${kitchen ? '3mm' : '4mm'};
+  }
+  .meta-row {
+    display: grid;
+    grid-template-columns: ${ar ? '1fr 23mm' : '23mm 1fr'};
+    gap: 2mm;
+    align-items: baseline;
+    margin: .75mm 0;
+    min-height: 4.3mm;
+  }
+  .meta-label {
+    font-weight: 700;
+    ${ar ? 'grid-column:2;text-align:right' : 'text-align:left'};
+  }
+  .meta-value {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+    ${ar ? 'grid-column:1;grid-row:1;text-align:right' : 'text-align:left'};
+  }
+  .meta-row.emphasis .meta-label,
+  .meta-row.emphasis .meta-value { font-weight: 800; }
+  .section {
+    border-top: .25mm solid #111;
+    padding-top: ${kitchen ? '2.5mm' : '3.2mm'};
+    margin-top: ${kitchen ? '2mm' : '2.5mm'};
+  }
+  .items-title {
+    font-size: ${kitchen ? '14pt' : '15pt'};
+    font-weight: 900;
+    margin-bottom: ${kitchen ? '2mm' : '2.5mm'};
+  }
+  .items-head, .customer-item {
+    display: grid;
+    grid-template-columns: 11mm 1fr 21mm;
+    gap: 1.5mm;
+    align-items: baseline;
+  }
+  .items-head {
+    font-size: 8.5pt;
+    font-weight: 800;
+    margin-bottom: 1.5mm;
+  }
+  .items-head .price, .customer-item .price { text-align: ${ar ? 'left' : 'right'}; }
+  .items-head .qty, .customer-item .qty { text-align: center; }
+  .customer-item {
+    min-height: 8mm;
+    padding: 1.2mm 0;
+    font-size: 10.5pt;
+  }
+  .customer-item .item-name { font-weight: 600; overflow-wrap: anywhere; }
+  .customer-item .price { font-weight: 700; white-space: nowrap; }
+  .kitchen-item {
+    padding: 1.4mm 0;
+    border-bottom: .15mm solid #b8b8b8;
+  }
+  .kitchen-item:last-child { border-bottom: 0; }
+  .kitchen-main {
+    display: grid;
+    grid-template-columns: 10mm 1fr;
+    gap: 2mm;
+    font-size: 11.5pt;
+    font-weight: 900;
+    align-items: baseline;
+  }
+  .kitchen-main .qty { text-align: center; }
+  .modifier, .note {
+    margin-top: .8mm;
+    ${ar ? 'padding-right:12mm' : 'padding-left:12mm'};
+    font-size: 8.7pt;
+    line-height: 1.18;
+  }
+  .modifier { font-weight: 700; }
+  .note { font-weight: 800; }
+  .totals {
+    border-top: .25mm solid #111;
+    border-bottom: .25mm solid #111;
+    margin-top: 3mm;
+    padding: 2.4mm 0 2mm;
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm;
+    margin: 1mm 0;
+    font-size: 10.5pt;
+  }
+  .grand-total {
+    font-size: 15pt;
+    font-weight: 900;
+    margin-top: 1.5mm;
+  }
+  .footer {
+    text-align: center;
+    margin-top: ${kitchen ? '3mm' : '5mm'};
+  }
+  .footer-line {
+    font-size: ${kitchen ? '10pt' : '10.5pt'};
+    margin: .8mm 0;
+  }
+  .kitchen-end {
+    font-size: 11.5pt;
+    font-weight: 900;
+    margin-top: 1mm;
+  }
+  .heart { font-size: 14pt; line-height: 1; margin-top: 1.8mm; }
+</style>
+</head>
+<body>
+  <main class="receipt">
+    <div class="brand">${e(t.storeName || "JOHNA'S")}</div>
+    <div class="brand-sub">${e(t.storeSubtitle || 'RESTAURANT')}</div>
+    <div class="title-row"><div class="title-rule"></div><div class="title">${e(t.title || '')}</div><div class="title-rule"></div></div>
+    ${t.subtitle ? `<div class="subtitle">${e(t.subtitle)}</div>` : ''}
+    ${t.slogan ? `<div class="slogan">${e(t.slogan)}</div>` : ''}
+    ${t.branchName ? `<div class="branch">${e(t.branchName)}</div>` : ''}
+    <section class="meta">${metaRows}</section>
+    <section class="section">
+      <div class="items-title">${e(t.itemsHeading || (ar ? 'الأصناف' : 'ITEMS'))}</div>
+      ${kitchen
+        ? kitchenItems
+        : `<div class="items-head"><div class="qty">${ar ? 'الكمية' : 'QTY'}</div><div>${ar ? 'الصنف' : 'ITEM'}</div><div class="price">${ar ? 'السعر' : 'PRICE'}</div></div>${customerItems}`}
+    </section>
+    ${!kitchen && totals.length ? `<section class="totals">${totalRows}</section>` : ''}
+    <footer class="footer">${footer}${!kitchen ? '<div class="heart">♥</div>' : ''}</footer>
+  </main>
+</body>
+</html>`, t.paperWidthMm);
+}
+
 function driverCompatiblePrintOptions(printerName, options) {
   return {
     silent: true,
@@ -165,9 +416,11 @@ function minimalDriverPrintOptions(printerName) {
 
 async function printOnPhysicalPrinter(printerName, options) {
   const worker = createPrintWorker(printerName);
-  const printableHtml = options.html
-    ? applyThermalLayout(options.html, options.paperWidthMm)
-    : textToPrintableHtml(options.text, options.paperWidthMm);
+  const templateHtml = fixedTemplateToHtml(options.template);
+  const printableHtml = templateHtml
+    || (options.html
+      ? applyThermalLayout(options.html, options.paperWidthMm)
+      : textToPrintableHtml(options.text, options.paperWidthMm));
 
   const attemptPrint = (printOptions) => withTimeout(new Promise((resolve) => {
     worker.webContents.print(
@@ -277,11 +530,12 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
   const printerName = typeof options.printerName === 'string' ? options.printerName.trim() : '';
   const html = typeof options.html === 'string' ? options.html : '';
   const text = typeof options.text === 'string' ? options.text : '';
+  const template = normalizeFixedThermalTemplate(options.template);
   const copies = Math.max(1, Math.min(5, Number(options.copies || 1)));
   const paperWidthMm = normalizeThermalWidthMm(options.paperWidthMm);
 
   if (!printerName) return { success: false, error: 'PRINTER_NAME_REQUIRED' };
-  if (!html && !text) return { success: false, error: 'NO_CONTENT_TO_PRINT' };
+  if (!template && !html && !text) return { success: false, error: 'NO_CONTENT_TO_PRINT' };
 
   try {
     if (!mainWindow) return { success: false, error: 'AGENT_WINDOW_UNAVAILABLE' };
@@ -293,6 +547,7 @@ ipcMain.handle('pos:print-silent', async (_event, options = {}) => {
     return await printerQueue.enqueue(printerName, () => printOnPhysicalPrinter(printerName, {
       html,
       text,
+      template,
       copies,
       paperWidthMm,
     }));
