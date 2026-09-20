@@ -153,9 +153,9 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
        WHERE id=ANY($1::uuid[]) ORDER BY id`,
       [[itemA, itemB, sentItem]],
     );
-    expect(lines.find((row) => row.id === itemA)?.order_id).toBe(targetOrder);
-    expect(lines.find((row) => row.id === sentItem)?.order_id).toBe(targetOrder);
-    expect(lines.find((row) => row.id === itemB)?.order_id).toBe(sourceOrder);
+    expect(lines.rows.find((row) => row.id === itemA)?.order_id).toBe(targetOrder);
+    expect(lines.rows.find((row) => row.id === sentItem)?.order_id).toBe(targetOrder);
+    expect(lines.rows.find((row) => row.id === itemB)?.order_id).toBe(sourceOrder);
 
     const targetOwner = await client.query<{ cashier_id: string }>(
       'SELECT cashier_id FROM public.orders WHERE id=$1',
@@ -257,7 +257,8 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
       kds_resent: false,
     });
 
-    const newOrderId = String(moved.rows[0].result.target_order_id);
+    const movedResult = moved.rows[0].result as Record<string, unknown>;
+    const newOrderId = String(movedResult.target_order_id || '');
     const target = await client.query<{ cashier_id: string; table_id: string; status: string }>(
       'SELECT cashier_id,table_id,status FROM public.orders WHERE id=$1::uuid',
       [newOrderId],
