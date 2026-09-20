@@ -27,6 +27,7 @@ export function InventoryLedgerPage() {
     table: 'inventory_ledger',
     select: '*, product:products(*), raw_material:raw_materials(*), warehouse:warehouses(*)',
     order: { column: 'created_at', ascending: false },
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
   });
   const rows = useMemo<LedgerRow[]>(() => rawRows.map((entry) => ({ id: String(entry.id), entry })), [rawRows]);
