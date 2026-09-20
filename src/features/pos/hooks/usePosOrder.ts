@@ -364,10 +364,13 @@ export function usePosOrder(input: UsePosOrderInput) {
     const receipt = buildSettlementReceipt(preview, base.activeOrderNumber || `ORDER-${Date.now()}`, 0);
     receipt.isOpenOrder = true;
     const text = buildReceiptThermalText(receipt, input.effSettings, lang, isAr);
+    const fixedFormHtml = await buildReceiptHtml(receipt, input.effSettings, lang, isAr, { authorize: false });
     const queued = await enqueueCloudOpenOrderPrint({
       orderId: base.activeOrderId,
       payload: {
         text,
+        fixedFormHtml,
+        rendererVersion: 1,
         paperWidthMm: input.effSettings.receipt_width_mm || 80,
         copies: 1,
       },
