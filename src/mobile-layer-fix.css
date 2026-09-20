@@ -452,22 +452,6 @@
     padding-bottom: env(safe-area-inset-bottom) !important;
   }
 
-  .hidden:has([data-testid="pos-payment-confirm"]) {
-    display: flex !important;
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 60 !important;
-    width: 100% !important;
-    max-width: none !important;
-    height: 100dvh !important;
-    border: 0 !important;
-  }
-
-  .hidden:has([data-testid="pos-payment-confirm"]) > * {
-    width: 100% !important;
-    min-width: 0 !important;
-  }
-
   [data-testid="pos-payment-confirm"] {
     margin-bottom: max(env(safe-area-inset-bottom), 0px);
   }
@@ -608,5 +592,194 @@
 
   [data-testid="pos-product-browser"] > div:first-child > div:last-child {
     margin-top: 0.4rem !important;
+  }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Dedicated POS mobile workspace                                             */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  [data-testid="pos-workspace"] {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  [data-testid="pos-top-bar"] {
+    min-height: 3.5rem !important;
+    flex-wrap: nowrap !important;
+    padding-inline: 0.5rem !important;
+    gap: 0.3rem !important;
+  }
+
+  [data-testid="pos-top-bar"] > div:first-child {
+    min-width: 0 !important;
+    gap: 0.35rem !important;
+  }
+
+  [data-testid="pos-offline-queue-button"] {
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    justify-content: center !important;
+    padding-inline: 0.5rem !important;
+  }
+
+  [data-testid="pos-main-workspace"] {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="pos-catalog-shell"] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  [data-testid="pos-mobile-command-dock"] {
+    min-height: calc(4rem + env(safe-area-inset-bottom)) !important;
+    padding-bottom: max(0.25rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="pos-mobile-command-dock"] > button {
+    min-height: 3.5rem !important;
+    touch-action: manipulation;
+  }
+
+  [data-testid="pos-mobile-order-sheet"] {
+    overscroll-behavior: contain;
+  }
+
+  [data-testid="pos-mobile-order-sheet-panel"] {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+
+  [data-testid="pos-current-order-panel"],
+  [data-testid="pos-payment-panel"] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  [data-testid^="pos-cart-qty-decrease-"],
+  [data-testid^="pos-cart-qty-increase-"] {
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  [data-testid^="pos-cart-qty-"]:not([data-testid^="pos-cart-qty-decrease-"]):not([data-testid^="pos-cart-qty-increase-"]) {
+    min-width: 2.5rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  [data-testid="pos-payment-confirm"] {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 5 !important;
+    min-height: 3.25rem !important;
+    margin-bottom: max(env(safe-area-inset-bottom), 0px) !important;
+    box-shadow: 0 -8px 22px color-mix(in srgb, var(--ui-text) 10%, transparent) !important;
+  }
+
+  [data-testid="pos-payment-method-cash"],
+  [data-testid="pos-payment-method-card"],
+  [data-testid="pos-payment-method-mobile_wallet"],
+  [data-testid="pos-payment-method-credit"] {
+    min-height: 4.75rem !important;
+  }
+
+  [data-testid="pos-table-grid"] {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="pos-more-menu"] {
+    max-height: min(78dvh, 620px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  [data-testid="pos-top-action-bar"] button {
+    min-height: 2.75rem !important;
+    touch-action: manipulation;
+  }
+
+  [data-testid="pos-category-strip"] > button {
+    min-height: 2.75rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  [data-testid="pos-top-counters"] {
+    display: none !important;
+  }
+
+  [data-testid="pos-more-menu"] {
+    position: fixed !important;
+    inset-inline: 0.5rem !important;
+    top: 3.75rem !important;
+    width: auto !important;
+  }
+
+  [data-testid="pos-mobile-catalog-header"] {
+    padding-inline: 0.65rem !important;
+    padding-top: 0.6rem !important;
+    padding-bottom: 0.55rem !important;
+  }
+
+  [data-testid="pos-mobile-catalog-intro"] {
+    margin-bottom: 0.45rem !important;
+  }
+
+  [data-testid="pos-mobile-catalog-intro"] > p:first-child,
+  [data-testid="pos-mobile-catalog-intro"] > p:last-child {
+    display: none !important;
+  }
+
+  [data-testid="pos-mobile-catalog-intro"] h2 {
+    margin-top: 0 !important;
+    font-size: 1rem !important;
+    line-height: 1.25rem !important;
+  }
+
+  [data-testid="pos-product-browser"] > div:last-child {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid^="pos-product-card-"] > div:last-child > div:last-child button {
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+
+  [data-testid="pos-current-order-panel"] > div:first-child {
+    padding-block: 0.55rem !important;
+  }
+
+  [data-testid="pos-payment-panel"] > div:nth-child(2) {
+    padding: 0.75rem !important;
+  }
+
+  [data-testid="pos-payment-receipt"],
+  [data-testid="pos-payment-totals"],
+  [data-testid="pos-split-payment-editor"] {
+    padding: 0.85rem !important;
+    border-radius: 1rem !important;
+  }
+
+  [data-testid="pos-payment-split-toggle"] {
+    padding: 0.75rem !important;
+  }
+}
+
+@media (max-width: 359px) {
+  [data-testid="pos-mobile-command-dock"] {
+    font-size: 9px !important;
+  }
+
+  [data-testid="pos-mobile-order-sheet-panel"] {
+    height: 96dvh !important;
+    max-height: 96dvh !important;
+  }
+
+  [data-testid="pos-product-grid"] {
+    gap: 0.4rem !important;
   }
 }
