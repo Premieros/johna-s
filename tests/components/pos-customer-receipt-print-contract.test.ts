@@ -38,6 +38,8 @@ describe('POS customer receipt print contract', () => {
     expect(hook).toContain('buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr)');
     expect(hook).toContain('payload: {');
     expect(hook).toContain('text,');
+    expect(hook).toContain('fixedFormHtml,');
+    expect(hook).toContain('rendererVersion: 1');
     expect(hook).not.toContain('payload: {\n            html,');
     expect(printing).toContain('options?: { authorize?: boolean }');
     expect(printing).toContain("isAr ? 'حساب مبدئي' : 'OPEN CHECK'");
