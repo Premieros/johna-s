@@ -78,25 +78,6 @@ export function ReceivingPage() {
     loadReceipts();
   }, [loadBackorders, loadReceipts]);
 
-  useEffect(() => {
-    const purchaseId = searchParams.get('purchaseId');
-    if (!purchaseId || boLoading || backorders.length === 0) return;
-    const target = backorders.find((row) => row.purchase_id === purchaseId);
-    if (target) {
-      openReceive(target);
-    } else {
-      show(
-        lang === 'ar'
-          ? 'لا توجد بنود متبقية قابلة للاستلام لهذا أمر الشراء.'
-          : 'No remaining receivable items were found for this purchase order.',
-        'error',
-      );
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete('purchaseId');
-    setSearchParams(next, { replace: true });
-  }, [backorders, boLoading, lang, openReceive, searchParams, setSearchParams, show]);
-
   const openTab = (next: Tab) => {
     setTab(next);
     if (next === 'evaluation') loadEvaluation();
@@ -118,6 +99,25 @@ export function ReceivingPage() {
       qty: '',
     })));
   }, [backorders]);
+
+  useEffect(() => {
+    const purchaseId = searchParams.get('purchaseId');
+    if (!purchaseId || boLoading || backorders.length === 0) return;
+    const target = backorders.find((row) => row.purchase_id === purchaseId);
+    if (target) {
+      openReceive(target);
+    } else {
+      show(
+        lang === 'ar'
+          ? 'لا توجد بنود متبقية قابلة للاستلام لهذا أمر الشراء.'
+          : 'No remaining receivable items were found for this purchase order.',
+        'error',
+      );
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('purchaseId');
+    setSearchParams(next, { replace: true });
+  }, [backorders, boLoading, lang, openReceive, searchParams, setSearchParams, show]);
 
   const updateQty = (i: number, qty: string) => setLines(lines.map((l, idx) => idx === i ? { ...l, qty } : l));
 
