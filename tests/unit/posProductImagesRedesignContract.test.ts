@@ -26,6 +26,17 @@ describe('POS product image and simplified workspace contracts', () => {
     expect(upload).toContain('5 * 1024 * 1024');
   });
 
+  it('shows product images fully without cropping on white backgrounds', () => {
+    const browser = source('src/features/pos/components/catalog/ProductBrowser.tsx');
+    const modal = source('src/features/pos/components/catalog/ProductConfigModal.tsx');
+    const products = source('src/features/catalog/pages/ProductsPage.tsx');
+
+    expect(browser).toContain('bg-white object-contain');
+    expect(browser).not.toContain('object-cover transition duration-200 group-hover:scale-105');
+    expect(modal).toContain('bg-white object-contain');
+    expect(products).toContain('bg-white object-contain');
+  });
+
   it('keeps the simplified product and tables workspaces wired', () => {
     const browser = source('src/features/pos/components/catalog/ProductBrowser.tsx');
     const tables = source('src/features/pos/components/tables/PosTablesSidebar.tsx');
