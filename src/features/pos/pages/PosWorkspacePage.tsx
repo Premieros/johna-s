@@ -79,6 +79,7 @@ export function PosWorkspacePage() {
   const [recipeMap, setRecipeMap] = useState<Record<string, ProductComponent[]>>({});
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [discountShortcutToken, setDiscountShortcutToken] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeShift, setActiveShift] = useState<{ id: string; expected: number; opened_at: string; opening_amount: number } | null>(null);
@@ -291,8 +292,9 @@ export function PosWorkspacePage() {
       if (perms.canHoldOrder && pos.cart.length > 0 && !pos.orderLoading) void pos.holdOrder();
     },
     onTriggerDiscount: () => {
-      if (perms.canDiscount) {
-        // Toggle or focus
+      if (perms.canDiscount && pos.cart.length > 0) {
+        setDiscountShortcutToken((value) => value + 1);
+        setMobileOrderOpen(true);
       }
     },
     onProceedToPay: handlePay,
@@ -732,6 +734,7 @@ export function PosWorkspacePage() {
       sessionSent={pos.kitchenSentItems}
       canDiscount={perms.canDiscount}
       canDeleteItem={perms.canDeleteItem}
+      discountShortcutToken={discountShortcutToken}
       onSwitchOrderType={(ot) => void pos.switchOrderType(ot)}
       onGuestCountChange={pos.setGuestCount}
       onDiscountTypeChange={pos.setDiscountType}
