@@ -5,7 +5,7 @@ import { getDbUrl, openDb } from './db';
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
-describe.skipIf(skip)('returned sales archive and daily discount database contract', () => {
+describe.skipIf(skip)('returned sales archive and closing report database contract', () => {
   let client: pg.Client;
 
   beforeAll(async () => {
@@ -17,7 +17,7 @@ describe.skipIf(skip)('returned sales archive and daily discount database contra
     if (client) await client.end().catch(() => {});
   });
 
-  it('installs archive columns and hardened archive rpc', async () => {
+  it('installs archive columns and a refund-permission archive rpc', async () => {
     const columns = await client.query<{ column_name: string }>(
       `SELECT column_name
        FROM information_schema.columns
@@ -35,19 +35,27 @@ describe.skipIf(skip)('returned sales archive and daily discount database contra
     );
     expect(fn.rows).toHaveLength(1);
     expect(fn.rows[0].def).toContain('FULL_REFUND_REQUIRED');
-    expect(fn.rows[0].def).toContain('sales.manage');
     expect(fn.rows[0].def).toContain('refunds.approve');
+    expect(fn.rows[0].def).toContain('refunded_quantity');
+    expect(fn.rows[0].def).not.toContain('sales.manage');
     expect(fn.rows[0].def).toContain("SET search_path TO 'public', 'pg_temp'");
   });
 
-  it('uses refund-adjusted discount in the authoritative day report', async () => {
-    const fn = await client.query<{ def: string }>(
-      `SELECT pg_get_functiondef(p.oid) AS def
+  it('excludes archived sales from both authoritative closing reports', async () => {
+    const defs = await client.query<{ proname: string; def: string }>(
+      `SELECT p.proname, pg_get_functiondef(p.oid) AS def
        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='public' AND p.proname='_build_day_closing_report'`,
+       WHERE n.nspname='public'
+         AND p.proname = ANY($1::text[])
+       ORDER BY p.proname`,
+      [['_build_day_closing_report','get_shift_closing_report']],
     );
-    expect(fn.rows).toHaveLength(1);
-    expect(fn.rows[0].def).toContain('GREATEST(COALESCE(s.total, 0::numeric) - COALESCE(s.refunded_amount, 0::numeric), 0::numeric)');
-    expect(fn.rows[0].def).not.toContain("'discount_amount', s.discount_amount, 'tax_amount'");
+    expect(defs.rows).toHaveLength(2);
+    for (const row of defs.rows) {
+      expect(row.def, row.proname).toContain('is_archived');
+      expect(row.def, row.proname).toContain('discount_amount');
+    }
+    const day = defs.rows.find((row) => row.proname === '_build_day_closing_report')!;
+    expect(day.def).toContain("'discount_amount', s.discount_amount");
   });
 });
