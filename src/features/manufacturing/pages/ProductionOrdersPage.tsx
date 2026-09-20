@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
@@ -32,12 +33,14 @@ export function ProductionOrdersPage() {
   const can = useCan();
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
   const isAr = lang === 'ar';
 
   const { rows: orders, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadOrders } = usePaginatedRows<ProductionOrder>({
     table: 'production_orders',
     select: '*, product:products(*), warehouse:warehouses(*), branch:branches(*), creator:users(id, full_name, email)',
     order: { column: 'created_at', ascending: false },
+    or: history.minIso ? `created_at.gte.${history.minIso},status.in.(planned,in_progress)` : undefined,
     pageSize: 100,
   });
   const [products, setProducts] = useState<Product[]>([]);
