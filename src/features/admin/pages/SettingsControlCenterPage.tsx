@@ -10,6 +10,8 @@ import {
   Loader2,
   CalendarClock,
   Percent,
+  LockKeyhole,
+  LockOpen,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/api';
@@ -39,7 +41,7 @@ interface UserRow {
 
 export function SettingsControlCenterPage() {
   const { user } = useAuth();
-  const { t, lang, setLang } = useLanguage();
+  const { t, lang, setLang, languageLocked, lockLanguagePreference, unlockLanguagePreference } = useLanguage();
   const { theme, setTheme, setUiTheme } = useTheme();
   const { settings, branchSettingsMap, saveBranchSettings } = useSettings();
   const { branches } = useBranches();
@@ -513,7 +515,7 @@ export function SettingsControlCenterPage() {
                 <p className="text-xs text-ui-subtle">{isAr ? 'اختر اللغة المفضلة للنظام' : 'Select interface language'}</p>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <Button
                   variant={lang === 'ar' ? 'primary' : 'outline'}
                   onClick={() => setLang('ar')}
@@ -527,6 +529,37 @@ export function SettingsControlCenterPage() {
                   className="w-32"
                 >
                   English
+                </Button>
+              </div>
+
+              <div data-testid="language-preference-lock" className="flex flex-col gap-3 rounded-xl border border-ui-border bg-ui-page-alt p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-ui-text">
+                    {languageLocked ? (isAr ? 'اللغة مثبتة على هذا الجهاز' : 'Language is locked on this device') : (isAr ? 'اللغة غير مثبتة' : 'Language is not locked')}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-ui-subtle">
+                    {isAr
+                      ? 'عند التثبيت لن تغيّر إعدادات النظام العامة اللغة التي اخترتها على هذا الجهاز.'
+                      : 'When locked, system defaults will not override the language you selected on this device.'}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant={languageLocked ? 'outline' : 'primary'}
+                  onClick={() => {
+                    if (languageLocked) {
+                      unlockLanguagePreference();
+                      show(isAr ? 'تم إلغاء تثبيت اللغة' : 'Language lock removed', 'success');
+                    } else {
+                      lockLanguagePreference();
+                      show(isAr ? 'تم تثبيت اللغة الحالية' : 'Current language locked', 'success');
+                    }
+                  }}
+                  data-testid="language-lock-button"
+                  className="shrink-0"
+                >
+                  {languageLocked ? <LockOpen className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+                  {languageLocked ? (isAr ? 'إلغاء التثبيت' : 'Unlock language') : (isAr ? 'تثبيت اللغة' : 'Lock language')}
                 </Button>
               </div>
             </Card>
