@@ -2,6 +2,8 @@ export interface SaleNumericLike {
   total?: number | string | null;
   paid_amount?: number | string | null;
   refunded_amount?: number | string | null;
+  discount_amount?: number | string | null;
+  status?: string | null;
 }
 
 export interface PurchaseNumericLike {
@@ -42,6 +44,17 @@ export const netSaleAmount = (sale: SaleNumericLike): number =>
 
 export const netSalePayment = (sale: SaleNumericLike): number =>
   nonNegative(n(sale.paid_amount) - n(sale.refunded_amount));
+
+export const saleRemainingRatio = (sale: SaleNumericLike): number => {
+  const status = String(sale.status || '').toLowerCase();
+  if (status === 'returned' || status === 'refunded' || status === 'cancelled') return 0;
+  const total = nonNegative(n(sale.total));
+  if (total <= 0) return 1;
+  return Math.min(1, nonNegative(total - n(sale.refunded_amount)) / total);
+};
+
+export const netSaleDiscount = (sale: SaleNumericLike): number =>
+  nonNegative(n(sale.discount_amount)) * saleRemainingRatio(sale);
 
 export const netPurchaseAmount = (purchase: PurchaseNumericLike): number =>
   nonNegative(n(purchase.total) - n(purchase.returned_amount));
