@@ -141,7 +141,7 @@ export function PosTopBar({
   );
 
   return (
-    <header className="sticky top-0 z-50 flex min-h-14 items-center gap-1.5 border-b border-ui-border bg-ui-surface px-2.5 shadow-ui-sm md:px-3">
+    <header data-testid="pos-top-bar" className="sticky top-0 z-50 flex min-h-14 items-center gap-1.5 border-b border-ui-border bg-ui-surface px-2.5 shadow-ui-sm md:px-3">
       <div className="flex shrink-0 items-center gap-2">
         <Logo variant="mark" size={32} tone="auto" />
         <div className="hidden leading-tight sm:block">
@@ -216,7 +216,7 @@ export function PosTopBar({
         </button>
 
         {more && (
-          <div className="absolute end-0 top-11 z-50 w-64 rounded-2xl border border-ui-border bg-ui-surface p-2 shadow-ui-xl">
+          <div data-testid="pos-more-menu" className="absolute end-0 top-11 z-50 w-64 rounded-2xl border border-ui-border bg-ui-surface p-2 shadow-ui-xl">
             <div className="mb-1 px-3 py-2 text-xs font-black text-ui-subtle">{isAr ? 'إجراءات إضافية' : 'More actions'}</div>
             <button
               onClick={() => { onPanel('orders'); setMore(false); }}
@@ -248,6 +248,37 @@ export function PosTopBar({
                 </select>
               </>
             )}
+
+            <div className="my-1 h-px bg-ui-border sm:hidden" />
+            <div className="grid grid-cols-3 gap-1.5 sm:hidden">
+              <button
+                data-testid="pos-mobile-theme-toggle"
+                type="button"
+                onClick={() => { toggleTheme(); setMore(false); }}
+                className="flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl bg-ui-page-alt text-[10px] font-black text-ui-muted"
+              >
+                {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                {isAr ? 'المظهر' : 'Theme'}
+              </button>
+              <button
+                data-testid="pos-mobile-exit"
+                type="button"
+                onClick={() => { onExit(); setMore(false); }}
+                className="flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl bg-ui-page-alt text-[10px] font-black text-ui-muted"
+              >
+                <LogOut className="h-4 w-4 rotate-180" />
+                {isAr ? 'الرئيسية' : 'Exit'}
+              </button>
+              <button
+                data-testid="pos-mobile-sign-out"
+                type="button"
+                onClick={() => { setMore(false); void signOut(); }}
+                className="flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl bg-ui-danger/10 text-[10px] font-black text-ui-danger"
+              >
+                <LogOut className="h-4 w-4" />
+                {isAr ? 'خروج' : 'Sign out'}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -261,7 +292,7 @@ export function PosTopBar({
         </div>
       </div>
 
-      <button onClick={toggleTheme} aria-label={isAr ? 'تغيير المظهر' : 'Toggle theme'} className="flex min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-muted hover:bg-ui-page-alt">
+      <button onClick={toggleTheme} aria-label={isAr ? 'تغيير المظهر' : 'Toggle theme'} className="hidden min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-muted hover:bg-ui-page-alt sm:flex">
         {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
       </button>
 
@@ -269,7 +300,7 @@ export function PosTopBar({
         <LogOut className="h-4 w-4 rotate-180" />
       </button>
 
-      <button onClick={() => void signOut()} aria-label={isAr ? 'تسجيل الخروج' : 'Sign out'} className="flex min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-subtle hover:bg-ui-danger/10 hover:text-ui-danger">
+      <button onClick={() => void signOut()} aria-label={isAr ? 'تسجيل الخروج' : 'Sign out'} className="hidden min-h-9 min-w-9 items-center justify-center rounded-xl text-ui-subtle hover:bg-ui-danger/10 hover:text-ui-danger sm:flex">
         <LogOut className="h-4 w-4" />
       </button>
     </header>
