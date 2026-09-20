@@ -194,7 +194,7 @@ BEGIN
 
   SELECT pg_get_functiondef(v_sig) INTO v_def;
 
-  IF position('app.sent_item_void_order_id' in split_part(v_def, $IF TG_TABLE_NAME='dining_tables'$, 2)) = 0 THEN
+  IF position('app.sent_item_void_order_id' in split_part(v_def, 'IF TG_TABLE_NAME=''dining_tables''', 2)) = 0 THEN
     v_next := replace(
       v_def,
       $old$      AND COALESCE(current_setting('app.pos_item_transfer_branch_id',true),'')=OLD.branch_id::text
@@ -228,7 +228,7 @@ BEGIN
 
     IF v_next = v_def
        OR position('v_sent_item_void_context := EXISTS (' in v_next) = 0
-       OR position('AND NOT v_sent_item_void_context' in split_part(v_next, $IF TG_TABLE_NAME='dining_tables'$, 2)) = 0 THEN
+       OR position('AND NOT v_sent_item_void_context' in split_part(v_next, 'IF TG_TABLE_NAME=''dining_tables''', 2)) = 0 THEN
       RAISE EXCEPTION 'guard_pos_operator_ownership dining-table Void patch drift; refusing migration';
     END IF;
 
