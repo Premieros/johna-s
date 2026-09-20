@@ -182,6 +182,61 @@ BEGIN
 END;
 $patch_order_owner_guard$;
 
+DO $patch_void_table_reconcile$
+DECLARE
+  v_sig regprocedure := to_regprocedure('public.guard_pos_operator_ownership()');
+  v_def text;
+  v_next text;
+BEGIN
+  IF v_sig IS NULL THEN
+    RAISE EXCEPTION 'guard_pos_operator_ownership target not found for table reconcile patch';
+  END IF;
+
+  SELECT pg_get_functiondef(v_sig) INTO v_def;
+
+  IF position('app.sent_item_void_order_id' in split_part(v_def, $IF TG_TABLE_NAME='dining_tables'$, 2)) = 0 THEN
+    v_next := replace(
+      v_def,
+      $old$      AND COALESCE(current_setting('app.pos_item_transfer_branch_id',true),'')=OLD.branch_id::text
+      AND public.can_permission('pos.order.transfer');
+
+    IF TG_OP='DELETE' THEN$old$,
+      $new$      AND COALESCE(current_setting('app.pos_item_transfer_branch_id',true),'')=OLD.branch_id::text
+      AND public.can_permission('pos.order.transfer');
+
+    v_sent_item_void_context := EXISTS (
+      SELECT 1
+      FROM public.orders o
+      WHERE o.table_id = OLD.id
+        AND COALESCE(current_setting('app.sent_item_void_order_id',true),'') = o.id::text
+        AND public._sent_item_void_context_matches(o.id, NULL)
+    );
+
+    IF TG_OP='DELETE' THEN$new$
+    );
+
+    v_next := replace(
+      v_next,
+      $old$      IF NOT v_can_manage_others
+         AND NOT v_table_item_transfer_context
+         AND EXISTS($old$,
+      $new$      IF NOT v_can_manage_others
+         AND NOT v_table_item_transfer_context
+         AND NOT v_sent_item_void_context
+         AND EXISTS($new$
+    );
+
+    IF v_next = v_def
+       OR position('v_sent_item_void_context := EXISTS (' in v_next) = 0
+       OR position('AND NOT v_sent_item_void_context' in split_part(v_next, $IF TG_TABLE_NAME='dining_tables'$, 2)) = 0 THEN
+      RAISE EXCEPTION 'guard_pos_operator_ownership dining-table Void patch drift; refusing migration';
+    END IF;
+
+    EXECUTE v_next;
+  END IF;
+END;
+$patch_void_table_reconcile$;
+
 DO $patch_permission_guard$
 DECLARE
   v_sig regprocedure := to_regprocedure('public.enforce_pos_permission_mutation()');
