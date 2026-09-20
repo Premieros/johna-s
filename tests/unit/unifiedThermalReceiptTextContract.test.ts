@@ -31,8 +31,15 @@ describe('unified thermal receipt text contract', () => {
     expect(localAgent).toContain("ar ? 'ملاحظة' : 'Note'");
     expect(localAgent).toContain('modifierNames(item, ar)');
     expect(localAgent).toContain('kitchenOrderTypeLabel(ctx.orderType, ar)');
-    expect(localAgent).not.toContain('END OF ORDER');
-    expect(localAgent).not.toContain('EGP');
+    const textFormatter = localAgent.slice(
+      localAgent.indexOf('export function buildStationTicketText'),
+      localAgent.indexOf('async function fetchWithTimeout'),
+    );
+    expect(textFormatter).not.toContain('END OF ORDER');
+    expect(textFormatter).not.toContain('EGP');
+    expect(localAgent).toContain("footerLines: [ar ? 'نهاية الطلب' : 'END OF ORDER']");
+    expect(localAgent).toContain('modifiers: modifierNames(item, ar)');
+    expect(localAgent).toContain("notes: item.notes?.trim() ? safeText(item.notes) : undefined");
   });
 
   it('does not change printer routing, queue transport, retry, or execution contracts', () => {
@@ -46,5 +53,6 @@ describe('unified thermal receipt text contract', () => {
     expect(cloudPrint).toContain("supabase.rpc('enqueue_cloud_kitchen_print'");
     expect(cloudPrint).toContain('KITCHEN_ENQUEUE_MAX_ATTEMPTS = 3');
     expect(cloudPrint).toContain('idempotencyKey = `kitchen:${station}:${keySeed}`');
+    expect(cloudPrint).toContain('template: buildKitchenFixedTemplate');
   });
 });

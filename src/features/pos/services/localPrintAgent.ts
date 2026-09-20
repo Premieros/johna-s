@@ -30,6 +30,40 @@ export interface SilentPrintResult {
   error?: string;
 }
 
+export interface FixedThermalTemplateItem {
+  qty: string;
+  name: string;
+  price?: string;
+  total?: string;
+  modifiers?: string[];
+  notes?: string;
+}
+
+export interface FixedThermalTemplateRow {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}
+
+export interface FixedThermalTemplate {
+  version: 1;
+  kind: 'customer' | 'kitchen';
+  isAr: boolean;
+  paperWidthMm: number;
+  storeName: string;
+  storeSubtitle: string;
+  title: string;
+  subtitle?: string;
+  slogan?: string;
+  branchName?: string;
+  station?: string;
+  meta: FixedThermalTemplateRow[];
+  itemsHeading: string;
+  items: FixedThermalTemplateItem[];
+  totals?: FixedThermalTemplateRow[];
+  footerLines?: string[];
+}
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -47,6 +81,232 @@ function safeText(value: unknown): string {
     .filter((ch) => ch === '\n' || ch === '\r' || ch === '\t' || ch >= ' ')
     .join('')
     .trim();
+}
+
+function escapeTemplateHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): string {
+  const ar = Boolean(template.isAr);
+  const kitchen = template.kind === 'kitchen';
+  const dir = ar ? 'rtl' : 'ltr';
+  const e = escapeTemplateHtml;
+  const meta = Array.isArray(template.meta) ? template.meta : [];
+  const items = Array.isArray(template.items) ? template.items : [];
+  const totals = Array.isArray(template.totals) ? template.totals : [];
+  const footerLines = Array.isArray(template.footerLines) ? template.footerLines : [];
+
+  const metaRows = [
+    ...(kitchen && template.station
+      ? [{ label: ar ? 'المحطة' : 'Station', value: template.station, emphasis: true }]
+      : []),
+    ...meta,
+  ].map((row) => `
+    <div class="meta-row ${row.emphasis ? 'emphasis' : ''}">
+      <div class="meta-label">${e(row.label)}:</div>
+      <div class="meta-value">${e(row.value)}</div>
+    </div>`).join('');
+
+  const customerItems = items.map((item) => `
+    <div class="item-row customer-item">
+      <div class="qty">${e(item.qty)}</div>
+      <div class="item-name">${e(item.name)}</div>
+      <div class="price">${e(item.total || item.price || '')}</div>
+    </div>`).join('');
+
+  const kitchenItems = items.map((item) => {
+    const modifiers = (item.modifiers || [])
+      .map((modifier) => `<div class="modifier">+ ${e(modifier)}</div>`)
+      .join('');
+    const note = item.notes
+      ? `<div class="note">${ar ? 'ملاحظة' : 'Note'}: ${e(item.notes)}</div>`
+      : '';
+    return `
+      <div class="kitchen-item">
+        <div class="kitchen-main"><span class="qty">${e(item.qty)}</span><span class="item-name">${e(item.name)}</span></div>
+        ${modifiers}
+        ${note}
+      </div>`;
+  }).join('');
+
+  const totalRows = totals.map((row) => `
+    <div class="total-row ${row.emphasis ? 'grand-total' : ''}">
+      <span>${e(row.label)}:</span>
+      <span>${e(row.value)}</span>
+    </div>`).join('');
+
+  const footer = footerLines.map((line, index) => `
+    <div class="footer-line ${kitchen && index === 0 ? 'kitchen-end' : ''}">${e(line)}</div>`
+  ).join('');
+
+  const width = Number(template.paperWidthMm || 80);
+  return `<!doctype html>
+<html lang="${ar ? 'ar' : 'en'}" dir="${dir}">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: ${width}mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    width: ${width}mm;
+    min-width: ${width}mm;
+    max-width: ${width}mm;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #000;
+    font-family: "Arial Narrow", "Segoe UI", Tahoma, Arial, sans-serif;
+    direction: ${dir};
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .receipt {
+    width: 100%;
+    padding: ${kitchen ? '3.2mm 4mm 3mm' : '4.5mm 5mm 4mm'};
+    font-size: ${kitchen ? '9.5pt' : '10pt'};
+    line-height: 1.22;
+  }
+  .brand {
+    text-align: center;
+    font-family: Arial, "Segoe UI", sans-serif;
+    font-size: ${kitchen ? '22pt' : '26pt'};
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -.5px;
+    margin: 0 0 1.2mm;
+  }
+  .brand-sub {
+    text-align: center;
+    font-family: Arial, "Segoe UI", sans-serif;
+    font-size: ${kitchen ? '7.3pt' : '8pt'};
+    font-weight: 600;
+    letter-spacing: 3.2px;
+    margin-bottom: ${kitchen ? '3mm' : '4mm'};
+  }
+  .title-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 2.2mm;
+    align-items: center;
+    margin-bottom: ${kitchen ? '1.2mm' : '1.6mm'};
+  }
+  .title-rule { height: .25mm; background: #111; }
+  .title {
+    font-size: ${kitchen ? '14pt' : '15pt'};
+    font-weight: 900;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .subtitle, .slogan, .branch {
+    text-align: center;
+    font-size: ${kitchen ? '8pt' : '8.5pt'};
+    margin-top: .8mm;
+  }
+  .subtitle { font-weight: 700; letter-spacing: 2px; }
+  .slogan { font-weight: 500; }
+  .branch { font-weight: 600; }
+  .meta {
+    margin-top: ${kitchen ? '3mm' : '5mm'};
+    margin-bottom: ${kitchen ? '3mm' : '4mm'};
+  }
+  .meta-row {
+    display: grid;
+    grid-template-columns: ${ar ? '1fr 23mm' : '23mm 1fr'};
+    gap: 2mm;
+    align-items: baseline;
+    margin: .75mm 0;
+    min-height: 4.3mm;
+  }
+  .meta-label { font-weight: 700; ${ar ? 'grid-column:2;text-align:right' : 'text-align:left'}; }
+  .meta-value { font-weight: 500; overflow-wrap: anywhere; ${ar ? 'grid-column:1;grid-row:1;text-align:right' : 'text-align:left'}; }
+  .meta-row.emphasis .meta-label, .meta-row.emphasis .meta-value { font-weight: 800; }
+  .section {
+    border-top: .25mm solid #111;
+    padding-top: ${kitchen ? '2.5mm' : '3.2mm'};
+    margin-top: ${kitchen ? '2mm' : '2.5mm'};
+  }
+  .items-title {
+    font-size: ${kitchen ? '14pt' : '15pt'};
+    font-weight: 900;
+    margin-bottom: ${kitchen ? '2mm' : '2.5mm'};
+  }
+  .items-head, .customer-item {
+    display: grid;
+    grid-template-columns: 11mm 1fr 21mm;
+    gap: 1.5mm;
+    align-items: baseline;
+  }
+  .items-head { font-size: 8.5pt; font-weight: 800; margin-bottom: 1.5mm; }
+  .items-head .price, .customer-item .price { text-align: ${ar ? 'left' : 'right'}; }
+  .items-head .qty, .customer-item .qty { text-align: center; }
+  .customer-item { min-height: 8mm; padding: 1.2mm 0; font-size: 10.5pt; }
+  .customer-item .item-name { font-weight: 600; overflow-wrap: anywhere; }
+  .customer-item .price { font-weight: 700; white-space: nowrap; }
+  .kitchen-item { padding: 1.4mm 0; border-bottom: .15mm solid #b8b8b8; }
+  .kitchen-item:last-child { border-bottom: 0; }
+  .kitchen-main {
+    display: grid;
+    grid-template-columns: 10mm 1fr;
+    gap: 2mm;
+    font-size: 11.5pt;
+    font-weight: 900;
+    align-items: baseline;
+  }
+  .kitchen-main .qty { text-align: center; }
+  .modifier, .note {
+    margin-top: .8mm;
+    ${ar ? 'padding-right:12mm' : 'padding-left:12mm'};
+    font-size: 8.7pt;
+    line-height: 1.18;
+  }
+  .modifier { font-weight: 700; }
+  .note { font-weight: 800; }
+  .totals {
+    border-top: .25mm solid #111;
+    border-bottom: .25mm solid #111;
+    margin-top: 3mm;
+    padding: 2.4mm 0 2mm;
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm;
+    margin: 1mm 0;
+    font-size: 10.5pt;
+  }
+  .grand-total { font-size: 15pt; font-weight: 900; margin-top: 1.5mm; }
+  .footer { text-align: center; margin-top: ${kitchen ? '3mm' : '5mm'}; }
+  .footer-line { font-size: ${kitchen ? '10pt' : '10.5pt'}; margin: .8mm 0; }
+  .kitchen-end { font-size: 11.5pt; font-weight: 900; margin-top: 1mm; }
+  .heart { font-size: 14pt; line-height: 1; margin-top: 1.8mm; }
+</style>
+</head>
+<body>
+  <main class="receipt">
+    <div class="brand">${e(template.storeName || "JOHNA'S")}</div>
+    <div class="brand-sub">${e(template.storeSubtitle || 'RESTAURANT')}</div>
+    <div class="title-row"><div class="title-rule"></div><div class="title">${e(template.title)}</div><div class="title-rule"></div></div>
+    ${template.subtitle ? `<div class="subtitle">${e(template.subtitle)}</div>` : ''}
+    ${template.slogan ? `<div class="slogan">${e(template.slogan)}</div>` : ''}
+    ${template.branchName ? `<div class="branch">${e(template.branchName)}</div>` : ''}
+    <section class="meta">${metaRows}</section>
+    <section class="section">
+      <div class="items-title">${e(template.itemsHeading)}</div>
+      ${kitchen
+        ? kitchenItems
+        : `<div class="items-head"><div class="qty">${ar ? 'الكمية' : 'QTY'}</div><div>${ar ? 'الصنف' : 'ITEM'}</div><div class="price">${ar ? 'السعر' : 'PRICE'}</div></div>${customerItems}`}
+    </section>
+    ${!kitchen && totals.length ? `<section class="totals">${totalRows}</section>` : ''}
+    <footer class="footer">${footer}${!kitchen ? '<div class="heart">♥</div>' : ''}</footer>
+  </main>
+</body>
+</html>`;
 }
 
 function htmlToThermalText(html: string): string {
@@ -91,6 +351,20 @@ function kitchenTime(isAr: boolean): string {
     minute: '2-digit',
     hour12: false,
   }).format(new Date());
+}
+
+function kitchenDateTime(): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
 }
 
 function readBoolean(key: string, defaultValue: boolean): boolean {
@@ -179,6 +453,42 @@ export function groupKitchenItemsByStation(items: KitchenSendItem[]): Record<str
     (groups[station] ||= []).push(item);
   }
   return groups;
+}
+
+export function buildKitchenFixedTemplate(
+  station: string,
+  items: KitchenSendItem[],
+  ctx: LocalKitchenPrintContext,
+  paperWidthMm = 80,
+): FixedThermalTemplate {
+  const ar = ctx.isAr;
+  const meta: FixedThermalTemplateRow[] = [];
+  if (ctx.orderNumber) meta.push({ label: ar ? 'رقم الطلب' : 'Order', value: safeText(ctx.orderNumber), emphasis: true });
+  meta.push({ label: ar ? 'التاريخ' : 'Date', value: kitchenDateTime() });
+  if (ctx.orderType) meta.push({ label: ar ? 'النوع' : 'Type', value: kitchenOrderTypeLabel(ctx.orderType, ar) });
+  if (ctx.tableName) meta.push({ label: ar ? 'الطاولة' : 'Table', value: safeText(ctx.tableName), emphasis: true });
+  if (ctx.guestCount) meta.push({ label: ar ? 'عدد الأفراد' : 'Guests', value: String(ctx.guestCount) });
+
+  return {
+    version: 1,
+    kind: 'kitchen',
+    isAr: ar,
+    paperWidthMm: Number(paperWidthMm || 80),
+    storeName: "JOHNA'S",
+    storeSubtitle: 'RESTAURANT',
+    title: ar ? 'تذكرة المطبخ' : 'KITCHEN TICKET',
+    subtitle: ar ? 'نسخة المطبخ' : 'KITCHEN COPY',
+    station: safeText(station),
+    meta,
+    itemsHeading: ar ? 'الأصناف' : 'ITEMS',
+    items: items.map((item) => ({
+      qty: String(Number(item.quantity || 0)),
+      name: safeText(item.product_name || '—'),
+      modifiers: modifierNames(item, ar),
+      notes: item.notes?.trim() ? safeText(item.notes) : undefined,
+    })),
+    footerLines: [ar ? 'نهاية الطلب' : 'END OF ORDER'],
+  };
 }
 
 export function buildStationTicketText(
@@ -281,6 +591,7 @@ export async function executeSilentPrintDetailed(options: {
   printerName: string;
   text?: string;
   html?: string;
+  template?: FixedThermalTemplate;
   copies?: number;
   paperWidthMm?: number;
 }): Promise<SilentPrintResult> {
@@ -290,10 +601,11 @@ export async function executeSilentPrintDetailed(options: {
 
   if (isRunningInElectron() && window.electronAPI) {
     try {
+      const templateHtml = options.template ? buildFixedThermalTemplateHtml(options.template) : '';
       const result = await window.electronAPI.printSilent({
         printerName,
-        text: options.text,
-        html: options.html,
+        text: templateHtml ? undefined : options.text,
+        html: templateHtml || options.html,
         copies: Math.max(1, Math.min(5, Number(options.copies || 1))),
         paperWidthMm: Number(options.paperWidthMm || 80),
       });
@@ -313,6 +625,7 @@ export async function executeSilentPrintDetailed(options: {
         station: 'custom',
         printer: printerName,
         text: options.text || (options.html ? htmlToThermalText(options.html) : ''),
+        template: options.template,
       }),
     });
     if (!response.ok) return { success: false, error: `LOCAL_AGENT_HTTP_${response.status}` };
@@ -330,6 +643,7 @@ export async function executeSilentPrint(options: {
   printerName: string;
   text?: string;
   html?: string;
+  template?: FixedThermalTemplate;
   copies?: number;
   paperWidthMm?: number;
 }): Promise<boolean> {
@@ -383,6 +697,7 @@ export async function printKitchenStationsLocally(
     const results = await Promise.all(Object.entries(groups).map(([station, stationItems]) => executeSilentPrint({
       printerName: routes[station],
       text: buildStationTicketText(station, stationItems, ctx),
+      template: buildKitchenFixedTemplate(station, stationItems, ctx),
     })));
     return results.every(Boolean);
   }
@@ -404,6 +719,7 @@ export async function printKitchenStationsLocally(
           body: JSON.stringify({
             station,
             text: buildStationTicketText(station, stationItems, ctx),
+            template: buildKitchenFixedTemplate(station, stationItems, ctx),
           }),
         });
         if (!response.ok) return false;

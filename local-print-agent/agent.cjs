@@ -7,6 +7,7 @@ const { execFile } = require('node:child_process');
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.JOHNS_PRINT_PORT || 17654);
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
+const TEMPLATE_RENDERER_PATH = path.join(__dirname, 'template-print.ps1');
 const MAX_BODY = 256 * 1024;
 const PREFLIGHT_RETRY_DELAYS_MS = [150, 350];
 const printerLanes = new Map();
@@ -141,6 +142,45 @@ async function submitTextToSpooler(printerName, text) {
   }
 }
 
+function isFixedThermalTemplate(template) {
+  if (!template || typeof template !== 'object' || Array.isArray(template)) return false;
+  if (Number(template.version) !== 1) return false;
+  if (template.kind !== 'customer' && template.kind !== 'kitchen') return false;
+  if (!Array.isArray(template.meta) || !Array.isArray(template.items)) return false;
+  const width = Number(template.paperWidthMm || 80);
+  return Number.isFinite(width) && width >= 50 && width <= 100;
+}
+
+async function submitTemplateToSpooler(printerName, template) {
+  const tmp = path.join(os.tmpdir(), `johns-template-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+  fs.writeFileSync(tmp, JSON.stringify(template), 'utf8');
+  try {
+    await new Promise((resolve, reject) => {
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', TEMPLATE_RENDERER_PATH, '-PrinterName', printerName, '-TemplatePath', tmp],
+        { windowsHide: true },
+        (err, stdout, stderr) => {
+          if (err) return reject(new Error((stderr || stdout || err.message || 'FIXED_TEMPLATE_PRINT_FAILED').trim()));
+          resolve(stdout);
+        },
+      );
+    });
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
+async function printFixedTemplate(printerName, template) {
+  return enqueuePrinterTask(printerName, async () => {
+    const printers = await listPrinters();
+    if (!printers.includes(printerName)) throw new Error('PRINTER_NOT_INSTALLED');
+    await ensureSpoolerReadyWithRetry(printerName);
+    await submitTemplateToSpooler(printerName, template);
+    return { acceptedBySpooler: true, renderer: 'fixed-template-v1' };
+  });
+}
+
 async function printText(printerName, text) {
   return enqueuePrinterTask(printerName, async () => {
     const printers = await listPrinters();
@@ -251,8 +291,19 @@ const server = http.createServer(async (req, res) => {
       const printer = body.printer ? String(body.printer) : config.routes[station];
       if (!printer) return json(res, 409, { success: false, error: 'STATION_NOT_CONFIGURED', station });
       const queuedAhead = queueDepthFor(printer);
-      const result = await printText(printer, text);
-      return json(res, 200, { success: true, station, printer, acceptedBySpooler: Boolean(result?.acceptedBySpooler), queuedAhead });
+      const template = body.template;
+      const canRenderTemplate = isFixedThermalTemplate(template) && fs.existsSync(TEMPLATE_RENDERER_PATH);
+      const result = canRenderTemplate
+        ? await printFixedTemplate(printer, template)
+        : await printText(printer, text);
+      return json(res, 200, {
+        success: true,
+        station,
+        printer,
+        acceptedBySpooler: Boolean(result?.acceptedBySpooler),
+        renderer: result?.renderer || 'text-fallback',
+        queuedAhead,
+      });
     }
     if (req.method === 'POST' && url.pathname === '/drawer') {
       const body = await readBody(req);
