@@ -36,6 +36,7 @@ export function PaymentsPage() {
     select: 'id, amount, payment_method, reference_number, notes, created_at, customer:customers(name)',
     order: { column: 'created_at', ascending: false },
     branch_id: effectiveBranchFilter,
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
     enabled: !!effectiveBranchFilter,
   });
@@ -44,6 +45,7 @@ export function PaymentsPage() {
     select: 'id, amount, payment_method, reference_number, notes, created_at, supplier:suppliers(name)',
     order: { column: 'created_at', ascending: false },
     branch_id: effectiveBranchFilter,
+    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
     enabled: !!effectiveBranchFilter,
   });
