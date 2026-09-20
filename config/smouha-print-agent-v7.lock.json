@@ -12,19 +12,23 @@
   "rpc_contract": {
     "claim_cloud_print_jobs": {
       "args": "p_branch_id uuid, p_agent_id uuid, p_limit integer",
-      "definition_md5_raw": "230529255ab7fe21df1eb1ca0f07f1b6"
+      "normalized_definition_md5": "7bb98c35d47f682c319e76ec0b0a8c9d",
+      "exact_literals": ["'AUTH_REQUIRED'","'AGENT_ID_REQUIRED'","'BRANCH_MISMATCH'","'CLAIM_LEASE_EXPIRED'","'PRINT_OUTCOME_UNKNOWN'","'pending'","'failed'","'claimed'","'printing'","'45 seconds'"]
     },
     "start_cloud_print_job": {
       "args": "p_job_id uuid, p_agent_id uuid",
-      "definition_md5_raw": "fae5a0b45bb5d0646100996bbb153fad"
+      "normalized_definition_md5": "7c37d00fc5370c64964f56ef66aec347",
+      "exact_literals": ["'AUTH_REQUIRED'","'JOB_NOT_FOUND'","'PERMISSION_DENIED'","'BRANCH_MISMATCH'","'CLAIM_MISMATCH'","'PRINT_SEQUENCE_CHANGED'","'INVALID_APPROVAL'","'printing'","'45 seconds'"]
     },
     "complete_cloud_print_job": {
       "args": "p_job_id uuid, p_agent_id uuid, p_success boolean, p_error text",
-      "definition_md5_raw": "8492141102176d4fddf30cb0d5d42cb1"
+      "normalized_definition_md5": "efa07471fccdbb94c2ca870eac95d374",
+      "exact_literals": ["'AUTH_REQUIRED'","'JOB_NOT_FOUND'","'PERMISSION_DENIED'","'BRANCH_MISMATCH'","'CLAIM_MISMATCH'","'PRINT_CALLBACK_TIMEOUT'","'PRINT_OUTCOME_UNKNOWN'","'PRINT_SEQUENCE_CHANGED'","'INVALID_APPROVAL'","'submitted'","'failed'","'physical_print_confirmed'"]
     },
     "can_execute_cloud_print_kind": {
       "args": "p_kind text",
-      "definition_md5_raw": "2a9c54858eec90cbc82db420f87cd703"
+      "normalized_definition_md5": "0c5c5cb7868db249588f6ff715e2e8c0",
+      "exact_literals": ["'kitchen'","'receipt'","'report'","'settings.manage'","'pos.print_kitchen'","'pos.receipt.print'"]
     }
   },
   "queue_contract": {
