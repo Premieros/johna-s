@@ -87,6 +87,7 @@ export function KitchenDisplayPage() {
     try {
       if (!branchFilter || !canViewKds) {
         setItems([]);
+        setOrderContext({});
         prevCountRef.current = 0;
         setLoadError(!canViewKds ? 'POS_KDS_VIEW_REQUIRED' : 'BRANCH_REQUIRED');
         return;
@@ -113,6 +114,7 @@ export function KitchenDisplayPage() {
         p_branch_id: branchFilter,
       });
       if (contextError) {
+        setOrderContext({});
         setLoadError(errorMessage(contextError));
         return;
       }
