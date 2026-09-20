@@ -1,0 +1,31 @@
+{
+  "name": "Smouha Headless Print Agent v7",
+  "status": "FROZEN",
+  "branch_id": "19c3fd23-d784-455b-8840-f4f2ac619651",
+  "branch_name": "فرع نادي سموحة",
+  "production_project_ref": "azzdesuowpdcoflmyezn",
+  "agent_version": 7,
+  "executable": "PremierSmouhaPrintAgentV07.exe",
+  "package": "Smouha-Headless-Print-Agent-v7-Windows-x64.zip",
+  "package_sha256": "991bf2890f3000ca3d4a904f361d2a01cccc11a55838ddafbbfb16a3f3f36142",
+  "executable_sha256": "0e01930aa63ba97649245928bb82d90e25312772c5140ce0aaea327cd765464d",
+  "rpc_contract": {
+    "claim_cloud_print_jobs": {
+      "args": "p_branch_id uuid, p_agent_id uuid, p_limit integer",
+      "definition_md5": "7bb98c35d47f682c319e76ec0b0a8c9d"
+    },
+    "start_cloud_print_job": {
+      "args": "p_job_id uuid, p_agent_id uuid",
+      "definition_md5": "7c37d00fc5370c64964f56ef66aec347"
+    },
+    "complete_cloud_print_job": {
+      "args": "p_job_id uuid, p_agent_id uuid, p_success boolean, p_error text",
+      "definition_md5": "efa07471fccdbb94c2ca870eac95d374"
+    },
+    "can_execute_cloud_print_kind": {
+      "args": "p_kind text",
+      "definition_md5": "0c5c5cb7868db249588f6ff715e2e8c0"
+    }
+  },
+  "change_policy": "Do not alter this lock or the locked RPC behavior without explicit Smouha v7 migration approval and a replacement-agent rollout plan."
+}
