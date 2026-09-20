@@ -147,7 +147,7 @@ describe.skipIf(skip)('Phase 2 — waste center', () => {
   it('get_waste_report returns grouped results', async () => {
     await asAdmin(async () => {
       const rows = await q<{ waste_category: string; total_cost: string }>(
-        `SELECT waste_category, total_cost FROM public.get_waste_report($1, CURRENT_DATE - 1, CURRENT_DATE)`,
+        `SELECT waste_category, total_cost FROM public.get_waste_report($1, (now() AT TIME ZONE 'Africa/Cairo')::date - 1, (now() AT TIME ZONE 'Africa/Cairo')::date)`,
         [branchId]
       );
       expect(rows.length).toBeGreaterThanOrEqual(1);

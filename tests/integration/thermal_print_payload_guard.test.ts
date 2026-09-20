@@ -41,6 +41,28 @@ describe.skipIf(!dbUrl)('thermal print payload guard', () => {
     expect(rows[0].payload.html).toBeUndefined();
   });
 
+  it('preserves fixed template metadata while keeping canonical text authoritative', async () => {
+    const template = {
+      version: 1,
+      kind: 'customer',
+      isAr: false,
+      paperWidthMm: 80,
+      storeName: "JOHNA'S",
+      storeSubtitle: 'RESTAURANT',
+      title: 'OPEN CHECK',
+      meta: [],
+      itemsHeading: 'ITEMS',
+      items: [],
+    };
+    const { rows } = await client.query<{ payload: { text?: string; html?: string; template?: unknown } }>(
+      `SELECT public._normalize_thermal_print_payload($1::jsonb) AS payload`,
+      [JSON.stringify({ text: 'READY RECEIPT', html: '<div>legacy</div>', template, copies: 1 })],
+    );
+    expect(rows[0].payload.text).toBe('READY RECEIPT');
+    expect(rows[0].payload.html).toBeUndefined();
+    expect(rows[0].payload.template).toEqual(template);
+  });
+
   it('installs a queue-boundary trigger for receipt and report jobs', async () => {
     const { rows } = await client.query<{ def: string }>(
       `SELECT pg_get_triggerdef(oid) AS def

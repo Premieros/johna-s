@@ -63,6 +63,7 @@ describe('print execution truth contract', () => {
     expect(receiptBuilder).toContain('await authorizeReceiptPrint(receipt)');
     expect(receiptBuilder).toContain('pendingReceiptPrints.set(printToken');
     expect(receiptBuilder).toContain('plainText: buildReceiptThermalText');
+    expect(receiptBuilder).toContain('template: buildReceiptFixedTemplate');
     expect(receiptBuilder).toContain('johns-print-auth');
     expect(receiptBuilder).not.toContain('window.print()');
   });
@@ -109,10 +110,12 @@ describe('print execution truth contract', () => {
       "if (req.method === 'POST' && url.pathname === '/print')",
       "if (req.method === 'POST' && url.pathname === '/drawer')",
     );
-    expect(printRoute).toContain('await printText(printer, text);');
+    expect(printRoute).toContain('const result = canRenderTemplate');
+    expect(printRoute).toContain('? await printFixedTemplate(printer, template)');
+    expect(printRoute).toContain(': await printText(printer, text)');
     expect(printRoute).toContain('acceptedBySpooler: Boolean(result?.acceptedBySpooler)');
-    expect(printRoute).toContain('return json(res, 200, { success: true');
-    expect(printRoute.indexOf('await printText(printer, text);')).toBeLessThan(printRoute.indexOf('return json(res, 200, { success: true'));
+    expect(printRoute).toContain('success: true');
+    expect(printRoute.indexOf('const result = canRenderTemplate')).toBeLessThan(printRoute.indexOf('success: true'));
 
     expect(agent).toContain("if (req.method === 'POST' && url.pathname === '/drawer')");
     expect(agent).toContain('Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])');
