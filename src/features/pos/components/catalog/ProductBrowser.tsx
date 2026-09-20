@@ -120,11 +120,11 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
 
   const renderCategories = (mobile = false) => (
     <div className={`flex gap-2 overflow-x-auto scrollbar-none ${mobile ? 'pb-1' : 'mt-3 pb-0.5'}`} data-testid="pos-category-strip">
-      <button type="button" onClick={() => onSelectCategory('')} className={`${mobile ? 'min-h-10 rounded-full px-4 text-[12px]' : 'min-h-11 rounded-xl px-4 text-xs'} flex shrink-0 items-center gap-2 font-black transition ${!selectedCategory ? 'bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border border-ui-border bg-ui-surface text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}>
+      <button type="button" onClick={() => onSelectCategory('')} className={`${mobile ? 'min-h-11 rounded-full px-4 text-[12px]' : 'min-h-11 rounded-xl px-4 text-xs'} flex shrink-0 items-center gap-2 font-black transition ${!selectedCategory ? 'bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border border-ui-border bg-ui-surface text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}>
         <span className="text-base">▦</span>{mobile ? (isAr ? 'الكل' : 'All') : t('allCategories')}
       </button>
       {categories.map((category) => (
-        <button key={category.id} type="button" onClick={() => onSelectCategory(selectedCategory === category.id ? '' : category.id)} className={`${mobile ? 'min-h-10 rounded-full px-4 text-[12px]' : 'min-h-11 rounded-xl px-4 text-xs'} shrink-0 font-black transition ${selectedCategory === category.id ? 'bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border border-ui-border bg-ui-surface text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}>
+        <button key={category.id} type="button" onClick={() => onSelectCategory(selectedCategory === category.id ? '' : category.id)} className={`${mobile ? 'min-h-11 rounded-full px-4 text-[12px]' : 'min-h-11 rounded-xl px-4 text-xs'} shrink-0 font-black transition ${selectedCategory === category.id ? 'bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border border-ui-border bg-ui-surface text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}>
           {isAr ? category.name : category.name_en || category.name}
           {!mobile && <span className="ms-1 opacity-50">{counts[category.id] || 0}</span>}
         </button>
@@ -158,9 +158,9 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
 
   return (
     <section data-testid="pos-product-browser" className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-ui-page">
-      <div className="lg:hidden flex-shrink-0 border-b border-ui-border bg-ui-surface px-4 pb-3 pt-4">
-        <div className="mb-3">
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-ui-accent">{isAr ? 'القائمة' : 'Menu'}</p>
+      <div data-testid="pos-mobile-catalog-header" className="flex-shrink-0 border-b border-ui-border bg-ui-surface px-3 pb-2.5 pt-3 lg:hidden">
+        <div data-testid="pos-mobile-catalog-intro" className="mb-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-ui-accent">{isAr ? 'القائمة' : 'Menu'}</p>
           <h2 className="mt-1 text-xl font-black text-ui-text">{isAr ? 'اختار طلبك' : 'Choose your order'}</h2>
           <p className="mt-1 text-xs font-medium text-ui-muted">{isAr ? 'اضغط على الصنف للتخصيص أو + للإضافة مباشرة' : 'Tap an item to customize or + to add it directly'}</p>
         </div>
@@ -217,7 +217,7 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
                       <span className="min-w-0 truncate text-[15px] font-black text-ui-accent">{formatCurrency(product.sale_price, currency, lang)}</span>
                       {!gated && <div className="flex shrink-0 items-center gap-1.5">
                         {onConfigureProduct && <button type="button" onClick={(event) => { event.stopPropagation(); onConfigureProduct(product); }} title={isAr ? 'تخصيص الصنف' : 'Configure Item'} className="hidden h-9 w-9 items-center justify-center rounded-full border border-ui-border bg-ui-page-alt text-ui-muted transition hover:border-ui-primary hover:text-ui-accent sm:flex"><SlidersHorizontal className="h-4 w-4" /></button>}
-                        <button type="button" aria-label={isAr ? 'إضافة' : 'Add'} onClick={(event) => { event.stopPropagation(); addProductDirectly(product); }} className="flex h-10 w-10 items-center justify-center rounded-full bg-ui-primary text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary/90 active:scale-95"><Plus className="h-5 w-5" /></button>
+                        <button type="button" aria-label={isAr ? 'إضافة' : 'Add'} onClick={(event) => { event.stopPropagation(); addProductDirectly(product); }} className="flex h-11 w-11 items-center justify-center rounded-full bg-ui-primary text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary/90 active:scale-95"><Plus className="h-5 w-5" /></button>
                       </div>}
                     </div>
                   </div>
