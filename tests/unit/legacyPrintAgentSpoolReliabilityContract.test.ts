@@ -33,6 +33,8 @@ describe('legacy print agent spool reliability contract', () => {
       printText.indexOf('await submitTextToSpooler(printerName, text)'),
     );
     expect(agent).toContain('Once Out-Printer is invoked we never retry here');
+    expect(agent).toContain("renderer: result?.renderer || 'text-fallback'");
+    expect(agent).toContain("renderer: 'fixed-template-v1'");
   });
 
   it('returns success only after Out-Printer resolves and supports Arabic station codes', () => {
@@ -42,9 +44,11 @@ describe('legacy print agent spool reliability contract', () => {
     const printHandler = agent.slice(printHandlerStart, drawerHandlerStart);
 
     expect(agent).toContain('await ps(script, [printerName, tmp]);');
-    expect(printHandler).toContain('const result = await printText(printer, text)');
+    expect(printHandler).toContain('const canRenderTemplate = isFixedThermalTemplate(template) && fs.existsSync(TEMPLATE_RENDERER_PATH)');
+    expect(printHandler).toContain('? await printFixedTemplate(printer, template)');
+    expect(printHandler).toContain(': await printText(printer, text)');
     expect(printHandler).toContain('acceptedBySpooler: Boolean(result?.acceptedBySpooler)');
-    expect(printHandler.indexOf('const result = await printText(printer, text)')).toBeLessThan(
+    expect(printHandler.indexOf('const result = canRenderTemplate')).toBeLessThan(
       printHandler.indexOf('success: true'),
     );
     expect(agent).toContain('\\u0600-\\u06FF');
