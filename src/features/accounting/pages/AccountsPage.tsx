@@ -145,8 +145,8 @@ export function AccountsPage() {
       <div className="flex gap-1">
         {!a.is_system && canManage && (
           <>
-            <button onClick={() => openEdit(a)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
-            <button onClick={() => setDeleteId(a.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={() => openEdit(a)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
+            <button onClick={() => setDeleteId(a.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>
           </>
         )}
       </div>

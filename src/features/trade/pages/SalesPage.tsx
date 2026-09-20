@@ -305,7 +305,7 @@ export function SalesPage() {
     { key: 'actions', header: t('actions'), render: (r) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         {canEditSale && (
-          <button onClick={() => openViewSale(r)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}>
+          <button onClick={() => openViewSale(r)} className="ui-icon-action ui-icon-action-info" title={t('edit')}>
             <Edit2 className="w-4 h-4" />
           </button>
         )}
@@ -315,7 +315,7 @@ export function SalesPage() {
           </button>
         )}
         {can('refunds.approve') && r.status !== 'completed' && (
-          <button onClick={() => setDeleteId(r.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('delete')}>
+          <button onClick={() => setDeleteId(r.id)} className="ui-icon-action ui-icon-action-danger" title={t('delete')}>
             <Trash2 className="w-4 h-4" />
           </button>
         )}

@@ -86,10 +86,10 @@ export function WarehousesPage() {
     { key: 'actions', header: t('actions'), render: (w) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         {can('warehouses.manage') && (
-          <button onClick={() => openEdit(w)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
+          <button onClick={() => openEdit(w)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
         )}
         {can('warehouses.manage') && (
-          <button onClick={() => setDeleteId(w.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => setDeleteId(w.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>
         )}
       </div>
     )},

@@ -501,7 +501,7 @@ export function PurchasesPage() {
     { key: 'actions', header: t('actions'), render: (p) => (
       <div className="flex items-center gap-1 justify-end">
         {p.status === 'draft' && can('purchases.manage') && (
-          <button title={t('submitOrder')} onClick={() => changeOrderStatus(p, 'submitted')} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Send className="w-4 h-4" /></button>
+          <button title={t('submitOrder')} onClick={() => changeOrderStatus(p, 'submitted')} className="ui-icon-action ui-icon-action-info"><Send className="w-4 h-4" /></button>
         )}
         {p.status === 'submitted' && can('purchases.manage') && (
           <button title={t('approveOrder')} onClick={() => changeOrderStatus(p, 'approved')} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success"><Check className="w-4 h-4" /></button>
@@ -516,7 +516,7 @@ export function PurchasesPage() {
           <button
             title={lang === 'ar' ? 'تعديل فاتورة المشتريات' : 'Edit purchase invoice'}
             onClick={(e) => { e.stopPropagation(); void openEdit(p); }}
-            className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"
+            className="ui-icon-action ui-icon-action-info"
           >
             <Edit2 className="w-4 h-4" />
           </button>
@@ -525,7 +525,7 @@ export function PurchasesPage() {
           <button
             title={lang === 'ar' ? (p.status === 'returned' ? 'حذف الفاتورة المرتجعة' : 'حذف فاتورة الشراء') : (p.status === 'returned' ? 'Delete returned purchase invoice' : 'Delete purchase invoice')}
             onClick={(e) => { e.stopPropagation(); void deletePurchase(p); }}
-            className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"
+            className="ui-icon-action ui-icon-action-danger"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -539,7 +539,7 @@ export function PurchasesPage() {
             <RotateCcw className="w-4 h-4" />
           </button>
         )}
-        <button onClick={() => viewPurchase(p)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Eye className="w-4 h-4" /></button>
+        <button onClick={() => viewPurchase(p)} className="ui-icon-action ui-icon-action-info"><Eye className="w-4 h-4" /></button>
       </div>
     )},
   ];

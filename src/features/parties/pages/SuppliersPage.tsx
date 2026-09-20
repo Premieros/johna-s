@@ -140,10 +140,10 @@ export function SuppliersPage() {
           data-testid={`supplier-statement-${s.id}`}
         ><FileText className="w-4 h-4" /></button>
         {can('suppliers.manage') && (
-          <button onClick={() => openEdit(s)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
+          <button onClick={() => openEdit(s)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
         )}
         {can('suppliers.manage') && (
-          <button onClick={() => setDeleteId(s.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => setDeleteId(s.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>
         )}
       </div>
     )},

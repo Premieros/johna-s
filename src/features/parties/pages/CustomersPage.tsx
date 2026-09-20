@@ -121,10 +121,10 @@ export function CustomersPage() {
     { key: 'actions', header: t('actions'), filterable: false, render: (c) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         {can('customers.manage') && (
-          <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
+          <button onClick={() => openEdit(c)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
         )}
         {can('customers.manage') && (
-          <button onClick={() => setDeleteId(c.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => setDeleteId(c.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>
         )}
       </div>
     )},

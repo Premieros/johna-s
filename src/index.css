@@ -254,6 +254,94 @@
     background: rgb(var(--ui-page-alt));
     border: 1px solid rgb(var(--ui-border));
   }
+
+  .ui-icon-action {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.625rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgb(var(--ui-muted));
+    transition:
+      background-color var(--ui-duration-fast) var(--ui-ease),
+      color var(--ui-duration-fast) var(--ui-ease),
+      border-color var(--ui-duration-fast) var(--ui-ease),
+      transform var(--ui-duration-fast) var(--ui-ease);
+    touch-action: manipulation;
+  }
+
+  .ui-icon-action:hover {
+    border-color: rgb(var(--ui-border));
+    background: rgb(var(--ui-page-alt));
+    color: rgb(var(--ui-text));
+  }
+
+  .ui-icon-action:active {
+    transform: scale(0.96);
+  }
+
+  .ui-icon-action:focus-visible,
+  .ui-toolbar-action:focus-visible {
+    outline: 2px solid rgb(var(--ui-ring));
+    outline-offset: 2px;
+  }
+
+  .ui-icon-action-info {
+    color: rgb(var(--ui-info));
+  }
+
+  .ui-icon-action-info:hover {
+    border-color: color-mix(in srgb, rgb(var(--ui-info)) 25%, rgb(var(--ui-border)));
+    background: rgb(var(--ui-info-soft));
+    color: rgb(var(--ui-info));
+  }
+
+  .ui-icon-action-danger {
+    color: rgb(var(--ui-danger));
+  }
+
+  .ui-icon-action-danger:hover {
+    border-color: color-mix(in srgb, rgb(var(--ui-danger)) 25%, rgb(var(--ui-border)));
+    background: rgb(var(--ui-danger-soft));
+    color: rgb(var(--ui-danger));
+  }
+
+  .ui-toolbar-action {
+    display: inline-flex;
+    min-height: 2.25rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border: 1px solid rgb(var(--ui-border));
+    border-radius: 0.625rem;
+    background: rgb(var(--ui-surface));
+    padding: 0.45rem 0.75rem;
+    color: rgb(var(--ui-muted));
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1rem;
+    transition:
+      background-color var(--ui-duration-fast) var(--ui-ease),
+      color var(--ui-duration-fast) var(--ui-ease),
+      border-color var(--ui-duration-fast) var(--ui-ease);
+    touch-action: manipulation;
+  }
+
+  .ui-toolbar-action:hover {
+    border-color: rgb(var(--ui-border-strong));
+    background: rgb(var(--ui-page-alt));
+    color: rgb(var(--ui-text));
+  }
+
+  .ui-toolbar-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 
 @keyframes slideDown {

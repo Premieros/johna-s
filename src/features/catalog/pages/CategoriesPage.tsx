@@ -87,10 +87,10 @@ export function CategoriesPage() {
     { key: 'actions', header: t('actions'), render: (c) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         {can('categories.manage') && (
-          <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
+          <button onClick={() => openEdit(c)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
         )}
         {can('categories.manage') && (
-          <button onClick={() => setDeleteId(c.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => setDeleteId(c.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>
         )}
       </div>
     )},

@@ -255,8 +255,8 @@ export function UsersPage() {
     { key: 'created_at', header: t('date'), render: (u) => formatDate(u.created_at) },
     { key: 'actions', header: t('actions'), render: (u) => canOpenUserEditor ? (
       <div className="flex gap-1">
-        <button onClick={() => void openEdit(u)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>
-        {canManageUsers && <button onClick={() => setDeleteId(u.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('deleteUser')}><Trash2 className="w-4 h-4" /></button>}
+        <button onClick={() => void openEdit(u)} className="ui-icon-action ui-icon-action-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>
+        {canManageUsers && <button onClick={() => setDeleteId(u.id)} className="ui-icon-action ui-icon-action-danger" title={t('deleteUser')}><Trash2 className="w-4 h-4" /></button>}
       </div>
     ) : <span className="text-ui-subtle">—</span> },
   ];

@@ -392,66 +392,6 @@
     border-radius: 999px !important;
   }
 
-  /* The phone cart is a near-full-screen sheet reusing the existing cart.
-   * Keeping a visible backdrop and large close control makes exiting obvious. */
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) {
-    z-index: 45 !important;
-    align-items: flex-end !important;
-    background: transparent !important;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.absolute.inset-0.bg-black\/50 {
-    display: block !important;
-    background: rgb(0 0 0 / 42%) !important;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative {
-    width: 100% !important;
-    height: min(92dvh, 760px) !important;
-    max-height: 92dvh !important;
-    border-radius: 1.25rem 1.25rem 0 0 !important;
-    box-shadow: 0 -12px 36px rgb(0 0 0 / 18%) !important;
-    background: var(--ui-page) !important;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child {
-    min-height: 3.4rem !important;
-    padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
-    padding-inline: 0.75rem !important;
-    background: var(--ui-surface) !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 2 !important;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child > button:first-child {
-    width: 2.75rem !important;
-    height: 2.75rem !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    border-radius: 999px !important;
-    border: 1px solid var(--ui-border) !important;
-    background: var(--ui-page-alt) !important;
-    color: var(--ui-text) !important;
-    padding: 0 !important;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child > button:first-child svg {
-    display: none !important;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:first-child > button:first-child::after {
-    content: '×';
-    font-size: 1.75rem;
-    font-weight: 700;
-    line-height: 1;
-  }
-
-  div.lg\:hidden.fixed.inset-0.z-40:has(> div.absolute.inset-0.bg-black\/50) > div.relative > div:last-child {
-    padding-bottom: env(safe-area-inset-bottom) !important;
-  }
-
   [data-testid="pos-payment-confirm"] {
     margin-bottom: max(env(safe-area-inset-bottom), 0px);
   }

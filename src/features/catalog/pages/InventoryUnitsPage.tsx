@@ -182,8 +182,8 @@ export function InventoryUnitsPage() {
     { key: 'sale_price', header: t('salePrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.sale_price), 1)}</span> },
     { key: 'actions', header: t('actions'), render: (unit) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
       {unit.unit_type === 'manufactured' && can('production.manage') && <button onClick={() => openRecipe(unit)} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={isAr ? 'وصفة المصنع' : 'Manufactured item recipe'}><Beaker className="w-4 h-4" /></button>}
-      {can('raw_materials.manage') && <button onClick={() => openEdit(unit)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>}
-      {can('raw_materials.manage') && <button onClick={() => setDeleteId(unit.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>}
+      {can('raw_materials.manage') && <button onClick={() => openEdit(unit)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>}
+      {can('raw_materials.manage') && <button onClick={() => setDeleteId(unit.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>}
     </div> },
   ];
 

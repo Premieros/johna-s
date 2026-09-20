@@ -88,8 +88,24 @@ async function loginAsE2EAdmin(page: Page) {
   await expect(page).toHaveURL(/#\/dashboard$/);
 }
 
+const NAV_GROUP_BY_ROUTE: Record<string, string> = {
+  '/branches': 'operations',
+  '/inventory-center': 'centers',
+  '/pos': 'main',
+};
+
 async function clickRouteLink(page: Page, route: string) {
   const target = page.locator(`a[href="#${route}"]`).first();
+
+  if (!(await target.isVisible().catch(() => false))) {
+    const group = NAV_GROUP_BY_ROUTE[route];
+    if (group) {
+      const toggle = page.getByTestId(`nav-group-toggle-${group}`);
+      await expect(toggle).toBeVisible();
+      await toggle.click();
+    }
+  }
+
   await expect(target).toBeVisible();
   await target.click();
 }
