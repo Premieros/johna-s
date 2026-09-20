@@ -111,8 +111,8 @@ export function BranchesPage() {
     )},
     { key: 'actions', header: t('actions'), render: (b) => (
       <div className="flex gap-1">
-        <button onClick={() => openEdit(b)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info"><Edit2 className="w-4 h-4" /></button>
-        <button onClick={() => setDeleteId(b.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button>
+        <button onClick={() => openEdit(b)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
+        <button onClick={() => setDeleteId(b.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>
       </div>
     )},
   ];
