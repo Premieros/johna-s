@@ -37,6 +37,9 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
   'pos.view': { ar: 'عرض نقطة البيع', en: 'View POS' },
   'pos.order.create': { ar: 'إنشاء الطلبات', en: 'Create orders' },
   'pos.order.edit': { ar: 'تعديل الطلبات', en: 'Edit orders' },
+  'pos.order.transfer': { ar: 'نقل الطلبات والأصناف بين الطاولات', en: 'Transfer orders and items between tables' },
+  'pos.cancel_order': { ar: 'إلغاء الطلبات', en: 'Cancel orders' },
+  'pos.void': { ar: 'إلغاء الأصناف', en: 'Void order items' },
   'pos.send_kitchen': { ar: 'إرسال الطلب للمطبخ', en: 'Send orders to kitchen' },
   'pos.receipt.print': { ar: 'طباعة الإيصالات', en: 'Print receipts' },
   'settings.manage': { ar: 'إدارة الإعدادات', en: 'Manage settings' },
@@ -168,6 +171,50 @@ const messages: Record<string, { ar: string; en: string }> = {
   ITEM_ALREADY_SENT: {
     ar: 'لا يمكن تنفيذ هذه العملية لأن الصنف أُرسل للمطبخ بالفعل.',
     en: 'This action cannot be completed because the item was already sent to kitchen.',
+  },
+  REASON_REQUIRED: {
+    ar: 'اكتب سبب الإلغاء أو التعديل قبل تنفيذ العملية.',
+    en: 'Enter a reason before completing this cancellation or change.',
+  },
+  SENT_ORDER_CANCEL_REQUIRES_CONTROLLED_VOID: {
+    ar: 'الطلب يحتوي أصنافًا أُرسلت للمطبخ. ألغِ الأصناف المرسلة من خلال إلغاء الصنف (Void) أولًا ثم ألغِ الطلب.',
+    en: 'This order contains items already sent to kitchen. Void the sent items first, then cancel the order.',
+  },
+  TARGET_ORDER_OPERATOR_REQUIRED: {
+    ar: 'الطلب الموجود على الطاولة الهدف مسجل على مستخدم آخر ولا تسمح صلاحياتك الحالية بتعديله.',
+    en: 'The target table order belongs to another operator and your current permissions do not allow changing it.',
+  },
+  TARGET_ORDER_NOT_FOUND: {
+    ar: 'تعذر العثور على الطلب الهدف. حدّث شاشة الطاولات ثم حاول مرة أخرى.',
+    en: 'The target order could not be found. Refresh the tables screen and retry.',
+  },
+  CROSS_BRANCH_ORDER_ITEM_MOVE: {
+    ar: 'لا يمكن نقل صنف طلب بين فرعين مختلفين.',
+    en: 'An order item cannot be moved between different branches.',
+  },
+  ORDER_TRANSFER_RPC_REQUIRED: {
+    ar: 'يجب تنفيذ نقل الطلب من زر النقل المخصص بدل تعديل المستخدم أو الطاولة مباشرة.',
+    en: 'Use the dedicated transfer action instead of changing the order operator or table directly.',
+  },
+  POS_ADMIN_PERMISSION_REQUIRED: {
+    ar: 'هذه العملية تحتاج صلاحية إدارة طلبات المستخدمين الآخرين.',
+    en: 'This action requires permission to manage other operators’ POS orders.',
+  },
+  TRANSACTION_FAILED: {
+    ar: 'تعذر إكمال العملية بالكامل، ولم يتم اعتماد تغيير جزئي. حدّث الطلب ثم حاول مرة أخرى.',
+    en: 'The transaction could not be completed and no partial change was committed. Refresh the order and retry.',
+  },
+  SAME_TABLE: {
+    ar: 'لا يمكن النقل إلى نفس الطاولة الحالية.',
+    en: 'The item is already on the selected table.',
+  },
+  TARGET_TABLE_NOT_FOUND: {
+    ar: 'الطاولة الهدف غير موجودة أو لا تتبع الفرع الحالي.',
+    en: 'The target table was not found or does not belong to the current branch.',
+  },
+  ORDER_ITEMS_REQUIRED: {
+    ar: 'اختر صنفًا واحدًا على الأقل لنقله.',
+    en: 'Select at least one item to transfer.',
   },
   MODIFIER_GROUP_HAS_OPEN_ORDERS: {
     ar: 'لا يمكن تعديل أو حذف مجموعة الإضافات لأنها مستخدمة في طلبات مفتوحة.',
