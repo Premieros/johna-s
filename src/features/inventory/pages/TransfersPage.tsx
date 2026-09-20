@@ -7,6 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { Button } from '@/components/Button';
@@ -31,6 +32,7 @@ export function TransfersPage() {
   const { show } = useToast();
   const can = useCan();
   const branchFilter = useBranchFilter();
+  const history = useHistoryAccess();
   const location = useLocation();
   const { guardTransfer, interceptDbError, startGuidance } = useOperationalGuard();
 
@@ -38,7 +40,11 @@ export function TransfersPage() {
     table: 'warehouse_transfers',
     select: '*, from_warehouse:warehouses!warehouse_transfers_from_warehouse_id_fkey(*), to_warehouse:warehouses!warehouse_transfers_to_warehouse_id_fkey(*), branch:branches!warehouse_transfers_branch_id_fkey(*), requester:users!warehouse_transfers_requested_by_fkey(id, full_name, email)',
     order: { column: 'created_at', ascending: false },
-    or: branchFilter ? `branch_id.eq.${branchFilter},to_branch_id.eq.${branchFilter}` : undefined,
+    or: history.minIso
+      ? (branchFilter
+          ? `and(branch_id.eq.${branchFilter},or(created_at.gte.${history.minIso},status.eq.pending)),and(to_branch_id.eq.${branchFilter},or(created_at.gte.${history.minIso},status.eq.pending))`
+          : `created_at.gte.${history.minIso},status.eq.pending`)
+      : (branchFilter ? `branch_id.eq.${branchFilter},to_branch_id.eq.${branchFilter}` : undefined),
     pageSize: 100,
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
