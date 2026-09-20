@@ -228,7 +228,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
 
     const blockedInvoice = `OWN-BLOCK-${randomUUID()}`;
     const deniedPay = await rpc(
-      captainId,
+      ids.users.branch_manager,
       `SELECT public.process_sale(
          p_invoice_number := $1,
          p_branch_id := $2,
@@ -396,7 +396,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
 
     const invoice = `OWN-OK-${randomUUID()}`;
     const paid = await rpc(
-      ids.users.branch_manager,
+      captainId,
       `SELECT public.process_sale(
          p_invoice_number := $1,
          p_branch_id := $2,
