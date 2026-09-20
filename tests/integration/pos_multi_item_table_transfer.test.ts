@@ -157,11 +157,18 @@ describe.skipIf(!dbUrl)('multi-item POS table transfer', () => {
     expect(lines.rows.find((row) => row.id === sentItem)?.order_id).toBe(targetOrder);
     expect(lines.rows.find((row) => row.id === itemB)?.order_id).toBe(sourceOrder);
 
-    const targetOwner = await client.query<{ cashier_id: string }>(
-      'SELECT cashier_id FROM public.orders WHERE id=$1',
+    const targetOwner = await client.query<{ cashier_id: string; kitchen_status: string }>(
+      'SELECT cashier_id,kitchen_status FROM public.orders WHERE id=$1',
       [targetOrder],
     );
     expect(targetOwner.rows[0].cashier_id).toBe(ids.users.branch_manager);
+    expect(targetOwner.rows[0].kitchen_status).toBe('sent');
+
+    const sourceKitchen = await client.query<{ kitchen_status: string }>(
+      'SELECT kitchen_status FROM public.orders WHERE id=$1',
+      [sourceOrder],
+    );
+    expect(sourceKitchen.rows[0].kitchen_status).toBe('pending');
 
     const kitchenLineage = await client.query<{
       send_order_id: string;
