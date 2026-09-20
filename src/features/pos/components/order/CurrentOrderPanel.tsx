@@ -25,6 +25,7 @@ import { usePosPermissions, type PosPermissions } from '../../hooks/usePosPermis
 import { OrderTypePill } from './OrderTypePill';
 import { OrderStageBadge } from './OrderStageBadge';
 import { TransferItemModal } from '../tables/TransferItemModal';
+import { TransferItemsModal, type TransferItemLine } from '../tables/TransferItemsModal';
 
 interface CurrentOrderPanelProps {
   cart: CartItem[];
@@ -112,22 +113,38 @@ export function CurrentOrderPanel({
   const perms = permissionOverride ?? resolvedPermissions;
   const [showDiscount, setShowDiscount] = useState(false);
   const [splitItem, setSplitItem] = useState<CartItem | null>(null);
-  const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
+  const [selectedLineKeys, setSelectedLineKeys] = useState<Set<string>>(() => new Set());
+  const [transferItemsOpen, setTransferItemsOpen] = useState(false);
 
   const sentState = computeSentState(cart, orderItems, sentOrderItemIds, sessionSent);
   const ago = activeOrderCreatedAt ? timeAgo(activeOrderCreatedAt) : null;
   const stage = deriveCartStage(cart, sentState, false);
   const empty = cart.length === 0;
 
-  const selectedItem = useMemo(
-    () => (selectedLineKey ? cart.find((item) => cartLineKey(item) === selectedLineKey) || null : null),
-    [cart, selectedLineKey],
+  const selectedItems = useMemo(
+    () => cart.filter((item) => selectedLineKeys.has(cartLineKey(item))),
+    [cart, selectedLineKeys],
   );
+  const selectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
   const selectedSent = selectedItem ? sentState[cartLineKey(selectedItem)] : null;
   const selectedMatches = selectedItem
     ? orderItems.filter((row) => orderItemLineKey(row) === cartLineKey(selectedItem))
     : [];
   const selectedCanSplit = perms.canSplitOrder && !!activeOrderId && !!selectedItem && (selectedSent?.sentQty || 0) === 0 && selectedMatches.length === 1;
+  const selectedTransferLines = useMemo<TransferItemLine[]>(() => selectedItems.flatMap((item) => {
+    const lineKey = cartLineKey(item);
+    const sent = sentState[lineKey];
+    const matches = orderItems.filter((row) => orderItemLineKey(row) === lineKey);
+    if ((sent?.sentQty || 0) > 0 || matches.length !== 1) return [];
+    return [{ item, orderItemId: matches[0].id }];
+  }), [selectedItems, sentState, orderItems]);
+  const selectedCanTransfer =
+    perms.canTransferOrder &&
+    orderType === 'dine_in' &&
+    !!activeOrderId &&
+    !!activeTable &&
+    selectedItems.length > 0 &&
+    selectedTransferLines.length === selectedItems.length;
 
   const splitLineKey = splitItem ? cartLineKey(splitItem) : null;
   const splitOrderItemMatches = splitLineKey ? orderItems.filter((row) => orderItemLineKey(row) === splitLineKey) : [];
@@ -139,7 +156,7 @@ export function CurrentOrderPanel({
     if (quantity >= splitItem.quantity) onRemove(lineKey);
     else onUpdateQty(lineKey, -quantity);
     setSplitItem(null);
-    setSelectedLineKey(null);
+    setSelectedLineKeys(new Set());
   };
 
   const handleSelectedVoid = () => {
@@ -148,8 +165,23 @@ export function CurrentOrderPanel({
     const sentQty = selectedSent?.sentQty || 0;
     if (sentQty > 0 && onVoidItem) onVoidItem(selectedItem, sentQty);
     else onRemove(lineKey);
-    setSelectedLineKey(null);
+    setSelectedLineKeys(new Set());
   };
+  const handleCompletedMultiTransfer = () => {
+    selectedItems.forEach((item) => onRemove(cartLineKey(item)));
+    setSelectedLineKeys(new Set());
+    setTransferItemsOpen(false);
+  };
+
+  const toggleSelectedLine = (lineKey: string) => {
+    setSelectedLineKeys((current) => {
+      const next = new Set(current);
+      if (next.has(lineKey)) next.delete(lineKey);
+      else next.add(lineKey);
+      return next;
+    });
+  };
+
 
   return (
     <div data-testid="pos-current-order-panel" className="flex h-full min-h-0 flex-col bg-ui-surface text-ui-text">
@@ -223,13 +255,28 @@ export function CurrentOrderPanel({
           )}
         </div>
 
-        {selectedItem && (
+        {selectedItems.length > 0 && (
           <div className="mt-2 flex items-center gap-2 rounded-xl border border-ui-primary/30 bg-ui-primary-soft p-2">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold text-ui-muted">{isAr ? 'الصنف المحدد' : 'Selected item'}</p>
-              <p className="truncate text-xs font-black text-ui-text">{selectedItem.product.name} × {selectedItem.quantity}</p>
+              <p className="text-[10px] font-bold text-ui-muted">{isAr ? 'الأصناف المحددة' : 'Selected items'}</p>
+              <p className="truncate text-xs font-black text-ui-text">
+                {selectedItems.length === 1
+                  ? `${selectedItems[0].product.name} × ${selectedItems[0].quantity}`
+                  : (isAr ? `${selectedItems.length} أصناف محددة` : `${selectedItems.length} items selected`)}
+              </p>
             </div>
-            {perms.canSplitOrder && (
+            {perms.canTransferOrder && orderType === 'dine_in' && (
+              <button
+                type="button"
+                data-testid="pos-selected-transfer-items"
+                disabled={!selectedCanTransfer}
+                onClick={() => setTransferItemsOpen(true)}
+                className="flex h-9 items-center gap-1 rounded-lg border border-ui-primary/30 bg-ui-surface px-2.5 text-[10px] font-black text-ui-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" /> {isAr ? 'نقل' : 'Move'}
+              </button>
+            )}
+            {perms.canSplitOrder && selectedItems.length === 1 && selectedItem && (
               <button
                 type="button"
                 data-testid={`pos-selected-split-${selectedItem.product.id}`}
@@ -240,7 +287,7 @@ export function CurrentOrderPanel({
                 <ArrowRightLeft className="h-3.5 w-3.5" /> Split
               </button>
             )}
-            {canDeleteItem && (
+            {canDeleteItem && selectedItems.length === 1 && selectedItem && (
               <button
                 type="button"
                 data-testid={`pos-selected-void-${selectedItem.product.id}`}
@@ -250,7 +297,7 @@ export function CurrentOrderPanel({
                 <Trash2 className="h-3.5 w-3.5" /> {selectedSent?.sentQty ? 'Void' : (isAr ? 'حذف' : 'Remove')}
               </button>
             )}
-            <button type="button" onClick={() => setSelectedLineKey(null)} className="flex h-9 w-9 items-center justify-center rounded-lg text-ui-subtle hover:bg-ui-surface">
+            <button type="button" onClick={() => setSelectedLineKeys(new Set())} className="flex h-9 w-9 items-center justify-center rounded-lg text-ui-subtle hover:bg-ui-surface">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -292,7 +339,7 @@ export function CurrentOrderPanel({
             {cart.map((item) => {
               const lineKey = cartLineKey(item);
               const sent = sentState[lineKey] || { sentQty: 0, newQty: item.quantity, sent: false, partial: false };
-              const selected = selectedLineKey === lineKey;
+              const selected = selectedLineKeys.has(lineKey);
               const sentLineLocked = sent.sentQty > 0 && item.quantity <= sent.sentQty && !canDeleteItem;
               return (
                 <div
@@ -303,7 +350,7 @@ export function CurrentOrderPanel({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedLineKey(selected ? null : lineKey)}
+                      onClick={() => toggleSelectedLine(lineKey)}
                       aria-pressed={selected}
                       className="min-w-0 flex-1 text-start"
                     >
@@ -375,6 +422,17 @@ export function CurrentOrderPanel({
           onCompleted={applyCompletedSplit}
         />
       )}
+      {perms.canTransferOrder && (
+        <TransferItemsModal
+          open={transferItemsOpen}
+          onClose={() => setTransferItemsOpen(false)}
+          lines={selectedTransferLines}
+          orderId={activeOrderId}
+          sourceTable={activeTable}
+          onCompleted={handleCompletedMultiTransfer}
+        />
+      )}
+
     </div>
   );
 }
