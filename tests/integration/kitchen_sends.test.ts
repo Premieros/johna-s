@@ -310,7 +310,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
   it('send_to_kitchen rejects a completed order (ORDER_NOT_EDITABLE)', async () => { const created = await createOrder(); expect(created.success).toBe(true); await client.query(`UPDATE public.orders SET status = 'completed' WHERE id = $1`, [created.order_id]); const sent = await sendToKitchen(created.order_id!); expect(sent.success).toBe(false); expect(sent.error).toBe('ORDER_NOT_EDITABLE'); });
   it('set_order_status cannot reopen a completed order (H4 ORDER_CLOSED)', async () => { const created = await createOrder(); expect(created.success).toBe(true); await client.query(`UPDATE public.orders SET status = 'completed' WHERE id = $1`, [created.order_id]); const res = await asUser(async () => client.query(`SELECT public.set_order_status($1, 'open') AS r`, [created.order_id])); expect(res.rows[0].r.success).toBe(false); expect(res.rows[0].r.error).toBe('ORDER_CLOSED'); const order = await client.query(`SELECT status FROM public.orders WHERE id = $1`, [created.order_id]); expect(order.rows[0].status).toBe('completed'); });
   it('order_kitchen_sends is readable under RLS within the caller branch', async () => { const created = await createOrder(); expect(created.success).toBe(true); await sendToKitchen(created.order_id!); const r = await asUser(async () => client.query(`SELECT count(*)::int AS c FROM public.order_kitchen_sends WHERE order_id = $1`, [created.order_id])); expect(r.rows[0].c).toBe(1); });
-  it('pos.void alone can void a sent table item owned by another operator in the same branch', async () => {
+  it('pos.void alone can partially void a sent table item owned by another operator in the same branch', async () => {
     const beforeRole = await client.query<{ permissions: unknown }>(
       `SELECT permissions FROM public.roles WHERE role='cashier'`,
     );
@@ -324,7 +324,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     );
 
     try {
-      const created = await createOrder(itemJson([{ product_id: prodA, quantity: 1 }]));
+      const created = await createOrder(itemJson([{ product_id: prodA, quantity: 2 }]));
       expect(created.success).toBe(true);
       const orderId = created.order_id!;
 
@@ -380,7 +380,13 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
           WHERE order_item_id=$1`,
         [orderItemId],
       );
-      expect(Number(sends.rows[0].qty)).toBe(0);
+      expect(Number(sends.rows[0].qty)).toBe(1);
+
+      const remainingLine = await client.query<{ quantity: string }>(
+        `SELECT quantity::text AS quantity FROM public.order_items WHERE id=$1`,
+        [orderItemId],
+      );
+      expect(Number(remainingLine.rows[0].quantity)).toBe(1);
 
       const audit = await client.query<{ c: number }>(
         `SELECT count(*)::int AS c
