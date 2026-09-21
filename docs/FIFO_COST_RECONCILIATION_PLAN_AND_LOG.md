@@ -277,6 +277,39 @@ Before any Production application:
 - **Hard gate added:** historical Production backfill MUST NOT be applied until a tested backfill reversal path exists. Code/function rollback alone is not considered sufficient after a historical backfill mutates valuation data.
 - Production remains unchanged by FIFO work at this point.
 
+### 2026-09-21 — Production dry-run replay (no persistent writes)
+
+- Replayed historical raw FIFO on Production inside a rollback-only transaction.
+- No persistent Production data was changed.
+- Current dry-run impact by branch:
+  - Cleopatra:
+    - consumption rows scanned: 1,562;
+    - changed valuation rows: 137;
+    - positive-delta rows: 88;
+    - negative-delta rows: 49;
+    - net valuation delta: +329.74;
+    - absolute valuation movement: 1,420.31;
+    - unresolved FIFO debt quantity: 4,581.6495 across 688 debt rows.
+  - Smouha Club:
+    - consumption rows scanned: 7,644;
+    - changed valuation rows: 864;
+    - positive-delta rows: 816;
+    - negative-delta rows: 48;
+    - net valuation delta: +21,059.25;
+    - absolute valuation movement: 22,572.64;
+    - unresolved FIFO debt quantity: 6,141.5936 across 2,396 debt rows.
+- Current combined changed rows: 1,001.
+- Current combined net valuation delta: +21,388.99.
+- Current combined unresolved debt quantity: 10,723.2431.
+- Changed references by type:
+  - direct sale: 45 rows, +15,216.39 net delta;
+  - kitchen_send: 907 rows, +6,087.99 net delta;
+  - purchase_return: 13 rows, -31.75 net delta;
+  - production: 36 rows, +116.84 net delta.
+- These numbers are a point-in-time dry-run and must be regenerated immediately before any Production apply because live branches continue moving.
+- Workflow #2221 started after the latest test fix and is still running at this log update.
+- Production still has no FIFO migration/backfill applied.
+
 ## Next Steps
 
 1. Design additive schema for FIFO debt settlement/reconciliation.
