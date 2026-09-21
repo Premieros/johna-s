@@ -316,7 +316,7 @@ DECLARE
   v_cutoff bigint;
   e record;
   d record;
-  l record;
+  v_lot record;
   v_remaining numeric(18,6);
   v_take numeric(18,6);
   v_batch_id uuid;
@@ -445,7 +445,7 @@ BEGIN
         -e.quantity,GREATEST(-COALESCE(e.total_cost,0),0),0,0,0,e.created_at
       );
 
-      FOR l IN
+      FOR v_lot IN
         SELECT *
         FROM rf_lots
         WHERE raw_material_id=e.raw_material_id
@@ -455,20 +455,20 @@ BEGIN
         ORDER BY expiry_date NULLS LAST,event_at,receipt_ledger_id,id
       LOOP
         EXIT WHEN v_remaining<=0;
-        v_take:=LEAST(v_remaining,l.available_qty);
+        v_take:=LEAST(v_remaining,v_lot.available_qty);
 
         UPDATE public.raw_fifo_backfill_plan
-        SET target_cost=target_cost+v_take*l.unit_cost
+        SET target_cost=target_cost+v_take*v_lot.unit_cost
         WHERE run_id=v_run AND consumption_ledger_id=e.id;
 
         INSERT INTO public.raw_fifo_backfill_allocations(
           run_id,consumption_ledger_id,receipt_ledger_id,
           allocation_type,quantity,unit_cost,total_cost
         ) VALUES (
-          v_run,e.id,l.receipt_ledger_id,'fifo',v_take,l.unit_cost,v_take*l.unit_cost
+          v_run,e.id,v_lot.receipt_ledger_id,'fifo',v_take,v_lot.unit_cost,v_take*v_lot.unit_cost
         );
 
-        UPDATE rf_lots SET available_qty=available_qty-v_take WHERE id=l.id;
+        UPDATE rf_lots SET available_qty=available_qty-v_take WHERE id=v_lot.id;
         v_remaining:=v_remaining-v_take;
       END LOOP;
 
