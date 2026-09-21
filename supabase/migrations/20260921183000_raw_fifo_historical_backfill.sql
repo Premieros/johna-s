@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS public.raw_fifo_backfill_runs (
   error_text text
 );
 
+ALTER TABLE public.raw_fifo_debts
+  ADD COLUMN IF NOT EXISTS backfill_run_id uuid
+    REFERENCES public.raw_fifo_backfill_runs(id) ON DELETE SET NULL;
+
 CREATE TABLE IF NOT EXISTS public.raw_fifo_backfill_plan (
   run_id uuid NOT NULL
     REFERENCES public.raw_fifo_backfill_runs(id) ON DELETE CASCADE,
@@ -764,6 +768,8 @@ DECLARE
   v_debt_id uuid;
   v_batch_id uuid;
   v_res jsonb;
+  v_existing_debt public.raw_fifo_debts%ROWTYPE;
+  v_settlement_mismatch integer;
 BEGIN
   SELECT * INTO v_run
   FROM public.raw_fifo_backfill_runs
@@ -868,21 +874,79 @@ BEGIN
     ORDER BY b.created_at,b.id
     LIMIT 1;
 
+    v_debt_id:=NULL;
+
     INSERT INTO public.raw_fifo_debts(
       source_ledger_id,raw_material_id,branch_id,warehouse_id,
       oversold_batch_id,reference_type,reference_id,reference_number,
-      debt_quantity,settled_quantity,source_created_at
+      debt_quantity,settled_quantity,source_created_at,backfill_run_id
     ) VALUES (
       v_row.consumption_ledger_id,v_row.raw_material_id,v_row.branch_id,v_row.warehouse_id,
-      CASE WHEN v_row.batch_number LIKE 'OV-%' THEN v_batch_id ELSE NULL END,
+      v_batch_id,
       v_row.reference_type,v_row.reference_id,v_row.reference_number,
-      v_row.debt_quantity,v_row.debt_quantity-v_row.unresolved_quantity,v_row.source_created_at
+      v_row.debt_quantity,v_row.debt_quantity-v_row.unresolved_quantity,v_row.source_created_at,
+      p_run_id
     )
-    ON CONFLICT(source_ledger_id) DO UPDATE
-    SET debt_quantity=EXCLUDED.debt_quantity,
-        settled_quantity=EXCLUDED.settled_quantity,
-        updated_at=now()
+    ON CONFLICT(source_ledger_id) DO NOTHING
     RETURNING id INTO v_debt_id;
+
+    IF v_debt_id IS NULL THEN
+      SELECT * INTO v_existing_debt
+      FROM public.raw_fifo_debts
+      WHERE source_ledger_id=v_row.consumption_ledger_id
+      FOR UPDATE;
+
+      IF v_existing_debt.id IS NULL THEN
+        RAISE EXCEPTION 'FIFO_BACKFILL_EXISTING_DEBT_NOT_FOUND ledger=%',
+          v_row.consumption_ledger_id;
+      END IF;
+
+      IF v_existing_debt.raw_material_id IS DISTINCT FROM v_row.raw_material_id
+         OR v_existing_debt.branch_id IS DISTINCT FROM v_row.branch_id
+         OR v_existing_debt.warehouse_id IS DISTINCT FROM v_row.warehouse_id
+         OR abs(v_existing_debt.debt_quantity-v_row.debt_quantity)>0.000001
+         OR abs(
+           v_existing_debt.settled_quantity
+           -(v_row.debt_quantity-v_row.unresolved_quantity)
+         )>0.000001 THEN
+        RAISE EXCEPTION
+          'FIFO_BACKFILL_EXISTING_DEBT_MISMATCH ledger=% current_debt=% target_debt=% current_settled=% target_settled=%',
+          v_row.consumption_ledger_id,
+          v_existing_debt.debt_quantity,
+          v_row.debt_quantity,
+          v_existing_debt.settled_quantity,
+          v_row.debt_quantity-v_row.unresolved_quantity;
+      END IF;
+
+      v_debt_id:=v_existing_debt.id;
+    END IF;
+
+    SELECT count(*) INTO v_settlement_mismatch
+    FROM public.raw_fifo_backfill_allocations a
+    JOIN public.inventory_ledger r ON r.id=a.receipt_ledger_id
+    JOIN public.raw_material_batches b
+      ON b.raw_material_id=r.raw_material_id
+     AND b.branch_id=r.branch_id
+     AND b.warehouse_id=r.warehouse_id
+     AND b.batch_number IS NOT DISTINCT FROM r.batch_number
+    JOIN public.raw_fifo_settlements s
+      ON s.debt_id=v_debt_id
+     AND s.receipt_ledger_id=a.receipt_ledger_id
+    WHERE a.run_id=p_run_id
+      AND a.consumption_ledger_id=v_row.consumption_ledger_id
+      AND a.allocation_type='debt_settlement'
+      AND (
+        abs(s.quantity-a.quantity)>0.000001
+        OR abs(s.unit_cost-a.unit_cost)>0.000001
+        OR abs(s.total_cost-a.total_cost)>0.000001
+        OR s.receipt_batch_id IS DISTINCT FROM b.id
+      );
+
+    IF v_settlement_mismatch>0 THEN
+      RAISE EXCEPTION
+        'FIFO_BACKFILL_EXISTING_SETTLEMENT_MISMATCH ledger=% count=%',
+        v_row.consumption_ledger_id,v_settlement_mismatch;
+    END IF;
 
     INSERT INTO public.raw_fifo_settlements(
       debt_id,receipt_ledger_id,receipt_batch_id,
@@ -901,13 +965,7 @@ BEGIN
     WHERE a.run_id=p_run_id
       AND a.consumption_ledger_id=v_row.consumption_ledger_id
       AND a.allocation_type='debt_settlement'
-    ON CONFLICT(debt_id,receipt_ledger_id) DO UPDATE
-    SET quantity=EXCLUDED.quantity,
-        unit_cost=EXCLUDED.unit_cost,
-        total_cost=EXCLUDED.total_cost,
-        run_id=EXCLUDED.run_id,
-        reconciliation_status='applied',
-        reconciliation_error=NULL;
+    ON CONFLICT(debt_id,receipt_ledger_id) DO NOTHING;
   END LOOP;
 
   -- Apply signed valuation deltas to source references in source chronological order.
