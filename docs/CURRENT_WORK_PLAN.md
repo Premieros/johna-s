@@ -13,6 +13,7 @@
 - POS and Active Orders / Floor Plan now expose a permission-gated Main Area count editor for `floor_plan.manage`.
 - Production RPC migration applied successfully to `azzdesuowpdcoflmyezn`.
 - Production API parity after migration ✅.
+- GitHub Pages deployment #772 ✅.
 - Cleopatra remains configured at 20 active Main Area tables; Smouha remains 50.
 - No printing/KDS/payment/inventory/accounting changes.
 
