@@ -41,31 +41,26 @@
   justify-content: flex-end;
 }
 
-.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-.dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child > a {
-  min-width: 7.5rem;
-  justify-content: center;
-  white-space: nowrap;
-}
 
 @media (max-width: 639px) {
-  .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child {
-    width: 100%;
-  }
-
-  .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section:first-of-type > div:last-child > a {
-    min-width: 0;
-    padding-inline: 0.6rem;
-  }
 
   .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div:first-child > div:last-child,
   .dashboard-compact-cleanup [data-testid='dashboard-surface'] > div > section[class*='bg-gradient-to-br'] > div.mt-5 {
     width: 100%;
     justify-content: center;
   }
+}
+
+
+@keyframes dashboard-standby-event-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dashboard-standby-event {
+  animation: dashboard-standby-event-in 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-standby-event { animation: none; }
 }
