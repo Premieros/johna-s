@@ -76,6 +76,9 @@ export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopSidebarHidden, setDesktopSidebarHidden] = useState(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem('premier:desktop-sidebar-hidden') === '1',
+  );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -113,6 +116,7 @@ export function Layout({ children }: { children: ReactNode }) {
     ? (lang === 'ar' ? activeBranch.name : activeBranch.name_en || activeBranch.name)
     : (ar ? 'اختر الفرع' : 'Select branch');
   const showBackButton = location.pathname !== APP_ROUTES.dashboard;
+  const fullWidthContent = location.pathname === APP_ROUTES.dashboard;
 
   useEffect(() => {
     if (!branchMenuOpen) return;
@@ -161,6 +165,11 @@ export function Layout({ children }: { children: ReactNode }) {
     window.localStorage.setItem('premier:nav-collapsed-groups', JSON.stringify(collapsed));
   }, [collapsed]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('premier:desktop-sidebar-hidden', desktopSidebarHidden ? '1' : '0');
+  }, [desktopSidebarHidden]);
+
   const mobilePrimaryItems = useMemo(() => {
     const priority = ['dashboard', 'pos', 'operations-center', 'inventory-center', 'sales'];
     const picked = priority
@@ -184,10 +193,20 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div dir={ar ? 'rtl' : 'ltr'} className="min-h-screen bg-ui-page text-ui-text overflow-x-hidden" data-testid="app-shell">
-      <header data-testid="app-header" className="fixed top-0 start-0 end-0 lg:start-[260px] z-[60] flex h-[64px] items-center justify-between gap-3 liquid-glass-header px-4 shadow-ui-sm sm:px-6">
+      <header data-testid="app-header" className={`fixed top-0 start-0 end-0 z-[60] flex h-[64px] items-center justify-between gap-3 liquid-glass-header px-4 shadow-ui-sm transition-all duration-200 sm:px-6 ${desktopSidebarHidden ? 'lg:start-0' : 'lg:start-[260px]'}`}>
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button data-testid="sidebar-open" type="button" onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'فتح القائمة' : 'Open sidebar'}>
             <Menu className="h-5 w-5" />
+          </button>
+          <button
+            data-testid="desktop-sidebar-toggle"
+            type="button"
+            onClick={() => setDesktopSidebarHidden((value) => !value)}
+            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-muted shadow-ui-xs transition hover:bg-ui-page-alt hover:text-ui-text lg:inline-flex"
+            aria-label={desktopSidebarHidden ? (ar ? 'إظهار القائمة الجانبية' : 'Show sidebar') : (ar ? 'إخفاء القائمة الجانبية' : 'Hide sidebar')}
+            title={desktopSidebarHidden ? (ar ? 'إظهار القائمة الجانبية' : 'Show sidebar') : (ar ? 'إخفاء القائمة الجانبية' : 'Hide sidebar')}
+          >
+            {desktopSidebarHidden ? <Menu className="h-4.5 w-4.5" /> : <X className="h-4.5 w-4.5" />}
           </button>
           {showBackButton && (
             <button
@@ -269,7 +288,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <aside data-testid="app-sidebar" className={`fixed top-0 bottom-0 start-0 z-50 w-[260px] liquid-glass border-e border-ui-border shadow-ui-md transition-transform duration-200 ease-[var(--ui-ease)] ${mobileOpen ? 'translate-x-0' : ar ? 'translate-x-full' : '-translate-x-full'} lg:translate-x-0`}>
+      <aside data-testid="app-sidebar" className={`fixed top-0 bottom-0 start-0 z-50 w-[260px] liquid-glass border-e border-ui-border shadow-ui-md transition-transform duration-200 ease-[var(--ui-ease)] ${mobileOpen ? 'translate-x-0' : ar ? 'translate-x-full' : '-translate-x-full'} ${desktopSidebarHidden ? (ar ? 'lg:translate-x-full' : 'lg:-translate-x-full') : 'lg:translate-x-0'}`}>
         <div className="flex h-14 items-center justify-between border-b border-ui-border px-5">
           <Logo variant="horizontal" size={28} tone="mono" showTagline={false} className="text-ui-primary" />
           <button data-testid="sidebar-close" type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'إغلاق القائمة' : 'Close sidebar'}><X className="h-5 w-5" /></button>
@@ -388,10 +407,15 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {mobileOpen && <button data-testid="mobile-sidebar-backdrop" type="button" className="fixed inset-0 z-40 bg-ui-text/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-label={ar ? 'إغلاق' : 'Close'} />}
 
-      <div data-testid="app-content-shell" className="pt-[64px] lg:ms-[260px] min-h-screen">
+      <div data-testid="app-content-shell" className={`min-h-screen pt-[64px] transition-all duration-200 ${desktopSidebarHidden ? 'lg:ms-0' : 'lg:ms-[260px]'}`}>
         <ReturnContextBanner />
         <main data-testid="app-main" className="min-h-[calc(100vh-64px)] bg-ui-page p-4 sm:p-6 lg:p-7">
-          <div data-testid="design-content-surface" className="mx-auto min-h-[calc(100vh-64px)] w-full max-w-[1600px] space-y-5">{children}</div>
+          <div
+            data-testid="design-content-surface"
+            className={`min-h-[calc(100vh-64px)] w-full min-w-0 space-y-5 ${fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'}`}
+          >
+            {children}
+          </div>
         </main>
       </div>
 
