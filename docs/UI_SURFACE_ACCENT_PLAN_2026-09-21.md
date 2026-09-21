@@ -336,3 +336,15 @@ No merge until exact-head Full Verify is green and latest `main` is rechecked.
 - Added `uiSurfaceAccentContract.test.ts`.
 - No printing, POS transaction logic, DB, RLS or permissions changed.
 - Next: run Full Verify on this exact branch head. If green, continue Phase 2/3 rollout only through safe shared/report/inventory/purchase/accounting surfaces, then visual regression before merge.
+
+
+### 2026-09-21 — Verify run #2104
+- Lint ✅
+- TypeScript ✅
+- Application/test-suite typecheck ✅
+- Unit: 835 passed / 1 failed.
+- Failure was an obsolete visual contract in `darkBlackPosContrastContract.test.ts` that explicitly required `--ui-page: 0 0 0` and true-black global dark surfaces.
+- This expectation conflicts with the newly approved UI requirement: pages must not be crushed black.
+- Updated the contract to require charcoal page/surface hierarchy while preserving true black only for the Dashboard StandBy strip.
+- No production/business behavior was changed to satisfy the test; only the superseded visual expectation was updated.
+- New verification run triggered from commit `b72ff8486e3b8f2f294cd56283998f51994379c1`.
