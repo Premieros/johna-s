@@ -461,6 +461,12 @@
       ]
     },
     {
+      "name": "get_current_business_day",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "get_day_closing_report",
       "params": [
         "branch_id",
