@@ -23,3 +23,8 @@ Unify cashier customer receipts, cashier OPEN CHECK prints, and kitchen station 
 
 ## Verification
 Pending Full Verify on PR head before merge.
+
+## Windows local service compatibility
+- Existing local service remains installed and keeps the same port, routes and config.
+- `update-renderer.cmd` updates only `template-print.ps1` from `main`, validates it, and creates a timestamped backup.
+- No reinstall, printer remapping, service protocol change, or Production migration is required.
