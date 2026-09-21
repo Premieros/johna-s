@@ -75,7 +75,7 @@ Acceptance cases:
 - Inventory returns exactly once after successful controlled Void.
 
 ### Phase 3 — Unified user-facing errors
-**Status: PENDING**
+**Status: FULL VERIFY GREEN**
 
 - Route operational errors through `userFacingErrorMessage`.
 - Preserve structured fields such as `permission`, `action`, `detail`, and `error`.
@@ -95,7 +95,7 @@ Priority surfaces:
 - POS load failures
 
 ### Phase 4 — UI guard correctness
-**Status: PENDING**
+**Status: IN PROGRESS**
 
 - New-order controls use `pos.order.create`.
 - Existing-order mutations use `pos.order.edit`.
@@ -444,3 +444,23 @@ End-to-end regression:
 - Production migrations applied: NONE.
 - Printing / Print Agent / printer routing / kitchen station routing changes: NONE.
 - Phase 3 remains IN PROGRESS until the new exact HEAD passes Full Verify.
+
+
+### 2026-09-21 — Phase 3 Full Verify GREEN; Phase 4 opened
+- Exact verified HEAD: `773065b74d4c18120acce2a3d42493782cf44607`.
+- Workflow: `Verify main` run `35581542219`.
+- Results:
+  - lint ✅
+  - TypeScript ✅
+  - test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations ✅
+  - schema verification ✅
+  - Integration / Security / RLS ✅
+  - Browser Smoke / Playwright ✅
+- Phase 3 is closed Green.
+- Phase 4 opened from the current repository state only.
+- No Production writes.
+- No Production migrations applied.
+- No print-agent / printer queue / printer routing / kitchen station routing changes.
