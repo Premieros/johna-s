@@ -203,3 +203,12 @@ End-to-end regression:
 - This evidence reinforces Phase 1 and Phase 2 acceptance criteria and must be verified before merge.
 - Production changes performed for this evidence: NONE.
 - Printing / print-agent / printer routing changes: NONE.
+
+
+### 2026-09-21 — Live POS fatal-load regression confirmed
+- User supplied a live screenshot from the POS route showing a full-screen fatal load state with a generic Arabic message equivalent to an unexpected POS data-load failure.
+- Current `PosWorkspacePage` can promote non-product query failures into `loadError`, and once `loadError` is set it replaces the entire POS workspace.
+- This confirms Phase 5 is a real operational issue, not only a static-code concern.
+- Repair remains ordered behind Phase 1/2/3/4: nonessential failures (customers/settings/branches/categories/areas where safe fallback exists) must degrade to a localized warning instead of blocking the whole POS.
+- A truly unavailable product catalog / unsafe branch context may still use a fatal screen.
+- No Production change was made in response to the screenshot.
