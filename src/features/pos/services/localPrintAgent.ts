@@ -262,7 +262,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   .modifier, .note {
     margin-top: .8mm;
     ${ar ? 'padding-right:12mm' : 'padding-left:12mm'};
-    font-size: 12pt;
+    font-size: 11.5pt;
     line-height: 1.24;
   }
   .modifier { font-weight: 700; }
@@ -278,7 +278,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     justify-content: space-between;
     gap: 2mm;
     margin: 1mm 0;
-    font-size: 10.5pt;
+    font-size: 12.5pt;
   }
   .grand-total { font-size: 18pt; font-weight: 900; margin-top: 1.8mm; }
   .footer { text-align: center; margin-top: ${kitchen ? '3mm' : '5mm'}; }
