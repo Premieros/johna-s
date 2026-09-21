@@ -36,6 +36,7 @@ type ActivityPresentation = {
 };
 
 const DISPLAY_MS = 4200;
+const SLIDE_MS = 280;
 const POLL_MS = 5000;
 const MAX_RECENT = 30;
 
@@ -173,15 +174,15 @@ function MiniCalendar({ now, ar }: { now: Date; ar: boolean }) {
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-black uppercase tracking-[0.16em] text-rose-300">{monthLabel}</span>
-        <CalendarDays className="h-4 w-4 text-white/60" />
+        <span className="text-xs font-black uppercase tracking-[0.16em] text-[#ff5c82]">{monthLabel}</span>
+        <CalendarDays className="h-4 w-4 text-[#67e8f9]" />
       </div>
       <div className="grid grid-cols-7 gap-x-2 gap-y-1 text-center text-[10px] sm:text-[11px]">
-        {week.map((day, index) => <span key={`${day}-${index}`} className="font-bold text-white/45">{day}</span>)}
+        {week.map((day, index) => <span key={`${day}-${index}`} className="font-bold text-white/70">{day}</span>)}
         {cells.map((day, index) => (
           <span
             key={`calendar-${index}`}
-            className={`flex h-5 items-center justify-center rounded-full font-semibold ${day === now.getDate() ? 'bg-rose-400 text-white shadow-[0_0_16px_rgba(251,113,133,0.45)]' : 'text-white/85'}`}
+            className={`flex h-5 items-center justify-center rounded-full font-bold ${day === now.getDate() ? 'bg-[#ff4f78] text-white shadow-[0_0_16px_rgba(255,79,120,0.55)]' : 'text-white'}`}
           >
             {day ?? ''}
           </span>
@@ -210,6 +211,7 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
   const [recent, setRecent] = useState<AuditLog[]>([]);
   const [queue, setQueue] = useState<AuditLog[]>([]);
   const [active, setActive] = useState<AuditLog | null>(null);
+  const [showEvent, setShowEvent] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const initialLoadRef = useRef(true);
@@ -229,6 +231,7 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
     setRecent([]);
     setQueue([]);
     setActive(null);
+    setShowEvent(false);
     setUnread(0);
   }, [branchFilter, user?.id]);
 
@@ -306,8 +309,16 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
 
   useEffect(() => {
     if (!active) return;
-    const timer = window.setTimeout(() => setActive(null), DISPLAY_MS);
-    return () => window.clearTimeout(timer);
+
+    const enterFrame = window.requestAnimationFrame(() => setShowEvent(true));
+    const hideTimer = window.setTimeout(() => setShowEvent(false), DISPLAY_MS);
+    const clearTimer = window.setTimeout(() => setActive(null), DISPLAY_MS + SLIDE_MS);
+
+    return () => {
+      window.cancelAnimationFrame(enterFrame);
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(clearTimer);
+    };
   }, [active]);
 
   const markRead = () => {
@@ -332,95 +343,135 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
   const branchName = branchFilter ? branches.find((branch) => branch.id === branchFilter)?.name : null;
   const activePresentation = active ? presentationFor(active, ar) : null;
   const ActiveIcon = activePresentation?.icon || ReceiptText;
+  const activeDocument = active ? detailValue(active.details || null, [
+    'invoice_number', 'order_number', 'reference_number', 'transfer_number', 'count_number', 'number',
+  ]) : null;
+  const activeAmount = active ? numericDetail(active.details || null) : null;
+  const activeActor = active
+    ? detailValue(active.details || null, ['user_name', 'cashier_name', 'employee_name', 'operator_name'])
+      || (active.user_email ? active.user_email.split('@')[0] : null)
+    : null;
+  const activeDocumentText = activeDocument === null || activeDocument === undefined ? null : String(activeDocument);
+  const activeActorText = activeActor === null || activeActor === undefined ? null : String(activeActor);
+
+  const idleTransform = showEvent
+    ? (ar ? '-translate-x-full' : 'translate-x-full')
+    : 'translate-x-0';
+  const eventTransform = showEvent
+    ? 'translate-x-0'
+    : (ar ? 'translate-x-full' : '-translate-x-full');
 
   return (
     <section
       data-testid="dashboard-standby-bar"
-      className="relative overflow-visible rounded-[28px] border border-white/10 bg-[#11131c] text-white shadow-[0_12px_35px_rgba(15,23,42,0.18)]"
+      dir={ar ? 'rtl' : 'ltr'}
+      className="relative rounded-[28px] border border-white/15 bg-black text-white shadow-[0_14px_38px_rgba(0,0,0,0.30)]"
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[28px]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(244,63,94,0.16),transparent_34%),radial-gradient(circle_at_82%_75%,rgba(59,130,246,0.12),transparent_36%)]" />
-      </div>
+      <div className="dashboard-standby-viewport relative h-[238px] overflow-hidden rounded-[27px] bg-black sm:h-[220px] md:h-[190px]">
+        <div className="pointer-events-none absolute inset-0 bg-black" />
+        <div className="pointer-events-none absolute -end-10 -top-16 h-40 w-40 rounded-full bg-rose-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -start-10 h-44 w-44 rounded-full bg-cyan-400/10 blur-3xl" />
 
-      {active && activePresentation ? (
-        <div key={active.id} className="dashboard-standby-event relative flex min-h-[150px] items-center gap-5 px-5 py-5 sm:px-7">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-rose-500/15 text-rose-300 ring-1 ring-rose-300/20 sm:h-20 sm:w-20">
-            <ActiveIcon className="h-8 w-8 sm:h-10 sm:w-10" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-rose-300">
-              <span className="h-2 w-2 rounded-full bg-rose-400" />
-              {ar ? 'نشاط مباشر' : 'Live activity'}
+        <div
+          aria-hidden={showEvent}
+          className={`dashboard-standby-slide-layer absolute inset-0 grid h-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] grid-rows-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-4 transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:px-6 md:grid-cols-[minmax(220px,0.92fr)_minmax(300px,1.08fr)_minmax(235px,0.9fr)] md:grid-rows-1 md:gap-x-5 md:px-7 md:py-5 ${idleTransform} ${showEvent ? 'pointer-events-none' : ''}`}
+        >
+          <div className="flex min-w-0 items-center justify-center gap-3 border-white/15 md:h-full md:justify-start md:border-e md:pe-6">
+            <div className="min-w-0 shrink">
+              <p className="text-base font-black leading-tight text-[#ff6b8a] sm:text-lg md:text-xl">{weekday}</p>
+              <p className="mt-1 text-xs font-black text-[#ff9bb0] sm:text-sm">{monthName}</p>
             </div>
-            <h2 className="text-2xl font-black sm:text-3xl">{activePresentation.title}</h2>
-            <p className="mt-2 truncate text-sm font-semibold text-white/75 sm:text-base">
-              {activitySummary(active, ar, money)}
-            </p>
-            <p className="mt-1 text-xs text-white/45">
-              {branchName ? `${branchName} · ` : ''}{new Date(active.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          </div>
-          {queue.length > 0 && (
-            <div className="hidden shrink-0 rounded-2xl bg-white/5 px-4 py-3 text-center sm:block">
-              <p className="text-[10px] text-white/45">{ar ? 'في الانتظار' : 'Queued'}</p>
-              <p className="mt-1 text-xl font-black">{queue.length}</p>
-            </div>
-          )}
-          {canViewAudit && (
-            <button
-              type="button"
-              onClick={togglePanel}
-              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/5 text-white/80 transition-colors hover:bg-white/10"
-              aria-label={ar ? 'سجل العمليات' : 'Activity log'}
-            >
-              <Bell className="h-5 w-5" />
-              {unread > 0 && <span className="absolute -end-1 -top-1 min-w-5 rounded-full bg-rose-500 px-1.5 text-[10px] font-black leading-5 text-white">{Math.min(unread, 99)}</span>}
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="relative grid min-h-[150px] grid-cols-1 items-center gap-5 px-5 py-5 md:grid-cols-[minmax(210px,0.9fr)_minmax(270px,1.05fr)_minmax(260px,1fr)] md:px-7">
-          <div className="flex items-center gap-4 border-white/10 md:border-e md:pe-6">
-            <div className="min-w-0">
-              <p className="text-xl font-black text-rose-300">{weekday}</p>
-              <p className="text-sm font-bold text-white/60">{monthName}</p>
-            </div>
-            <div className="text-[78px] font-black leading-none tracking-[-0.06em] text-white sm:text-[96px]">{dayNumber}</div>
+            <div className="shrink-0 text-[72px] font-black leading-[0.85] tracking-[-0.055em] text-white drop-shadow-[0_0_18px_rgba(255,255,255,0.12)] sm:text-[84px] md:text-[100px]">{dayNumber}</div>
           </div>
 
-          <MiniCalendar now={now} ar={ar} />
+          <div className="min-w-0 md:px-2">
+            <MiniCalendar now={now} ar={ar} />
+          </div>
 
-          <div className="flex min-w-0 items-center justify-between gap-4 border-white/10 md:border-s md:ps-6">
-            <div className="min-w-0">
-              <p className="truncate text-xl font-black sm:text-2xl">
+          <div className="col-span-2 flex min-w-0 items-center justify-between gap-3 border-t border-white/15 pt-3 md:col-span-1 md:h-full md:border-s md:border-t-0 md:ps-6 md:pt-0">
+            <div className="min-w-0 flex-1">
+              <p className="max-w-full break-words text-[clamp(1.05rem,2vw,1.45rem)] font-black leading-[1.25] text-white">
                 {ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome, ${user?.full_name || 'Admin'}`}
               </p>
-              <p className="mt-1 text-xs font-semibold text-white/50">{weekday} · {dayNumber} {monthName} {year}</p>
-              {branchName && <p className="mt-1 truncate text-xs text-white/40">{branchName}</p>}
+              <p className="mt-1 text-xs font-bold text-[#ffd166]">{weekday} · {dayNumber} {monthName} {year}</p>
+              {branchName && <p className="mt-1 max-w-full break-words text-xs font-bold leading-5 text-[#67e8f9]">{branchName}</p>}
               {canCreateSale && (
                 <Link
                   to="/pos"
-                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black text-white transition-colors hover:bg-white/15"
+                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-3.5 py-2 text-xs font-black text-white shadow-[0_6px_18px_rgba(37,99,235,0.30)] transition-colors hover:bg-[#3b82f6]"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   {ar ? 'إنشاء بيع' : 'New sale'}
                 </Link>
               )}
             </div>
+
             {canViewAudit && (
               <button
                 type="button"
                 onClick={togglePanel}
-                className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/5 text-white/80 transition-colors hover:bg-white/10"
+                className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#101827] text-[#67e8f9] ring-1 ring-cyan-300/25 transition-colors hover:bg-[#162033]"
                 aria-label={ar ? 'سجل العمليات' : 'Activity log'}
               >
                 <Bell className="h-5 w-5" />
-                {unread > 0 && <span className="absolute -end-1 -top-1 min-w-5 rounded-full bg-rose-500 px-1.5 text-[10px] font-black leading-5 text-white">{Math.min(unread, 99)}</span>}
+                {unread > 0 && <span className="absolute -end-1 -top-1 min-w-5 rounded-full bg-[#ff315f] px-1.5 text-[10px] font-black leading-5 text-white shadow-[0_0_14px_rgba(255,49,95,0.55)]">{Math.min(unread, 99)}</span>}
               </button>
             )}
           </div>
         </div>
-      )}
+
+        <div
+          aria-live="polite"
+          aria-hidden={!showEvent}
+          className={`dashboard-standby-slide-layer absolute inset-0 flex h-full items-center gap-4 px-5 py-5 transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:gap-5 sm:px-7 ${eventTransform} ${showEvent ? '' : 'pointer-events-none'}`}
+        >
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-[#ff315f] text-white shadow-[0_8px_28px_rgba(255,49,95,0.34)] sm:h-20 sm:w-20">
+            <ActiveIcon className="h-8 w-8 sm:h-10 sm:w-10" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center gap-2 text-xs font-black text-[#ff8da6]">
+              <span className="h-2 w-2 rounded-full bg-[#ff315f] shadow-[0_0_10px_rgba(255,49,95,0.75)]" />
+              {ar ? 'نشاط مباشر' : 'Live activity'}
+            </div>
+            <h2 className="text-2xl font-black leading-tight text-white sm:text-3xl">{activePresentation?.title || (ar ? 'حركة جديدة' : 'New activity')}</h2>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-black sm:text-base">
+              {activeDocumentText && <span className="text-[#ffd166]">{ar ? 'رقم' : '#'} {activeDocumentText}</span>}
+              {activeAmount !== null && <span className="text-[#67e8f9]">{money(activeAmount)}</span>}
+              {activeActorText && <span className="max-w-full break-words text-[#86efac]">{activeActorText}</span>}
+              {!activeDocumentText && activeAmount === null && !activeActorText && active && (
+                <span className="max-w-full break-words text-[#e2e8f0]">{activitySummary(active, ar, money)}</span>
+              )}
+            </div>
+
+            {active && (
+              <p className="mt-2 text-xs font-bold text-[#c4b5fd]">
+                {branchName ? `${branchName} · ` : ''}{new Date(active.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+          </div>
+
+          {queue.length > 0 && (
+            <div className="hidden shrink-0 rounded-2xl bg-[#111827] px-4 py-3 text-center ring-1 ring-white/10 sm:block">
+              <p className="text-[10px] font-bold text-[#a5b4fc]">{ar ? 'في الانتظار' : 'Queued'}</p>
+              <p className="mt-1 text-xl font-black text-white">{queue.length}</p>
+            </div>
+          )}
+
+          {canViewAudit && (
+            <button
+              type="button"
+              onClick={togglePanel}
+              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#101827] text-[#67e8f9] ring-1 ring-cyan-300/25 transition-colors hover:bg-[#162033]"
+              aria-label={ar ? 'سجل العمليات' : 'Activity log'}
+            >
+              <Bell className="h-5 w-5" />
+              {unread > 0 && <span className="absolute -end-1 -top-1 min-w-5 rounded-full bg-[#ff315f] px-1.5 text-[10px] font-black leading-5 text-white shadow-[0_0_14px_rgba(255,49,95,0.55)]">{Math.min(unread, 99)}</span>}
+            </button>
+          )}
+        </div>
+      </div>
 
       {panelOpen && canViewAudit && (
         <div

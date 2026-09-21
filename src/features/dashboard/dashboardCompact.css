@@ -52,15 +52,19 @@
 }
 
 
-@keyframes dashboard-standby-event-in {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: translateY(0); }
+.dashboard-standby-viewport {
+  contain: layout paint;
+  isolation: isolate;
 }
 
-.dashboard-standby-event {
-  animation: dashboard-standby-event-in 180ms ease-out both;
+.dashboard-standby-slide-layer {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dashboard-standby-event { animation: none; }
+  .dashboard-standby-slide-layer {
+    transition-duration: 0.01ms !important;
+  }
 }
