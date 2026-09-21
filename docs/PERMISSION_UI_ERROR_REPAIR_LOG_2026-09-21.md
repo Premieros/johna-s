@@ -36,7 +36,7 @@ The UI audit found two classes of defects:
 ## Ordered repair plan
 
 ### Phase 1 — Action-specific permission contract
-**Status: IN PROGRESS**
+**Status: IMPLEMENTED — VERIFY PENDING**
 
 Target actions:
 - `pos.payment.take`
@@ -169,3 +169,24 @@ End-to-end regression:
 - No Production write performed.
 - No print-agent / printer-routing change performed.
 - Phase 1 marked IN PROGRESS.
+
+
+### 2026-09-21 — Phase 1 implementation checkpoint
+- Development HEAD advanced with action-specific permission migration and regression tests.
+- Added migration:
+  - `supabase/migrations/20260921110000_action_specific_pos_permissions.sql`
+- Added integration coverage:
+  - payment-only across another operator's same-branch order
+  - receipt-print-only queueing to the existing cashier station
+  - send-kitchen across another operator while preserving ownership and single deduction
+  - cancel-only across another operator without edit authority
+  - cross-branch denial
+- Added static safety contract test:
+  - does not redefine/broaden `can_manage_other_pos_orders()`
+  - does not alter printer settings, local print-agent routes, or kitchen station assignment
+  - retains the existing `receipt -> cashier` cloud print route
+- Updated older ownership/captain tests so they no longer encode the superseded rule that action permissions must fail solely because the order belongs to another operator.
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Print Agent / printer routes changed: NONE.
+- Next gate: Draft PR Full Verify. Phase 2 must remain pending until Phase 1 verification result is known.
