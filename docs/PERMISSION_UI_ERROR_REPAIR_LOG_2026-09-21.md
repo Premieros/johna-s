@@ -316,3 +316,25 @@ End-to-end regression:
 - Production writes: NONE.
 - Production migrations applied: NONE.
 - Full Verify run for this exact HEAD: `35578569475` — pending.
+
+
+### 2026-09-21 — Phase 2 first Full Verify failure and test-contract repair
+- Exact failed HEAD: `efc5203ac8a762f6793ee9f92f71bd28abc14da3`.
+- Verify run: `35578605841`.
+- lint ✅
+- TypeScript ✅
+- test-suite typecheck ✅
+- unit ❌
+- DB and Browser Smoke were skipped because the verify job stopped at unit tests.
+- Unit summary: 163 files passed, 2 failed; 840 tests passed, 2 failed.
+- Both failures were stale literal-text assertions in existing tests:
+  - `tests/unit/posSentItemEditGuard.test.ts`
+  - `tests/unit/posVoidAndEmptyTableRepairContract.test.ts`
+- No runtime/permission logic failed. The old tests expected the former fixed sentence containing `pos.void`, while Phase 2 intentionally changed the modal to explicitly branch on `canDirectVoid` and show either direct Void or manager-approval copy.
+- Updated the existing tests to assert the new semantic contract rather than restoring obsolete UI text:
+  - commit `488e13a450e112b763ca77fceb00fe19935cba62`
+  - commit `4990cbcb8a2031d0f1218e3fc4387935e1f2ca3b`
+- No Production writes.
+- No Production migrations applied.
+- No print-agent / print-routing / kitchen station changes.
+- Phase 2 remains IN PROGRESS until the new exact HEAD passes Full Verify.
