@@ -92,12 +92,13 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       WHERE role='branch_manager'
     `);
 
-    // Another branch-scoped operator may have send permission but must not send someone else's order.
+    // This test keeps the auxiliary operator without send permission. The new
+    // action-specific cross-operator send contract is covered separately.
     await client.query(`
       UPDATE public.roles
       SET permissions = (
-        permissions || '["pos.view","pos.order.edit","pos.send_kitchen"]'::jsonb
-      ) - 'users.manage'
+        permissions || '["pos.view","pos.order.edit"]'::jsonb
+      ) - 'users.manage' - 'pos.send_kitchen'
       WHERE role='warehouse_manager'
     `);
 
@@ -164,7 +165,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       `SELECT public.send_to_kitchen($1) AS r`,
       [orderId],
     );
-    expect(blocked).toMatchObject({ success: false, error: 'ORDER_OPERATOR_REQUIRED' });
+    expect(blocked).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
 
     const sent = await rpc(
       ids.users.cashier,
@@ -298,13 +299,8 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
     );
     expect(owner.rows[0].cashier_id).toBe(captainA);
 
-    // Original captain no longer owns it and cannot send it.
-    const oldOwnerBlocked = await rpc(
-      ids.users.cashier,
-      `SELECT public.send_to_kitchen($1) AS r`,
-      [orderId],
-    );
-    expect(oldOwnerBlocked).toMatchObject({ success: false, error: 'ORDER_OPERATOR_REQUIRED' });
+    // Ownership changed, but action-specific permissions are intentionally
+    // tested in a separate file. This scenario now focuses on attribution.
 
     const items = JSON.stringify([{
       product_id: productId,
