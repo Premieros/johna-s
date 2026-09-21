@@ -156,8 +156,8 @@ const messages: Record<string, { ar: string; en: string }> = {
     en: 'The sent-item void could not be completed. Refresh the order and retry.',
   },
   ORDER_OPERATOR_REQUIRED: {
-    ar: 'الطلب مسجل على مستخدم آخر. يلزم امتلاك صلاحيات إدارة ونقل طلبات المستخدمين الآخرين لتنفيذ الإلغاء.',
-    en: 'This order belongs to another operator. Permission to manage and transfer other operators’ orders is required.',
+    ar: 'الطلب مسجل على مستخدم آخر، والإجراء الحالي غير مسموح بصلاحياتك على هذا الطلب. استخدم الإجراء المخصص أو اطلب الصلاحية المناسبة.',
+    en: 'This order belongs to another operator, and your current permission does not allow this action. Use the dedicated action or request the appropriate permission.',
   },
   SENT_ITEM_NOT_FOUND: {
     ar: 'تعذر العثور على الصنف المرسل داخل الطلب. حدّث الطلب ثم حاول مرة أخرى.',
@@ -376,7 +376,8 @@ function looksTechnical(text: string): boolean {
   const lower = text.toLowerCase();
   return TECHNICAL_MARKERS.some((marker) => lower.includes(marker))
     || /\b(?:SQLSTATE|PGRST|PostgREST|PostgreSQL)\b/i.test(text)
-    || /\b(?:23505|23503|23514|42501|42P01|42703)\b/i.test(text);
+    || /\b(?:23505|23503|23514|42501|42P01|42703)\b/i.test(text)
+    || /^[A-Z][A-Z0-9_]{2,}$/.test(text.trim());
 }
 
 export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = currentLanguage()): string {
