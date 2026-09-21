@@ -324,7 +324,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     );
 
     try {
-      const created = await createOrder(itemJson([{ product_id: prodA, quantity: 1 }]));
+      const created = await createOrder(itemJson([{ product_id: prodA, quantity: 2 }]));
       expect(created.success).toBe(true);
       const orderId = created.order_id!;
 
@@ -380,7 +380,13 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
           WHERE order_item_id=$1`,
         [orderItemId],
       );
-      expect(Number(sends.rows[0].qty)).toBe(0);
+      expect(Number(sends.rows[0].qty)).toBe(1);
+
+      const remainingLine = await client.query<{ quantity: string }>(
+        `SELECT quantity::text AS quantity FROM public.order_items WHERE id=$1`,
+        [orderItemId],
+      );
+      expect(Number(remainingLine.rows[0].quantity)).toBe(1);
 
       const audit = await client.query<{ c: number }>(
         `SELECT count(*)::int AS c
