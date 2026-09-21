@@ -5,6 +5,19 @@
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة. سجل إصلاح POS الحالي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
 
 
+## ACTIVE — Dashboard full width / card lines / sidebar collapse — 2026-09-21
+
+- Branch: `development/dashboard-width-sidebar-collapse-20260921`
+- Base: `main@320413ed08a037c25d57a05c26e777a9e97da018`
+- Log: `docs/DASHBOARD_FULL_WIDTH_SIDEBAR_COLLAPSE_2026-09-21.md`
+- Colored edge/top lines removed from cards; semantic colors remain only as very faint background tint.
+- Dashboard duplicate horizontal padding/max-width removed so it fills the available content area.
+- Desktop sidebar hide/show button added with persisted state and RTL/LTR-safe logical offsets.
+- No business logic / DB / RLS / printing changes.
+- Full Verify pending.
+
+
+
 ## ACTIVE — Main Area count UI / POS active-table fix — 2026-09-21
 
 - Branch: `development/main-area-count-ui-20260921`
