@@ -248,8 +248,8 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   }
   .items-head, .customer-item {
     display: grid;
-    grid-template-columns: 9mm minmax(0, 1fr) 18mm 20mm;
-    gap: 1mm;
+    grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;
+    gap: .8mm;
     align-items: start;
   }
   .items-head {
@@ -261,7 +261,13 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     border-bottom: .3mm solid #000;
   }
   .items-head .unit-price, .items-head .line-total,
-  .customer-item .unit-price, .customer-item .line-total { text-align: ${ar ? 'left' : 'right'}; }
+  .customer-item .unit-price, .customer-item .line-total {
+    text-align: ${ar ? 'left' : 'right'};
+    direction: ltr;
+    unicode-bidi: isolate;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
   .items-head .qty, .customer-item .qty { text-align: center; }
   .customer-item {
     min-height: 9.5mm;
@@ -272,8 +278,8 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   .customer-item:last-child { border-bottom: 0; }
   .customer-item .item-name { font-weight: 800; overflow-wrap: anywhere; line-height: 1.18; }
   .customer-item .qty { font-weight: 800; }
-  .customer-item .unit-price { font-weight: 600; white-space: nowrap; font-size: 10.5pt; }
-  .customer-item .line-total { font-weight: 900; white-space: nowrap; }
+  .customer-item .unit-price { font-weight: 700; font-size: 9.4pt; }
+  .customer-item .line-total { font-weight: 900; font-size: 10.5pt; }
   .kitchen-item { padding: 2mm 0; border-bottom: .3mm dashed #000; }
   .kitchen-item:last-child { border-bottom: 0; }
   .kitchen-main {
@@ -315,7 +321,16 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     margin: 1mm 0;
     font-size: 12.5pt;
   }
-  .grand-total { font-size: 19pt; font-weight: 900; margin-top: 1.8mm; padding-top: 1.8mm; border-top: .45mm solid #000; }
+  .total-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+  .total-row > span:last-child {
+    flex: 0 0 auto;
+    direction: ltr;
+    unicode-bidi: isolate;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .grand-total { font-size: 17.5pt; font-weight: 900; margin-top: 1.8mm; padding-top: 1.8mm; border-top: .45mm solid #000; }
   .footer { text-align: center; margin-top: ${kitchen ? '3mm' : '5mm'}; }
   .footer-line { font-size: ${kitchen ? '11.5pt' : '12pt'}; margin: 1mm 0; }
   .kitchen-end { font-size: 13.5pt; font-weight: 900; margin-top: 1.2mm; }
