@@ -7,6 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
@@ -91,9 +92,8 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
   const addBlockMessage = addBlockReason === 'shift'
     ? (isAr ? 'لا يمكن إضافة أصناف بدون شفت مفتوح' : 'Open a shift before adding items')
     : (isAr ? 'لا تملك صلاحية إنشاء أو تعديل الطلب الحالي' : 'You do not have permission to create or edit the current order');
-  const availabilityErrorLabel = (code: string) => code === 'RAW_MATERIAL_NOT_IN_BRANCH'
-    ? (isAr ? 'خامة الوصفة خارج الفرع' : 'Recipe material belongs to another branch')
-    : (isAr ? `خطأ إعداد المخزون: ${code}` : `Inventory configuration error: ${code}`);
+  const availabilityErrorLabel = (code: string) =>
+    userFacingErrorMessage(code, isAr ? 'ar' : 'en');
 
   const ensureSellable = (product: Product) => {
     const availabilityError = availabilityErrors[product.id];
@@ -128,7 +128,14 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
       show(isAr ? 'تم رفع صورة المنتج' : 'Product photo uploaded', 'success');
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : String(uploadError);
-      show(message === 'IMAGE_TOO_LARGE' ? (isAr ? 'حجم الصورة يجب ألا يتجاوز 5MB' : 'Image must be 5MB or smaller') : message === 'INVALID_IMAGE_TYPE' ? (isAr ? 'اختر ملف صورة صالح' : 'Choose a valid image file') : message, 'error');
+      show(
+        message === 'IMAGE_TOO_LARGE'
+          ? (isAr ? 'حجم الصورة يجب ألا يتجاوز 5MB' : 'Image must be 5MB or smaller')
+          : message === 'INVALID_IMAGE_TYPE'
+            ? (isAr ? 'اختر ملف صورة صالح' : 'Choose a valid image file')
+            : userFacingErrorMessage(uploadError, isAr ? 'ar' : 'en'),
+        'error',
+      );
     } finally {
       setUploadingProductId(null);
     }
@@ -150,7 +157,7 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
       setAdjustingProduct(null);
       show(isAr ? 'تم حفظ موضع وحجم الصورة' : 'Image position and size saved', 'success');
     } catch (saveError) {
-      show(saveError instanceof Error ? saveError.message : String(saveError), 'error');
+      show(userFacingErrorMessage(saveError, isAr ? 'ar' : 'en'), 'error');
     } finally {
       setSavingImageView(false);
     }
