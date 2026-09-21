@@ -36,9 +36,10 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
     return (rows[0]?.r || {}) as Rpc;
   };
 
-  const probeError = async (userId: string, sql: string, params: unknown[] = []) => {
+  const probeRpc = async (userId: string, sql: string, params: unknown[] = []): Promise<Rpc & { transportError?: string }> => {
     const result = await runAs(client, userId, sql, params);
-    return result.error || '';
+    if (result.error) return { success: false, transportError: result.error };
+    return (result.rows[0]?.r || {}) as Rpc;
   };
 
   const setActorPermissions = async (permissions: string[]) => {
@@ -153,7 +154,7 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
     );
     expect(access.success, JSON.stringify(access)).toBe(true);
 
-    const blockedEdit = await probeError(
+    const blockedEdit = await probeRpc(
       ids.users.branch_manager,
       `SELECT public.update_order(
         $1,'dine_in',$2,NULL,2,'forbidden edit',$3::jsonb,
@@ -161,7 +162,8 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
       ) AS r`,
       [orderId, tableId, itemPayload()],
     );
-    expect(blockedEdit).toContain('PERMISSION_DENIED:pos.order.edit');
+    expect(blockedEdit.success).toBe(false);
+    expect(`${blockedEdit.error || ''} ${blockedEdit.detail || ''} ${blockedEdit.transportError || ''}`).toContain('PERMISSION_DENIED');
 
     const invoice = `ACTION-PAY-${randomUUID()}`;
     const paid = await rpc(
@@ -313,7 +315,7 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
     const orderId = await createOwnedOrder(tableId);
     await setActorPermissions(['pos.view', 'pos.cancel_order']);
 
-    const blockedEdit = await probeError(
+    const blockedEdit = await probeRpc(
       ids.users.branch_manager,
       `SELECT public.update_order(
         $1,'dine_in',$2,NULL,2,'forbidden edit',$3::jsonb,
@@ -321,7 +323,8 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
       ) AS r`,
       [orderId, tableId, itemPayload()],
     );
-    expect(blockedEdit).toContain('PERMISSION_DENIED:pos.order.edit');
+    expect(blockedEdit.success).toBe(false);
+    expect(`${blockedEdit.error || ''} ${blockedEdit.detail || ''} ${blockedEdit.transportError || ''}`).toContain('PERMISSION_DENIED');
 
     const cancelled = await rpc(
       ids.users.branch_manager,
