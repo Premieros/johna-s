@@ -103,6 +103,18 @@ describe.skipIf(skip)('automatic production from sale and ingredient-derived ava
       );
       expect(Number(availBefore[0].available_quantity)).toBe(5);
 
+      const sellability = await q<{ is_sellable: boolean; raw_shortage_only: boolean; availability_error: string | null }>(
+        `SELECT is_sellable,raw_shortage_only,availability_error
+         FROM public.get_pos_product_sellability($1,$2,100000)
+         WHERE product_id=$3`,
+        [branchId, warehouseId, productId],
+      );
+      expect(sellability).toEqual([{
+        is_sellable: true,
+        raw_shortage_only: true,
+        availability_error: null,
+      }]);
+
       const sale = await q<{ r: { success: boolean; sale_id?: string; error?: string; detail?: string } }>(
         `SELECT public.process_sale($1,$2,$3,NULL,NULL,40,0,'amount',0,0,40,40,'cash','completed',$4::jsonb,NULL,'takeaway',NULL,NULL,NULL) AS r`,
         [
