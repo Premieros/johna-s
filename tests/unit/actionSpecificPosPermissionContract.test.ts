@@ -33,6 +33,15 @@ describe('action-specific POS permission contract', () => {
     );
   });
 
+  it('allows payment completion bookkeeping only through the exact payment action context', () => {
+    expect(migration).toContain("ELSIF NEW.status='completed' THEN");
+    expect(migration).toContain(
+      "_pos_action_context_matches(OLD.id,'pos.payment.take')",
+    );
+    expect(migration).toContain('AND NOT v_pos_action_context');
+    expect(migration).toContain("RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit'");
+  });
+
   it('preserves cashier print queue routing and does not touch printer-agent configuration', () => {
     expect(migration).toContain(
       "v_order.branch_id,v_uid,'receipt','cashier'",
