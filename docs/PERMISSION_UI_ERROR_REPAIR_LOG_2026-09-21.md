@@ -242,3 +242,24 @@ End-to-end regression:
 - Production migrations applied: NONE.
 - Print Agent / printer routes / station routing changed: NONE.
 - Phase 2 remains blocked until the new exact HEAD completes Full Verify Green.
+
+
+### 2026-09-21 — Phase 1 second Full Verify failure and repair
+- Reverify run: `35576944395` on HEAD `6014ca4584924afcffe23d1873e66350ded01c2a`.
+- Frontend verify remained GREEN.
+- Canonical migrations and schema verification remained GREEN.
+- Integration/Security/RLS failed again in the same new action-specific test file.
+- Root failure changed from `PERMISSION_DENIED:pos.order.edit` to `ORDER_OPERATOR_REQUIRED`, confirming the previous edit-guard repair worked.
+- DB log proved the remaining failure came from `guard_pos_operator_ownership()` while `process_sale` updated `payment_status` after the order had already transitioned to `completed`.
+- Root cause:
+  - `_pos_action_context_matches(..., 'pos.payment.take')` required the order to remain `open/held`.
+  - During the same controlled settlement transaction, the final payment bookkeeping happens after status becomes `completed`, so the exact payment proof became false too early.
+- Repair commit: `bbfe3438f0c01bbfce9f7c7b2135a1174364e9e1`.
+  - The helper now permits `completed` only for the exact `pos.payment.take` transaction context.
+  - Other action contexts remain restricted to active `open/held` orders.
+  - Generic ownership/edit checks remain unchanged.
+- Regression contract test commit: `d8cf89b16bf1a15e8f5115409ca1727d4be16e9c`.
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Printing / Print Agent / printer routing / kitchen station routing changed: NONE.
+- Phase 2 remains blocked until the new exact HEAD is Full Verify Green.
