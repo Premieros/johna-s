@@ -34,8 +34,8 @@ export function DesignPanel({
           <div className="flex min-w-0 items-center gap-3">
             {icon ? <span className="shrink-0">{icon}</span> : null}
             <div className="min-w-0">
-              {title ? <h2 className="font-bold text-ui-text">{title}</h2> : null}
-              {description ? <p className="mt-0.5 text-xs text-ui-subtle">{description}</p> : null}
+              {title ? <h2 className="text-base font-extrabold leading-6 text-ui-text">{title}</h2> : null}
+              {description ? <p className="mt-1 text-xs font-medium leading-5 text-ui-muted">{description}</p> : null}
             </div>
           </div>
           {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
