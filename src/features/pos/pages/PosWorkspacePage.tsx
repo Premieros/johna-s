@@ -649,10 +649,10 @@ export function PosWorkspacePage() {
       p_status: 'cancelled',
       p_notes: reason,
     });
-    if (error) show(error.message, 'error');
+    if (error) show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
+      show(userFacingErrorMessage(r ?? t('error'), isAr ? 'ar' : 'en'), 'error');
     } else {
       show(t('cancelOrder'), 'success');
       setPanel(null);
