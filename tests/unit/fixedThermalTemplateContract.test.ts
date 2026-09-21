@@ -152,10 +152,10 @@ describe('fixed thermal receipt template contract', () => {
 
     expect(frontendRenderer).toContain("font-size: ${kitchen ? '11pt' : '12pt'}");
     expect(frontendRenderer).toContain("font-size: ${kitchen ? '26pt' : '30pt'}");
-    expect(frontendRenderer).toContain('grid-template-columns: 9mm minmax(0, 1fr) 18mm 20mm;');
+    expect(frontendRenderer).toContain('grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;');
     expect(frontendRenderer).toContain('.station-card {');
     expect(frontendRenderer).toContain('.qty-badge {');
-    expect(frontendRenderer).toContain('.grand-total { font-size: 19pt;');
+    expect(frontendRenderer).toContain('.grand-total { font-size: 17.5pt;');
 
     expect(renderer).toContain("$bodyFamily = 'Arial Narrow'");
     expect(renderer).toContain("$brandFamily = 'Arial'");
@@ -226,6 +226,43 @@ describe('fixed thermal receipt template contract', () => {
     expect(html).toContain('Alexandria');
     expect(html).toContain('Tel: 0123456789');
     expect(html).not.toContain('johns-print-auth');
+  });
+
+  it('reserves fixed LTR numeric columns so prices and totals cannot be visually clipped by RTL layout', async () => {
+    const html = await buildReceiptHtml(
+      {
+        invoice: "Johna's-009999",
+        branchName: 'Cleopatra',
+        items: [{ name: 'Very Long Product Name For Number Safety', qty: 12, price: 123456.78, total: 1481481.36 }],
+        subtotal: 1481481.36,
+        discount: 0,
+        tax: 0,
+        total: 1481481.36,
+        paid: 1481481.36,
+        change: 0,
+        date: '2026-09-21T20:30:00+03:00',
+        customerName: '',
+        payments: [{ method: 'card', amount: 1481481.36 }],
+      },
+      {
+        store_name: "Johna's",
+        currency: 'EGP',
+        receipt_width_mm: 80,
+        receipt_header: '',
+        receipt_footer: '',
+        receipt_show_tax: false,
+      } as unknown as Settings,
+      'ar',
+      true,
+      { authorize: false },
+    );
+
+    expect(html).toContain('grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;');
+    expect(html).toContain('white-space: nowrap;');
+    expect(html).toContain('font-variant-numeric: tabular-nums;');
+    expect(html).toContain('direction: ltr;');
+    expect(html).toContain('1,481,481.36 EGP');
+    expect(html).toContain('123,456.78 EGP');
   });
 
 
