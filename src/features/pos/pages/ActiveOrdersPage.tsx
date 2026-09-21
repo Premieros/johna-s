@@ -12,6 +12,7 @@ import { useToast } from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -135,7 +136,7 @@ export function ActiveOrdersPage() {
     if (!cashierId || cashierId === order.cashier_id) return;
     setBusy(true);
     const { error: updateError } = await supabase.from('orders').update({ cashier_id: cashierId }).eq('id', order.id);
-    if (updateError) show(updateError.message, 'error');
+    if (updateError) show(userFacingErrorMessage(updateError, isAr ? 'ar' : 'en'), 'error');
     else show(isAr ? 'تم تغيير مستخدم الطلب' : 'Order user reassigned', 'success');
     setBusy(false);
   };
@@ -154,10 +155,10 @@ export function ActiveOrdersPage() {
   const setStatus = async (tableId: string, status: string) => {
     setBusy(true);
     const { data, error } = await api.floorPlan.setTableStatus({ p_table_id: tableId, p_status: status });
-    if (error) { show(error.message, 'error'); }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); }
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
+      show(userFacingErrorMessage(r ?? t('error'), isAr ? 'ar' : 'en'), 'error');
     } else {
       show(t('saveSuccess'), 'success');
     }
@@ -167,10 +168,10 @@ export function ActiveOrdersPage() {
   const setOrderStatus = async (order: Order, status: 'open' | 'held' | 'completed' | 'cancelled') => {
     setBusy(true);
     const { data, error } = await api.floorPlan.setOrderStatus({ p_order_id: order.id, p_status: status });
-    if (error) { show(error.message, 'error'); }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); }
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
+      show(userFacingErrorMessage(r ?? t('error'), isAr ? 'ar' : 'en'), 'error');
     } else {
       show(status === 'cancelled' ? t('cancelOrder') : t('saveSuccess'), 'success');
     }
@@ -180,7 +181,7 @@ export function ActiveOrdersPage() {
   const createArea = async () => {
     if (!areaName.trim()) { show(t('required'), 'error'); return; }
     const { error } = await supabase.from('dining_areas').insert({ name: areaName.trim(), branch_id: effectiveBranch });
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     show(t('saveSuccess'), 'success');
     setAreaName('');
     setAreaModal(false);
@@ -217,7 +218,7 @@ export function ActiveOrdersPage() {
           p_shape: 'rect',
           p_layout: layout,
         });
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     const result = data as RpcResult | null;
     if (!result?.success) {
       const code = result?.error || t('error');
@@ -225,7 +226,7 @@ export function ActiveOrdersPage() {
         ? (isAr ? 'المنطقة الأساسية ثابتة على 50 طاولة. أضف الطاولة إلى منطقة أخرى.' : 'Main Area is fixed at 50 tables. Add the table to another area.')
         : code === 'DEFAULT_TABLE_IDENTITY_FIXED'
           ? (isAr ? 'اسم ومكان الطاولة الأساسية ثابتان.' : 'The default table name and area are fixed.')
-          : (result?.detail || code);
+          : userFacingErrorMessage(result ?? code, isAr ? 'ar' : 'en');
       show(message, 'error');
       return;
     }
@@ -237,7 +238,7 @@ export function ActiveOrdersPage() {
   const deleteTable = async (table: DiningTable) => {
     if (!window.confirm(isAr ? `حذف الطاولة "${table.name}"؟` : `Delete table "${table.name}"?`)) return;
     const { error } = await supabase.from('dining_tables').delete().eq('id', table.id);
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
   };
 
@@ -248,7 +249,7 @@ export function ActiveOrdersPage() {
     }
     if (!window.confirm(isAr ? `حذف المنطقة "${area.name}"؟` : `Delete area "${area.name}"?`)) return;
     const { error } = await supabase.from('dining_areas').delete().eq('id', area.id);
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
     await loadAreas();
   };
@@ -314,7 +315,7 @@ export function ActiveOrdersPage() {
           <div className="xl:col-span-2 space-y-5">
             {error && (
               <DesignPanel className="text-sm text-ui-danger border-ui-danger/30 bg-ui-danger/10" bodyClassName="p-3">
-                {error}
+                {userFacingErrorMessage(error, isAr ? 'ar' : 'en')}
               </DesignPanel>
             )}
             <TableFloorPlan
