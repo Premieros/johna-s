@@ -22,16 +22,24 @@ describe('dining area workspace and language lock contract', () => {
     expect(workspace).toContain('pos-dining-areas-');
   });
 
-  it('keeps the canonical Main Area fixed at English Table 01..Table 50', () => {
-    const migration = read('supabase/migrations/20260920170000_fixed_main_dining_area_and_english_tables.sql');
+  it('keeps canonical Main Area identities fixed while allowing a per-branch active table count', () => {
+    const baseline = read('supabase/migrations/20260920170000_fixed_main_dining_area_and_english_tables.sql');
+    const configurable = read('supabase/migrations/20260921090000_branch_main_area_table_limit.sql');
 
-    expect(migration).toContain("name = 'Main Area'");
-    expect(migration).toContain("'Table ' || lpad(v_i::text, 2, '0')");
-    expect(migration).toContain('idx_dining_areas_one_default_per_branch');
-    expect(migration).toContain('DEFAULT_AREA_FIXED_50');
-    expect(migration).toContain('DEFAULT_DINING_TABLE_FIXED');
-    expect(migration).toContain('trg_guard_default_dining_area_delete');
-    expect(migration).toContain('trg_guard_default_dining_table_identity');
+    expect(baseline).toContain("name = 'Main Area'");
+    expect(baseline).toContain("'Table ' || lpad(v_i::text, 2, '0')");
+    expect(baseline).toContain('idx_dining_areas_one_default_per_branch');
+    expect(baseline).toContain('DEFAULT_AREA_FIXED_50');
+    expect(baseline).toContain('DEFAULT_DINING_TABLE_FIXED');
+    expect(baseline).toContain('trg_guard_default_dining_area_delete');
+    expect(baseline).toContain('trg_guard_default_dining_table_identity');
+
+    expect(configurable).toContain('main_area_table_count');
+    expect(configurable).toContain('private.default_dining_table_limit');
+    expect(configurable).toContain('FOR v_i IN 1..50 LOOP');
+    expect(configurable).toContain('is_active = (v_i <= v_limit)');
+    expect(configurable).toContain('MAIN_AREA_TABLE_LIMIT_BUSY');
+    expect(configurable).toContain('trg_sync_main_area_table_count');
   });
 
   it('uses canonical floor-plan RPCs for table creation and updates', () => {
