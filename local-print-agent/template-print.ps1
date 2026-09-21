@@ -76,7 +76,7 @@ $doc.add_PrintPage({
   $subTitleFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 9.4 } else { 10.2 }), [System.Drawing.FontStyle]::Bold)
   $bodyFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 10.8 } else { 11.5 }), [System.Drawing.FontStyle]::Regular)
   $bodyBold = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 11.7 } else { 12.4 }), [System.Drawing.FontStyle]::Bold)
-  $smallFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 9.1 } else { 9.8 }), [System.Drawing.FontStyle]::Regular)
+  $smallFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 10.2 } else { 10.5 }), [System.Drawing.FontStyle]::Regular)
   $itemsTitleFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 15 } else { 16 }), [System.Drawing.FontStyle]::Bold)
   $totalFont = [System.Drawing.Font]::new($bodyFamily, 16.5, [System.Drawing.FontStyle]::Bold)
   $footerFont = [System.Drawing.Font]::new($bodyFamily, 11.2, [System.Drawing.FontStyle]::Regular)
