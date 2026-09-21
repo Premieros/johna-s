@@ -16,6 +16,24 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage('PERMISSION_DENIED:users.create', 'ar'))
       .toContain('إنشاء المستخدمين');
   });
+  it('keeps the permission name from structured RPC errors', () => {
+    const msg = userFacingErrorMessage(
+      { error: 'PERMISSION_DENIED', permission: 'pos.payment.take' },
+      'ar',
+    );
+    expect(msg).toContain('تحصيل المدفوعات');
+    expect(msg).toContain('pos.payment.take');
+  });
+
+  it('translates common POS/KDS operational codes instead of exposing raw codes', () => {
+    expect(userFacingErrorMessage('POS_KDS_VIEW_REQUIRED', 'ar')).toContain('شاشة المطبخ');
+    expect(userFacingErrorMessage('POS_KDS_UPDATE_REQUIRED', 'ar')).toContain('تحديث حالة المطبخ');
+    expect(userFacingErrorMessage('TABLE_BUSY', 'ar')).toContain('الطاولة');
+    expect(userFacingErrorMessage('ORDER_NOT_FOUND', 'ar')).toContain('الطلب');
+    expect(userFacingErrorMessage('BRANCH_REQUIRED', 'ar')).toContain('الفرع');
+    expect(userFacingErrorMessage('RAW_MATERIAL_NOT_IN_BRANCH', 'ar')).toContain('خامات');
+  });
+
 
   it('prefers sent-item approval codes over the generic approval substring', () => {
     const msg = userFacingErrorMessage(
