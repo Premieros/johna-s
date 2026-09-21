@@ -33,7 +33,7 @@ export type MyActiveTableOrderResolution = {
 
 export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeData> {
   const [tRes, oRes, operatorRes] = await Promise.all([
-    supabase.from('dining_tables').select('*').eq('branch_id', branchId).order('name'),
+    supabase.from('dining_tables').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
     supabase.from('orders')
       .select('*, table:dining_tables(*)')
       .eq('branch_id', branchId)

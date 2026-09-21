@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Grid3x3, MapPin, Plus, Trash2, Users } from 'lucide-react';
+import { Grid3x3, MapPin, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -38,9 +38,20 @@ interface TableFloorPlanProps {
   onSelectTable: (table: DiningTable) => void;
   onAddTable: (areaId?: string) => void;
   onDeleteArea: (area: DiningArea) => void;
+  onEditDefaultAreaCount: (area: DiningArea, currentCount: number) => void;
 }
 
-export function TableFloorPlan({ areas, tables, ordersByTable, canManage, currency, onSelectTable, onAddTable, onDeleteArea }: TableFloorPlanProps) {
+export function TableFloorPlan({
+  areas,
+  tables,
+  ordersByTable,
+  canManage,
+  currency,
+  onSelectTable,
+  onAddTable,
+  onDeleteArea,
+  onEditDefaultAreaCount,
+}: TableFloorPlanProps) {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
 
@@ -123,9 +134,21 @@ export function TableFloorPlan({ areas, tables, ordersByTable, canManage, curren
                     </>
                   )}
                   {area.is_default && (
-                    <span data-testid="default-dining-area-fixed" className="rounded-full border border-ui-border bg-ui-page-alt px-2 py-1 text-[10px] font-black text-ui-muted">
-                      {isAr ? 'ثابتة · 50 طاولة' : 'Fixed · 50 tables'}
-                    </span>
+                    <>
+                      <span data-testid="default-dining-area-fixed" className="rounded-full border border-ui-border bg-ui-page-alt px-2 py-1 text-[10px] font-black text-ui-muted">
+                        {isAr ? `أساسية · ${areaTables.length} طاولة` : `Main · ${areaTables.length} tables`}
+                      </span>
+                      <button
+                        type="button"
+                        data-testid="main-area-table-count-edit"
+                        onClick={() => onEditDefaultAreaCount(area, areaTables.length)}
+                        className="p-1.5 rounded-lg text-ui-subtle hover:text-ui-accent hover:bg-ui-page-alt"
+                        title={isAr ? 'تعديل عدد طاولات المنطقة الأساسية' : 'Edit Main Area table count'}
+                        aria-label={isAr ? 'تعديل عدد طاولات المنطقة الأساسية' : 'Edit Main Area table count'}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </>
                   )}
                 </div>
               )}

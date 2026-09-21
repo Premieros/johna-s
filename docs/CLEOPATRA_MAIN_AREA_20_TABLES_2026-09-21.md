@@ -61,11 +61,62 @@ Integration coverage includes:
 - changing setting back to 25 => exactly 25 active
 
 ## Production application
-Not applied yet.
-Required sequence:
-1. Full Verify green on exact development head.
-2. Merge migration to `main`.
-3. Apply the migration to production.
-4. Set Cleopatra `main_area_table_count = 20`.
-5. Verify Main Area has 20 active tables, Table 01..20 active and Table 21..50 inactive.
-6. Confirm other Cleopatra areas and all other branches are unchanged.
+**Status: COMPLETE — 2026-09-21**
+
+### Merge
+- PR #288 merged to `main`.
+- Merge commit: `65bf325ec243d6dbe5d1a0721db5874a122f6111`.
+
+### Verification before Production
+- PR Verify run #2159: Full Green ✅
+  - lint
+  - TypeScript
+  - app/test typecheck
+  - unit
+  - build
+  - canonical migrations/schema
+  - integration + security/RLS
+  - Browser Smoke
+- Post-merge `main` run #2164:
+  - verify ✅
+  - DB/schema/integration/security ✅
+  - Browser Smoke running at the moment the Production operation was completed.
+- The merge tree is identical to the Full-Green PR tree.
+
+### Production migration
+- Project: `azzdesuowpdcoflmyezn`
+- Applied migration: `branch_main_area_table_limit`
+- Supabase migration history recorded version: `20260921092200`
+- Result: success.
+
+### Cleopatra setting applied
+- Branch: `279e6662-e901-40b2-9170-7dda0b471ba7`
+- `main_area_table_count`: **20**
+
+### Production verification after apply
+Cleopatra Main Area:
+- canonical rows retained: **50**
+- active: **20**
+- inactive: **30**
+- active range: **Table 01..Table 20**
+- inactive range: **Table 21..Table 50**
+- inactive non-vacant tables: **0**
+- inactive tables with non-final orders: **0**
+
+Other branches:
+- Smouha remains configured at **50**
+- Smouha Main Area remains **50 active / 0 inactive**
+
+Other Cleopatra areas were not changed by the Main Area setting:
+- Floor 2: 27 active
+- out door: 10 active
+- In Door: 0
+- p-2: 0
+- Another: 5 active
+
+### Safety conclusion
+- No canonical table row was deleted.
+- Existing table identities remain protected.
+- No RLS/permission weakening.
+- No printing, KDS, payment, inventory, accounting, shift or day-close logic changed.
+- The change is branch-scoped and reversible by changing `main_area_table_count` to a safe value between 1 and 50.

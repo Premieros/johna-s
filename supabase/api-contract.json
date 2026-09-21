@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T00:15:00.000Z",
+  "generated_at": "2026-09-21T09:35:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -363,6 +363,13 @@
         "layout",
         "name",
         "shape"
+      ]
+    },
+    {
+      "name": "floor_plan_set_main_area_table_count",
+      "params": [
+        "branch_id",
+        "count"
       ]
     },
     {
