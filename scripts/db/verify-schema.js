@@ -144,7 +144,13 @@ async function main() {
     );
     const def = rows[0]?.definition || '';
     const alignsToCurrentQuantity =
-      def.includes('set sent_quantity = greatest(coalesce(v_current_quantity, 0), 0)')
+      (
+        def.includes('set sent_quantity = greatest(coalesce(v_current_quantity, 0), 0)')
+        || (
+          def.includes('v_target_quantity := greatest(coalesce(v_current_quantity, 0), 0)')
+          && def.includes('set sent_quantity = v_target_quantity')
+        )
+      )
       && def.includes('from public.order_items oi')
       && def.includes('where oi.id = new.order_item_id');
     const legacyDoubleSubtract =
