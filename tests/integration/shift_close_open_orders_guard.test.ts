@@ -149,7 +149,7 @@ describe.skipIf(skip)('shift close open-order guard', () => {
 
     await client.query(
       `UPDATE public.shifts
-       SET status='open',closed_at=NULL,expected_amount=NULL,actual_amount=NULL,difference=0
+       SET status='open',closed_at=NULL,expected_amount=100,actual_amount=NULL,difference=0
        WHERE id=$1`,
       [shiftA],
     );
