@@ -92,7 +92,7 @@ export function SalesPage() {
   const canEditSale = canEditSaleMetadata || canEditPaymentMethod;
   const canArchiveReturnedSale = can('refunds.approve');
   const canPreviewReceipt = can('sales.view');
-  const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint') || can('sales.print');
+  const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint');
 
   async function loadMeta() {
     const { data: customersRes } = await supabase.from('customers').select('*').order('name');
