@@ -291,3 +291,28 @@ End-to-end regression:
   - no print trigger, print queue, print-agent, printer route, kitchen station routing, or inventory algorithm redesign.
 - Production writes: NONE.
 - Production migrations applied: NONE.
+
+
+### 2026-09-21 — Phase 2 implementation checkpoint
+- Development HEAD before verification: `23b2a6d8db682c2534e6e4aec5f1082c494df3e4`.
+- `main` rechecked and still unchanged at `ff2152b8f9849e9c03376fb69d87c83432f795d3`.
+- Implemented UI-only permission split:
+  - `canDeleteItem` now represents unsent order-line edit authority (`pos.order.edit`);
+  - new `canVoidSentItem` represents direct sent-item Void authority (`pos.void`);
+  - current/new order context still uses `canModifyCurrentOrder` so create-only users can remove an unsent line from the order they are creating.
+- Sent-item approval path repair:
+  - sent-line Void/request control is no longer hidden solely because direct `pos.void` is absent;
+  - fully sent quantity decrease routes to the controlled Void callback even when normal order-edit authority is absent;
+  - partially sent lines still require normal edit authority while removing only their unsent delta;
+  - the modal explicitly distinguishes direct Void from manager approval request.
+- Server boundary remains unchanged in Phase 2:
+  - same `cancel_sent_order_item_exact` RPC;
+  - same approval-request logic;
+  - same audited inventory restoration path;
+  - no new migration added for Phase 2.
+- Added regression contract:
+  - `tests/unit/posVoidApprovalUiContract.test.ts`.
+- Printing / print-agent / printer routing / kitchen station routing changes: NONE.
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Full Verify run for this exact HEAD: `35578569475` — pending.
