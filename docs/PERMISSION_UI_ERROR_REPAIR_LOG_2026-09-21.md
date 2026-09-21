@@ -490,3 +490,20 @@ End-to-end regression:
 - Production writes: NONE.
 - Production migrations applied: NONE.
 - Printing / Print Agent / printer routing / kitchen station routing changes: NONE.
+
+
+### 2026-09-21 — Final-gate sync with latest main
+- Before final verification, `main` advanced to `65bf325ec243d6dbe5d1a0721db5874a122f6111`.
+- Compared changes from prior synchronized main `9e14cf5b2421809dfad3fd6b60a977b999fa2c47`.
+- Incoming main touched only:
+  - Cleopatra main-area table-limit documentation/domain type;
+  - migration `20260921090000_branch_main_area_table_limit.sql`;
+  - dining-area/table-limit regression tests.
+- Exact file overlap with this permission/error repair branch: **NONE**.
+- Safely synchronized latest main into this development branch with two-parent merge commit:
+  - `f03f1f2695dfcc37ae4677b0ff854bf3d2c400cb`
+- No Force Push.
+- No direct write to `main`.
+- No Production write or migration.
+- No printing / Print Agent / printer routing / kitchen station routing change.
+- Final Full Verify must run from the post-sync documented HEAD.
