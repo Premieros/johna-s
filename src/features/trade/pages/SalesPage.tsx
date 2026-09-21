@@ -3,7 +3,6 @@ import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -54,7 +53,6 @@ interface SaleRow {
 export function SalesPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const history = useHistoryAccess();
@@ -89,7 +87,9 @@ export function SalesPage() {
   const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
   const canRequestPaymentApproval = can('sales.payment.receive') && !can('refunds.approve');
-  const canEditSale = can('refunds.approve') || can('sales.payment.receive');
+  const canEditSaleMetadata = can('refunds.approve');
+  const canEditPaymentMethod = can('sales.payment.receive') || can('refunds.approve');
+  const canEditSale = canEditSaleMetadata || canEditPaymentMethod;
   const canArchiveReturnedSale = can('refunds.approve');
   const canPreviewReceipt = can('sales.view');
   const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint') || can('sales.print');
@@ -383,6 +383,10 @@ export function SalesPage() {
     if (!viewSale) return;
 
     const paymentChanged = editForm.payment_method !== viewSale.payment_method;
+    if (paymentChanged && !canEditPaymentMethod) {
+      show(isAr ? 'لا تملك صلاحية تعديل طريقة الدفع' : 'You do not have permission to edit the payment method', 'error');
+      return;
+    }
     if (paymentChanged) {
       if (editForm.payment_method === 'credit') {
         show(isAr ? 'التحويل إلى آجل يحتاج مسار ذمم مدينة مستقل' : 'Changing to credit requires the receivables workflow', 'error');
@@ -424,7 +428,7 @@ export function SalesPage() {
       }
     }
 
-    if (user?.role !== 'cashier') {
+    if (canEditSaleMetadata) {
       const { error } = await supabase.from('sales').update({
         customer_id: editForm.customer_id || null,
         status: editForm.status,
@@ -577,24 +581,24 @@ export function SalesPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Select label={t('customer')} value={editForm.customer_id} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, customer_id: e.target.value })}>
+              <Select label={t('customer')} value={editForm.customer_id} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, customer_id: e.target.value })}>
                 <option value="">--</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
-              <Select label={isAr ? 'طريقة الدفع' : 'Payment Method'} value={editForm.payment_method} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}>
+              <Select label={isAr ? 'طريقة الدفع' : 'Payment Method'} value={editForm.payment_method} disabled={!canEditPaymentMethod} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}>
                 <option value="cash">{t('cash')}</option>
                 <option value="card">{t('card')}</option>
                 <option value="transfer">{t('transfer')}</option>
                 <option value="credit" disabled>{t('credit')}</option>
               </Select>
-              <Select label={t('status')} value={editForm.status} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+              <Select label={t('status')} value={editForm.status} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
                 <option value="completed">{isAr ? 'مكتملة' : 'Completed'}</option>
                 <option value="pending">{isAr ? 'قيد الانتظار' : 'Pending'}</option>
                 <option value="returned">{isAr ? 'مرتجعة' : 'Returned'}</option>
               </Select>
               <div />
             </div>
-            <Textarea label={t('notes')} value={editForm.notes} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} />
+            <Textarea label={t('notes')} value={editForm.notes} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} />
 
             {viewSale.sale_items && viewSale.sale_items.length > 0 && (
               <div>
