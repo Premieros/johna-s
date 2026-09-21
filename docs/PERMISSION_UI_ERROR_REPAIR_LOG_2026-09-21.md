@@ -530,3 +530,27 @@ End-to-end regression:
 - No Production write has been performed.
 - No Print Agent, printer queue contract, printer route, printer payload, or kitchen station routing change was made by this repair.
 - PR `#286` remains the delivery vehicle; it must not merge until the final documentation HEAD itself is verified Green and merge approval is explicit.
+
+
+### 2026-09-21 — Reconcile latest main overlap before merge readiness
+- `main` advanced again to `320413ed08a037c25d57a05c26e777a9e97da018`.
+- New main work added the Main Area active-table-count UI/RPC and touched two files that also contain this repair:
+  - `src/features/pos/pages/ActiveOrdersPage.tsx`
+  - `src/features/pos/pages/PosWorkspacePage.tsx`
+- The overlap was not auto-overwritten.
+- Manual reconciliation preserved both scopes:
+  - retained this repair's exact permission guards for create/payment/cancel/operator-transfer;
+  - retained transfer target discovery through the dedicated RPC instead of direct users-table access;
+  - retained centralized user-facing error translation;
+  - retained POS partial-degradation / cached catalog behavior;
+  - added Main Area count editor, setter RPC UI, active-table scope and `branchId` propagation required by latest main.
+- Remaining non-overlapping latest-main files were copied from `320413ed...` unchanged.
+- A real two-parent merge commit was created:
+  - `131be076372eafa5c5959a2f346b17ef4e102cf7`
+  - parent 1: reconciled repair branch
+  - parent 2: latest `main`
+- No Force Push.
+- No direct write to `main`.
+- No Production write or migration.
+- No Print Agent / printer routing / kitchen station routing change.
+- Exact-head Full Verify must pass again after this reconciliation before merge readiness.
