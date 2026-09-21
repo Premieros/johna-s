@@ -80,6 +80,17 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
   }, [branchId, hasBranch]);
 
   const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;
+  const addBlockReason: 'shift' | 'permission' | null =
+    !hasBranch || !shiftChecked
+      ? null
+      : !shiftOpen
+        ? 'shift'
+        : !canModifyOrder
+          ? 'permission'
+          : null;
+  const addBlockMessage = addBlockReason === 'shift'
+    ? (isAr ? 'لا يمكن إضافة أصناف بدون شفت مفتوح' : 'Open a shift before adding items')
+    : (isAr ? 'لا تملك صلاحية إنشاء أو تعديل الطلب الحالي' : 'You do not have permission to create or edit the current order');
   const availabilityErrorLabel = (code: string) => code === 'RAW_MATERIAL_NOT_IN_BRANCH'
     ? (isAr ? 'خامة الوصفة خارج الفرع' : 'Recipe material belongs to another branch')
     : (isAr ? `خطأ إعداد المخزون: ${code}` : `Inventory configuration error: ${code}`);
@@ -191,10 +202,10 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
           <h2 className="mt-1 text-xl font-black text-ui-text">{isAr ? 'اختار طلبك' : 'Choose your order'}</h2>
           <p className="mt-1 text-xs font-medium text-ui-muted">{isAr ? 'اضغط على الصنف للتخصيص أو + للإضافة مباشرة' : 'Tap an item to customize or + to add it directly'}</p>
         </div>
-        {!canAddToCart && hasBranch && shiftChecked && (
+        {addBlockReason && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-ui-warning/30 bg-ui-warning/10 px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-ui-warning" /><p className="text-[11px] font-black text-ui-text">{isAr ? 'لا يمكن الإضافة بدون شفت مفتوح' : 'Open a shift before adding items'}</p></div>
-            {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-full bg-ui-warning px-3 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'الذهاب للشفتات' : 'Go to shifts'}</button>}
+            <div className="flex min-w-0 items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-ui-warning" /><p className="text-[11px] font-black text-ui-text">{addBlockMessage}</p></div>
+            {addBlockReason === 'shift' && can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-full bg-ui-warning px-3 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'الذهاب للشفتات' : 'Go to shifts'}</button>}
           </div>
         )}
         {renderSearch(true)}
@@ -202,10 +213,10 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
       </div>
 
       <div className="hidden lg:block z-10 flex-shrink-0 border-b border-ui-border bg-ui-surface/95 px-4 py-3 backdrop-blur">
-        {!canAddToCart && hasBranch && shiftChecked && (
+        {addBlockReason && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-ui-warning/30 bg-ui-warning/10 px-3 py-2">
-            <div className="flex min-w-0 items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-ui-warning" /><p className="truncate text-[11px] font-black text-ui-text">{isAr ? 'ممنوع إضافة منتجات بدون شفت مفتوح' : 'An open shift is required before adding products'}</p></div>
-            {can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-lg bg-ui-warning px-2.5 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'الذهاب للشفتات' : 'Go to shifts'}</button>}
+            <div className="flex min-w-0 items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-ui-warning" /><p className="truncate text-[11px] font-black text-ui-text">{addBlockMessage}</p></div>
+            {addBlockReason === 'shift' && can('shifts.view') && <button type="button" onClick={() => navigate(APP_ROUTES.shifts)} className="flex shrink-0 items-center gap-1 rounded-lg bg-ui-warning px-2.5 py-1.5 text-[10px] font-black text-white"><Timer className="h-3 w-3" />{isAr ? 'الذهاب للشفتات' : 'Go to shifts'}</button>}
           </div>
         )}
         <div className="flex gap-2">
