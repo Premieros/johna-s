@@ -213,7 +213,7 @@
 }
 
 @layer components {
-  /* === Accent strip system: subtle hierarchy, RTL-aware, no behavior impact === */
+  /* === Accent tint system: subtle section identity without colored edge strips === */
   .ui-accent-card,
   .ui-accent-top {
     --ui-accent-strip: var(--ui-strip-neutral);
@@ -221,30 +221,6 @@
     background:
       linear-gradient(135deg, rgb(var(--ui-accent-strip) / 0.045), transparent 34%),
       rgb(var(--ui-surface));
-  }
-
-  .ui-accent-card::before,
-  .ui-accent-top::before {
-    content: '';
-    position: absolute;
-    z-index: 1;
-    pointer-events: none;
-    background: rgb(var(--ui-accent-strip));
-    opacity: 0.9;
-  }
-
-  .ui-accent-card::before {
-    inset-block: 0.75rem;
-    inset-inline-start: 0;
-    width: 3px;
-    border-radius: 999px;
-  }
-
-  .ui-accent-top::before {
-    inset-inline: 1rem;
-    inset-block-start: 0;
-    height: 3px;
-    border-radius: 0 0 999px 999px;
   }
 
   .ui-accent-neutral { --ui-accent-strip: var(--ui-strip-neutral); }

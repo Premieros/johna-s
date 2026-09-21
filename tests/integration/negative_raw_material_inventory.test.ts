@@ -485,7 +485,9 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
       `SELECT avg_cost::text FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,
       [rawL, branchA],
     );
-    expect(num(avgPos[0].avg_cost)).toBe(9);
+    // FIFO settlement consumes 4 units of the 6-unit receipt against the
+    // historical debt first, leaving 2 units at their true receipt cost (3).
+    expect(num(avgPos[0].avg_cost)).toBe(3);
   });
 
   it('keeps strict callers (default allow_negative=false) from going negative', async () => {
