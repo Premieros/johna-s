@@ -6,6 +6,7 @@ const migration = read('supabase/migrations/20260922002500_restore_shift_open_or
 const shifts = read('src/features/trade/pages/ShiftsPage.tsx');
 const products = read('src/features/catalog/pages/ProductsPage.tsx');
 const raw = read('src/features/manufacturing/pages/RawMaterialsPage.tsx');
+const pricing = read('src/features/catalog/pages/PricingPage.tsx');
 
 describe('shift override and catalog visibility repair contract', () => {
   it('keeps close-with-open-orders permission-first and preserves operational orders', () => {
@@ -30,5 +31,10 @@ describe('shift override and catalog visibility repair contract', () => {
     expect(raw).toContain("table: 'raw_materials'");
     expect(raw).toContain("select: '*'");
     expect(raw).not.toContain("unit:units(*)");
+  });
+
+  it('reloads pricing rows when permissions hydrate after branch context', () => {
+    expect(pricing).toContain('[branchId, canRawView, canProductsView]');
+    expect(pricing).toContain('void load();');
   });
 });
