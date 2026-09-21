@@ -63,6 +63,71 @@ describe.skipIf(!dbUrl)('fixed dining table contract', () => {
     }
   });
 
+  it('keeps 50 canonical rows but syncs the active Main Area count from branch settings', async () => {
+    await client.query('BEGIN');
+    try {
+      const branch = await client.query<{ id: string }>(
+        `INSERT INTO public.branches(name, is_active)
+         VALUES ($1, true)
+         RETURNING id`,
+        [`configurable-main-area-${Date.now()}`],
+      );
+      const branchId = branch.rows[0].id;
+
+      await client.query(
+        `INSERT INTO public.branch_settings(branch_id, main_area_table_count)
+         VALUES ($1, 20)
+         ON CONFLICT (branch_id)
+         DO UPDATE SET main_area_table_count = EXCLUDED.main_area_table_count, updated_at = now()`,
+        [branchId],
+      );
+
+      const reduced = await client.query<{ total: string; active: string; max_active: string | null }>(
+        `SELECT COUNT(*)::text AS total,
+                COUNT(*) FILTER (WHERE is_active)::text AS active,
+                MAX(substring(name from '([0-9]{2})$')::int) FILTER (WHERE is_active)::text AS max_active
+         FROM public.dining_tables
+         WHERE branch_id = $1
+           AND name ~ '^Table (0[1-9]|[1-4][0-9]|50)$'`,
+        [branchId],
+      );
+
+      expect(Number(reduced.rows[0].total)).toBe(50);
+      expect(Number(reduced.rows[0].active)).toBe(20);
+      expect(Number(reduced.rows[0].max_active)).toBe(20);
+
+      await client.query('SAVEPOINT reject_manual_reactivation');
+      await expect(client.query(
+        `UPDATE public.dining_tables
+         SET is_active = true
+         WHERE branch_id = $1 AND name = 'Table 21'`,
+        [branchId],
+      )).rejects.toThrow(/DEFAULT_DINING_TABLE_FIXED/);
+      await client.query('ROLLBACK TO SAVEPOINT reject_manual_reactivation');
+
+      await client.query(
+        `UPDATE public.branch_settings
+         SET main_area_table_count = 25, updated_at = now()
+         WHERE branch_id = $1`,
+        [branchId],
+      );
+
+      const expanded = await client.query<{ active: string; max_active: string | null }>(
+        `SELECT COUNT(*) FILTER (WHERE is_active)::text AS active,
+                MAX(substring(name from '([0-9]{2})$')::int) FILTER (WHERE is_active)::text AS max_active
+         FROM public.dining_tables
+         WHERE branch_id = $1
+           AND name ~ '^Table (0[1-9]|[1-4][0-9]|50)$'`,
+        [branchId],
+      );
+
+      expect(Number(expanded.rows[0].active)).toBe(25);
+      expect(Number(expanded.rows[0].max_active)).toBe(25);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
   it('marks Main Area as the only default area and protects its fixed 50 table identities', async () => {
     await client.query('BEGIN');
     try {
