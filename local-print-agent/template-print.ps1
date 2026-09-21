@@ -83,7 +83,9 @@ $doc.add_PrintPage({
   $bodyBold = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 11.7 } else { 12.4 }), [System.Drawing.FontStyle]::Bold)
   $smallFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 10.2 } else { 10.5 }), [System.Drawing.FontStyle]::Regular)
   $itemsTitleFont = [System.Drawing.Font]::new($bodyFamily, $(if ($isKitchen) { 15 } else { 16 }), [System.Drawing.FontStyle]::Bold)
-  $totalFont = [System.Drawing.Font]::new($bodyFamily, 16.5, [System.Drawing.FontStyle]::Bold)
+  $totalFont = [System.Drawing.Font]::new($bodyFamily, 15.5, [System.Drawing.FontStyle]::Bold)
+  $numberFont = [System.Drawing.Font]::new($bodyFamily, 9.2, [System.Drawing.FontStyle]::Bold)
+  $numberTotalFont = [System.Drawing.Font]::new($bodyFamily, 10.4, [System.Drawing.FontStyle]::Bold)
   $footerFont = [System.Drawing.Font]::new($bodyFamily, 11.2, [System.Drawing.FontStyle]::Regular)
 
   $fmtCenter = New-Object System.Drawing.StringFormat
@@ -216,9 +218,9 @@ $doc.add_PrintPage({
       $y += 1.4
     }
   } else {
-    $qtyW = 9.0
-    $unitW = 17.0
-    $totalW = 20.0
+    $qtyW = 8.0
+    $unitW = 19.0
+    $totalW = 23.0
     $nameW = $contentWidth - $qtyW - $unitW - $totalW
     $qtyHead = $(if ($isAr) { 'الكمية' } else { 'QTY' })
     $itemHead = $(if ($isAr) { 'الصنف' } else { 'ITEM' })
@@ -256,9 +258,9 @@ $doc.add_PrintPage({
       $rowHeight = [Math]::Max(8.5, ($nameLines * 5.5) + 1.5)
       $g.DrawString((Safe $item.qty), $bodyBold, $black, ([System.Drawing.RectangleF]::new($qtyX, $y, $qtyW, $rowHeight)), $fmtCenter)
       $g.DrawString($name, $bodyBold, $black, ([System.Drawing.RectangleF]::new($nameX, $y, $nameW, $rowHeight)), $(if ($isAr) { $fmtRtlRight } else { $fmtLeft }))
-      $g.DrawString((Safe $item.price), $smallFont, $black, ([System.Drawing.RectangleF]::new($unitX, $y, $unitW, $rowHeight)), $fmtRight)
+      $g.DrawString((Safe $item.price), $numberFont, $black, ([System.Drawing.RectangleF]::new($unitX, $y, $unitW, $rowHeight)), $fmtRight)
       $displayTotal = $(if ((Safe $item.total).Trim()) { Safe $item.total } else { Safe $item.price })
-      $g.DrawString($displayTotal, $bodyBold, $black, ([System.Drawing.RectangleF]::new($totalX, $y, $totalW, $rowHeight)), $fmtRight)
+      $g.DrawString($displayTotal, $numberTotalFont, $black, ([System.Drawing.RectangleF]::new($totalX, $y, $totalW, $rowHeight)), $fmtRight)
       $y += $rowHeight
       $g.DrawLine($thinPen, $left, $y, $paperWidthMm - $right, $y)
       $y += 1.1
@@ -276,16 +278,18 @@ $doc.add_PrintPage({
     foreach ($row in @($data.totals)) {
       $isStrong = [bool]$row.emphasis
       $font = $(if ($isStrong) { $totalFont } else { $bodyFont })
+      $valueText = Safe $row.value
+      $valueFont = $(if ($isStrong -and $valueText.Length -gt 12) { $bodyBold } elseif ($isStrong) { $totalFont } else { $bodyBold })
       $rowHeight = $(if ($isStrong) { 9.8 } else { 6.8 })
       if ($isStrong) {
         $g.DrawLine($strongPen, $left + 1.5, $y - 0.6, $paperWidthMm - $right - 1.5, $y - 0.6)
       }
       if ($isAr) {
-        $g.DrawString((Safe $row.label) + ':', $font, $black, ([System.Drawing.RectangleF]::new($paperWidthMm - $right - ($contentWidth*0.6) - 1.5, $y, $contentWidth*0.6, $rowHeight)), $fmtRtlRight)
-        $g.DrawString((Safe $row.value), $font, $black, ([System.Drawing.RectangleF]::new($left + 1.5, $y, $contentWidth*0.42, $rowHeight)), $fmtRight)
+        $g.DrawString((Safe $row.label) + ':', $font, $black, ([System.Drawing.RectangleF]::new($paperWidthMm - $right - ($contentWidth*0.52) - 1.5, $y, $contentWidth*0.52, $rowHeight)), $fmtRtlRight)
+        $g.DrawString($valueText, $valueFont, $black, ([System.Drawing.RectangleF]::new($left + 1.5, $y, $contentWidth*0.48 - 1.5, $rowHeight)), $fmtRight)
       } else {
-        $g.DrawString((Safe $row.label) + ':', $font, $black, ([System.Drawing.RectangleF]::new($left + 1.5, $y, $contentWidth*0.58, $rowHeight)), $fmtLeft)
-        $g.DrawString((Safe $row.value), $font, $black, ([System.Drawing.RectangleF]::new($left + ($contentWidth*0.55), $y, $contentWidth*0.45 - 1.5, $rowHeight)), $fmtRight)
+        $g.DrawString((Safe $row.label) + ':', $font, $black, ([System.Drawing.RectangleF]::new($left + 1.5, $y, $contentWidth*0.52, $rowHeight)), $fmtLeft)
+        $g.DrawString($valueText, $valueFont, $black, ([System.Drawing.RectangleF]::new($left + ($contentWidth*0.52), $y, $contentWidth*0.48 - 1.5, $rowHeight)), $fmtRight)
       }
       $y += $rowHeight
     }
@@ -305,7 +309,7 @@ $doc.add_PrintPage({
 
   $thinPen.Dispose()
   $strongPen.Dispose()
-  foreach ($font in @($brandFont,$brandSubFont,$titleFont,$subTitleFont,$bodyFont,$bodyBold,$smallFont,$itemsTitleFont,$totalFont,$footerFont)) { $font.Dispose() }
+  foreach ($font in @($brandFont,$brandSubFont,$titleFont,$subTitleFont,$bodyFont,$bodyBold,$smallFont,$itemsTitleFont,$totalFont,$numberFont,$numberTotalFont,$footerFont)) { $font.Dispose() }
   foreach ($fmt in @($fmtCenter,$fmtLeft,$fmtRight,$fmtRtlRight,$fmtRtlLeft)) { $fmt.Dispose() }
 })
 
