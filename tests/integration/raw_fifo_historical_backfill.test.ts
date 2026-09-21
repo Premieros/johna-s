@@ -39,7 +39,7 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
       [raw, branch, 'HRAW-' + randomUUID().slice(0, 6), rawStale, unit, 'HSTALE-' + randomUUID().slice(0, 6)],
     );
     await client.query(
-      "INSERT INTO public.sales(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,payment_method,status,order_type,created_at) VALUES($1,'FIFO-HIST-SALE',$2,$3,100,100,100,'cash','completed','takeaway','2026-01-02T12:00:00Z')",
+      "INSERT INTO public.sales(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,payment_method,status,order_type,created_at) VALUES($1,'FIFO-HIST-SALE',$2,$3,100,100,100,'cash','completed','takeaway','2026-09-20T12:00:00Z')",
       [sale, branch, warehouse],
     );
 
@@ -49,12 +49,12 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
     );
 
     await client.query(
-      "INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) VALUES ($1,$2,$3,'H-B1',0,4,'purchase','2026-01-01T08:00:00Z'),($1,$2,$3,'OV-HIST',-3,0,'sale_oversold','2026-01-02T12:00:00Z'),($1,$2,$3,'H-B2',3,10,'purchase','2026-01-03T08:00:00Z')",
+      "INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) VALUES ($1,$2,$3,'H-B1',0,4,'purchase','2026-09-20T08:00:00Z'),($1,$2,$3,'OV-HIST',-3,0,'sale_oversold','2026-09-20T12:00:00Z'),($1,$2,$3,'H-B2',3,10,'purchase','2026-09-21T08:00:00Z')",
       [raw, branch, warehouse],
     );
 
     await client.query(
-      "INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at) VALUES ($1,$2,$3,'H-B1',2,4,8,0,2,'purchase','purchase',NULL,'H-P1','2026-01-01T08:00:00Z'),($1,$2,$3,'H-B1',-2,4,-8,2,0,'sale','sale',$4,'FIFO-HIST-SALE','2026-01-02T12:00:00Z'),($1,$2,$3,'OV-HIST',-3,0,0,0,-3,'sale','sale',$4,'FIFO-HIST-SALE','2026-01-02T12:00:01Z'),($1,$2,$3,'H-B2',3,10,30,-3,0,'purchase','purchase',NULL,'H-P2','2026-01-03T08:00:00Z')",
+      "INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at) VALUES ($1,$2,$3,'H-B1',2,4,8,0,2,'purchase','purchase',NULL,'H-P1','2026-09-20T08:00:00Z'),($1,$2,$3,'H-B1',-2,4,-8,2,0,'sale','sale',$4,'FIFO-HIST-SALE','2026-09-20T12:00:00Z'),($1,$2,$3,'OV-HIST',-3,0,0,0,-3,'sale','sale',$4,'FIFO-HIST-SALE','2026-09-20T12:00:01Z'),($1,$2,$3,'H-B2',3,10,30,-3,0,'purchase','purchase',NULL,'H-P2','2026-09-21T08:00:00Z')",
       [raw, branch, warehouse, sale],
     );
     await client.query(
