@@ -554,3 +554,25 @@ End-to-end regression:
 - No Production write or migration.
 - No Print Agent / printer routing / kitchen station routing change.
 - Exact-head Full Verify must pass again after this reconciliation before merge readiness.
+
+
+### 2026-09-21 — Post-reconciliation exact-head Full Verify GREEN
+- Exact verified HEAD: `74e38281a24b5b144ae77ecddfded4067afb85cb`.
+- Base `main`: `320413ed08a037c25d57a05c26e777a9e97da018`.
+- Workflow: `Verify main` run `35587697570`.
+- Results:
+  - frontend API contract ✅
+  - lint ✅
+  - TypeScript ✅
+  - test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations ✅
+  - schema verification ✅
+  - Integration / Security / RLS ✅
+  - Browser Smoke / Playwright ✅
+- The manual reconciliation with latest Main Area work is verified Green together with the permission/error repair.
+- PR `#286` remains Draft and is technically merge-ready once the final documentation HEAD itself is Green and merge approval is explicit.
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Printing / Print Agent / printer queue contract / printer routing / kitchen station routing changes: NONE.
