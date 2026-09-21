@@ -136,6 +136,62 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
       [sale],
     );
     expect(num(adjAgain[0].exact_delta)).toBe(30);
+
+    const reversed = await q<{ r: Record<string, unknown> }>(
+      'SELECT public.raw_fifo_reverse_backfill($1) r',
+      [runId],
+    );
+    expect(reversed[0].r.success).toBe(true);
+    expect(reversed[0].r.reversed).toBe(true);
+
+    const restoredBatches = await q<{ batch_number: string; quantity: string }>(
+      'SELECT batch_number,quantity::text FROM public.raw_material_batches WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3 ORDER BY batch_number',
+      [raw, branch, warehouse],
+    );
+    const restoredByBatch = new Map(
+      restoredBatches.map((r) => [r.batch_number, num(r.quantity)]),
+    );
+    expect(restoredByBatch.get('H-B1')).toBe(0);
+    expect(restoredByBatch.get('H-B2')).toBe(3);
+    expect(restoredByBatch.get('OV-HIST')).toBe(-3);
+
+    const restoredLedger = await q<{ unit_cost: string; total_cost: string }>(
+      "SELECT unit_cost::text,total_cost::text FROM public.inventory_ledger WHERE raw_material_id=$1 AND batch_number='OV-HIST'",
+      [raw],
+    );
+    expect(num(restoredLedger[0].unit_cost)).toBe(0);
+    expect(num(restoredLedger[0].total_cost)).toBe(0);
+
+    const debtAfterReverse = await q<{ count: string }>(
+      'SELECT count(*)::text count FROM public.raw_fifo_debts WHERE raw_material_id=$1 AND reference_id=$2',
+      [raw, sale],
+    );
+    expect(num(debtAfterReverse[0].count)).toBe(0);
+
+    const adjustmentAfterReverse = await q<{ count: string }>(
+      'SELECT count(*)::text count FROM public.raw_fifo_sale_cogs_adjustments WHERE sale_id=$1',
+      [sale],
+    );
+    expect(num(adjustmentAfterReverse[0].count)).toBe(0);
+
+    const fifoJournalAfterReverse = await q<{ count: string }>(
+      "SELECT count(*)::text count FROM public.journal_entries WHERE reference_type='fifo_cogs_reconcile' AND reference_id=$1",
+      [sale],
+    );
+    expect(num(fifoJournalAfterReverse[0].count)).toBe(0);
+
+    const restoredMargin = await q<{ cogs: string }>(
+      'SELECT cogs::text FROM public.get_order_margin($1,NULL,NULL) WHERE sale_id=$2',
+      [branch, sale],
+    );
+    expect(num(restoredMargin[0].cogs)).toBe(8);
+
+    const reverseAgain = await q<{ r: Record<string, unknown> }>(
+      'SELECT public.raw_fifo_reverse_backfill($1) r',
+      [runId],
+    );
+    expect(reverseAgain[0].r.success).toBe(true);
+    expect(reverseAgain[0].r.already_reversed).toBe(true);
   });
 
   it('rejects a prepared plan after a new raw ledger movement makes it stale', async () => {
