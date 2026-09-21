@@ -334,6 +334,9 @@ BEGIN
   INSERT INTO public.raw_fifo_backfill_runs(id,branch_id,cutoff_ledger_id,status)
   VALUES(v_run,p_branch_id,v_cutoff,'preparing');
 
+  DROP TABLE IF EXISTS pg_temp.rf_lots;
+  DROP TABLE IF EXISTS pg_temp.rf_debts;
+
   CREATE TEMP TABLE rf_lots(
     id bigserial PRIMARY KEY,
     raw_material_id uuid NOT NULL,
