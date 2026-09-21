@@ -6,6 +6,7 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useActiveBranchId } from '@/lib/activeBranch';
 import { useOffline } from '@/context/OfflineContext';
 import { offlinePosManager } from '../services/offlinePos';
@@ -82,6 +83,7 @@ export function PosWorkspacePage() {
   const [discountShortcutToken, setDiscountShortcutToken] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [loadWarning, setLoadWarning] = useState('');
   const [activeShift, setActiveShift] = useState<{ id: string; expected: number; opened_at: string; opening_amount: number } | null>(null);
   const [shiftChecked, setShiftChecked] = useState(false);
   const [panel, setPanel] = useState<PosPanelId>(null);
@@ -350,6 +352,7 @@ export function PosWorkspacePage() {
     async function loadData() {
       setLoading(true);
       setLoadError('');
+      setLoadWarning('');
       try {
         const fixedBranch = effectiveBranch;
         
@@ -397,44 +400,60 @@ export function PosWorkspacePage() {
         ]);
         if (cancelled) return;
         
-        const errors: string[] = [];
+        let productLoadError: unknown = null;
+        const secondaryErrors: unknown[] = [];
         let loadedProds: Product[] = [];
         let loadedCats: Category[] = [];
         let loadedCusts: Customer[] = [];
         let loadedSettings: Settings | null = null;
         let loadedBranches: Branch[] = [];
 
-        if (pRes.status === 'fulfilled' && pRes.value.error) errors.push('products: ' + pRes.value.error.message);
-        else if (pRes.status === 'fulfilled') {
+        if (pRes.status === 'rejected') productLoadError = pRes.reason;
+        else if (pRes.value.error) productLoadError = pRes.value.error;
+        else {
           loadedProds = (pRes.value.data as Product[]) || [];
           setProducts(loadedProds);
         }
 
-        if (cRes.status === 'fulfilled' && cRes.value.error) errors.push('customers: ' + cRes.value.error.message);
-        else if (cRes.status === 'fulfilled') {
+        if (cRes.status === 'rejected') secondaryErrors.push(cRes.reason);
+        else if (cRes.value.error) secondaryErrors.push(cRes.value.error);
+        else {
           loadedCusts = (cRes.value.data as Customer[]) || [];
           setCustomers(loadedCusts);
         }
 
-        if (sRes.status === 'fulfilled' && sRes.value.error) errors.push('settings: ' + sRes.value.error.message);
-        else if (sRes.status === 'fulfilled') {
+        if (sRes.status === 'rejected') secondaryErrors.push(sRes.reason);
+        else if (sRes.value.error) secondaryErrors.push(sRes.value.error);
+        else {
           loadedSettings = sRes.value.data as Settings;
           setSettings(loadedSettings);
         }
 
-        if (bRes.status === 'fulfilled' && bRes.value.error) errors.push('branches: ' + bRes.value.error.message);
-        else if (bRes.status === 'fulfilled') {
+        if (bRes.status === 'rejected') secondaryErrors.push(bRes.reason);
+        else if (bRes.value.error) secondaryErrors.push(bRes.value.error);
+        else {
           loadedBranches = (bRes.value.data as Branch[]) || [];
           setBranches(loadedBranches);
         }
 
-        if (catRes.status === 'fulfilled' && catRes.value.error) errors.push('categories: ' + catRes.value.error.message);
-        else if (catRes.status === 'fulfilled') {
+        if (catRes.status === 'rejected') secondaryErrors.push(catRes.reason);
+        else if (catRes.value.error) secondaryErrors.push(catRes.value.error);
+        else {
           loadedCats = (catRes.value.data as Category[]) || [];
           setCategories(loadedCats);
         }
 
-        if (aRes.status === 'fulfilled' && aRes.value.data) setDiningAreas((aRes.value.data as DiningArea[]) || []);
+        if (aRes.status === 'rejected') secondaryErrors.push(aRes.reason);
+        else if (aRes.value.error) secondaryErrors.push(aRes.value.error);
+        else if (aRes.value.data) setDiningAreas((aRes.value.data as DiningArea[]) || []);
+
+        if (secondaryErrors.length > 0) {
+          setLoadWarning(
+            isAr
+              ? 'تم تحميل نقطة البيع، لكن تعذر تحديث بعض البيانات الثانوية. يمكنك مواصلة العمل، ثم إعادة المحاولة لتحديث البيانات.'
+              : 'POS loaded, but some secondary data could not be refreshed. You can continue working and retry to refresh it.',
+          );
+        }
 
         // Cache online data for offline use
         if (loadedProds.length > 0) {
@@ -449,8 +468,9 @@ export function PosWorkspacePage() {
           });
         }
 
-        // If online query had errors or zero products, attempt offline fallback gracefully
-        if (errors.length > 0 || loadedProds.length === 0) {
+        // Only a product-catalog failure can block POS after offline fallback.
+        // Secondary customer/settings/branch/category failures degrade gracefully.
+        if (productLoadError || loadedProds.length === 0) {
           const offlineData = await loadCachedPosData(fixedBranch || undefined);
           const catalogFallback = offlinePosManager.getCatalogCache(fixedBranch || 'default');
           const fallbackProds = offlineData.products.length > 0 ? offlineData.products : catalogFallback?.products || [];
@@ -463,9 +483,15 @@ export function PosWorkspacePage() {
             if (offlineData.settings) setSettings(offlineData.settings);
             if (offlineData.stockMap && Object.keys(offlineData.stockMap).length > 0) setStockMap(offlineData.stockMap);
             if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
-            // Clear errors because we successfully recovered with offline catalog
-          } else if (errors.length > 0) {
-            setLoadError(errors.join('\n'));
+            if (productLoadError) {
+              setLoadWarning(
+                isAr
+                  ? 'تعذر تحديث كتالوج المنتجات من الخادم، وتم تشغيل آخر نسخة محفوظة بأمان.'
+                  : 'The product catalog could not refresh from the server, so the last safe cached version is in use.',
+              );
+            }
+          } else if (productLoadError) {
+            setLoadError(userFacingErrorMessage(productLoadError, isAr ? 'ar' : 'en'));
           }
         }
       } catch (err: unknown) {
@@ -487,7 +513,7 @@ export function PosWorkspacePage() {
         } catch {
           // ignore
         }
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setLoadError(userFacingErrorMessage(err, isAr ? 'ar' : 'en'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -623,10 +649,10 @@ export function PosWorkspacePage() {
       p_status: 'cancelled',
       p_notes: reason,
     });
-    if (error) show(error.message, 'error');
+    if (error) show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
+      show(userFacingErrorMessage(r ?? t('error'), isAr ? 'ar' : 'en'), 'error');
     } else {
       show(t('cancelOrder'), 'success');
       setPanel(null);
@@ -766,7 +792,7 @@ export function PosWorkspacePage() {
       sentOrderItemIds={sentOrderItemIds}
       sessionSent={pos.kitchenSentItems}
       canDiscount={perms.canDiscount}
-      canDeleteItem={perms.canDeleteItem}
+      canDeleteItem={canModifyCurrentOrder}
       discountShortcutToken={discountShortcutToken}
       onSwitchOrderType={(ot) => void pos.switchOrderType(ot)}
       onGuestCountChange={pos.setGuestCount}
@@ -829,6 +855,19 @@ export function PosWorkspacePage() {
         }}
         onExit={() => navigate('/dashboard')}
       />
+
+      {loadWarning && (
+        <div data-testid="pos-load-warning" className="flex items-center justify-between gap-3 border-b border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs font-bold text-ui-text">
+          <span className="min-w-0 break-words">{loadWarning}</span>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="shrink-0 rounded-lg border border-ui-warning/40 bg-ui-surface px-2.5 py-1.5 text-[11px] font-black text-ui-text"
+          >
+            {isAr ? 'تحديث' : 'Retry'}
+          </button>
+        </div>
+      )}
 
       {products.length === 0 && !loading && (
         <div className="p-3 bg-ui-surface border-b border-ui-border">
@@ -903,6 +942,7 @@ export function PosWorkspacePage() {
             orderType={pos.orderType}
             itemsCount={pos.cart.reduce((s, it) => s + it.quantity, 0)}
             canPrintReceipt={pos.cart.length > 0 || !!pos.lastReceipt}
+            canModifyOrder={canModifyCurrentOrder}
             total={pos.total}
             currency={pos.effCurrency}
             createdAt={activeOrderCreatedAt}
@@ -1245,6 +1285,7 @@ export function PosWorkspacePage() {
         }}
         item={voidItem}
         sentQty={voidSentQty}
+        canDirectVoid={perms.canVoidSentItem}
         onConfirmVoid={handleConfirmVoid}
       />
 

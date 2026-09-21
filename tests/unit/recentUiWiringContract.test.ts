@@ -45,7 +45,9 @@ describe('Recent UI wiring contracts', () => {
   it('keeps POS cart additions blocked by shift/configuration prerequisites, never stock quantity', () => {
     const page = source('src/features/pos/components/catalog/ProductBrowser.tsx');
     expect(page).toContain('const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen');
-    expect(page).toContain('ممنوع إضافة منتجات بدون شفت مفتوح');
+    expect(page).toContain("addBlockReason: 'shift' | 'permission' | null");
+    expect(page).toContain('لا يمكن إضافة أصناف بدون شفت مفتوح');
+    expect(page).toContain('لا تملك صلاحية إنشاء أو تعديل الطلب الحالي');
     expect(page).toContain('if (!canAddToCart || !ensureSellable(product)) return;');
     expect(page).toContain('const gated = !!availabilityError || !canAddToCart;');
     expect(page).not.toContain('if (!hasStockValue(source, product.id))');

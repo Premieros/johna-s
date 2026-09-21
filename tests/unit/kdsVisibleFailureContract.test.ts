@@ -8,7 +8,7 @@ describe('KDS visible failure contract', () => {
     const catchAt = source.indexOf("// Never turn a KDS transport/permission failure into a fake empty queue.");
     expect(catchAt).toBeGreaterThanOrEqual(0);
     const catchBody = source.slice(catchAt, source.indexOf('} finally {', catchAt));
-    expect(catchBody).toContain('setLoadError(errorMessage(error))');
+    expect(catchBody).toContain("setLoadError(userFacingErrorMessage(error, ar ? 'ar' : 'en'))");
     expect(catchBody).not.toContain('setItems([])');
   });
 

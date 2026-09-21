@@ -6,6 +6,7 @@ export interface PosPermissions {
   canCreateOrder: boolean;
   canEditOrder: boolean;
   canDeleteItem: boolean;
+  canVoidSentItem: boolean;
   canApplyDiscount: boolean;
   canDiscount: boolean;
   canChangePrice: boolean;
@@ -35,7 +36,10 @@ export function usePosPermissions(): PosPermissions {
     canViewPos: can('pos.view'),
     canCreateOrder: can('pos.order.create'),
     canEditOrder: can('pos.order.edit'),
-    canDeleteItem: can('pos.void'),
+    // Unsent line removal is an order edit. Sent-item Void stays a separate
+    // direct capability; users without it can still enter the approval path.
+    canDeleteItem: can('pos.order.edit'),
+    canVoidSentItem: can('pos.void'),
     canApplyDiscount: can('pos.discount'),
     canDiscount: can('pos.discount'),
     canChangePrice: can('pos.change_price'),

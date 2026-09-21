@@ -12,6 +12,7 @@ import { useToast } from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
 import { StatCard } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -67,8 +68,11 @@ export function ActiveOrdersPage() {
 
   const effectiveBranch = branchFilter || user?.branch_id || '';
   const canManage = can('floor_plan.manage');
+  const canCreateOrder = can('pos.order.create');
+  const canPayOrder = can('pos.payment.take');
+  const canCancelOrder = can('pos.cancel_order');
+  const canReassignCashier = can('pos.order.transfer');
   const editTargetIsDefault = !!editTarget && areas.some((area) => area.id === editTarget.area_id && area.is_default);
-  const canReassignCashier = can('pos.order.transfer') && can('pos.order.edit') && can('users.manage');
 
   const { orders, tables, counts, ordersByTable, itemsByOrder, loading, error } = useActiveOrders(effectiveBranch);
 
@@ -101,17 +105,27 @@ export function ActiveOrdersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!effectiveBranch) { setCashiers([]); return undefined; }
-    supabase.from('users')
-      .select('id, full_name, email')
-      .eq('branch_id', effectiveBranch)
-      .eq('is_active', true)
-      .order('full_name')
-      .then(({ data }) => {
-        if (!cancelled) setCashiers((data as CashierOption[]) || []);
+    const sourceOrder = orders[0];
+    if (!effectiveBranch || !canReassignCashier || !sourceOrder) {
+      setCashiers([]);
+      return () => { cancelled = true; };
+    }
+    api.pos.listOrderTransferTargets({ p_order_id: sourceOrder.id })
+      .then(({ data, error: targetsError }) => {
+        if (cancelled) return;
+        if (targetsError) {
+          setCashiers([]);
+          return;
+        }
+        const targets = (Array.isArray(data) ? data : []) as Array<{ user_id: string; display_name: string }>;
+        setCashiers(targets.map((target) => ({
+          id: target.user_id,
+          full_name: target.display_name,
+          email: null,
+        })));
       });
     return () => { cancelled = true; };
-  }, [effectiveBranch]);
+  }, [effectiveBranch, canReassignCashier, orders]);
 
   useEffect(() => {
     void loadAreas();
@@ -137,9 +151,17 @@ export function ActiveOrdersPage() {
   const assignCashier = async (order: Order, cashierId: string) => {
     if (!cashierId || cashierId === order.cashier_id) return;
     setBusy(true);
-    const { error: updateError } = await supabase.from('orders').update({ cashier_id: cashierId }).eq('id', order.id);
-    if (updateError) show(updateError.message, 'error');
-    else show(isAr ? 'تم تغيير مستخدم الطلب' : 'Order user reassigned', 'success');
+    const { data, error: updateError } = await api.floorPlan.transferOrderOperator({
+      p_order_id: order.id,
+      p_target_user_id: cashierId,
+    });
+    if (updateError) {
+      show(userFacingErrorMessage(updateError, isAr ? 'ar' : 'en'), 'error');
+    } else if (!data?.success) {
+      show(userFacingErrorMessage(data, isAr ? 'ar' : 'en'), 'error');
+    } else {
+      show(isAr ? 'تم تغيير مستخدم الطلب' : 'Order user reassigned', 'success');
+    }
     setBusy(false);
   };
 
@@ -157,10 +179,10 @@ export function ActiveOrdersPage() {
   const setStatus = async (tableId: string, status: string) => {
     setBusy(true);
     const { data, error } = await api.floorPlan.setTableStatus({ p_table_id: tableId, p_status: status });
-    if (error) { show(error.message, 'error'); }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); }
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
+      show(userFacingErrorMessage(r ?? t('error'), isAr ? 'ar' : 'en'), 'error');
     } else {
       show(t('saveSuccess'), 'success');
     }
@@ -170,10 +192,10 @@ export function ActiveOrdersPage() {
   const setOrderStatus = async (order: Order, status: 'open' | 'held' | 'completed' | 'cancelled') => {
     setBusy(true);
     const { data, error } = await api.floorPlan.setOrderStatus({ p_order_id: order.id, p_status: status });
-    if (error) { show(error.message, 'error'); }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); }
     else if (!(data as RpcResult | null)?.success) {
       const r = data as RpcResult | null;
-      show(r?.detail || r?.error || t('error'), 'error');
+      show(userFacingErrorMessage(r ?? t('error'), isAr ? 'ar' : 'en'), 'error');
     } else {
       show(status === 'cancelled' ? t('cancelOrder') : t('saveSuccess'), 'success');
     }
@@ -183,7 +205,7 @@ export function ActiveOrdersPage() {
   const createArea = async () => {
     if (!areaName.trim()) { show(t('required'), 'error'); return; }
     const { error } = await supabase.from('dining_areas').insert({ name: areaName.trim(), branch_id: effectiveBranch });
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     show(t('saveSuccess'), 'success');
     setAreaName('');
     setAreaModal(false);
@@ -220,7 +242,7 @@ export function ActiveOrdersPage() {
           p_shape: 'rect',
           p_layout: layout,
         });
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     const result = data as RpcResult | null;
     if (!result?.success) {
       const code = result?.error || t('error');
@@ -228,7 +250,7 @@ export function ActiveOrdersPage() {
         ? (isAr ? 'لا يمكن إضافة طاولة مخصصة داخل المنطقة الأساسية. استخدم زر تعديل العدد لتغيير عدد طاولاتها.' : 'Custom tables cannot be added to Main Area. Use Edit count to change its table count.')
         : code === 'DEFAULT_TABLE_IDENTITY_FIXED'
           ? (isAr ? 'اسم ومكان الطاولة الأساسية ثابتان.' : 'The default table name and area are fixed.')
-          : (result?.detail || code);
+          : userFacingErrorMessage(result ?? code, isAr ? 'ar' : 'en');
       show(message, 'error');
       return;
     }
@@ -240,7 +262,7 @@ export function ActiveOrdersPage() {
   const deleteTable = async (table: DiningTable) => {
     if (!window.confirm(isAr ? `حذف الطاولة "${table.name}"؟` : `Delete table "${table.name}"?`)) return;
     const { error } = await supabase.from('dining_tables').delete().eq('id', table.id);
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
   };
 
@@ -251,7 +273,7 @@ export function ActiveOrdersPage() {
     }
     if (!window.confirm(isAr ? `حذف المنطقة "${area.name}"؟` : `Delete area "${area.name}"?`)) return;
     const { error } = await supabase.from('dining_areas').delete().eq('id', area.id);
-    if (error) { show(error.message, 'error'); return; }
+    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
     await loadAreas();
   };
@@ -275,7 +297,7 @@ export function ActiveOrdersPage() {
         p_count: nextCount,
       });
       if (error) {
-        show(error.message, 'error');
+        show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
         return;
       }
       const result = data as (RpcResult & { main_area_table_count?: number }) | null;
@@ -284,7 +306,7 @@ export function ActiveOrdersPage() {
           ? (isAr
             ? 'لا يمكن تقليل العدد لأن هناك طاولة أعلى من العدد المطلوب مشغولة أو عليها طلب مفتوح.'
             : 'Cannot reduce the count because a table above the requested limit is occupied or has an open order.')
-          : result?.detail || result?.error || t('error');
+          : userFacingErrorMessage(result ?? t('error'), isAr ? 'ar' : 'en');
         show(message, 'error');
         return;
       }
@@ -356,7 +378,7 @@ export function ActiveOrdersPage() {
           <div className="xl:col-span-2 space-y-5">
             {error && (
               <DesignPanel className="text-sm text-ui-danger border-ui-danger/30 bg-ui-danger/10" bodyClassName="p-3">
-                {error}
+                {userFacingErrorMessage(error, isAr ? 'ar' : 'en')}
               </DesignPanel>
             )}
             <TableFloorPlan
@@ -434,8 +456,8 @@ export function ActiveOrdersPage() {
                       )}
                       <div className="flex flex-wrap gap-1.5">
                         <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-3.5 h-3.5" /> {t('resumeOrder')}</Button>
-                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-3.5 h-3.5" /> {t('payOrder')}</Button>
-                        <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>
+                        {canPayOrder && <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-3.5 h-3.5" /> {t('payOrder')}</Button>}
+                        {canCancelOrder && <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>}
                       </div>
                     </div>
                   ))
@@ -490,7 +512,7 @@ export function ActiveOrdersPage() {
                       </div>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-4 h-4" /> {t('resumeOrder')}</Button>
-                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-4 h-4" /> {t('payOrder')}</Button>
+                        {canPayOrder && <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-4 h-4" /> {t('payOrder')}</Button>}
                       </div>
                     </div>
                   ))}
@@ -498,7 +520,7 @@ export function ActiveOrdersPage() {
               ) : (
                 <div>
                   <p className="text-sm text-ui-muted mb-3">{isAr ? 'لا يوجد طلب مفتوح على هذه الطاولة.' : 'No open order on this table.'}</p>
-                  <Button size="lg" className="w-full" onClick={() => { startOrder(tableTarget); }}><UtensilsCrossed className="w-5 h-5" /> {t('openOrder')}</Button>
+                  {canCreateOrder && <Button size="lg" className="w-full" onClick={() => { startOrder(tableTarget); }}><UtensilsCrossed className="w-5 h-5" /> {t('openOrder')}</Button>}
                 </div>
               )}
 

@@ -140,6 +140,12 @@ export function CurrentOrderPanel({
     ? orderItems.filter((row) => orderItemLineKey(row) === cartLineKey(selectedItem))
     : [];
   const selectedCanSplit = perms.canSplitOrder && !!activeOrderId && !!selectedItem && (selectedSent?.sentQty || 0) === 0 && selectedMatches.length === 1;
+  const selectedSentQty = selectedSent?.sentQty || 0;
+  const selectedCanRemoveOrVoid =
+    !!selectedItem &&
+    (selectedSentQty > 0
+      ? !!activeOrderId && !!onVoidItem
+      : canDeleteItem);
   const selectedTransferLines = useMemo<TransferItemLine[]>(() => selectedItems.flatMap((item) => {
     const lineKey = cartLineKey(item);
     const matches = orderItems.filter((row) => orderItemLineKey(row) === lineKey);
@@ -168,11 +174,18 @@ export function CurrentOrderPanel({
   };
 
   const handleSelectedVoid = () => {
-    if (!selectedItem || !canDeleteItem) return;
+    if (!selectedItem) return;
     const lineKey = cartLineKey(selectedItem);
     const sentQty = selectedSent?.sentQty || 0;
-    if (sentQty > 0 && onVoidItem) onVoidItem(selectedItem, sentQty);
-    else onRemove(lineKey);
+
+    if (sentQty > 0) {
+      if (!activeOrderId || !onVoidItem) return;
+      onVoidItem(selectedItem, sentQty);
+    } else {
+      if (!canDeleteItem) return;
+      onRemove(lineKey);
+    }
+
     setSelectedLineKeys(new Set());
   };
   const handleCompletedMultiTransfer = () => {
@@ -295,14 +308,18 @@ export function CurrentOrderPanel({
                 <ArrowRightLeft className="h-3.5 w-3.5" /> Split
               </button>
             )}
-            {canDeleteItem && selectedItems.length === 1 && selectedItem && (
+            {selectedCanRemoveOrVoid && selectedItems.length === 1 && selectedItem && (
               <button
                 type="button"
                 data-testid={`pos-selected-void-${selectedItem.product.id}`}
                 onClick={handleSelectedVoid}
                 className="flex h-9 items-center gap-1 rounded-lg border border-ui-danger/30 bg-ui-surface px-2.5 text-[10px] font-black text-ui-danger"
               >
-                <Trash2 className="h-3.5 w-3.5" /> {selectedSent?.sentQty ? 'Void' : (isAr ? 'حذف' : 'Remove')}
+                <Trash2 className="h-3.5 w-3.5" /> {
+                  selectedSentQty > 0
+                    ? (perms.canVoidSentItem ? 'Void' : (isAr ? 'طلب إلغاء' : 'Request Void'))
+                    : (isAr ? 'حذف' : 'Remove')
+                }
               </button>
             )}
             <button type="button" onClick={() => setSelectedLineKeys(new Set())} className="flex h-9 w-9 items-center justify-center rounded-lg text-ui-subtle hover:bg-ui-surface">
@@ -348,7 +365,10 @@ export function CurrentOrderPanel({
               const lineKey = cartLineKey(item);
               const sent = sentState[lineKey] || { sentQty: 0, newQty: item.quantity, sent: false, partial: false };
               const selected = selectedLineKeys.has(lineKey);
-              const sentLineLocked = sent.sentQty > 0 && item.quantity <= sent.sentQty && !canDeleteItem;
+              const requiresVoid = sent.sentQty > 0 && item.quantity <= sent.sentQty;
+              const canDecreaseQuantity = requiresVoid
+                ? !!activeOrderId && !!onVoidItem
+                : perms.canEditOrder;
               return (
                 <div
                   key={lineKey}
@@ -392,8 +412,8 @@ export function CurrentOrderPanel({
                     <button
                       data-testid={`pos-cart-qty-decrease-${item.product.id}`}
                       aria-label={isAr ? `تقليل كمية ${item.product.name}` : `Decrease quantity ${item.product.name}`}
-                      disabled={!perms.canEditOrder || sentLineLocked}
-                      onClick={() => sent.sentQty > 0 && item.quantity <= sent.sentQty && onVoidItem ? onVoidItem(item, sent.sentQty) : onUpdateQty(lineKey, -1)}
+                      disabled={!canDecreaseQuantity}
+                      onClick={() => requiresVoid && onVoidItem ? onVoidItem(item, sent.sentQty) : onUpdateQty(lineKey, -1)}
                       className="flex h-7 w-7 items-center justify-center rounded-lg border border-ui-border bg-ui-surface text-ui-text disabled:cursor-not-allowed disabled:opacity-40"
                     ><Minus className="h-3.5 w-3.5" /></button>
                     <span data-testid={`pos-cart-qty-${item.product.id}`} className="w-7 text-center text-xs font-black text-ui-text">{item.quantity}</span>
