@@ -1,9 +1,23 @@
 import { TrendingUp, ShoppingCart, Receipt, Package, BarChart3, CreditCard, Users, FileText, Layers, TrendingDown, AlertTriangle, BookOpen, Award, Factory, Clock, Wallet, Landmark, Star } from 'lucide-react';
-import type { ReportDefinition } from './reportRegistry';
+import type { ReportCategory, ReportDefinition } from './reportRegistry';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   TrendingUp, ShoppingCart, Receipt, Package, BarChart3, CreditCard, Users, FileText,
   Layers, TrendingDown, AlertTriangle, BookOpen, Award, Factory, Clock, Wallet, Landmark,
+};
+
+const CATEGORY_ACCENTS: Record<ReportCategory, string> = {
+  overview: 'ui-accent-neutral',
+  sales: 'ui-accent-primary',
+  purchases_expenses: 'ui-accent-purchase',
+  inventory: 'ui-accent-inventory',
+  manufacturing_costing: 'ui-accent-purchase',
+  customers_suppliers: 'ui-accent-system',
+  employees_shifts: 'ui-accent-system',
+  treasury_payments: 'ui-accent-finance',
+  financial: 'ui-accent-finance',
+  analytics: 'ui-accent-system',
+  audit: 'ui-accent-neutral',
 };
 
 interface ReportCardProps {
@@ -19,6 +33,7 @@ export function ReportCard({ report, isActive, isFavorite, lang, onSelect, onTog
   const Icon = ICON_MAP[report.icon] || BarChart3;
   const title = lang === 'ar' ? report.title : report.titleEn;
   const desc = lang === 'ar' ? report.description : report.descriptionEn;
+  const accentClass = CATEGORY_ACCENTS[report.category];
 
   return (
     <div
@@ -32,7 +47,7 @@ export function ReportCard({ report, isActive, isFavorite, lang, onSelect, onTog
           onSelect();
         }
       }}
-      className={`group relative flex flex-col items-start gap-2 p-4 rounded-xl border text-start cursor-pointer transition-all duration-150 ${
+      className={`ui-accent-card ${accentClass} group relative flex flex-col items-start gap-2 p-4 rounded-xl border text-start cursor-pointer transition-all duration-150 ${
         isActive
           ? 'bg-ui-primary/10 border-ui-primary shadow-ui-sm ring-1 ring-ui-primary/30'
           : 'bg-ui-surface border-ui-border hover:border-ui-primary/40 hover:shadow-ui-sm'
@@ -45,7 +60,7 @@ export function ReportCard({ report, isActive, isFavorite, lang, onSelect, onTog
           <Icon className="w-5 h-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className={`text-sm font-semibold truncate ${isActive ? 'text-ui-primary' : 'text-ui-text'}`}>{title}</h3>
+          <h3 className={`break-words text-sm font-bold leading-5 ${isActive ? 'text-ui-primary' : 'text-ui-text'}`}>{title}</h3>
           <p className="text-xs text-ui-subtle mt-0.5 line-clamp-2">{desc}</p>
         </div>
         <button
