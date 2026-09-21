@@ -291,7 +291,11 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
         () => void loadActivity(),
       );
     }
-    channel.subscribe();
+    channel.subscribe((status) => {
+      // Realtime does not replay rows missed during a disconnect. Refresh once
+      // every time the channel reaches SUBSCRIBED, including reconnects.
+      if (status === 'SUBSCRIBED') void loadActivity();
+    });
 
     return () => {
       void supabase.removeChannel(channel);
