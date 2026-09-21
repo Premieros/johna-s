@@ -3,6 +3,7 @@ import { RefreshCw, ChefHat, CheckCircle2, UtensilsCrossed, Volume2, VolumeX, Al
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Input';
@@ -43,11 +44,6 @@ function modifierText(value: unknown, ar: boolean): string {
   }
 }
 
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) return String((error as { message?: unknown }).message || 'KDS_LOAD_FAILED');
-  return error instanceof Error ? error.message : 'KDS_LOAD_FAILED';
-}
-
 export function KitchenDisplayPage() {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
@@ -78,7 +74,7 @@ export function KitchenDisplayPage() {
       setStation((current) => current && allowed.some((s) => s.code === current) ? current : '');
     } catch (error) {
       setStations([]);
-      setLoadError(errorMessage(error));
+      setLoadError(userFacingErrorMessage(error, ar ? 'ar' : 'en'));
     }
   }, [branchFilter, canViewKds]);
 
@@ -89,7 +85,7 @@ export function KitchenDisplayPage() {
         setItems([]);
         setOrderContext({});
         prevCountRef.current = 0;
-        setLoadError(!canViewKds ? 'POS_KDS_VIEW_REQUIRED' : 'BRANCH_REQUIRED');
+        setLoadError(userFacingErrorMessage(!canViewKds ? 'POS_KDS_VIEW_REQUIRED' : 'BRANCH_REQUIRED', ar ? 'ar' : 'en'));
         return;
       }
       const { data, error } = await supabase.rpc('get_kitchen_queue', {
@@ -115,7 +111,7 @@ export function KitchenDisplayPage() {
       });
       if (contextError) {
         setOrderContext({});
-        setLoadError(errorMessage(contextError));
+        setLoadError(userFacingErrorMessage(contextError, ar ? 'ar' : 'en'));
         return;
       }
 
@@ -128,7 +124,7 @@ export function KitchenDisplayPage() {
     } catch (error) {
       // Never turn a KDS transport/permission failure into a fake empty queue.
       // Keep the last known cards visible and surface the error so staff can retry.
-      setLoadError(errorMessage(error));
+      setLoadError(userFacingErrorMessage(error, ar ? 'ar' : 'en'));
     } finally {
       setLoading(false);
     }
@@ -163,11 +159,19 @@ export function KitchenDisplayPage() {
   }, [load]);
 
   const handleKitchenStatus = async (orderId: string, status: string) => {
-    if (!canUpdateKds) return;
+    if (!canUpdateKds) {
+      setLoadError(userFacingErrorMessage('POS_KDS_UPDATE_REQUIRED', ar ? 'ar' : 'en'));
+      return;
+    }
     try {
       await catalog.setKitchenStatus(orderId, status);
+      setLoadError('');
       void load();
-    } catch { /* keep KDS interaction quiet */ }
+    } catch (error) {
+      // Keep the last known KDS cards visible, but never make a failed action
+      // look successful or silent.
+      setLoadError(userFacingErrorMessage(error, ar ? 'ar' : 'en'));
+    }
   };
 
   const stationName = (v: string) => {
