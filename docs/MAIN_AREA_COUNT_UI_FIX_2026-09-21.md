@@ -128,7 +128,7 @@ No branch table-count setting was changed while applying the UI/RPC fix.
 - First Production parity attempt ran before the new RPC migration was applied and failed for the expected missing-route reason.
 - After applying the RPC migration, the failed deployment workflow was rerun.
 - Production API parity then passed ✅.
-- GitHub Pages deployment was triggered from the same `main` merge tree.
+- GitHub Pages deployment #772 completed successfully ✅ from the same `main` merge tree.
 
 ### User-visible behavior
 - POS table workspace now loads active dining tables only.
