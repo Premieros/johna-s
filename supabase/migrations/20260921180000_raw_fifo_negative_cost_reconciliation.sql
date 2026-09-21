@@ -108,7 +108,7 @@ DECLARE
   v_cogs_line bigint;
   v_inventory_line bigint;
 BEGIN
-  IF p_sale_id IS NULL OR COALESCE(p_delta,0) <= 0 THEN
+  IF p_sale_id IS NULL OR COALESCE(p_delta,0) = 0 THEN
     RETURN jsonb_build_object('success',true,'posted_delta',0);
   END IF;
 
@@ -190,13 +190,16 @@ BEGIN
     INSERT INTO public.journal_entry_lines(
       journal_entry_id,account_id,debit,credit,note
     ) VALUES (
-      v_entry_id,v_cogs_account,v_target_posted,0,'FIFO COGS reconciliation'
+      v_entry_id,v_cogs_account,
+      GREATEST(v_target_posted,0),
+      GREATEST(-v_target_posted,0),
+      'FIFO COGS reconciliation'
     )
     RETURNING id INTO v_cogs_line;
   ELSE
     UPDATE public.journal_entry_lines
-    SET debit=v_target_posted,
-        credit=0
+    SET debit=GREATEST(v_target_posted,0),
+        credit=GREATEST(-v_target_posted,0)
     WHERE id=v_cogs_line;
   END IF;
 
@@ -211,13 +214,16 @@ BEGIN
     INSERT INTO public.journal_entry_lines(
       journal_entry_id,account_id,debit,credit,note
     ) VALUES (
-      v_entry_id,v_inventory_account,0,v_target_posted,'FIFO inventory reconciliation'
+      v_entry_id,v_inventory_account,
+      GREATEST(-v_target_posted,0),
+      GREATEST(v_target_posted,0),
+      'FIFO inventory reconciliation'
     )
     RETURNING id INTO v_inventory_line;
   ELSE
     UPDATE public.journal_entry_lines
-    SET debit=0,
-        credit=v_target_posted
+    SET debit=GREATEST(-v_target_posted,0),
+        credit=GREATEST(v_target_posted,0)
     WHERE id=v_inventory_line;
   END IF;
 
@@ -251,7 +257,7 @@ DECLARE
   v_sale_delta numeric(18,6):=0;
   v_res jsonb;
 BEGIN
-  IF p_event_id IS NULL OR COALESCE(p_delta,0)<=0 THEN
+  IF p_event_id IS NULL OR COALESCE(p_delta,0)=0 THEN
     RETURN jsonb_build_object('success',true,'delta',0);
   END IF;
 
@@ -268,7 +274,8 @@ BEGIN
   SET total_cost=total_cost+p_delta
   WHERE event_id=p_event_id
     AND target_type=p_target_type
-    AND target_id=p_target_id;
+    AND target_id=p_target_id
+    AND total_cost+p_delta>=-0.000001;
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object(
@@ -282,7 +289,17 @@ BEGIN
 
   UPDATE public.order_kitchen_inventory_events
   SET total_cost=total_cost+p_delta
-  WHERE id=p_event_id;
+  WHERE id=p_event_id
+    AND total_cost+p_delta>=-0.000001;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success',false,
+      'error','FIFO_KITCHEN_EVENT_COST_NEGATIVE',
+      'event_id',p_event_id,
+      'delta',p_delta
+    );
+  END IF;
 
   IF v_event.settled_sale_id IS NOT NULL
      AND COALESCE(v_event.sent_quantity,0)>0 THEN
@@ -290,7 +307,7 @@ BEGIN
       * GREATEST(v_event.sent_quantity-COALESCE(v_event.voided_quantity,0),0)
       / v_event.sent_quantity;
 
-    IF v_sale_delta>0 THEN
+    IF v_sale_delta<>0 THEN
       v_res:=public._fifo_adjust_sale_cogs_delta(
         v_event.settled_sale_id,
         v_sale_delta
@@ -348,7 +365,7 @@ DECLARE
   v_consumer_delta numeric(18,6);
   v_res jsonb;
 BEGIN
-  IF p_production_id IS NULL OR COALESCE(p_delta,0)<=0 THEN
+  IF p_production_id IS NULL OR COALESCE(p_delta,0)=0 THEN
     RETURN jsonb_build_object('success',true,'delta',0);
   END IF;
 
@@ -375,8 +392,12 @@ BEGIN
 
   v_delta_per_unit:=p_delta/v_prod.quantity;
 
+  IF COALESCE(v_prod.total_cost,0)+p_delta < -0.000001 THEN
+    RETURN jsonb_build_object('success',false,'error','FIFO_PRODUCTION_COST_NEGATIVE');
+  END IF;
+
   UPDATE public.inventory_unit_productions
-  SET total_cost=total_cost+p_delta,
+  SET total_cost=GREATEST(total_cost+p_delta,0),
       updated_at=now()
   WHERE id=v_prod.id;
 
@@ -389,12 +410,19 @@ BEGIN
       AND quantity>0
     ORDER BY created_at,id
   LOOP
+    IF v_output.quantity>0 AND EXISTS(
+      SELECT 1 FROM public.inventory_unit_entries e
+      WHERE e.id=v_output.id AND e.unit_cost+v_delta_per_unit < -0.000001
+    ) THEN
+      RETURN jsonb_build_object('success',false,'error','FIFO_UNIT_COST_NEGATIVE');
+    END IF;
+
     UPDATE public.inventory_unit_entries
-    SET unit_cost=unit_cost+v_delta_per_unit
+    SET unit_cost=GREATEST(unit_cost+v_delta_per_unit,0)
     WHERE id=v_output.id;
 
     UPDATE public.inventory_unit_batches
-    SET unit_cost=unit_cost+v_delta_per_unit
+    SET unit_cost=GREATEST(unit_cost+v_delta_per_unit,0)
     WHERE unit_id=v_output.unit_id
       AND branch_id=v_output.branch_id
       AND warehouse_id IS NOT DISTINCT FROM v_output.warehouse_id
@@ -414,10 +442,10 @@ BEGIN
       v_consumer_delta:=(-v_consumer.quantity)*v_delta_per_unit;
 
       UPDATE public.inventory_unit_entries
-      SET unit_cost=unit_cost+v_delta_per_unit
+      SET unit_cost=GREATEST(unit_cost+v_delta_per_unit,0)
       WHERE id=v_consumer.id;
 
-      IF v_consumer_delta>0 THEN
+      IF v_consumer_delta<>0 THEN
         v_res:=public._fifo_adjust_reference_delta(
           v_consumer.reference_type,
           v_consumer.reference_id,
@@ -460,7 +488,7 @@ SECURITY DEFINER
 SET search_path TO public, pg_temp
 AS $function$
 BEGIN
-  IF p_reference_id IS NULL OR COALESCE(p_delta,0)<=0 THEN
+  IF p_reference_id IS NULL OR COALESCE(p_delta,0)=0 THEN
     RETURN jsonb_build_object('success',true,'delta',0);
   END IF;
 
