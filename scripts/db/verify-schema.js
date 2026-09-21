@@ -150,10 +150,13 @@ async function main() {
     const legacyDoubleSubtract =
       def.includes('sent_quantity - new.quantity')
       || def.includes('sent_quantity = greatest(sent_quantity - new.quantity');
-    kitchenVoidInvariantOk = alignsToCurrentQuantity && !legacyDoubleSubtract;
+    const skipsNoopUpdate =
+      def.includes('sent_quantity is distinct from v_target_quantity');
+    kitchenVoidInvariantOk =
+      alignsToCurrentQuantity && skipsNoopUpdate && !legacyDoubleSubtract;
     if (!kitchenVoidInvariantOk) {
       kitchenVoidInvariantDetail =
-        'sync_kitchen_sent_quantity_after_void must align sent_quantity to the current order-item quantity and must never subtract NEW.quantity a second time.';
+        'sync_kitchen_sent_quantity_after_void must align sent_quantity to the current order-item quantity, skip no-op updates, and never subtract NEW.quantity a second time.';
     }
   }
 
