@@ -58,33 +58,7 @@ DECLARE
   v_started_at timestamptz;
   v_local_open timestamp;
 BEGIN
-  SELECT * INTO v_existing
-  FROM public.business_day_state
-  WHERE branch_id=p_branch_id;
-
-  IF FOUND THEN
-    RETURN jsonb_build_object(
-      'branch_id',v_existing.branch_id,
-      'business_date',v_existing.business_date,
-      'started_at',v_existing.started_at,
-      'updated_at',v_existing.updated_at
-    );
-  END IF;
-
   PERFORM pg_advisory_xact_lock(hashtextextended('business_day_state:'||p_branch_id::text,0));
-
-  SELECT * INTO v_existing
-  FROM public.business_day_state
-  WHERE branch_id=p_branch_id;
-
-  IF FOUND THEN
-    RETURN jsonb_build_object(
-      'branch_id',v_existing.branch_id,
-      'business_date',v_existing.business_date,
-      'started_at',v_existing.started_at,
-      'updated_at',v_existing.updated_at
-    );
-  END IF;
 
   SELECT COALESCE(bs.business_day_start,'00:00'::time)
   INTO v_start_time
@@ -103,6 +77,47 @@ BEGIN
   WHERE dc.branch_id=p_branch_id
   ORDER BY dc.business_date DESC,dc.closed_at DESC NULLS LAST,dc.id DESC
   LIMIT 1;
+
+  SELECT * INTO v_existing
+  FROM public.business_day_state
+  WHERE branch_id=p_branch_id
+  FOR UPDATE;
+
+  -- A persisted state can outlive a normally closed shift. When a later shift
+  -- opens, start the live workday exactly at that new shift unless this state
+  -- was created by a rollover inside the SAME continuing shift. In rollover
+  -- state, started_at is later than the shift's original opened_at and must stay.
+  IF v_existing.branch_id IS NOT NULL THEN
+    IF v_shift.id IS NOT NULL AND v_existing.started_at < v_shift.opened_at THEN
+      v_local_open:=v_shift.opened_at AT TIME ZONE 'Africa/Cairo';
+      v_candidate:=v_local_open::date;
+      IF v_local_open::time < v_start_time THEN
+        v_candidate:=v_candidate-1;
+      END IF;
+
+      IF v_last_close.id IS NOT NULL
+         AND v_last_close.closed_at IS NOT NULL
+         AND v_shift.opened_at>v_last_close.closed_at THEN
+        v_candidate:=GREATEST(v_candidate,v_last_close.business_date+1);
+      END IF;
+
+      v_candidate:=public._next_unclosed_business_date(p_branch_id,v_candidate);
+
+      UPDATE public.business_day_state
+      SET business_date=v_candidate,
+          started_at=v_shift.opened_at,
+          updated_at=now()
+      WHERE branch_id=p_branch_id
+      RETURNING * INTO v_existing;
+    END IF;
+
+    RETURN jsonb_build_object(
+      'branch_id',v_existing.branch_id,
+      'business_date',v_existing.business_date,
+      'started_at',v_existing.started_at,
+      'updated_at',v_existing.updated_at
+    );
+  END IF;
 
   IF v_shift.id IS NOT NULL THEN
     v_local_open:=v_shift.opened_at AT TIME ZONE 'Africa/Cairo';
@@ -902,7 +917,13 @@ GRANT EXECUTE ON FUNCTION public.get_shift_closing_report(uuid) TO authenticated
 -- unused business date while keeping its original shift id.
 SELECT public._ensure_business_day_state(b.id)
 FROM public.branches b
-WHERE b.is_active=true;
+WHERE b.is_active=true
+  AND EXISTS (
+    SELECT 1
+    FROM public.shifts s
+    WHERE s.branch_id=b.id
+      AND s.status='open'
+  );
 
 REVOKE ALL ON FUNCTION public._next_unclosed_business_date(uuid,date) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public._ensure_business_day_state(uuid) FROM PUBLIC,anon,authenticated;
