@@ -31,7 +31,7 @@ describe('fixed thermal receipt template contract', () => {
       {
         store_name: "Johna's",
         currency: 'EGP',
-        receipt_width_mm: 80,
+        receipt_width_mm: 72,
         receipt_header: '',
         receipt_footer: '',
         receipt_show_tax: false,
@@ -138,8 +138,9 @@ describe('fixed thermal receipt template contract', () => {
     expect(html).toContain('END OF ORDER');
   });
 
-  it('renders with fixed Windows typography and only uses text fallback before template submission', () => {
+  it('renders with enlarged fixed typography and only uses text fallback before template submission', () => {
     const agent = read('local-print-agent/agent.cjs');
+    const frontendRenderer = read('src/features/pos/services/localPrintAgent.ts');
     const renderer = read('local-print-agent/template-print.ps1');
 
     expect(agent).toContain("const TEMPLATE_RENDERER_PATH = path.join(__dirname, 'template-print.ps1')");
@@ -148,13 +149,33 @@ describe('fixed thermal receipt template contract', () => {
     expect(agent).toContain(': await printText(printer, text)');
     expect(agent).toContain("renderer: result?.renderer || 'text-fallback'");
 
+    expect(frontendRenderer).toContain("font-size: ${kitchen ? '11pt' : '12pt'}");
+    expect(frontendRenderer).toContain("font-size: ${kitchen ? '26pt' : '30pt'}");
+    expect(frontendRenderer).toContain('font-size: 14pt;');
+    expect(frontendRenderer).toContain('.grand-total { font-size: 18pt;');
+
     expect(renderer).toContain("$bodyFamily = 'Arial Narrow'");
     expect(renderer).toContain("$brandFamily = 'Arial'");
+    expect(renderer).toContain("$(if ($isKitchen) { 20 } else { 23 })");
+    expect(renderer).toContain("$(if ($isKitchen) { 10.8 } else { 11.5 })");
+    expect(renderer).toContain("$(if ($isKitchen) { 15 } else { 16 })");
+    expect(renderer).toContain("$totalFont = [System.Drawing.Font]::new($bodyFamily, 16.5");
     expect(renderer).toContain("[System.Drawing.Font]::new($brandFamily");
     expect(renderer).toContain("[System.Drawing.Font]::new($bodyFamily");
-    expect(renderer).toContain('$paperHeightMm = 50 +');
-    expect(renderer).toContain('$itemUnits += @($item.modifiers).Count * 4.5');
+    expect(renderer).toContain('$paperHeightMm = 58 +');
+    expect(renderer).toContain('$itemUnits += @($item.modifiers).Count * 5.5');
     expect(renderer).toContain("$noteLabel = $(if ($isAr) { 'ملاحظة: ' } else { 'Note: ' })");
     expect(renderer).toContain('$doc.Print()');
   });
+  it('updates only the Windows renderer without reinstalling or remapping printers', () => {
+    const updater = read('local-print-agent/update-renderer.cmd');
+    expect(updater).toContain('template-print.ps1');
+    expect(updater).toContain('raw.githubusercontent.com/Premieros/johna-s/main/local-print-agent/template-print.ps1');
+    expect(updater).toContain("Copy-Item -LiteralPath $target -Destination ($target + '.bak-' + $stamp) -Force");
+    expect(updater).toContain('Move-Item -LiteralPath $tmp -Destination $target -Force');
+    expect(updater).not.toContain('printer-config.json');
+    expect(updater).not.toContain('agent.cjs');
+    expect(updater).not.toContain('taskkill');
+  });
+
 });

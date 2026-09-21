@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast';
 import { cartToItems, type ItemPayload } from '../utils/cart';
 import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
 import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/settlementPreview';
-import { buildReceiptHtml, buildReceiptThermalText, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, openPrintWindow, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { usePosPermissions } from './usePosPermissions';
@@ -319,7 +319,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       if (input.effSettings?.receipt_auto_print) {
         const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
       }
 
       if (extended.order_completed) {
@@ -345,7 +345,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (!base.activeOrderId) {
       if (settlementReceipt) {
         const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
         return;
       }
       await base.printReceipt();
@@ -356,7 +356,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (!preview) {
       if (settlementReceipt) {
         const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, input.effSettings.receipt_width_mm || 80);
+        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
       }
       return;
     }
@@ -364,11 +364,13 @@ export function usePosOrder(input: UsePosOrderInput) {
     const receipt = buildSettlementReceipt(preview, base.activeOrderNumber || `ORDER-${Date.now()}`, 0);
     receipt.isOpenOrder = true;
     const text = buildReceiptThermalText(receipt, input.effSettings, lang, isAr);
+    const template = buildReceiptFixedTemplate(receipt, input.effSettings, lang, isAr);
     const queued = await enqueueCloudOpenOrderPrint({
       orderId: base.activeOrderId,
       payload: {
         text,
-        paperWidthMm: input.effSettings.receipt_width_mm || 80,
+        template,
+        paperWidthMm: APPROVED_FIXED_THERMAL_WIDTH_MM,
         copies: 1,
       },
       idempotencyKey: `open-check:${base.activeOrderId}:${Date.now()}`,

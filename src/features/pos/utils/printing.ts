@@ -12,6 +12,7 @@ import {
 } from '../services/localPrintAgent';
 
 export const THERMAL_RECEIPT_PRESET_WIDTHS_MM = [58, 80] as const;
+export const APPROVED_FIXED_THERMAL_WIDTH_MM = 80 as const;
 
 export interface ReceiptData {
   invoice: string;
@@ -264,7 +265,7 @@ export function buildReceiptFixedTemplate(
   isAr: boolean,
 ): FixedThermalTemplate {
   const currency = safeThermalText(s.currency || 'EGP');
-  const width = receiptWidthMm(s.receipt_width_mm || 80);
+  const width = APPROVED_FIXED_THERMAL_WIDTH_MM;
   const meta: Array<{ label: string; value: string; emphasis?: boolean }> = [];
 
   meta.push({
@@ -327,7 +328,7 @@ export function buildReceiptFixedTemplate(
 
 export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang: Language, isAr: boolean): string {
   const currency = safeThermalText(s.currency || 'EGP');
-  const width = receiptWidthMm(s.receipt_width_mm || 80);
+  const width = APPROVED_FIXED_THERMAL_WIDTH_MM;
   const columns = isCompactThermalWidth(width) ? 32 : 42;
   const divider = '-'.repeat(isCompactThermalWidth(width) ? 32 : 42);
   const lines: string[] = [];
@@ -530,7 +531,7 @@ export async function buildReceiptHtml(
     window.setTimeout(() => pendingReceiptPrints.delete(tokenToDelete), 60_000);
   }
 
-  const width = receiptWidthMm(s.receipt_width_mm || 80);
+  const width = APPROVED_FIXED_THERMAL_WIDTH_MM;
   const compact = isCompactThermalWidth(width);
   const copies = Math.max(1, Math.min(5, s.receipt_copies || 1));
   const showTax = s.receipt_show_tax !== false;

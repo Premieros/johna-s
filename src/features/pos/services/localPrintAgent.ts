@@ -168,14 +168,14 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   }
   .receipt {
     width: 100%;
-    padding: ${kitchen ? '3.2mm 4mm 3mm' : '4.5mm 5mm 4mm'};
-    font-size: ${kitchen ? '9.5pt' : '10pt'};
-    line-height: 1.22;
+    padding: ${kitchen ? '3.4mm 4mm 3.2mm' : '4.8mm 5mm 4.2mm'};
+    font-size: ${kitchen ? '11pt' : '12pt'};
+    line-height: 1.26;
   }
   .brand {
     text-align: center;
     font-family: Arial, "Segoe UI", sans-serif;
-    font-size: ${kitchen ? '22pt' : '26pt'};
+    font-size: ${kitchen ? '26pt' : '30pt'};
     line-height: 1;
     font-weight: 900;
     letter-spacing: -.5px;
@@ -184,7 +184,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   .brand-sub {
     text-align: center;
     font-family: Arial, "Segoe UI", sans-serif;
-    font-size: ${kitchen ? '7.3pt' : '8pt'};
+    font-size: ${kitchen ? '8.5pt' : '9.5pt'};
     font-weight: 600;
     letter-spacing: 3.2px;
     margin-bottom: ${kitchen ? '3mm' : '4mm'};
@@ -198,14 +198,14 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   }
   .title-rule { height: .25mm; background: #111; }
   .title {
-    font-size: ${kitchen ? '14pt' : '15pt'};
+    font-size: ${kitchen ? '16.5pt' : '18pt'};
     font-weight: 900;
     white-space: nowrap;
     text-align: center;
   }
   .subtitle, .slogan, .branch {
     text-align: center;
-    font-size: ${kitchen ? '8pt' : '8.5pt'};
+    font-size: ${kitchen ? '9.5pt' : '10.5pt'};
     margin-top: .8mm;
   }
   .subtitle { font-weight: 700; letter-spacing: 2px; }
@@ -221,7 +221,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     gap: 2mm;
     align-items: baseline;
     margin: .75mm 0;
-    min-height: 4.3mm;
+    min-height: ${kitchen ? '5.2mm' : '5.6mm'};
   }
   .meta-label { font-weight: 700; ${ar ? 'grid-column:2;text-align:right' : 'text-align:left'}; }
   .meta-value { font-weight: 500; overflow-wrap: anywhere; ${ar ? 'grid-column:1;grid-row:1;text-align:right' : 'text-align:left'}; }
@@ -232,7 +232,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     margin-top: ${kitchen ? '2mm' : '2.5mm'};
   }
   .items-title {
-    font-size: ${kitchen ? '14pt' : '15pt'};
+    font-size: ${kitchen ? '16.5pt' : '18pt'};
     font-weight: 900;
     margin-bottom: ${kitchen ? '2mm' : '2.5mm'};
   }
@@ -242,10 +242,10 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     gap: 1.5mm;
     align-items: baseline;
   }
-  .items-head { font-size: 8.5pt; font-weight: 800; margin-bottom: 1.5mm; }
+  .items-head { font-size: 10pt; font-weight: 800; margin-bottom: 1.8mm; }
   .items-head .price, .customer-item .price { text-align: ${ar ? 'left' : 'right'}; }
   .items-head .qty, .customer-item .qty { text-align: center; }
-  .customer-item { min-height: 8mm; padding: 1.2mm 0; font-size: 10.5pt; }
+  .customer-item { min-height: 9.5mm; padding: 1.5mm 0; font-size: 12.5pt; }
   .customer-item .item-name { font-weight: 600; overflow-wrap: anywhere; }
   .customer-item .price { font-weight: 700; white-space: nowrap; }
   .kitchen-item { padding: 1.4mm 0; border-bottom: .15mm solid #b8b8b8; }
@@ -254,7 +254,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     display: grid;
     grid-template-columns: 10mm 1fr;
     gap: 2mm;
-    font-size: 11.5pt;
+    font-size: 14pt;
     font-weight: 900;
     align-items: baseline;
   }
@@ -262,8 +262,8 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   .modifier, .note {
     margin-top: .8mm;
     ${ar ? 'padding-right:12mm' : 'padding-left:12mm'};
-    font-size: 8.7pt;
-    line-height: 1.18;
+    font-size: 11.5pt;
+    line-height: 1.24;
   }
   .modifier { font-weight: 700; }
   .note { font-weight: 800; }
@@ -278,13 +278,13 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     justify-content: space-between;
     gap: 2mm;
     margin: 1mm 0;
-    font-size: 10.5pt;
+    font-size: 12.5pt;
   }
-  .grand-total { font-size: 15pt; font-weight: 900; margin-top: 1.5mm; }
+  .grand-total { font-size: 18pt; font-weight: 900; margin-top: 1.8mm; }
   .footer { text-align: center; margin-top: ${kitchen ? '3mm' : '5mm'}; }
-  .footer-line { font-size: ${kitchen ? '10pt' : '10.5pt'}; margin: .8mm 0; }
-  .kitchen-end { font-size: 11.5pt; font-weight: 900; margin-top: 1mm; }
-  .heart { font-size: 14pt; line-height: 1; margin-top: 1.8mm; }
+  .footer-line { font-size: ${kitchen ? '11.5pt' : '12pt'}; margin: 1mm 0; }
+  .kitchen-end { font-size: 13.5pt; font-weight: 900; margin-top: 1.2mm; }
+  .heart { font-size: 16pt; line-height: 1; margin-top: 2mm; }
 </style>
 </head>
 <body>
