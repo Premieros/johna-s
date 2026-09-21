@@ -37,6 +37,10 @@ export const shifts = {
     return rpc('get_day_closing_report', p);
   },
 
+  getCurrentBusinessDay(p: { p_branch_id: string }): ApiResult<RpcResult & { business_date?: string; started_at?: string; shift_id?: string; shift_open?: boolean }> {
+    return rpc('get_current_business_day', p);
+  },
+
   tryAutoClose(p: { p_branch_id: string }): ApiResult<RpcResult & { closed?: boolean; reason?: string; open_order_count?: number; open_table_count?: number }> {
     return rpc('try_auto_close_branch_shift', p);
   },
