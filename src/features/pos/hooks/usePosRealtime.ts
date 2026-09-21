@@ -16,41 +16,50 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
   const activeBranchRef = useRef(branchId);
   const inFlightRef = useRef(false);
   const trailingRefreshRef = useRef(false);
+  const loadCyclePromiseRef = useRef<Promise<void> | null>(null);
 
-  const load = useCallback(async (requestedBranch: string) => {
-    if (!requestedBranch) return;
+  const load = useCallback((requestedBranch: string): Promise<void> => {
+    if (!requestedBranch) return Promise.resolve();
 
     // A kitchen send/order update can emit several Realtime events together.
-    // Never launch overlapping full snapshots; keep one trailing refresh so the
-    // final server state is still observed after the burst settles.
-    if (inFlightRef.current) {
+    // Return the same in-flight promise when coalescing so branch-change loading
+    // cannot finish before the queued snapshot for the new branch completes.
+    if (inFlightRef.current && loadCyclePromiseRef.current) {
       trailingRefreshRef.current = true;
-      return;
+      return loadCyclePromiseRef.current;
     }
 
     inFlightRef.current = true;
-    let targetBranch = requestedBranch;
-    try {
-      while (targetBranch) {
-        trailingRefreshRef.current = false;
-        try {
-          const snapshot = await fetchActiveOrders(targetBranch);
-          if (activeBranchRef.current === targetBranch) {
-            setData(snapshot);
-            setError('');
+    const cycle = (async () => {
+      let targetBranch = requestedBranch;
+      try {
+        while (targetBranch) {
+          trailingRefreshRef.current = false;
+          try {
+            const snapshot = await fetchActiveOrders(targetBranch);
+            if (activeBranchRef.current === targetBranch) {
+              setData(snapshot);
+              setError('');
+            }
+          } catch (err) {
+            if (activeBranchRef.current === targetBranch) {
+              setError(err instanceof Error ? err.message : String(err));
+            }
           }
-        } catch (err) {
-          if (activeBranchRef.current === targetBranch) {
-            setError(err instanceof Error ? err.message : String(err));
-          }
-        }
 
-        if (!trailingRefreshRef.current || !activeBranchRef.current) break;
-        targetBranch = activeBranchRef.current;
+          if (!trailingRefreshRef.current || !activeBranchRef.current) break;
+          targetBranch = activeBranchRef.current;
+        }
+      } finally {
+        inFlightRef.current = false;
       }
-    } finally {
-      inFlightRef.current = false;
-    }
+    })();
+
+    loadCyclePromiseRef.current = cycle;
+    void cycle.finally(() => {
+      if (loadCyclePromiseRef.current === cycle) loadCyclePromiseRef.current = null;
+    });
+    return cycle;
   }, []);
 
   useEffect(() => {
@@ -61,6 +70,9 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
       return;
     }
     let cancelled = false;
+    // Never expose the previous branch snapshot under a newly selected branch.
+    setData(EMPTY_POS_REALTIME);
+    setError('');
     setLoading(true);
     load(branchId).finally(() => { if (!cancelled) setLoading(false); });
     const unsubscribe = subscribePosRealtime({
