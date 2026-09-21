@@ -175,12 +175,17 @@ export function SalesPage() {
 
   const previewSaleReceipt = async (sale: SaleRow) => {
     if (!canPreviewReceipt || receiptBusyId) return;
+    const receiptSettings = effectiveSettings(sale.branch_id);
+    if (!receiptSettings) {
+      show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
+      return;
+    }
     setReceiptBusyId(sale.id);
     try {
       const receipt = await buildSaleReceipt(sale);
       const html = await buildReceiptHtml(
         receipt,
-        effectiveSettings(sale.branch_id),
+        receiptSettings,
         lang,
         isAr,
         { authorize: false },
@@ -197,10 +202,15 @@ export function SalesPage() {
 
   const printSaleReceipt = async (sale: SaleRow) => {
     if (!canPrintReceipt || receiptBusyId) return;
+    const receiptSettings = effectiveSettings(sale.branch_id);
+    if (!receiptSettings) {
+      show(isAr ? 'إعدادات الفرع غير متاحة للطباعة' : 'Branch receipt settings are unavailable', 'error');
+      return;
+    }
     setReceiptBusyId(sale.id);
     try {
       const receipt = await buildSaleReceipt(sale);
-      const html = await buildReceiptHtml(receipt, effectiveSettings(sale.branch_id), lang, isAr);
+      const html = await buildReceiptHtml(receipt, receiptSettings, lang, isAr);
       const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
       if (!accepted) {
         show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open the receipt print path', 'error');
@@ -308,11 +318,17 @@ export function SalesPage() {
       hidePaymentSummary: true,
     };
 
+    const receiptSettings = effectiveSettings(refundSale.branch_id);
+    if (!receiptSettings) {
+      show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
+      return;
+    }
+
     setReceiptBusyId(refundSale.id);
     try {
       const html = await buildReceiptHtml(
         receipt,
-        effectiveSettings(refundSale.branch_id),
+        receiptSettings,
         lang,
         isAr,
         { authorize: false },
