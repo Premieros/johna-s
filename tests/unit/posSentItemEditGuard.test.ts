@@ -19,7 +19,9 @@ describe('sent-item edit safety contract', () => {
   });
 
   it('explains direct-vs-approval void behavior accurately', () => {
-    expect(voidModal).toContain('من يملك صلاحية إلغاء الصنف (pos.void) ينفذ مباشرة');
-    expect(voidModal).toContain('ومن لا يملكها يبقى خاضعًا لمسار الموافقة');
+    expect(voidModal).toContain('canDirectVoid: boolean');
+    expect(voidModal).toContain('لديك صلاحية Void المباشرة');
+    expect(voidModal).toContain('لا تملك صلاحية Void المباشرة');
+    expect(voidModal).toContain('طلب موافقة على الإلغاء');
   });
 });
