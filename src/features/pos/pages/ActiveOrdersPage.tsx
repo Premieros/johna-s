@@ -225,7 +225,7 @@ export function ActiveOrdersPage() {
     if (!result?.success) {
       const code = result?.error || t('error');
       const message = code === 'DEFAULT_AREA_FIXED_50'
-        ? (isAr ? 'المنطقة الأساسية ثابتة على 50 طاولة. أضف الطاولة إلى منطقة أخرى.' : 'Main Area is fixed at 50 tables. Add the table to another area.')
+        ? (isAr ? 'لا يمكن إضافة طاولة مخصصة داخل المنطقة الأساسية. استخدم زر تعديل العدد لتغيير عدد طاولاتها.' : 'Custom tables cannot be added to Main Area. Use Edit count to change its table count.')
         : code === 'DEFAULT_TABLE_IDENTITY_FIXED'
           ? (isAr ? 'اسم ومكان الطاولة الأساسية ثابتان.' : 'The default table name and area are fixed.')
           : (result?.detail || code);
