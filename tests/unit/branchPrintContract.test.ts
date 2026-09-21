@@ -11,7 +11,7 @@ describe('printed document branch identity', () => {
     const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 
     expect(printing).toContain('branchName: string');
-    expect(printing).toContain("${isAr ? 'الفرع' : 'Branch'}: ${escapeHtml(receipt.branchName)}");
+    expect(printing).toContain('branchName: safeThermalText(receipt.branchName)');
     expect(posOrderBase).toContain('branchName,');
     expect(workspace).toContain('branchName: currentBranchName');
   });
