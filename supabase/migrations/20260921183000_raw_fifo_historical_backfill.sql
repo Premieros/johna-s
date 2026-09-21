@@ -500,7 +500,7 @@ BEGIN
           oversold_batch_id,debt_quantity,remaining_qty,event_at
         ) VALUES (
           e.raw_material_id,e.branch_id,e.warehouse_id,e.id,
-          CASE WHEN e.batch_number LIKE 'OV-%' THEN v_batch_id ELSE NULL END,
+          v_batch_id,
           v_remaining,v_remaining,e.created_at
         );
 
@@ -601,17 +601,14 @@ BEGIN
     )
     SELECT
       v_run,b.id,b.raw_material_id,b.branch_id,b.warehouse_id,b.quantity,
-      CASE
-        WHEN b.quantity<0 AND b.batch_number LIKE 'OV-%' THEN
-          -COALESCE((
-            SELECT sum(d.remaining_qty)
-            FROM rf_debts d WHERE d.oversold_batch_id=b.id
-          ),0)
-        ELSE COALESCE((
-          SELECT sum(l.available_qty)
-          FROM rf_lots l WHERE l.batch_id=b.id
-        ),0)
-      END
+      COALESCE((
+        SELECT sum(l.available_qty)
+        FROM rf_lots l WHERE l.batch_id=b.id
+      ),0)
+      - COALESCE((
+        SELECT sum(d.remaining_qty)
+        FROM rf_debts d WHERE d.oversold_batch_id=b.id
+      ),0)
     FROM public.raw_material_batches b
     WHERE (p_branch_id IS NULL OR b.branch_id=p_branch_id)
       AND EXISTS(
