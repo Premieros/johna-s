@@ -198,16 +198,18 @@ export function Layout({ children }: { children: ReactNode }) {
           <button data-testid="sidebar-open" type="button" onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'فتح القائمة' : 'Open sidebar'}>
             <Menu className="h-5 w-5" />
           </button>
-          <button
-            data-testid="desktop-sidebar-toggle"
-            type="button"
-            onClick={() => setDesktopSidebarHidden((value) => !value)}
-            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-muted shadow-ui-xs transition hover:bg-ui-page-alt hover:text-ui-text lg:inline-flex"
-            aria-label={desktopSidebarHidden ? (ar ? 'إظهار القائمة الجانبية' : 'Show sidebar') : (ar ? 'إخفاء القائمة الجانبية' : 'Hide sidebar')}
-            title={desktopSidebarHidden ? (ar ? 'إظهار القائمة الجانبية' : 'Show sidebar') : (ar ? 'إخفاء القائمة الجانبية' : 'Hide sidebar')}
-          >
-            {desktopSidebarHidden ? <Menu className="h-4.5 w-4.5" /> : <X className="h-4.5 w-4.5" />}
-          </button>
+          {desktopSidebarHidden && (
+            <button
+              data-testid="desktop-sidebar-toggle"
+              type="button"
+              onClick={() => setDesktopSidebarHidden(false)}
+              className="hidden h-9 w-9 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-muted shadow-ui-xs transition hover:bg-ui-page-alt hover:text-ui-text lg:inline-flex"
+              aria-label={ar ? 'إظهار القائمة الجانبية' : 'Show sidebar'}
+              title={ar ? 'إظهار القائمة الجانبية' : 'Show sidebar'}
+            >
+              <Menu className="h-4.5 w-4.5" />
+            </button>
+          )}
           {showBackButton && (
             <button
               data-testid="header-back-button"
@@ -292,6 +294,16 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="flex h-14 items-center justify-between border-b border-ui-border px-5">
           <Logo variant="horizontal" size={28} tone="mono" showTagline={false} className="text-ui-primary" />
           <button data-testid="sidebar-close" type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'إغلاق القائمة' : 'Close sidebar'}><X className="h-5 w-5" /></button>
+          <button
+            data-testid="desktop-sidebar-hide"
+            type="button"
+            onClick={() => setDesktopSidebarHidden(true)}
+            className="hidden h-8 w-8 items-center justify-center rounded-lg text-ui-muted transition hover:bg-ui-page-alt hover:text-ui-text lg:inline-flex"
+            aria-label={ar ? 'إخفاء القائمة الجانبية' : 'Hide sidebar'}
+            title={ar ? 'إخفاء القائمة الجانبية' : 'Hide sidebar'}
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <nav data-testid="app-navigation" className="h-[calc(100%-56px)] overflow-y-auto px-3 py-4">
           <section data-testid="mobile-sidebar-controls" className="mb-4 grid gap-3 rounded-2xl border border-ui-border bg-ui-surface/80 p-3 lg:hidden">
