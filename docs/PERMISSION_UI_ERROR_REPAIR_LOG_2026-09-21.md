@@ -60,7 +60,7 @@ Acceptance cases:
 - Super Admin behavior remains unchanged.
 
 ### Phase 2 — Void / approval UI contract
-**Status: IN PROGRESS**
+**Status: FULL VERIFY GREEN**
 
 - Unsent line removal must depend on `pos.order.edit`.
 - Sent-item direct Void uses `pos.void`.
@@ -356,3 +356,28 @@ End-to-end regression:
 - No Production write or migration.
 - No printing / Print Agent / printer routing / kitchen station routing modification.
 - Phase 2 reverify must run from the post-sync HEAD, not the obsolete pre-#287 baseline.
+
+
+### 2026-09-21 — Phase 2 Full Verify GREEN; Phase 3 opened
+- Exact verified HEAD: `a0ce2bfb95808b5aa78082bf89f0252e9094c69b`.
+- Workflow: `Verify main` run `35579769954`.
+- Results:
+  - lint ✅
+  - TypeScript ✅
+  - test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations ✅
+  - schema verification ✅
+  - Integration / Security / RLS ✅
+  - Browser Smoke / Playwright ✅
+- Phase 2 is now closed Green on top of latest main `9e14cf5b2421809dfad3fd6b60a977b999fa2c47`.
+- Phase 3 starts from current repository state only.
+- Phase 3 scope:
+  - normalize structured RPC errors into user-facing messages;
+  - prevent raw local modal / KDS / POS loader errors from reaching users;
+  - preserve permission codes internally but show actionable Arabic/English text;
+  - separate “no open shift” from “missing create/edit permission” in Product Browser.
+- No Production writes.
+- No Production migration application.
+- No print-agent / print-routing / kitchen station routing changes.
