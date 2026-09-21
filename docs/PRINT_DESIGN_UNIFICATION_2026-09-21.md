@@ -28,3 +28,6 @@ Pending Full Verify on PR head before merge.
 - Existing local service remains installed and keeps the same port, routes and config.
 - `update-renderer.cmd` updates only `template-print.ps1` from `main`, validates it, and creates a timestamped backup.
 - No reinstall, printer remapping, service protocol change, or Production migration is required.
+
+## Follow-up — kitchen VOID tickets
+Post-deploy Production inspection found that approved kitchen VOID jobs are created directly by the database trigger and therefore bypass the frontend kitchen-template builder. The follow-up migration `20260921175000_kitchen_void_fixed_template.sql` preserves the existing route, idempotency key and text fallback, while adding the same fixed 80mm `kind=kitchen` template to newly-created VOID jobs. Historical/submitted jobs are not modified.
