@@ -244,7 +244,7 @@ Acceptance:
 - keep hover/selected states separate from domain accent.
 
 ## Phase 4 — Page rollout
-**Status: IN PROGRESS**
+**Status: COMPLETE (safe rollout scope)**
 
 Order:
 1. Dashboard cards below the StandBy strip. ✅
@@ -253,12 +253,12 @@ Order:
 4. Accounting / finance. ✅ treasury + financial-report filter surfaces
 5. Reports. ✅ browser/filter/cards by report category
 6. Settings / admin surfaces. ✅ users/branches/approval shared panels
-7. Remaining shared pages. ⏳ pending targeted inventory before any edit.
+7. Remaining shared pages. ✅ inherit the shared neutral Card/DataTable/DesignPanel strip by default; no local semantic override added without a clear domain need.
 
 POS operational workspace is reviewed separately after shared primitives are stable so visual work cannot disturb touch layout or critical controls.
 
 ## Phase 5 — Responsive + RTL typography
-**Status: PENDING**
+**Status: IN PROGRESS — automated smoke green; manual visual review still required**
 
 Test:
 - 360/390/430 px mobile;
@@ -276,7 +276,7 @@ Acceptance:
 - touch targets remain unchanged or improved.
 
 ## Phase 6 — Regression / Verify
-**Status: PENDING**
+**Status: GREEN on implementation head; final docs-head rerun pending**
 
 Required before merge:
 - Lint
@@ -386,3 +386,31 @@ No merge until exact-head Full Verify is green and latest `main` is rechecked.
 - Added/expanded `uiSurfaceAccentContract.test.ts` to lock the semantic rollout and accent-precedence contract.
 - Current implementation head after this documented batch: `e8bca72347571afa16fd5b83dc7f7d4c3a41aae6`.
 - Next: inspect remaining shared pages from repository state, then Phase 5 RTL/responsive checks and exact-head Full Verify before any merge.
+
+
+### 2026-09-21 — Full Verify run #2126 Green on implementation head
+- Verified exact PR head before documentation update: `79741aa7e75022697aa764d03dd1900290ecfe9b`.
+- `main` remained unchanged at `ff2152b8f9849e9c03376fb69d87c83432f795d3`.
+- PR #287 remained open, mergeable and not merged.
+- Run #2126 results:
+  - locked Supabase identity ✅
+  - frontend API contract ✅
+  - lint ✅
+  - TypeScript ✅
+  - application/test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations ✅
+  - schema verification ✅
+  - integration + security/RLS regression ✅
+  - Playwright Browser Smoke ✅
+- This verifies that the surface/accent/typography rollout did not regress the automated application, DB, security or browser-smoke gates.
+- Browser Smoke is not treated as proof of pixel-perfect Light/Dark or every mobile width. Manual visual acceptance remains required for:
+  - Light + Dark
+  - Arabic + English
+  - 360 / 390 / 430 px
+  - tablet + desktop
+  - long branch/user/product/report names.
+- No printing, Print Agent, cloud print queue, KDS, send-to-kitchen, payment, stock-deduction, shift/day-close, RLS or permission logic was changed in this visual branch.
+- Phase 4 safe rollout is considered complete because remaining shared pages automatically inherit the neutral shared Card/DataTable/DesignPanel strip; local semantic overrides are only used where the domain is explicit.
+- This documentation commit changes HEAD, therefore a final CI rerun is required before any merge.
