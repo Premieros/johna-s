@@ -102,6 +102,19 @@ describe('userFacingErrorMessage', () => {
     expect(msg).toContain('خطأ في النظام');
     expect(msg).not.toContain('PGRST999');
   });
+  it('does not expose unknown uppercase technical codes in English', () => {
+    const msg = userFacingErrorMessage('SOME_NEW_INTERNAL_CODE', 'en');
+    expect(msg).toContain('system error');
+    expect(msg).not.toContain('SOME_NEW_INTERNAL_CODE');
+  });
+
+  it('keeps ownership errors action-neutral instead of demanding unrelated permissions', () => {
+    const msg = userFacingErrorMessage('ORDER_OPERATOR_REQUIRED', 'ar');
+    expect(msg).toContain('مستخدم آخر');
+    expect(msg).toContain('الإجراء الحالي');
+    expect(msg).not.toContain('إدارة ونقل');
+  });
+
 
   it('provides English messages when the UI is English', () => {
     expect(userFacingErrorMessage('EMAIL_TAKEN', 'en')).toContain('already used');
