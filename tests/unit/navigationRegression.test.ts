@@ -81,8 +81,9 @@ describe('navigation regressions', () => {
     expect(layout).toContain('data-testid="app-sidebar"');
     expect(layout).toContain('fixed top-0 bottom-0 start-0');
     expect(layout).toContain('border-e');
-    expect(layout).toContain('fixed top-0 start-0 end-0 lg:start-[260px]');
-    expect(layout).toContain('pt-[64px] lg:ms-[260px]');
+    expect(layout).toContain("desktopSidebarHidden ? 'lg:start-0' : 'lg:start-[260px]'");
+    expect(layout).toContain("desktopSidebarHidden ? 'lg:ms-0' : 'lg:ms-[260px]'");
+    expect(layout).toContain('data-testid="desktop-sidebar-toggle"');
     expect(layout).not.toMatch(/fixed[^`]*\bright-0\b/);
     expect(layout).not.toMatch(/fixed[^`]*\bleft-0\b/);
   });
