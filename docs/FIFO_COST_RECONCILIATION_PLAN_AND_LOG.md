@@ -310,6 +310,21 @@ Before any Production application:
 - Workflow #2221 started after the latest test fix and is still running at this log update.
 - Production still has no FIFO migration/backfill applied.
 
+### 2026-09-21 — Full Verify green with tested reversal
+
+- Workflow #2227 completed successfully on commit `af0ad2b47252ccaa5b81a87b869f0df5cc7baa9a`.
+- verify: GREEN (lint, TypeScript, unit, build).
+- db: GREEN (canonical migrations, schema, integration, security/RLS).
+- browser-smoke: GREEN.
+- Historical backfill reversal is now covered by integration tests:
+  - apply -> reverse restores pre-backfill raw ledger valuation and batch residual quantities;
+  - reconciliation accounting artifacts are removed when their net delta returns to zero;
+  - a repeated reverse is idempotent;
+  - stale reversal is blocked after newer raw-material movement.
+- Production remains unchanged by FIFO migrations/backfill at this point.
+- The emergency pre-FIFO rollback branch/package remains available.
+- Next gate: refresh Production preflight/dry-run against the live ledger immediately before any approved Production apply.
+
 ## Next Steps
 
 1. Design additive schema for FIFO debt settlement/reconciliation.
