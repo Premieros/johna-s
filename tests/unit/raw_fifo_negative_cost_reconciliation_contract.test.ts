@@ -49,8 +49,8 @@ describe('raw FIFO negative-cost reconciliation contract', () => {
 
   it('propagates production cost changes into the produced unit and its consumers', () => {
     expect(migration).toContain('v_delta_per_unit:=p_delta/v_prod.quantity');
-    expect(migration).toContain('SET total_cost=total_cost+p_delta');
-    expect(migration).toContain('SET unit_cost=unit_cost+v_delta_per_unit');
+    expect(migration).toContain('SET total_cost=GREATEST(total_cost+p_delta,0)');
+    expect(migration).toContain('SET unit_cost=GREATEST(unit_cost+v_delta_per_unit,0)');
     expect(migration).toContain("'inventory_unit',");
   });
 
