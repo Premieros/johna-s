@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Trash2, FileText, Edit2, RotateCcw } from 'lucide-react';
+import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -21,10 +20,20 @@ import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
 import type { Customer } from '@/lib/types';
+import {
+  APPROVED_FIXED_THERMAL_WIDTH_MM,
+  ReceiptPrintApprovalError,
+  buildReceiptHtml,
+  openPrintWindow,
+  type ReceiptData,
+} from '@/features/pos/utils/printing';
 
 interface SaleRow {
   id: string;
   invoice_number: string;
+  subtotal: number;
+  discount_amount: number;
+  tax_amount: number;
   total: number;
   paid_amount: number;
   refunded_amount: number;
@@ -34,6 +43,8 @@ interface SaleRow {
   created_at: string;
   customer_id: string | null;
   branch_id: string;
+  order_type: string;
+  guest_count: number | null;
   is_archived: boolean;
   customer?: { name: string } | null;
   sale_items?: { id: string; product_id: string | null; unit_name: string; quantity: number; unit_price: number; discount_amount: number; refunded_quantity: number; refunded_amount: number; total: number; product?: { name: string } | null }[];
@@ -42,13 +53,12 @@ interface SaleRow {
 export function SalesPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
-  const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const can = useCan();
   const history = useHistoryAccess();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, is_archived, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     filters: [{ column: 'is_archived', value: false }],
@@ -69,12 +79,20 @@ export function SalesPage() {
   const [refundQty, setRefundQty] = useState<Record<string, string>>({});
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
+  const [receiptPreviewHtml, setReceiptPreviewHtml] = useState('');
+  const [receiptPreviewTitle, setReceiptPreviewTitle] = useState('');
+  const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
+  const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
   const isAr = lang === 'ar';
   const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
-  const canRequestPaymentApproval = user?.role === 'cashier';
-  const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
+  const canRequestPaymentApproval = can('sales.payment.receive') && !can('refunds.approve');
+  const canEditSaleMetadata = can('refunds.approve');
+  const canEditPaymentMethod = can('sales.payment.receive') || can('refunds.approve');
+  const canEditSale = canEditSaleMetadata || canEditPaymentMethod;
   const canArchiveReturnedSale = can('refunds.approve');
+  const canPreviewReceipt = can('sales.view');
+  const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint');
 
   async function loadMeta() {
     const { data: customersRes } = await supabase.from('customers').select('*').order('name');
@@ -92,6 +110,129 @@ export function SalesPage() {
     );
   });
 
+  const branchNameForSale = (sale: SaleRow) =>
+    branches.find((branch) => branch.id === sale.branch_id)?.name || (isAr ? 'الفرع' : 'Branch');
+
+  const orderTypeLabelForSale = (orderType: string) => {
+    const labels: Record<string, [string, string]> = {
+      dine_in: ['صالة', 'Dine-in'],
+      takeaway: ['سفري', 'Takeaway'],
+      delivery: ['توصيل', 'Delivery'],
+      drive_thru: ['سيارات', 'Drive-thru'],
+      quick: ['سريع', 'Quick'],
+    };
+    const label = labels[String(orderType || '').toLowerCase()];
+    return label ? (isAr ? label[0] : label[1]) : orderType;
+  };
+
+  const loadReceiptPayments = async (sale: SaleRow): Promise<Array<{ method: string; amount: number }>> => {
+    const { data, error: paymentError } = await supabase
+      .from('sale_payments')
+      .select('payment_method, amount, refunded_amount, created_at')
+      .eq('sale_id', sale.id)
+      .order('created_at', { ascending: true });
+
+    if (!paymentError && Array.isArray(data) && data.length > 0) {
+      const payments = data
+        .map((row) => ({
+          method: String(row.payment_method || 'other'),
+          amount: Math.max(0, Number(row.amount || 0) - Number(row.refunded_amount || 0)),
+        }))
+        .filter((row) => row.amount > 0);
+      if (payments.length > 0) return payments;
+    }
+
+    const fallbackAmount = Math.max(0, Number(sale.paid_amount || 0) - Number(sale.refunded_amount || 0));
+    return fallbackAmount > 0
+      ? [{ method: sale.payment_method || 'cash', amount: fallbackAmount }]
+      : [];
+  };
+
+  const buildSaleReceipt = async (sale: SaleRow): Promise<ReceiptData> => {
+    const payments = await loadReceiptPayments(sale);
+    return {
+      invoice: sale.invoice_number,
+      branchName: branchNameForSale(sale),
+      items: (sale.sale_items || []).map((item) => ({
+        name: item.product?.name || item.unit_name || '-',
+        qty: Number(item.quantity || 0),
+        price: Number(item.unit_price || 0),
+        total: Number(item.total || 0),
+      })),
+      subtotal: Number(sale.subtotal || 0),
+      discount: Number(sale.discount_amount || 0),
+      tax: Number(sale.tax_amount || 0),
+      total: Number(sale.total || 0),
+      paid: Number(sale.paid_amount || 0),
+      change: Math.max(0, Number(sale.paid_amount || 0) - Number(sale.total || 0)),
+      date: sale.created_at,
+      customerName: sale.customer?.name || '',
+      orderTypeLabel: orderTypeLabelForSale(sale.order_type),
+      guestCount: sale.guest_count,
+      payments,
+    };
+  };
+
+  const previewSaleReceipt = async (sale: SaleRow) => {
+    if (!canPreviewReceipt || receiptBusyId) return;
+    const receiptSettings = effectiveSettings(sale.branch_id);
+    if (!receiptSettings) {
+      show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
+      return;
+    }
+    setReceiptBusyId(sale.id);
+    try {
+      const receipt = await buildSaleReceipt(sale);
+      const html = await buildReceiptHtml(
+        receipt,
+        receiptSettings,
+        lang,
+        isAr,
+        { authorize: false },
+      );
+      setReceiptPreviewTitle(isAr ? `معاينة شيك العميل — ${sale.invoice_number}` : `Customer Receipt Preview — ${sale.invoice_number}`);
+      setReceiptPreviewHtml(html);
+      setReceiptPreviewOpen(true);
+    } catch (err) {
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر إنشاء المعاينة' : 'Could not build receipt preview'), 'error');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
+  const printSaleReceipt = async (sale: SaleRow) => {
+    if (!canPrintReceipt || receiptBusyId) return;
+    const receiptSettings = effectiveSettings(sale.branch_id);
+    if (!receiptSettings) {
+      show(isAr ? 'إعدادات الفرع غير متاحة للطباعة' : 'Branch receipt settings are unavailable', 'error');
+      return;
+    }
+    setReceiptBusyId(sale.id);
+    try {
+      const receipt = await buildSaleReceipt(sale);
+      const html = await buildReceiptHtml(receipt, receiptSettings, lang, isAr);
+      const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+      if (!accepted) {
+        show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open the receipt print path', 'error');
+        return;
+      }
+      show(isAr ? 'تم إرسال الشيك إلى مسار طباعة الكاشير.' : 'Receipt sent to the cashier print path.', 'success');
+    } catch (err) {
+      if (err instanceof ReceiptPrintApprovalError && err.code === 'REPRINT_APPROVAL_PENDING') {
+        show(
+          isAr
+            ? 'إعادة الطباعة تحتاج موافقة. تم إرسال الطلب للمدير أو ما زال قيد المراجعة.'
+            : 'Reprint requires approval. The request was sent or is still pending.',
+          'success',
+        );
+        return;
+      }
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر إعادة طباعة الشيك' : 'Could not reprint receipt'), 'error');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
   const openViewSale = (sale: SaleRow) => {
     setViewSale(sale);
     setEditForm({
@@ -107,7 +248,7 @@ export function SalesPage() {
     setRefundReason('');
     const qty: Record<string, string> = {};
     for (const item of sale.sale_items || []) {
-      qty[item.id] = String(item.quantity - (item.refunded_quantity || 0));
+      qty[item.id] = '0';
     }
     setRefundQty(qty);
   };
@@ -121,6 +262,85 @@ export function SalesPage() {
     let sum = 0;
     for (const item of refundSale?.sale_items || []) sum += refundLineTotal(item);
     return Math.round(sum * 100) / 100;
+  };
+
+  const fillFullRefund = () => {
+    if (!refundSale) return;
+    const qty: Record<string, string> = {};
+    for (const item of refundSale.sale_items || []) {
+      qty[item.id] = String(Math.max(0, item.quantity - (item.refunded_quantity || 0)));
+    }
+    setRefundQty(qty);
+  };
+
+  const clearRefundSelection = () => {
+    if (!refundSale) return;
+    const qty: Record<string, string> = {};
+    for (const item of refundSale.sale_items || []) qty[item.id] = '0';
+    setRefundQty(qty);
+  };
+
+  const previewRefundReceipt = async () => {
+    if (!refundSale || receiptBusyId) return;
+    const selected = (refundSale.sale_items || [])
+      .map((item) => {
+        const remaining = Math.max(0, item.quantity - (item.refunded_quantity || 0));
+        const qty = Math.max(0, Math.min(parseFloat(refundQty[item.id] || '0') || 0, remaining));
+        return { item, qty };
+      })
+      .filter((row) => row.qty > 0);
+    if (selected.length === 0) {
+      show(isAr ? 'اختر صنفًا أو كمية للمرتجع أولًا' : 'Choose an item or quantity to refund first', 'error');
+      return;
+    }
+
+    const totalRefund = refundTotal();
+    const receipt: ReceiptData = {
+      invoice: refundSale.invoice_number,
+      branchName: branchNameForSale(refundSale),
+      items: selected.map(({ item, qty }) => ({
+        name: item.product?.name || item.unit_name || '-',
+        qty,
+        price: Number(item.unit_price || 0),
+        total: refundLineTotal(item),
+      })),
+      subtotal: totalRefund,
+      discount: 0,
+      tax: 0,
+      total: totalRefund,
+      paid: 0,
+      change: 0,
+      date: refundSale.created_at,
+      customerName: refundSale.customer?.name || '',
+      orderTypeLabel: orderTypeLabelForSale(refundSale.order_type),
+      guestCount: refundSale.guest_count,
+      documentTitle: isAr ? 'معاينة المرتجع' : 'REFUND PREVIEW',
+      hidePaymentSummary: true,
+    };
+
+    const receiptSettings = effectiveSettings(refundSale.branch_id);
+    if (!receiptSettings) {
+      show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
+      return;
+    }
+
+    setReceiptBusyId(refundSale.id);
+    try {
+      const html = await buildReceiptHtml(
+        receipt,
+        receiptSettings,
+        lang,
+        isAr,
+        { authorize: false },
+      );
+      setReceiptPreviewTitle(isAr ? `معاينة المرتجع — ${refundSale.invoice_number}` : `Refund Preview — ${refundSale.invoice_number}`);
+      setReceiptPreviewHtml(html);
+      setReceiptPreviewOpen(true);
+    } catch (err) {
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر إنشاء معاينة المرتجع' : 'Could not build refund preview'), 'error');
+    } finally {
+      setReceiptBusyId(null);
+    }
   };
 
   const submitRefund = async () => {
@@ -179,6 +399,10 @@ export function SalesPage() {
     if (!viewSale) return;
 
     const paymentChanged = editForm.payment_method !== viewSale.payment_method;
+    if (paymentChanged && !canEditPaymentMethod) {
+      show(isAr ? 'لا تملك صلاحية تعديل طريقة الدفع' : 'You do not have permission to edit the payment method', 'error');
+      return;
+    }
     if (paymentChanged) {
       if (editForm.payment_method === 'credit') {
         show(isAr ? 'التحويل إلى آجل يحتاج مسار ذمم مدينة مستقل' : 'Changing to credit requires the receivables workflow', 'error');
@@ -220,7 +444,7 @@ export function SalesPage() {
       }
     }
 
-    if (user?.role !== 'cashier') {
+    if (canEditSaleMetadata) {
       const { error } = await supabase.from('sales').update({
         customer_id: editForm.customer_id || null,
         status: editForm.status,
@@ -318,13 +542,33 @@ export function SalesPage() {
     )},
     { key: 'actions', header: t('actions'), render: (r) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+        {canPreviewReceipt && (
+          <button
+            onClick={() => void previewSaleReceipt(r)}
+            className="ui-icon-action ui-icon-action-info"
+            title={isAr ? 'معاينة شيك العميل' : 'Preview customer receipt'}
+            disabled={receiptBusyId === r.id}
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        )}
+        {canPrintReceipt && (
+          <button
+            onClick={() => void printSaleReceipt(r)}
+            className="ui-icon-action ui-icon-action-info"
+            title={isAr ? 'إعادة طباعة الشيك' : 'Reprint receipt'}
+            disabled={receiptBusyId === r.id}
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+        )}
         {canEditSale && (
           <button onClick={() => openViewSale(r)} className="ui-icon-action ui-icon-action-info" title={t('edit')}>
             <Edit2 className="w-4 h-4" />
           </button>
         )}
         {canOpenRefund && r.status !== 'returned' && (r.refunded_amount || 0) < r.total && (
-          <button onClick={() => openRefund(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning" title={isAr ? 'مرتجع' : 'Refund'}>
+          <button onClick={() => openRefund(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning" title={isAr ? 'مرتجع صنف أو فاتورة' : 'Refund item or invoice'}>
             <RotateCcw className="w-4 h-4" />
           </button>
         )}
@@ -364,33 +608,59 @@ export function SalesPage() {
       <Modal open={!!viewSale} onClose={() => setViewSale(null)} title={isAr ? 'تفاصيل الفاتورة' : 'Invoice Details'} size="lg">
         {viewSale && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-ui-page-alt rounded-lg">
-              <FileText className="w-8 h-8 text-brand-500" />
-              <div>
-                <p className="font-bold text-lg text-ui-text">{viewSale.invoice_number}</p>
-                <p className="text-sm text-ui-subtle">{formatDateTime(viewSale.created_at, lang)}</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-ui-page-alt rounded-lg">
+              <div className="flex items-center gap-3">
+                <FileText className="w-8 h-8 text-brand-500" />
+                <div>
+                  <p className="font-bold text-lg text-ui-text">{viewSale.invoice_number}</p>
+                  <p className="text-sm text-ui-subtle">{formatDateTime(viewSale.created_at, lang)}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {canPreviewReceipt && (
+                  <Button variant="secondary" size="sm" onClick={() => void previewSaleReceipt(viewSale)} disabled={receiptBusyId === viewSale.id}>
+                    <Eye className="w-4 h-4" /> {isAr ? 'معاينة الشيك' : 'Receipt preview'}
+                  </Button>
+                )}
+                {canPrintReceipt && (
+                  <Button variant="secondary" size="sm" onClick={() => void printSaleReceipt(viewSale)} disabled={receiptBusyId === viewSale.id}>
+                    <Printer className="w-4 h-4" /> {isAr ? 'إعادة الطباعة' : 'Reprint'}
+                  </Button>
+                )}
+                {canOpenRefund && viewSale.status !== 'returned' && (viewSale.refunded_amount || 0) < viewSale.total && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      openRefund(viewSale);
+                      setViewSale(null);
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4" /> {isAr ? 'مرتجع' : 'Refund'}
+                  </Button>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Select label={t('customer')} value={editForm.customer_id} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, customer_id: e.target.value })}>
+              <Select label={t('customer')} value={editForm.customer_id} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, customer_id: e.target.value })}>
                 <option value="">--</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
-              <Select label={isAr ? 'طريقة الدفع' : 'Payment Method'} value={editForm.payment_method} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}>
+              <Select label={isAr ? 'طريقة الدفع' : 'Payment Method'} value={editForm.payment_method} disabled={!canEditPaymentMethod} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}>
                 <option value="cash">{t('cash')}</option>
                 <option value="card">{t('card')}</option>
                 <option value="transfer">{t('transfer')}</option>
                 <option value="credit" disabled>{t('credit')}</option>
               </Select>
-              <Select label={t('status')} value={editForm.status} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+              <Select label={t('status')} value={editForm.status} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
                 <option value="completed">{isAr ? 'مكتملة' : 'Completed'}</option>
                 <option value="pending">{isAr ? 'قيد الانتظار' : 'Pending'}</option>
                 <option value="returned">{isAr ? 'مرتجعة' : 'Returned'}</option>
               </Select>
               <div />
             </div>
-            <Textarea label={t('notes')} value={editForm.notes} disabled={user?.role === 'cashier'} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} />
+            <Textarea label={t('notes')} value={editForm.notes} disabled={!canEditSaleMetadata} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} />
 
             {viewSale.sale_items && viewSale.sale_items.length > 0 && (
               <div>
@@ -430,7 +700,7 @@ export function SalesPage() {
 
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setViewSale(null)}>{t('cancel')}</Button>
-              <Button onClick={saveSaleEdit}>{t('save')}</Button>
+              {canEditSale && <Button onClick={saveSaleEdit}>{t('save')}</Button>}
             </div>
           </div>
         )}
@@ -440,12 +710,25 @@ export function SalesPage() {
       <Modal open={!!refundSale} onClose={() => setRefundSale(null)} title={isAr ? 'مرتجع الفاتورة' : 'Invoice Refund'} size="lg">
         {refundSale && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-ui-page-alt rounded-lg">
-              <div>
-                <p className="font-bold text-lg text-ui-text">{refundSale.invoice_number}</p>
-                <p className="text-sm text-ui-subtle">{formatDateTime(refundSale.created_at, lang)}</p>
+            <div className="space-y-3 rounded-lg bg-ui-page-alt p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold text-lg text-ui-text">{refundSale.invoice_number}</p>
+                  <p className="text-sm text-ui-subtle">{formatDateTime(refundSale.created_at, lang)}</p>
+                </div>
+                <span className="text-sm text-ui-subtle">{isAr ? 'إجمالي الفاتورة' : 'Invoice total'}: <b>{formatCurrency(refundSale.total, currency, lang)}</b></span>
               </div>
-              <span className="text-sm text-ui-subtle">{isAr ? 'إجمالي الفاتورة' : 'Invoice total'}: <b>{formatCurrency(refundSale.total, currency, lang)}</b></span>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" onClick={fillFullRefund}>
+                  <RotateCcw className="w-4 h-4" /> {isAr ? 'إرجاع الفاتورة بالكامل' : 'Refund full invoice'}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={clearRefundSelection}>
+                  {isAr ? 'مسح الاختيار' : 'Clear selection'}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => void previewRefundReceipt()} disabled={receiptBusyId === refundSale.id || refundTotal() <= 0}>
+                  <Eye className="w-4 h-4" /> {isAr ? 'معاينة المرتجع' : 'Refund preview'}
+                </Button>
+              </div>
             </div>
 
             <div className="overflow-x-auto border border-ui-border rounded-xl">
@@ -467,15 +750,25 @@ export function SalesPage() {
                           <p className="text-xs text-ui-subtle">{isAr ? 'الكمية المبيعة' : 'Sold'}: {item.quantity}{item.refunded_quantity > 0 ? ` · ${isAr ? 'مرتجع' : 'refunded'}: ${item.refunded_quantity}` : ''}</p>
                         </td>
                         <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            min={0}
-                            max={remaining}
-                            step="any"
-                            value={refundQty[item.id] ?? ''}
-                            onChange={(e) => setRefundQty({ ...refundQty, [item.id]: e.target.value })}
-                            className="w-24 px-2 py-1.5 rounded-lg border border-ui-border bg-ui-surface text-sm text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary"
-                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={remaining}
+                              step="any"
+                              value={refundQty[item.id] ?? ''}
+                              onChange={(e) => setRefundQty({ ...refundQty, [item.id]: e.target.value })}
+                              className="w-24 px-2 py-1.5 rounded-lg border border-ui-border bg-ui-surface text-sm text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary"
+                            />
+                            <button
+                              type="button"
+                              disabled={remaining <= 0}
+                              onClick={() => setRefundQty({ ...refundQty, [item.id]: String(Math.max(0, remaining)) })}
+                              className="rounded-lg border border-ui-border bg-ui-surface px-2 py-1.5 text-xs font-bold text-ui-accent disabled:opacity-40"
+                            >
+                              {isAr ? 'الكل' : 'All'}
+                            </button>
+                          </div>
                         </td>
                         <td className="px-3 py-2 font-medium text-ui-text">{formatCurrency(refundLineTotal(item), currency, lang)}</td>
                       </tr>
@@ -492,14 +785,33 @@ export function SalesPage() {
               <span className="font-bold text-lg text-ui-danger">{formatCurrency(refundTotal(), currency, lang)}</span>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="secondary" onClick={() => setRefundSale(null)}>{t('cancel')}</Button>
-              <Button onClick={submitRefund} disabled={refunding}>
+              <Button variant="secondary" onClick={() => void previewRefundReceipt()} disabled={receiptBusyId === refundSale.id || refundTotal() <= 0}>
+                <Eye className="w-4 h-4" /> {isAr ? 'معاينة قبل التنفيذ' : 'Preview before refund'}
+              </Button>
+              <Button onClick={submitRefund} disabled={refunding || refundTotal() <= 0}>
                 <RotateCcw className="w-4 h-4" /> {refunding ? '...' : (isAr ? 'تأكيد المرتجع' : 'Confirm Refund')}
               </Button>
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={receiptPreviewOpen}
+        onClose={() => setReceiptPreviewOpen(false)}
+        title={receiptPreviewTitle || (isAr ? 'معاينة الشيك' : 'Receipt Preview')}
+        size="lg"
+      >
+        <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
+          <iframe
+            title={receiptPreviewTitle || 'receipt-preview'}
+            srcDoc={receiptPreviewHtml}
+            sandbox=""
+            className="h-[70vh] w-full rounded-lg bg-white"
+          />
+        </div>
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove}
