@@ -21,6 +21,7 @@ import {
   netSaleItemQuantity,
   type SalePaymentLike,
 } from '@/features/reporting/numericIntegrity';
+import { DashboardStandbyBar } from '../components/DashboardStandbyBar';
 
 type Range = 'today' | 'week' | 'month' | 'year';
 type RelatedName = { name?: string | null; name_en?: string | null; low_stock_threshold?: number | null };
@@ -514,7 +515,7 @@ export function DashboardDataPage() {
   const recent = sales.slice(0, 5);
 
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] bg-ui-page px-4 py-5 sm:px-7 sm:py-7" data-testid="dashboard-surface"><div className="mx-auto max-w-[1560px] space-y-6">
-    <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-black text-ui-text">{ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome back, ${user?.full_name || 'Admin'}`}</h1><p className="mt-1 text-sm text-ui-muted">{ar ? 'بيانات فعلية من النظام حسب الفترة والفرع المحددين' : 'Live system data for the selected period and branch'}</p></div>{canCreateSale && <Link to="/pos" className="inline-flex items-center gap-2 rounded-xl bg-ui-primary px-4 py-2 text-sm font-bold text-ui-primary-fg"><ShoppingBag className="h-4 w-4" />{ar ? 'إنشاء بيع' : 'New sale'}</Link>}</section>
+    <DashboardStandbyBar canCreateSale={canCreateSale} />
 
     <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month') : (ar ? 'الحد الأقصى للعرض: آخر 7 أيام' : 'Maximum visible history: last 7 days')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).filter((item) => history.unlimited || item === 'today' || item === 'week').map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
 
