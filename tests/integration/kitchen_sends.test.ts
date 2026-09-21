@@ -269,6 +269,21 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
       );
       expect(voidRow.rows).toHaveLength(1);
       expect(Number(voidRow.rows[0].quantity)).toBe(1);
+
+      const closedOrder = await client.query<{
+        status: string;
+        kitchen_status: string;
+        table_status: string;
+      }>(
+        `SELECT o.status, o.kitchen_status, t.status AS table_status
+           FROM public.orders o
+           JOIN public.dining_tables t ON t.id=o.table_id
+          WHERE o.id=$1`,
+        [orderId],
+      );
+      expect(closedOrder.rows[0].status).toBe('cancelled');
+      expect(closedOrder.rows[0].kitchen_status).toBe('cancelled');
+      expect(closedOrder.rows[0].table_status).toBe('vacant');
     } finally {
       await client.query(
         `UPDATE public.roles SET permissions=$1::jsonb WHERE role='cashier'`,
@@ -387,6 +402,19 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
         [orderItemId],
       );
       expect(Number(remainingLine.rows[0].quantity)).toBe(1);
+
+      const stillOpen = await client.query<{
+        status: string;
+        table_status: string;
+      }>(
+        `SELECT o.status, t.status AS table_status
+           FROM public.orders o
+           JOIN public.dining_tables t ON t.id=o.table_id
+          WHERE o.id=$1`,
+        [orderId],
+      );
+      expect(stillOpen.rows[0].status).toBe('open');
+      expect(stillOpen.rows[0].table_status).toBe('occupied');
 
       const audit = await client.query<{ c: number }>(
         `SELECT count(*)::int AS c
