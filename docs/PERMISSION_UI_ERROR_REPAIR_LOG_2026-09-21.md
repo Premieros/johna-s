@@ -381,3 +381,39 @@ End-to-end regression:
 - No Production writes.
 - No Production migration application.
 - No print-agent / print-routing / kitchen station routing changes.
+
+
+### 2026-09-21 — Phase 3 implementation checkpoint
+- Scope implemented from current branch state only; no memory-derived code assumptions.
+- Central error normalization:
+  - structured RPC errors such as `{ error: 'PERMISSION_DENIED', permission: 'pos.payment.take' }` now preserve the permission name for the user-facing message;
+  - added operational mappings for common POS/KDS/table/order/branch errors;
+  - unknown `UPPER_SNAKE_CASE` technical codes no longer surface literally in English;
+  - `ORDER_OPERATOR_REQUIRED` copy is now action-neutral and does not falsely demand unrelated manage/transfer permissions.
+- Local UI surfaces converted away from raw `.message` / raw RPC code rendering:
+  - `TransferOrderModal.tsx`
+  - `TransferItemModal.tsx`
+  - `TransferItemsModal.tsx`
+  - `KitchenDisplayPage.tsx`
+  - `ActiveOrdersPage.tsx`
+  - POS cancellation path in `PosWorkspacePage.tsx`
+  - catalog/image failures in `ProductBrowser.tsx`
+- KDS:
+  - load/context failures are translated;
+  - Start Cooking / Ready / Served failures are no longer silently swallowed;
+  - last known queue cards remain visible on failure.
+- Product Browser:
+  - missing shift and missing order create/edit authority are now distinct reasons;
+  - “Go to shifts” appears only when the shift is actually the blocker;
+  - inventory availability codes are translated instead of rendered raw.
+- POS initial load resilience:
+  - product catalog failure is the only online-load failure allowed to block POS after offline fallback also fails;
+  - customer/settings/branches/categories/areas failures degrade to a non-blocking warning;
+  - cached product catalog recovery remains available and produces a non-blocking warning rather than a fatal screen.
+- Regression coverage added/extended:
+  - `tests/unit/userFacingError.test.ts`
+  - `tests/unit/posUserFacingErrorSurfaceContract.test.ts`
+- No Production writes.
+- No Production migrations applied.
+- No print-agent / printer queue / printer routing / kitchen station routing changes.
+- Phase 3 status remains IN PROGRESS until Full Verify is Green on the exact post-documentation HEAD.
