@@ -154,11 +154,12 @@ export function PricingPage() {
   }
 
   useEffect(() => {
-    load();
-    // The active branch is the operational scope. Permission changes cause a new
-    // session/context load and therefore a fresh page mount.
+    void load();
+    // Permission state may hydrate after the branch context. Re-run when the
+    // view permissions become available so authorized product/raw rows cannot
+    // remain stuck as an empty initial result.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId]);
+  }, [branchId, canRawView, canProductsView]);
 
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const matches = (name: string, code?: string | null) =>

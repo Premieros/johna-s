@@ -96,12 +96,17 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     expect(def).toContain("AUTO_CLOSED_AT_BUSINESS_DAY_END");
   });
 
-  it('retains the compatibility override only as a fail-closed surface', async () => {
+  it('retains a separate Permission-First override that preserves operational orders', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public.close_shift_with_open_orders(uuid,numeric,text)'::regprocedure) def
     `);
-    expect(rows[0].def).toContain("'OPEN_ORDERS_BLOCK_SHIFT_CLOSE'");
-    expect(rows[0].def).not.toContain("status = 'closed'");
+    const def = rows[0].def.replace(/\s+/g, ' ');
+    expect(def).toContain("can_permission('shifts.close')");
+    expect(def).toContain("can_permission('shifts.close_with_open_orders')");
+    expect(def).toContain("SET status='closed'");
+    expect(def).toContain("'open_orders_preserved'");
+    expect(def).not.toMatch(/UPDATE\s+public\.orders/i);
+    expect(def).not.toMatch(/UPDATE\s+public\.dining_tables/i);
   });
 
   it('still enforces exactly one open shared shift per branch', async () => {

@@ -42,7 +42,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState('');
   const { rows: products, loading, total, hasMore, loadMore, loadingMore, refresh: reloadProducts } = usePaginatedRows<Product>({
     table: 'products',
-    select: '*, category:categories(*)',
+    select: '*',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     search: { term: search, columns: ['name', 'name_en', 'barcode', 'sku'] },
@@ -62,6 +62,7 @@ export function ProductsPage() {
   const { branches } = useBranches();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const branchLabel = (id: string | null | undefined) => branches.find((b) => b.id === id)?.name || '';
+  const productCategoryName = (product: Product) => categories.find((item) => item.id === product.category_id)?.name || product.category?.name || '';
 
   const [form, setForm] = useState({
     name: '', name_en: '', barcode: '', sku: '', category_id: '', description: '',
@@ -246,7 +247,7 @@ export function ProductsPage() {
     reloadProducts();
   };
 
-  const handleExport = () => { exportToExcel(products.map(p => ({ Name: p.name, NameEn: p.name_en || '', Barcode: p.barcode || '', SKU: p.sku || '', ProductType: p.product_type || 'ready', CostPrice: p.cost_price, SalePrice: p.sale_price, WholesalePrice: p.wholesale_price, Category: p.category?.name || '', Active: p.is_active, LowStockThreshold: p.low_stock_threshold, MinStock: p.min_stock ?? 0, MaxStock: p.max_stock ?? 0, ReorderPoint: p.reorder_point ?? 0 })), 'products'); };
+  const handleExport = () => { exportToExcel(products.map(p => ({ Name: p.name, NameEn: p.name_en || '', Barcode: p.barcode || '', SKU: p.sku || '', ProductType: p.product_type || 'ready', CostPrice: p.cost_price, SalePrice: p.sale_price, WholesalePrice: p.wholesale_price, Category: productCategoryName(p), Active: p.is_active, LowStockThreshold: p.low_stock_threshold, MinStock: p.min_stock ?? 0, MaxStock: p.max_stock ?? 0, ReorderPoint: p.reorder_point ?? 0 })), 'products'); };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -267,8 +268,8 @@ export function ProductsPage() {
   const removeUnit = (i: number) => setUnits(units.filter((_, idx) => idx !== i));
 
   const columns: Column<Product>[] = [
-    { key: 'name', header: t('productName'), render: (p) => <div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-ui-page-alt flex items-center justify-center flex-shrink-0">{p.image_url ? <ProductImage src={p.image_url} name={p.name} category={p.category?.name} className="h-full w-full rounded-lg bg-white" imgClassName="h-full w-full rounded-lg bg-white object-contain p-0.5" positionX={p.image_position_x} positionY={p.image_position_y} zoom={p.image_zoom} /> : <BarcodeIcon className="w-4 h-4 text-ui-subtle" />}</div><div><p className="font-medium text-ui-text">{p.name}</p><p className="text-xs text-ui-subtle">{p.barcode || '-'}</p></div>{p.product_type === 'manufactured' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">{t('manufactured')}</span>}</div> },
-    { key: 'category', header: t('category'), render: (p) => p.category?.name || '-' },
+    { key: 'name', header: t('productName'), render: (p) => <div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-ui-page-alt flex items-center justify-center flex-shrink-0">{p.image_url ? <ProductImage src={p.image_url} name={p.name} category={productCategoryName(p)} className="h-full w-full rounded-lg bg-white" imgClassName="h-full w-full rounded-lg bg-white object-contain p-0.5" positionX={p.image_position_x} positionY={p.image_position_y} zoom={p.image_zoom} /> : <BarcodeIcon className="w-4 h-4 text-ui-subtle" />}</div><div><p className="font-medium text-ui-text">{p.name}</p><p className="text-xs text-ui-subtle">{p.barcode || '-'}</p></div>{p.product_type === 'manufactured' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">{t('manufactured')}</span>}</div> },
+    { key: 'category', header: t('category'), render: (p) => productCategoryName(p) || '-' },
     { key: 'branch', header: t('branch'), render: (p) => <BranchBadge name={branchLabel(p.branch_id)} /> },
     { key: 'cost_price', header: t('costPrice'), render: (p) => formatCurrency(p.cost_price, currency, lang) },
     { key: 'sale_price', header: t('salePrice'), render: (p) => <span className="font-semibold text-brand-600 dark:text-brand-400">{formatCurrency(p.sale_price, currency, lang)}</span> },
