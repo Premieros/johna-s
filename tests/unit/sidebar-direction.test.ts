@@ -20,20 +20,19 @@ describe('sidebar direction contract', () => {
     expect(layout).toContain('data-testid="app-header"');
   });
 
-  it('header is fixed and offsets from logical inline-start by sidebar width on desktop', () => {
+  it('header and main content release their logical offset when desktop sidebar is hidden', () => {
     const layout = read('src/components/Layout.tsx');
-    expect(layout).toContain('fixed top-0 start-0 end-0 lg:start-[260px]');
-  });
-
-  it('main content offsets from logical inline-start and fixed header', () => {
-    const layout = read('src/components/Layout.tsx');
-    expect(layout).toContain('pt-[64px] lg:ms-[260px]');
+    expect(layout).toContain("desktopSidebarHidden ? 'lg:start-0' : 'lg:start-[260px]'");
+    expect(layout).toContain("desktopSidebarHidden ? 'lg:ms-0' : 'lg:ms-[260px]'");
+    expect(layout).toContain('data-testid="desktop-sidebar-toggle"');
+    expect(layout).toContain('data-testid="desktop-sidebar-hide"');
+    expect(layout).toContain("premier:desktop-sidebar-hidden");
   });
 
   it('keeps the shared shell direction source on the Layout root', () => {
     const layout = read('src/components/Layout.tsx');
     expect(layout).toContain('<div dir={ar ? \'rtl\' : \'ltr\'}');
     expect(layout).toContain('data-testid="app-sidebar"');
-    expect(layout).toContain('lg:translate-x-0');
+    expect(layout).toContain("desktopSidebarHidden ? (ar ? 'lg:translate-x-full' : 'lg:-translate-x-full') : 'lg:translate-x-0'");
   });
 });
