@@ -162,12 +162,37 @@ This work will **standardize use of the existing font stack**; it will not intro
 - [x] Create isolated development branch.
 - [x] Inspect existing global design tokens in `src/index.css`.
 - [x] Confirm typography stack: Inter/Cairo.
-- [ ] Inventory shared surfaces/cards/filter bars/table shells that can safely inherit global styling.
-- [ ] Identify components where a global token change could cause operational regression.
+- [x] Inventory shared surfaces/cards/filter bars/table shells that can safely inherit global styling.
+- [x] Identify components where a global token change could cause operational regression.
 
 Deliverable:
 - component impact list;
 - no UI behavior changes yet.
+
+### Phase 0 inventory findings
+
+**Safe shared leverage points**
+- `src/index.css`: global page/surface/border/text tokens and typography stack.
+- `src/components/PageHeader.tsx`: shared `Card` and `StatCard`.
+- `src/components/design/DesignSurface.tsx`: shared `DesignFilterBar`.
+- `src/components/design/CenterTile.tsx`: shared navigation tiles/cards.
+- `src/components/DataTable.tsx`: shared table/filter menu surface.
+- reporting shells/filter cards already use `bg-ui-surface` + `border-ui-border` and can inherit token improvements.
+
+**Local card implementations requiring later normalization**
+- `src/features/dashboard/pages/DashboardDataPage.tsx`
+- `src/features/dashboard/pages/DashboardExecutiveInsightsV2.tsx`
+- `src/features/dashboard/pages/VisualDashboardPage.tsx`
+
+These duplicate local Card patterns and should be handled after the shared token/primitives are stable, not by broad string replacement.
+
+**Operational/high-risk surfaces to exclude from the first visual pass**
+- POS payment/start/table operational controls;
+- kitchen display cards;
+- printer settings / print agent related controls;
+- modal flows tied to void/transfer/payment.
+
+Reason: these screens have touch-layout/status semantics and must receive visual accents only in a later focused regression pass.
 
 ## Phase 1 — Global surface tokens
 **Status: PENDING**
@@ -283,4 +308,10 @@ No runtime/UI code changed yet in this branch at the time of this log creation.
 - Existing global surface tokens inspected.
 - Existing typography confirmed as Cairo for RTL and Inter for LTR.
 - User requirement added explicitly: font family, weights, sizes, line-height and clipping policy are part of acceptance, not an incidental styling choice.
-- Next action: complete Phase 0 component inventory, then make the smallest reusable token/primitive change for Phase 1.
+
+### 2026-09-21 — Phase 0 inventory complete
+- Shared leverage points identified: global tokens, PageHeader Card/StatCard, DesignFilterBar, CenterTile and DataTable surfaces.
+- Duplicate local dashboard Card implementations identified for later normalization.
+- POS operational, payment, kitchen and printing-adjacent surfaces explicitly excluded from the first pass.
+- No runtime/UI code changed yet.
+- Next action: Phase 1 — adjust global neutral surfaces and add reusable accent-strip primitives while preserving StandBy true black.
