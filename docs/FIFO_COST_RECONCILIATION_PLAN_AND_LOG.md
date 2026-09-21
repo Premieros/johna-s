@@ -254,6 +254,29 @@ Before any Production application:
 - Current verification run after these fixes: CI #2214 (pending at time of this log update).
 - Production remains unchanged: no FIFO migration, no historical backfill, no printing changes.
 
+### 2026-09-21 — Emergency rollback point locked
+
+- Exact pre-FIFO Production code point: `0559ec7e0bc21524cc029bc00055928837a7cd6d`.
+- Dedicated rollback branch created:
+  - `rollback/pre-fifo-20260921-1829`.
+- This rollback point includes the current approved unified thermal printing design from PR #294.
+- Exact pre-FIFO Production database definitions were captured for:
+  - warehouse-aware `_raw_add`;
+  - warehouse-aware `_raw_remove_fifo`;
+  - `get_costing_sales_summary`;
+  - `get_order_margin`.
+- Emergency database behavior restore package:
+  - `supabase/rollback/20260921_pre_fifo_emergency_restore.sql`.
+- The rollback SQL lives outside `supabase/migrations` and therefore can never auto-run.
+- Emergency restore does not touch:
+  - printing tables/functions/queues;
+  - sales/orders/payments;
+  - recipes;
+  - stock movement rows.
+- FIFO audit tables are intentionally left intact during emergency behavior rollback so rollback itself is non-destructive and auditable.
+- **Hard gate added:** historical Production backfill MUST NOT be applied until a tested backfill reversal path exists. Code/function rollback alone is not considered sufficient after a historical backfill mutates valuation data.
+- Production remains unchanged by FIFO work at this point.
+
 ## Next Steps
 
 1. Design additive schema for FIFO debt settlement/reconciliation.
