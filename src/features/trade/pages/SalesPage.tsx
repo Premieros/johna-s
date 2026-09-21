@@ -110,6 +110,119 @@ export function SalesPage() {
     );
   });
 
+  const branchNameForSale = (sale: SaleRow) =>
+    branches.find((branch) => branch.id === sale.branch_id)?.name || (isAr ? 'الفرع' : 'Branch');
+
+  const orderTypeLabelForSale = (orderType: string) => {
+    const labels: Record<string, [string, string]> = {
+      dine_in: ['صالة', 'Dine-in'],
+      takeaway: ['سفري', 'Takeaway'],
+      delivery: ['توصيل', 'Delivery'],
+      drive_thru: ['سيارات', 'Drive-thru'],
+      quick: ['سريع', 'Quick'],
+    };
+    const label = labels[String(orderType || '').toLowerCase()];
+    return label ? (isAr ? label[0] : label[1]) : orderType;
+  };
+
+  const loadReceiptPayments = async (sale: SaleRow): Promise<Array<{ method: string; amount: number }>> => {
+    const { data, error: paymentError } = await supabase
+      .from('sale_payments')
+      .select('payment_method, amount, refunded_amount, created_at')
+      .eq('sale_id', sale.id)
+      .order('created_at', { ascending: true });
+
+    if (!paymentError && Array.isArray(data) && data.length > 0) {
+      const payments = data
+        .map((row) => ({
+          method: String(row.payment_method || 'other'),
+          amount: Math.max(0, Number(row.amount || 0) - Number(row.refunded_amount || 0)),
+        }))
+        .filter((row) => row.amount > 0);
+      if (payments.length > 0) return payments;
+    }
+
+    const fallbackAmount = Math.max(0, Number(sale.paid_amount || 0) - Number(sale.refunded_amount || 0));
+    return fallbackAmount > 0
+      ? [{ method: sale.payment_method || 'cash', amount: fallbackAmount }]
+      : [];
+  };
+
+  const buildSaleReceipt = async (sale: SaleRow): Promise<ReceiptData> => {
+    const payments = await loadReceiptPayments(sale);
+    return {
+      invoice: sale.invoice_number,
+      branchName: branchNameForSale(sale),
+      items: (sale.sale_items || []).map((item) => ({
+        name: item.product?.name || item.unit_name || '-',
+        qty: Number(item.quantity || 0),
+        price: Number(item.unit_price || 0),
+        total: Number(item.total || 0),
+      })),
+      subtotal: Number(sale.subtotal || 0),
+      discount: Number(sale.discount_amount || 0),
+      tax: Number(sale.tax_amount || 0),
+      total: Number(sale.total || 0),
+      paid: Number(sale.paid_amount || 0),
+      change: Math.max(0, Number(sale.paid_amount || 0) - Number(sale.total || 0)),
+      date: sale.created_at,
+      customerName: sale.customer?.name || '',
+      orderTypeLabel: orderTypeLabelForSale(sale.order_type),
+      guestCount: sale.guest_count,
+      payments,
+    };
+  };
+
+  const previewSaleReceipt = async (sale: SaleRow) => {
+    if (!canPreviewReceipt || receiptBusyId) return;
+    setReceiptBusyId(sale.id);
+    try {
+      const receipt = await buildSaleReceipt(sale);
+      const html = await buildReceiptHtml(
+        receipt,
+        effectiveSettings(sale.branch_id),
+        lang,
+        isAr,
+        { authorize: false },
+      );
+      setReceiptPreviewTitle(isAr ? `معاينة شيك العميل — ${sale.invoice_number}` : `Customer Receipt Preview — ${sale.invoice_number}`);
+      setReceiptPreviewHtml(html);
+      setReceiptPreviewOpen(true);
+    } catch (err) {
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر إنشاء المعاينة' : 'Could not build receipt preview'), 'error');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
+  const printSaleReceipt = async (sale: SaleRow) => {
+    if (!canPrintReceipt || receiptBusyId) return;
+    setReceiptBusyId(sale.id);
+    try {
+      const receipt = await buildSaleReceipt(sale);
+      const html = await buildReceiptHtml(receipt, effectiveSettings(sale.branch_id), lang, isAr);
+      const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+      if (!accepted) {
+        show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open the receipt print path', 'error');
+        return;
+      }
+      show(isAr ? 'تم إرسال الشيك إلى مسار طباعة الكاشير.' : 'Receipt sent to the cashier print path.', 'success');
+    } catch (err) {
+      if (err instanceof ReceiptPrintApprovalError && err.code === 'REPRINT_APPROVAL_PENDING') {
+        show(
+          isAr
+            ? 'إعادة الطباعة تحتاج موافقة. تم إرسال الطلب للمدير أو ما زال قيد المراجعة.'
+            : 'Reprint requires approval. The request was sent or is still pending.',
+          'success',
+        );
+        return;
+      }
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر إعادة طباعة الشيك' : 'Could not reprint receipt'), 'error');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
   const openViewSale = (sale: SaleRow) => {
     setViewSale(sale);
     setEditForm({
