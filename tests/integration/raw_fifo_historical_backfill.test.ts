@@ -330,15 +330,20 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
     const orderId = randomUUID();
     const itemId = randomUUID();
     const eventId = randomUUID();
+    const productId = randomUUID();
     const orderNo = 'FIFO-KROUND-' + randomUUID().slice(0, 8);
 
+    await client.query(
+      "INSERT INTO public.products(id,name,branch_id,sale_price,is_active) VALUES($1,'FIFO Kitchen Round Product',$2,0,true)",
+      [productId, branch],
+    );
     await client.query(
       "INSERT INTO public.orders(id,order_number,branch_id,order_type,status,inventory_warehouse_id) VALUES($1,$2,$3,'takeaway','completed',$4)",
       [orderId, orderNo, branch, warehouse],
     );
     await client.query(
-      "INSERT INTO public.order_items(id,order_id,product_id,quantity,unit_price,total) VALUES($1,$2,NULL,1,0,0)",
-      [itemId, orderId],
+      "INSERT INTO public.order_items(id,order_id,product_id,quantity,unit_price,total) VALUES($1,$2,$3,1,0,0)",
+      [itemId, orderId, productId],
     );
     await client.query(
       "INSERT INTO public.order_kitchen_inventory_events(id,branch_id,warehouse_id,order_id,order_item_id,sent_quantity,voided_quantity,total_cost) VALUES($1,$2,$3,$4,$5,1,0,5.7888)",
