@@ -169,7 +169,7 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
     await client.query(
       `INSERT INTO public.purchases
         (invoice_number,supplier_id,branch_id,warehouse_id,buyer_id,subtotal,discount_amount,tax_amount,total,paid_amount,payment_method,status,created_at)
-       VALUES($1,$2,$3,$4,$5,55,0,0,55,55,'cash','completed',now()+interval '1 second')`,
+       VALUES($1,$2,$3,$4,$5,55,0,0,55,55,'cash','completed',now())`,
       [newInvoice, ids.suppA, ids.branchA, ids.whA, ids.users.super_admin],
     );
 
