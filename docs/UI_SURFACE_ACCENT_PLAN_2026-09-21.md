@@ -215,7 +215,7 @@ Acceptance:
 - WCAG-friendly readable text contrast.
 
 ## Phase 2 — Shared card / section primitives
-**Status: IN PROGRESS**
+**Status: COMPLETE**
 
 Targets:
 - shared Card/surface primitive(s);
@@ -235,7 +235,7 @@ Acceptance:
 - no page-by-page duplicate CSS where a shared primitive exists.
 
 ## Phase 3 — Tables, filters and information strips
-**Status: PENDING**
+**Status: COMPLETE**
 
 - distinguish table header from page surface;
 - add subtle section strip on filter/tool bars;
@@ -244,16 +244,16 @@ Acceptance:
 - keep hover/selected states separate from domain accent.
 
 ## Phase 4 — Page rollout
-**Status: PENDING**
+**Status: IN PROGRESS**
 
 Order:
-1. Dashboard cards below the StandBy strip.
-2. Inventory / warehouse.
-3. Purchases.
-4. Accounting / finance.
-5. Reports.
-6. Settings / admin surfaces.
-7. Remaining shared pages.
+1. Dashboard cards below the StandBy strip. ✅
+2. Inventory / warehouse. ✅ first safe center/shared pass
+3. Purchases. ✅ search/table surfaces
+4. Accounting / finance. ✅ treasury + financial-report filter surfaces
+5. Reports. ✅ browser/filter/cards by report category
+6. Settings / admin surfaces. ✅ users/branches/approval shared panels
+7. Remaining shared pages. ⏳ pending targeted inventory before any edit.
 
 POS operational workspace is reviewed separately after shared primitives are stable so visual work cannot disturb touch layout or critical controls.
 
@@ -348,3 +348,41 @@ No merge until exact-head Full Verify is green and latest `main` is rechecked.
 - Updated the contract to require charcoal page/surface hierarchy while preserving true black only for the Dashboard StandBy strip.
 - No production/business behavior was changed to satisfy the test; only the superseded visual expectation was updated.
 - New verification run triggered from commit `b72ff8486e3b8f2f294cd56283998f51994379c1`.
+
+
+### 2026-09-21 — Exact repository re-check before continuation
+- Re-read live GitHub state instead of relying on conversation memory.
+- `main` confirmed unchanged at `ff2152b8f9849e9c03376fb69d87c83432f795d3`.
+- PR #287 confirmed OPEN / mergeable / not merged.
+- PR head at re-check: `330969d2ab02867c9cb35db68c634d2a43eafec1`.
+- Verify run #2107 confirmed **Full Green**:
+  - lint ✅
+  - TypeScript ✅
+  - application/test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations + schema ✅
+  - integration + security/RLS ✅
+  - Browser Smoke / Playwright ✅
+- Continued only after this exact-state verification.
+
+### 2026-09-21 — Phase 2/3 completion and Phase 4 safe rollout
+- Fixed accent precedence so a semantic class can override the shared Card neutral default; neutral is declared before semantic accent classes.
+- Extended `CenterTileItem` with an optional semantic `accent` key while retaining `primary` as the default.
+- Inventory Center tiles and its explanatory flow card now use the emerald inventory accent.
+- Purchases search and table panels now use the amber procurement accent.
+- Treasury branch selection and Financial Reports filter panel now use the violet finance accent.
+- Reporting:
+  - report chooser/filter surfaces use the cyan system accent;
+  - report cards derive accent from `ReportCategory`;
+  - sales = blue, purchases/costing = amber, inventory = emerald, treasury/financial = violet, utilities/analytics = cyan, generic/audit = neutral;
+  - important report titles now wrap instead of being forcibly truncated;
+  - report totals/counts use tabular numeric styling.
+- Administration:
+  - Users search/table panels use system accent;
+  - Branches table panel uses system accent;
+  - Approval Center filter panel uses system accent.
+- POS operational/touch controls, KDS, payment, void/transfer modals and all printing/Print Agent surfaces remain untouched.
+- Added/expanded `uiSurfaceAccentContract.test.ts` to lock the semantic rollout and accent-precedence contract.
+- Current implementation head after this documented batch: `e8bca72347571afa16fd5b83dc7f7d4c3a41aae6`.
+- Next: inspect remaining shared pages from repository state, then Phase 5 RTL/responsive checks and exact-head Full Verify before any merge.
