@@ -152,10 +152,7 @@ BEGIN
   WHERE s.run_id=p_run_id;
 
   DELETE FROM public.raw_fifo_debts d
-  USING public.raw_fifo_backfill_plan p
-  WHERE p.run_id=p_run_id
-    AND p.debt_quantity>0
-    AND d.source_ledger_id=p.consumption_ledger_id
+  WHERE d.backfill_run_id=p_run_id
     AND NOT EXISTS (
       SELECT 1
       FROM public.raw_fifo_settlements s
