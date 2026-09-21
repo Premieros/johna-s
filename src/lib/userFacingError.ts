@@ -42,6 +42,9 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
   'pos.void': { ar: 'إلغاء الأصناف', en: 'Void order items' },
   'pos.send_kitchen': { ar: 'إرسال الطلب للمطبخ', en: 'Send orders to kitchen' },
   'pos.receipt.print': { ar: 'طباعة الإيصالات', en: 'Print receipts' },
+  'pos.kds_view': { ar: 'عرض شاشة المطبخ', en: 'View kitchen display' },
+  'pos.kds_update': { ar: 'تحديث حالة المطبخ', en: 'Update kitchen status' },
+  'approvals.review': { ar: 'مراجعة واعتماد الطلبات', en: 'Review approvals' },
   'settings.manage': { ar: 'إدارة الإعدادات', en: 'Manage settings' },
   'recipes.manage': { ar: 'إدارة الوصفات', en: 'Manage recipes' },
   'products.create': { ar: 'إنشاء المنتجات', en: 'Create products' },
@@ -228,6 +231,106 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'هذا دور أساسي في النظام ولا يمكن حذفه.',
     en: 'This is a system role and cannot be deleted.',
   },
+  ORDER_NOT_FOUND: {
+    ar: 'تعذر العثور على الطلب. حدّث الشاشة ثم حاول مرة أخرى.',
+    en: 'The order could not be found. Refresh and retry.',
+  },
+  ORDER_NOT_EDITABLE: {
+    ar: 'لا يمكن تعديل هذا الطلب في حالته الحالية.',
+    en: 'This order cannot be edited in its current state.',
+  },
+  ORDER_CLOSED: {
+    ar: 'هذا الطلب مغلق بالفعل ولا يقبل تعديلات جديدة.',
+    en: 'This order is already closed and cannot be changed.',
+  },
+  TABLE_BUSY: {
+    ar: 'الطاولة مستخدمة حاليًا بطلب نشط. افتح الطلب الحالي أو اختر طاولة أخرى.',
+    en: 'This table already has an active order. Open it or choose another table.',
+  },
+  TABLE_NOT_FOUND: {
+    ar: 'تعذر العثور على الطاولة. حدّث شاشة الطاولات ثم حاول مرة أخرى.',
+    en: 'The table could not be found. Refresh the tables screen and retry.',
+  },
+  BRANCH_REQUIRED: {
+    ar: 'اختر الفرع أولًا ثم أعد المحاولة.',
+    en: 'Select a branch first, then retry.',
+  },
+  BRANCH_MISMATCH: {
+    ar: 'البيانات المحددة لا تتبع الفرع الحالي.',
+    en: 'The selected data does not belong to the current branch.',
+  },
+  TABLE_BRANCH_MISMATCH: {
+    ar: 'الطاولة المحددة لا تتبع الفرع الحالي.',
+    en: 'The selected table does not belong to the current branch.',
+  },
+  NO_SENT_ITEMS_TO_SETTLE: {
+    ar: 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل في هذا الطلب.',
+    en: 'There are no sent kitchen items ready to settle on this order.',
+  },
+  EMPTY_CART: {
+    ar: 'الطلب فارغ. أضف صنفًا واحدًا على الأقل قبل المتابعة.',
+    en: 'The order is empty. Add at least one item before continuing.',
+  },
+  INVALID_PRODUCT: {
+    ar: 'المنتج المحدد غير صالح أو لم يعد متاحًا.',
+    en: 'The selected product is invalid or no longer available.',
+  },
+  INVALID_QUANTITY: {
+    ar: 'الكمية المدخلة غير صحيحة. أدخل كمية أكبر من صفر.',
+    en: 'The quantity is invalid. Enter a quantity greater than zero.',
+  },
+  PRODUCT_NOT_IN_BRANCH: {
+    ar: 'هذا المنتج غير متاح في الفرع الحالي.',
+    en: 'This product is not available in the current branch.',
+  },
+  RAW_MATERIAL_NOT_IN_BRANCH: {
+    ar: 'إحدى خامات الوصفة غير مضافة إلى الفرع الحالي.',
+    en: 'A recipe raw material is not assigned to the current branch.',
+  },
+  WAREHOUSE_NOT_IN_BRANCH: {
+    ar: 'المستودع المحدد لا يتبع الفرع الحالي.',
+    en: 'The selected warehouse does not belong to the current branch.',
+  },
+  FULL_PAYMENT_REQUIRED_FOR_SENT_ITEMS: {
+    ar: 'الأصناف المرسلة للمطبخ تحتاج سداد قيمتها بالكامل قبل إكمال الطلب.',
+    en: 'Sent kitchen items must be fully paid before completing the order.',
+  },
+  COMPLETION_REQUIRES_PAYMENT: {
+    ar: 'لا يمكن إكمال الطلب قبل تسجيل الدفع المطلوب.',
+    en: 'The order cannot be completed until the required payment is recorded.',
+  },
+  SAME_OPERATOR: {
+    ar: 'المستخدم الهدف هو نفس المستخدم الحالي للطلب.',
+    en: 'The target operator is already assigned to this order.',
+  },
+  SOURCE_OPERATOR_NOT_IN_BRANCH: {
+    ar: 'مستخدم الطلب الحالي غير تابع للفرع المحدد.',
+    en: 'The current order operator is not assigned to the selected branch.',
+  },
+  TARGET_USER_NOT_IN_BRANCH: {
+    ar: 'المستخدم الهدف غير تابع للفرع المحدد.',
+    en: 'The target user is not assigned to the selected branch.',
+  },
+  TARGET_USER_NOT_BRANCH_CAPTAIN: {
+    ar: 'المستخدم الهدف غير مسموح له باستلام طلبات هذا الفرع.',
+    en: 'The target user is not allowed to receive orders for this branch.',
+  },
+  INVALID_PAYLOAD: {
+    ar: 'بيانات العملية غير مكتملة أو غير صحيحة. حدّث الشاشة ثم حاول مرة أخرى.',
+    en: 'The action data is incomplete or invalid. Refresh and retry.',
+  },
+  IDEMPOTENCY_KEY_REQUIRED: {
+    ar: 'تعذر تأكيد العملية بأمان. أعد المحاولة من الشاشة الحالية.',
+    en: 'The action could not be safely confirmed. Retry from the current screen.',
+  },
+  POS_KDS_VIEW_REQUIRED: {
+    ar: 'تحتاج صلاحية عرض شاشة المطبخ لرؤية هذه الصفحة.',
+    en: 'You need kitchen display view permission to access this page.',
+  },
+  POS_KDS_UPDATE_REQUIRED: {
+    ar: 'تحتاج صلاحية تحديث حالة المطبخ لتنفيذ هذا الإجراء.',
+    en: 'You need kitchen status update permission for this action.',
+  },
 };
 
 function currentLanguage(): ErrorLanguage {
@@ -241,6 +344,12 @@ function extractMessage(input: unknown): string {
   if (input instanceof Error) return input.message.trim();
   if (typeof input === 'object') {
     const obj = input as Record<string, unknown>;
+    const permission = typeof obj.permission === 'string' ? obj.permission.trim() : '';
+    const error = typeof obj.error === 'string' ? obj.error.trim() : '';
+    const code = typeof obj.code === 'string' ? obj.code.trim() : '';
+    if (permission && /PERMISSION_DENIED/i.test(error || code)) {
+      return `PERMISSION_DENIED:${permission}`;
+    }
     for (const key of ['detail', 'message', 'error', 'code']) {
       if (typeof obj[key] === 'string' && obj[key]) return String(obj[key]).trim();
     }
