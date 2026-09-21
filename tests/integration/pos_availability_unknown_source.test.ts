@@ -17,6 +17,9 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
   const readyProductId = randomUUID();
   const unresolvedProductId = randomUUID();
   const unresolvedUnitId = randomUUID();
+  const mixedDependencyProductId = randomUUID();
+  const earlyReadyUnitId = '00000000-0000-4000-8000-000000000011';
+  const laterBrokenManufacturedUnitId = 'ffffffff-ffff-4fff-8fff-fffffffffff1';
 
   const q = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> =>
     (await client.query(sql, params)).rows as T[];
@@ -110,6 +113,33 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
        VALUES ($1,$2,1)`,
       [unresolvedProductId, unresolvedUnitId],
     );
+
+    // Mixed dependency regression: the low UUID ready unit has no stock and is
+    // encountered before a later manufactured unit with no recipe. A quantity
+    // probe alone returns INSUFFICIENT_UNIT_STOCK and can hide the bad config.
+    await client.query(
+      `INSERT INTO public.inventory_units (id,code,name,unit_type,branch_id,cost_price,sale_price,is_active)
+       VALUES
+         ($1,$2,'Early Ready Unit','ready',$3,0,0,true),
+         ($4,$5,'Later Broken Manufactured Unit','manufactured',$3,0,0,true)`,
+      [
+        earlyReadyUnitId,
+        `UNIT-${randomUUID()}`,
+        branchId,
+        laterBrokenManufacturedUnitId,
+        `UNIT-${randomUUID()}`,
+      ],
+    );
+    await client.query(
+      `INSERT INTO public.products (id,name,branch_id,product_type,sale_price,cost_price,is_active)
+       VALUES ($1,'Mixed Dependency Product',$2,'ready',20,0,true)`,
+      [mixedDependencyProductId, branchId],
+    );
+    await client.query(
+      `INSERT INTO public.product_unit_links (product_id,unit_id,quantity)
+       VALUES ($1,$2,1),($1,$3,1)`,
+      [mixedDependencyProductId, earlyReadyUnitId, laterBrokenManufacturedUnitId],
+    );
   });
 
   afterAll(async () => {
@@ -173,6 +203,29 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
          FROM public.get_pos_product_sellability($1,$2,100000)
          WHERE product_id=$3`,
         [branchId, warehouseId, unresolvedProductId],
+      );
+      expect(sellability).toEqual([{
+        is_sellable: false,
+        raw_shortage_only: false,
+        availability_error: 'MANUFACTURED_UNIT_HAS_NO_RECIPE',
+      }]);
+    });
+  });
+
+  it('does not let an earlier stock shortage hide a later configuration error', async () => {
+    await asUser(adminUserId, async () => {
+      const direct = await q<{ result: { success: boolean; error?: string } }>(
+        `SELECT public.check_product_availability($1,$2,$3,100000) AS result`,
+        [mixedDependencyProductId, branchId, warehouseId],
+      );
+      expect(direct[0].result.success).toBe(false);
+      expect(direct[0].result.error).toBe('INSUFFICIENT_UNIT_STOCK');
+
+      const sellability = await q<{ is_sellable: boolean; raw_shortage_only: boolean; availability_error: string | null }>(
+        `SELECT is_sellable,raw_shortage_only,availability_error
+         FROM public.get_pos_product_sellability($1,$2,100000)
+         WHERE product_id=$3`,
+        [branchId, warehouseId, mixedDependencyProductId],
       );
       expect(sellability).toEqual([{
         is_sellable: false,
