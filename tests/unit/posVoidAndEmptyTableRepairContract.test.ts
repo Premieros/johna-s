@@ -19,7 +19,8 @@ describe('POS void permission and empty-table repair contract', () => {
     expect(migration).toContain("can_permission(''pos.void'')");
     expect(migration).toContain("cancel_sent_order_item_exact");
     expect(migration).toContain("cancel_sent_order_item");
-    expect(voidModal).toContain('pos.void');
+    expect(voidModal).toContain('canDirectVoid: boolean');
+    expect(voidModal).toContain('لديك صلاحية Void المباشرة');
   });
 
   it('keeps users without direct void capability on the existing approval path', () => {
