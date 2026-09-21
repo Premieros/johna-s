@@ -526,13 +526,33 @@ export function SalesPage() {
     )},
     { key: 'actions', header: t('actions'), render: (r) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+        {canPreviewReceipt && (
+          <button
+            onClick={() => void previewSaleReceipt(r)}
+            className="ui-icon-action ui-icon-action-info"
+            title={isAr ? 'معاينة شيك العميل' : 'Preview customer receipt'}
+            disabled={receiptBusyId === r.id}
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        )}
+        {canPrintReceipt && (
+          <button
+            onClick={() => void printSaleReceipt(r)}
+            className="ui-icon-action ui-icon-action-info"
+            title={isAr ? 'إعادة طباعة الشيك' : 'Reprint receipt'}
+            disabled={receiptBusyId === r.id}
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+        )}
         {canEditSale && (
           <button onClick={() => openViewSale(r)} className="ui-icon-action ui-icon-action-info" title={t('edit')}>
             <Edit2 className="w-4 h-4" />
           </button>
         )}
         {canOpenRefund && r.status !== 'returned' && (r.refunded_amount || 0) < r.total && (
-          <button onClick={() => openRefund(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning" title={isAr ? 'مرتجع' : 'Refund'}>
+          <button onClick={() => openRefund(r)} className="p-1.5 rounded-md hover:bg-ui-warning-soft text-ui-warning" title={isAr ? 'مرتجع صنف أو فاتورة' : 'Refund item or invoice'}>
             <RotateCcw className="w-4 h-4" />
           </button>
         )}
@@ -572,11 +592,37 @@ export function SalesPage() {
       <Modal open={!!viewSale} onClose={() => setViewSale(null)} title={isAr ? 'تفاصيل الفاتورة' : 'Invoice Details'} size="lg">
         {viewSale && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-ui-page-alt rounded-lg">
-              <FileText className="w-8 h-8 text-brand-500" />
-              <div>
-                <p className="font-bold text-lg text-ui-text">{viewSale.invoice_number}</p>
-                <p className="text-sm text-ui-subtle">{formatDateTime(viewSale.created_at, lang)}</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-ui-page-alt rounded-lg">
+              <div className="flex items-center gap-3">
+                <FileText className="w-8 h-8 text-brand-500" />
+                <div>
+                  <p className="font-bold text-lg text-ui-text">{viewSale.invoice_number}</p>
+                  <p className="text-sm text-ui-subtle">{formatDateTime(viewSale.created_at, lang)}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {canPreviewReceipt && (
+                  <Button variant="secondary" size="sm" onClick={() => void previewSaleReceipt(viewSale)} disabled={receiptBusyId === viewSale.id}>
+                    <Eye className="w-4 h-4" /> {isAr ? 'معاينة الشيك' : 'Receipt preview'}
+                  </Button>
+                )}
+                {canPrintReceipt && (
+                  <Button variant="secondary" size="sm" onClick={() => void printSaleReceipt(viewSale)} disabled={receiptBusyId === viewSale.id}>
+                    <Printer className="w-4 h-4" /> {isAr ? 'إعادة الطباعة' : 'Reprint'}
+                  </Button>
+                )}
+                {canOpenRefund && viewSale.status !== 'returned' && (viewSale.refunded_amount || 0) < viewSale.total && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      openRefund(viewSale);
+                      setViewSale(null);
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4" /> {isAr ? 'مرتجع' : 'Refund'}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -638,7 +684,7 @@ export function SalesPage() {
 
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setViewSale(null)}>{t('cancel')}</Button>
-              <Button onClick={saveSaleEdit}>{t('save')}</Button>
+              {canEditSale && <Button onClick={saveSaleEdit}>{t('save')}</Button>}
             </div>
           </div>
         )}
