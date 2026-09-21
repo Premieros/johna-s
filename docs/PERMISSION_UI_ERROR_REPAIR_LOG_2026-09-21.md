@@ -95,7 +95,7 @@ Priority surfaces:
 - POS load failures
 
 ### Phase 4 — UI guard correctness
-**Status: IN PROGRESS**
+**Status: IMPLEMENTED — FINAL VERIFY PENDING**
 
 - New-order controls use `pos.order.create`.
 - Existing-order mutations use `pos.order.edit`.
@@ -104,7 +104,7 @@ Priority surfaces:
 - Approval-based actions should remain reachable when approval is the intended server path.
 
 ### Phase 5 — POS partial-degradation behavior
-**Status: PENDING**
+**Status: IMPLEMENTED — FINAL VERIFY PENDING**
 
 - A nonessential query failure must not unnecessarily replace the entire POS with a fatal screen.
 - Keep the POS usable when safe fallback data is available.
@@ -112,7 +112,7 @@ Priority surfaces:
 - Fatal screen only when the POS cannot safely operate.
 
 ### Phase 6 — Verification
-**Status: PENDING**
+**Status: IN PROGRESS**
 
 Required checks before any Production migration or merge:
 - lint
@@ -464,3 +464,29 @@ End-to-end regression:
 - No Production writes.
 - No Production migrations applied.
 - No print-agent / printer queue / printer routing / kitchen station routing changes.
+
+
+### 2026-09-21 — Phase 4/5 implementation complete; Phase 6 final verification opened
+- Phase 4 corrections completed from current repository code:
+  - new-order customer action uses effective create-or-edit authority instead of always requiring `pos.order.edit`;
+  - Active Orders payment is gated by `pos.payment.take`;
+  - Active Orders cancellation is gated by `pos.cancel_order`;
+  - vacant-table new-order action is gated by `pos.order.create`;
+  - operator reassignment is gated only by `pos.order.transfer`;
+  - operator reassignment now uses `transfer_order_operator` instead of direct `orders.cashier_id` mutation;
+  - transfer target discovery now uses `listOrderTransferTargets` instead of directly reading the `users` table.
+- Added UI guard regression:
+  - `tests/unit/posUiGuardPermissionContract.test.ts`.
+- Phase 5 implementation was already completed during Phase 3 and is now locked for final verification:
+  - secondary POS data failures degrade to a non-blocking warning;
+  - product catalog remains the only blocking load dependency after cache fallback also fails;
+  - cached catalog fallback remains available.
+- Existing Phase 6 coverage confirmed from repository tests, without duplicating suites:
+  - `pos_action_specific_cross_operator_permissions.test.ts`: payment-only, receipt-print-only, send-kitchen-only, cancel-only, cross-branch denial;
+  - `pos_operator_ownership.test.ts`: transfer-only authorization, cross-branch target denial, audit and ownership transfer;
+  - `functional_core_cycle.test.ts`: order → hold/resume → kitchen → payment → inventory → shift close and branch denial;
+  - granular POS permission unit coverage remains in `tests/features/pos/pos-permissions.test.ts`.
+- Final gate: Full Verify on exact post-documentation HEAD.
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Printing / Print Agent / printer routing / kitchen station routing changes: NONE.
