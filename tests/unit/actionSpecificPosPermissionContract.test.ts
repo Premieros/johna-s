@@ -33,6 +33,12 @@ describe('action-specific POS permission contract', () => {
     );
   });
 
+  it('keeps the payment proof valid only through completed settlement finalization', () => {
+    expect(migration).toContain("p_permission = 'pos.payment.take'");
+    expect(migration).toContain("AND o.status = 'completed'");
+    expect(migration).toContain("o.status IN ('open','held')");
+  });
+
   it('allows payment completion bookkeeping only through the exact payment action context', () => {
     expect(migration).toContain("ELSIF NEW.status='completed' THEN");
     expect(migration).toContain(
