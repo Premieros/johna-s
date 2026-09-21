@@ -95,3 +95,12 @@ Required sequence:
 6. Apply new RPC migration to Production.
 7. Confirm Cleopatra Main Area renders exactly 20 in POS.
 8. Confirm Smouha remains 50.
+
+
+## Verification log
+### PR #290 — first Verify attempt
+- Verify run #2174 stopped at **frontend API contract** before lint/typecheck.
+- Cause: new frontend RPC reference `floor_plan_set_main_area_table_count(branch_id,count)` was not yet added to `supabase/api-contract.json`.
+- This was a contract-generation maintenance issue, not a runtime/business failure.
+- Updated `supabase/api-contract.json` with the new RPC signature.
+- New verification will run from the updated exact head.
