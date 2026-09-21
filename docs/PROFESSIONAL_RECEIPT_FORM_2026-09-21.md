@@ -45,3 +45,10 @@ Rebuild customer and kitchen receipt presentation as a clear, fixed, professiona
 
 ## Verification
 Pending focused unit contracts + exact-head Full Verify before merge.
+
+## Numeric safety
+- Price and amount columns reserve fixed space before the product-name column.
+- Numeric cells are forced LTR with tabular numbers and no wrapping.
+- Large totals keep a dedicated value area; Windows renderer reduces only the amount font when a long emphasized total needs extra room.
+- Product names wrap before numeric columns are allowed to clip.
+- Contract coverage includes large values such as `1,481,481.36 EGP`.
