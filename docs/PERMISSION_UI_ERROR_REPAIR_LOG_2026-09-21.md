@@ -190,3 +190,16 @@ End-to-end regression:
 - Production migrations applied: NONE.
 - Print Agent / printer routes changed: NONE.
 - Next gate: Draft PR Full Verify. Phase 2 must remain pending until Phase 1 verification result is known.
+
+
+### 2026-09-21 — Regression evidence from live UI
+- User supplied a live POS screenshot showing the blocking ownership message while attempting an allowed cancellation/Void-related action on another operator's order:
+  - `الطلب مسجل على مستخدم آخر. يلزم امتلاك صلاحيات إدارة ونقل طلبات المستخدمين الآخرين لتنفيذ الإلغاء.`
+- This case is now a mandatory regression scenario for the repair.
+- Expected contract after repair:
+  - an explicit action permission authorizes only that exact action on another operator's order within the same allowed branch;
+  - it must not require the broad `can_manage_other_pos_orders()` bundle;
+  - it must not grant generic order edit, user-management, ownership-transfer, or cross-branch access.
+- This evidence reinforces Phase 1 and Phase 2 acceptance criteria and must be verified before merge.
+- Production changes performed for this evidence: NONE.
+- Printing / print-agent / printer routing changes: NONE.
