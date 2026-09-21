@@ -13,7 +13,7 @@
 - Confirmed bottleneck: legacy POS maximum-availability RPC repeatedly probes every active product even though client quantity is not a saleability gate and raw-material negative sell-through is allowed.
 - Implemented on development branch: lightweight sellability/configuration probe, removal of inventory/settlement availability rescans, removal of 5-second dashboard audit polling, POS Realtime burst coalescing, and safer dashboard query parallelization.
 - Printing / Print Agent / printer routing / KDS / send-to-kitchen authority are untouched.
-- New DB migration is **development-only and unapplied to Production** pending exact-head Full Verify Green + explicit approval.
+- DB migration `pos_sellability_performance` **applied to Production after exact-head Full Verify Green and explicit approval**; PR #293 remains the code deployment step.
 
 ## ACTIVE — Main Area count UI / POS active-table fix — 2026-09-21
 
