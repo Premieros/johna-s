@@ -151,6 +151,26 @@ BEGIN
   v_target_posted:=round(v_row.exact_delta,2);
   v_post_delta:=v_target_posted-v_row.posted_delta;
 
+  IF v_target_posted=0 THEN
+    v_entry_id:=v_row.journal_entry_id;
+
+    IF v_entry_id IS NOT NULL THEN
+      DELETE FROM public.journal_entries
+      WHERE id=v_entry_id
+        AND reference_type='fifo_cogs_reconcile';
+    END IF;
+
+    DELETE FROM public.raw_fifo_sale_cogs_adjustments
+    WHERE sale_id=v_sale.id;
+
+    RETURN jsonb_build_object(
+      'success',true,
+      'exact_delta',0,
+      'posted_delta',0,
+      'journal_entry_id',NULL
+    );
+  END IF;
+
   IF v_post_delta=0 THEN
     RETURN jsonb_build_object(
       'success',true,
