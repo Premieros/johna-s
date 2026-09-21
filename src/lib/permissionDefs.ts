@@ -107,7 +107,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'pos.kds_view': { ar: 'عرض شاشة وطلبات المطبخ', en: 'View Kitchen / KDS' },
   'pos.kds_update': { ar: 'تحديث حالة طلبات المطبخ', en: 'Update Kitchen / KDS Status' },
   'pos.print_kitchen': { ar: 'طباعة تذكرة المطبخ', en: 'Print Kitchen Ticket' },
-  'pos.void': { ar: 'إلغاء صنف مرسل مباشرة', en: 'Direct Sent Item Void' },
+  'pos.void': { ar: 'إلغاء صنف مرسل للمطبخ (حتى طلب مستخدم آخر)', en: 'Void Sent Kitchen Item (Including Other Operator Orders)' },
   'pos.cancel_order': { ar: 'إلغاء الطلب بالكامل', en: 'Cancel Full Order' },
   'pos.change_branch': { ar: 'تغيير الفرع من نقطة البيع', en: 'Change POS Branch' },
   'sales.print': { ar: 'طباعة فواتير المبيعات', en: 'Print Sales Invoices' },

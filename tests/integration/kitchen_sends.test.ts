@@ -310,21 +310,13 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
   it('send_to_kitchen rejects a completed order (ORDER_NOT_EDITABLE)', async () => { const created = await createOrder(); expect(created.success).toBe(true); await client.query(`UPDATE public.orders SET status = 'completed' WHERE id = $1`, [created.order_id]); const sent = await sendToKitchen(created.order_id!); expect(sent.success).toBe(false); expect(sent.error).toBe('ORDER_NOT_EDITABLE'); });
   it('set_order_status cannot reopen a completed order (H4 ORDER_CLOSED)', async () => { const created = await createOrder(); expect(created.success).toBe(true); await client.query(`UPDATE public.orders SET status = 'completed' WHERE id = $1`, [created.order_id]); const res = await asUser(async () => client.query(`SELECT public.set_order_status($1, 'open') AS r`, [created.order_id])); expect(res.rows[0].r.success).toBe(false); expect(res.rows[0].r.error).toBe('ORDER_CLOSED'); const order = await client.query(`SELECT status FROM public.orders WHERE id = $1`, [created.order_id]); expect(order.rows[0].status).toBe('completed'); });
   it('order_kitchen_sends is readable under RLS within the caller branch', async () => { const created = await createOrder(); expect(created.success).toBe(true); await sendToKitchen(created.order_id!); const r = await asUser(async () => client.query(`SELECT count(*)::int AS c FROM public.order_kitchen_sends WHERE order_id = $1`, [created.order_id])); expect(r.rows[0].c).toBe(1); });
-  it('authorized manager can void a sent table item owned by another operator', async () => {
+  it('pos.void alone can void a sent table item owned by another operator in the same branch', async () => {
     const beforeRole = await client.query<{ permissions: unknown }>(
       `SELECT permissions FROM public.roles WHERE role='cashier'`,
     );
     const originalPermissions = beforeRole.rows[0]?.permissions;
     const otherOperatorId = randomUUID();
 
-    await client.query(
-      `UPDATE public.roles
-          SET permissions = (
-            COALESCE(permissions, '[]'::jsonb)
-            || '["pos.void","pos.view","pos.order.edit","pos.order.transfer","users.manage"]'::jsonb
-          )
-        WHERE role='cashier'`,
-    );
     await client.query(
       `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
        VALUES ($1, $2, 'Other Table Operator', 'cashier', $3, true)`,
@@ -348,16 +340,32 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
       const orderItemId = line.rows[0]?.id;
       expect(orderItemId).toBeTruthy();
 
-      // Fixture-only ownership change: model a manager opening a captain/cashier order.
+      // Fixture-only ownership change: the sent order now belongs to another operator.
       await client.query(
         `UPDATE public.orders SET cashier_id=$1 WHERE id=$2`,
         [otherOperatorId, orderId],
       );
 
+      // The executor deliberately loses every permission that composes the
+      // generic "manage other POS orders" bundle, plus send/edit authority.
+      // pos.void must remain sufficient only for the controlled Void RPC.
+      await client.query(
+        `UPDATE public.roles
+            SET permissions = (
+              COALESCE(permissions, '[]'::jsonb)
+              - 'pos.order.edit'
+              - 'pos.order.transfer'
+              - 'users.manage'
+              - 'pos.send_kitchen'
+              - 'approvals.review'
+            ) || '["pos.view","pos.void"]'::jsonb
+          WHERE role='cashier'`,
+      );
+
       const manageOthers = await asUser(async () => client.query<{ allowed: boolean }>(
         `SELECT public.can_manage_other_pos_orders() AS allowed`,
       ));
-      expect(manageOthers.rows[0].allowed).toBe(true);
+      expect(manageOthers.rows[0].allowed).toBe(false);
 
       const voided = await asUser(async () => client.query(
         `SELECT public.cancel_sent_order_item_exact($1,$2,1,'customer cancelled item') AS r`,

@@ -179,10 +179,10 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     en: 'Shows and executes POS payment. An open branch shift must already exist; this does not grant shift opening.',
   },
   'pos.void': {
-    ar: 'ينفذ إلغاء الصنف المرسل مباشرة مع السبب والتدقيق ورد المخزون حسب المسار المعتمد.',
-    en: 'Directly voids a sent item with reason, audit trail, and controlled inventory restoration.',
-    notesAr: 'بدونها يبقى المستخدم على مسار موافقة المدير عند محاولة إلغاء صنف مرسل.',
-    notesEn: 'Without it, sent-item voids stay on the manager-approval path.',
+    ar: 'ينفذ Void لصنف مرسل للمطبخ مباشرة مع السبب والتدقيق ورد المخزون، ويشمل طلب مستخدم آخر داخل نفس الفرع.',
+    en: 'Directly voids a sent kitchen item with reason, audit trail, and controlled inventory restoration, including another operator\'s order in the same branch.',
+    notesAr: 'هذه الصلاحية لا تمنح تعديل أو نقل أو تغيير مالك طلبات المستخدمين الآخرين؛ الاستثناء محصور في مسار Void المرسل فقط. بدونها يبقى المستخدم على مسار موافقة المدير.',
+    notesEn: 'This does not grant general edit, transfer, or ownership changes on other operators\' orders; the exception is limited to the controlled sent-item Void flow. Without it, users stay on the manager-approval path.',
   },
   'pos.cancel_order': {
     ar: 'يُظهر إلغاء الطلب الكامل غير المرسل بعد إدخال سبب واضح.',
