@@ -25,6 +25,7 @@ describe('sidebar direction contract', () => {
     expect(layout).toContain("desktopSidebarHidden ? 'lg:start-0' : 'lg:start-[260px]'");
     expect(layout).toContain("desktopSidebarHidden ? 'lg:ms-0' : 'lg:ms-[260px]'");
     expect(layout).toContain('data-testid="desktop-sidebar-toggle"');
+    expect(layout).toContain('data-testid="desktop-sidebar-hide"');
     expect(layout).toContain("premier:desktop-sidebar-hidden");
   });
 
