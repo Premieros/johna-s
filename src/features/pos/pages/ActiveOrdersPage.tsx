@@ -102,17 +102,27 @@ export function ActiveOrdersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!effectiveBranch) { setCashiers([]); return undefined; }
-    supabase.from('users')
-      .select('id, full_name, email')
-      .eq('branch_id', effectiveBranch)
-      .eq('is_active', true)
-      .order('full_name')
-      .then(({ data }) => {
-        if (!cancelled) setCashiers((data as CashierOption[]) || []);
+    const sourceOrder = orders[0];
+    if (!effectiveBranch || !canReassignCashier || !sourceOrder) {
+      setCashiers([]);
+      return () => { cancelled = true; };
+    }
+    api.pos.listOrderTransferTargets({ p_order_id: sourceOrder.id })
+      .then(({ data, error: targetsError }) => {
+        if (cancelled) return;
+        if (targetsError) {
+          setCashiers([]);
+          return;
+        }
+        const targets = (Array.isArray(data) ? data : []) as Array<{ user_id: string; display_name: string }>;
+        setCashiers(targets.map((target) => ({
+          id: target.user_id,
+          full_name: target.display_name,
+          email: null,
+        })));
       });
     return () => { cancelled = true; };
-  }, [effectiveBranch]);
+  }, [effectiveBranch, canReassignCashier, orders]);
 
   useEffect(() => {
     void loadAreas();
