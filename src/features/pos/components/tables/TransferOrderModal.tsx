@@ -6,6 +6,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import type { DiningArea, DiningTable, Order } from '@/lib/types';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 interface TransferOrderModalProps {
   open: boolean;
@@ -67,7 +68,7 @@ export function TransferOrderModal({
         if (cancelled) return;
         if (error) {
           setOperatorTargets([]);
-          setOperatorError(error.message);
+          setOperatorError(userFacingErrorMessage(error, isAr ? 'ar' : 'en'));
           return;
         }
         setOperatorTargets(Array.isArray(data) ? data : []);
@@ -108,15 +109,14 @@ export function TransferOrderModal({
         p_target_user_id: selectedOperatorId,
       });
       if (error) {
-        setOperatorError(error.message);
+        setOperatorError(userFacingErrorMessage(error, isAr ? 'ar' : 'en'));
         return;
       }
       if (!data?.success) {
-        setOperatorError(
-          data?.error === 'POS_ADMIN_PERMISSION_REQUIRED'
-            ? (isAr ? 'تحتاج صلاحية إدارة طلبات المستخدمين الآخرين لإتمام النقل.' : 'Managing other users’ orders is required for this transfer.')
-            : data?.detail || data?.error || (isAr ? 'تعذر نقل المستخدم.' : 'Could not transfer the operator.'),
-        );
+        setOperatorError(userFacingErrorMessage(
+          data ?? (isAr ? 'تعذر نقل المستخدم.' : 'Could not transfer the operator.'),
+          isAr ? 'ar' : 'en',
+        ));
         return;
       }
       window.dispatchEvent(new CustomEvent('pos:operator-transferred', {
@@ -152,7 +152,7 @@ export function TransferOrderModal({
       });
 
       if (error) {
-        setErrorMsg(error.message);
+        setErrorMsg(userFacingErrorMessage(error, isAr ? 'ar' : 'en'));
         return;
       }
 
@@ -175,7 +175,7 @@ export function TransferOrderModal({
           ? (isAr
             ? 'لا يمكن دمج طلب يحتوي أصنافًا مرسلة للمطبخ حاليًا حتى لا يتغير سجل KDS. استخدم نقل الطاولة للطلب كاملًا أو أكمل الطلب كما هو.'
             : 'A source order with sent kitchen items cannot currently be merged because the KDS snapshot is immutable. Transfer the whole table order instead or finish it separately.')
-          : data?.detail || data?.error || (isAr ? 'تعذر تنفيذ العملية.' : 'Could not execute the action.'),
+          : userFacingErrorMessage(data ?? (isAr ? 'تعذر تنفيذ العملية.' : 'Could not execute the action.'), isAr ? 'ar' : 'en'),
       );
     } finally {
       setLoading(false);
