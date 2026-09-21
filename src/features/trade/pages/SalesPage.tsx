@@ -694,12 +694,25 @@ export function SalesPage() {
       <Modal open={!!refundSale} onClose={() => setRefundSale(null)} title={isAr ? 'مرتجع الفاتورة' : 'Invoice Refund'} size="lg">
         {refundSale && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-ui-page-alt rounded-lg">
-              <div>
-                <p className="font-bold text-lg text-ui-text">{refundSale.invoice_number}</p>
-                <p className="text-sm text-ui-subtle">{formatDateTime(refundSale.created_at, lang)}</p>
+            <div className="space-y-3 rounded-lg bg-ui-page-alt p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold text-lg text-ui-text">{refundSale.invoice_number}</p>
+                  <p className="text-sm text-ui-subtle">{formatDateTime(refundSale.created_at, lang)}</p>
+                </div>
+                <span className="text-sm text-ui-subtle">{isAr ? 'إجمالي الفاتورة' : 'Invoice total'}: <b>{formatCurrency(refundSale.total, currency, lang)}</b></span>
               </div>
-              <span className="text-sm text-ui-subtle">{isAr ? 'إجمالي الفاتورة' : 'Invoice total'}: <b>{formatCurrency(refundSale.total, currency, lang)}</b></span>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" onClick={fillFullRefund}>
+                  <RotateCcw className="w-4 h-4" /> {isAr ? 'إرجاع الفاتورة بالكامل' : 'Refund full invoice'}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={clearRefundSelection}>
+                  {isAr ? 'مسح الاختيار' : 'Clear selection'}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => void previewRefundReceipt()} disabled={receiptBusyId === refundSale.id || refundTotal() <= 0}>
+                  <Eye className="w-4 h-4" /> {isAr ? 'معاينة المرتجع' : 'Refund preview'}
+                </Button>
+              </div>
             </div>
 
             <div className="overflow-x-auto border border-ui-border rounded-xl">
@@ -721,15 +734,25 @@ export function SalesPage() {
                           <p className="text-xs text-ui-subtle">{isAr ? 'الكمية المبيعة' : 'Sold'}: {item.quantity}{item.refunded_quantity > 0 ? ` · ${isAr ? 'مرتجع' : 'refunded'}: ${item.refunded_quantity}` : ''}</p>
                         </td>
                         <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            min={0}
-                            max={remaining}
-                            step="any"
-                            value={refundQty[item.id] ?? ''}
-                            onChange={(e) => setRefundQty({ ...refundQty, [item.id]: e.target.value })}
-                            className="w-24 px-2 py-1.5 rounded-lg border border-ui-border bg-ui-surface text-sm text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary"
-                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={remaining}
+                              step="any"
+                              value={refundQty[item.id] ?? ''}
+                              onChange={(e) => setRefundQty({ ...refundQty, [item.id]: e.target.value })}
+                              className="w-24 px-2 py-1.5 rounded-lg border border-ui-border bg-ui-surface text-sm text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary"
+                            />
+                            <button
+                              type="button"
+                              disabled={remaining <= 0}
+                              onClick={() => setRefundQty({ ...refundQty, [item.id]: String(Math.max(0, remaining)) })}
+                              className="rounded-lg border border-ui-border bg-ui-surface px-2 py-1.5 text-xs font-bold text-ui-accent disabled:opacity-40"
+                            >
+                              {isAr ? 'الكل' : 'All'}
+                            </button>
+                          </div>
                         </td>
                         <td className="px-3 py-2 font-medium text-ui-text">{formatCurrency(refundLineTotal(item), currency, lang)}</td>
                       </tr>
@@ -746,14 +769,33 @@ export function SalesPage() {
               <span className="font-bold text-lg text-ui-danger">{formatCurrency(refundTotal(), currency, lang)}</span>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="secondary" onClick={() => setRefundSale(null)}>{t('cancel')}</Button>
-              <Button onClick={submitRefund} disabled={refunding}>
+              <Button variant="secondary" onClick={() => void previewRefundReceipt()} disabled={receiptBusyId === refundSale.id || refundTotal() <= 0}>
+                <Eye className="w-4 h-4" /> {isAr ? 'معاينة قبل التنفيذ' : 'Preview before refund'}
+              </Button>
+              <Button onClick={submitRefund} disabled={refunding || refundTotal() <= 0}>
                 <RotateCcw className="w-4 h-4" /> {refunding ? '...' : (isAr ? 'تأكيد المرتجع' : 'Confirm Refund')}
               </Button>
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={receiptPreviewOpen}
+        onClose={() => setReceiptPreviewOpen(false)}
+        title={receiptPreviewTitle || (isAr ? 'معاينة الشيك' : 'Receipt Preview')}
+        size="lg"
+      >
+        <div className="rounded-xl border border-ui-border bg-ui-page-alt p-3">
+          <iframe
+            title={receiptPreviewTitle || 'receipt-preview'}
+            srcDoc={receiptPreviewHtml}
+            sandbox=""
+            className="h-[70vh] w-full rounded-lg bg-white"
+          />
+        </div>
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={remove}
