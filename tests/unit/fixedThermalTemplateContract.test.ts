@@ -150,6 +150,14 @@ describe('fixed thermal receipt template contract', () => {
 
     expect(renderer).toContain("$bodyFamily = 'Arial Narrow'");
     expect(renderer).toContain("$brandFamily = 'Arial'");
+    expect(agent).toContain("font-size: ${kitchen ? '11pt' : '12pt'}");
+    expect(agent).toContain("font-size: ${kitchen ? '26pt' : '30pt'}");
+    expect(agent).toContain("font-size: 14pt;");
+    expect(agent).toContain(".grand-total { font-size: 18pt;");
+    expect(renderer).toContain("$(if ($isKitchen) { 20 } else { 23 })");
+    expect(renderer).toContain("$(if ($isKitchen) { 10.8 } else { 11.5 })");
+    expect(renderer).toContain("$(if ($isKitchen) { 15 } else { 16 })");
+    expect(renderer).toContain("$totalFont = [System.Drawing.Font]::new($bodyFamily, 16.5");
     expect(renderer).toContain("[System.Drawing.Font]::new($brandFamily");
     expect(renderer).toContain("[System.Drawing.Font]::new($bodyFamily");
     expect(renderer).toContain('$paperHeightMm = 50 +');
