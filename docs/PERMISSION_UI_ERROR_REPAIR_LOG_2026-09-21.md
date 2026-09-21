@@ -338,3 +338,21 @@ End-to-end regression:
 - No Production migrations applied.
 - No print-agent / print-routing / kitchen station changes.
 - Phase 2 remains IN PROGRESS until the new exact HEAD passes Full Verify.
+
+
+### 2026-09-21 — Parallel main synchronization before Phase 2 reverify
+- While Phase 2 was being repaired, `main` advanced from `ff2152b8f9849e9c03376fb69d87c83432f795d3` to `9e14cf5b2421809dfad3fd6b60a977b999fa2c47` via merged PR `#287`.
+- The incoming PR is visual-only (surface/accent/typography work).
+- Compared changed-file sets against this repair branch before synchronization:
+  - repair branch changed files: Permission/Void/error-plan files and associated tests/migration;
+  - incoming main changed files: shared visual surfaces/styles/report/admin presentation files;
+  - exact overlap: **NONE**.
+- Synchronized latest main into this development branch with a real two-parent merge commit:
+  - merge commit: `bf509a451e9f962e22f06e542274e9590f0da4b5`
+  - parent 1: repair branch `bcb1fb6b9c2f7513bfd29cf38116ccd94da68d56`
+  - parent 2: main `9e14cf5b2421809dfad3fd6b60a977b999fa2c47`
+- No Force Push.
+- No direct write to `main`.
+- No Production write or migration.
+- No printing / Print Agent / printer routing / kitchen station routing modification.
+- Phase 2 reverify must run from the post-sync HEAD, not the obsolete pre-#287 baseline.
