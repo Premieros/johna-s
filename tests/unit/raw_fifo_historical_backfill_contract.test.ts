@@ -37,7 +37,7 @@ describe('historical raw FIFO backfill contract', () => {
   });
 
   it('preserves net quantity and only normalizes per-batch residual allocation', () => {
-    expect(migration).toContain("'FIFO_BACKFILL_NET_QUANTITY_MISMATCH'");
+    expect(migration).toContain('FIFO_BACKFILL_NET_QUANTITY_MISMATCH');
     expect(migration).toContain('SET quantity=bp.target_quantity');
     expect(migration).toContain('Refresh branch aggregate cache from canonical batches');
   });
