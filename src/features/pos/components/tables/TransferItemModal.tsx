@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
 import { useLanguage } from '@/context/LanguageContext';
 import type { CartItem, DiningTable } from '@/lib/types';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 interface TransferItemModalProps {
   open: boolean;
@@ -68,7 +69,7 @@ export function TransferItemModal({ open, onClose, item, orderId, orderItemId, s
       .then(({ data, error: fetchError }) => {
         if (cancelled) return;
         if (fetchError) {
-          setError(fetchError.message);
+          setError(userFacingErrorMessage(fetchError, isAr ? 'ar' : 'en'));
           setTables([]);
         } else {
           setTables((data as DiningTable[]) || []);
@@ -115,7 +116,7 @@ export function TransferItemModal({ open, onClose, item, orderId, orderItemId, s
       });
 
       if (rpcError) {
-        setError(rpcError.message);
+        setError(userFacingErrorMessage(rpcError, isAr ? 'ar' : 'en'));
         return;
       }
 
@@ -136,7 +137,7 @@ export function TransferItemModal({ open, onClose, item, orderId, orderItemId, s
       setError(
         data?.error === 'ITEM_ALREADY_SENT'
           ? (isAr ? 'لا يمكن فصل صنف تم إرساله للمطبخ لأن سجل KDS يجب أن يظل ثابتًا.' : 'A line already sent to kitchen cannot be split because its KDS snapshot must stay immutable.')
-          : data?.detail || data?.error || (isAr ? 'تعذر فصل الصنف.' : 'Could not split the item.'),
+          : userFacingErrorMessage(data ?? (isAr ? 'تعذر فصل الصنف.' : 'Could not split the item.'), isAr ? 'ar' : 'en'),
       );
     } finally {
       setLoading(false);
