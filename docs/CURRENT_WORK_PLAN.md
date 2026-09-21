@@ -5,6 +5,17 @@
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة. سجل إصلاح POS الحالي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
 
 
+## COMPLETED — Cleopatra Main Area 20 tables — 2026-09-21
+
+- PR #288 merged to `main` at `65bf325ec243d6dbe5d1a0721db5874a122f6111`.
+- Production migration `branch_main_area_table_limit` applied successfully to `azzdesuowpdcoflmyezn`.
+- Cleopatra `main_area_table_count = 20`.
+- Verified Production: Main Area retains 50 canonical rows, with Table 01..20 active and Table 21..50 inactive; no inactive table has a non-final order.
+- Smouha remains 50 active Main Area tables.
+- Detailed log: `docs/CLEOPATRA_MAIN_AREA_20_TABLES_2026-09-21.md`.
+
+
+
 ## ACTIVE VISUAL WORK — 2026-09-21
 
 - Active branch: `development/ui-surface-accent-20260921`
