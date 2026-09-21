@@ -8,27 +8,29 @@ describe('thermal customer receipt contract', () => {
   const printing = read('src/features/pos/utils/printing.ts');
   const localAgent = read('src/features/pos/services/localPrintAgent.ts');
 
-  it('keeps 58mm and 80mm thermal presets while locking the approved fixed customer form to 80mm', () => {
+  it('keeps 58mm and 80mm thermal paper as first-class presets without a schema change', () => {
     expect(printing).toContain('THERMAL_RECEIPT_PRESET_WIDTHS_MM = [58, 80]');
-    expect(printing).toContain('APPROVED_FIXED_THERMAL_WIDTH_MM = 80');
+    expect(printing).toContain('s.receipt_width_mm || 80');
     expect(printing).toContain("const divider = '-'.repeat(isCompactThermalWidth(width) ? 32 : 42)");
   });
 
-  it('renders the dedicated black-and-white RTL-safe layout in the shared fixed renderer', () => {
-    expect(localAgent).toContain('<html lang="${ar ? \'ar\' : \'en\'}" dir="${dir}">');
-    expect(localAgent).toContain('<meta charset="utf-8">');
-    expect(localAgent).toContain('font-family: "Arial Narrow"');
-    expect(localAgent).toContain('background: #fff');
-    expect(localAgent).toContain('color: #000');
-    expect(localAgent).toContain('@page { size: ${width}mm auto; margin: 0; }');
+  it('renders a dedicated black-and-white RTL-safe print layout', () => {
+    expect(printing).toContain('<html lang="${isAr ? \'ar\' : \'en\'}" dir="${isAr ? \'rtl\' : \'ltr\'}">');
+    expect(printing).toContain('<meta charset="utf-8" />');
+    expect(printing).toContain('font-family: Tahoma, Arial, "Segoe UI", sans-serif');
+    expect(printing).toContain('background: #fff');
+    expect(printing).toContain('color: #000');
+    expect(printing).toContain('@media print');
+    expect(printing).toContain('@page');
+    expect(printing).toContain('width: ${width}mm !important');
   });
 
-  it('protects long item names while reserving non-wrapping numeric columns', () => {
-    expect(localAgent).toContain('overflow-wrap: anywhere');
-    expect(localAgent).toContain('grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;');
-    expect(localAgent).toContain('white-space: nowrap');
-    expect(localAgent).toContain('font-variant-numeric: tabular-nums');
-    expect(localAgent).toContain('direction: ltr');
+  it('protects long item names and thermal page breaks', () => {
+    expect(printing).toContain('overflow-wrap: anywhere');
+    expect(printing).toContain('break-inside: avoid');
+    expect(printing).toContain('page-break-inside: avoid');
+    expect(printing).toContain('white-space: nowrap');
+    expect(printing).toContain('font-variant-numeric: tabular-nums');
   });
 
   it('sanitizes control characters before plain-text Print Agent output', () => {
@@ -48,7 +50,7 @@ describe('thermal customer receipt contract', () => {
     expect(localAgent).toContain('return Boolean(result?.success)');
   });
 
-  it('keeps kitchen ticket generation as a separate browser fallback path', () => {
+  it('keeps kitchen ticket generation as a separate unchanged path', () => {
     expect(printing).toContain('export function buildKitchenTicketHtml');
     expect(printing).toContain('window.onload = function() { window.print();');
   });

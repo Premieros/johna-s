@@ -32,6 +32,14 @@ interface ShiftCloseResult extends RpcResult {
   open_table_count?: number;
   open_orders_preserved?: boolean;
 }
+interface BusinessDayCloseResult extends RpcResult {
+  daily_close_id?: string;
+  already_closed?: boolean;
+  rolled_over?: boolean;
+  closed_business_date?: string;
+  next_business_date?: string;
+  shift_preserved?: boolean;
+}
 interface CloseBlock { openOrderCount: number; openTableCount: number; }
 
 function businessDateForShift(openedAt: string, businessDayStart = '00:00'): string {
@@ -270,11 +278,19 @@ export function ShiftsPage() {
     }
   };
 
-  const printDayReport = async () => {
-    if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
-    const reportDate = targetOpenShift?.opened_at
+  const resolveCurrentBusinessDate = async () => {
+    if (!targetBranchId) return dayDate;
+    const { data, error: stateError } = await api.shifts.getCurrentBusinessDay({ p_branch_id: targetBranchId });
+    const state = data as (RpcResult & { business_date?: string }) | null;
+    if (!stateError && state?.success && state.business_date) return state.business_date;
+    return targetOpenShift?.opened_at
       ? businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings?.business_day_start || '00:00')
       : dayDate;
+  };
+
+  const printDayReport = async (reportDateOverride?: string) => {
+    if (!targetBranchId) { show(t('selectBranchFirst'), 'error'); return; }
+    const reportDate = reportDateOverride || await resolveCurrentBusinessDate();
     try {
       const report = await fetchDayClosingReportServer(targetBranchId, reportDate);
       const html = buildA4DayClosingReportHtml(report, currency, lang);
@@ -294,10 +310,14 @@ export function ShiftsPage() {
         p_business_date: dayDate,
       });
       if (closeError) { show(closeError.message, 'error'); return; }
-      const res = data as (RpcResult & { daily_close_id?: string; already_closed?: boolean }) | null;
+      const res = data as BusinessDayCloseResult | null;
       if (!res?.success) {
         if (res?.error === 'OPEN_SHIFTS_REMAIN') {
-          show(isAr ? 'لا يمكن إغلاق اليوم قبل إغلاق الشفت المفتوح في الفرع.' : 'Close the branch open shift before day close.', 'error');
+          show(isAr ? 'تعذر ترحيل اليوم مع الشفت المفتوح.' : 'Could not roll the day while the shift is open.', 'error');
+          return;
+        }
+        if (res?.error === 'CURRENT_BUSINESS_DAY_ALREADY_CLOSED') {
+          show(isAr ? 'اليومية الحالية مغلقة بالفعل؛ حدّث الصفحة لإظهار يوم العمل الجديد.' : 'The current business day is already closed; refresh to load the next workday.', 'error');
           return;
         }
         if (res?.error === 'NO_SHIFTS_FOR_DAY') {
@@ -311,16 +331,25 @@ export function ShiftsPage() {
         show(res?.detail || res?.error || t('error'), 'error');
         return;
       }
+      const closedBusinessDate = res.closed_business_date || dayDate;
       await logAudit('update', 'daily_closes', res.daily_close_id || '', {
         branch_id: targetBranchId,
-        business_date: dayDate,
+        business_date: closedBusinessDate,
         already_closed: Boolean(res.already_closed),
+        rolled_over: Boolean(res.rolled_over),
+        shift_preserved: Boolean(res.shift_preserved),
+        next_business_date: res.next_business_date || null,
       });
-      show(res.already_closed
-        ? (isAr ? 'اليوم مغلق بالفعل وتم تحميل نسخة الإغلاق الثابتة' : 'Day was already closed; immutable snapshot loaded')
-        : (isAr ? 'تم إغلاق اليوم وحفظ التقرير الثابت' : 'Day closed and immutable snapshot saved'), 'success');
+      if (res.next_business_date) setDayDate(res.next_business_date);
+      show(res.rolled_over
+        ? (isAr
+          ? `تم إغلاق يوم العمل ${closedBusinessDate} وبدء يوم جديد مع استمرار الشفت الحالي بدون إغلاقه`
+          : `Business day ${closedBusinessDate} closed; a new day started while the current shift stayed open`)
+        : res.already_closed
+          ? (isAr ? 'اليوم مغلق بالفعل وتم تحميل نسخة الإغلاق الثابتة' : 'Day was already closed; immutable snapshot loaded')
+          : (isAr ? 'تم إغلاق اليوم وحفظ التقرير الثابت' : 'Day closed and immutable snapshot saved'), 'success');
       setDayCloseModal(false);
-      await printDayReport();
+      await printDayReport(closedBusinessDate);
     } finally {
       setDayClosing(false);
     }
@@ -367,10 +396,10 @@ export function ShiftsPage() {
           )}
           {can('shifts.day_close') && targetBranchId && (
             <Button variant="outline" onClick={() => {
-              if (targetOpenShift?.opened_at) {
-                setDayDate(businessDateForShift(targetOpenShift.opened_at, targetBusinessDaySettings?.business_day_start || '00:00'));
-              }
-              setDayCloseModal(true);
+              void (async () => {
+                setDayDate(await resolveCurrentBusinessDate());
+                setDayCloseModal(true);
+              })();
             }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'إغلاق اليوم' : 'Close Day'}</Button>
           )}
           {can('shifts.open') && !targetOpenShift && (
@@ -407,8 +436,12 @@ export function ShiftsPage() {
         <div className="space-y-4">
           <div className="rounded-lg border border-ui-border bg-ui-page-alt p-4 text-sm text-ui-muted">
             {isAr
-              ? 'إغلاق اليوم لا يخفي أي بيانات: التقرير يحفظ كل الشفتات والمبيعات والمصروفات والمستخدمين ومشتريات الكاش. يجب إغلاق كل الشفتات أولًا.'
-              : 'Day close keeps full detail: shifts, sales, expenses, users and cash purchases. Every shift must be closed first.'}
+              ? (targetOpenShift
+                ? 'يمكن إغلاق يوم العمل الآن بدون إغلاق الشفت. سيتم حفظ التقرير حتى لحظة الإغلاق وبدء يوم جديد فورًا مع استمرار نفس الشفت والطلبات المفتوحة.'
+                : 'إغلاق اليوم يحفظ نسخة ثابتة من الشفتات والمبيعات والمصروفات والمستخدمين ومشتريات الكاش.')
+              : (targetOpenShift
+                ? 'You can close the business day without closing the shift. The report is frozen at the rollover boundary and a new day starts immediately with the same shift and open orders.'
+                : 'Day close stores an immutable snapshot of shifts, sales, expenses, users and cash purchases.')}
           </div>
           <Input type="date" label={isAr ? 'تاريخ العمل' : 'Business Date'} value={dayDate} onChange={(e) => setDayDate(e.target.value)} />
           <div className="p-3 bg-ui-page-alt rounded-lg text-sm space-y-1">
@@ -417,7 +450,7 @@ export function ShiftsPage() {
             </div>
             {targetOpenShift && (
               <div><span className="text-ui-muted">{isAr ? 'اليوم الحالي:' : 'Current workday:'}</span>{' '}
-                <strong>{isAr ? 'يبدأ مع الشفت المفتوح الآن' : 'Starts with the currently open shift'}</strong>
+                <strong>{isAr ? 'سيستمر نفس الشفت عند إغلاق اليومية وبدء اليوم التالي' : 'The same shift continues when this day rolls into the next one'}</strong>
               </div>
             )}
             <div><span className="text-ui-muted">{isAr ? 'إعداد نهاية اليوم:' : 'Day-boundary setting:'}</span>{' '}
@@ -429,7 +462,7 @@ export function ShiftsPage() {
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" disabled={dayClosing} onClick={() => setDayCloseModal(false)}>{t('cancel')}</Button>
             <Button variant="outline" disabled={dayClosing} onClick={() => { void printDayReport(); }}><FileText className="w-4 h-4" /> {isAr ? 'معاينة التقرير الكامل' : 'Preview Full Report'}</Button>
-            <Button variant="danger" disabled={dayClosing} onClick={() => { void closeDay(); }}><CalendarCheck className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق اليوم وطباعة التقرير' : 'Close Day & Print'}</Button>
+            <Button variant="danger" disabled={dayClosing} onClick={() => { void closeDay(); }}><CalendarCheck className="w-4 h-4" /> {targetOpenShift ? (isAr ? 'إغلاق اليوم وبدء يوم جديد مع استمرار الشفت' : 'Close Day & Continue Shift') : (isAr ? 'تأكيد إغلاق اليوم وطباعة التقرير' : 'Close Day & Print')}</Button>
           </div>
         </div>
       </Modal>
