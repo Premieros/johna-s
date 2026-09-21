@@ -766,7 +766,7 @@ export function PosWorkspacePage() {
       sentOrderItemIds={sentOrderItemIds}
       sessionSent={pos.kitchenSentItems}
       canDiscount={perms.canDiscount}
-      canDeleteItem={perms.canDeleteItem}
+      canDeleteItem={canModifyCurrentOrder}
       discountShortcutToken={discountShortcutToken}
       onSwitchOrderType={(ot) => void pos.switchOrderType(ot)}
       onGuestCountChange={pos.setGuestCount}
@@ -1244,6 +1244,7 @@ export function PosWorkspacePage() {
         }}
         item={voidItem}
         sentQty={voidSentQty}
+        canDirectVoid={perms.canVoidSentItem}
         onConfirmVoid={handleConfirmVoid}
       />
 
