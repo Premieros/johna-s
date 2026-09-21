@@ -1,5 +1,5 @@
 import type { Language, Settings } from '@/lib/types';
-import { formatCurrency, escapeHtml } from '@/lib/format';
+import { escapeHtml } from '@/lib/format';
 import { supabase } from '@/api';
 import { enqueueCloudReceiptPrint } from '../services/cloudPrint';
 import {
