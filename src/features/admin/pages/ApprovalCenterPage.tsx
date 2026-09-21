@@ -92,7 +92,7 @@ export function ApprovalCenterPage() {
         actions={<Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="w-4 h-4" />{ar ? 'تحديث' : 'Refresh'}</Button>}
       />
       <div className="space-y-4">
-        <DesignPanel testId="approval-center-filter-panel">
+        <DesignPanel testId="approval-center-filter-panel" className="ui-accent-system">
           <div className="flex flex-wrap items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-ui-primary" />
             <span className="font-semibold">{ar ? 'الفرع' : 'Branch'}</span>

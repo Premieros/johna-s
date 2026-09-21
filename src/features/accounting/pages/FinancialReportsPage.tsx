@@ -186,7 +186,7 @@ export function FinancialReportsPage() {
     <DesignSurface testId="financial-reports-page">
       <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
 
-      <DesignPanel testId="financial-reports-filters">
+      <DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-2">
             {views.map((v) => (

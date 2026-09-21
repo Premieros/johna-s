@@ -288,10 +288,10 @@ export function UsersPage() {
       <DesignPageHeader title={t('users')} actions={
         canCreateUsers ? <Button size="sm" onClick={openAdd} data-testid="users-add"><Plus className="w-4 h-4" /> {t('addUser')}</Button> : undefined
       } />
-      <DesignPanel testId="users-search-panel">
+      <DesignPanel testId="users-search-panel" className="ui-accent-system">
         <DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="users-search" />
       </DesignPanel>
-      <DesignPanel testId="users-table-panel">
+      <DesignPanel testId="users-table-panel" className="ui-accent-system">
         <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>

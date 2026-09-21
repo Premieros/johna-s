@@ -36,8 +36,8 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs }: PageHeader
             })}
           </nav>
         )}
-        <h1 data-testid="page-title" className="text-xl font-bold tracking-tight text-ui-text sm:text-2xl">{title}</h1>
-        {subtitle && <p data-testid="page-description" className="mt-1 text-sm leading-5 text-ui-muted sm:mt-1.5">{subtitle}</p>}
+        <h1 data-testid="page-title" className="text-xl font-extrabold tracking-tight text-ui-text sm:text-2xl">{title}</h1>
+        {subtitle && <p data-testid="page-description" className="mt-1 text-sm font-medium leading-6 text-ui-muted sm:mt-1.5">{subtitle}</p>}
       </div>
       {actions && (
         <div
@@ -59,7 +59,7 @@ export function Card({ children, className = '', ...rest }: CardProps) {
   return (
     <div
       className={clsx(
-        'rounded-xl border border-ui-border bg-ui-surface shadow-ui-sm transition-all duration-150',
+        'ui-accent-card ui-accent-neutral rounded-xl border border-ui-border bg-ui-surface shadow-ui-sm transition-all duration-150',
         className
       )}
       {...rest}
@@ -78,26 +78,26 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, icon, color = 'navy', trend }: StatCardProps) {
-  const colorMap: Record<string, { bg: string; icon: string; border: string }> = {
-    navy: { bg: 'bg-ui-page-alt', icon: 'text-ui-muted', border: 'border-ui-border' },
-    gold: { bg: 'bg-ui-accent/10', icon: 'text-ui-accent', border: 'border-ui-accent/25' },
-    brand: { bg: 'bg-ui-primary-soft', icon: 'text-ui-accent', border: 'border-ui-primary/25' },
-    blue: { bg: 'bg-ui-info/10', icon: 'text-ui-info', border: 'border-ui-info/25' },
-    amber: { bg: 'bg-ui-warning/10', icon: 'text-ui-warning', border: 'border-ui-warning/25' },
-    red: { bg: 'bg-ui-danger/10', icon: 'text-ui-danger', border: 'border-ui-danger/25' },
-    purple: { bg: 'bg-ui-primary-soft', icon: 'text-ui-accent', border: 'border-ui-primary/25' },
-    green: { bg: 'bg-ui-success/10', icon: 'text-ui-success', border: 'border-ui-success/25' },
+  const colorMap: Record<string, { bg: string; icon: string; border: string; accent: string }> = {
+    navy: { bg: 'bg-ui-page-alt', icon: 'text-ui-muted', border: 'border-ui-border', accent: 'ui-accent-neutral' },
+    gold: { bg: 'bg-ui-accent/10', icon: 'text-ui-accent', border: 'border-ui-accent/25', accent: 'ui-accent-purchase' },
+    brand: { bg: 'bg-ui-primary-soft', icon: 'text-ui-accent', border: 'border-ui-primary/25', accent: 'ui-accent-primary' },
+    blue: { bg: 'bg-ui-info/10', icon: 'text-ui-info', border: 'border-ui-info/25', accent: 'ui-accent-primary' },
+    amber: { bg: 'bg-ui-warning/10', icon: 'text-ui-warning', border: 'border-ui-warning/25', accent: 'ui-accent-purchase' },
+    red: { bg: 'bg-ui-danger/10', icon: 'text-ui-danger', border: 'border-ui-danger/25', accent: 'ui-accent-alert' },
+    purple: { bg: 'bg-ui-primary-soft', icon: 'text-ui-accent', border: 'border-ui-primary/25', accent: 'ui-accent-finance' },
+    green: { bg: 'bg-ui-success/10', icon: 'text-ui-success', border: 'border-ui-success/25', accent: 'ui-accent-inventory' },
   };
 
   const c = colorMap[color] || colorMap.navy;
 
   return (
-    <Card className="p-5 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
+    <Card className={clsx('p-5 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200', c.accent)}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-ui-subtle">{title}</p>
-          <p className="text-2xl font-bold text-ui-text mt-2 tracking-tight">{value}</p>
-          {trend && <p className="text-xs text-ui-subtle mt-2">{trend}</p>}
+          <p className="text-sm font-semibold text-ui-muted">{title}</p>
+          <p className="mt-2 text-2xl font-extrabold tracking-tight text-ui-text tabular-nums">{value}</p>
+          {trend && <p className="mt-2 text-xs font-medium leading-5 text-ui-subtle">{trend}</p>}
         </div>
         <div className={clsx('w-12 h-12 rounded-2xl flex items-center justify-center border', c.bg, c.icon, c.border)}>
           {icon}

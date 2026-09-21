@@ -75,7 +75,7 @@ export function ReportFilterBar({
   const history = useHistoryAccess();
 
   return (
-    <Card className="mb-3 border-ui-border bg-ui-surface p-3 shadow-ui-sm">
+    <Card className="ui-accent-system mb-3 border-ui-border bg-ui-surface p-3 shadow-ui-sm">
       <div className="hidden" aria-hidden="true">
         <select
           data-testid="report-type-select"
@@ -189,11 +189,11 @@ export function ReportFilterBar({
         <div className="flex flex-wrap items-center gap-2 border-t border-ui-border pt-2 text-xs">
           <div className="rounded-lg bg-ui-page-alt px-3 py-1.5 border border-ui-border">
             <span className="text-ui-muted">{t('total')}: </span>
-            <span className="font-black text-ui-accent">{formatCurrency(total, currency, lang)}</span>
+            <span className="font-extrabold tabular-nums text-ui-accent">{formatCurrency(total, currency, lang)}</span>
           </div>
           <div className="rounded-lg bg-ui-page-alt px-3 py-1.5 border border-ui-border">
             <span className="text-ui-muted">{t('count')}: </span>
-            <span className="font-black text-ui-text">{count}</span>
+            <span className="font-extrabold tabular-nums text-ui-text">{count}</span>
           </div>
         </div>
       </div>

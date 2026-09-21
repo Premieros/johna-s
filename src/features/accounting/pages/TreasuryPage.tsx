@@ -179,7 +179,7 @@ export function TreasuryPage() {
       </div>
 
       {isAdminRole(user?.role) && branches.length > 0 && (
-        <DesignPanel testId="treasury-branch-panel">
+        <DesignPanel testId="treasury-branch-panel" className="ui-accent-finance">
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-sm font-medium text-ui-muted">{t('filterByBranch')}</label>
             <select value={adminBranchFilter} onChange={(e) => setAdminBranchFilter(e.target.value)}

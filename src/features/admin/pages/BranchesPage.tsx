@@ -120,7 +120,7 @@ export function BranchesPage() {
   return (
     <DesignSurface testId="branches-page">
       <DesignPageHeader title={t('branches')} actions={<Button size="sm" onClick={openAdd} data-testid="branches-add"><Plus className="w-4 h-4" /> {t('add')}</Button>} />
-      <DesignPanel testId="branches-table-panel">
+      <DesignPanel testId="branches-table-panel" className="ui-accent-system">
         <DataTable columns={columns} data={items} loading={loading} emptyMessage={t('noData')} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
