@@ -10,7 +10,7 @@
 - Active branch: `development/ui-surface-accent-20260921`
 - Base at start: `main@ff2152b8f9849e9c03376fb69d87c83432f795d3`
 - Live plan/log: `docs/UI_SURFACE_ACCENT_PLAN_2026-09-21.md`
-- Status: Phase 0 ✅ / Phase 1 ✅ / Phase 2 ✅ / Phase 3 ✅ / Phase 4 safe rollout in progress. Run #2107 was Full Green before the current rollout batch; a new exact-head Full Verify is required after the new commits.
+- Status: Phase 0 ✅ / Phase 1 ✅ / Phase 2 ✅ / Phase 3 ✅ / Phase 4 safe rollout ✅. Run #2126 was Full Green on implementation head `79741aa7e75022697aa764d03dd1900290ecfe9b`; final docs-head Verify is now required. Phase 5 visual review remains pending for Light/Dark + Arabic/English + mobile widths.
 - Scope: visual hierarchy only — softer Light/Dark page surfaces, subtle accent strips/borders for cards/sections/tables/filters, and explicit typography rules (Cairo RTL / Inter LTR, weights/sizes/line-height/clipping).
 - No business logic, DB migration, RLS/permissions, printing, Print Agent, KDS or send-to-kitchen changes in this branch.
 - The older baseline sections below are historical and have not been rewritten by this visual-only branch; exact current Git state must be taken from the active branch/main checks recorded in the live plan.
