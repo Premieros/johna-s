@@ -31,7 +31,7 @@ describe('fixed thermal receipt template contract', () => {
       {
         store_name: "Johna's",
         currency: 'EGP',
-        receipt_width_mm: 80,
+        receipt_width_mm: 72,
         receipt_header: '',
         receipt_footer: '',
         receipt_show_tax: false,
