@@ -247,13 +247,13 @@
     border-radius: 0 0 999px 999px;
   }
 
+  .ui-accent-neutral { --ui-accent-strip: var(--ui-strip-neutral); }
   .ui-accent-primary { --ui-accent-strip: var(--ui-strip-blue); }
   .ui-accent-purchase { --ui-accent-strip: var(--ui-strip-amber); }
   .ui-accent-inventory { --ui-accent-strip: var(--ui-strip-emerald); }
   .ui-accent-finance { --ui-accent-strip: var(--ui-strip-violet); }
   .ui-accent-alert { --ui-accent-strip: var(--ui-strip-rose); }
   .ui-accent-system { --ui-accent-strip: var(--ui-strip-cyan); }
-  .ui-accent-neutral { --ui-accent-strip: var(--ui-strip-neutral); }
 
   [data-testid='data-table'] {
     font-variant-numeric: tabular-nums;
