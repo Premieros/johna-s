@@ -238,7 +238,7 @@ export function SalesPage() {
     setRefundReason('');
     const qty: Record<string, string> = {};
     for (const item of sale.sale_items || []) {
-      qty[item.id] = String(item.quantity - (item.refunded_quantity || 0));
+      qty[item.id] = '0';
     }
     setRefundQty(qty);
   };
@@ -252,6 +252,79 @@ export function SalesPage() {
     let sum = 0;
     for (const item of refundSale?.sale_items || []) sum += refundLineTotal(item);
     return Math.round(sum * 100) / 100;
+  };
+
+  const fillFullRefund = () => {
+    if (!refundSale) return;
+    const qty: Record<string, string> = {};
+    for (const item of refundSale.sale_items || []) {
+      qty[item.id] = String(Math.max(0, item.quantity - (item.refunded_quantity || 0)));
+    }
+    setRefundQty(qty);
+  };
+
+  const clearRefundSelection = () => {
+    if (!refundSale) return;
+    const qty: Record<string, string> = {};
+    for (const item of refundSale.sale_items || []) qty[item.id] = '0';
+    setRefundQty(qty);
+  };
+
+  const previewRefundReceipt = async () => {
+    if (!refundSale || receiptBusyId) return;
+    const selected = (refundSale.sale_items || [])
+      .map((item) => {
+        const remaining = Math.max(0, item.quantity - (item.refunded_quantity || 0));
+        const qty = Math.max(0, Math.min(parseFloat(refundQty[item.id] || '0') || 0, remaining));
+        return { item, qty };
+      })
+      .filter((row) => row.qty > 0);
+    if (selected.length === 0) {
+      show(isAr ? 'اختر صنفًا أو كمية للمرتجع أولًا' : 'Choose an item or quantity to refund first', 'error');
+      return;
+    }
+
+    const totalRefund = refundTotal();
+    const receipt: ReceiptData = {
+      invoice: refundSale.invoice_number,
+      branchName: branchNameForSale(refundSale),
+      items: selected.map(({ item, qty }) => ({
+        name: item.product?.name || item.unit_name || '-',
+        qty,
+        price: Number(item.unit_price || 0),
+        total: refundLineTotal(item),
+      })),
+      subtotal: totalRefund,
+      discount: 0,
+      tax: 0,
+      total: totalRefund,
+      paid: 0,
+      change: 0,
+      date: refundSale.created_at,
+      customerName: refundSale.customer?.name || '',
+      orderTypeLabel: orderTypeLabelForSale(refundSale.order_type),
+      guestCount: refundSale.guest_count,
+      documentTitle: isAr ? 'معاينة المرتجع' : 'REFUND PREVIEW',
+      hidePaymentSummary: true,
+    };
+
+    setReceiptBusyId(refundSale.id);
+    try {
+      const html = await buildReceiptHtml(
+        receipt,
+        effectiveSettings(refundSale.branch_id),
+        lang,
+        isAr,
+        { authorize: false },
+      );
+      setReceiptPreviewTitle(isAr ? `معاينة المرتجع — ${refundSale.invoice_number}` : `Refund Preview — ${refundSale.invoice_number}`);
+      setReceiptPreviewHtml(html);
+      setReceiptPreviewOpen(true);
+    } catch (err) {
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر إنشاء معاينة المرتجع' : 'Could not build refund preview'), 'error');
+    } finally {
+      setReceiptBusyId(null);
+    }
   };
 
   const submitRefund = async () => {
