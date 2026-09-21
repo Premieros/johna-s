@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { Settings } from '@/lib/types';
 import type { KitchenSendItem } from '../../src/features/pos/types';
-import { buildReceiptFixedTemplate } from '../../src/features/pos/utils/printing';
+import { buildReceiptFixedTemplate, buildReceiptHtml } from '../../src/features/pos/utils/printing';
 import { buildFixedThermalTemplateHtml, buildKitchenFixedTemplate } from '../../src/features/pos/services/localPrintAgent';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -47,6 +47,7 @@ describe('fixed thermal receipt template contract', () => {
       storeName: "JOHNA'S",
       storeSubtitle: 'RESTAURANT',
       title: 'OPEN CHECK',
+      subtitle: 'NOT PAID',
       itemsHeading: 'ITEMS',
     });
     expect(template.meta).toEqual(expect.arrayContaining([
@@ -151,8 +152,10 @@ describe('fixed thermal receipt template contract', () => {
 
     expect(frontendRenderer).toContain("font-size: ${kitchen ? '11pt' : '12pt'}");
     expect(frontendRenderer).toContain("font-size: ${kitchen ? '26pt' : '30pt'}");
-    expect(frontendRenderer).toContain('font-size: 14pt;');
-    expect(frontendRenderer).toContain('.grand-total { font-size: 18pt;');
+    expect(frontendRenderer).toContain('grid-template-columns: 9mm minmax(0, 1fr) 18mm 20mm;');
+    expect(frontendRenderer).toContain('.station-card {');
+    expect(frontendRenderer).toContain('.qty-badge {');
+    expect(frontendRenderer).toContain('.grand-total { font-size: 19pt;');
 
     expect(renderer).toContain("$bodyFamily = 'Arial Narrow'");
     expect(renderer).toContain("$brandFamily = 'Arial'");
@@ -162,8 +165,10 @@ describe('fixed thermal receipt template contract', () => {
     expect(renderer).toContain("$totalFont = [System.Drawing.Font]::new($bodyFamily, 16.5");
     expect(renderer).toContain("[System.Drawing.Font]::new($brandFamily");
     expect(renderer).toContain("[System.Drawing.Font]::new($bodyFamily");
-    expect(renderer).toContain('$paperHeightMm = 58 +');
-    expect(renderer).toContain('$itemUnits += @($item.modifiers).Count * 5.5');
+    expect(renderer).toContain('$paperHeightMm = 66 +');
+    expect(renderer).toContain('$itemUnits += @($item.modifiers).Count * 5.8');
+    expect(renderer).toContain("$g.DrawRectangle($strongPen, $badgeX, $y, $badgeW, 7.5)");
+    expect(renderer).toContain("$unitHead = $(if ($isAr) { 'السعر' } else { 'UNIT' })");
     expect(renderer).toContain("$noteLabel = $(if ($isAr) { 'ملاحظة: ' } else { 'Note: ' })");
     expect(renderer).toContain('$doc.Print()');
   });
@@ -177,5 +182,51 @@ describe('fixed thermal receipt template contract', () => {
     expect(updater).not.toContain('agent.cjs');
     expect(updater).not.toContain('taskkill');
   });
+
+  it('uses the same fixed professional customer form for preview without authorizing a print', async () => {
+    const html = await buildReceiptHtml(
+      {
+        invoice: "Johna's-003400",
+        branchName: 'Cleopatra',
+        items: [{ name: 'Chicken Burger', qty: 2, price: 120, total: 240 }],
+        subtotal: 240,
+        discount: 10,
+        tax: 0,
+        total: 230,
+        paid: 230,
+        change: 0,
+        date: '2026-09-21T20:30:00+03:00',
+        customerName: 'Walk-in',
+        orderTypeLabel: 'Dine In',
+        tableName: 'Table 01',
+        operatorName: 'cashier',
+        payments: [{ method: 'cash', amount: 230 }],
+      },
+      {
+        store_name: "Johna's",
+        store_address: 'Alexandria',
+        store_phone: '0123456789',
+        currency: 'EGP',
+        receipt_width_mm: 80,
+        receipt_header: '',
+        receipt_footer: '',
+        receipt_show_tax: false,
+      } as unknown as Settings,
+      'en',
+      false,
+      { authorize: false },
+    );
+
+    expect(html).toContain('CUSTOMER RECEIPT');
+    expect(html).toContain('CUSTOMER COPY');
+    expect(html).toContain('grid-template-columns: 9mm minmax(0, 1fr) 18mm 20mm;');
+    expect(html).toContain('Chicken Burger');
+    expect(html).toContain('120 EGP');
+    expect(html).toContain('240 EGP');
+    expect(html).toContain('Alexandria');
+    expect(html).toContain('Tel: 0123456789');
+    expect(html).not.toContain('johns-print-auth');
+  });
+
 
 });
