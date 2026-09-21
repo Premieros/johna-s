@@ -35,7 +35,13 @@ AS $function$
       SELECT 1
       FROM public.orders o
       WHERE o.id = p_order_id
-        AND o.status IN ('open','held')
+        AND (
+          o.status IN ('open','held')
+          OR (
+            p_permission = 'pos.payment.take'
+            AND o.status = 'completed'
+          )
+        )
         AND public.user_may_access_branch(o.branch_id)
     );
 $function$;
