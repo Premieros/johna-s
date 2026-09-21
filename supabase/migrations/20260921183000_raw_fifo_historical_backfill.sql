@@ -151,6 +151,28 @@ BEGIN
   RETURNING * INTO v_row;
 
   v_target:=round(v_row.exact_delta,2);
+
+  IF v_target=0 THEN
+    v_entry_id:=v_row.journal_entry_id;
+
+    IF v_entry_id IS NOT NULL THEN
+      DELETE FROM public.journal_entries
+      WHERE id=v_entry_id
+        AND reference_type='fifo_stock_reconcile';
+    END IF;
+
+    DELETE FROM public.raw_fifo_stock_adjustments
+    WHERE branch_id=p_branch_id
+      AND reference_type=p_reference_type
+      AND reference_id=p_reference_id;
+
+    RETURN jsonb_build_object(
+      'success',true,
+      'posted_delta',0,
+      'journal_entry_id',NULL
+    );
+  END IF;
+
   IF v_target=v_row.posted_delta THEN
     RETURN jsonb_build_object('success',true,'posted_delta',v_target);
   END IF;
