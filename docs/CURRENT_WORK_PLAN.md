@@ -5,15 +5,16 @@
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة. سجل إصلاح POS الحالي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
 
 
-## ACTIVE — Main Area count UI / POS active-table fix — 2026-09-21
+## COMPLETED — Main Area count UI / POS active-table fix — 2026-09-21
 
-- Branch: `development/main-area-count-ui-20260921`
-- Base: `main@0d5ea68eeb62f31d03844cd6769753ae34de4d31`
-- Live log: `docs/MAIN_AREA_COUNT_UI_FIX_2026-09-21.md`
-- Root cause confirmed from current `main`: POS realtime loaded inactive `dining_tables`, the UI still hard-coded 50, and the per-branch count had no permission-first edit action.
-- Fix in progress: active-only table query + Main Area edit action in POS and floor-plan surfaces + protected branch-scoped RPC.
+- PR #290 merged to `main` at `320413ed08a037c25d57a05c26e777a9e97da018`.
+- Live log: `docs/MAIN_AREA_COUNT_UI_FIX_2026-09-21.md`.
+- Root cause fixed: POS now loads active dining tables only; the hard-coded 50 label was removed.
+- POS and Active Orders / Floor Plan now expose a permission-gated Main Area count editor for `floor_plan.manage`.
+- Production RPC migration applied successfully to `azzdesuowpdcoflmyezn`.
+- Production API parity after migration ✅.
+- Cleopatra remains configured at 20 active Main Area tables; Smouha remains 50.
 - No printing/KDS/payment/inventory/accounting changes.
-- Full Verify pending on current development head.
 
 
 
