@@ -10,6 +10,7 @@
 - Active branch: `development/ui-surface-accent-20260921`
 - Base at start: `main@ff2152b8f9849e9c03376fb69d87c83432f795d3`
 - Live plan/log: `docs/UI_SURFACE_ACCENT_PLAN_2026-09-21.md`
+- Status: Phase 0 ✅ / Phase 1 ✅ / Phase 2 first pass in progress; Full Verify pending on the current branch head.
 - Scope: visual hierarchy only — softer Light/Dark page surfaces, subtle accent strips/borders for cards/sections/tables/filters, and explicit typography rules (Cairo RTL / Inter LTR, weights/sizes/line-height/clipping).
 - No business logic, DB migration, RLS/permissions, printing, Print Agent, KDS or send-to-kitchen changes in this branch.
 - The older baseline sections below are historical and have not been rewritten by this visual-only branch; exact current Git state must be taken from the active branch/main checks recorded in the live plan.
