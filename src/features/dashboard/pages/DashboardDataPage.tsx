@@ -263,8 +263,9 @@ export function DashboardDataPage() {
     const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
     const window = periodWindow(effectiveRange);
     const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
+    const previousFields = 'id,total,paid_amount,payment_method,branch_id,created_at,refunded_amount,discount_amount';
     let currentQuery = supabase.from('sales').select(fields).gte('created_at', window.start.toISOString()).lte('created_at', window.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
-    let previousQuery = supabase.from('sales').select(fields).gte('created_at', window.previousStart.toISOString()).lte('created_at', window.previousEnd.toISOString()).order('created_at', { ascending: false }).limit(5000);
+    let previousQuery = supabase.from('sales').select(previousFields).gte('created_at', window.previousStart.toISOString()).lte('created_at', window.previousEnd.toISOString()).order('created_at', { ascending: false }).limit(5000);
     if (branchFilter) {
       currentQuery = currentQuery.eq('branch_id', branchFilter);
       previousQuery = previousQuery.eq('branch_id', branchFilter);
@@ -278,21 +279,22 @@ export function DashboardDataPage() {
     if (currentResult.error) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
 
     const ids = [...currentRows, ...previousRows].map((sale) => sale.id);
-    if (ids.length) {
-      const paymentResult = await supabase.from('sale_payments').select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id', ids).limit(20000);
-      const details = paymentResult.error ? [] : ((paymentResult.data || []) as SalePaymentLike[]);
-      const currentIds = new Set(currentRows.map((sale) => sale.id));
-      const previousIds = new Set(previousRows.map((sale) => sale.id));
-      setSalePayments(details.filter((payment) => currentIds.has(payment.sale_id)));
-      setPreviousSalePayments(details.filter((payment) => previousIds.has(payment.sale_id)));
-    } else {
-      setSalePayments([]); setPreviousSalePayments([]);
-    }
+    const paymentPromise = ids.length
+      ? supabase.from('sale_payments').select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id', ids).limit(20000)
+      : Promise.resolve({ data: [], error: null });
+    const itemPromise = currentRows.length
+      ? supabase.from('sale_items').select('quantity,refunded_quantity,product:products(name)').in('sale_id', currentRows.map((sale) => sale.id)).limit(20000)
+      : Promise.resolve({ data: [], error: null });
 
-    if (currentRows.length) {
-      const itemResult = await supabase.from('sale_items').select('quantity,refunded_quantity,product:products(name)').in('sale_id', currentRows.map((sale) => sale.id)).limit(20000);
-      setItems(itemResult.error ? [] : ((itemResult.data || []) as unknown as SaleItem[]));
-    } else setItems([]);
+    // Payment and item details are independent once sale ids are known.
+    // Load them together instead of serially extending dashboard latency.
+    const [paymentResult, itemResult] = await Promise.all([paymentPromise, itemPromise]);
+    const details = paymentResult.error ? [] : ((paymentResult.data || []) as SalePaymentLike[]);
+    const currentIds = new Set(currentRows.map((sale) => sale.id));
+    const previousIds = new Set(previousRows.map((sale) => sale.id));
+    setSalePayments(details.filter((payment) => currentIds.has(payment.sale_id)));
+    setPreviousSalePayments(details.filter((payment) => previousIds.has(payment.sale_id)));
+    setItems(itemResult.error ? [] : ((itemResult.data || []) as unknown as SaleItem[]));
 
     setLoading(false);
     setRefreshing(false);
