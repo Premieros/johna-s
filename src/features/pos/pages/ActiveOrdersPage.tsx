@@ -65,8 +65,11 @@ export function ActiveOrdersPage() {
 
   const effectiveBranch = branchFilter || user?.branch_id || '';
   const canManage = can('floor_plan.manage');
+  const canCreateOrder = can('pos.order.create');
+  const canPayOrder = can('pos.payment.take');
+  const canCancelOrder = can('pos.cancel_order');
+  const canReassignCashier = can('pos.order.transfer');
   const editTargetIsDefault = !!editTarget && areas.some((area) => area.id === editTarget.area_id && area.is_default);
-  const canReassignCashier = can('pos.order.transfer') && can('pos.order.edit') && can('users.manage');
 
   const { orders, tables, counts, ordersByTable, itemsByOrder, loading, error } = useActiveOrders(effectiveBranch);
 
@@ -135,9 +138,17 @@ export function ActiveOrdersPage() {
   const assignCashier = async (order: Order, cashierId: string) => {
     if (!cashierId || cashierId === order.cashier_id) return;
     setBusy(true);
-    const { error: updateError } = await supabase.from('orders').update({ cashier_id: cashierId }).eq('id', order.id);
-    if (updateError) show(userFacingErrorMessage(updateError, isAr ? 'ar' : 'en'), 'error');
-    else show(isAr ? 'تم تغيير مستخدم الطلب' : 'Order user reassigned', 'success');
+    const { data, error: updateError } = await api.floorPlan.transferOrderOperator({
+      p_order_id: order.id,
+      p_target_user_id: cashierId,
+    });
+    if (updateError) {
+      show(userFacingErrorMessage(updateError, isAr ? 'ar' : 'en'), 'error');
+    } else if (!data?.success) {
+      show(userFacingErrorMessage(data, isAr ? 'ar' : 'en'), 'error');
+    } else {
+      show(isAr ? 'تم تغيير مستخدم الطلب' : 'Order user reassigned', 'success');
+    }
     setBusy(false);
   };
 
@@ -392,8 +403,8 @@ export function ActiveOrdersPage() {
                       )}
                       <div className="flex flex-wrap gap-1.5">
                         <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-3.5 h-3.5" /> {t('resumeOrder')}</Button>
-                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-3.5 h-3.5" /> {t('payOrder')}</Button>
-                        <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>
+                        {canPayOrder && <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-3.5 h-3.5" /> {t('payOrder')}</Button>}
+                        {canCancelOrder && <Button size="sm" variant="ghost" onClick={() => setOrderStatus(order, 'cancelled')} disabled={busy}><XCircle className="w-3.5 h-3.5" /> {t('cancelOrder')}</Button>}
                       </div>
                     </div>
                   ))
@@ -448,7 +459,7 @@ export function ActiveOrdersPage() {
                       </div>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <Button size="sm" onClick={() => resumeOrder(order)}><UtensilsCrossed className="w-4 h-4" /> {t('resumeOrder')}</Button>
-                        <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-4 h-4" /> {t('payOrder')}</Button>
+                        {canPayOrder && <Button size="sm" variant="success" onClick={() => resumeOrder(order)}><Banknote className="w-4 h-4" /> {t('payOrder')}</Button>}
                       </div>
                     </div>
                   ))}
@@ -456,7 +467,7 @@ export function ActiveOrdersPage() {
               ) : (
                 <div>
                   <p className="text-sm text-ui-muted mb-3">{isAr ? 'لا يوجد طلب مفتوح على هذه الطاولة.' : 'No open order on this table.'}</p>
-                  <Button size="lg" className="w-full" onClick={() => { startOrder(tableTarget); }}><UtensilsCrossed className="w-5 h-5" /> {t('openOrder')}</Button>
+                  {canCreateOrder && <Button size="lg" className="w-full" onClick={() => { startOrder(tableTarget); }}><UtensilsCrossed className="w-5 h-5" /> {t('openOrder')}</Button>}
                 </div>
               )}
 
