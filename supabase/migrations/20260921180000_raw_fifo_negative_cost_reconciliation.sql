@@ -291,6 +291,12 @@ SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_event public.order_kitchen_inventory_events%ROWTYPE;
+  v_effect_id uuid;
+  v_effect_total numeric(18,6);
+  v_effect_new numeric(18,6);
+  v_effect_delta numeric(18,6);
+  v_event_new numeric(18,6);
+  v_event_delta numeric(18,6);
   v_sale_delta numeric(18,6):=0;
   v_res jsonb;
 BEGIN
@@ -307,14 +313,17 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','FIFO_KITCHEN_EVENT_NOT_FOUND');
   END IF;
 
-  UPDATE public.order_kitchen_inventory_effects
-  SET total_cost=total_cost+p_delta
+  SELECT id,total_cost
+  INTO v_effect_id,v_effect_total
+  FROM public.order_kitchen_inventory_effects
   WHERE event_id=p_event_id
     AND target_type=p_target_type
     AND target_id=p_target_id
-    AND total_cost+p_delta>=-0.000001;
+  ORDER BY id
+  LIMIT 1
+  FOR UPDATE;
 
-  IF NOT FOUND THEN
+  IF v_effect_id IS NULL THEN
     RETURN jsonb_build_object(
       'success',false,
       'error','FIFO_KITCHEN_EFFECT_NOT_FOUND',
@@ -324,23 +333,51 @@ BEGIN
     );
   END IF;
 
-  UPDATE public.order_kitchen_inventory_events
-  SET total_cost=total_cost+p_delta
-  WHERE id=p_event_id
-    AND total_cost+p_delta>=-0.000001;
-
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object(
-      'success',false,
-      'error','FIFO_KITCHEN_EVENT_COST_NEGATIVE',
-      'event_id',p_event_id,
-      'delta',p_delta
-    );
+  v_effect_new:=COALESCE(v_effect_total,0)+p_delta;
+  IF v_effect_new < -0.000001 THEN
+    IF abs(v_effect_new)<=0.005 THEN
+      v_effect_new:=0;
+    ELSE
+      RETURN jsonb_build_object(
+        'success',false,
+        'error','FIFO_KITCHEN_EFFECT_COST_NEGATIVE',
+        'event_id',p_event_id,
+        'target_type',p_target_type,
+        'target_id',p_target_id,
+        'current_cost',v_effect_total,
+        'requested_delta',p_delta
+      );
+    END IF;
   END IF;
+  v_effect_delta:=v_effect_new-COALESCE(v_effect_total,0);
+
+  v_event_new:=COALESCE(v_event.total_cost,0)+p_delta;
+  IF v_event_new < -0.000001 THEN
+    IF abs(v_event_new)<=0.005 THEN
+      v_event_new:=0;
+    ELSE
+      RETURN jsonb_build_object(
+        'success',false,
+        'error','FIFO_KITCHEN_EVENT_COST_NEGATIVE',
+        'event_id',p_event_id,
+        'current_cost',v_event.total_cost,
+        'requested_delta',p_delta
+      );
+    END IF;
+  END IF;
+  v_event_delta:=v_event_new-COALESCE(v_event.total_cost,0);
+
+  UPDATE public.order_kitchen_inventory_effects
+  SET total_cost=v_effect_new
+  WHERE id=v_effect_id;
+
+  UPDATE public.order_kitchen_inventory_events
+  SET total_cost=v_event_new
+  WHERE id=p_event_id;
 
   IF v_event.settled_sale_id IS NOT NULL
      AND COALESCE(v_event.sent_quantity,0)>0 THEN
-    v_sale_delta:=p_delta
+    v_sale_delta:=v_event_delta
       * GREATEST(v_event.sent_quantity-COALESCE(v_event.voided_quantity,0),0)
       / v_event.sent_quantity;
 
@@ -357,7 +394,9 @@ BEGIN
 
   RETURN jsonb_build_object(
     'success',true,
-    'event_delta',p_delta,
+    'requested_delta',p_delta,
+    'effect_delta',v_effect_delta,
+    'event_delta',v_event_delta,
     'sale_delta',v_sale_delta
   );
 END;
