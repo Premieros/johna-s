@@ -33,6 +33,8 @@ export interface ReceiptData {
   operatorName?: string | null;
   payments?: Array<{ method: string; amount: number }>;
   isOpenOrder?: boolean;
+  documentTitle?: string;
+  hidePaymentSummary?: boolean;
 }
 
 type PrintAuthorizationResult = {
@@ -287,7 +289,7 @@ export function buildReceiptFixedTemplate(
   if (s.receipt_show_tax !== false && receipt.tax > 0) totals.push({ label: isAr ? 'الضريبة' : 'Tax', value: thermalMoney(receipt.tax, currency) });
   totals.push({ label: isAr ? 'الإجمالي' : 'TOTAL', value: thermalMoney(receipt.total, currency), emphasis: true });
 
-  if (!receipt.isOpenOrder) {
+  if (!receipt.isOpenOrder && !receipt.hidePaymentSummary) {
     for (const payment of (receipt.payments || []).filter((entry) => safeThermalText(entry.method))) {
       totals.push({ label: thermalPaymentLabel(payment.method, isAr), value: thermalMoney(payment.amount, currency) });
     }
@@ -308,9 +310,9 @@ export function buildReceiptFixedTemplate(
     paperWidthMm: width,
     storeName: safeThermalText(s.store_name || "JOHNA'S").toUpperCase(),
     storeSubtitle: 'RESTAURANT',
-    title: receipt.isOpenOrder
+    title: safeThermalText(receipt.documentTitle) || (receipt.isOpenOrder
       ? (isAr ? 'الحساب المفتوح' : 'OPEN CHECK')
-      : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'),
+      : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT')),
     slogan: safeThermalText(s.receipt_header) || (isAr ? 'الأكل الجيد يجمع الناس' : 'Good Food Brings People Together'),
     branchName: safeThermalText(receipt.branchName),
     meta,
@@ -341,9 +343,9 @@ export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang
 
   const storeName = safeThermalText(s.store_name);
   if (storeName) lines.push(heading(storeName.toUpperCase()));
-  lines.push(heading(receipt.isOpenOrder
+  lines.push(heading(safeThermalText(receipt.documentTitle) || (receipt.isOpenOrder
     ? (isAr ? 'حساب مبدئي' : 'OPEN CHECK')
-    : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT')));
+    : (isAr ? 'إيصال العميل' : 'CUSTOMER RECEIPT'))));
 
   const branchName = safeThermalText(receipt.branchName);
   if (branchName) lines.push(heading(branchName));
@@ -374,7 +376,7 @@ export function buildReceiptThermalText(receipt: ReceiptData, s: Settings, _lang
   if (s.receipt_show_tax !== false && receipt.tax > 0) moneyRow(isAr ? 'الضريبة' : 'TAX', thermalMoney(receipt.tax, currency));
   moneyRow(isAr ? 'الإجمالي' : 'TOTAL', thermalMoney(receipt.total, currency));
 
-  if (!receipt.isOpenOrder) {
+  if (!receipt.isOpenOrder && !receipt.hidePaymentSummary) {
     const payments = (receipt.payments || []).filter((payment) => String(payment.method || '').trim());
     if (payments.length > 0) {
       lines.push(divider);
@@ -567,7 +569,11 @@ export async function buildReceiptHtml(
     ${s.receipt_header ? `<div class="center sub pre-wrap">${escapeHtml(s.receipt_header)}</div>` : ''}
     <div class="center sub branch-name">${isAr ? 'الفرع' : 'Branch'}: ${escapeHtml(receipt.branchName)}</div>
     <div class="divider"></div>
-    ${receipt.isOpenOrder ? `<div class="center open-order-label">${isAr ? 'حساب مبدئي – غير مدفوع' : 'OPEN CHECK – NOT PAID'}</div>` : ''}
+    ${receipt.documentTitle
+      ? `<div class="center open-order-label">${escapeHtml(receipt.documentTitle)}</div>`
+      : receipt.isOpenOrder
+        ? `<div class="center open-order-label">${isAr ? 'حساب مبدئي – غير مدفوع' : 'OPEN CHECK – NOT PAID'}</div>`
+        : ''}
     <div class="meta-row"><span class="meta-value">${receipt.isOpenOrder ? (isAr ? 'الطلب' : 'Order') : (isAr ? 'الفاتورة' : 'Invoice')}: ${escapeHtml(receipt.invoice)}</span></div>
     <div class="meta-row"><span class="meta-value">${isAr ? 'التاريخ' : 'Date'}: ${escapeHtml(new Date(receipt.date).toLocaleString(isAr ? 'ar-EG' : 'en-US'))}</span></div>
     ${receipt.orderTypeLabel ? `<div class="meta-row"><span class="meta-value">${isAr ? 'النوع' : 'Type'}: ${escapeHtml(receipt.orderTypeLabel)}</span></div>` : ''}
@@ -585,8 +591,8 @@ export async function buildReceiptHtml(
     ${showTax && receipt.tax > 0 ? `<div class="money-row"><span>${isAr ? 'الضريبة' : 'Tax'} (${escapeHtml(s.tax_rate ?? 0)}%)</span><span class="amount">${formatCurrency(receipt.tax, currency, lang)}</span></div>` : ''}
     <div class="divider strong"></div>
     <div class="money-row total-row"><span>${isAr ? 'الإجمالي' : 'Total'}</span><span class="amount">${formatCurrency(receipt.total, currency, lang)}</span></div>
-    ${receipt.isOpenOrder ? '' : `<div class="money-row"><span>${isAr ? 'المدفوع' : 'Paid'}</span><span class="amount">${formatCurrency(receipt.paid, currency, lang)}</span></div>`}
-    ${!receipt.isOpenOrder && receipt.change > 0 ? `<div class="money-row"><span>${isAr ? 'الباقي' : 'Change'}</span><span class="amount">${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
+    ${receipt.isOpenOrder || receipt.hidePaymentSummary ? '' : `<div class="money-row"><span>${isAr ? 'المدفوع' : 'Paid'}</span><span class="amount">${formatCurrency(receipt.paid, currency, lang)}</span></div>`}
+    ${!receipt.isOpenOrder && !receipt.hidePaymentSummary && receipt.change > 0 ? `<div class="money-row"><span>${isAr ? 'الباقي' : 'Change'}</span><span class="amount">${formatCurrency(receipt.change, currency, lang)}</span></div>` : ''}
     ${qrImg ? `<div class="center qr-wrap"><img src="${qrImg}" class="receipt-qr" alt="QR" /></div>` : ''}
     <div class="divider"></div>
     ${s.receipt_footer ? `<div class="footer pre-wrap">${escapeHtml(s.receipt_footer)}</div>` : ''}
