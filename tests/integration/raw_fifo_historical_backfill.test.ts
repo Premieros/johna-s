@@ -215,4 +215,55 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
     expect(applied[0].r.success).toBe(false);
     expect(applied[0].r.error).toBe('FIFO_BACKFILL_STALE_PLAN');
   });
+  it('safely handles orphan historical kitchen and purchase-return references', async () => {
+    const orphanKitchenRef = randomUUID();
+    const orphanReturnRef = randomUUID();
+    const kitchenRefNo = 'FIFO-ORPH-K-' + randomUUID().slice(0, 8);
+    const returnRefNo = 'FIFO-ORPH-R-' + randomUUID().slice(0, 8);
+
+    await client.query(
+      "INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at) VALUES ($1,$2,$3,'ORPH-K',-1,5,-5,0,-1,'kitchen_send','kitchen_send',$4,$5,'2026-09-21T10:00:00Z'),($1,$2,$3,'ORPH-R',-1,5,-5,0,-1,'purchase_return','purchase_return',$6,$7,'2026-09-21T10:01:00Z')",
+      [rawStale, branch, warehouse, orphanKitchenRef, kitchenRefNo, orphanReturnRef, returnRefNo],
+    );
+
+    const kitchen = await q<{ r: Record<string, unknown> }>(
+      "SELECT public._fifo_adjust_reference_delta('kitchen_send',$1,$2,$3,'raw_material',$4,-5,0) r",
+      [orphanKitchenRef, branch, warehouse, rawStale],
+    );
+    expect(kitchen[0].r.success).toBe(true);
+    expect(kitchen[0].r.orphan_reference).toBe(true);
+    expect(kitchen[0].r.ledger_only).toBe(true);
+
+    const purchase = await q<{ r: Record<string, unknown> }>(
+      "SELECT public._fifo_adjust_reference_delta('purchase_return',$1,$2,$3,'raw_material',$4,5,0) r",
+      [orphanReturnRef, branch, warehouse, rawStale],
+    );
+    expect(purchase[0].r.success).toBe(true);
+
+    const adjustment = await q<{ exact_delta: string; journal_entry_id: string | null }>(
+      "SELECT exact_delta::text,journal_entry_id::text FROM public.raw_fifo_stock_adjustments WHERE branch_id=$1 AND reference_type='purchase_return' AND reference_id=$2",
+      [branch, orphanReturnRef],
+    );
+    expect(num(adjustment[0].exact_delta)).toBe(5);
+    expect(adjustment[0].journal_entry_id).toBeTruthy();
+
+    const reversed = await q<{ r: Record<string, unknown> }>(
+      "SELECT public._fifo_adjust_reference_delta('purchase_return',$1,$2,$3,'raw_material',$4,-5,0) r",
+      [orphanReturnRef, branch, warehouse, rawStale],
+    );
+    expect(reversed[0].r.success).toBe(true);
+
+    const adjustmentAfter = await q<{ count: string }>(
+      "SELECT count(*)::text count FROM public.raw_fifo_stock_adjustments WHERE branch_id=$1 AND reference_type='purchase_return' AND reference_id=$2",
+      [branch, orphanReturnRef],
+    );
+    expect(num(adjustmentAfter[0].count)).toBe(0);
+
+    const journalAfter = await q<{ count: string }>(
+      "SELECT count(*)::text count FROM public.journal_entries WHERE reference_type='fifo_stock_reconcile' AND reference_id=$1",
+      [orphanReturnRef],
+    );
+    expect(num(journalAfter[0].count)).toBe(0);
+  });
+
 });
