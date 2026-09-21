@@ -2,13 +2,12 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNo
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpRight, BarChart3, CreditCard,
-  RefreshCw, ShoppingBag, Wallet, Clock3, ReceiptText,
+  RefreshCw, Wallet, Clock3, ReceiptText,
   Calculator, Armchair, CheckCircle2, Timer, ShoppingCart, Users, ChefHat,
   Settings, History as HistoryIcon, Landmark,
 } from 'lucide-react';
 import { reporting, supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
@@ -199,7 +198,6 @@ function Metric({ testId, icon: Icon, title, value, display, previous, href, ar,
 
 export function DashboardDataPage() {
   const { lang } = useLanguage();
-  const { user } = useAuth();
   const can = useCan();
   const history = useHistoryAccess();
   const branchFilter = useBranchFilter();
