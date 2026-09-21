@@ -25,10 +25,16 @@ Base: `main@e228162c308b365db0ba76ef31c5aa638462f5b5`
 - [x] P4: Coalesce POS Realtime snapshot refresh bursts without losing a trailing refresh.
 - [~] P5: Dashboard detail latency reduced safely: previous-period projection is narrower and payment/item detail queries now run concurrently. Further server aggregation will only be added if verification/profiling shows it is still needed.
 - [x] P6: Add/update unit + integration contracts for sell-through, configuration blocking, no polling and Realtime coalescing.
-- [ ] P7: Full Verify exact head.
-- [ ] P8: PR only after Green. Production migration remains unapplied pending explicit approval.
+- [x] P7: Full Verify exact head — run #2189 GREEN (verify + DB + browser-smoke).
+- [x] P8: PR #293 is Green/mergeable. Explicit approval received; Production migration `pos_sellability_performance` applied successfully before merge.
 
 ## Status
 Implementation head: `3a4a3f7e4b74bb0c4efda5ade22e6e698bbeff8b` before this log update.
 
-Production writes: **NONE**. The new migration exists only on the development branch and is not applied.
+Production migration status: **APPLIED WITH EXPLICIT APPROVAL** to `azzdesuowpdcoflmyezn` as migration `pos_sellability_performance` (recorded version `20260921120421`). Verification: function exists with hardened search_path; `anon` EXECUTE=false; `authenticated/service_role` EXECUTE=true; both live branches returned 249/249 sellable products and 0 configuration errors. Printing/KDS were not modified.
+
+
+## Verification / benchmark
+- Full Verify run #2189: verify ✅, DB/schema/integration/security/RLS ✅, Browser Smoke ✅.
+- Read-only Production benchmark on 249 active products: legacy max-availability scan 1276.521 ms; one-probe diagnostic path 740.323 ms (~42% faster per scan), before counting removed repeat scans.
+- `main` remained at `e228162c308b365db0ba76ef31c5aa638462f5b5` through migration verification.
