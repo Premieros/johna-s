@@ -417,3 +417,30 @@ End-to-end regression:
 - No Production migrations applied.
 - No print-agent / printer queue / printer routing / kitchen station routing changes.
 - Phase 3 status remains IN PROGRESS until Full Verify is Green on the exact post-documentation HEAD.
+
+
+### 2026-09-21 — Phase 3 first Full Verify failure and stale-test repair
+- Failed exact HEAD: `0afedc8049da61fc4fe7ae6750e8a8cd16cb150d`.
+- Verify run: `35581205223`.
+- lint ✅
+- TypeScript ✅
+- test-suite typecheck ✅
+- unit ❌
+- DB / Browser Smoke skipped because verify stopped at unit tests.
+- Unit summary: 164 files passed, 3 failed; 854 tests passed, 3 failed.
+- All three failures were stale literal/source-shape assertions rather than runtime logic failures:
+  - `kdsVisibleFailureContract.test.ts` expected the removed local `errorMessage()` helper instead of the new centralized translator;
+  - `posRawShortageSellabilityContract.test.ts` expected a hard-coded `RAW_MATERIAL_NOT_IN_BRANCH` branch instead of centralized availability-code translation;
+  - `recentUiWiringContract.test.ts` expected the old misleading “open shift” sentence even when permission could be the blocker.
+- Updated the existing tests to assert the new semantic contracts:
+  - KDS still preserves the last known queue and now asserts `userFacingErrorMessage(...)`;
+  - invalid availability/configuration still blocks sale while its code is translated centrally;
+  - catalog gating explicitly distinguishes `shift` vs `permission`.
+- Repair commits:
+  - `0e7b10b151982b49bb43a1892aa0e16bb7bc2d1d`
+  - `5ef1bc97ba440087a87c24759c1b5fe69ab6ea23`
+  - `29bcca14ad70970df21cdce13343dea6b11f4267`
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Printing / Print Agent / printer routing / kitchen station routing changes: NONE.
+- Phase 3 remains IN PROGRESS until the new exact HEAD passes Full Verify.
