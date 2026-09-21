@@ -36,7 +36,7 @@ The UI audit found two classes of defects:
 ## Ordered repair plan
 
 ### Phase 1 — Action-specific permission contract
-**Status: FIXED AFTER CI FAILURE — REVERIFY PENDING**
+**Status: FULL VERIFY GREEN**
 
 Target actions:
 - `pos.payment.take`
@@ -60,7 +60,7 @@ Acceptance cases:
 - Super Admin behavior remains unchanged.
 
 ### Phase 2 — Void / approval UI contract
-**Status: PENDING**
+**Status: IN PROGRESS**
 
 - Unsent line removal must depend on `pos.order.edit`.
 - Sent-item direct Void uses `pos.void`.
@@ -263,3 +263,31 @@ End-to-end regression:
 - Production migrations applied: NONE.
 - Printing / Print Agent / printer routing / kitchen station routing changed: NONE.
 - Phase 2 remains blocked until the new exact HEAD is Full Verify Green.
+
+
+### 2026-09-21 — Phase 1 Full Verify GREEN; Phase 2 opened
+- Verified exact HEAD: `b5493f6c41261a70306a785b9571a16bf364d8d5`.
+- Workflow: `Verify main` run `35577449377`.
+- Results:
+  - lint ✅
+  - TypeScript ✅
+  - test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations ✅
+  - schema verification ✅
+  - Integration / Security / RLS ✅
+  - Browser Smoke / Playwright ✅
+- The action-specific permission contract is now verified Green without applying its migration to Production.
+- `main` was rechecked before Phase 2 and remained at `ff2152b8f9849e9c03376fb69d87c83432f795d3`; the development branch remained ahead with no parallel main change to reconcile.
+- Phase 2 starts from current repository code only. Confirmed UI defects:
+  - unsent-line removal is still coupled to `canDeleteItem -> pos.void`;
+  - a sent line can become inaccessible to the approval path because the Void control is hidden/disabled when the user lacks the direct Void capability;
+  - the server already preserves the manager-approval path for users without direct `pos.void`.
+- Phase 2 implementation boundaries:
+  - unsent removal follows create/edit authority for the current order;
+  - sent-item Void remains routed through `cancel_sent_order_item_exact`;
+  - direct `pos.void` affects whether execution is immediate, not whether the approval request UI is reachable;
+  - no print trigger, print queue, print-agent, printer route, kitchen station routing, or inventory algorithm redesign.
+- Production writes: NONE.
+- Production migrations applied: NONE.
