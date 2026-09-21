@@ -308,10 +308,7 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
   }, [active, queue]);
 
   useEffect(() => {
-    if (!active) {
-      setShowEvent(false);
-      return;
-    }
+    if (!active) return;
 
     const enterFrame = window.requestAnimationFrame(() => setShowEvent(true));
     const hideTimer = window.setTimeout(() => setShowEvent(false), DISPLAY_MS);
