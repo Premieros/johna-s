@@ -29,23 +29,33 @@ describe('dashboard standby activity bar contract', () => {
     expect(standby).not.toContain(".delete(");
   });
 
-  it('queues new activity and returns to the calendar after a short minimal transition', () => {
+  it('queues new activity and slides it inside a fixed standby viewport without layout shift', () => {
     const standby = read('src/features/dashboard/components/DashboardStandbyBar.tsx');
     const css = read('src/features/dashboard/dashboardCompact.css');
     expect(standby).toContain('const DISPLAY_MS = 4200');
+    expect(standby).toContain('const SLIDE_MS = 280');
     expect(standby).toContain('setQueue((current) => [...current, ...fresh])');
-    expect(standby).toContain('setActive(null)');
+    expect(standby).toContain('setShowEvent(false)');
+    expect(standby).toContain('translate-x-full');
+    expect(standby).toContain('-translate-x-full');
+    expect(standby).toContain('dashboard-standby-viewport');
     expect(standby).toContain('<MiniCalendar now={now} ar={ar} />');
     expect(standby).toContain('dashboard-standby:last-read:');
-    expect(css).toContain('dashboard-standby-event-in');
-    expect(css).toContain('180ms ease-out');
+    expect(css).toContain('contain: layout paint');
+    expect(css).toContain('dashboard-standby-slide-layer');
     expect(css).toContain('prefers-reduced-motion');
   });
 
-  it('merges the welcome name and new-sale action inside the standby bar', () => {
+  it('keeps the welcome readable and uses vivid high-contrast data colors', () => {
     const standby = read('src/features/dashboard/components/DashboardStandbyBar.tsx');
     expect(standby).toContain("user?.full_name");
     expect(standby).toContain("مرحباً،");
+    expect(standby).toContain('break-words');
+    expect(standby).not.toContain('truncate text-xl font-black');
+    expect(standby).toContain('bg-black');
+    expect(standby).toContain('text-[#67e8f9]');
+    expect(standby).toContain('text-[#ffd166]');
+    expect(standby).toContain('bg-[#ff315f]');
     expect(standby).toContain('to="/pos"');
     expect(standby).toContain("إنشاء بيع");
   });
