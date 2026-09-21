@@ -26,6 +26,7 @@ interface PosOrderHeaderBarProps {
   orderType: OrderType;
   itemsCount: number;
   canPrintReceipt: boolean;
+  canModifyOrder: boolean;
   total: number;
   currency: string;
   createdAt: string | null;
@@ -51,6 +52,7 @@ export function PosOrderHeaderBar({
   orderType,
   itemsCount,
   canPrintReceipt,
+  canModifyOrder,
   total,
   currency,
   createdAt,
@@ -126,7 +128,7 @@ export function PosOrderHeaderBar({
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-        {perms.canManageCustomer && perms.canEditOrder && (
+        {perms.canManageCustomer && canModifyOrder && (
           <button
             data-testid="pos-top-action-customer"
             type="button"
