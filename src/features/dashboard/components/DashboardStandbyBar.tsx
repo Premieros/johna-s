@@ -351,6 +351,8 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
     ? detailValue(active.details || null, ['user_name', 'cashier_name', 'employee_name', 'operator_name'])
       || (active.user_email ? active.user_email.split('@')[0] : null)
     : null;
+  const activeDocumentText = activeDocument === null || activeDocument === undefined ? null : String(activeDocument);
+  const activeActorText = activeActor === null || activeActor === undefined ? null : String(activeActor);
 
   const idleTransform = showEvent
     ? (ar ? '-translate-x-full' : 'translate-x-full')
@@ -435,10 +437,10 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
             <h2 className="text-2xl font-black leading-tight text-white sm:text-3xl">{activePresentation?.title || (ar ? 'حركة جديدة' : 'New activity')}</h2>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-black sm:text-base">
-              {activeDocument && <span className="text-[#ffd166]">{ar ? 'رقم' : '#'} {String(activeDocument)}</span>}
+              {activeDocumentText && <span className="text-[#ffd166]">{ar ? 'رقم' : '#'} {activeDocumentText}</span>}
               {activeAmount !== null && <span className="text-[#67e8f9]">{money(activeAmount)}</span>}
-              {activeActor && <span className="max-w-full break-words text-[#86efac]">{String(activeActor)}</span>}
-              {!activeDocument && activeAmount === null && !activeActor && active && (
+              {activeActorText && <span className="max-w-full break-words text-[#86efac]">{activeActorText}</span>}
+              {!activeDocumentText && activeAmount === null && !activeActorText && active && (
                 <span className="max-w-full break-words text-[#e2e8f0]">{activitySummary(active, ar, money)}</span>
               )}
             </div>
