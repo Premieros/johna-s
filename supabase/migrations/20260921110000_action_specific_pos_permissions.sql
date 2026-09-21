@@ -553,9 +553,35 @@ BEGIN
        AND NOT v_pos_action_context THEN$new$
     );
 
+    -- Payment settlement changes status/payment bookkeeping on the linked
+    -- order. Permit that exact transition only when process_sale established
+    -- the transaction-scoped pos.payment.take proof. Direct/manual completed
+    -- mutations without that proof still require pos.order.edit.
+    v_next:=replace(
+      v_next,
+      $old$      ELSIF NEW.status='completed' THEN
+        IF NOT public.can_permission('pos.payment.take') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.payment.take'; END IF;
+        IF NOT public.can_permission('pos.order.edit')
+           AND (to_jsonb(NEW)-ARRAY['status','payment_status','payment_at','updated_at']::text[])
+             IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['status','payment_status','payment_at','updated_at']::text[]) THEN
+          RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit';
+        END IF;$old$,
+      $new$      ELSIF NEW.status='completed' THEN
+        IF NOT public.can_permission('pos.payment.take') THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.payment.take'; END IF;
+        v_pos_action_context :=
+          public._pos_action_context_matches(OLD.id,'pos.payment.take');
+        IF NOT public.can_permission('pos.order.edit')
+           AND NOT v_pos_action_context
+           AND (to_jsonb(NEW)-ARRAY['status','payment_status','payment_at','updated_at']::text[])
+             IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['status','payment_status','payment_at','updated_at']::text[]) THEN
+          RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.edit';
+        END IF;$new$
+    );
+
     IF v_next=v_def
        OR position('v_pos_action_context boolean := false;' in v_next)=0
-       OR position('_pos_action_context_matches(OLD.id,''pos.send_kitchen'')' in v_next)=0 THEN
+       OR position('_pos_action_context_matches(OLD.id,''pos.send_kitchen'')' in v_next)=0
+       OR position('AND NOT v_pos_action_context' in v_next)=0 THEN
       RAISE EXCEPTION
         'enforce_pos_permission_mutation action-context patch drift; refusing migration';
     END IF;
