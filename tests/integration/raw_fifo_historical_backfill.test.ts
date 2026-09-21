@@ -326,4 +326,50 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
     expect(num(journalAfter[0].count)).toBe(0);
   });
 
+  it('clamps only sub-cent kitchen FIFO rounding drift', async () => {
+    const orderId = randomUUID();
+    const itemId = randomUUID();
+    const eventId = randomUUID();
+    const orderNo = 'FIFO-KROUND-' + randomUUID().slice(0, 8);
+
+    await client.query(
+      "INSERT INTO public.orders(id,order_number,branch_id,order_type,status,inventory_warehouse_id) VALUES($1,$2,$3,'takeaway','completed',$4)",
+      [orderId, orderNo, branch, warehouse],
+    );
+    await client.query(
+      "INSERT INTO public.order_items(id,order_id,product_id,quantity,unit_price,total) VALUES($1,$2,NULL,1,0,0)",
+      [itemId, orderId],
+    );
+    await client.query(
+      "INSERT INTO public.order_kitchen_inventory_events(id,branch_id,warehouse_id,order_id,order_item_id,sent_quantity,voided_quantity,total_cost) VALUES($1,$2,$3,$4,$5,1,0,5.7888)",
+      [eventId, branch, warehouse, orderId, itemId],
+    );
+    await client.query(
+      "INSERT INTO public.order_kitchen_inventory_effects(event_id,branch_id,warehouse_id,target_type,target_id,quantity,total_cost) VALUES($1,$2,$3,'raw_material',$4,0.12,5.7888)",
+      [eventId, branch, warehouse, rawStale],
+    );
+
+    const adjusted = await q<{ r: Record<string, unknown> }>(
+      "SELECT public._fifo_adjust_kitchen_effect_delta($1,'raw_material',$2,-5.79) r",
+      [eventId, rawStale],
+    );
+    expect(adjusted[0].r.success).toBe(true);
+    expect(num(adjusted[0].r.effect_delta)).toBeCloseTo(-5.7888, 6);
+    expect(num(adjusted[0].r.event_delta)).toBeCloseTo(-5.7888, 6);
+
+    const after = await q<{ event_cost: string; effect_cost: string }>(
+      "SELECT e.total_cost::text event_cost,ef.total_cost::text effect_cost FROM public.order_kitchen_inventory_events e JOIN public.order_kitchen_inventory_effects ef ON ef.event_id=e.id WHERE e.id=$1 AND ef.target_type='raw_material' AND ef.target_id=$2",
+      [eventId, rawStale],
+    );
+    expect(num(after[0].event_cost)).toBe(0);
+    expect(num(after[0].effect_cost)).toBe(0);
+
+    const tooLarge = await q<{ r: Record<string, unknown> }>(
+      "SELECT public._fifo_adjust_kitchen_effect_delta($1,'raw_material',$2,-0.01) r",
+      [eventId, rawStale],
+    );
+    expect(tooLarge[0].r.success).toBe(false);
+    expect(tooLarge[0].r.error).toBe('FIFO_KITCHEN_EFFECT_COST_NEGATIVE');
+  });
+
 });
