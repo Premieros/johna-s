@@ -19,14 +19,16 @@ Base: `main@e228162c308b365db0ba76ef31c5aa638462f5b5`
 5. Dashboard analytics loads large raw sale/item/payment row sets and aggregates in the browser.
 
 ## Repair plan
-- [ ] P1: Introduce a lightweight POS sellability/configuration RPC: one diagnostic probe per product; stock shortages remain non-blocking, configuration errors remain blocking.
-- [ ] P2: Switch POS to the lightweight RPC and stop inventory/settlement-triggered availability rescans.
-- [ ] P3: Remove 5-second dashboard activity polling; keep initial load + Realtime.
-- [ ] P4: Coalesce POS Realtime snapshot refresh bursts without losing a trailing refresh.
-- [ ] P5: Reduce dashboard raw-row overfetch using server-side aggregation where contract-safe.
-- [ ] P6: Add/update unit + integration contracts.
+- [x] P1: Introduce a lightweight POS sellability/configuration RPC: one diagnostic probe per product; stock shortages remain non-blocking, configuration errors remain blocking.
+- [x] P2: Switch POS to the lightweight RPC and stop inventory/settlement-triggered availability rescans.
+- [x] P3: Remove 5-second dashboard activity polling; keep initial load + Realtime.
+- [x] P4: Coalesce POS Realtime snapshot refresh bursts without losing a trailing refresh.
+- [~] P5: Dashboard detail latency reduced safely: previous-period projection is narrower and payment/item detail queries now run concurrently. Further server aggregation will only be added if verification/profiling shows it is still needed.
+- [x] P6: Add/update unit + integration contracts for sell-through, configuration blocking, no polling and Realtime coalescing.
 - [ ] P7: Full Verify exact head.
 - [ ] P8: PR only after Green. Production migration remains unapplied pending explicit approval.
 
 ## Status
-Started from exact latest main. No Production write performed.
+Implementation head: `3a4a3f7e4b74bb0c4efda5ade22e6e698bbeff8b` before this log update.
+
+Production writes: **NONE**. The new migration exists only on the development branch and is not applied.
