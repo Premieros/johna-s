@@ -47,10 +47,9 @@ Add a compact StandBy-style strip inside the dashboard only.
 - `src/features/dashboard/dashboardCompact.css`
 - `tests/unit/dashboardStandbyBarContract.test.ts`
 
-## Pending verification
-- TypeScript
-- ESLint
-- Unit tests
-- Build
-- Browser visual check on desktop/mobile
+## Verification status
+- PR #284 moved from Draft to Ready for Review.
+- CI synchronize trigger requested after the initial Draft did not start the pull-request workflow.
+- Pending: TypeScript, ESLint, unit tests, build, DB integration/security, browser smoke.
+- Browser visual check remains required on desktop/mobile after CI is green.
 - Confirm which existing audit actions provide amount/document metadata for every requested business event; missing metadata should be improved separately without changing the business transaction path.
