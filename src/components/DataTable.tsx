@@ -514,7 +514,7 @@ export function DataTable<T extends { id?: string }>({
 
       <div className="space-y-3 sm:hidden">
         {enableColumnFilters && visibleColumns.some((col) => col.filterable !== false && col.key !== 'actions') && (
-          <div data-testid="data-table-mobile-filters" className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain rounded-xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div data-testid="data-table-mobile-filters" className="ui-accent-card ui-accent-system flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain rounded-xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleColumns.filter((col) => col.filterable !== false && col.key !== 'actions').map((col) => (
               <div key={col.key} className="flex items-center gap-1 rounded-lg border border-ui-border bg-ui-page px-2 py-1">
                 <span className="max-w-32 truncate text-xs font-semibold text-ui-muted">{col.header}</span>
@@ -568,7 +568,7 @@ export function DataTable<T extends { id?: string }>({
                   className="grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-start gap-3 py-2 first:pt-0 last:pb-0"
                 >
                   <dt className="min-w-0 break-words text-xs font-semibold text-ui-muted">{col.header}</dt>
-                  <dd className="min-w-0 break-words text-sm text-ui-text [&>*]:max-w-full">
+                  <dd className="min-w-0 break-words text-sm font-medium leading-6 text-ui-text [&>*]:max-w-full">
                     {renderCell(row, col)}
                   </dd>
                 </div>
@@ -602,7 +602,7 @@ export function DataTable<T extends { id?: string }>({
         ))}
       </div>
 
-      <div className="hidden max-w-full overflow-x-auto overscroll-x-contain rounded-xl touch-pan-x [scrollbar-gutter:stable] sm:block">
+      <div className="ui-accent-top ui-accent-neutral hidden max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-ui-border bg-ui-surface shadow-ui-sm touch-pan-x [scrollbar-gutter:stable] sm:block">
         <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b border-ui-border bg-ui-page-alt/70">
@@ -615,7 +615,7 @@ export function DataTable<T extends { id?: string }>({
               {visibleColumns.map((col) => (
                 <th
                   key={col.key}
-                  className={`whitespace-nowrap px-4 py-3 text-start text-xs font-semibold uppercase tracking-wider text-ui-muted ${col.className || ''}`}
+                  className={`whitespace-nowrap px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-ui-muted ${col.className || ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span>{col.header}</span>
@@ -651,7 +651,7 @@ export function DataTable<T extends { id?: string }>({
                   </td>
                 )}
                 {visibleColumns.map((col) => (
-                  <td key={col.key} className={`px-4 py-3 text-ui-text ${col.className || ''}`}>
+                  <td key={col.key} className={`px-4 py-3 font-medium text-ui-text ${col.className || ''}`}>
                     {renderCell(row, col)}
                   </td>
                 ))}
