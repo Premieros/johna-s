@@ -5,6 +5,16 @@
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة. سجل إصلاح POS الحالي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
 
 
+## ACTIVE — Performance repair — 2026-09-21
+
+- Branch: `development/performance-repair-20260921`
+- Base: `main@e228162c308b365db0ba76ef31c5aa638462f5b5`
+- Live log: `docs/PERFORMANCE_REPAIR_2026-09-21.md`
+- Confirmed bottleneck: legacy POS maximum-availability RPC repeatedly probes every active product even though client quantity is not a saleability gate and raw-material negative sell-through is allowed.
+- Implemented on development branch: lightweight sellability/configuration probe, removal of inventory/settlement availability rescans, removal of 5-second dashboard audit polling, POS Realtime burst coalescing, and safer dashboard query parallelization.
+- Printing / Print Agent / printer routing / KDS / send-to-kitchen authority are untouched.
+- New DB migration is **development-only and unapplied to Production** pending exact-head Full Verify Green + explicit approval.
+
 ## ACTIVE — Main Area count UI / POS active-table fix — 2026-09-21
 
 - Branch: `development/main-area-count-ui-20260921`
