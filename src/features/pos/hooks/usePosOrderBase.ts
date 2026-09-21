@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/audit';
 import type { CartItem, Customer, DiningTable, Order, OrderItem, OrderType, Product, RpcResult, Settings } from '@/lib/types';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '../utils/cart';
-import { buildReceiptHtml, buildReceiptThermalText, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
@@ -726,7 +726,7 @@ export function usePosOrder(input: UsePosOrderInput) {
             s: effSettings,
             isAr,
           });
-          openPrintWindow(html, effSettings.receipt_width_mm || 80);
+          openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
         }
       } else {
         show(isAr ? 'تم إرسال جميع الأصناف مسبقاً' : 'All items already sent to kitchen', 'success');
@@ -749,7 +749,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       s: effSettings,
       isAr,
     });
-    openPrintWindow(html, effSettings.receipt_width_mm || 80);
+    openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
   }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, orderNotes, t, isAr]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
@@ -856,7 +856,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       if (effSettings?.receipt_auto_print) {
         try {
           const html = await buildReceiptHtml(receiptPayload, effSettings, lang, isAr);
-          openPrintWindow(html, effSettings.receipt_width_mm || 80);
+          openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
         } catch (error) {
           showReceiptPrintError(error);
         }
@@ -902,11 +902,13 @@ export function usePosOrder(input: UsePosOrderInput) {
           isOpenOrder: true,
         };
         const text = buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr);
+        const template = buildReceiptFixedTemplate(openOrderReceipt, effSettings, lang, isAr);
         const queued = await enqueueCloudOpenOrderPrint({
           orderId: persisted.orderId,
           payload: {
             text,
-            paperWidthMm: effSettings.receipt_width_mm || 80,
+            template,
+            paperWidthMm: APPROVED_FIXED_THERMAL_WIDTH_MM,
             copies: 1,
           },
           idempotencyKey: `open-check:${persisted.orderId}:${Date.now()}`,
@@ -925,7 +927,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       if (!lastReceipt) return;
       const html = await buildReceiptHtml(lastReceipt, effSettings, lang, isAr);
-      openPrintWindow(html, effSettings.receipt_width_mm || 80);
+      openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
     } catch (error) {
       showReceiptPrintError(error);
     }
