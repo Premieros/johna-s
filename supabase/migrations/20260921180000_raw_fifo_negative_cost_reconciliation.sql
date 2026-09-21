@@ -107,6 +107,7 @@ DECLARE
   v_inventory_account uuid;
   v_cogs_line bigint;
   v_inventory_line bigint;
+  v_base_cogs numeric(18,6):=0;
 BEGIN
   IF p_sale_id IS NULL OR COALESCE(p_delta,0) = 0 THEN
     RETURN jsonb_build_object('success',true,'posted_delta',0);
@@ -121,6 +122,17 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','FIFO_SALE_NOT_FOUND');
   END IF;
 
+  SELECT COALESCE(sum(jl.debit-jl.credit),0)
+  INTO v_base_cogs
+  FROM public.journal_entries je
+  JOIN public.account_mappings am
+    ON am.branch_id=v_sale.branch_id AND am.semantic_key='cogs'
+  JOIN public.journal_entry_lines jl
+    ON jl.journal_entry_id=je.id AND jl.account_id=am.account_id
+  WHERE je.branch_id=v_sale.branch_id
+    AND je.reference_id=v_sale.id
+    AND je.reference_type='sale';
+
   INSERT INTO public.raw_fifo_sale_cogs_adjustments(
     sale_id,branch_id,exact_delta,posted_delta
   ) VALUES (
@@ -130,6 +142,11 @@ BEGIN
   SET exact_delta=public.raw_fifo_sale_cogs_adjustments.exact_delta+EXCLUDED.exact_delta,
       updated_at=now()
   RETURNING * INTO v_row;
+
+  IF v_base_cogs+v_row.exact_delta < -0.005 THEN
+    RAISE EXCEPTION 'FIFO_SALE_COGS_NEGATIVE sale=% base=% delta=%',
+      v_sale.id,v_base_cogs,v_row.exact_delta;
+  END IF;
 
   v_target_posted:=round(v_row.exact_delta,2);
   v_post_delta:=v_target_posted-v_row.posted_delta;
