@@ -137,7 +137,7 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
 
   return (
     <div className="space-y-2">
-      <div className="sticky top-0 z-20 rounded-xl border border-ui-border bg-ui-surface/95 p-2 shadow-ui-sm backdrop-blur">
+      <div className="ui-accent-top ui-accent-system sticky top-0 z-20 rounded-xl border border-ui-border bg-ui-surface/95 p-2 shadow-ui-sm backdrop-blur">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -150,8 +150,8 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
           </button>
 
           {activeDefinition && (
-            <div className="min-w-0 flex-1 rounded-lg bg-ui-page-alt px-3 py-2">
-              <p className="truncate text-xs font-black text-ui-text">
+            <div className="min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-2">
+              <p className="break-words text-xs font-extrabold leading-5 text-ui-text">
                 {lang === 'ar' ? activeDefinition.title : activeDefinition.titleEn}
               </p>
             </div>
@@ -160,7 +160,7 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
       </div>
 
       {showReportBrowser && (
-        <section className="rounded-xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
+        <section className="ui-accent-card ui-accent-system rounded-xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
           <div className="relative mb-3">
             <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-subtle" />
             <input
