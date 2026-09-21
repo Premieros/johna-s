@@ -35,7 +35,8 @@ Based on the live Dashboard screenshot:
 
 ### Desktop sidebar hide/show
 `src/components/Layout.tsx`
-- Added `desktop-sidebar-toggle` button.
+- Added `desktop-sidebar-hide` inside the desktop sidebar header.
+- After hiding, `desktop-sidebar-toggle` appears in the app header to restore the sidebar.
 - Desktop sidebar can be hidden and shown without affecting mobile behavior.
 - Header logical start offset changes from 260px to 0 when hidden.
 - Main content logical start margin changes from 260px to 0 when hidden.
