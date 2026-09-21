@@ -221,7 +221,14 @@ BEGIN
   v_state_date:=NULLIF(v_state->>'business_date','')::date;
   v_state_start:=NULLIF(v_state->>'started_at','')::timestamptz;
 
-  IF v_state_date=p_business_date AND v_state_start IS NOT NULL THEN
+  IF v_state_date=p_business_date
+     AND v_state_start IS NOT NULL
+     AND EXISTS (
+       SELECT 1
+       FROM public.shifts s
+       WHERE s.branch_id=p_branch_id
+         AND s.status='open'
+     ) THEN
     SELECT
       count(*)::int,
       count(*) FILTER (WHERE s.status='open')::int
@@ -296,6 +303,7 @@ DECLARE
   v_snapshot jsonb;
   v_state jsonb;
   v_state_date date;
+  v_has_open_shift boolean:=false;
 BEGIN
   IF auth.uid() IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
@@ -311,8 +319,14 @@ BEGIN
 
   v_state:=public._ensure_business_day_state(p_branch_id);
   v_state_date:=NULLIF(v_state->>'business_date','')::date;
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.shifts s
+    WHERE s.branch_id=p_branch_id
+      AND s.status='open'
+  ) INTO v_has_open_shift;
 
-  IF v_state_date=p_day THEN
+  IF v_state_date=p_day AND v_has_open_shift THEN
     RETURN public._build_day_closing_report(p_branch_id,p_day)
       || jsonb_build_object('daily_close_status','open','snapshot',false,'active_business_day',true);
   END IF;
