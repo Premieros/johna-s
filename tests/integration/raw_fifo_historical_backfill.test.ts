@@ -215,6 +215,66 @@ describe.skipIf(skip)('Historical raw FIFO backfill', () => {
     expect(applied[0].r.success).toBe(false);
     expect(applied[0].r.error).toBe('FIFO_BACKFILL_STALE_PLAN');
   });
+  it('preserves FIFO debts created by live traffic before backfill apply and reversal', async () => {
+    const rawLive = randomUUID();
+    const liveSale = randomUUID();
+
+    await client.query(
+      "INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost,is_active) VALUES($1,$2,'FIFO Live Debt Raw',$3,$4,0,true)",
+      [rawLive, 'FLIVE-' + randomUUID().slice(0, 6), branch, unit],
+    );
+    await client.query(
+      "INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) VALUES($1,$2,$3,'OV-LIVE-PRE',-1,0,'sale_oversold','2026-09-21T09:00:00Z')",
+      [rawLive, branch, warehouse],
+    );
+    const liveLedger = await q<{ id: string }>(
+      "INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at) VALUES($1,$2,$3,'OV-LIVE-PRE',-1,0,0,0,-1,'sale','sale',$4,'FIFO-LIVE-PRE','2026-09-21T09:00:00Z') RETURNING id::text",
+      [rawLive, branch, warehouse, liveSale],
+    );
+    const liveBatch = await q<{ id: string }>(
+      "SELECT id::text FROM public.raw_material_batches WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3 AND batch_number='OV-LIVE-PRE'",
+      [rawLive, branch, warehouse],
+    );
+
+    await client.query(
+      "INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,reference_type,reference_id,reference_number,debt_quantity,settled_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,'sale',$6,'FIFO-LIVE-PRE',1,0,'2026-09-21T09:00:00Z')",
+      [liveLedger[0].id, rawLive, branch, warehouse, liveBatch[0].id, liveSale],
+    );
+
+    const prepared = await q<{ r: Record<string, unknown> }>(
+      'SELECT public.raw_fifo_prepare_backfill($1) r',
+      [branch],
+    );
+    const runId = String(prepared[0].r.run_id);
+
+    const applied = await q<{ r: Record<string, unknown> }>(
+      'SELECT public.raw_fifo_apply_backfill($1) r',
+      [runId],
+    );
+    expect(applied[0].r.success).toBe(true);
+
+    const liveAfterApply = await q<{ count: string; backfill_run_id: string | null }>(
+      'SELECT count(*)::text count,max(backfill_run_id::text) backfill_run_id FROM public.raw_fifo_debts WHERE source_ledger_id=$1',
+      [liveLedger[0].id],
+    );
+    expect(num(liveAfterApply[0].count)).toBe(1);
+    expect(liveAfterApply[0].backfill_run_id).toBeNull();
+
+    const reversed = await q<{ r: Record<string, unknown> }>(
+      'SELECT public.raw_fifo_reverse_backfill($1) r',
+      [runId],
+    );
+    expect(reversed[0].r.success).toBe(true);
+
+    const liveAfterReverse = await q<{ count: string; debt_quantity: string; settled_quantity: string }>(
+      'SELECT count(*)::text count,max(debt_quantity)::text debt_quantity,max(settled_quantity)::text settled_quantity FROM public.raw_fifo_debts WHERE source_ledger_id=$1',
+      [liveLedger[0].id],
+    );
+    expect(num(liveAfterReverse[0].count)).toBe(1);
+    expect(num(liveAfterReverse[0].debt_quantity)).toBe(1);
+    expect(num(liveAfterReverse[0].settled_quantity)).toBe(0);
+  });
+
   it('safely handles orphan historical kitchen and purchase-return references', async () => {
     const orphanKitchenRef = randomUUID();
     const orphanReturnRef = randomUUID();
