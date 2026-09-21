@@ -156,7 +156,7 @@ This work will **standardize use of the existing font stack**; it will not intro
 # Implementation Plan
 
 ## Phase 0 — Baseline & inventory
-**Status: IN PROGRESS**
+**Status: COMPLETE**
 
 - [x] Start from latest `main`.
 - [x] Create isolated development branch.
@@ -195,7 +195,7 @@ These duplicate local Card patterns and should be handled after the shared token
 Reason: these screens have touch-layout/status semantics and must receive visual accents only in a later focused regression pass.
 
 ## Phase 1 — Global surface tokens
-**Status: PENDING**
+**Status: COMPLETE**
 
 Planned files:
 - `src/index.css`
@@ -215,7 +215,7 @@ Acceptance:
 - WCAG-friendly readable text contrast.
 
 ## Phase 2 — Shared card / section primitives
-**Status: PENDING**
+**Status: IN PROGRESS**
 
 Targets:
 - shared Card/surface primitive(s);
@@ -294,9 +294,16 @@ No merge until exact-head Full Verify is green and latest `main` is rechecked.
 
 # Files Changed So Far
 
-- `docs/UI_SURFACE_ACCENT_PLAN_2026-09-21.md` — created as live plan/execution log.
-
-No runtime/UI code changed yet in this branch at the time of this log creation.
+- `docs/UI_SURFACE_ACCENT_PLAN_2026-09-21.md` — live plan/execution log.
+- `docs/CURRENT_WORK_PLAN.md` — active visual work pointer/status.
+- `src/index.css` — softened Light/Dark surfaces, semantic accent-strip tokens/classes, tabular-number table rule.
+- `src/components/PageHeader.tsx` — shared Card/StatCard accents + typography normalization.
+- `src/components/design/DesignSurface.tsx` — system-accent filter bar.
+- `src/components/design/CenterTile.tsx` — accent strip + stronger title/body typography.
+- `src/components/design/DesignPanel.tsx` — normalized shared panel typography.
+- `src/components/DataTable.tsx` — table/filter accent treatment + stronger header/body typography.
+- `src/features/dashboard/pages/DashboardDataPage.tsx` — first semantic accent rollout below the StandBy strip.
+- `tests/unit/uiSurfaceAccentContract.test.ts` — contract for neutral surfaces, accents, typography and StandBy exception.
 
 ---
 
@@ -315,3 +322,17 @@ No runtime/UI code changed yet in this branch at the time of this log creation.
 - POS operational, payment, kitchen and printing-adjacent surfaces explicitly excluded from the first pass.
 - No runtime/UI code changed yet.
 - Next action: Phase 1 — adjust global neutral surfaces and add reusable accent-strip primitives while preserving StandBy true black.
+
+
+### 2026-09-21 — Phase 1 complete / Phase 2 first pass
+- Light mode full-page white glare reduced using layered off-white/cool-neutral tokens.
+- Dark mode page moved from absolute black to charcoal hierarchy; cards remain visibly elevated.
+- StandBy strip explicitly remains true black.
+- Added RTL-aware 3px logical-side accent strip and optional top strip.
+- Added semantic accent families: primary/sales, purchase, inventory, finance, alert and system.
+- Shared Card/StatCard, DesignFilterBar, CenterTile, DesignPanel and DataTable received the first safe accent/typography pass.
+- Dashboard cards below StandBy now use semantic strips (sales blue, finance violet, inventory emerald, alerts rose, utilities cyan/neutral).
+- Financial/KPI/table numbers use tabular numeric behavior where practical.
+- Added `uiSurfaceAccentContract.test.ts`.
+- No printing, POS transaction logic, DB, RLS or permissions changed.
+- Next: run Full Verify on this exact branch head. If green, continue Phase 2/3 rollout only through safe shared/report/inventory/purchase/accounting surfaces, then visual regression before merge.
