@@ -315,7 +315,7 @@ DECLARE
   v_run uuid:=gen_random_uuid();
   v_cutoff bigint;
   e record;
-  d record;
+  v_debt record;
   v_lot record;
   v_remaining numeric(18,6);
   v_take numeric(18,6);
@@ -389,7 +389,7 @@ BEGIN
     IF e.quantity>0 THEN
       v_remaining:=e.quantity;
 
-      FOR d IN
+      FOR v_debt IN
         SELECT *
         FROM rf_debts
         WHERE raw_material_id=e.raw_material_id
@@ -399,26 +399,26 @@ BEGIN
         ORDER BY event_at,id
       LOOP
         EXIT WHEN v_remaining<=0;
-        v_take:=LEAST(v_remaining,d.remaining_qty);
+        v_take:=LEAST(v_remaining,v_debt.remaining_qty);
 
         UPDATE public.raw_fifo_backfill_plan
         SET target_cost=target_cost+v_take*COALESCE(e.unit_cost,0),
             unresolved_quantity=GREATEST(unresolved_quantity-v_take,0)
         WHERE run_id=v_run
-          AND consumption_ledger_id=d.consumption_ledger_id;
+          AND consumption_ledger_id=v_debt.consumption_ledger_id;
 
         INSERT INTO public.raw_fifo_backfill_allocations(
           run_id,consumption_ledger_id,receipt_ledger_id,
           allocation_type,quantity,unit_cost,total_cost
         ) VALUES (
-          v_run,d.consumption_ledger_id,e.id,
+          v_run,v_debt.consumption_ledger_id,e.id,
           'debt_settlement',v_take,COALESCE(e.unit_cost,0),
           v_take*COALESCE(e.unit_cost,0)
         );
 
         UPDATE rf_debts
         SET remaining_qty=remaining_qty-v_take
-        WHERE id=d.id;
+        WHERE id=v_debt.id;
 
         v_remaining:=v_remaining-v_take;
       END LOOP;
