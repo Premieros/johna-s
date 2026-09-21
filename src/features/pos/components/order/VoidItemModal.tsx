@@ -11,6 +11,7 @@ interface VoidItemModalProps {
   onClose: () => void;
   item: CartItem | null;
   sentQty: number;
+  canDirectVoid: boolean;
   onConfirmVoid: (lineKey: string, voidQuantity: number, reason: string) => Promise<void> | void;
 }
 
@@ -27,6 +28,7 @@ export function VoidItemModal({
   onClose,
   item,
   sentQty,
+  canDirectVoid,
   onConfirmVoid,
 }: VoidItemModalProps) {
   const { lang, t } = useLanguage();
@@ -67,9 +69,13 @@ export function VoidItemModal({
                 : `This item was previously sent to kitchen (Sent Qty: ${sentQty})`}
             </p>
             <p className="text-rose-600">
-              {isAr
-                ? 'سيتم تنفيذ الإلغاء عبر مسار Void المعتمد مع تسجيل السبب وتحديث الطلب والمخزون حسب الكمية المرسلة. من يملك صلاحية إلغاء الصنف (pos.void) ينفذ مباشرة؛ ومن لا يملكها يبقى خاضعًا لمسار الموافقة.'
-                : 'The item will be voided through the controlled Void flow with an audited reason and the sent quantity reconciled. Users with pos.void execute directly; users without it remain on the approval path.'}
+              {canDirectVoid
+                ? (isAr
+                    ? 'لديك صلاحية Void المباشرة. سيتم تنفيذ الإلغاء عبر المسار المعتمد مع تسجيل السبب وتحديث الطلب والمخزون للكمية المرسلة فقط.'
+                    : 'You have direct Void permission. The controlled flow will record the reason and reconcile only the sent quantity.')
+                : (isAr
+                    ? 'لا تملك صلاحية Void المباشرة. سيتم إرسال طلب موافقة للمدير، ولن يتم إلغاء الصنف أو رد المخزون قبل اعتماد الطلب ثم إعادة تنفيذ الإلغاء.'
+                    : 'You do not have direct Void permission. A manager approval request will be created; the item and inventory will not change until approval and a retry.')}
             </p>
           </div>
         </div>
@@ -144,7 +150,11 @@ export function VoidItemModal({
           <Button variant="secondary" onClick={onClose} disabled={loading}>{t('cancel')}</Button>
           <Button variant="danger" onClick={handleConfirm} disabled={loading}>
             <Trash2 className="h-4 w-4" />
-            <span>{isAr ? 'تأكيد إلغاء الصنف (Void)' : 'Confirm Void'}</span>
+            <span>
+              {canDirectVoid
+                ? (isAr ? 'تأكيد إلغاء الصنف (Void)' : 'Confirm Void')
+                : (isAr ? 'طلب موافقة على الإلغاء' : 'Request Void Approval')}
+            </span>
           </Button>
         </div>
       </div>
