@@ -973,8 +973,14 @@ WITH scoped_sales AS (
     GREATEST(COALESCE(s.total,0)-COALESCE(s.tax_amount,0),0)::numeric AS net_sales
   FROM public.sales s
   WHERE (p_branch_id IS NULL OR s.branch_id=p_branch_id)
-    AND (p_from IS NULL OR s.created_at::date>=p_from)
-    AND (p_to IS NULL OR s.created_at::date<=p_to)
+    AND (
+      public.history_clamp_from(p_from) IS NULL
+      OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date>=public.history_clamp_from(p_from)
+    )
+    AND (
+      public.history_clamp_to(p_to) IS NULL
+      OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date<=public.history_clamp_to(p_to)
+    )
     AND COALESCE(s.status,'') NOT IN ('returned','cancelled')
 ),
 journal_costs AS (
