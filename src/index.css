@@ -46,15 +46,24 @@
   --ui-primary-fg: 255 255 255;
   --ui-accent: var(--brand-600);
 
-  /* === Surfaces (Solid, Crisp, Opaque) === */
-  --ui-surface: 255 255 255;
+  /* === Surfaces (Comfort-neutral, layered, opaque) === */
+  --ui-surface: 252 252 253;
   --ui-surface-raised: 248 250 252;
-  --ui-page: 248 250 252;
-  --ui-page-alt: 241 245 249;
+  --ui-page: 245 247 250;
+  --ui-page-alt: 238 242 247;
+
+  /* === Accent strips / section identity === */
+  --ui-strip-blue: 59 130 246;
+  --ui-strip-amber: 245 158 11;
+  --ui-strip-emerald: 16 185 129;
+  --ui-strip-violet: 139 92 246;
+  --ui-strip-rose: 244 63 94;
+  --ui-strip-cyan: 6 182 212;
+  --ui-strip-neutral: 100 116 139;
 
   /* === Borders === */
-  --ui-border: 226 232 240;
-  --ui-border-strong: 203 213 225;
+  --ui-border: 218 225 234;
+  --ui-border-strong: 190 201 214;
 
   /* === Text === */
   --ui-text: 15 23 42;
@@ -132,18 +141,18 @@
 }
 
 .dark {
-  /* True-black dark mode: page is black, surfaces stay slightly lifted for hierarchy. */
-  --ui-surface: 9 9 11;
-  --ui-surface-raised: 16 16 19;
-  --ui-page: 0 0 0;
-  --ui-page-alt: 12 12 15;
+  /* Charcoal dark mode: avoids crushed black while keeping clear hierarchy. */
+  --ui-surface: 24 27 33;
+  --ui-surface-raised: 32 36 44;
+  --ui-page: 17 19 24;
+  --ui-page-alt: 21 24 32;
 
-  /* Stronger separation on black so cards, tables and controls do not blend together. */
-  --ui-border: 52 52 58;
-  --ui-border-strong: 82 82 91;
+  /* Separation tuned for charcoal rather than pure black. */
+  --ui-border: 55 60 72;
+  --ui-border-strong: 78 85 101;
 
-  /* High-contrast typography for dense POS/table data. */
-  --ui-text: 255 255 255;
+  /* High-contrast typography without harsh pure-white glare. */
+  --ui-text: 248 250 252;
   --ui-muted: 203 213 225;
   --ui-subtle: 148 163 184;
 
@@ -204,6 +213,52 @@
 }
 
 @layer components {
+  /* === Accent strip system: subtle hierarchy, RTL-aware, no behavior impact === */
+  .ui-accent-card,
+  .ui-accent-top {
+    --ui-accent-strip: var(--ui-strip-neutral);
+    position: relative;
+    background:
+      linear-gradient(135deg, rgb(var(--ui-accent-strip) / 0.045), transparent 34%),
+      rgb(var(--ui-surface));
+  }
+
+  .ui-accent-card::before,
+  .ui-accent-top::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+    background: rgb(var(--ui-accent-strip));
+    opacity: 0.9;
+  }
+
+  .ui-accent-card::before {
+    inset-block: 0.75rem;
+    inset-inline-start: 0;
+    width: 3px;
+    border-radius: 999px;
+  }
+
+  .ui-accent-top::before {
+    inset-inline: 1rem;
+    inset-block-start: 0;
+    height: 3px;
+    border-radius: 0 0 999px 999px;
+  }
+
+  .ui-accent-primary { --ui-accent-strip: var(--ui-strip-blue); }
+  .ui-accent-purchase { --ui-accent-strip: var(--ui-strip-amber); }
+  .ui-accent-inventory { --ui-accent-strip: var(--ui-strip-emerald); }
+  .ui-accent-finance { --ui-accent-strip: var(--ui-strip-violet); }
+  .ui-accent-alert { --ui-accent-strip: var(--ui-strip-rose); }
+  .ui-accent-system { --ui-accent-strip: var(--ui-strip-cyan); }
+  .ui-accent-neutral { --ui-accent-strip: var(--ui-strip-neutral); }
+
+  [data-testid='data-table'] {
+    font-variant-numeric: tabular-nums;
+  }
+
   /* === Solid Enterprise Surfaces (High Contrast, Crisp & Non-Glassmorphic) === */
   .ui-surface {
     background: rgb(var(--ui-surface));
