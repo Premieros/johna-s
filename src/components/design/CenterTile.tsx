@@ -31,14 +31,14 @@ export function CenterTile({ item, testIdPrefix }: CenterTileProps) {
       data-testid={`${testIdPrefix}-${item.id}`}
       type="button"
       onClick={() => navigate(item.route)}
-      className="group relative rounded-2xl border border-ui-border bg-ui-surface p-5 text-start shadow-ui-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-ring"
+      className="ui-accent-card ui-accent-primary group relative rounded-2xl border border-ui-border bg-ui-surface p-5 text-start shadow-ui-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-ring"
     >
       <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-ui-primary-soft text-ui-primary transition-all duration-150 group-hover:bg-ui-primary group-hover:text-ui-primary-fg">
         <Icon className="h-5 w-5" />
       </div>
-      <h3 className="font-bold text-ui-text">{ar ? (item.ar ?? item.en) : (item.en ?? item.ar)}</h3>
+      <h3 className="text-base font-extrabold leading-6 text-ui-text">{ar ? (item.ar ?? item.en) : (item.en ?? item.ar)}</h3>
       {(item.descriptionAr || item.descriptionEn) && (
-        <p className="mt-2 text-sm leading-6 text-ui-muted">
+        <p className="mt-2 text-sm font-medium leading-6 text-ui-muted">
           {ar ? item.descriptionAr : item.descriptionEn}
         </p>
       )}
