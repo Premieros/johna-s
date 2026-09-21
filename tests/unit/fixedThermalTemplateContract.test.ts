@@ -162,7 +162,9 @@ describe('fixed thermal receipt template contract', () => {
     expect(renderer).toContain("$(if ($isKitchen) { 20 } else { 23 })");
     expect(renderer).toContain("$(if ($isKitchen) { 10.8 } else { 11.5 })");
     expect(renderer).toContain("$(if ($isKitchen) { 15 } else { 16 })");
-    expect(renderer).toContain("$totalFont = [System.Drawing.Font]::new($bodyFamily, 16.5");
+    expect(renderer).toContain("$totalFont = [System.Drawing.Font]::new($bodyFamily, 15.5");
+    expect(renderer).toContain("$numberFont = [System.Drawing.Font]::new($bodyFamily, 9.2");
+    expect(renderer).toContain("$numberTotalFont = [System.Drawing.Font]::new($bodyFamily, 10.4");
     expect(renderer).toContain("[System.Drawing.Font]::new($brandFamily");
     expect(renderer).toContain("[System.Drawing.Font]::new($bodyFamily");
     expect(renderer).toContain('$paperHeightMm = 66 +');
@@ -219,7 +221,7 @@ describe('fixed thermal receipt template contract', () => {
 
     expect(html).toContain('CUSTOMER RECEIPT');
     expect(html).toContain('CUSTOMER COPY');
-    expect(html).toContain('grid-template-columns: 9mm minmax(0, 1fr) 18mm 20mm;');
+    expect(html).toContain('grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;');
     expect(html).toContain('Chicken Burger');
     expect(html).toContain('120 EGP');
     expect(html).toContain('240 EGP');
