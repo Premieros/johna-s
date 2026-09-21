@@ -95,7 +95,7 @@ Priority surfaces:
 - POS load failures
 
 ### Phase 4 — UI guard correctness
-**Status: IMPLEMENTED — FINAL VERIFY PENDING**
+**Status: FULL VERIFY GREEN**
 
 - New-order controls use `pos.order.create`.
 - Existing-order mutations use `pos.order.edit`.
@@ -104,7 +104,7 @@ Priority surfaces:
 - Approval-based actions should remain reachable when approval is the intended server path.
 
 ### Phase 5 — POS partial-degradation behavior
-**Status: IMPLEMENTED — FINAL VERIFY PENDING**
+**Status: FULL VERIFY GREEN**
 
 - A nonessential query failure must not unnecessarily replace the entire POS with a fatal screen.
 - Keep the POS usable when safe fallback data is available.
@@ -112,7 +112,7 @@ Priority surfaces:
 - Fatal screen only when the POS cannot safely operate.
 
 ### Phase 6 — Verification
-**Status: IN PROGRESS**
+**Status: FULL VERIFY GREEN**
 
 Required checks before any Production migration or merge:
 - lint
@@ -507,3 +507,26 @@ End-to-end regression:
 - No Production write or migration.
 - No printing / Print Agent / printer routing / kitchen station routing change.
 - Final Full Verify must run from the post-sync documented HEAD.
+
+
+### 2026-09-21 — Final repair plan Full Verify GREEN
+- Exact code HEAD verified before final documentation closeout: `ca22b283cc0b1ded59654b5c6ae843461e09c15f`.
+- Latest synchronized `main` at verification start: `65bf325ec243d6dbe5d1a0721db5874a122f6111`.
+- Workflow: `Verify main` run `35582743259`.
+- Results:
+  - lint ✅
+  - TypeScript ✅
+  - test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations ✅
+  - schema verification ✅
+  - Integration / Security / RLS ✅
+  - Browser Smoke / Playwright ✅
+- Phase 4 UI guards are verified Green.
+- Phase 5 partial-degradation behavior is verified Green.
+- Phase 6 verification is verified Green using the existing permission/action lifecycle suites plus the new UI guard regression.
+- No Production migration has been applied.
+- No Production write has been performed.
+- No Print Agent, printer queue contract, printer route, printer payload, or kitchen station routing change was made by this repair.
+- PR `#286` remains the delivery vehicle; it must not merge until the final documentation HEAD itself is verified Green and merge approval is explicit.
