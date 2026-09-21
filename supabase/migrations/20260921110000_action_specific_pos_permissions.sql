@@ -504,6 +504,67 @@ BEGIN
 END;
 $patch_order_owner_action_context$;
 
+-- The permission trigger is separate from the ownership trigger. Allow the
+-- same exact action proof through order bookkeeping fields without granting
+-- pos.order.edit. This is required for first kitchen send warehouse binding and
+-- for payment-only settlement bookkeeping.
+DO $patch_permission_guard_action_context$
+DECLARE
+  v_sig regprocedure:=
+    to_regprocedure('public.enforce_pos_permission_mutation()');
+  v_def text;
+  v_next text;
+BEGIN
+  IF v_sig IS NULL THEN
+    RAISE EXCEPTION 'enforce_pos_permission_mutation target not found';
+  END IF;
+
+  SELECT pg_get_functiondef(v_sig) INTO v_def;
+
+  IF position('v_pos_action_context boolean := false;' in v_def)=0 THEN
+    v_next:=replace(
+      v_def,
+      $old$  v_sent_item_void_context boolean := false;$old$,
+      $new$  v_sent_item_void_context boolean := false;
+  v_pos_action_context boolean := false;$new$
+    );
+
+    v_next:=replace(
+      v_next,
+      $old$    v_sent_item_void_context :=
+      public._sent_item_void_context_matches(OLD.id, NULL);
+
+    IF NEW.status IS NOT DISTINCT FROM OLD.status
+       AND NEW.table_id IS NOT DISTINCT FROM OLD.table_id
+       AND NOT public.can_permission('pos.order.edit')
+       AND NOT v_sent_item_void_context THEN$old$,
+      $new$    v_sent_item_void_context :=
+      public._sent_item_void_context_matches(OLD.id, NULL);
+
+    v_pos_action_context :=
+      public._pos_action_context_matches(OLD.id,'pos.payment.take')
+      OR public._pos_action_context_matches(OLD.id,'pos.send_kitchen')
+      OR public._pos_action_context_matches(OLD.id,'pos.cancel_order');
+
+    IF NEW.status IS NOT DISTINCT FROM OLD.status
+       AND NEW.table_id IS NOT DISTINCT FROM OLD.table_id
+       AND NOT public.can_permission('pos.order.edit')
+       AND NOT v_sent_item_void_context
+       AND NOT v_pos_action_context THEN$new$
+    );
+
+    IF v_next=v_def
+       OR position('v_pos_action_context boolean := false;' in v_next)=0
+       OR position('_pos_action_context_matches(OLD.id,''pos.send_kitchen'')' in v_next)=0 THEN
+      RAISE EXCEPTION
+        'enforce_pos_permission_mutation action-context patch drift; refusing migration';
+    END IF;
+
+    EXECUTE v_next;
+  END IF;
+END;
+$patch_permission_guard_action_context$;
+
 -- Preserve transfer and controlled Void exceptions while allowing only the
 -- exact send-kitchen context through the kitchen-send ownership trigger.
 CREATE OR REPLACE FUNCTION public.guard_kitchen_send_operator_ownership()
