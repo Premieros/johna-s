@@ -36,7 +36,7 @@ The UI audit found two classes of defects:
 ## Ordered repair plan
 
 ### Phase 1 — Action-specific permission contract
-**Status: IMPLEMENTED — VERIFY PENDING**
+**Status: FIXED AFTER CI FAILURE — REVERIFY PENDING**
 
 Target actions:
 - `pos.payment.take`
@@ -212,3 +212,33 @@ End-to-end regression:
 - Repair remains ordered behind Phase 1/2/3/4: nonessential failures (customers/settings/branches/categories/areas where safe fallback exists) must degrade to a localized warning instead of blocking the whole POS.
 - A truly unavailable product catalog / unsafe branch context may still use a fatal screen.
 - No Production change was made in response to the screenshot.
+
+
+### 2026-09-21 — Phase 1 first Full Verify failure and repair
+- Draft PR confirmed: `#286` — `fix(pos): align action permissions with cross-operator workflow`.
+- Verified exact tested HEAD before failure: `ffb3bf80fc2142c5c52503d42f99ff635658e17b`.
+- Workflow: `Verify main` run `35576424448`.
+- Frontend job: GREEN:
+  - lint ✅
+  - TypeScript ✅
+  - test suite typecheck ✅
+  - unit ✅
+  - build ✅
+- DB job:
+  - canonical migrations ✅
+  - schema verification ✅
+  - Integration/Security/RLS ❌
+- Integration summary: 137 files passed, 1 file failed; 781 tests passed, 5 failed.
+- All five failing cases were in the new `pos_action_specific_cross_operator_permissions.test.ts`.
+- Root failure was the first Pay-Only scenario: `PERMISSION_DENIED:pos.order.edit`; the remaining four failures were cascading `25P02 current transaction is aborted` failures from the same test transaction.
+- Root cause confirmed from current migration/trigger contract:
+  - `enforce_pos_permission_mutation()` handled `NEW.status='completed'` before accepting the exact action context and therefore still required `pos.order.edit` during payment settlement bookkeeping.
+- Repair commit: `7e4a3fe2d84eaa8e544899bd381396a2a93c3a83`.
+  - The completion guard now accepts only the exact transaction-scoped `pos.payment.take` proof created by the controlled payment RPC.
+  - Generic/manual edits remain protected by `pos.order.edit`.
+  - No broadening of `can_manage_other_pos_orders()`.
+- Regression contract test commit: `b2c2d647af080b2e499e5ff911d4f404b9ca099f`.
+- Production writes: NONE.
+- Production migrations applied: NONE.
+- Print Agent / printer routes / station routing changed: NONE.
+- Phase 2 remains blocked until the new exact HEAD completes Full Verify Green.
