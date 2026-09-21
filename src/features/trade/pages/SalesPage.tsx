@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, FileText, Edit2, RotateCcw } from 'lucide-react';
+import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -21,10 +21,20 @@ import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
 import type { Customer } from '@/lib/types';
+import {
+  APPROVED_FIXED_THERMAL_WIDTH_MM,
+  ReceiptPrintApprovalError,
+  buildReceiptHtml,
+  openPrintWindow,
+  type ReceiptData,
+} from '@/features/pos/utils/printing';
 
 interface SaleRow {
   id: string;
   invoice_number: string;
+  subtotal: number;
+  discount_amount: number;
+  tax_amount: number;
   total: number;
   paid_amount: number;
   refunded_amount: number;
@@ -34,6 +44,8 @@ interface SaleRow {
   created_at: string;
   customer_id: string | null;
   branch_id: string;
+  order_type: string;
+  guest_count: number | null;
   is_archived: boolean;
   customer?: { name: string } | null;
   sale_items?: { id: string; product_id: string | null; unit_name: string; quantity: number; unit_price: number; discount_amount: number; refunded_quantity: number; refunded_amount: number; total: number; product?: { name: string } | null }[];
@@ -48,7 +60,7 @@ export function SalesPage() {
   const history = useHistoryAccess();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, is_archived, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     filters: [{ column: 'is_archived', value: false }],
@@ -69,12 +81,18 @@ export function SalesPage() {
   const [refundQty, setRefundQty] = useState<Record<string, string>>({});
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
+  const [receiptPreviewHtml, setReceiptPreviewHtml] = useState('');
+  const [receiptPreviewTitle, setReceiptPreviewTitle] = useState('');
+  const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
+  const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
   const isAr = lang === 'ar';
   const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
-  const canRequestPaymentApproval = user?.role === 'cashier';
-  const canEditSale = can('refunds.approve') || canRequestPaymentApproval;
+  const canRequestPaymentApproval = can('sales.payment.receive') && !can('refunds.approve');
+  const canEditSale = can('refunds.approve') || can('sales.payment.receive');
   const canArchiveReturnedSale = can('refunds.approve');
+  const canPreviewReceipt = can('sales.view');
+  const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint') || can('sales.print');
 
   async function loadMeta() {
     const { data: customersRes } = await supabase.from('customers').select('*').order('name');
