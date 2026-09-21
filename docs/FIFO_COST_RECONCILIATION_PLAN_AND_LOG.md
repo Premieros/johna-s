@@ -1,3 +1,46 @@
+### 2026-09-21 — Production FIFO backfill applied and verified
+
+- Full Verify #2244 is GREEN on commit `7fac631b71747923d8989be6d2fe41d5964a960b`:
+  - verify ✅
+  - canonical migrations/schema/integration/security/RLS ✅
+  - browser smoke ✅
+- Additional Production safety patches applied after the original FIFO migrations:
+  - `20260921193000_raw_fifo_backfill_batch_identity_fix.sql`
+  - `20260921194500_raw_fifo_orphan_reference_fallback.sql`
+  - `20260921200000_raw_fifo_preserve_live_debt_state.sql`
+  - `20260921201500_raw_fifo_kitchen_rounding_tolerance.sql`
+- Historical all-branch Production run:
+  - run_id: `ce72c9e6-3ab0-4eaa-aac8-0642d24175c7`
+  - cutoff raw ledger id: `15610`
+  - status: `applied`
+  - consumption rows replayed: 9,452
+  - changed valuation rows: 1,022
+  - positive delta rows: 915
+  - negative delta rows: 107
+  - net FIFO cost delta: +21,496.20
+  - unresolved historical FIFO quantity: 10,804.8299
+  - unresolved rows: 3,204
+- Post-apply Production invariants:
+  - raw batch vs raw ledger quantity mismatch groups: 0
+  - raw inventory cache vs canonical batches mismatch groups: 0
+  - FIFO reconciliation journals: 175
+  - unbalanced FIFO journals: 0
+  - zero/zero FIFO journal lines: 0
+  - sales with negative COGS after FIFO adjustments: 0
+  - historical settlements materialized for run: 2,064
+  - backfill-owned historical debts: 4,494
+- Live traffic continued immediately after apply:
+  - raw ledger advanced from cutoff 15610 to at least 15613
+  - new oversold live rows 15612 and 15613 created normal live FIFO debts with `backfill_run_id IS NULL`
+  - this confirms future/live FIFO debt tracking remains active after historical backfill.
+- Printing check immediately after apply:
+  - a new kitchen print job was created for Smouha after the apply timestamp
+  - status reached `submitted`, attempts=1, last_error=NULL
+  - FIFO migrations/backfill did not write to print tables.
+- Cleopatra imported historical sale `IMP-CLEO-HIST-20260920` now reports FIFO COGS = 75,389.63 via `get_order_margin`.
+  The old imported note value 75,105.72 is no longer treated as the authoritative COGS.
+- Exact historical reversal is intentionally stale-guarded once newer raw ledger movements exist. Code/function emergency rollback remains separately available; never force historical reversal across newer live inventory traffic.
+
 # FIFO Cost Reconciliation — Plan, Work Log, and Continuation Memory
 
 > **SOURCE OF TRUTH for this workstream**
