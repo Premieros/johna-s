@@ -21,11 +21,12 @@ describe('business-day UI contract', () => {
     expect(shiftsPage).toContain('يوجد شفت مفتوح بالفعل لهذا الفرع');
   });
 
-  it('requires every open order to be resolved before shift close', () => {
-    expect(shiftsPage).toContain('لا يمكن إغلاق الوردية مع وجود طلبات مفتوحة');
-    expect(shiftsPage).toContain('يجب على المستخدم إغلاق أو تسوية كل الطلبات أولًا');
-    expect(shiftsPage).not.toContain('إغلاق الوردية مع بقاء الطلبات المفتوحة');
-    expect(shiftsPage).not.toContain('Close Shift With Open Orders');
+  it('blocks normal close but exposes the separately-permitted open-order override', () => {
+    expect(shiftsPage).toContain('OPEN_ORDERS_BLOCK_SHIFT_CLOSE');
+    expect(shiftsPage).toContain("can('shifts.close_with_open_orders')");
+    expect(shiftsPage).toContain('api.shifts.closeWithOpenOrders');
+    expect(shiftsPage).toContain('إغلاق الوردية مع إبقاء الطلبات المفتوحة');
+    expect(shiftsPage).toContain('يمكنك تسويتها أولًا، أو استخدام صلاحية إغلاق الوردية مع إبقاء الطلبات المفتوحة');
   });
 
   it('shows the safe auto-close policy in branch settings', () => {
