@@ -131,6 +131,18 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
       expect(rows).toHaveLength(1);
       expect(Number(rows[0].available_quantity)).toBe(0);
       expect(rows[0].is_available).toBe(false);
+
+      const sellability = await q<{ is_sellable: boolean; raw_shortage_only: boolean; availability_error: string | null }>(
+        `SELECT is_sellable,raw_shortage_only,availability_error
+         FROM public.get_pos_product_sellability($1,$2,100000)
+         WHERE product_id=$3`,
+        [branchId, warehouseId, readyProductId],
+      );
+      expect(sellability).toEqual([{
+        is_sellable: true,
+        raw_shortage_only: false,
+        availability_error: null,
+      }]);
     });
   });
 
@@ -152,6 +164,18 @@ describe.skipIf(skip)('POS availability authoritative zero vs unknown source', (
       expect(rows).toEqual([{
         available_quantity: '0',
         is_available: false,
+        raw_shortage_only: false,
+        availability_error: 'MANUFACTURED_UNIT_HAS_NO_RECIPE',
+      }]);
+
+      const sellability = await q<{ is_sellable: boolean; raw_shortage_only: boolean; availability_error: string | null }>(
+        `SELECT is_sellable,raw_shortage_only,availability_error
+         FROM public.get_pos_product_sellability($1,$2,100000)
+         WHERE product_id=$3`,
+        [branchId, warehouseId, unresolvedProductId],
+      );
+      expect(sellability).toEqual([{
+        is_sellable: false,
         raw_shortage_only: false,
         availability_error: 'MANUFACTURED_UNIT_HAS_NO_RECIPE',
       }]);
