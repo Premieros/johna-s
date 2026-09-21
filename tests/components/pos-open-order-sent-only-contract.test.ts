@@ -30,6 +30,9 @@ describe('POS sent-only settlement contract', () => {
     expect(publicHook).toContain('settlementPreview.total');
     expect(publicHook).toContain('buildSettlementReceipt(preview');
     expect(publicHook).toContain('buildReceiptThermalText(receipt, input.effSettings, lang, isAr)');
+    expect(publicHook).toContain('buildReceiptFixedTemplate(receipt, input.effSettings, lang, isAr)');
+    expect(publicHook).toContain('template,');
+    expect(publicHook).toContain('paperWidthMm: APPROVED_FIXED_THERMAL_WIDTH_MM');
     expect(publicHook).toContain('enqueueCloudOpenOrderPrint({');
   });
 
