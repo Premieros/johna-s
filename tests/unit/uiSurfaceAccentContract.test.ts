@@ -18,12 +18,13 @@ describe('UI surface accent and typography contract', () => {
     expect(css).not.toContain('--ui-page: 0 0 0;');
   });
 
-  it('provides reusable RTL-aware accent strips with semantic colors', () => {
+  it('provides reusable semantic tints without colored card edge strips', () => {
     const css = read('src/index.css');
 
-    expect(css).toContain('.ui-accent-card::before');
-    expect(css).toContain('inset-inline-start: 0;');
-    expect(css).toContain('.ui-accent-top::before');
+    expect(css).toContain('linear-gradient(135deg, rgb(var(--ui-accent-strip) / 0.045)');
+    expect(css).not.toContain('.ui-accent-card::before');
+    expect(css).not.toContain('.ui-accent-top::before');
+    expect(css).not.toContain('inset-inline-start: 0;');
     expect(css).toContain('.ui-accent-primary');
     expect(css).toContain('.ui-accent-purchase');
     expect(css).toContain('.ui-accent-inventory');
@@ -91,6 +92,18 @@ describe('UI surface accent and typography contract', () => {
     expect(users).toContain('ui-accent-system');
     expect(branches).toContain('ui-accent-system');
     expect(approvals).toContain('ui-accent-system');
+  });
+
+  it('lets the dashboard consume the full available shell width without duplicate horizontal padding', () => {
+    const dashboard = read('src/features/dashboard/pages/DashboardDataPage.tsx');
+    const layout = read('src/components/Layout.tsx');
+
+    expect(dashboard).toContain('w-full min-w-0 bg-ui-page');
+    expect(dashboard).toContain('className="w-full min-w-0 space-y-5"');
+    expect(dashboard).not.toContain('mx-auto max-w-[1560px]');
+    expect(dashboard).not.toContain('bg-ui-page px-4 py-5 sm:px-7 sm:py-7');
+    expect(layout).toContain("const fullWidthContent = location.pathname === APP_ROUTES.dashboard");
+    expect(layout).toContain("fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'");
   });
 
   it('preserves the dashboard StandBy strip as intentional true black', () => {
