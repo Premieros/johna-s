@@ -590,10 +590,10 @@ export function PurchasesPage() {
         />
       )}
 
-      <DesignPanel testId="purchases-search-panel">
+      <DesignPanel testId="purchases-search-panel" className="ui-accent-purchase">
         <DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="purchases-search" />
       </DesignPanel>
-      <DesignPanel testId="purchases-table-panel">
+      <DesignPanel testId="purchases-table-panel" className="ui-accent-purchase">
         <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={viewPurchase} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
