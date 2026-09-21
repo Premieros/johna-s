@@ -109,6 +109,16 @@ export const floorPlan = {
     return rpc<RpcResult & { table_id?: string }>('floor_plan_update_table', p);
   },
 
+  async setMainAreaTableCount(p: { p_branch_id: string; p_count: number }): ApiResult<RpcResult & {
+    previous_count?: number;
+    main_area_table_count?: number;
+  }> {
+    return rpc<RpcResult & {
+      previous_count?: number;
+      main_area_table_count?: number;
+    }>('floor_plan_set_main_area_table_count', p);
+  },
+
   async setTableStatus(p: { p_table_id: string; p_status: string }): ApiResult<RpcResult> {
     return rpc<RpcResult>('set_table_status', p);
   },

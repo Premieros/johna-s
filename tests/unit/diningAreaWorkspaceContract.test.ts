@@ -42,16 +42,38 @@ describe('dining area workspace and language lock contract', () => {
     expect(configurable).toContain('trg_sync_main_area_table_count');
   });
 
-  it('uses canonical floor-plan RPCs for table creation and updates', () => {
+  it('uses canonical floor-plan RPCs for table creation, updates and Main Area count', () => {
     const api = read('src/api/domains/floorPlan.ts');
     const activeOrders = read('src/features/pos/pages/ActiveOrdersPage.tsx');
+    const migration = read('supabase/migrations/20260921103000_floor_plan_main_area_table_count_rpc.sql');
 
     expect(api).toContain("'floor_plan_add_table'");
     expect(api).toContain("'floor_plan_update_table'");
+    expect(api).toContain("'floor_plan_set_main_area_table_count'");
     expect(activeOrders).toContain('api.floorPlan.addTable');
     expect(activeOrders).toContain('api.floorPlan.updateTable');
+    expect(activeOrders).toContain('api.floorPlan.setMainAreaTableCount');
+    expect(migration).toContain("public.can_permission('floor_plan.manage')");
+    expect(migration).toContain('public.user_may_access_branch(p_branch_id)');
+    expect(migration).toContain('MAIN_AREA_TABLE_LIMIT_BUSY');
     expect(activeOrders).not.toContain("supabase.from('dining_tables').insert(payload)");
     expect(activeOrders).not.toContain("supabase.from('dining_tables').update(payload)");
+  });
+
+  it('shows only active POS tables and exposes the Main Area count editor in both table workspaces', () => {
+    const service = read('src/features/pos/services/posOrders.ts');
+    const sidebar = read('src/features/pos/components/tables/PosTablesSidebar.tsx');
+    const floorPlan = read('src/features/pos/components/floor/TableFloorPlan.tsx');
+    const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
+
+    expect(service).toContain(".eq('is_active', true)");
+    expect(sidebar).toContain('data-testid="pos-main-area-count-edit"');
+    expect(sidebar).toContain('data-testid="pos-main-area-count-input"');
+    expect(sidebar).toContain('data-testid="pos-main-area-count-save"');
+    expect(sidebar).toContain("can('floor_plan.manage')");
+    expect(floorPlan).toContain('data-testid="main-area-table-count-edit"');
+    expect(floorPlan).not.toContain('ثابتة · 50 طاولة');
+    expect(workspace).toContain('branchId={effectiveBranch}');
   });
 
   it('exposes an explicit language lock control in Settings', () => {

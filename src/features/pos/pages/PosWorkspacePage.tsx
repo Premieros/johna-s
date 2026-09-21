@@ -853,6 +853,7 @@ export function PosWorkspacePage() {
         {/* Tables-first landing stays available on phones, tablets, and desktop. */}
         <div data-testid="pos-tables-landing-shell" className="flex h-full shrink-0">
           <PosTablesSidebar
+            branchId={effectiveBranch}
             tables={tables}
             areas={diningAreas}
             ordersByTable={ordersByTable}

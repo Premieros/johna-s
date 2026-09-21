@@ -56,6 +56,9 @@ export function ActiveOrdersPage() {
   const [editTarget, setEditTarget] = useState<DiningTable | null>(null);
   const [areaModal, setAreaModal] = useState(false);
   const [tableModal, setTableModal] = useState(false);
+  const [mainAreaCountModal, setMainAreaCountModal] = useState(false);
+  const [mainAreaCount, setMainAreaCount] = useState(50);
+  const [mainAreaCountSaving, setMainAreaCountSaving] = useState(false);
 
   const [areaName, setAreaName] = useState('');
   const [tableForm, setTableForm] = useState({
@@ -222,7 +225,7 @@ export function ActiveOrdersPage() {
     if (!result?.success) {
       const code = result?.error || t('error');
       const message = code === 'DEFAULT_AREA_FIXED_50'
-        ? (isAr ? 'المنطقة الأساسية ثابتة على 50 طاولة. أضف الطاولة إلى منطقة أخرى.' : 'Main Area is fixed at 50 tables. Add the table to another area.')
+        ? (isAr ? 'لا يمكن إضافة طاولة مخصصة داخل المنطقة الأساسية. استخدم زر تعديل العدد لتغيير عدد طاولاتها.' : 'Custom tables cannot be added to Main Area. Use Edit count to change its table count.')
         : code === 'DEFAULT_TABLE_IDENTITY_FIXED'
           ? (isAr ? 'اسم ومكان الطاولة الأساسية ثابتان.' : 'The default table name and area are fixed.')
           : (result?.detail || code);
@@ -251,6 +254,45 @@ export function ActiveOrdersPage() {
     if (error) { show(error.message, 'error'); return; }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
     await loadAreas();
+  };
+
+  const openMainAreaCountEditor = (_area: DiningArea, currentCount: number) => {
+    setMainAreaCount(Math.max(1, currentCount || 1));
+    setMainAreaCountModal(true);
+  };
+
+  const saveMainAreaCount = async () => {
+    const nextCount = Math.trunc(Number(mainAreaCount));
+    if (!effectiveBranch || nextCount < 1 || nextCount > 50) {
+      show(isAr ? 'عدد الطاولات يجب أن يكون من 1 إلى 50.' : 'Table count must be between 1 and 50.', 'error');
+      return;
+    }
+
+    setMainAreaCountSaving(true);
+    try {
+      const { data, error } = await api.floorPlan.setMainAreaTableCount({
+        p_branch_id: effectiveBranch,
+        p_count: nextCount,
+      });
+      if (error) {
+        show(error.message, 'error');
+        return;
+      }
+      const result = data as (RpcResult & { main_area_table_count?: number }) | null;
+      if (!result?.success) {
+        const message = result?.error === 'MAIN_AREA_TABLE_LIMIT_BUSY'
+          ? (isAr
+            ? 'لا يمكن تقليل العدد لأن هناك طاولة أعلى من العدد المطلوب مشغولة أو عليها طلب مفتوح.'
+            : 'Cannot reduce the count because a table above the requested limit is occupied or has an open order.')
+          : result?.detail || result?.error || t('error');
+        show(message, 'error');
+        return;
+      }
+      show(isAr ? `تم ضبط المنطقة الأساسية على ${nextCount} طاولة.` : `Main Area set to ${nextCount} tables.`, 'success');
+      setMainAreaCountModal(false);
+    } finally {
+      setMainAreaCountSaving(false);
+    }
   };
 
   const orderItemsOf = (order: Order) => itemsByOrder[order.id] || [];
@@ -326,6 +368,7 @@ export function ActiveOrdersPage() {
               onSelectTable={setTableTarget}
               onAddTable={openAddTable}
               onDeleteArea={deleteArea}
+              onEditDefaultAreaCount={openMainAreaCountEditor}
             />
           </div>
 
@@ -480,6 +523,38 @@ export function ActiveOrdersPage() {
             </div>
           );
         })()}
+      </Modal>
+
+      <Modal
+        open={mainAreaCountModal}
+        onClose={() => setMainAreaCountModal(false)}
+        title={isAr ? 'تعديل عدد طاولات المنطقة الأساسية' : 'Edit Main Area table count'}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm font-medium leading-6 text-ui-muted">
+            {isAr
+              ? 'حدد عدد الطاولات النشطة والظاهرة في المنطقة الأساسية من 1 إلى 50.'
+              : 'Choose how many Main Area tables are active and visible, from 1 to 50.'}
+          </p>
+          <input
+            data-testid="floor-plan-main-area-count-input"
+            type="number"
+            min={1}
+            max={50}
+            value={mainAreaCount}
+            onChange={(e) => setMainAreaCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+            className="w-full rounded-xl border border-ui-border bg-ui-surface-raised px-3 py-2.5 text-center text-lg font-black tabular-nums text-ui-text focus:ring-2 focus:ring-ui-ring"
+          />
+          <Button
+            data-testid="floor-plan-main-area-count-save"
+            className="w-full"
+            disabled={mainAreaCountSaving}
+            onClick={() => void saveMainAreaCount()}
+          >
+            {mainAreaCountSaving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ العدد' : 'Save count')}
+          </Button>
+        </div>
       </Modal>
 
       <Modal open={areaModal} onClose={() => setAreaModal(false)} title={t('addArea')} size="sm">

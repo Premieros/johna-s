@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bike, Car, ListOrdered, Search, ShoppingBag, Utensils } from 'lucide-react';
+import { Bike, Car, ListOrdered, Pencil, Search, ShoppingBag, Utensils } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
-import type { DiningArea, DiningTable, Order, OrderItem } from '@/lib/types';
+import { useToast } from '@/components/Toast';
+import { Modal } from '@/components/Modal';
+import { Button } from '@/components/Button';
+import { useCan } from '@/lib/permissions';
+import * as api from '@/api';
+import type { DiningArea, DiningTable, Order, OrderItem, RpcResult } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
 import { TableCard } from './TableCard';
 
 type TableFilter = 'all' | 'available' | 'occupied';
 
 interface PosTablesSidebarProps {
+  branchId: string;
   tables: DiningTable[];
   areas: DiningArea[];
   ordersByTable: Record<string, Order[]>;
@@ -31,6 +37,7 @@ interface PosTablesSidebarProps {
 
 export function PosTablesSidebar(props: PosTablesSidebarProps) {
   const {
+    branchId,
     tables,
     areas,
     ordersByTable,
@@ -51,11 +58,17 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
     onSelectDelivery,
   } = props;
   const { lang } = useLanguage();
+  const { show } = useToast();
+  const can = useCan();
   const isAr = lang === 'ar';
+  const canManageFloorPlan = can('floor_plan.manage');
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<TableFilter>('all');
   const [flowStarted, setFlowStarted] = useState(false);
   const [selectedAreaId, setSelectedAreaId] = useState('');
+  const [countModalOpen, setCountModalOpen] = useState(false);
+  const [mainAreaCount, setMainAreaCount] = useState(50);
+  const [savingCount, setSavingCount] = useState(false);
 
   useEffect(() => {
     const handleExternalFlowStart = () => setFlowStarted(true);
@@ -107,6 +120,58 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
       return table.name.toLowerCase().includes(q) || orders.some((order) => order.order_number?.toLowerCase().includes(q));
     });
   }, [areaTables, ordersByTable, searchQuery, filter]);
+
+  const defaultArea = useMemo(() => orderedAreas.find((area) => area.is_default) || null, [orderedAreas]);
+  const defaultAreaCount = useMemo(
+    () => defaultArea ? tables.filter((table) => table.area_id === defaultArea.id).length : 0,
+    [tables, defaultArea],
+  );
+
+  const openMainAreaCountEditor = () => {
+    setMainAreaCount(Math.max(1, defaultAreaCount || 1));
+    setCountModalOpen(true);
+  };
+
+  const saveMainAreaCount = async () => {
+    const nextCount = Math.trunc(Number(mainAreaCount));
+    if (!branchId || nextCount < 1 || nextCount > 50) {
+      show(isAr ? 'عدد الطاولات يجب أن يكون من 1 إلى 50.' : 'Table count must be between 1 and 50.', 'error');
+      return;
+    }
+
+    setSavingCount(true);
+    try {
+      const { data, error } = await api.floorPlan.setMainAreaTableCount({
+        p_branch_id: branchId,
+        p_count: nextCount,
+      });
+      if (error) {
+        show(error.message, 'error');
+        return;
+      }
+
+      const result = data as (RpcResult & { main_area_table_count?: number }) | null;
+      if (!result?.success) {
+        const message = result?.error === 'MAIN_AREA_TABLE_LIMIT_BUSY'
+          ? (isAr
+            ? 'لا يمكن تقليل العدد لأن هناك طاولة أعلى من العدد المطلوب مشغولة أو عليها طلب مفتوح.'
+            : 'Cannot reduce the count because a table above the requested limit is occupied or has an open order.')
+          : result?.error === 'PERMISSION_DENIED'
+            ? (isAr ? 'لا تملك صلاحية إدارة مخطط الطاولات.' : 'You do not have floor-plan management permission.')
+            : result?.detail || result?.error || (isAr ? 'تعذر تعديل عدد الطاولات.' : 'Could not update the table count.');
+        show(message, 'error');
+        return;
+      }
+
+      show(
+        isAr ? `تم ضبط المنطقة الأساسية على ${nextCount} طاولة.` : `Main Area set to ${nextCount} tables.`,
+        'success',
+      );
+      setCountModalOpen(false);
+    } finally {
+      setSavingCount(false);
+    }
+  };
 
   // The POS is tables-first. Once a real table/order is selected, or the
   // operator explicitly starts a quick non-table order, the landing disappears
@@ -203,23 +268,36 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
         </div>
 
         {orderedAreas.length > 0 && (
-          <div data-testid="pos-table-area-tabs" className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {orderedAreas.map((area) => {
-              const count = tables.filter((table) => table.area_id === area.id && table.is_active).length;
-              const active = selectedAreaId === area.id;
-              return (
-                <button
-                  key={area.id}
-                  type="button"
-                  data-testid={`pos-table-area-${area.id}`}
-                  onClick={() => setSelectedAreaId(area.id)}
-                  className={`flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-xs font-black transition ${active ? 'border-ui-primary bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}
-                >
-                  <span>{area.name}</span>
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20' : 'bg-ui-surface'}`}>{count}</span>
-                </button>
-              );
-            })}
+          <div className="mt-3 flex items-center gap-2">
+            <div data-testid="pos-table-area-tabs" className="flex min-w-0 flex-1 gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {orderedAreas.map((area) => {
+                const count = tables.filter((table) => table.area_id === area.id).length;
+                const active = selectedAreaId === area.id;
+                return (
+                  <button
+                    key={area.id}
+                    type="button"
+                    data-testid={`pos-table-area-${area.id}`}
+                    onClick={() => setSelectedAreaId(area.id)}
+                    className={`flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-xs font-black transition ${active ? 'border-ui-primary bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}
+                  >
+                    <span>{area.name}</span>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20' : 'bg-ui-surface'}`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {canManageFloorPlan && defaultArea && selectedAreaId === defaultArea.id && (
+              <button
+                type="button"
+                data-testid="pos-main-area-count-edit"
+                onClick={openMainAreaCountEditor}
+                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border bg-ui-page px-3 text-xs font-black text-ui-text transition hover:border-ui-primary hover:text-ui-primary"
+              >
+                <Pencil className="h-4 w-4" />
+                {isAr ? 'تعديل العدد' : 'Edit count'}
+              </button>
+            )}
           </div>
         )}
 
@@ -258,6 +336,43 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
           </div>
         ) : <div className="py-16 text-center text-sm font-bold text-ui-muted">{isAr ? 'لا توجد طاولات مطابقة' : 'No matching tables'}</div>}
       </div>
+
+      <Modal
+        open={countModalOpen}
+        onClose={() => setCountModalOpen(false)}
+        title={isAr ? 'تعديل عدد طاولات المنطقة الأساسية' : 'Edit Main Area table count'}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm font-medium leading-6 text-ui-muted">
+            {isAr
+              ? 'حدد عدد الطاولات الظاهرة والنشطة في Main Area. الطاولات الأعلى من العدد ستبقى محفوظة في النظام ولكن لن تظهر للبيع.'
+              : 'Choose how many Main Area tables are active and visible. Higher table numbers stay preserved but are hidden from selling.'}
+          </p>
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-ui-text">
+              {isAr ? 'عدد الطاولات' : 'Table count'}
+            </label>
+            <input
+              data-testid="pos-main-area-count-input"
+              type="number"
+              min={1}
+              max={50}
+              value={mainAreaCount}
+              onChange={(event) => setMainAreaCount(Math.max(1, Math.min(50, Number(event.target.value) || 1)))}
+              className="w-full rounded-xl border border-ui-border bg-ui-surface-raised px-3 py-2.5 text-center text-lg font-black tabular-nums text-ui-text focus:ring-2 focus:ring-ui-ring"
+            />
+          </div>
+          <Button
+            data-testid="pos-main-area-count-save"
+            className="w-full"
+            disabled={savingCount}
+            onClick={() => void saveMainAreaCount()}
+          >
+            {savingCount ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ العدد' : 'Save count')}
+          </Button>
+        </div>
+      </Modal>
     </aside>
   );
 }
