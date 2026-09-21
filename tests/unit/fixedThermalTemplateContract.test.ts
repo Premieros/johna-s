@@ -167,4 +167,15 @@ describe('fixed thermal receipt template contract', () => {
     expect(renderer).toContain("$noteLabel = $(if ($isAr) { 'ملاحظة: ' } else { 'Note: ' })");
     expect(renderer).toContain('$doc.Print()');
   });
+  it('updates only the Windows renderer without reinstalling or remapping printers', () => {
+    const updater = read('local-print-agent/update-renderer.cmd');
+    expect(updater).toContain('template-print.ps1');
+    expect(updater).toContain('raw.githubusercontent.com/Premieros/johna-s/main/local-print-agent/template-print.ps1');
+    expect(updater).toContain("Copy-Item -LiteralPath $target -Destination ($target + '.bak-' + $stamp) -Force");
+    expect(updater).toContain('Move-Item -LiteralPath $tmp -Destination $target -Force');
+    expect(updater).not.toContain('printer-config.json');
+    expect(updater).not.toContain('agent.cjs');
+    expect(updater).not.toContain('taskkill');
+  });
+
 });
