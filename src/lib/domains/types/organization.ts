@@ -31,6 +31,7 @@ export interface BranchSettings {
   business_day_start: string;
   business_day_end: string;
   auto_close_shift_at_day_end: boolean;
+  main_area_table_count: number;
   created_at: string;
   updated_at: string;
 }
