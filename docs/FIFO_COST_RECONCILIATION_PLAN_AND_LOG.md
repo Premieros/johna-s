@@ -211,6 +211,49 @@ Before any Production application:
 - No printing code touched.
 - No recipes or stock quantities changed by this workstream yet.
 
+### 2026-09-21 — FIFO implementation / CI iteration
+
+- Draft PR: #295 (`development/fifo-cost-reconciliation` -> `main`).
+- First CI run #2205:
+  - lint ✅
+  - typecheck ✅
+  - unit ✅
+  - build ✅
+  - Fresh DB/schema ✅
+  - integration ❌ with three actionable failures.
+- CI #2205 failures and fixes:
+  1. `get_costing_sales_summary` temporarily lost the existing `history.unlimited` clamp contract -> restored `history_clamp_from/to`.
+  2. legacy negative-cycle test expected aggregate average cost 9; true FIFO debt settlement leaves 2 receipt units at real cost 3 -> regression expectation updated to 3.
+  3. new FIFO integration fixture duplicated auto-seeded account mappings -> fixture now reuses canonical seeded mappings.
+- Historical read-only replay on Production (no writes) found:
+  - 3,210 zero-cost oversold raw movements;
+  - total oversold quantity 14,613.7341;
+  - 1,000 historical consumption rows would change valuation under true FIFO;
+  - net historical valuation delta observed in dry replay: ~21,401.50;
+  - 10,692.0107 quantity remains unresolved because no later receipt exists yet;
+  - 13 affected historical purchase-return movements were discovered and are now explicitly supported.
+- Production ledger/batch integrity check:
+  - 11,890 raw ledger rows;
+  - 0 missing batch numbers;
+  - 0 ledger rows without matching batch;
+  - 0 duplicate batch matches;
+  - 0 aggregate ledger-vs-batch quantity mismatches.
+- Added historical backfill migration `20260921183000_raw_fifo_historical_backfill.sql`:
+  - prepare/apply split; migration never auto-runs the backfill;
+  - immutable run/plan/allocation/batch-target records;
+  - stale-ledger and changed-batch guards before apply;
+  - deterministic debt-first + FIFO receipt replay;
+  - signed valuation deltas;
+  - purchase-return valuation support;
+  - net stock quantity invariant;
+  - idempotent already-applied behavior.
+- Added unit backfill contract test and integration backfill safety/idempotency test.
+- Added signed-delta handling so historical FIFO can both raise and lower costs safely.
+- Added guards preventing corrected sale/production/kitchen cost from falling below zero.
+- Added temp-table cleanup so prepare can be rerun safely inside one test transaction.
+- Current verification run after these fixes: CI #2214 (pending at time of this log update).
+- Production remains unchanged: no FIFO migration, no historical backfill, no printing changes.
+
 ## Next Steps
 
 1. Design additive schema for FIFO debt settlement/reconciliation.
