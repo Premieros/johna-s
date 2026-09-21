@@ -84,17 +84,58 @@ Updated `tests/unit/diningAreaWorkspaceContract.test.ts` to lock:
 - removal of hard-coded 50 label.
 
 ## Production
-Not applied yet.
+**Status: APPLIED — 2026-09-21**
 
-Required sequence:
-1. Open PR from this branch.
-2. Exact-head Full Verify Green.
-3. Re-check latest `main`.
-4. Merge.
-5. Wait for post-merge Verify/DB at minimum.
-6. Apply new RPC migration to Production.
-7. Confirm Cleopatra Main Area renders exactly 20 in POS.
-8. Confirm Smouha remains 50.
+### Merge
+- PR #290 merged to `main`.
+- Merge commit: `320413ed08a037c25d57a05c26e777a9e97da018`.
+
+### Verification before merge
+- Exact PR head `b6f5c960e99076b00d6c2ed14f286212b6c53793` passed Full Verify:
+  - frontend API contract ✅
+  - lint ✅
+  - TypeScript ✅
+  - full app/test typecheck ✅
+  - unit ✅
+  - build ✅
+  - canonical migrations/schema ✅
+  - integration + security/RLS ✅
+  - Browser Smoke ✅
+
+### Production RPC application
+- Supabase project: `azzdesuowpdcoflmyezn`
+- Applied migration: `floor_plan_main_area_table_count_rpc`
+- RPC verified present:
+  `public.floor_plan_set_main_area_table_count(p_branch_id uuid, p_count integer)`
+- RPC remains `SECURITY DEFINER` with explicit Permission-First and branch-access checks.
+
+### Production data after apply
+Cleopatra:
+- configured Main Area count: **20**
+- canonical rows: **50**
+- active: **20**
+- inactive: **30**
+- active range: **Table 01..Table 20**
+
+Smouha:
+- configured Main Area count: **50**
+- active: **50**
+- inactive: **0**
+
+No branch table-count setting was changed while applying the UI/RPC fix.
+
+### Deployment
+- First Production parity attempt ran before the new RPC migration was applied and failed for the expected missing-route reason.
+- After applying the RPC migration, the failed deployment workflow was rerun.
+- Production API parity then passed ✅.
+- GitHub Pages deployment was triggered from the same `main` merge tree.
+
+### User-visible behavior
+- POS table workspace now loads active dining tables only.
+- Cleopatra Main Area therefore shows **20**, not 50.
+- Users with `floor_plan.manage` see **تعديل العدد / Edit count** beside Main Area.
+- The same permission-gated count editor is available in the Active Orders / Floor Plan surface.
+- Inactive canonical tables remain stored for history and reversibility but are not shown for selling.
 
 
 ## Verification log
