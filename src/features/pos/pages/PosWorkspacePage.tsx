@@ -131,13 +131,14 @@ export function PosWorkspacePage() {
     reloadShift();
   }, [reloadShift]);
 
-  const loadStock = useCallback(async (branchId: string) => {
+  const loadSellabilityStatus = useCallback(async (branchId: string) => {
     if (!branchId) {
       setStockMap({});
       setRawShortageMap({});
       setAvailabilityErrorMap({});
       return;
     }
+
     const { data: warehouses } = await supabase
       .from('warehouses')
       .select('id,is_default,created_at')
@@ -153,10 +154,11 @@ export function PosWorkspacePage() {
       setAvailabilityErrorMap({});
       return;
     }
-    const { data, error } = await supabase.rpc('get_pos_product_availability', {
+
+    const { data, error } = await supabase.rpc('get_pos_product_sellability', {
       p_branch_id: branchId,
       p_warehouse_id: warehouseId,
-      p_cap: 100000,
+      p_probe_quantity: 100000,
     });
     if (error) {
       setStockMap({});
@@ -164,23 +166,25 @@ export function PosWorkspacePage() {
       setAvailabilityErrorMap({});
       return;
     }
-    const map: Record<string, number> = {};
+
     const rawShortage: Record<string, boolean> = {};
     const availabilityErrors: Record<string, string> = {};
-    for (const row of (data || []) as { product_id: string; available_quantity: number | string; raw_shortage_only?: boolean; availability_error?: string | null }[]) {
-      map[row.product_id] = Number(row.available_quantity) || 0;
+    for (const row of (data || []) as {
+      product_id: string;
+      is_sellable?: boolean;
+      raw_shortage_only?: boolean;
+      availability_error?: string | null;
+    }[]) {
       if (row.raw_shortage_only) rawShortage[row.product_id] = true;
       if (row.availability_error) availabilityErrors[row.product_id] = row.availability_error;
     }
-    setStockMap(map);
+
+    // Quantity is not a client-side saleability gate. Keep the legacy map empty
+    // so the POS wrapper cannot accidentally reintroduce maximum-quantity scans.
+    setStockMap({});
     setRawShortageMap(rawShortage);
     setAvailabilityErrorMap(availabilityErrors);
-    void cachePosData({ branchId, stockMap: map, rawShortageOnly: rawShortage });
-  }, [cachePosData]);
-
-  const handleInventoryChanged = useCallback(() => {
-    if (effectiveBranch) void loadStock(effectiveBranch);
-  }, [effectiveBranch, loadStock]);
+  }, []);
 
   const currentBranchName = branches.find((b) => b.id === effectiveBranch)?.name || effectiveBranch;
 
@@ -194,15 +198,8 @@ export function PosWorkspacePage() {
     products,
     stockMap,
     rawShortageOnly: rawShortageMap,
-    onInventoryChanged: handleInventoryChanged,
   });
   const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;
-
-  // Refresh after settlement as a second synchronization point. Kitchen send
-  // already owns the physical deduction and refreshes through the callback.
-  useEffect(() => {
-    if (pos.receiptSaleId && effectiveBranch) void loadStock(effectiveBranch);
-  }, [pos.receiptSaleId, effectiveBranch, loadStock]);
 
   useEffect(() => {
     if (pos.receiptSaleId) setMobileOrderOpen(false);
@@ -525,8 +522,13 @@ export function PosWorkspacePage() {
   }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData]);
 
   useEffect(() => {
-    if (effectiveBranch) void loadStock(effectiveBranch);
-  }, [effectiveBranch, loadStock]);
+    if (effectiveBranch) void loadSellabilityStatus(effectiveBranch);
+    else {
+      setStockMap({});
+      setRawShortageMap({});
+      setAvailabilityErrorMap({});
+    }
+  }, [effectiveBranch, loadSellabilityStatus]);
 
   useEffect(() => {
     if (!effectiveBranch) {
@@ -668,7 +670,6 @@ export function PosWorkspacePage() {
     }
     setActiveBranchId(v);
     pos.resetWorkspace();
-    void loadStock(v);
   };
 
   if (loading) {

@@ -8,7 +8,8 @@ describe('POS availability gate contract', () => {
     const browser = read('src/features/pos/components/catalog/ProductBrowser.tsx');
     const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 
-    expect(workspace).toContain("supabase.rpc('get_pos_product_availability'");
+    expect(workspace).toContain("supabase.rpc('get_pos_product_sellability'");
+    expect(workspace).not.toContain("supabase.rpc('get_pos_product_availability'");
     expect(browser).not.toContain('const noRecipe =');
     expect(browser).not.toContain("t('noRecipe')");
     expect(browser).toContain('const ensureSellable = (product: Product) =>');

@@ -37,7 +37,6 @@ type ActivityPresentation = {
 
 const DISPLAY_MS = 4200;
 const SLIDE_MS = 280;
-const POLL_MS = 5000;
 const MAX_RECENT = 30;
 
 function detailValue(details: Record<string, unknown> | null, keys: string[]): unknown {
@@ -278,7 +277,6 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
     void loadActivity();
     if (!canViewAudit) return;
 
-    const poll = window.setInterval(() => void loadActivity(), POLL_MS);
     const channel = supabase.channel(`dashboard-standby-${user?.id || 'anonymous'}-${branchFilter || 'all'}`);
     if (branchFilter) {
       channel.on(
@@ -293,10 +291,13 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
         () => void loadActivity(),
       );
     }
-    channel.subscribe();
+    channel.subscribe((status) => {
+      // Realtime does not replay rows missed during a disconnect. Refresh once
+      // every time the channel reaches SUBSCRIBED, including reconnects.
+      if (status === 'SUBSCRIBED') void loadActivity();
+    });
 
     return () => {
-      window.clearInterval(poll);
       void supabase.removeChannel(channel);
     };
   }, [branchFilter, canViewAudit, loadActivity, user?.id]);

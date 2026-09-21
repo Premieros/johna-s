@@ -35,8 +35,10 @@ describe('POS sell-through and verified-configuration contract', () => {
   });
 
   it('still loads server availability/configuration data without inventing success', () => {
-    expect(workspace).toContain("await supabase.rpc('get_pos_product_availability'");
+    expect(workspace).toContain("await supabase.rpc('get_pos_product_sellability'");
+    expect(workspace).not.toContain("await supabase.rpc('get_pos_product_availability'");
     expect(workspace).toContain('if (row.raw_shortage_only) rawShortage[row.product_id] = true;');
+    expect(workspace).not.toContain('p_cap: 100000');
     expect(workspace).toContain('if (row.availability_error) availabilityErrors[row.product_id] = row.availability_error;');
     expect(workspace).toContain('setStockMap({});\n      setRawShortageMap({});\n      setAvailabilityErrorMap({});');
     expect(offline).toContain('rawShortageOnly: data.rawShortageOnly?.[productId] === true');
