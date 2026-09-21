@@ -30,6 +30,7 @@ describe('UI surface accent and typography contract', () => {
     expect(css).toContain('.ui-accent-finance');
     expect(css).toContain('.ui-accent-alert');
     expect(css).toContain('.ui-accent-system');
+    expect(css.indexOf('.ui-accent-neutral')).toBeLessThan(css.indexOf('.ui-accent-primary'));
   });
 
   it('keeps Cairo for RTL, Inter for LTR and strengthens shared typography', () => {
@@ -54,11 +55,42 @@ describe('UI surface accent and typography contract', () => {
 
     expect(header).toContain('ui-accent-card ui-accent-neutral');
     expect(design).toContain('ui-accent-card ui-accent-system');
-    expect(tiles).toContain('ui-accent-card ui-accent-primary');
+    expect(tiles).toContain("accent?: 'primary' | 'purchase' | 'inventory' | 'finance' | 'alert' | 'system' | 'neutral'");
+    expect(tiles).toContain("const accentClass = `ui-accent-${item.accent || 'primary'}`");
+    expect(tiles).toContain('ui-accent-card ${accentClass}');
     expect(table).toContain('ui-accent-top ui-accent-neutral');
     expect(dashboard).toContain('ui-accent-finance');
     expect(dashboard).toContain('ui-accent-inventory');
     expect(dashboard).toContain('ui-accent-alert');
+  });
+
+  it('rolls semantic accents through safe inventory, purchase, finance, reports and admin surfaces', () => {
+    const inventory = read('src/features/inventory/pages/InventoryCenterPage.tsx');
+    const purchases = read('src/features/trade/pages/PurchasesPage.tsx');
+    const treasury = read('src/features/accounting/pages/TreasuryPage.tsx');
+    const financial = read('src/features/accounting/pages/FinancialReportsPage.tsx');
+    const reportShell = read('src/features/reporting/ReportingShell.tsx');
+    const reportFilter = read('src/features/reporting/ReportFilterBar.tsx');
+    const reportCard = read('src/features/reporting/ReportCard.tsx');
+    const users = read('src/features/admin/pages/UsersPage.tsx');
+    const branches = read('src/features/admin/pages/BranchesPage.tsx');
+    const approvals = read('src/features/admin/pages/ApprovalCenterPage.tsx');
+
+    expect(inventory).toContain("accent: 'inventory'");
+    expect(inventory).toContain('ui-accent-card ui-accent-inventory');
+    expect(purchases).toContain('className="ui-accent-purchase"');
+    expect(treasury).toContain('className="ui-accent-finance"');
+    expect(financial).toContain('className="ui-accent-finance"');
+    expect(reportShell).toContain('ui-accent-top ui-accent-system');
+    expect(reportFilter).toContain('ui-accent-system');
+    expect(reportCard).toContain('CATEGORY_ACCENTS');
+    expect(reportCard).toContain("sales: 'ui-accent-primary'");
+    expect(reportCard).toContain("inventory: 'ui-accent-inventory'");
+    expect(reportCard).toContain("financial: 'ui-accent-finance'");
+    expect(reportCard).toContain('break-words text-sm font-bold leading-5');
+    expect(users).toContain('ui-accent-system');
+    expect(branches).toContain('ui-accent-system');
+    expect(approvals).toContain('ui-accent-system');
   });
 
   it('preserves the dashboard StandBy strip as intentional true black', () => {
