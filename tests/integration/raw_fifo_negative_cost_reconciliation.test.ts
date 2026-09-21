@@ -14,9 +14,6 @@ describe.skipIf(skip)('Raw FIFO negative-cost reconciliation', () => {
   const warehouse = randomUUID();
   const warehouse2 = randomUUID();
   const unit = randomUUID();
-  const cogsAccount = randomUUID();
-  const inventoryAccount = randomUUID();
-
   const rawA = randomUUID();
   const rawB = randomUUID();
   const rawC = randomUUID();
@@ -93,19 +90,6 @@ describe.skipIf(skip)('Raw FIFO negative-cost reconciliation', () => {
         [id, code + '-' + randomUUID().slice(0, 6), name, branch, unit],
       );
     }
-
-    await client.query(
-      `INSERT INTO public.chart_of_accounts(id,branch_id,code,name,account_type,is_system,is_active)
-       VALUES
-       ($1,$3,$4,'FIFO COGS','expense',true,true),
-       ($2,$3,$5,'FIFO Inventory','asset',true,true)`,
-      [cogsAccount, inventoryAccount, branch, '5' + randomUUID().slice(0, 5), '1' + randomUUID().slice(0, 5)],
-    );
-    await client.query(
-      `INSERT INTO public.account_mappings(branch_id,semantic_key,account_id)
-       VALUES($1,'cogs',$2),($1,'inventory_fg',$3)`,
-      [branch, cogsAccount, inventoryAccount],
-    );
 
     for (const [id, invoice] of [
       [saleA, 'FIFO-SALE-A'],
