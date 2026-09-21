@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
 import { useLanguage } from '@/context/LanguageContext';
 import type { CartItem, DiningTable } from '@/lib/types';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 export type TransferItemLine = {
   item: CartItem;
@@ -61,7 +62,7 @@ export function TransferItemsModal({
       .then(({ data, error: fetchError }) => {
         if (cancelled) return;
         if (fetchError) {
-          setError(fetchError.message);
+          setError(userFacingErrorMessage(fetchError, isAr ? 'ar' : 'en'));
           setTables([]);
         } else {
           setTables((data as DiningTable[]) || []);
@@ -90,16 +91,14 @@ export function TransferItemsModal({
         p_target_table_id: selectedTableId,
       });
       if (rpcError) {
-        setError(rpcError.message);
+        setError(userFacingErrorMessage(rpcError, isAr ? 'ar' : 'en'));
         return;
       }
       if (!data?.success) {
-        const code = data?.error || '';
-        setError(
-          code === 'PERMISSION_DENIED'
-            ? (isAr ? 'لا تملك صلاحية نقل الأصناف بين الطاولات.' : 'You do not have permission to move items between tables.')
-            : data?.detail || code || (isAr ? 'تعذر نقل الأصناف.' : 'Could not move the selected items.'),
-        );
+        setError(userFacingErrorMessage(
+          data ?? (isAr ? 'تعذر نقل الأصناف.' : 'Could not move the selected items.'),
+          isAr ? 'ar' : 'en',
+        ));
         return;
       }
       onCompleted();
