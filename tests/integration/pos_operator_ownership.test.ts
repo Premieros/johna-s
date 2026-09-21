@@ -79,13 +79,20 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     );
     await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
 
-    // Both original operators have the same normal POS capabilities. User B intentionally
-    // starts without pos.order.transfer so transfer denial is permission-specific.
+    // Keep the owner fully operational. The second user starts with generic
+    // edit/hold access only; action-specific cross-operator permissions are
+    // covered in a dedicated contract test below.
     await client.query(`
       UPDATE public.roles
       SET permissions = (COALESCE(permissions, '[]'::jsonb) - 'pos.order.transfer')
         || '["pos.view","pos.order.create","pos.order.edit","pos.hold","pos.send_kitchen","pos.payment.take","pos.cancel_order","shifts.open"]'::jsonb
-      WHERE role IN ('cashier', 'branch_manager')
+      WHERE role = 'cashier';
+
+      UPDATE public.roles
+      SET permissions = (((COALESCE(permissions, '[]'::jsonb)
+        - 'pos.order.transfer') - 'pos.send_kitchen') - 'pos.payment.take') - 'pos.cancel_order'
+        || '["pos.view","pos.order.create","pos.order.edit","pos.hold","shifts.open"]'::jsonb
+      WHERE role = 'branch_manager';
     `);
 
     await client.query(
@@ -209,7 +216,8 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     expect(firstAttribution.rows[0].sent_by).toBe(ids.users.cashier);
     expect(firstAttribution.rows[0].created_by).toBe(ids.users.cashier);
 
-    // B has edit/cancel/payment capabilities, but none of them override ownership.
+    // Generic edit stays owner-scoped. Independent action permissions are not
+    // present on B yet, so cancel/payment/send fail on their own permission gate.
     const deniedEdit = await rpc(
       ids.users.branch_manager,
       `SELECT public.update_order($1, 'dine_in', $2, NULL, 2, 'B edit', $3::jsonb, 20, 0, 'amount', 0, 20, 'open') AS r`,
@@ -224,7 +232,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
       [orderId],
     );
     expect(deniedCancel.success).toBe(false);
-    expect(deniedCancel.error).toBe('ORDER_OPERATOR_REQUIRED');
+    expect(deniedCancel.error).toBe('PERMISSION_DENIED');
 
     const blockedInvoice = `OWN-BLOCK-${randomUUID()}`;
     const deniedPay = await rpc(
@@ -253,15 +261,15 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
       [blockedInvoice, ids.branchA, ids.shiftA, ids.whA, ids.users.branch_manager, item1, tableId, orderId],
     );
     expect(deniedPay.success).toBe(false);
-    expect(`${deniedPay.error || ''} ${deniedPay.detail || ''}`).toContain('ORDER_OPERATOR_REQUIRED');
+    expect(deniedPay.error).toBe('PERMISSION_DENIED');
     const blockedSale = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM public.sales WHERE invoice_number = $1`,
       [blockedInvoice],
     );
     expect(Number(blockedSale.rows[0].count)).toBe(0);
 
-    // A adds one unsent unit. B still cannot send that delta even with
-    // pos.send_kitchen because the order is still owned by A.
+    // A adds one unsent unit. B has not been granted the independent
+    // pos.send_kitchen action permission in this ownership-focused test.
     const item2 = JSON.stringify([{
       product_id: productId,
       unit_name: 'piece',
@@ -281,7 +289,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
 
     const deniedSend = await rpc(ids.users.branch_manager, `SELECT public.send_to_kitchen($1) AS r`, [orderId]);
     expect(deniedSend.success).toBe(false);
-    expect(`${deniedSend.error || ''} ${deniedSend.detail || ''}`).toContain('ORDER_OPERATOR_REQUIRED');
+    expect(deniedSend.error).toBe('PERMISSION_DENIED');
     expect(await batchQty()).toBe(stockBeforeDeniedSend);
 
     const deniedTableTransfer = await rpc(
