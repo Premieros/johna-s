@@ -64,7 +64,7 @@ describe('POS sell-through and verified-configuration contract', () => {
     expect(migration).toContain("'error', 'RAW_MATERIAL_NOT_IN_BRANCH'");
     expect(migration).toContain('availability_error := v_error;');
     expect(migration).toContain('raw_shortage_only := false;');
-    expect(browser).toContain("code === 'RAW_MATERIAL_NOT_IN_BRANCH'");
+    expect(browser).toContain("userFacingErrorMessage(code, isAr ? 'ar' : 'en')");
     expect(browser).toContain('const gated = !!availabilityError || !canAddToCart;');
     expect(browser).toContain('if (availabilityError) {');
     expect(browser).toContain('show(availabilityErrorLabel(availabilityError), \'error\');');
