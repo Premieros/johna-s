@@ -185,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     await api.admin.recordLoginSuccess({ p_user_id: activeSession.user.id }).catch(() => {});
     return { error: null };
-  }, [loadUser]);
+  }, [clearAuthState, loadUser]);
 
   const signIn = async (email: string, password: string) => {
     const trimmed = email.trim().toLowerCase();
