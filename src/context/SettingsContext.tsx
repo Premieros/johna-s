@@ -20,6 +20,9 @@ export function mergeEffectiveSettings(global: Settings, branch?: BranchSettings
     receipt_footer: branch.receipt_footer ?? global.receipt_footer,
     logo_url: branch.logo_url ?? global.logo_url,
     low_stock_threshold: branch.low_stock_threshold ?? global.low_stock_threshold,
+    // The legacy global invoice_prefix is intentionally not activated here.
+    // Only an explicit per-branch override affects newly allocated sale numbers.
+    branch_invoice_prefix: branch.invoice_prefix ?? null,
   };
 }
 
