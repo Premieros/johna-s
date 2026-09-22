@@ -175,6 +175,99 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     })
     : [];
 
+  // The authoritative RPC owns shift membership and financial totals, but it
+  // deliberately returns sale headers only. Enrich the report from those
+  // already-authorized sale ids so product / recipe sections cannot silently
+  // degrade to empty arrays.
+  const orderTypeMap = new Map<string, { count: number; total: number }>();
+  for (const sale of salesDetails) {
+    const type = sale.orderType || 'takeaway';
+    const current = orderTypeMap.get(type) || { count: 0, total: 0 };
+    current.count += 1;
+    current.total += Number(sale.total || 0);
+    orderTypeMap.set(type, current);
+  }
+
+  const productMap = new Map<string, { name: string; quantity: number; unitName: string; total: number }>();
+  const saleIds = Array.from(new Set(salesDetails.map((sale) => sale.saleId).filter(Boolean)));
+  if (saleIds.length > 0) {
+    const { data: saleItems, error: saleItemsError } = await supabase
+      .from('sale_items')
+      .select('sale_id,product_id,unit_name,quantity,unit_price,total,refunded_quantity,refunded_amount,product:products(name,name_en)')
+      .in('sale_id', saleIds);
+    if (saleItemsError) throw new Error(`SHIFT_REPORT_ITEMS_LOAD_FAILED: ${saleItemsError.message}`);
+
+    const itemRows = (saleItems || []) as unknown as Array<{
+      sale_id: string;
+      product_id: string | null;
+      unit_name?: string | null;
+      quantity: number;
+      unit_price: number;
+      total: number;
+      refunded_quantity?: number | null;
+      refunded_amount?: number | null;
+      product?: { name?: string; name_en?: string } | null;
+    }>;
+
+    for (const item of itemRows) {
+      const productId = item.product_id || `unlinked:${item.unit_name || 'item'}`;
+      const productName = item.product?.name || item.product?.name_en || item.unit_name || 'منتج';
+      const current = productMap.get(productId) || {
+        name: productName,
+        quantity: 0,
+        unitName: item.unit_name || 'قطعة',
+        total: 0,
+      };
+      const netQuantity = Math.max(0, Number(item.quantity || 0) - Number(item.refunded_quantity || 0));
+      const grossLineTotal = Number(item.total || (Number(item.quantity || 0) * Number(item.unit_price || 0)));
+      const netLineTotal = Math.max(0, grossLineTotal - Number(item.refunded_amount || 0));
+      if (netQuantity <= 0 && netLineTotal <= 0) continue;
+      current.quantity += netQuantity;
+      current.total += netLineTotal;
+      productMap.set(productId, current);
+    }
+  }
+
+  const ingredientsMap = new Map<string, { name: string; quantity: number; unit: string; estimatedCost: number }>();
+  const productIds = Array.from(productMap.keys()).filter((id) => !id.startsWith('unlinked:'));
+  if (productIds.length > 0 && raw.branch_id) {
+    const { data: recipes, error: recipesError } = await supabase
+      .from('recipes')
+      .select('product_id,yield_quantity,recipe_items(raw_material_id,quantity,wastage_percent,raw_material:raw_materials(name,default_cost,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)))')
+      .eq('branch_id', String(raw.branch_id))
+      .in('product_id', productIds);
+    if (recipesError) throw new Error(`SHIFT_REPORT_INGREDIENTS_LOAD_FAILED: ${recipesError.message}`);
+
+    for (const recipe of recipes || []) {
+      const sold = productMap.get(recipe.product_id);
+      if (!sold) continue;
+      const multiplier = sold.quantity / (Number(recipe.yield_quantity) || 1);
+      for (const recipeItem of recipe.recipe_items || []) {
+        const rawMaterial = recipeItem.raw_material as {
+          name?: string;
+          default_cost?: number;
+          measurement_unit?: { name?: string; symbol?: string; code?: string };
+        } | null;
+        const materialId = recipeItem.raw_material_id;
+        const consumed = Number(recipeItem.quantity || 0)
+          * multiplier
+          * (1 + Number(recipeItem.wastage_percent || 0) / 100);
+        const current = ingredientsMap.get(materialId) || {
+          name: rawMaterial?.name || 'مادة خام',
+          quantity: 0,
+          unit: rawMaterial?.measurement_unit?.symbol
+            || rawMaterial?.measurement_unit?.code
+            || rawMaterial?.measurement_unit?.name
+            || '',
+          estimatedCost: 0,
+        };
+        current.quantity += consumed;
+        current.estimatedCost += consumed * Number(rawMaterial?.default_cost || 0);
+        ingredientsMap.set(materialId, current);
+      }
+    }
+  }
+
   return {
     shiftId,
     branchId: String(raw.branch_id || ''),
@@ -197,10 +290,27 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     totalTaxes: Number(raw.taxes || 0),
     netSales: Number(raw.net_sales || 0),
     avgTicket: Number(raw.invoice_count || 0) > 0 ? Number(raw.net_revenue || 0) / Number(raw.invoice_count) : 0,
-    orderTypes: [],
+    orderTypes: Array.from(orderTypeMap, ([type, data]) => ({
+      type,
+      label: ORDER_LABELS[type] || type,
+      count: data.count,
+      total: data.total,
+    })),
     paymentMethods,
-    productsSold: [],
-    ingredientsConsumed: [],
+    productsSold: Array.from(productMap, ([productId, data]) => ({
+      productId,
+      productName: data.name,
+      quantity: data.quantity,
+      unitName: data.unitName,
+      total: data.total,
+    })),
+    ingredientsConsumed: Array.from(ingredientsMap, ([materialId, data]) => ({
+      materialId,
+      materialName: data.name,
+      quantity: Number(data.quantity.toFixed(3)),
+      unit: data.unit,
+      estimatedCost: Number(data.estimatedCost.toFixed(2)),
+    })),
     userReports,
     treasuryBalances,
     expenseDetails,

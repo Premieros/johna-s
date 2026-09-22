@@ -16,10 +16,10 @@ import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
-import { useSettings } from '@/context/SettingsContext';
+import { mergeEffectiveSettings, useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
-import type { Customer } from '@/lib/types';
+import type { BranchSettings, Customer, Settings } from '@/lib/types';
 import {
   APPROVED_FIXED_THERMAL_WIDTH_MM,
   ReceiptPrintApprovalError,
@@ -148,6 +148,26 @@ export function SalesPage() {
       : [];
   };
 
+  const resolveReceiptSettings = async (branchId: string): Promise<Settings | null> => {
+    const cached = effectiveSettings(branchId);
+    if (cached) return cached;
+
+    // Receipt actions normally use the shared settings cache. Only when that
+    // cache is missing do a single read-only branch-scoped recovery read.
+    const [globalResult, branchResult] = await Promise.all([
+      supabase.from('settings').select('*').maybeSingle(),
+      supabase.from('branch_settings').select('*').eq('branch_id', branchId).maybeSingle(),
+    ]);
+    if (globalResult.error) throw new Error(`SETTINGS_LOAD_FAILED: ${globalResult.error.message}`);
+    if (branchResult.error) throw new Error(`BRANCH_SETTINGS_LOAD_FAILED: ${branchResult.error.message}`);
+    if (!globalResult.data) return null;
+
+    return mergeEffectiveSettings(
+      globalResult.data as Settings,
+      (branchResult.data as BranchSettings | null) || null,
+    );
+  };
+
   const buildSaleReceipt = async (sale: SaleRow): Promise<ReceiptData> => {
     const payments = await loadReceiptPayments(sale);
     return {
@@ -175,13 +195,13 @@ export function SalesPage() {
 
   const previewSaleReceipt = async (sale: SaleRow) => {
     if (!canPreviewReceipt || receiptBusyId) return;
-    const receiptSettings = effectiveSettings(sale.branch_id);
-    if (!receiptSettings) {
-      show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
-      return;
-    }
     setReceiptBusyId(sale.id);
     try {
+      const receiptSettings = await resolveReceiptSettings(sale.branch_id);
+      if (!receiptSettings) {
+        show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
+        return;
+      }
       const receipt = await buildSaleReceipt(sale);
       const html = await buildReceiptHtml(
         receipt,
@@ -202,13 +222,13 @@ export function SalesPage() {
 
   const printSaleReceipt = async (sale: SaleRow) => {
     if (!canPrintReceipt || receiptBusyId) return;
-    const receiptSettings = effectiveSettings(sale.branch_id);
-    if (!receiptSettings) {
-      show(isAr ? 'إعدادات الفرع غير متاحة للطباعة' : 'Branch receipt settings are unavailable', 'error');
-      return;
-    }
     setReceiptBusyId(sale.id);
     try {
+      const receiptSettings = await resolveReceiptSettings(sale.branch_id);
+      if (!receiptSettings) {
+        show(isAr ? 'إعدادات الفرع غير متاحة للطباعة' : 'Branch receipt settings are unavailable', 'error');
+        return;
+      }
       const receipt = await buildSaleReceipt(sale);
       const html = await buildReceiptHtml(receipt, receiptSettings, lang, isAr);
       const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
@@ -318,14 +338,13 @@ export function SalesPage() {
       hidePaymentSummary: true,
     };
 
-    const receiptSettings = effectiveSettings(refundSale.branch_id);
-    if (!receiptSettings) {
-      show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
-      return;
-    }
-
     setReceiptBusyId(refundSale.id);
     try {
+      const receiptSettings = await resolveReceiptSettings(refundSale.branch_id);
+      if (!receiptSettings) {
+        show(isAr ? 'إعدادات الفرع غير متاحة لإنشاء المعاينة' : 'Branch receipt settings are unavailable', 'error');
+        return;
+      }
       const html = await buildReceiptHtml(
         receipt,
         receiptSettings,
