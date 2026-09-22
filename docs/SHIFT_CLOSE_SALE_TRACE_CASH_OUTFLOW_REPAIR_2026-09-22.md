@@ -46,7 +46,7 @@ The POS shift modal called `close_shift` but ignored a returned JSON payload wit
 - Integration: `tests/integration/shift_cash_purchase_expected.test.ts`
 
 Expected integration equation:
-`100 opening + 200 cash sale - 30 posted linked cash expense - 7 in-window cash expense - 35 net cash purchase = 228`.
+`100 opening + 200 cash sale - 30 posted linked cash expense - 35 net cash purchase = 235`.\n\nAn unassigned expense (`shift_id IS NULL`) is deliberately excluded from shift cash so unrelated day/accounting rows cannot leak into a shift.
 
 ## Production status
 
