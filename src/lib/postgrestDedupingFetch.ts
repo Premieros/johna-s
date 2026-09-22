@@ -1,7 +1,5 @@
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-const READ_REUSE_WINDOW_MS = 1_500;
-
 function postgrestRequest(input: RequestInfo | URL, init?: RequestInit): Request | null {
   try {
     const request = new Request(input, init);
@@ -28,27 +26,15 @@ function requestKey(request: Request): string | null {
   ].join('\n');
 }
 
-interface CachedRead {
-  response: Response;
-  expiresAt: number;
-  generation: number;
-}
-
 /**
- * Coordinates identical PostgREST reads across the whole application.
+ * Coordinates only identical PostgREST GET requests that are concurrently
+ * in flight. Completed responses are never cached or reused.
  *
- * - Concurrent identical GETs share one network call.
- * - A completed successful GET may be reused for only 1.5s, which collapses
- *   StrictMode/remount/effect bursts without becoming an application data cache.
- * - Any PostgREST mutation/RPC request invalidates the completed-read microcache
- *   and advances the generation so a following read never waits on an older
- *   pre-mutation request.
- * - The key includes the auth identity and response-affecting headers, preserving
- *   RLS/user isolation.
+ * A mutation/RPC advances the generation so a GET started after the write
+ * cannot attach to an older pre-mutation read that is still in flight.
  */
 export function createPostgrestDedupingFetch(baseFetch: FetchLike): FetchLike {
   const inFlight = new Map<string, Promise<Response>>();
-  const recentReads = new Map<string, CachedRead>();
   let generation = 0;
 
   return async (input, init) => {
@@ -58,45 +44,21 @@ export function createPostgrestDedupingFetch(baseFetch: FetchLike): FetchLike {
     const method = request.method.toUpperCase();
     if (method !== 'GET') {
       generation += 1;
-      recentReads.clear();
       return baseFetch(input, init);
     }
 
     const key = requestKey(request);
     if (!key) return baseFetch(input, init);
 
-    const now = Date.now();
-    const cached = recentReads.get(key);
-    if (cached) {
-      if (cached.generation === generation && cached.expiresAt > now) {
-        return cached.response.clone();
-      }
-      recentReads.delete(key);
-    }
-
-    const requestGeneration = generation;
-    const flightKey = `${requestGeneration}\n${key}`;
+    const flightKey = `${generation}\n${key}`;
     let pending = inFlight.get(flightKey);
     if (!pending) {
-      pending = baseFetch(input, init)
-        .then((response) => {
-          if (response.ok && generation === requestGeneration) {
-            recentReads.set(key, {
-              response,
-              expiresAt: Date.now() + READ_REUSE_WINDOW_MS,
-              generation: requestGeneration,
-            });
-          }
-          return response;
-        })
-        .finally(() => {
-          inFlight.delete(flightKey);
-        });
+      pending = baseFetch(input, init).finally(() => {
+        inFlight.delete(flightKey);
+      });
       inFlight.set(flightKey, pending);
     }
 
-    // Every Supabase caller consumes its own response body. Keep the shared
-    // response untouched and hand a clone to each caller.
     const response = await pending;
     return response.clone();
   };
