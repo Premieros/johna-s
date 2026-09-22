@@ -133,6 +133,26 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
     await client.end().catch(() => {});
   });
 
+  async function expectResolverError(
+    product: string,
+    branch: string,
+    pattern: RegExp,
+  ): Promise<void> {
+    const savepoint = `resolver_error_${randomUUID().replace(/-/g, '')}`;
+    await client.query(`SAVEPOINT ${savepoint}`);
+    try {
+      await expect(
+        client.query(
+          'SELECT * FROM public.resolve_product_raw_components($1,$2)',
+          [product, branch],
+        ),
+      ).rejects.toThrow(pattern);
+    } finally {
+      await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    }
+  }
+
   it('flattens every explicit direct raw plus reusable and nested groups without manufacturing', async () => {
     const before = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count
@@ -170,29 +190,14 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
   });
 
   it('rejects a nested component cycle instead of recursing forever', async () => {
-    await expect(
-      client.query(
-        'SELECT * FROM public.resolve_product_raw_components($1,$2)',
-        [cycleProduct, branchId],
-      ),
-    ).rejects.toThrow(/COMPONENT_GROUP_CYCLE/);
+    await expectResolverError(cycleProduct, branchId, /COMPONENT_GROUP_CYCLE/);
   });
 
   it('rejects a product link to a component group from another branch', async () => {
-    await expect(
-      client.query(
-        'SELECT * FROM public.resolve_product_raw_components($1,$2)',
-        [mismatchProduct, branchId],
-      ),
-    ).rejects.toThrow(/COMPONENT_GROUP_NOT_IN_BRANCH/);
+    await expectResolverError(mismatchProduct, branchId, /COMPONENT_GROUP_NOT_IN_BRANCH/);
   });
 
   it('rejects a nested component group from another branch instead of silently skipping it', async () => {
-    await expect(
-      client.query(
-        'SELECT * FROM public.resolve_product_raw_components($1,$2)',
-        [nestedMismatchProduct, branchId],
-      ),
-    ).rejects.toThrow(/COMPONENT_GROUP_NOT_IN_BRANCH/);
+    await expectResolverError(nestedMismatchProduct, branchId, /COMPONENT_GROUP_NOT_IN_BRANCH/);
   });
 });
