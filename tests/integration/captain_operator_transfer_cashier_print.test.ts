@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 import { getDbUrl, openDb } from './db';
@@ -123,9 +124,16 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
     );
     await client.query(
       `INSERT INTO public.inventory_unit_batches(unit_id,branch_id,warehouse_id,quantity,unit_cost)
+       VALUES(
+    await client.query(
+      `INSERT INTO public.inventory_unit_batches(unit_id,branch_id,warehouse_id,quantity,unit_cost)
        VALUES($1,$2,$3,10,10)`,
       [unitId, ids.branchA, ids.whA],
     );
+,$2,$3,10,10)`,
+      [unitId, ids.branchA, ids.whA],
+    );
+    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
     await client.query(
       `INSERT INTO public.dining_tables(id,name,branch_id,capacity,status,is_active)
        VALUES($1,'Captain QA Table',$2,4,'vacant',true)`,
