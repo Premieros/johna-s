@@ -78,11 +78,11 @@ describe.skipIf(skip)('FIFO missing historical kitchen-event fallback', () => {
     expect(num(adj[0].exact_delta)).toBe(7);
     expect(num(adj[0].posted_delta)).toBe(7);
 
-    const margin = await q<{ cogs: string }>(
-      'SELECT cogs::text FROM public.get_order_margin($1,NULL,NULL) WHERE sale_id=$2',
-      [branch, sale],
+    const postedCogs = await q<{ cogs: string }>(
+      "SELECT COALESCE(sum(jl.debit-jl.credit),0)::text cogs FROM public.journal_entries je JOIN public.account_mappings am ON am.branch_id=je.branch_id AND am.semantic_key='cogs' JOIN public.journal_entry_lines jl ON jl.journal_entry_id=je.id AND jl.account_id=am.account_id WHERE je.reference_type='fifo_cogs_reconcile' AND je.reference_id=$1",
+      [sale],
     );
-    expect(num(margin[0].cogs)).toBe(12);
+    expect(num(postedCogs[0].cogs)).toBe(7);
 
     const reversed = await q<{ r: Record<string, unknown> }>(
       "SELECT public._fifo_adjust_reference_delta('kitchen_send',$1,$2,$3,'raw_material',$4,-7,0) r",
@@ -97,10 +97,10 @@ describe.skipIf(skip)('FIFO missing historical kitchen-event fallback', () => {
     );
     expect(num(remaining[0].count)).toBe(0);
 
-    const restored = await q<{ cogs: string }>(
-      'SELECT cogs::text FROM public.get_order_margin($1,NULL,NULL) WHERE sale_id=$2',
-      [branch, sale],
+    const fifoJournal = await q<{ count: string }>(
+      "SELECT count(*)::text count FROM public.journal_entries WHERE reference_type='fifo_cogs_reconcile' AND reference_id=$1",
+      [sale],
     );
-    expect(num(restored[0].cogs)).toBe(5);
+    expect(num(fifoJournal[0].count)).toBe(0);
   });
 });
