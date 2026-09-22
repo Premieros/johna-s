@@ -124,13 +124,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
     );
     await client.query(
       `INSERT INTO public.inventory_unit_batches(unit_id,branch_id,warehouse_id,quantity,unit_cost)
-       VALUES(
-    await client.query(
-      `INSERT INTO public.inventory_unit_batches(unit_id,branch_id,warehouse_id,quantity,unit_cost)
        VALUES($1,$2,$3,10,10)`,
-      [unitId, ids.branchA, ids.whA],
-    );
-,$2,$3,10,10)`,
       [unitId, ids.branchA, ids.whA],
     );
     await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
