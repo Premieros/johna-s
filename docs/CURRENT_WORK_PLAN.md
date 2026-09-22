@@ -1,5 +1,17 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
+
+## ACTIVE — Stability / integrity monitor & historical repair — 2026-09-22
+
+- Branch: `development/stability-integrity-repair-20260922`
+- Base: `main@6838b23c310616a95e3b7235f624b8f2af22c779`
+- Live audit: `docs/STABILITY_INTEGRITY_AUDIT_2026-09-22.md`
+- Production inspection is read-only; printing / Print Agent / routing remain untouched.
+- Confirmed historical repair staged only: 12 Smouha purchase headers with wrong Cleopatra warehouse identity and 4 fully-voided zero-value open order shells.
+- Raw/FIFO live invariants are healthy: raw inventory vs batches 515/515 matched; FIFO pending reconciliation delta = 0; no current kitchen over-deduction signal.
+- Migration is forward-only, exact-ID scoped, assumption-guarded and no-op on fresh/already-repaired DBs.
+- Production migration is NOT applied. Required gates: focused tests -> exact-head Full Verify Green -> re-check Production assumptions -> explicit approval.
+
 آخر تحديث: **2026-09-19 — synchronized through PR #228**
 
 > هذا هو السجل الحي المختصر للمشروع. للتفاصيل التاريخية راجع `docs/STABILIZATION_WORK_LOG.md` وملفات الإغلاق السابقة. سجل إصلاح POS الحالي: `docs/POS_HARDENING_REPAIR_LOG_2026-09-16.md`.
