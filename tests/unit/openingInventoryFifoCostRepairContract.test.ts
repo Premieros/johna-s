@@ -14,12 +14,14 @@ describe('opening inventory FIFO cost repair contract', () => {
     expect(migration).not.toMatch(/SELECT\s+public\.raw_opening_cost_apply_repair\s*\(/i);
   });
 
-  it('uses only authoritative costing events and leaves missing candidates unresolved', () => {
+  it('uses only opening-time authoritative evidence for automatic repair', () => {
     expect(migration).toContain('public._raw_cost_events_for_costing');
     expect(migration).toContain("'latest_at_or_before_opening'");
     expect(migration).toContain("'earliest_after_opening'");
     expect(migration).toContain("'NO_AUTHORITATIVE_PRICE_EVENT'");
-    expect(migration).toContain('COALESCE(c.unit_cost,0)>0');
+    expect(migration).toContain("'FUTURE_PRICE_REQUIRES_REVIEW'");
+    expect(migration).toContain('c.priced_at<=b.created_at');
+    expect(migration).toContain('OPENING_COST_REPAIR_FUTURE_CANDIDATE');
   });
 
   it('changes valuation only and delegates historical propagation to existing FIFO backfill', () => {
