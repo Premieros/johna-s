@@ -3,13 +3,35 @@ import { readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
-describe('Smouha Print Agent V8 isolation and query budget', () => {
+describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
   it('is a separate app identity and starts with Production queue disabled', () => {
     const build = read('print-agent-v8/BuildConfig.cs');
     const config = read('print-agent-v8/AgentConfig.cs');
     expect(build).toContain('PremierSmouhaFormPrintAgentV08');
     expect(build).not.toContain('PremierSmouhaPrintAgentV07');
     expect(config).toContain('QueueEnabled { get; set; } = false');
+  });
+
+  it('builds as framework-dependent Lite instead of bundling the runtime', () => {
+    const project = read('print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj');
+    const workflow = read('.github/workflows/smouha-print-agent-v8-build.yml');
+    expect(project).toContain('<SelfContained>false</SelfContained>');
+    expect(project).toContain('<Version>8.1.0</Version>');
+    expect(workflow).toContain('--self-contained false');
+    expect(workflow).toContain('Windows Desktop Runtime 8 x64');
+  });
+
+  it('does not expose a manual legacy text test button', () => {
+    const setup = read('print-agent-v8/SetupForm.cs');
+    expect(setup).not.toContain('اختبار Text fallback');
+    expect(setup).not.toContain('testLegacy');
+  });
+
+  it('keeps Arabic totals label-right and value-left', () => {
+    const renderer = read('print-agent-v8/FixedTemplateRenderer.cs');
+    expect(renderer).toContain('Arabic form: label stays on the RIGHT, numeric value on the LEFT.');
+    expect(renderer).toContain('innerWidth * 0.40f');
+    expect(renderer).toContain('innerWidth * 0.42f');
   });
 
   it('removes the 700ms idle claim loop and uses event wake plus slow fallback', () => {
