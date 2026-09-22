@@ -102,22 +102,22 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   const totals = Array.isArray(template.totals) ? template.totals : [];
   const footerLines = Array.isArray(template.footerLines) ? template.footerLines : [];
 
-  const metaRows = [
-    ...(kitchen && template.station
-      ? [{ label: ar ? 'المحطة' : 'Station', value: template.station, emphasis: true }]
-      : []),
-    ...meta,
-  ].map((row) => `
+  const metaRows = meta.map((row) => `
     <div class="meta-row ${row.emphasis ? 'emphasis' : ''}">
       <div class="meta-label">${e(row.label)}:</div>
       <div class="meta-value">${e(row.value)}</div>
     </div>`).join('');
 
+  const stationBlock = kitchen && template.station
+    ? `<div class="station-card"><div class="station-label">${ar ? 'المحطة' : 'STATION'}</div><div class="station-name">${e(template.station)}</div></div>`
+    : '';
+
   const customerItems = items.map((item) => `
     <div class="item-row customer-item">
       <div class="qty">${e(item.qty)}</div>
       <div class="item-name">${e(item.name)}</div>
-      <div class="price">${e(item.total || item.price || '')}</div>
+      <div class="unit-price">${e(item.price || '')}</div>
+      <div class="line-total">${e(item.total || item.price || '')}</div>
     </div>`).join('');
 
   const kitchenItems = items.map((item) => {
@@ -129,7 +129,7 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
       : '';
     return `
       <div class="kitchen-item">
-        <div class="kitchen-main"><span class="qty">${e(item.qty)}</span><span class="item-name">${e(item.name)}</span></div>
+        <div class="kitchen-main"><span class="qty-badge">${e(item.qty)}×</span><span class="item-name">${e(item.name)}</span></div>
         ${modifiers}
         ${note}
       </div>`;
@@ -190,18 +190,18 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     margin-bottom: ${kitchen ? '3mm' : '4mm'};
   }
   .title-row {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: 2.2mm;
-    align-items: center;
-    margin-bottom: ${kitchen ? '1.2mm' : '1.6mm'};
+    display: block;
+    border: .35mm solid #000;
+    padding: ${kitchen ? '1.2mm 2mm' : '1.6mm 2.4mm'};
+    margin-bottom: ${kitchen ? '1.5mm' : '2mm'};
   }
-  .title-rule { height: .25mm; background: #111; }
+  .title-rule { display: none; }
   .title {
     font-size: ${kitchen ? '16.5pt' : '18pt'};
     font-weight: 900;
-    white-space: nowrap;
+    white-space: normal;
     text-align: center;
+    letter-spacing: .2px;
   }
   .subtitle, .slogan, .branch {
     text-align: center;
@@ -211,9 +211,19 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   .subtitle { font-weight: 700; letter-spacing: 2px; }
   .slogan { font-weight: 500; }
   .branch { font-weight: 600; }
+  .station-card {
+    border: .45mm solid #000;
+    margin: 2.2mm 0 2.8mm;
+    padding: 1.6mm 2mm;
+    text-align: center;
+  }
+  .station-label { font-size: 9pt; font-weight: 800; letter-spacing: 1.8px; }
+  .station-name { font-size: 17pt; font-weight: 900; margin-top: .6mm; overflow-wrap: anywhere; }
   .meta {
-    margin-top: ${kitchen ? '3mm' : '5mm'};
+    margin-top: ${kitchen ? '2.2mm' : '3.5mm'};
     margin-bottom: ${kitchen ? '3mm' : '4mm'};
+    border: .22mm solid #000;
+    padding: ${kitchen ? '1.4mm 2mm' : '2mm 2.4mm'};
   }
   .meta-row {
     display: grid;
@@ -238,40 +248,71 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
   }
   .items-head, .customer-item {
     display: grid;
-    grid-template-columns: 11mm 1fr 21mm;
-    gap: 1.5mm;
-    align-items: baseline;
+    grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;
+    gap: .8mm;
+    align-items: start;
   }
-  .items-head { font-size: 10pt; font-weight: 800; margin-bottom: 1.8mm; }
-  .items-head .price, .customer-item .price { text-align: ${ar ? 'left' : 'right'}; }
+  .items-head {
+    font-size: 9.5pt;
+    font-weight: 900;
+    padding: 1.4mm 0 1.2mm;
+    margin-bottom: 0;
+    border-top: .3mm solid #000;
+    border-bottom: .3mm solid #000;
+  }
+  .items-head .unit-price, .items-head .line-total,
+  .customer-item .unit-price, .customer-item .line-total {
+    text-align: ${ar ? 'left' : 'right'};
+    direction: ltr;
+    unicode-bidi: isolate;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
   .items-head .qty, .customer-item .qty { text-align: center; }
-  .customer-item { min-height: 9.5mm; padding: 1.5mm 0; font-size: 12.5pt; }
-  .customer-item .item-name { font-weight: 600; overflow-wrap: anywhere; }
-  .customer-item .price { font-weight: 700; white-space: nowrap; }
-  .kitchen-item { padding: 1.4mm 0; border-bottom: .15mm solid #b8b8b8; }
+  .customer-item {
+    min-height: 9.5mm;
+    padding: 1.8mm 0;
+    font-size: 11.8pt;
+    border-bottom: .16mm dotted #777;
+  }
+  .customer-item:last-child { border-bottom: 0; }
+  .customer-item .item-name { font-weight: 800; overflow-wrap: anywhere; line-height: 1.18; }
+  .customer-item .qty { font-weight: 800; }
+  .customer-item .unit-price { font-weight: 700; font-size: 9.4pt; }
+  .customer-item .line-total { font-weight: 900; font-size: 10.5pt; }
+  .kitchen-item { padding: 2mm 0; border-bottom: .3mm dashed #000; }
   .kitchen-item:last-child { border-bottom: 0; }
   .kitchen-main {
     display: grid;
-    grid-template-columns: 10mm 1fr;
+    grid-template-columns: 14mm minmax(0, 1fr);
     gap: 2mm;
-    font-size: 14pt;
+    font-size: 15pt;
     font-weight: 900;
-    align-items: baseline;
+    align-items: center;
   }
-  .kitchen-main .qty { text-align: center; }
+  .qty-badge {
+    border: .4mm solid #000;
+    padding: 1mm .8mm;
+    text-align: center;
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-size: 17pt;
+    line-height: 1;
+    font-weight: 900;
+  }
+  .kitchen-main .item-name { overflow-wrap: anywhere; line-height: 1.18; }
   .modifier, .note {
-    margin-top: .8mm;
-    ${ar ? 'padding-right:12mm' : 'padding-left:12mm'};
-    font-size: 11.5pt;
-    line-height: 1.24;
+    margin-top: 1mm;
+    ${ar ? 'margin-right:16mm' : 'margin-left:16mm'};
+    font-size: 11.3pt;
+    line-height: 1.25;
   }
-  .modifier { font-weight: 700; }
-  .note { font-weight: 800; }
+  .modifier { font-weight: 800; }
+  .note { font-weight: 900; border: .28mm solid #000; padding: 1mm 1.2mm; }
   .totals {
-    border-top: .25mm solid #111;
-    border-bottom: .25mm solid #111;
-    margin-top: 3mm;
-    padding: 2.4mm 0 2mm;
+    border: .3mm solid #000;
+    margin-top: 3.2mm;
+    padding: 2mm 2.2mm;
   }
   .total-row {
     display: flex;
@@ -280,7 +321,16 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     margin: 1mm 0;
     font-size: 12.5pt;
   }
-  .grand-total { font-size: 18pt; font-weight: 900; margin-top: 1.8mm; }
+  .total-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+  .total-row > span:last-child {
+    flex: 0 0 auto;
+    direction: ltr;
+    unicode-bidi: isolate;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .grand-total { font-size: 17.5pt; font-weight: 900; margin-top: 1.8mm; padding-top: 1.8mm; border-top: .45mm solid #000; }
   .footer { text-align: center; margin-top: ${kitchen ? '3mm' : '5mm'}; }
   .footer-line { font-size: ${kitchen ? '11.5pt' : '12pt'}; margin: 1mm 0; }
   .kitchen-end { font-size: 13.5pt; font-weight: 900; margin-top: 1.2mm; }
@@ -295,12 +345,13 @@ export function buildFixedThermalTemplateHtml(template: FixedThermalTemplate): s
     ${template.subtitle ? `<div class="subtitle">${e(template.subtitle)}</div>` : ''}
     ${template.slogan ? `<div class="slogan">${e(template.slogan)}</div>` : ''}
     ${template.branchName ? `<div class="branch">${e(template.branchName)}</div>` : ''}
+    ${stationBlock}
     <section class="meta">${metaRows}</section>
     <section class="section">
       <div class="items-title">${e(template.itemsHeading)}</div>
       ${kitchen
         ? kitchenItems
-        : `<div class="items-head"><div class="qty">${ar ? 'الكمية' : 'QTY'}</div><div>${ar ? 'الصنف' : 'ITEM'}</div><div class="price">${ar ? 'السعر' : 'PRICE'}</div></div>${customerItems}`}
+        : `<div class="items-head"><div class="qty">${ar ? 'الكمية' : 'QTY'}</div><div>${ar ? 'الصنف' : 'ITEM'}</div><div class="unit-price">${ar ? 'السعر' : 'UNIT'}</div><div class="line-total">${ar ? 'القيمة' : 'TOTAL'}</div></div>${customerItems}`}
     </section>
     ${!kitchen && totals.length ? `<section class="totals">${totalRows}</section>` : ''}
     <footer class="footer">${footer}${!kitchen ? '<div class="heart">♥</div>' : ''}</footer>

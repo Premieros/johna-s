@@ -7,11 +7,14 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 describe('printed document branch identity', () => {
   it('prints the actual POS branch on every receipt', () => {
     const printing = read('src/features/pos/utils/printing.ts');
+    const renderer = read('src/features/pos/services/localPrintAgent.ts');
     const posOrderBase = read('src/features/pos/hooks/usePosOrderBase.ts');
     const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 
     expect(printing).toContain('branchName: string');
-    expect(printing).toContain("${isAr ? 'الفرع' : 'Branch'}: ${escapeHtml(receipt.branchName)}");
+    expect(printing).toContain('branchName: safeThermalText(receipt.branchName)');
+    expect(renderer).toContain('template.branchName');
+    expect(renderer).toContain('class="branch"');
     expect(posOrderBase).toContain('branchName,');
     expect(workspace).toContain('branchName: currentBranchName');
   });

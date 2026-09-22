@@ -235,6 +235,10 @@
 
 User explicitly requested a limited invoice-page extension while the general print-system lock remains in force. The allowed scope is UI integration with the existing protected receipt path only: customer-receipt preview (non-authorizing), protected reprint, and existing refund workflow access. Print Agent, station routing, queue RPCs, and kitchen printing remain frozen. Implementation log: `docs/SALES_INVOICE_REFUND_PREVIEW_REPRINT_2026-09-21.md`.
 
+## Active print-form work — Professional Receipt Form (2026-09-21)
+
+User explicitly approved a renderer-only redesign of customer and kitchen receipts. Scope is limited to the fixed `template v1` form and preview parity; Print Agent protocol, cloud queue, printer stations, routing, authorization, RLS and Production DB remain frozen. Rollback baseline and execution details: `docs/PROFESSIONAL_RECEIPT_FORM_2026-09-21.md`.
+
 ## NEXT ACTION
 
 1. لا تعديل على الطباعة أو محطات الطباعة أو الوكيل أو أزرار الطباعة أو `send_to_kitchen`/KDS تحت القفل الحالي.
