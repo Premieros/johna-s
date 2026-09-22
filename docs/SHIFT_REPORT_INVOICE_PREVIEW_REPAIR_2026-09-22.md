@@ -56,3 +56,14 @@ Production currently contains one global settings row and two branch-settings ro
 3. New receipt-settings recovery contract.
 4. Full repository CI before any merge.
 5. No Production migration is required for this repair.
+
+
+## Follow-up similar-defect sweep
+A repository-wide scan found no second active receipt-preview path with the same cache-only guard and no second active shift adapter with hard-coded product/ingredient/order-type arrays.
+
+One additional correctness issue was found in the same shift-composition path: refunded line quantities were still counted as sold. The repair now nets `refunded_quantity` and `refunded_amount` before aggregating sold products, so fully returned lines do not remain in the sold-products/raw-material calculation.
+
+The old exported `fetchShiftClosingDetails()` helper in `shiftClosingReport.ts` still references legacy `sales.shift_id`, but it currently has no consumers. The live POS shift modal and Shifts page both use `fetchShiftClosingReportServer()`. It was not changed in this focused repair to avoid unnecessary scope expansion; it is recorded as dead legacy cleanup rather than an active production defect.
+
+## Base drift audit after auth hotfix
+While this PR was under verification, `main` advanced to `223104ac7502ce89031ca859362fbfb0fe43f281` through the expired-session recovery hotfix. The changed files are AuthContext / SessionProfileGuard / authSessionError / PostgREST dedupe and their tests/docs. None overlap this PR's SalesPage, shift-closing financial adapter, or report tests. The PR remains mergeable; a fresh PR check run is required against the current base before merge.
