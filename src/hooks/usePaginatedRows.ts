@@ -86,9 +86,15 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
 
   const buildDataQuery = useCallback(
     (from: number, to: number, includeCount = false): FilterBuilder => {
+      // `table` and `select` are intentionally dynamic in this generic hook.
+      // Narrow the Supabase overload to the filter-builder shape once here so
+      // TypeScript does not recursively instantiate schema-string error types.
+      const source = supabase.from(table) as unknown as {
+        select: (columns: string, options?: { count?: 'exact'; head?: boolean }) => FilterBuilder;
+      };
       const baseQuery = includeCount
-        ? supabase.from(table).select(select, { count: 'exact' })
-        : supabase.from(table).select(select);
+        ? source.select(select, { count: 'exact' })
+        : source.select(select);
       let q = applyFilters(baseQuery);
       if (order) q = q.order(order.column, { ascending: orderAsc });
       return q.range(from, to);
