@@ -13,8 +13,10 @@ describe('system-wide duplicate query reduction contract', () => {
     expect(client).toContain('postgrestDedupingFetch');
     expect(client).toContain('global:');
     expect(client).toContain('fetch: postgrestDedupingFetch');
-    expect(coordinator).toContain('READ_REUSE_WINDOW_MS = 1_500');
-    expect(coordinator).toContain('recentReads.clear()');
+    expect(coordinator).toContain('const inFlight = new Map');
+    expect(coordinator).toContain('generation += 1');
+    expect(coordinator).not.toContain('recentReads');
+    expect(coordinator).not.toContain('READ_REUSE_WINDOW_MS');
     expect(coordinator).toContain("request.headers.get('authorization')");
   });
 
