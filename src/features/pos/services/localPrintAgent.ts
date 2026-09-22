@@ -652,11 +652,19 @@ export async function executeSilentPrintDetailed(options: {
 
   if (isRunningInElectron() && window.electronAPI) {
     try {
-      const templateHtml = options.template ? buildFixedThermalTemplateHtml(options.template) : '';
+      // Emergency compatibility guard:
+      // template-backed thermal jobs must never be sent to an installed Electron
+      // bridge as HTML. Older/field-installed bridges can treat that HTML as
+      // printable text, which exposes CSS on paper. Preserve the fixed template
+      // for preview/queue data, but use the already-authoritative thermal text
+      // for physical Electron output until the bridge version is explicitly known.
+      const templateText = options.template
+        ? htmlToThermalText(buildFixedThermalTemplateHtml(options.template))
+        : '';
       const result = await window.electronAPI.printSilent({
         printerName,
-        text: templateHtml ? undefined : options.text,
-        html: templateHtml || options.html,
+        text: options.template ? (options.text || templateText) : options.text,
+        html: options.template ? undefined : options.html,
         copies: Math.max(1, Math.min(5, Number(options.copies || 1))),
         paperWidthMm: Number(options.paperWidthMm || 80),
       });
