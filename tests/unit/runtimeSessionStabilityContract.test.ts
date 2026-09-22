@@ -14,9 +14,14 @@ describe('runtime session stability contract', () => {
     expect(auth).toContain('throw error');
     expect(auth).toContain('PROFILE_RETRY_MAX_MS');
     expect(auth).not.toContain('if (error || !data || data.is_active === false)');
+    expect(auth).toContain('isAuthSessionError(error)');
+    expect(auth).toContain('supabase.auth.refreshSession()');
+    expect(auth).toContain('setLoading(!(user?.id && user.id === activeSession.user.id))');
 
     expect(guard).toContain('PROFILE_REVALIDATION_RETRY_MS');
     expect(guard).toContain('if (error) {');
+    expect(guard).toContain('isAuthSessionError(error)');
+    expect(guard).toContain('supabase.auth.refreshSession()');
     expect(guard).not.toContain('if (error || !data || data.is_active === false)');
   });
 
