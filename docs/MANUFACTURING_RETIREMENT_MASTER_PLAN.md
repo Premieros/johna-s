@@ -85,10 +85,38 @@ Goal:
 - define cycle detection and branch isolation;
 - preserve existing data with a migration/compatibility bridge.
 
+Production read-only audit before implementation:
+- products: 508;
+- legacy recipes: 508, recipe_items: 2160;
+- product_components: 0 rows (not an operational composition source);
+- inventory_units: 34;
+- product_unit_links: 110;
+- inventory_unit_recipes: 136;
+- inventory_unit_recipe_units: 6;
+- 502 products currently have direct legacy raw recipe rows;
+- 110 products have reusable inventory-unit raw groups;
+- 104 products use both paths and therefore require deterministic compatibility handling.
+
+Canonical Phase-2 interpretation:
+- `recipes/recipe_items` = direct raw components of a product;
+- `inventory_units` linked through `product_unit_links` = reusable named component groups (legacy physical name retained only for compatibility);
+- `inventory_unit_recipes` = raw members of those groups;
+- `inventory_unit_recipe_units` = nested named groups;
+- `product_components` is not used as a canonical source because Production currently has zero rows.
+
+Implementation:
+- adds internal `resolve_product_raw_components(product_id, branch_id)`;
+- resolver recursively flattens reusable/nested groups directly to raw-material quantities;
+- preserves current legacy placeholder behavior during migration by replacing same-name manufactured placeholders with the linked group's raw expansion;
+- includes nested group wastage exactly as the old production consumption did;
+- does not create production orders, inventory batches, or stock movements;
+- rejects cross-branch groups/raws and detects cycles.
+
 Exit criteria:
 - one authoritative resolver can flatten a product to raw-material quantities;
 - no production order is required to resolve sale consumption;
-- existing product/recipe definitions are migrated or bridged losslessly.
+- existing product/recipe definitions are migrated or bridged losslessly;
+- integration proves direct + reusable + nested composition and zero production side effects.
 
 ### Phase 3 — Exact kitchen-send consumption snapshot
 Status: PENDING
