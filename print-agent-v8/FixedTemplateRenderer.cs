@@ -53,24 +53,24 @@ internal static class FixedTemplateRenderer
         using var thinPen = new Pen(Color.Black, Math.Max(1f, 1.2f * scale));
         using var grayPen = new Pen(Color.Gray, 1f) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dot };
 
-        float y = 14f * scale;
+        float y = 10f * scale;
 
         y = Center(g, S(template, "storeName", "JOHNA'S"), brand, y, innerWidth, margin, isAr) + 2 * scale;
-        y = Center(g, S(template, "storeSubtitle", "RESTAURANT"), brandSub, y, innerWidth, margin, false) + 9 * scale;
+        y = Center(g, S(template, "storeSubtitle", "RESTAURANT"), brandSub, y, innerWidth, margin, false) + 4 * scale;
 
         var titleText = S(template, "title");
-        var titleH = Measure(g, titleText, title, innerWidth - 16 * scale, isAr) + 16 * scale;
+        var titleH = Measure(g, titleText, title, innerWidth - 16 * scale, isAr) + 12 * scale;
         g.DrawRectangle(pen, margin, y, innerWidth, titleH);
         Draw(g, titleText, title,
-            new RectangleF(margin + 8 * scale, y + 5 * scale, innerWidth - 16 * scale, titleH - 10 * scale),
+            new RectangleF(margin + 8 * scale, y + 4 * scale, innerWidth - 16 * scale, titleH - 8 * scale),
             isAr, StringAlignment.Center);
-        y += titleH + 6 * scale;
+        y += titleH + 4 * scale;
 
         foreach (var key in new[] { "subtitle", "slogan", "branchName" })
         {
             var value = S(template, key);
             if (string.IsNullOrWhiteSpace(value)) continue;
-            y = Center(g, value, key == "subtitle" ? subtitle : smallBold, y, innerWidth, margin, isAr) + 3 * scale;
+            y = Center(g, value, key == "subtitle" ? subtitle : smallBold, y, innerWidth, margin, isAr) + 2 * scale;
         }
 
         if (kitchen)
@@ -94,7 +94,7 @@ internal static class FixedTemplateRenderer
         if (template.TryGetProperty("meta", out var meta) && meta.ValueKind == JsonValueKind.Array)
         {
             var start = y;
-            y += 8 * scale;
+            y += 5 * scale;
             foreach (var row in meta.EnumerateArray())
             {
                 var label = S(row, "label");
@@ -104,8 +104,8 @@ internal static class FixedTemplateRenderer
                 var labelW = Math.Min(155 * scale, innerWidth * 0.36f);
                 var valueW = innerWidth - labelW - 20 * scale;
                 var rowH = Math.Max(
-                    30 * scale,
-                    Measure(g, value, rowFont, valueW, isAr) + 8 * scale);
+                    28 * scale,
+                    Measure(g, value, rowFont, valueW, isAr) + 6 * scale);
 
                 if (isAr)
                 {
@@ -127,15 +127,15 @@ internal static class FixedTemplateRenderer
                 }
                 y += rowH;
             }
-            y += 7 * scale;
+            y += 5 * scale;
             g.DrawRectangle(thinPen, margin, start, innerWidth, y - start);
-            y += 10 * scale;
+            y += 6 * scale;
         }
 
         g.DrawLine(pen, margin, y, margin + innerWidth, y);
-        y += 10 * scale;
+        y += 6 * scale;
         var heading = S(template, "itemsHeading", isAr ? "الأصناف" : "ITEMS");
-        y = TextBlock(g, heading, title, y, innerWidth, margin, isAr, StringAlignment.Near) + 7 * scale;
+        y = TextBlock(g, heading, title, y, innerWidth, margin, isAr, StringAlignment.Near) + 4 * scale;
 
         if (template.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
         {
@@ -230,15 +230,15 @@ internal static class FixedTemplateRenderer
                     var price = S(item, "price");
                     var total = S(item, "total", price);
                     var itemH = Math.Max(
-                        46 * scale,
-                        Measure(g, name, bodyBold, nameW - 8 * scale, isAr) + 14 * scale);
+                        42 * scale,
+                        Measure(g, name, bodyBold, nameW - 8 * scale, isAr) + 10 * scale);
 
                     DrawCustomerColumns(
                         g, isAr, margin, y, qtyW, nameW, unitW, totalW, itemH,
                         qty, name, price, total, bodyBold);
                     y += itemH;
                     g.DrawLine(grayPen, margin, y, margin + innerWidth, y);
-                    y += 5 * scale;
+                    y += 3 * scale;
                 }
             }
         }
@@ -247,34 +247,47 @@ internal static class FixedTemplateRenderer
             template.TryGetProperty("totals", out var totals) &&
             totals.ValueKind == JsonValueKind.Array)
         {
-            y += 6 * scale;
+            y += 4 * scale;
             var start = y;
-            y += 8 * scale;
+            y += 5 * scale;
             foreach (var row in totals.EnumerateArray())
             {
                 var label = S(row, "label");
                 var value = S(row, "value");
                 var emph = B(row, "emphasis");
                 var rowFont = emph ? grand : bodyBold;
-                var rowH = emph ? 46 * scale : 31 * scale;
+                var rowH = emph ? 42 * scale : 28 * scale;
 
                 if (emph)
                 {
                     g.DrawLine(pen, margin + 7 * scale, y, margin + innerWidth - 7 * scale, y);
-                    y += 6 * scale;
+                    y += 4 * scale;
                 }
 
-                Draw(g, label + ":", rowFont,
-                    new RectangleF(margin + 10 * scale, y, innerWidth * 0.55f, rowH),
-                    isAr, isAr ? StringAlignment.Far : StringAlignment.Near);
-                Draw(g, value, rowFont,
-                    new RectangleF(margin + innerWidth * 0.55f, y, innerWidth * 0.43f - 10 * scale, rowH),
-                    false, StringAlignment.Far);
+                if (isAr)
+                {
+                    // Arabic form: label stays on the RIGHT, numeric value on the LEFT.
+                    Draw(g, value, rowFont,
+                        new RectangleF(margin + 10 * scale, y, innerWidth * 0.40f, rowH),
+                        false, StringAlignment.Far);
+                    Draw(g, label + ":", rowFont,
+                        new RectangleF(margin + innerWidth * 0.42f, y, innerWidth * 0.56f - 10 * scale, rowH),
+                        true, StringAlignment.Far);
+                }
+                else
+                {
+                    Draw(g, label + ":", rowFont,
+                        new RectangleF(margin + 10 * scale, y, innerWidth * 0.55f, rowH),
+                        false, StringAlignment.Near);
+                    Draw(g, value, rowFont,
+                        new RectangleF(margin + innerWidth * 0.55f, y, innerWidth * 0.43f - 10 * scale, rowH),
+                        false, StringAlignment.Far);
+                }
                 y += rowH;
             }
-            y += 8 * scale;
+            y += 5 * scale;
             g.DrawRectangle(pen, margin, start, innerWidth, y - start);
-            y += 10 * scale;
+            y += 6 * scale;
         }
 
         if (template.TryGetProperty("footerLines", out var footer) &&
@@ -286,11 +299,11 @@ internal static class FixedTemplateRenderer
                     ? line.GetString() ?? ""
                     : line.ToString();
                 if (string.IsNullOrWhiteSpace(value)) continue;
-                y = Center(g, value, bodyBold, y, innerWidth, margin, isAr) + 4 * scale;
+                y = Center(g, value, bodyBold, y, innerWidth, margin, isAr) + 2 * scale;
             }
         }
 
-        y += 26 * scale;
+        y += 16 * scale;
         var finalHeight = Math.Max(96, Math.Min(maxHeight, (int)Math.Ceiling(y)));
         var result = new Bitmap(widthDots, finalHeight, PixelFormat.Format32bppArgb);
         result.SetResolution(203f, 203f);
