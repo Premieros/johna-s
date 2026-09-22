@@ -115,3 +115,11 @@ Repair the missing **opening valuation** without replacing the existing FIFO eng
   - production: about +76.38
   These are pre-apply estimates only; the authoritative result must come from the existing FIFO prepare/apply dry-run after migration installation.
 - No Production write performed.
+
+
+### 2026-09-22 — Opening source identity cross-check
+
+- Read-only Production cross-check joined the 140 automatic candidates back to their applied stock-count items.
+- Result: 140 / 140 opening ledger quantities exactly match the corresponding counted quantities; mismatches = 0; maximum quantity difference = 0.0000.
+- This confirms the automatic candidate price is not merely near the opening timestamp: it belongs to the same opening count quantity for every auto-repair row.
+- No Production write performed.
