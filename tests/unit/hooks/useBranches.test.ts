@@ -59,6 +59,21 @@ describe('useBranches', () => {
     expect(mockState.calls).toBe(1);
   });
 
+  it('coalesces concurrent mounts for the same user into one branch request', async () => {
+    mockState.data = [{ id: 'b1', name: 'Main', is_active: true }];
+    const useBranches = await loadUseBranches();
+
+    const first = renderHook(() => useBranches());
+    const second = renderHook(() => useBranches());
+
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    await waitFor(() => expect(second.result.current.loading).toBe(false));
+
+    expect(first.result.current.branches[0]?.id).toBe('b1');
+    expect(second.result.current.branches[0]?.id).toBe('b1');
+    expect(mockState.calls).toBe(1);
+  });
+
   it('reuses cache for the same user but refetches for a different user', async () => {
     mockState.data = [{ id: 'b1', name: 'Main', is_active: true }];
     const useBranches = await loadUseBranches();
