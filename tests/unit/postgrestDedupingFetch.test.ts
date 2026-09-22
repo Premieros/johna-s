@@ -71,7 +71,7 @@ describe('PostgREST duplicate read coalescing', () => {
     let calls = 0;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const baseFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const baseFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
       calls += 1;
       if ((init?.method || 'GET').toUpperCase() === 'GET' && calls === 1) await gate;
       return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
