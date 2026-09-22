@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
@@ -23,56 +24,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
   const productId = randomUUID();
   const unitId = randomUUID();
 
-  const batchQty = async (): Promise<number> => {
-    const result = await client.query<{ quantity: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS quantity
-         FROM public.inventory_unit_batches
-        WHERE unit_id = $1::uuid AND warehouse_id = $2::uuid`,
-      [unitId, ids.whA],
-    );
-    return Number(result.rows[0]?.quantity || 0);
-  };
-
-  const splitSale = async (invoice: string, payments: unknown[], orderId: string | null = null): Promise<SplitSaleResult> => {
-    const items = JSON.stringify([{
-      product_id: productId,
-      unit_name: 'piece',
-      quantity: 1,
-      unit_price: 20,
-      discount_amount: 0,
-      bonus_quantity: 0,
-      total: 20,
-    }]);
-
-    const result = await runAsPersist(
-      client,
-      ids.users.cashier,
-      `SELECT public.process_sale_split(
-         p_invoice_number := $1,
-         p_branch_id := $2,
-         p_warehouse_id := $3,
-         p_customer_id := NULL,
-         p_salesperson_id := $4,
-         p_subtotal := 20,
-         p_discount_amount := 0,
-         p_discount_type := 'amount',
-         p_tax_amount := 0,
-         p_bonus_amount := 0,
-         p_total := 20,
-         p_payments := $5::jsonb,
-         p_status := 'completed',
-         p_items := $6::jsonb,
-         p_shift_id := $7,
-         p_order_type := 'takeaway',
-         p_table_id := NULL,
-         p_order_id := $8,
-         p_guest_count := NULL
-       ) AS r`,
-      [invoice, ids.branchA, ids.whA, ids.users.cashier, JSON.stringify(payments), items, ids.shiftA, orderId],
-    );
-    if (result.error) throw new Error(result.error);
-    return (result.rows[0]?.r || {}) as SplitSaleResult;
-  };
+  const batchQty = async (): Promise<number> => rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
@@ -112,6 +64,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
        VALUES ($1::uuid, $2::uuid, $3::uuid, 10, 10)`,
       [unitId, ids.branchA, ids.whA],
     );
+    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
     await client.query(`UPDATE public.settings SET tax_enabled = false, tax_rate = 0`);
   });
 
