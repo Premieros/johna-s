@@ -507,7 +507,7 @@ export function PosWorkspacePage() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData]);
+  }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData, settings, branches, isAr]);
 
   useEffect(() => {
     if (effectiveBranch) void loadSellabilityStatus(effectiveBranch);
