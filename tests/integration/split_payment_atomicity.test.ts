@@ -26,6 +26,47 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
 
   const batchQty = async (): Promise<number> => rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
 
+  const splitSale = async (invoice: string, payments: unknown[], orderId: string | null = null): Promise<SplitSaleResult> => {
+    const items = JSON.stringify([{
+      product_id: productId,
+      unit_name: 'piece',
+      quantity: 1,
+      unit_price: 20,
+      discount_amount: 0,
+      bonus_quantity: 0,
+      total: 20,
+    }]);
+
+    const result = await runAsPersist(
+      client,
+      ids.users.cashier,
+      `SELECT public.process_sale_split(
+         p_invoice_number := $1,
+         p_branch_id := $2,
+         p_warehouse_id := $3,
+         p_customer_id := NULL,
+         p_salesperson_id := $4,
+         p_subtotal := 20,
+         p_discount_amount := 0,
+         p_discount_type := 'amount',
+         p_tax_amount := 0,
+         p_bonus_amount := 0,
+         p_total := 20,
+         p_payments := $5::jsonb,
+         p_status := 'completed',
+         p_items := $6::jsonb,
+         p_shift_id := $7,
+         p_order_type := 'takeaway',
+         p_table_id := NULL,
+         p_order_id := $8,
+         p_guest_count := NULL
+       ) AS r`,
+      [invoice, ids.branchA, ids.whA, ids.users.cashier, JSON.stringify(payments), items, ids.shiftA, orderId],
+    );
+    if (result.error) throw new Error(result.error);
+    return (result.rows[0]?.r || {}) as SplitSaleResult;
+  };
+
   beforeAll(async () => {
     client = openDb(dbUrl!);
     await client.connect();
