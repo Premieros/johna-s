@@ -18,8 +18,8 @@ describe('receipt visual unification contract', () => {
   });
 
   it('keeps existing print authority and routing primitives intact', () => {
-    expect(printing).toContain(\"supabase.rpc('authorize_sale_print'\");
-    expect(printing).toContain(\"supabase.rpc('record_sale_print'\");
+    expect(printing).toContain("supabase.rpc('authorize_sale_print'");
+    expect(printing).toContain("supabase.rpc('record_sale_print'");
     expect(printing).toContain('enqueueCloudReceiptPrint({');
     expect(printing).toContain('executeSilentPrint({');
     expect(printing).toContain('getLocalPrinterRoutes()');
