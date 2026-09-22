@@ -28,6 +28,8 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
   const cycleB = randomUUID();
 
   const mismatchProduct = randomUUID();
+  const nestedMismatchProduct = randomUUID();
+  const localNestedParent = randomUUID();
   const foreignGroup = randomUUID();
 
   beforeAll(async () => {
@@ -61,8 +63,9 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
       `INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES
        ($1,'QA Canonical Product',$2,10,0,true),
        ($3,'QA Cycle Product',$2,10,0,true),
-       ($4,'QA Mismatch Product',$2,10,0,true)`,
-      [productId, branchId, cycleProduct, mismatchProduct],
+       ($4,'QA Mismatch Product',$2,10,0,true),
+       ($5,'QA Nested Mismatch Product',$2,10,0,true)`,
+      [productId, branchId, cycleProduct, mismatchProduct, nestedMismatchProduct],
     );
 
     await client.query(
@@ -84,7 +87,8 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
        ($3,$4,'Nested Group','manufactured',$7,true),
        ($5,$6,'Cycle A','manufactured',$7,true),
        ($8,$9,'Cycle B','manufactured',$7,true),
-       ($10,$11,'Foreign Group','manufactured',$12,true)`,
+       ($10,$11,'Foreign Group','manufactured',$12,true),
+       ($13,$14,'Local Nested Parent','manufactured',$7,true)`,
       [
         groupParent, `U-${randomUUID()}`,
         groupChild, `U-${randomUUID()}`,
@@ -93,6 +97,7 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
         cycleB, `U-${randomUUID()}`,
         foreignGroup, `U-${randomUUID()}`,
         otherBranchId,
+        localNestedParent, `U-${randomUUID()}`,
       ],
     );
 
@@ -100,8 +105,9 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
       `INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES
        ($1,$2,2),
        ($3,$4,1),
-       ($5,$6,1)`,
-      [productId, groupParent, cycleProduct, cycleA, mismatchProduct, foreignGroup],
+       ($5,$6,1),
+       ($7,$8,1)`,
+      [productId, groupParent, cycleProduct, cycleA, mismatchProduct, foreignGroup, nestedMismatchProduct, localNestedParent],
     );
 
     await client.query(
@@ -115,8 +121,9 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
       `INSERT INTO public.inventory_unit_recipe_units(unit_id,component_unit_id,quantity,wastage_percent) VALUES
        ($1,$2,0.5,20),
        ($3,$4,1,0),
-       ($4,$3,1,0)`,
-      [groupParent, groupChild, cycleA, cycleB],
+       ($4,$3,1,0),
+       ($5,$6,1,0)`,
+      [groupParent, groupChild, cycleA, cycleB, localNestedParent, foreignGroup],
     );
   });
 
@@ -176,6 +183,15 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
       client.query(
         'SELECT * FROM public.resolve_product_raw_components($1,$2)',
         [mismatchProduct, branchId],
+      ),
+    ).rejects.toThrow(/COMPONENT_GROUP_NOT_IN_BRANCH/);
+  });
+
+  it('rejects a nested component group from another branch instead of silently skipping it', async () => {
+    await expect(
+      client.query(
+        'SELECT * FROM public.resolve_product_raw_components($1,$2)',
+        [nestedMismatchProduct, branchId],
       ),
     ).rejects.toThrow(/COMPONENT_GROUP_NOT_IN_BRANCH/);
   });
