@@ -4,7 +4,7 @@
 
 Production: `azzdesuowpdcoflmyezn`
 
-Reference: latest `main@176501373f74a0ec1e12336095cebab7474eccdc` at branch creation.
+Reference: latest `main@0b002c58f6ddc361e81b73a3610a248d60f3ae1c` after rebuilding on the latest main following PRs #310 and #311.
 
 The canonical Fresh DB sequence contains 404 migrations. Comparing both Production migration histories by exact/logical name produced 47 canonical files without a matching Production migration record.
 
