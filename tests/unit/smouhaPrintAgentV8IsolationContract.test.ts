@@ -34,6 +34,18 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     expect(renderer).toContain('innerWidth * 0.42f');
   });
 
+  it('verifies the realtime postgres subscription handshake before reporting connected', () => {
+    const realtime = read('print-agent-v8/RealtimeWakeClient.cs');
+
+    expect(realtime).toContain('join_ref = reference');
+    expect(realtime).toContain('string.Equals(reference, _joinRef');
+    expect(realtime).toContain('HasPostgresSubscriptionConfirmation(payload)');
+    expect(realtime).toContain('response.TryGetProperty("postgres_changes"');
+    expect(realtime).toContain('changes.GetArrayLength() > 0');
+    expect(realtime).toContain('eventName == "postgres_changes"');
+    expect(realtime).not.toContain('json.Contains(BuildConfig.WakeTable');
+  });
+
   it('removes the 700ms idle claim loop and uses event wake plus slow fallback', () => {
     const worker = read('print-agent-v8/CloudPrintWorker.cs');
     const realtime = read('print-agent-v8/RealtimeWakeClient.cs');
