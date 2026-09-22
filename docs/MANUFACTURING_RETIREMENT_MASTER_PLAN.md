@@ -37,8 +37,9 @@ Do not delete historical production data before a compatibility/archival phase p
 ## Phase status
 
 ### Phase 1 — POS runtime decoupling
-Status: IN PROGRESS
+Status: COMPLETE — verified green on run #2355
 Branch: development/retire-manufacturing-phase1-pos-runtime-20260922
+PR: #326
 
 Goal:
 - remove catalog-wide stock/sellability preflight from POS startup;
@@ -60,6 +61,12 @@ Exit criteria:
 - browser smoke green;
 - POS can open without sellability/recipe scans;
 - no printing code changed.
+
+Completion note:
+- POS no longer calls catalog-wide sellability/availability RPCs on startup;
+- POS no longer loads product_components recipes on startup;
+- ProductBrowser gates only on branch/shift/permission;
+- legacy DB compatibility functions remain for later retirement phases.
 
 ### Phase 2 — Canonical component graph
 Status: PENDING
