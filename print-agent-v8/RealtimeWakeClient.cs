@@ -12,6 +12,7 @@ internal sealed class RealtimeWakeClient : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _loop;
     private long _refCounter;
+    private string _joinRef = "";
 
     internal bool Connected { get; private set; }
 
@@ -48,28 +49,37 @@ internal sealed class RealtimeWakeClient : IDisposable
                 socket.Options.SetRequestHeader("apikey", BuildConfig.PublishableKey);
                 socket.Options.SetRequestHeader("Authorization", "Bearer " + _accessToken);
 
+                SetConnected(false, "Realtime جاري الاتصال...");
+
                 await socket.ConnectAsync(
                     new Uri(BuildConfig.RealtimeUrl),
                     token).ConfigureAwait(false);
 
-                await SendJoinAsync(socket, token).ConfigureAwait(false);
+                _joinRef = await SendJoinAsync(socket, token).ConfigureAwait(false);
+                var joinDeadlineUtc = DateTime.UtcNow.AddSeconds(12);
                 var receiveTask = ReceiveMessageAsync(socket, token);
 
                 while (!token.IsCancellationRequested &&
                        socket.State == WebSocketState.Open)
                 {
-                    var heartbeat = Task.Delay(TimeSpan.FromSeconds(20), token);
-                    var completed = await Task.WhenAny(receiveTask, heartbeat)
+                    var waitSeconds = Connected ? 20 : 4;
+                    var timer = Task.Delay(TimeSpan.FromSeconds(waitSeconds), token);
+                    var completed = await Task.WhenAny(receiveTask, timer)
                         .ConfigureAwait(false);
 
-                    if (completed == heartbeat)
+                    if (completed == timer)
                     {
+                        if (!Connected && DateTime.UtcNow >= joinDeadlineUtc)
+                            throw new TimeoutException(
+                                "Realtime join timeout — postgres_changes غير مؤكد");
+
                         await SendHeartbeatAsync(socket, token).ConfigureAwait(false);
                         continue;
                     }
 
                     var message = await receiveTask.ConfigureAwait(false);
                     if (message is null) break;
+
                     HandleMessage(message);
                     receiveTask = ReceiveMessageAsync(socket, token);
                 }
@@ -84,6 +94,7 @@ internal sealed class RealtimeWakeClient : IDisposable
             }
             finally
             {
+                _joinRef = "";
                 SetConnected(false, "Realtime مفصول — استخدام polling احتياطي");
             }
 
@@ -98,7 +109,7 @@ internal sealed class RealtimeWakeClient : IDisposable
         }
     }
 
-    private async Task SendJoinAsync(
+    private async Task<string> SendJoinAsync(
         ClientWebSocket socket,
         CancellationToken token)
     {
@@ -127,9 +138,13 @@ internal sealed class RealtimeWakeClient : IDisposable
                 },
                 access_token = _accessToken
             },
-            @ref = reference
+            @ref = reference,
+            join_ref = reference
         };
+
         await SendJsonAsync(socket, message, token).ConfigureAwait(false);
+        SetConnected(false, "Realtime WebSocket مفتوح — انتظار تأكيد postgres_changes");
+        return reference;
     }
 
     private async Task SendHeartbeatAsync(
@@ -194,33 +209,92 @@ internal sealed class RealtimeWakeClient : IDisposable
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var eventName = root.TryGetProperty("event", out var ev)
-                ? ev.GetString() ?? ""
-                : "";
+            var eventName = ReadString(root, "event");
+            var topic = ReadString(root, "topic");
+            var reference = ReadString(root, "ref");
 
-            if (eventName == "phx_reply" &&
-                root.TryGetProperty("payload", out var payload))
+            if (eventName == "phx_reply")
             {
-                var status = payload.TryGetProperty("status", out var statusNode)
-                    ? statusNode.GetString() ?? ""
-                    : "";
-                if (string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
-                    SetConnected(true, "Realtime متصل — انتظار Jobs بدون polling سريع");
-                else
+                // Heartbeat replies are also phx_reply. Only the reply carrying
+                // the exact phx_join ref may establish subscription readiness.
+                if (string.IsNullOrWhiteSpace(_joinRef) ||
+                    !string.Equals(reference, _joinRef, StringComparison.Ordinal))
+                    return;
+
+                if (!root.TryGetProperty("payload", out var payload))
+                {
+                    SetConnected(false, "Realtime join بلا payload — fallback فعال");
+                    return;
+                }
+
+                var status = ReadString(payload, "status");
+                if (!string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
+                {
                     SetConnected(false, "Realtime join لم ينجح — fallback فعال");
+                    return;
+                }
+
+                if (!HasPostgresSubscriptionConfirmation(payload))
+                {
+                    SetConnected(
+                        false,
+                        "Realtime WebSocket متصل لكن postgres_changes غير مؤكد — fallback فعال");
+                    return;
+                }
+
+                SetConnected(
+                    true,
+                    "Realtime متصل — postgres_changes مؤكد لسموحة");
                 return;
             }
 
-            if (eventName == "postgres_changes" ||
-                json.Contains(BuildConfig.WakeTable, StringComparison.OrdinalIgnoreCase))
+            if (eventName == "postgres_changes" &&
+                string.Equals(
+                    topic,
+                    $"realtime:public:{BuildConfig.WakeTable}",
+                    StringComparison.Ordinal))
             {
+                // Receiving a real database change is definitive proof that the
+                // branch-filtered subscription is live.
+                SetConnected(
+                    true,
+                    "Realtime متصل — تم استقبال Wake من سموحة");
                 try { _onWake(); } catch { }
             }
         }
         catch
         {
-            // Ignore protocol noise; the reconciliation timer is the safety net.
+            // Ignore protocol noise; reconciliation/fallback polling is the
+            // safety net and remains active until a verified subscription exists.
         }
+    }
+
+    private static bool HasPostgresSubscriptionConfirmation(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("response", out var response) ||
+            response.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (!response.TryGetProperty("postgres_changes", out var changes) ||
+            changes.ValueKind != JsonValueKind.Array)
+            return false;
+
+        // One postgres_changes entry was requested in phx_join, so an empty
+        // confirmation must not be treated as an active database subscription.
+        return changes.GetArrayLength() > 0;
+    }
+
+    private static string ReadString(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+            return "";
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? "",
+            JsonValueKind.Number => value.ToString(),
+            _ => ""
+        };
     }
 
     private string NextRef() =>
