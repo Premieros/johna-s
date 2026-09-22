@@ -109,13 +109,13 @@ internal sealed class TrayHostForm : Form
         {
             try
             {
-                BeginInvoke(() =>
+                BeginInvoke((Action)(() =>
                 {
                     _status.Text = value;
                     _tray.Text = value.Length > 63
                         ? value[..63]
                         : value;
-                });
+                }));
             }
             catch { }
         };
@@ -123,7 +123,7 @@ internal sealed class TrayHostForm : Form
         {
             try
             {
-                BeginInvoke(() => RenderMetrics(value));
+                BeginInvoke((Action)(() => RenderMetrics(value)));
             }
             catch { }
         };
