@@ -89,14 +89,14 @@ describe.skipIf(skip)('shift expected cash includes canonical outflows', () => {
     await client.end().catch(() => {});
   });
 
-  it('subtracts each posted cash expense once and subtracts in-window cash purchases net of returns', async () => {
+  it('subtracts assigned cash expenses once, ignores unassigned expenses, and subtracts in-window cash purchases', async () => {
     const result = await client.query<{ expected: string }>(
       'SELECT public._compute_shift_expected_cash($1)::text AS expected',
       [shiftId],
     );
 
-    // 100 opening + 200 cash sale - 30 linked expense - 7 unlinked in-window expense
-    // - (40 paid - 5 returned cash purchase) = 228.
-    expect(Number(result.rows[0].expected)).toBe(228);
+    // 100 opening + 200 cash sale - 30 linked expense - (40 paid - 5 returned cash purchase) = 235.
+    // The 7 EGP expense has no shift_id and must not leak into this shift.
+    expect(Number(result.rows[0].expected)).toBe(235);
   });
 });
