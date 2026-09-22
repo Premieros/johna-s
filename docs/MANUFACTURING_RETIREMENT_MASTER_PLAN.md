@@ -95,7 +95,7 @@ Production read-only audit before implementation:
 - inventory_unit_recipe_units: 6;
 - 502 products currently have direct legacy raw recipe rows;
 - 110 products have reusable inventory-unit raw groups;
-- 104 products use both paths and therefore require deterministic compatibility handling.
+- 104 products use both paths and therefore require deterministic combined handling;\n- 110/110 current group links have no same-name raw placeholder in the product recipe, confirming that name-based suppression is not a valid canonical rule.
 
 Canonical Phase-2 interpretation:
 - `recipes/recipe_items` = direct raw components of a product;
@@ -107,7 +107,7 @@ Canonical Phase-2 interpretation:
 Implementation:
 - adds internal `resolve_product_raw_components(product_id, branch_id)`;
 - resolver recursively flattens reusable/nested groups directly to raw-material quantities;
-- preserves current legacy placeholder behavior during migration by replacing same-name manufactured placeholders with the linked group's raw expansion;
+- removes name-based composition inference: Production audit found 0 same-name placeholder matches across all 110 current group links, so every explicit direct raw and every explicit group link contributes deterministically;
 - includes nested group wastage exactly as the old production consumption did;
 - does not create production orders, inventory batches, or stock movements;
 - rejects cross-branch groups/raws and detects cycles.
