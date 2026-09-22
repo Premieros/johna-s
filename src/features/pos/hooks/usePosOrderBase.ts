@@ -789,7 +789,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
 
       const warehouseId = await fetchBranchWarehouseId(branchId, activeOrderId);
-      const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
+      const invoiceNumber = (await nextInvoiceNumber(effSettings?.branch_invoice_prefix)) || `INV-${Date.now()}`;
       const itemsPayload = cartToItems(cart);
       const paidAmountToUse = paymentMethod === 'credit' ? 0 : paidAmount || total;
 
