@@ -76,6 +76,38 @@ BEGIN
     RAISE EXCEPTION 'COMPONENT_GROUP_CYCLE';
   END IF;
 
+  -- Nested reusable groups must not cross branch boundaries. Check this
+  -- explicitly instead of silently excluding a foreign child from flattening.
+  IF EXISTS (
+    WITH RECURSIVE unit_walk(unit_id, path) AS (
+      SELECT
+        pul.unit_id,
+        ARRAY[pul.unit_id]::uuid[]
+      FROM public.product_unit_links pul
+      JOIN public.inventory_units iu
+        ON iu.id = pul.unit_id
+       AND iu.branch_id = p_branch_id
+       AND iu.is_active = true
+      WHERE pul.product_id = p_product_id
+
+      UNION ALL
+
+      SELECT
+        rel.component_unit_id,
+        w.path || rel.component_unit_id
+      FROM unit_walk w
+      JOIN public.inventory_unit_recipe_units rel
+        ON rel.unit_id = w.unit_id
+      WHERE NOT rel.component_unit_id = ANY(w.path)
+    )
+    SELECT 1
+    FROM unit_walk w
+    JOIN public.inventory_units iu ON iu.id = w.unit_id
+    WHERE iu.branch_id IS DISTINCT FROM p_branch_id
+  ) THEN
+    RAISE EXCEPTION 'COMPONENT_GROUP_NOT_IN_BRANCH';
+  END IF;
+
   -- Direct product recipe rows must stay inside the product branch.
   IF EXISTS (
     WITH latest_recipe AS (
