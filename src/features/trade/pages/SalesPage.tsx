@@ -31,6 +31,7 @@ import {
 interface SaleRow {
   id: string;
   invoice_number: string;
+  source_order_id: string | null;
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
@@ -47,6 +48,7 @@ interface SaleRow {
   guest_count: number | null;
   is_archived: boolean;
   customer?: { name: string } | null;
+  source_order?: { order_number: string } | null;
   sale_items?: { id: string; product_id: string | null; unit_name: string; quantity: number; unit_price: number; discount_amount: number; refunded_quantity: number; refunded_amount: number; total: number; product?: { name: string } | null }[];
 }
 
@@ -58,7 +60,7 @@ export function SalesPage() {
   const history = useHistoryAccess();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, source_order_id, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     filters: [{ column: 'is_archived', value: false }],
@@ -105,6 +107,7 @@ export function SalesPage() {
     const s = search.toLowerCase();
     return (
       i.invoice_number?.toLowerCase().includes(s) ||
+      i.source_order?.order_number?.toLowerCase().includes(s) ||
       i.customer?.name?.toLowerCase().includes(s) ||
       i.status?.toLowerCase().includes(s)
     );
@@ -528,9 +531,16 @@ export function SalesPage() {
 
   const columns: Column<SaleRow>[] = [
     { key: 'invoice_number', header: t('invoiceNumber'), render: (r) => (
-      <div className="flex items-center gap-2">
-        <FileText className="w-4 h-4 text-brand-500" />
-        <span className="font-medium text-ui-text">{r.invoice_number}</span>
+      <div className="flex items-start gap-2">
+        <FileText className="mt-0.5 w-4 h-4 text-brand-500" />
+        <div>
+          <div className="font-medium text-ui-text">{r.invoice_number}</div>
+          {r.source_order?.order_number && (
+            <div className="text-[11px] font-bold text-ui-subtle">
+              {isAr ? 'الطلب' : 'Order'}: {r.source_order.order_number}
+            </div>
+          )}
+        </div>
       </div>
     )},
     { key: 'created_at', header: t('date'), render: (r) => <span className="text-sm text-ui-subtle">{formatDateTime(r.created_at, lang)}</span> },
@@ -614,7 +624,7 @@ export function SalesPage() {
 
       <DesignPanel testId="sales-search-panel">
         <DesignSearch value={search} onChange={setSearch} label={t('search')}
-          placeholder={isAr ? 'بحث برقم الفاتورة أو اسم العميل...' : 'Search by invoice number or customer...'} testId="sales-search" />
+          placeholder={isAr ? 'بحث برقم الفاتورة أو رقم الطلب أو اسم العميل...' : 'Search by invoice number, order number or customer...'} testId="sales-search" />
       </DesignPanel>
 
       <DesignPanel testId="sales-table-panel">
@@ -632,6 +642,11 @@ export function SalesPage() {
                 <FileText className="w-8 h-8 text-brand-500" />
                 <div>
                   <p className="font-bold text-lg text-ui-text">{viewSale.invoice_number}</p>
+                  {viewSale.source_order?.order_number && (
+                    <p className="text-xs font-bold text-ui-accent">
+                      {isAr ? 'رقم الطلب الأصلي' : 'Original order'}: {viewSale.source_order.order_number}
+                    </p>
+                  )}
                   <p className="text-sm text-ui-subtle">{formatDateTime(viewSale.created_at, lang)}</p>
                 </div>
               </div>
