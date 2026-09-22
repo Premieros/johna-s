@@ -63,10 +63,9 @@ describe.skipIf(skip)('Opening inventory FIFO cost repair', () => {
       [raw, branch],
     );
 
-    // No opening valuation existed. The first later authoritative pricing event
-    // is the traceable candidate used by the repair plan.
+    // Opening-time authoritative evidence is required for automatic repair.
     await client.query(
-      "INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,detail,priced_at) VALUES($1,$2,10,'pricing','PRICE-OPEN-REPAIR','integration candidate','2026-09-03T00:00:00Z')",
+      "INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,detail,priced_at) VALUES($1,$2,10,'pricing','PRICE-OPEN-REPAIR','integration candidate','2026-09-01T00:00:00Z')",
       [raw, branch],
     );
   });
@@ -100,7 +99,7 @@ describe.skipIf(skip)('Opening inventory FIFO cost repair', () => {
     );
     expect(num(plan[0].candidate_cost)).toBe(10);
     expect(plan[0].candidate_source).toBe('pricing');
-    expect(plan[0].candidate_basis).toBe('earliest_after_opening');
+    expect(plan[0].candidate_basis).toBe('latest_at_or_before_opening');
     expect(num(plan[0].opening_quantity)).toBe(5);
 
     const beforeQty = await q<{ qty: string }>(
