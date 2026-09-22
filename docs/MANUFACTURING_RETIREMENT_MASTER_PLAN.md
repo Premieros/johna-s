@@ -74,7 +74,7 @@ Completion note:
 - legacy DB compatibility functions remain for later retirement phases.
 
 ### Phase 2 — Canonical component graph
-Status: IN PROGRESS
+Status: COMPLETED
 Branch: development/retire-manufacturing-phase2-components-20260922
 Base: main@7bb0009409ce69410cb0cc4d6b9a17910fd33b85
 
@@ -117,6 +117,14 @@ Exit criteria:
 - no production order is required to resolve sale consumption;
 - existing product/recipe definitions are migrated or bridged losslessly;
 - integration proves direct + reusable + nested composition and zero production side effects.
+
+Verification:
+- Verify main #2366 ✅
+- lint/typecheck/unit/build ✅
+- Fresh DB/schema ✅
+- integration + security/RLS ✅
+- browser-smoke ✅
+- No Phase-2 migration applied to Production; production apply remains blocked until explicit approval.
 
 ### Phase 3 — Exact kitchen-send consumption snapshot
 Status: PENDING
