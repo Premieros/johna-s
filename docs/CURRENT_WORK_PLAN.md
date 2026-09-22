@@ -7,10 +7,10 @@
 - Base: `main@6838b23c310616a95e3b7235f624b8f2af22c779`
 - Live audit: `docs/STABILITY_INTEGRITY_AUDIT_2026-09-22.md`
 - Production inspection is read-only; printing / Print Agent / routing remain untouched.
-- Confirmed historical repair staged only: 12 Smouha purchase headers with wrong Cleopatra warehouse identity and 4 fully-voided zero-value open order shells.
+- Confirmed historical repair staged only: 12 Smouha purchase headers with wrong Cleopatra warehouse identity and 4 fully-voided stale open order shells with no effective items and zero net kitchen inventory.
 - Raw/FIFO live invariants are healthy: raw inventory vs batches 515/515 matched; FIFO pending reconciliation delta = 0; no current kitchen over-deduction signal.
 - Migration is forward-only, exact-ID scoped, assumption-guarded and no-op on fresh/already-repaired DBs.
-- Production migration is NOT applied. Required gates: focused tests -> exact-head Full Verify Green -> re-check Production assumptions -> explicit approval.
+- Full Verify run `35696371462` is Green end-to-end: verify ✅ / Fresh DB+schema+integration+security/RLS ✅ / Browser Smoke ✅. Production assumptions re-checked read-only and unchanged. Production migration is NOT applied; merge/apply still require explicit approval and a final latest-main recheck.
 
 آخر تحديث: **2026-09-19 — synchronized through PR #228**
 
