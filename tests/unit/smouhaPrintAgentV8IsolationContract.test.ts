@@ -57,6 +57,17 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     expect(renderer).toContain('totals');
   });
 
+  it('scopes realtime wake strictly to Smouha and leaves Cleopatra on V7', () => {
+    const migration = read('supabase/migrations/20260922165000_cloud_print_v8_realtime_wake.sql');
+    const build = read('print-agent-v8/BuildConfig.cs');
+    const smouha = '19c3fd23-d784-455b-8840-f4f2ac619651';
+
+    expect(build).toContain(`BranchId = "${smouha}"`);
+    expect(migration).toContain(`WHEN (NEW.branch_id = '${smouha}'::uuid)`);
+    expect(migration).toContain(`branch_id = '${smouha}'::uuid`);
+    expect(migration).toContain(`NEW.branch_id IS DISTINCT FROM '${smouha}'::uuid`);
+  });
+
   it('does not alter frozen V7 RPC definitions in the optional wake SQL', () => {
     const sql = read('print-agent-v8/sql/OPTIONAL_cloud_print_v8_realtime_wake.sql');
     expect(sql).not.toMatch(/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.(claim_cloud_print_jobs|start_cloud_print_job|complete_cloud_print_job)/i);
