@@ -6,9 +6,33 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 const BRANCHES_CHANGED_EVENT = 'premier:branches-changed';
 const branchCacheByUser = new Map<string, Branch[]>();
+const branchRequestByUser = new Map<string, Promise<Branch[]>>();
+
+async function fetchBranchesForUser(userId: string): Promise<Branch[]> {
+  const cached = branchCacheByUser.get(userId);
+  if (cached !== undefined) return cached;
+
+  const existing = branchRequestByUser.get(userId);
+  if (existing) return existing;
+
+  const pending = supabase.from('branches').select('*').order('name')
+    .then(({ data, error }) => {
+      if (error) throw error;
+      const next = (data as Branch[]) || [];
+      branchCacheByUser.set(userId, next);
+      return next;
+    })
+    .finally(() => {
+      branchRequestByUser.delete(userId);
+    });
+
+  branchRequestByUser.set(userId, pending);
+  return pending;
+}
 
 export function notifyBranchesChanged(): void {
   branchCacheByUser.clear();
+  branchRequestByUser.clear();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(BRANCHES_CHANGED_EVENT));
   }
@@ -31,19 +55,16 @@ export function useBranches() {
     }
 
     setLoading(branchCacheByUser.get(userId) === undefined);
-    const { data, error } = await supabase.from('branches').select('*').order('name');
-    if (error) {
+    try {
+      const next = await fetchBranchesForUser(userId);
+      setBranches(next);
+      setError(null);
+    } catch (error) {
       setBranches([]);
       setError(userFacingErrorMessage(error));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const next = (data as Branch[]) || [];
-    branchCacheByUser.set(userId, next);
-    setBranches(next);
-    setError(null);
-    setLoading(false);
   }, [userId]);
 
   useEffect(() => {
