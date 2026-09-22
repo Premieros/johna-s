@@ -73,6 +73,7 @@ export function SettingsControlCenterPage() {
         tax_enabled: row?.tax_enabled ?? null,
         currency: row?.currency ?? '',
         low_stock_threshold: row?.low_stock_threshold ?? null,
+        invoice_prefix: row?.invoice_prefix ?? '',
         business_day_mode: row?.business_day_mode ?? 'fixed_time',
         business_day_start: row?.business_day_start ?? '00:00',
         business_day_end: row?.business_day_end ?? '00:00',
@@ -108,6 +109,16 @@ export function SettingsControlCenterPage() {
 
   const saveBranchSpecific = async () => {
     if (!targetBranchId) return;
+    const invoicePrefix = String(branchForm.invoice_prefix || '').trim();
+    if (invoicePrefix.length > 12 || /[\r\n\t]/.test(invoicePrefix)) {
+      show(
+        isAr
+          ? 'بادئة الفاتورة يجب أن تكون في سطر واحد وبحد أقصى 12 حرفًا.'
+          : 'Invoice prefix must be a single line with at most 12 characters.',
+        'error',
+      );
+      return;
+    }
     setSaving(true);
     const patch: Partial<BranchSettings> = {
       receipt_header: branchForm.receipt_header || null,
@@ -116,6 +127,7 @@ export function SettingsControlCenterPage() {
       tax_rate: branchForm.tax_rate != null && !Number.isNaN(branchForm.tax_rate) ? branchForm.tax_rate : null,
       tax_enabled: branchForm.tax_enabled ?? null,
       currency: branchForm.currency || null,
+      invoice_prefix: invoicePrefix || null,
       low_stock_threshold:
         branchForm.low_stock_threshold != null && !Number.isNaN(branchForm.low_stock_threshold)
           ? branchForm.low_stock_threshold
@@ -219,8 +231,23 @@ export function SettingsControlCenterPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2 rounded-xl border border-ui-border bg-ui-page-alt p-4">
+                  <Input
+                    label={isAr ? 'بادئة فاتورة المبيعات الجديدة' : 'New Sales Invoice Prefix'}
+                    value={branchForm.invoice_prefix || ''}
+                    onChange={(e) => setBranchForm({ ...branchForm, invoice_prefix: e.target.value })}
+                    placeholder="#S"
+                    maxLength={12}
+                    dir="ltr"
+                  />
+                  <p className="mt-2 text-xs font-semibold text-ui-subtle">
+                    {isAr
+                      ? 'مثال: اكتب #S فتكون الفواتير الجديدة مثل #S12. يطبق على الفواتير الجديدة فقط؛ اتركه فارغًا للإبقاء على الترقيم الحالي.'
+                      : 'Example: enter #S and new invoices will look like #S12. This affects new invoices only; leave blank to keep current numbering.'}
+                  </p>
+                </div>
                 <Input
-                  label={isAr ? 'شعار خاص بهذا الفرع (رابط صورة)' : 'Branch Logo Image URL'}
+                  label={isAr ? 'شعار خاص بهذا الفرع (رابط صورة)' : 'Branch Logo Image URL'
                   value={branchForm.logo_url || ''}
                   onChange={(e) => setBranchForm({ ...branchForm, logo_url: e.target.value })}
                   placeholder="https://..."
