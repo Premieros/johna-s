@@ -42,6 +42,7 @@ All 12:
 - contain Smouha raw materials;
 - point to Cleopatra Main warehouse;
 - have `received_quantity = 0`;
+- have no GRN;
 - created no raw batches, inventory entries, ledger entries, stock transactions or stock movements.
 
 Therefore the defect is a historical header identity error, not a stock-quantity defect.
@@ -51,17 +52,19 @@ Repair in this branch:
 - abort if any receipt/stock effect or changed assumption is detected;
 - do not touch stock quantities, FIFO or accounting values.
 
-### B. 4 fully-voided zero-value order shells remain open
+### B. 4 fully-voided stale order shells remain open
 
 The four audited orders:
-- have no current order items or kitchen-send snapshot;
-- are unpaid;
+- have no current effective order items or kitchen-send snapshot;
+- are unpaid and have no payment timestamp;
 - have zero net kitchen inventory quantity after voids;
 - have no shift/accounting/stock reference;
+- retain stale header state/totals on three rows even though all effective items are gone;
 - predate or fell outside the current fully-voided-order auto-close path.
 
 Repair in this branch:
 - mark only those four shells cancelled;
+- zero stale subtotal/total header values;
 - align kitchen status to cancelled;
 - preserve historical notes and append a system retirement marker;
 - keep table safety guard so another live order can never be freed.
@@ -73,10 +76,39 @@ Repair in this branch:
 - Historical settled kitchen event totals can differ from the current send snapshot after void/resend cycles; live/unsettled overage is the actionable invariant.
 - Negative raw batches are expected debt under the approved negative-raw sell-through contract.
 
-## Next gates
+## Verification
 
-1. Focused contract test.
-2. Full Verify on exact branch HEAD.
-3. Review migration diff and re-query Production assumptions read-only.
-4. No Production migration until Full Verify Green and explicit approval.
-5. After data repair is proven, proceed to low-risk project cleanup/dead-path reduction separately.
+Exact repair head before this documentation update: `ecea5aecd792200e5c278732c3c80a22e1c441fb`.
+
+GitHub Actions run `35696371462` — Full Green:
+- application verify: ✅
+  - locked Supabase identity
+  - frontend API contract
+  - lint
+  - TypeScript
+  - application/test-suite typecheck
+  - unit tests
+  - build
+- DB verification: ✅
+  - canonical migrations on fresh PostgreSQL
+  - schema verification
+  - integration + security/RLS regression
+- Browser Smoke / Playwright Chromium: ✅
+
+Production assumptions were re-queried read-only after Full Green:
+- all 12 purchase headers are still Smouha rows pointing at Cleopatra warehouse;
+- all 12 still have received quantity 0, returned quantity 0, and no GRN;
+- all 4 stale orders remain open/unpaid with 0 effective items, 0 effective send snapshot, 0 net kitchen inventory quantity, 0 shift refs and 0 journal refs.
+
+## Gate status
+
+- Focused contract: ✅
+- Full Verify: ✅
+- Fresh DB/schema: ✅
+- Integration/security/RLS: ✅
+- Browser Smoke: ✅
+- Production assumptions re-checked read-only: ✅
+- Printing/KDS/Print Agent touched: ❌
+- Production migration applied: ❌
+- Merge: pending explicit approval / final main-head recheck.
+- Production migration: pending explicit approval after merge and final pre-apply dry-run.
