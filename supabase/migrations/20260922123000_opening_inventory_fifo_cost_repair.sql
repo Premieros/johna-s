@@ -112,11 +112,13 @@ BEGIN
       COALESCE(ol.receipt_count,0)=1
       AND COALESCE(ol.opening_quantity,0)>0
       AND COALESCE(c.unit_cost,0)>0
+      AND c.priced_at<=b.created_at
     ),
     CASE
       WHEN COALESCE(ol.receipt_count,0)<>1 THEN 'OPENING_LEDGER_IDENTITY_AMBIGUOUS'
       WHEN COALESCE(ol.opening_quantity,0)<=0 THEN 'OPENING_QUANTITY_INVALID'
       WHEN COALESCE(c.unit_cost,0)<=0 THEN 'NO_AUTHORITATIVE_PRICE_EVENT'
+      WHEN c.priced_at>b.created_at THEN 'FUTURE_PRICE_REQUIRES_REVIEW'
       ELSE NULL
     END
   FROM public.raw_material_batches b
@@ -262,8 +264,14 @@ BEGIN
       RAISE EXCEPTION 'OPENING_COST_REPAIR_LEDGER_CHANGED ledger=%',v_row.opening_ledger_id;
     END IF;
 
-    IF COALESCE(v_row.candidate_cost,0)<=0 THEN
+    IF COALESCE(v_row.candidate_cost,0)<=0 OR v_row.candidate_at IS NULL THEN
       RAISE EXCEPTION 'OPENING_COST_REPAIR_INVALID_CANDIDATE batch=%',v_row.batch_id;
+    END IF;
+
+    IF v_row.candidate_at > (
+      SELECT b.created_at FROM public.raw_material_batches b WHERE b.id=v_row.batch_id
+    ) THEN
+      RAISE EXCEPTION 'OPENING_COST_REPAIR_FUTURE_CANDIDATE batch=%',v_row.batch_id;
     END IF;
 
     UPDATE public.raw_material_batches
