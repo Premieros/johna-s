@@ -65,7 +65,10 @@ EXECUTE FUNCTION public.touch_cloud_print_v8_wake_state();
 
 DO $publication$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM pg_publication
+    WHERE pubname = 'supabase_realtime'
+  ) AND NOT EXISTS (
     SELECT 1
     FROM pg_publication_tables
     WHERE pubname = 'supabase_realtime'
