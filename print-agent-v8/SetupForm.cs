@@ -43,7 +43,7 @@ internal sealed class SetupForm : Form
         _printer = printer;
         _config = config;
 
-        Text = "Smouha Form Print Agent V8 — إعداد";
+        Text = "Smouha Form Print Agent V8.1 Lite — إعداد";
         Width = 760;
         Height = 610;
         StartPosition = FormStartPosition.CenterScreen;
@@ -304,7 +304,7 @@ internal sealed class SetupForm : Form
                 box.SelectedItem.ToString()!,
                 template,
                 80);
-            MessageBox.Show("تم إرسال فورمة V8 التجريبية.");
+            MessageBox.Show("تم إرسال فورمة V8.1 التجريبية.");
         }
         catch (Exception ex)
         {
@@ -313,29 +313,6 @@ internal sealed class SetupForm : Form
                 "خطأ طباعة",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
-        }
-    }
-
-    private async Task TestTextAsync(ComboBox box)
-    {
-        if (box.SelectedItem is null)
-        {
-            MessageBox.Show("اختر طابعة الكاش أولاً.");
-            return;
-        }
-
-        try
-        {
-            await _printer.PrintTextAsync(
-                box.SelectedItem.ToString()!,
-                "V8 LEGACY FALLBACK\r\nاختبار نص قديم فقط\r\n" +
-                "الفورمة المنظمة تستخدم تلقائياً عندما يكون template موجوداً.",
-                80);
-            MessageBox.Show("تم إرسال Text fallback.");
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message);
         }
     }
 
