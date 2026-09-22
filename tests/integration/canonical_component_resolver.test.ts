@@ -126,7 +126,7 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
     await client.end().catch(() => {});
   });
 
-  it('flattens direct raws plus reusable and nested groups without manufacturing', async () => {
+  it('flattens every explicit direct raw plus reusable and nested groups without manufacturing', async () => {
     const before = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count
        FROM public.inventory_unit_productions
@@ -147,11 +147,11 @@ describe.skipIf(skip)('canonical product raw component resolver', () => {
 
     const byId = new Map(resolved.rows.map((row) => [row.raw_material_id, Number(row.quantity_per_sale)]));
 
-    expect(resolved.rows).toHaveLength(3);
+    expect(resolved.rows).toHaveLength(4);
     expect(byId.get(rawDirect)).toBeCloseTo(1, 6);
     expect(byId.get(rawGroup)).toBeCloseTo(6.6, 6);
     expect(byId.get(rawNested)).toBeCloseTo(6, 6);
-    expect(byId.has(rawPlaceholder)).toBe(false);
+    expect(byId.get(rawPlaceholder)).toBeCloseTo(1, 6);
 
     const after = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count
