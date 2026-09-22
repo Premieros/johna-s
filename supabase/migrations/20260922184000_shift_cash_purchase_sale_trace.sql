@@ -126,14 +126,7 @@ AS $function$
       ON e.branch_id = s.branch_id
      AND e.status = 'posted'
      AND COALESCE(e.payment_method, 'cash') = 'cash'
-     AND (
-       e.shift_id = s.id
-       OR (
-         e.shift_id IS NULL
-         AND e.created_at >= s.opened_at
-         AND e.created_at <= s.effective_closed_at
-       )
-     )
+     AND e.shift_id = s.id
   ),
   cash_purchases AS (
     SELECT COALESCE(sum(
