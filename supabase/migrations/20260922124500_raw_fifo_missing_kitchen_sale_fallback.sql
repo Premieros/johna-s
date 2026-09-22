@@ -67,8 +67,8 @@ BEGIN
       );
     END IF;
 
-    SELECT count(*),min(o.id)
-    INTO v_order_count,v_sale_id
+    SELECT count(*)
+    INTO v_order_count
     FROM public.orders o
     WHERE o.branch_id=p_branch_id
       AND o.order_number=v_ref_no;
@@ -86,11 +86,20 @@ BEGIN
       );
     END IF;
 
-    SELECT count(*),min(s.id),min(s.status)
-    INTO v_sale_count,v_sale_id,v_sale_status
+    SELECT count(*)
+    INTO v_sale_count
     FROM public.sales s
     WHERE s.branch_id=p_branch_id
       AND s.invoice_number=v_ref_no;
+
+    IF v_sale_count=1 THEN
+      SELECT s.id,s.status
+      INTO v_sale_id,v_sale_status
+      FROM public.sales s
+      WHERE s.branch_id=p_branch_id
+        AND s.invoice_number=v_ref_no
+      LIMIT 1;
+    END IF;
 
     SELECT count(*)
     INTO v_journal_count
