@@ -15,6 +15,8 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const PROFILE_RETRY_INITIAL_MS = 1_000;
+const PROFILE_RETRY_MAX_MS = 5_000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -32,48 +34,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
+    // Keep the authenticated Supabase session mounted while the public profile
+    // is being revalidated. A transient database/network failure must never be
+    // converted into a real sign-out.
+    setSession(activeSession);
+
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', activeSession.user.id)
       .maybeSingle();
 
+    if (error) {
+      throw error;
+    }
+
     // A Supabase Auth identity is not an application account by itself.
     // Never synthesize a role, auto-create a profile, or trust auth metadata.
-    if (error || !data || data.is_active === false) {
+    // Missing/inactive profiles are definitive failures; transport failures
+    // are handled separately above and keep the current session alive.
+    if (!data || data.is_active === false) {
       clearAuthState();
       await supabase.auth.signOut().catch(() => {});
       return null;
     }
 
     const profile = data as AppUser;
-    setSession(activeSession);
     setUser(profile);
     return profile;
   }, [clearAuthState]);
 
   useEffect(() => {
     let mounted = true;
+    let retryTimer: number | null = null;
+
+    const hydrateSession = async (activeSession: Session | null, retryDelay = PROFILE_RETRY_INITIAL_MS): Promise<void> => {
+      if (!mounted) return;
+      if (!activeSession) {
+        clearAuthState();
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await loadUser(activeSession);
+        if (mounted) setLoading(false);
+      } catch {
+        if (!mounted) return;
+        // Keep the valid Supabase session and the last verified user mounted.
+        // Retry profile hydration instead of sending an active operator back
+        // to the login page because of a temporary connectivity/PostgREST error.
+        setSession(activeSession);
+        setLoading(true);
+        retryTimer = window.setTimeout(() => {
+          void hydrateSession(activeSession, Math.min(retryDelay * 2, PROFILE_RETRY_MAX_MS));
+        }, retryDelay);
+      }
+    };
 
     void supabase.auth.getSession()
-      .then(async ({ data: { session: activeSession } }) => {
-        if (!mounted) return;
-        if (!activeSession) {
-          clearAuthState();
-          return;
-        }
-        await loadUser(activeSession);
+      .then(({ data: { session: activeSession } }) => {
+        void hydrateSession(activeSession);
       })
       .catch(() => {
-        if (mounted) clearAuthState();
-      })
-      .finally(() => {
         if (mounted) setLoading(false);
       });
 
     const { data: subscriptionHandle } = supabase.auth.onAuthStateChange((event, activeSession) => {
       if (!mounted) return;
       if (event === 'SIGNED_OUT' || !activeSession) {
+        if (retryTimer !== null) window.clearTimeout(retryTimer);
+        retryTimer = null;
         clearAuthState();
         setLoading(false);
         return;
@@ -86,13 +117,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       setLoading(true);
-      void loadUser(activeSession).finally(() => {
-        if (mounted) setLoading(false);
-      });
+      void hydrateSession(activeSession);
     });
 
     return () => {
       mounted = false;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
       subscriptionHandle.subscription.unsubscribe();
     };
   }, [clearAuthState, loadUser, user?.id]);
@@ -102,7 +132,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!activeSession) {
       return { error: { code: 'session_missing', message: 'Session was not created.' } };
     }
-    const profile = await loadUser(activeSession);
+    let profile: AppUser | null = null;
+    try {
+      profile = await loadUser(activeSession);
+    } catch {
+      return { error: { code: 'profile_check_unavailable', message: 'Could not verify the application profile. Please retry.' } };
+    }
     if (!profile) {
       return { error: { code: 'profile_missing', message: 'This authentication account has no active application profile.' } };
     }
@@ -154,7 +189,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = async () => {
     const activeSession = (await supabase.auth.getSession()).data.session;
-    await loadUser(activeSession);
+    try {
+      await loadUser(activeSession);
+    } catch {
+      // A transient profile read failure must not invalidate an otherwise
+      // healthy authenticated session. Background hydration will retry.
+    }
   };
 
   return (
