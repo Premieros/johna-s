@@ -9,7 +9,7 @@ describe('receipt visual unification contract', () => {
     expect(printing).toContain('APPROVED_FIXED_THERMAL_WIDTH_MM = 80');
     expect(printing).toContain('const template = buildReceiptFixedTemplate(receipt, s, lang, isAr);');
     expect(printing).toContain('buildFixedThermalTemplateHtml(template)');
-    expect(renderer).toContain('font-family: \"Arial Narrow\", \"Segoe UI\", Tahoma, Arial, sans-serif;');
+    expect(renderer).toContain('font-family: "Arial Narrow", "Segoe UI", Tahoma, Arial, sans-serif;');
     expect(renderer).toContain('grid-template-columns: 8mm minmax(0, 1fr) 19mm 23mm;');
     expect(renderer).toContain('direction: ltr;');
     expect(renderer).toContain('unicode-bidi: isolate;');
