@@ -74,7 +74,9 @@ Completion note:
 - legacy DB compatibility functions remain for later retirement phases.
 
 ### Phase 2 — Canonical component graph
-Status: PENDING
+Status: IN PROGRESS
+Branch: development/retire-manufacturing-phase2-components-20260922
+Base: main@7bb0009409ce69410cb0cc4d6b9a17910fd33b85
 
 Goal:
 - define one canonical composition model for products and reusable named component groups;
