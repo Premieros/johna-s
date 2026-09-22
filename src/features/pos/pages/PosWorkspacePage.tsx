@@ -404,8 +404,8 @@ export function PosWorkspacePage() {
         let loadedProds: Product[] = [];
         let loadedCats: Category[] = [];
         let loadedCusts: Customer[] = [];
-        const loadedSettings: Settings | null = settings;
-        const loadedBranches: Branch[] = branches;
+        const loadedSettings: Settings | null = sharedSettings;
+        const loadedBranches: Branch[] = sharedBranches;
 
         if (pRes.status === 'rejected') productLoadError = pRes.reason;
         else if (pRes.value.error) productLoadError = pRes.value.error;
@@ -507,7 +507,7 @@ export function PosWorkspacePage() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData, settings, branches, isAr]);
+  }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData, sharedSettings, sharedBranches, isAr]);
 
   useEffect(() => {
     if (effectiveBranch) void loadSellabilityStatus(effectiveBranch);
