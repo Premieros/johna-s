@@ -83,3 +83,16 @@ Repair the missing **opening valuation** without replacing the existing FIFO eng
 - Confirmed 141 have an authoritative candidate and 21 do not.
 - Chosen approach: additive prepare/apply/reverse repair that reuses the already-tested FIFO historical reconciliation engine.
 - No Production write performed.
+
+
+### 2026-09-22 — Targeted repair implemented on development branch
+
+- Added migration: `20260922123000_opening_inventory_fifo_cost_repair.sql`.
+- Added internal-only `prepare / apply / reverse` functions.
+- Prepare is read-only and records every zero-cost opening batch, exact opening ledger identity, authoritative candidate source/date/reference, and unresolved reason.
+- Apply changes valuation only, then atomically invokes the existing historical FIFO prepare/apply engine so historical sale/kitchen/production valuation follows the corrected opening lot cost.
+- Apply does not alter physical quantities.
+- Rows without a purchase/count/pricing candidate remain untouched.
+- Added guarded reversal that first invokes the existing FIFO reversal, then restores only repair-owned opening valuation.
+- Added unit safety contract and integration coverage for prepare -> apply -> historical sale COGS delta -> reverse.
+- Production remains untouched; no migration or repair function has been executed there.
