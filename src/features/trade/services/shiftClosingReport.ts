@@ -22,6 +22,7 @@ export interface ShiftClosingSummary {
   returns: number;
   voids: number;
   expenses: number;
+  cashPurchases?: number;
   netRevenue: number;
   totalTaxes: number;
   netSales: number;
@@ -73,6 +74,7 @@ export interface ShiftClosingSummary {
   salesDetails?: {
     saleId: string;
     invoiceNumber: string;
+    orderNumber?: string;
     userId: string;
     userName: string;
     subtotal: number;
@@ -84,6 +86,13 @@ export interface ShiftClosingSummary {
     paymentMethod: string;
     payments?: Array<{ method: string; amount: number }>;
     orderType: string;
+    createdAt: string;
+  }[];
+
+  cashPurchaseDetails?: {
+    purchaseId: string;
+    invoiceNumber: string;
+    amount: number;
     createdAt: string;
   }[];
 
@@ -398,6 +407,7 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
     `${isAr ? 'المرتجعات' : 'Returns'}: ${money(summary.returns)}`,
     `${isAr ? 'الإلغاءات' : 'Voids'}: ${money(summary.voids)}`,
     `${isAr ? 'المصروفات' : 'Expenses'}: ${money(summary.expenses)}`,
+    `${isAr ? 'مشتريات كاش' : 'Cash Purchases'}: ${money(summary.cashPurchases || 0)}`,
     `${isAr ? 'صافي المبيعات' : 'Net Sales'}: ${money(summary.netSales)}`,
     `${isAr ? 'صافي الإيراد' : 'Net Revenue'}: ${money(summary.netRevenue)}`,
     line,
@@ -542,6 +552,7 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     ${(summary.salesDetails || []).map((sale) => `
       <div class="py-1 border-b">
         <div class="flex justify-between"><span class="font-bold">${escapeHtml(sale.invoiceNumber)}</span><span class="font-bold">${formatCurrency(sale.total, currency, lang)}</span></div>
+        ${sale.orderNumber ? `<div style="font-size:9px;font-weight:700;">${isAr ? 'الطلب الأصلي' : 'Original order'}: ${escapeHtml(sale.orderNumber)}</div>` : ''}
         <div style="font-size:9px;">${escapeHtml(sale.userName || '-')} · ${formatDateTime(sale.createdAt, lang)}</div>
         ${(sale.payments && sale.payments.length > 0)
           ? sale.payments.map((payment) => `<div class="flex justify-between" style="font-size:10px;"><span>${escapeHtml(payment.method)}</span><span>${formatCurrency(payment.amount, currency, lang)}</span></div>`).join('')
@@ -554,6 +565,14 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
   <div class="flex justify-between py-1">
     <span>${isAr ? 'رصيد الافتتاح:' : 'Opening Cash:'}</span>
     <span>${formatCurrency(summary.openingAmount, currency, lang)}</span>
+  </div>
+  <div class="flex justify-between py-1">
+    <span>${isAr ? 'المصروفات:' : 'Expenses:'}</span>
+    <span>-${formatCurrency(summary.expenses, currency, lang)}</span>
+  </div>
+  <div class="flex justify-between py-1">
+    <span>${isAr ? 'مشتريات كاش:' : 'Cash Purchases:'}</span>
+    <span>-${formatCurrency(summary.cashPurchases || 0, currency, lang)}</span>
   </div>
   <div class="flex justify-between py-1">
     <span>${isAr ? 'المتوقع بالدرج:' : 'Expected Cash:'}</span>
@@ -575,6 +594,16 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
         <div class="flex justify-between"><span class="font-bold">${escapeHtml(e.category || '-')}</span><span class="font-bold">-${formatCurrency(e.amount, currency, lang)}</span></div>
         <div class="flex justify-between"><span>${escapeHtml(e.description || '-')}</span><span>${escapeHtml(e.paymentMethod)}</span></div>
         <div style="font-size:9px;">${escapeHtml(e.createdByName)} · ${formatDateTime(e.createdAt, lang)}</div>
+      </div>
+    `).join('')}
+  ` : ''}
+
+  ${(summary.cashPurchaseDetails || []).length > 0 ? `
+    <div class="section-title">${isAr ? 'مشتريات الكاش' : 'CASH PURCHASES'}</div>
+    ${(summary.cashPurchaseDetails || []).map((p) => `
+      <div class="py-1 border-b">
+        <div class="flex justify-between"><span class="font-bold">${escapeHtml(p.invoiceNumber || '-')}</span><span class="font-bold">-${formatCurrency(p.amount, currency, lang)}</span></div>
+        <div style="font-size:9px;">${formatDateTime(p.createdAt, lang)}</div>
       </div>
     `).join('')}
   ` : ''}
@@ -789,6 +818,8 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
         <table>
           <tbody>
             <tr><td>${isAr ? 'رصيد الافتتاح:' : 'Opening Cash:'}</td><td class="text-end">${formatCurrency(summary.openingAmount, currency, lang)}</td></tr>
+            <tr><td>${isAr ? 'المصروفات النقدية:' : 'Cash Expenses:'}</td><td class="text-end">-${formatCurrency(summary.expenses, currency, lang)}</td></tr>
+            <tr><td>${isAr ? 'مشتريات الكاش:' : 'Cash Purchases:'}</td><td class="text-end">-${formatCurrency(summary.cashPurchases || 0, currency, lang)}</td></tr>
             <tr><td>${isAr ? 'المتوقع بالدرج:' : 'Expected Cash:'}</td><td class="text-end font-bold">${formatCurrency(summary.expectedAmount, currency, lang)}</td></tr>
             <tr><td>${isAr ? 'الفعلي بالدرج (العد):' : 'Actual Counted:'}</td><td class="text-end font-bold">${formatCurrency(summary.actualAmount, currency, lang)}</td></tr>
             <tr style="background: #f8fafc; font-weight: 900; color: ${diffColor};"><td>${isAr ? 'الفارق (عجز / زيادة):' : 'Difference:'}</td><td class="text-end">${formatCurrency(summary.difference, currency, lang)}</td></tr>
@@ -828,7 +859,10 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
           <th class="text-end">${isAr ? 'الإجمالي' : 'Total'}</th>
         </tr></thead>
         <tbody>${(summary.salesDetails || []).map((sale) => `<tr>
-          <td>${escapeHtml(sale.invoiceNumber)}</td>
+          <td>
+            <div>${escapeHtml(sale.invoiceNumber)}</div>
+            ${sale.orderNumber ? `<div style="font-size:10px;color:#64748b;font-weight:700;">${isAr ? 'الطلب' : 'Order'}: ${escapeHtml(sale.orderNumber)}</div>` : ''}
+          </td>
           <td>${escapeHtml(sale.userName || '-')}</td>
           <td>${(sale.payments && sale.payments.length > 0)
             ? sale.payments.map((payment) => `${escapeHtml(payment.method)}: ${formatCurrency(payment.amount, currency, lang)}`).join(' + ')
@@ -849,6 +883,22 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
           <td>${escapeHtml(e.category || '-')}</td><td>${escapeHtml(e.description || '-')}</td>
           <td>${escapeHtml(e.createdByName || '-')}</td><td>${escapeHtml(e.paymentMethod || '-')}</td>
           <td class="text-end font-bold">${formatCurrency(e.amount, currency, lang)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    ` : ''}
+
+    ${(summary.cashPurchaseDetails || []).length > 0 ? `
+      <h3 class="section-heading">${isAr ? 'مشتريات الكاش بالتفصيل' : 'Cash Purchase Details'}</h3>
+      <table>
+        <thead><tr>
+          <th>${isAr ? 'فاتورة الشراء' : 'Purchase Invoice'}</th>
+          <th>${isAr ? 'التاريخ' : 'Date'}</th>
+          <th class="text-end">${isAr ? 'المبلغ المخصوم' : 'Cash Outflow'}</th>
+        </tr></thead>
+        <tbody>${(summary.cashPurchaseDetails || []).map((p) => `<tr>
+          <td>${escapeHtml(p.invoiceNumber || '-')}</td>
+          <td>${formatDateTime(p.createdAt, lang)}</td>
+          <td class="text-end font-bold">-${formatCurrency(p.amount, currency, lang)}</td>
         </tr>`).join('')}</tbody>
       </table>
     ` : ''}
