@@ -1,5 +1,5 @@
 -- Canonical component resolver for the manufacturing-retirement program.
--- Phase 2 is additive only: existing recipe/unit tables remain untouched.
+-- Phase 2 is additive only: existing recipe/unit tables remain untouched.\n-- Every explicit direct raw and every explicit reusable-group link contributes;\n-- no name-based component inference is used.
 -- The resolver interprets:
 --   recipes/recipe_items                    = direct product raw components
 --   product_unit_links + inventory_units   = reusable named component groups
@@ -183,20 +183,6 @@ BEGIN
       ON rm.id = ri.raw_material_id
      AND rm.branch_id = p_branch_id
      AND rm.is_active = true
-    WHERE NOT EXISTS (
-      -- Compatibility bridge for the old "manufactured raw placeholder":
-      -- if the product links a named reusable group with the same normalized
-      -- name, the placeholder row is replaced by the group's flattened raws.
-      SELECT 1
-      FROM public.product_unit_links pul
-      JOIN public.inventory_units iu
-        ON iu.id = pul.unit_id
-       AND iu.branch_id = p_branch_id
-       AND iu.is_active = true
-      WHERE pul.product_id = p_product_id
-        AND regexp_replace(lower(btrim(iu.name)), '[ .]+$', '', 'g')
-            = regexp_replace(lower(btrim(rm.name)), '[ .]+$', '', 'g')
-    )
     GROUP BY ri.raw_material_id, rm.name
   ),
   group_raw AS (
