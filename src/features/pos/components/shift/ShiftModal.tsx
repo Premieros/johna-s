@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/format';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useToast } from '@/components/Toast';
+import { useCan } from '@/lib/permissions';
 import { buildThermalZReportHtml, buildA4ZReportHtml, type ShiftClosingSummary } from '@/features/trade/services/shiftClosingReport';
 import { fetchShiftClosingReportServer } from '@/features/trade/services/shiftClosingFinancials';
 
@@ -28,6 +29,7 @@ export function ShiftModal({
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { show } = useToast();
+  const can = useCan();
 
   const [closingCash, setClosingCash] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
@@ -35,9 +37,11 @@ export function ShiftModal({
   const [sensitiveAction, setSensitiveAction] = useState<'force_close' | 'open_drawer' | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [summary, setSummary] = useState<ShiftClosingSummary | null>(null);
+  const [closeBlock, setCloseBlock] = useState<{ openOrderCount: number; openTableCount: number } | null>(null);
 
   useEffect(() => {
     if (isOpen && activeShift?.id) {
+      setCloseBlock(null);
       setLoadingSummary(true);
       fetchShiftClosingReportServer(activeShift.id)
         .then((data) => setSummary(data))
@@ -195,15 +199,78 @@ export function ShiftModal({
 
     setClosing(true);
     try {
-      const { error } = await api.shifts.close({
+      const { data, error } = await api.shifts.close({
         p_shift_id: activeShift.id,
         p_actual_amount: actualAmount,
         p_notes: notes.trim() || null,
       });
 
       if (error) throw error;
+      const result = data as {
+        success?: boolean;
+        error?: string;
+        detail?: string;
+        open_order_count?: number;
+        open_table_count?: number;
+      } | null;
 
-      show(isAr ? 'تم إغلاق الوردية واليوم بنجاح' : 'Shift & Day closed successfully', 'success');
+      if (!result?.success) {
+        if (result?.error === 'OPEN_ORDERS_BLOCK_SHIFT_CLOSE') {
+          const block = {
+            openOrderCount: Number(result.open_order_count || 0),
+            openTableCount: Number(result.open_table_count || 0),
+          };
+          setCloseBlock(block);
+          show(
+            can('shifts.close_with_open_orders')
+              ? (isAr
+                ? `يوجد ${block.openOrderCount} طلب مفتوح/معلق. استخدم زر إغلاق الوردية مع إبقاء الطلبات المفتوحة إذا كان هذا مقصودًا.`
+                : `${block.openOrderCount} open/held order(s) remain. Use the close-with-open-orders action if intentional.`)
+              : (isAr
+                ? `تعذر الإغلاق: يوجد ${block.openOrderCount} طلب مفتوح/معلق على ${block.openTableCount} طاولة.`
+                : `Shift close blocked by ${block.openOrderCount} open/held order(s) on ${block.openTableCount} table(s).`),
+            'error',
+          );
+          return;
+        }
+        show(result?.detail || result?.error || (isAr ? 'تعذر إغلاق الوردية' : 'Could not close shift'), 'error');
+        return;
+      }
+
+      setCloseBlock(null);
+      show(isAr ? 'تم إغلاق الوردية بنجاح' : 'Shift closed successfully', 'success');
+      onShiftClosed();
+      onClose();
+    } catch (err: unknown) {
+      show(err instanceof Error ? err.message : 'Error closing shift', 'error');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const handleCloseWithOpenOrders = async () => {
+    if (!activeShift || typeof closingCash !== 'number' || closing) return;
+    if (!can('shifts.close') || !can('shifts.close_with_open_orders')) {
+      show(isAr ? 'لا تملك صلاحية إغلاق الوردية مع بقاء الطلبات المفتوحة' : 'Missing close-with-open-orders permission', 'error');
+      return;
+    }
+
+    setClosing(true);
+    try {
+      const { data, error } = await api.shifts.closeWithOpenOrders({
+        p_shift_id: activeShift.id,
+        p_actual_amount: actualAmount,
+        p_notes: notes.trim() || null,
+      });
+      if (error) throw error;
+      const result = data as { success?: boolean; error?: string; detail?: string } | null;
+      if (!result?.success) {
+        show(result?.detail || result?.error || (isAr ? 'تعذر إغلاق الوردية' : 'Could not close shift'), 'error');
+        return;
+      }
+
+      setCloseBlock(null);
+      show(isAr ? 'تم إغلاق الوردية مع إبقاء الطلبات المفتوحة كما هي' : 'Shift closed and open orders were preserved', 'success');
       onShiftClosed();
       onClose();
     } catch (err: unknown) {
@@ -369,6 +436,28 @@ export function ShiftModal({
                 </div>
               )}
 
+              {closeBlock && (
+                <div className="rounded-2xl border border-ui-warning/40 bg-ui-warning/10 p-3 text-xs font-bold text-ui-warning">
+                  <div>
+                    {isAr
+                      ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق على ${closeBlock.openTableCount} طاولة.`
+                      : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s).`}
+                  </div>
+                  {can('shifts.close') && can('shifts.close_with_open_orders') && (
+                    <button
+                      type="button"
+                      onClick={handleCloseWithOpenOrders}
+                      disabled={closing}
+                      className="mt-3 w-full rounded-xl border border-ui-warning/40 bg-ui-surface py-2.5 font-black text-ui-warning hover:bg-ui-warning/10 disabled:opacity-50"
+                    >
+                      {closing
+                        ? (isAr ? 'جاري الإغلاق...' : 'Closing...')
+                        : (isAr ? 'إغلاق الوردية مع إبقاء الطلبات المفتوحة' : 'Close Shift and Keep Open Orders')}
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Print buttons */}
               {summary && (
                 <div className="flex gap-2">
@@ -441,7 +530,7 @@ export function ShiftModal({
                   disabled={closing || typeof closingCash !== 'number'}
                   className="flex-1 rounded-xl bg-ui-danger py-3 text-xs font-black text-ui-primary-fg shadow-ui-md hover:bg-ui-danger/90 disabled:opacity-50"
                 >
-                  {closing ? (isAr ? 'جاري الإغلاق...' : 'Closing...') : (isAr ? 'إغلاق اليوم والوردية' : 'Close Day & Shift')}
+                  {closing ? (isAr ? 'جاري الإغلاق...' : 'Closing...') : (isAr ? 'إغلاق الوردية' : 'Close Shift')}
                 </button>
               </div>
             </form>
