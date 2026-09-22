@@ -29,7 +29,7 @@ describe('Smouha Print Agent V8 isolation and query budget', () => {
     expect(worker).toContain('FixedTemplateRenderer.TryGetTemplate');
     expect(worker).toContain('PrintTemplateAsync');
     expect(worker).toContain('PrintTextAsync');
-    expect(renderer).toContain('qty-badge');
+    expect(renderer).toContain('badgeW');
     expect(renderer).toContain('itemsHeading');
     expect(renderer).toContain('totals');
   });
