@@ -8,6 +8,9 @@ describe('shift report product / ingredient composition contract', () => {
     expect(source).toContain("const saleIds = Array.from(new Set(salesDetails.map((sale) => sale.saleId).filter(Boolean)))");
     expect(source).toContain(".from('sale_items')");
     expect(source).toContain("product:products(name,name_en)");
+    expect(source).toContain('refunded_quantity,refunded_amount');
+    expect(source).toContain('const netQuantity = Math.max(0, Number(item.quantity || 0) - Number(item.refunded_quantity || 0))');
+    expect(source).toContain('const netLineTotal = Math.max(0, grossLineTotal - Number(item.refunded_amount || 0))');
     expect(source).toContain('productsSold: Array.from(productMap');
     expect(source).toContain('ingredientsConsumed: Array.from(ingredientsMap');
     expect(source).toContain('orderTypes: Array.from(orderTypeMap');
