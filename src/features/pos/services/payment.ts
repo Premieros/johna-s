@@ -2,6 +2,7 @@ import { pos as posApi, supabase, type SplitTenderInput } from '@/api';
 import { enqueueOfflineSale, type OfflineSaleQueueItem } from '@/core/offline/offlineStorage';
 import type { RpcResult, OrderType } from '@/lib/types';
 import type { ItemPayload } from '../utils/cart';
+import { formatAllocatedInvoiceNumber } from '../utils/invoiceNumber';
 
 export interface ProcessSalePayload {
   p_invoice_number: string;
@@ -219,13 +220,6 @@ export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Prom
   }
 }
 
-function normalizeInvoicePrefix(value?: string | null): string {
-  return String(value || '')
-    .replace(/[\r\n\t]/g, '')
-    .trim()
-    .slice(0, 12);
-}
-
 export async function nextInvoiceNumber(branchPrefix?: string | null): Promise<string> {
   // Offline identifiers stay on the established INV-OFF contract because the
   // sync engine uses that marker to reconcile pending sales safely.
@@ -241,15 +235,7 @@ export async function nextInvoiceNumber(branchPrefix?: string | null): Promise<s
     const payload = !error && data?.success
       ? (data as RpcResult & { number?: string; raw?: number | string })
       : null;
-    const number = payload?.number || null;
-    const prefix = normalizeInvoicePrefix(branchPrefix);
-    const rawFromPayload = Number(payload?.raw);
-    const rawFromNumber = Number(String(number || '').match(/(\d+)$/)?.[1] || '');
-    const raw = Number.isSafeInteger(rawFromPayload) && rawFromPayload > 0
-      ? rawFromPayload
-      : rawFromNumber;
-
-    if (prefix && Number.isSafeInteger(raw) && raw > 0) return `${prefix}${raw}`;
+    const number = formatAllocatedInvoiceNumber(payload?.number, payload?.raw, branchPrefix);
     if (number) return number;
     throw new Error(error?.message || (data as RpcResult | null)?.detail || (data as RpcResult | null)?.error || 'Could not allocate sale invoice number');
   } catch (err) {
