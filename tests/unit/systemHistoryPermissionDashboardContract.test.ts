@@ -13,15 +13,13 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(permissions).toContain("Historical Data Access");
   });
 
-  it('renders dashboard KPIs from actual capabilities and includes open orders', () => {
+  it('renders only the requested operational dashboard KPIs', () => {
     const dashboard = read('src/features/dashboard/pages/DashboardDataPage.tsx');
     expect(dashboard).toContain("can('pos.view')");
     expect(dashboard).toContain("can('sales.view')");
     expect(dashboard).toContain("can('inventory.view')");
     expect(dashboard).toContain("can('purchases.view')");
     expect(dashboard).toContain("can('expenses.view')");
-    expect(dashboard).toContain("can('shifts.view')");
-    expect(dashboard).toContain('testId="kpi-open-orders"');
     expect(dashboard).toContain('testId="kpi-open-order-value"');
     expect(dashboard).toContain('testId="kpi-discounts"');
     expect(dashboard).toContain('testId="kpi-returns"');
@@ -31,9 +29,15 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).toContain('current.returns');
     expect(dashboard).toContain('data-testid={testId}');
     expect(dashboard).toContain("status', ['open', 'held']");
-    expect(dashboard).toContain('openDineIn');
-    expect(dashboard).toContain('openTakeaway');
-    expect(dashboard).toContain('openDelivery');
+    expect(dashboard).not.toContain('testId="kpi-open-orders"');
+    expect(dashboard).not.toContain('testId="kpi-net-sales"');
+    expect(dashboard).not.toContain('testId="kpi-occupied-tables"');
+    expect(dashboard).not.toContain('testId="kpi-available-tables"');
+    expect(dashboard).not.toContain('testId="kpi-open-shifts"');
+    expect(dashboard).not.toContain('testId="kpi-active-users"');
+    expect(dashboard).not.toContain("supabase.from('dining_tables')");
+    expect(dashboard).not.toContain("supabase.from('shifts')");
+    expect(dashboard).not.toContain("supabase.from('users')");
     expect(dashboard).not.toContain('aria-disabled="true"');
     expect(dashboard).not.toContain("role === 'branch_manager'");
     expect(dashboard).not.toContain("role === 'accountant'");

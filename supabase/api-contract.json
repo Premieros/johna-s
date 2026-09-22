@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T09:35:00.000Z",
+  "generated_at": "2026-09-22T06:49:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -1179,7 +1179,6 @@
     "sale_payments",
     "sales",
     "settings",
-    "shifts",
     "stock_transactions",
     "suppliers",
     "system_settings",

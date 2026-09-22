@@ -85,8 +85,17 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   );
 
   const buildDataQuery = useCallback(
-    (from: number, to: number): FilterBuilder => {
-      let q = applyFilters(supabase.from(table).select(select));
+    (from: number, to: number, includeCount = false): FilterBuilder => {
+      // `table` and `select` are intentionally dynamic in this generic hook.
+      // Narrow the Supabase overload to the filter-builder shape once here so
+      // TypeScript does not recursively instantiate schema-string error types.
+      const source = supabase.from(table) as unknown as {
+        select: (columns: string, options?: { count?: 'exact'; head?: boolean }) => FilterBuilder;
+      };
+      const baseQuery = includeCount
+        ? source.select(select, { count: 'exact' })
+        : source.select(select);
+      let q = applyFilters(baseQuery);
       if (order) q = q.order(order.column, { ascending: orderAsc });
       return q.range(from, to);
     },
@@ -94,17 +103,14 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     [table, select, applyFilters, orderKey, orderAsc]
   );
 
-  const countTotal = useCallback(async (): Promise<number> => {
-    const { count } = await applyFilters(supabase.from(table).select('id', { count: 'exact', head: true }));
-    return count ?? 0;
-  }, [table, applyFilters]);
-
   const refresh = useCallback(async () => {
     const g = ++gen.current;
     setLoading(true);
     setError(null);
     try {
-      const [{ data, error: err }, totalCount] = await Promise.all([buildDataQuery(0, pageSize - 1), countTotal()]);
+      // PostgREST can return the page and exact total count in one response.
+      // Avoid the historical second HEAD/count query for every list page.
+      const { data, error: err, count } = await buildDataQuery(0, pageSize - 1, true);
       if (g !== gen.current) return;
       if (err) {
         setError(userFacingErrorMessage(err));
@@ -113,11 +119,11 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
         return;
       }
       setRows((data as T[]) || []);
-      setTotal(totalCount);
+      setTotal(count ?? 0);
     } finally {
       if (g === gen.current) setLoading(false);
     }
-  }, [buildDataQuery, countTotal, pageSize]);
+  }, [buildDataQuery, pageSize]);
 
   const loadMore = useCallback(async () => {
     if (loading || loadingMore) return;

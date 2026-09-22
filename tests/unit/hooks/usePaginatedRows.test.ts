@@ -55,7 +55,11 @@ const mockSupabase = vi.hoisted(() => {
       }
       const from = this.rangeFrom ?? 0;
       const to = this.rangeTo ?? state.data.length - 1;
-      return Promise.resolve({ data: state.data.slice(from, to + 1), error: null }).then(resolve);
+      return Promise.resolve({
+        data: state.data.slice(from, to + 1),
+        count: this.selectOpts?.count === 'exact' ? state.count : null,
+        error: null,
+      }).then(resolve);
     }
   }
   return {
@@ -82,7 +86,7 @@ describe('usePaginatedRows', () => {
     mockState.calls = [];
   });
 
-  it('fetches the first page (range 0..pageSize-1) and the exact count', async () => {
+  it('fetches the first page and exact count in one request', async () => {
     seed('sales', 25);
     const { result } = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
 
@@ -94,10 +98,11 @@ describe('usePaginatedRows', () => {
     expect(result.current.hasMore).toBe(true);
     const r = dataCalls('sales')[0].range;
     expect(r).toEqual([0, 9]);
-    expect(countCalls('sales')).toHaveLength(1);
+    expect(dataCalls('sales')).toHaveLength(1);
+    expect(countCalls('sales')).toHaveLength(0);
   });
 
-  it('applies branch_id and extra equality filters to both data and count queries', async () => {
+  it('applies branch_id and extra equality filters to the combined data/count query', async () => {
     seed('orders', 3);
     const { result } = renderHook(() =>
       usePaginatedRows<{ id: number }>({
@@ -110,10 +115,10 @@ describe('usePaginatedRows', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     await waitFor(() => expect(dataCalls('orders').length).toBe(1));
 
-    for (const call of [...dataCalls('orders'), ...countCalls('orders')]) {
-      expect(call.filters).toContainEqual({ col: 'branch_id', val: 'b1' });
-      expect(call.filters).toContainEqual({ col: 'status', val: 'open' });
-    }
+    expect(countCalls('orders')).toHaveLength(0);
+    const call = dataCalls('orders')[0];
+    expect(call.filters).toContainEqual({ col: 'branch_id', val: 'b1' });
+    expect(call.filters).toContainEqual({ col: 'status', val: 'open' });
   });
 
   it('loadMore appends the next page and hasMore flips to false when done', async () => {
