@@ -4,7 +4,7 @@ import { createPostgrestDedupingFetch } from '@/lib/postgrestDedupingFetch';
 describe('PostgREST duplicate read coalescing', () => {
   it('shares one network request for identical concurrent GET reads', async () => {
     let calls = 0;
-    let release: (() => void) | null = null;
+    let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
 
     const baseFetch = async () => {
@@ -23,7 +23,7 @@ describe('PostgREST duplicate read coalescing', () => {
     const second = fetcher(url, { headers: { Authorization: 'Bearer same-user' } });
 
     expect(calls).toBe(1);
-    release?.();
+    release();
 
     const [a, b] = await Promise.all([first, second]);
     expect(await a.json()).toEqual([{ id: 1 }]);
