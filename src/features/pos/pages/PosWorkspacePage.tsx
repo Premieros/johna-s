@@ -17,7 +17,7 @@ import { mergeEffectiveSettings, useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useToast } from '@/components/Toast';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
-import type { Product, Customer, Settings, Branch, Category, ProductComponent, RpcResult, Order, CartItem, DiningArea, DiningTable } from '@/lib/types';
+import type { Product, Customer, Settings, Branch, Category, RpcResult, Order, CartItem, DiningArea, DiningTable } from '@/lib/types';
 import { usePosOrder } from '../hooks/usePosOrder';
 import { useActiveOrders } from '../hooks/useActiveOrders';
 import { usePosPermissions } from '../hooks/usePosPermissions';
@@ -40,6 +40,8 @@ import { PosOrderHeaderBar } from '../components/order/PosOrderHeaderBar';
 import { TransferOrderModal } from '../components/tables/TransferOrderModal';
 import { orderOperatorName } from '../utils/operatorName';
 import { VoidItemModal } from '../components/order/VoidItemModal';
+
+const EMPTY_POS_STOCK_MAP: Record<string, number> = {};
 
 interface WorkspaceState {
   tableId?: string | null;
@@ -76,10 +78,6 @@ export function PosWorkspacePage() {
   const [offlineBranches, setOfflineBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [diningAreas, setDiningAreas] = useState<DiningArea[]>([]);
-  const [stockMap, setStockMap] = useState<Record<string, number>>({});
-  const [rawShortageMap, setRawShortageMap] = useState<Record<string, boolean>>({});
-  const [availabilityErrorMap, setAvailabilityErrorMap] = useState<Record<string, string>>({});
-  const [recipeMap, setRecipeMap] = useState<Record<string, ProductComponent[]>>({});
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [discountShortcutToken, setDiscountShortcutToken] = useState(0);
@@ -135,61 +133,9 @@ export function PosWorkspacePage() {
     reloadShift();
   }, [reloadShift]);
 
-  const loadSellabilityStatus = useCallback(async (branchId: string) => {
-    if (!branchId) {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-      return;
-    }
-
-    const { data: warehouses } = await supabase
-      .from('warehouses')
-      .select('id,is_default,created_at')
-      .eq('branch_id', branchId)
-      .eq('is_active', true)
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true });
-    const warehouseId = ((warehouses || []) as { id: string }[])[0]?.id || null;
-    if (!warehouseId) {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-      return;
-    }
-
-    const { data, error } = await supabase.rpc('get_pos_product_sellability', {
-      p_branch_id: branchId,
-      p_warehouse_id: warehouseId,
-      p_probe_quantity: 100000,
-    });
-    if (error) {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-      return;
-    }
-
-    const rawShortage: Record<string, boolean> = {};
-    const availabilityErrors: Record<string, string> = {};
-    for (const row of (data || []) as {
-      product_id: string;
-      is_sellable?: boolean;
-      raw_shortage_only?: boolean;
-      availability_error?: string | null;
-    }[]) {
-      if (row.raw_shortage_only) rawShortage[row.product_id] = true;
-      if (row.availability_error) availabilityErrors[row.product_id] = row.availability_error;
-    }
-
-    // Quantity is not a client-side saleability gate. Keep the legacy map empty
-    // so the POS wrapper cannot accidentally reintroduce maximum-quantity scans.
-    setStockMap({});
-    setRawShortageMap(rawShortage);
-    setAvailabilityErrorMap(availabilityErrors);
-  }, []);
-
+  // POS catalog is intentionally stock-agnostic. Kitchen send is the
+  // authoritative inventory deduction point and may drive raw stock negative.
+  // Do not preflight product/recipe stock from the workspace.
   const currentBranchName = branches.find((b) => b.id === effectiveBranch)?.name || effectiveBranch;
 
   const pos = usePosOrder({
@@ -200,8 +146,7 @@ export function PosWorkspacePage() {
     effSettings,
     activeShift,
     products,
-    stockMap,
-    rawShortageOnly: rawShortageMap,
+    stockMap: EMPTY_POS_STOCK_MAP,
   });
   const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;
 
@@ -246,22 +191,6 @@ export function PosWorkspacePage() {
       sent_quantity: Number(item.quantity || 0),
     }));
   }, [pos.activeOrderId, pos.kitchenSentItems, kitchenSendsByOrder, effectiveBranch, user?.id]);
-
-  // stockMap already reflects quantities physically deducted at kitchen send.
-  // Project only the still-unsent part of the cart so sent quantities are not
-  // subtracted a second time from the availability shown to the cashier.
-  const displayStockMap = useMemo(() => {
-    const remaining = { ...stockMap };
-    for (const item of pos.cart) {
-      const lineKey = cartLineKey(item);
-      const orderItem = orderItemsForActive.find((oi) => orderItemLineKey(oi) === lineKey);
-      const send = orderItem ? kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id) : null;
-      const unsentQuantity = Math.max(item.quantity - Number(send?.sent_quantity || 0), 0);
-      remaining[item.product.id] = Math.max(0, (remaining[item.product.id] || 0) - unsentQuantity);
-    }
-    return remaining;
-  }, [stockMap, pos.cart, orderItemsForActive, kitchenSendsForActive]);
-  const displaySellableStock = displayStockMap;
 
   const hasUnsentItems = useMemo(() => {
     if (pos.cart.length === 0) return false;
@@ -372,8 +301,6 @@ export function PosWorkspacePage() {
               if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
               if (offlineData.settings) setOfflineSettings(offlineData.settings);
               if (offlineData.branches.length > 0) setOfflineBranches(offlineData.branches);
-              if (offlineData.stockMap) setStockMap(offlineData.stockMap);
-              if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
               setLoading(false);
             }
             return;
@@ -466,8 +393,6 @@ export function PosWorkspacePage() {
             setCategories(fallbackCats);
             if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
             if (offlineData.settings) setOfflineSettings(offlineData.settings);
-            if (offlineData.stockMap && Object.keys(offlineData.stockMap).length > 0) setStockMap(offlineData.stockMap);
-            if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
             if (productLoadError) {
               setLoadWarning(
                 isAr
@@ -510,15 +435,6 @@ export function PosWorkspacePage() {
   }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData, sharedSettings, sharedBranches, isAr]);
 
   useEffect(() => {
-    if (effectiveBranch) void loadSellabilityStatus(effectiveBranch);
-    else {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-    }
-  }, [effectiveBranch, loadSellabilityStatus]);
-
-  useEffect(() => {
     if (!effectiveBranch) {
       setDiningAreas([]);
       return undefined;
@@ -550,31 +466,6 @@ export function PosWorkspacePage() {
     };
   }, [effectiveBranch]);
 
-
-  useEffect(() => {
-    let cancelled = false;
-    const manufactured = products.filter((p) => p.product_type === 'manufactured');
-    if (manufactured.length === 0) {
-      setRecipeMap({});
-      return;
-    }
-    supabase
-      .from('product_components')
-      .select('*')
-      .in(
-        'product_id',
-        manufactured.map((p) => p.id)
-      )
-      .then(({ data }) => {
-        if (cancelled) return;
-        const map: Record<string, ProductComponent[]> = {};
-        for (const row of (data || []) as ProductComponent[]) (map[row.product_id] = map[row.product_id] || []).push(row);
-        setRecipeMap(map);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [products]);
 
   const openOrderWorkspace = (orderId: string, opts: { pay?: boolean } = {}) => {
     if (pos.activeOrderId === orderId) {
@@ -969,11 +860,6 @@ export function PosWorkspacePage() {
             <ProductBrowser
               products={products}
               categories={categories}
-              stockMap={displayStockMap}
-              sellableStock={displaySellableStock}
-              rawShortageOnly={rawShortageMap}
-              availabilityErrors={availabilityErrorMap}
-              recipeMap={recipeMap}
               search={search}
               selectedCategory={selectedCategory}
               currency={pos.effCurrency}

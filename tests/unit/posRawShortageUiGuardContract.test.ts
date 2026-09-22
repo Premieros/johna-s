@@ -2,14 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const orderHook = readFileSync(
-  resolve(process.cwd(), 'src/features/pos/hooks/usePosOrder.ts'),
-  'utf8',
-);
-const productBrowser = readFileSync(
-  resolve(process.cwd(), 'src/features/pos/components/catalog/ProductBrowser.tsx'),
-  'utf8',
-);
+const orderHook = readFileSync(resolve(process.cwd(), 'src/features/pos/hooks/usePosOrder.ts'), 'utf8');
+const productBrowser = readFileSync(resolve(process.cwd(), 'src/features/pos/components/catalog/ProductBrowser.tsx'), 'utf8');
 
 describe('POS unconditional sell-through contract', () => {
   it('does not run cart quantity availability guards before cart mutations', () => {
@@ -19,15 +13,15 @@ describe('POS unconditional sell-through contract', () => {
     expect(orderHook).not.toContain('showAvailabilityBlocked');
   });
 
-  it('bypasses the legacy base-hook quantity guard for every visible product without changing server inventory behavior', () => {
+  it('keeps physical raw-material deduction server-owned at kitchen send', () => {
     expect(orderHook).toContain('rawShortageOnly: Object.fromEntries(input.products.map((product) => [product.id, true]))');
     expect(orderHook).toContain('Physical raw-material deduction remains server-owned at send_to_kitchen');
   });
 
-  it('keeps configuration and operational prerequisites blocking in the product browser', () => {
-    expect(productBrowser).toContain('const availabilityError = availabilityErrors[product.id];');
-    expect(productBrowser).toContain('if (availabilityError)');
-    expect(productBrowser).toContain('const gated = !!availabilityError || !canAddToCart;');
+  it('keeps only operational prerequisites blocking in the product browser', () => {
+    expect(productBrowser).not.toContain('availabilityErrors');
+    expect(productBrowser).not.toContain('ensureSellable');
+    expect(productBrowser).toContain('const gated = !canAddToCart;');
     expect(productBrowser).toContain('const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;');
   });
 

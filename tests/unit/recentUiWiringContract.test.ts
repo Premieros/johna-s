@@ -42,14 +42,16 @@ describe('Recent UI wiring contracts', () => {
     expect(page).toContain('data-testid="report-contextual-filters"');
   });
 
-  it('keeps POS cart additions blocked by shift/configuration prerequisites, never stock quantity', () => {
+  it('keeps POS cart additions blocked only by shift/permission prerequisites, never stock or recipe preflight', () => {
     const page = source('src/features/pos/components/catalog/ProductBrowser.tsx');
     expect(page).toContain('const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen');
     expect(page).toContain("addBlockReason: 'shift' | 'permission' | null");
     expect(page).toContain('لا يمكن إضافة أصناف بدون شفت مفتوح');
     expect(page).toContain('لا تملك صلاحية إنشاء أو تعديل الطلب الحالي');
-    expect(page).toContain('if (!canAddToCart || !ensureSellable(product)) return;');
-    expect(page).toContain('const gated = !!availabilityError || !canAddToCart;');
+    expect(page).toContain('if (!canAddToCart) return;');
+    expect(page).toContain('const gated = !canAddToCart;');
+    expect(page).not.toContain('ensureSellable');
+    expect(page).not.toContain('availabilityErrors');
     expect(page).not.toContain('if (!hasStockValue(source, product.id))');
     expect(page).not.toContain('if ((source[product.id] || 0) <= 0)');
     expect(page).not.toContain('Out of stock');
