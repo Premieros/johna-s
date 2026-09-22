@@ -15,6 +15,14 @@ describe('sales invoice refund / preview / reprint contract', () => {
     expect(salesPage).toContain("can('pos.reprint')");
   });
 
+  it('recovers branch receipt settings read-only when the shared cache is temporarily empty', () => {
+    expect(salesPage).toContain('const resolveReceiptSettings = async');
+    expect(salesPage).toContain("supabase.from('settings').select('*').maybeSingle()");
+    expect(salesPage).toContain("supabase.from('branch_settings').select('*').eq('branch_id', branchId).maybeSingle()");
+    expect(salesPage).toContain('mergeEffectiveSettings(');
+    expect(salesPage.match(/await resolveReceiptSettings\(/g)?.length).toBe(3);
+  });
+
   it('starts refund quantities at zero and requires an explicit full-refund action', () => {
     expect(salesPage).toContain("qty[item.id] = '0'");
     expect(salesPage).toContain('const fillFullRefund = () =>');
