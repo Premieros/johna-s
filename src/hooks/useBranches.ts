@@ -15,16 +15,15 @@ async function fetchBranchesForUser(userId: string, force = false): Promise<Bran
   const existing = branchRequestByUser.get(userId);
   if (existing) return existing;
 
-  const pending = supabase.from('branches').select('*').order('name')
-    .then(({ data, error }) => {
-      if (error) throw error;
-      const next = (data as Branch[]) || [];
-      branchCacheByUser.set(userId, next);
-      return next;
-    })
-    .finally(() => {
-      branchRequestByUser.delete(userId);
-    });
+  const pending = (async () => {
+    const { data, error } = await supabase.from('branches').select('*').order('name');
+    if (error) throw error;
+    const next = (data as Branch[]) || [];
+    branchCacheByUser.set(userId, next);
+    return next;
+  })().finally(() => {
+    branchRequestByUser.delete(userId);
+  });
 
   branchRequestByUser.set(userId, pending);
   return pending;
