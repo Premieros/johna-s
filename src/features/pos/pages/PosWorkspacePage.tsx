@@ -14,6 +14,7 @@ import { Modal } from '@/components/Modal';
 import { Logo } from '@/components/Logo';
 import { formatCurrency } from '@/lib/format';
 import { mergeEffectiveSettings, useSettings } from '@/context/SettingsContext';
+import { useBranches } from '@/hooks/useBranches';
 import { useToast } from '@/components/Toast';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { Product, Customer, Settings, Branch, Category, ProductComponent, RpcResult, Order, CartItem, DiningArea, DiningTable } from '@/lib/types';
@@ -57,7 +58,8 @@ export function PosWorkspacePage() {
   const { user } = useAuth();
   const branchFilter = useBranchFilter();
   const [, setActiveBranchId] = useActiveBranchId();
-  const { branchSettingsMap } = useSettings();
+  const { settings: sharedSettings, branchSettingsMap } = useSettings();
+  const { branches: sharedBranches } = useBranches();
   const { show } = useToast();
   const perms = usePosPermissions();
   const {
@@ -70,8 +72,8 @@ export function PosWorkspacePage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [offlineSettings, setOfflineSettings] = useState<Settings | null>(null);
+  const [offlineBranches, setOfflineBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [diningAreas, setDiningAreas] = useState<DiningArea[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
@@ -109,6 +111,8 @@ export function PosWorkspacePage() {
   const barcodeRef = useRef<HTMLInputElement>(null);
   const payConsumed = useRef(false);
   const effectiveBranch = branchFilter || user?.branch_id || '';
+  const settings = sharedSettings || offlineSettings;
+  const branches = sharedBranches.length > 0 ? sharedBranches : offlineBranches;
   const effSettings: Settings | null = settings ? mergeEffectiveSettings(settings, effectiveBranch ? branchSettingsMap[effectiveBranch] : null) : null;
 
   const reloadShift = useCallback(() => {
@@ -366,8 +370,8 @@ export function PosWorkspacePage() {
               setProducts(prodList);
               setCategories(catList);
               if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
-              if (offlineData.settings) setSettings(offlineData.settings);
-              if (offlineData.branches.length > 0) setBranches(offlineData.branches);
+              if (offlineData.settings) setOfflineSettings(offlineData.settings);
+              if (offlineData.branches.length > 0) setOfflineBranches(offlineData.branches);
               if (offlineData.stockMap) setStockMap(offlineData.stockMap);
               if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
               setLoading(false);
@@ -387,11 +391,9 @@ export function PosWorkspacePage() {
           catq = catq.eq('branch_id', fixedBranch);
           areaq = areaq.eq('branch_id', fixedBranch);
         }
-        const [pRes, cRes, sRes, bRes, catRes, aRes] = await Promise.allSettled([
+        const [pRes, cRes, catRes, aRes] = await Promise.allSettled([
           productQuery,
           cusq.order('name'),
-          supabase.from('settings').select('*').maybeSingle(),
-          supabase.from('branches').select('*').eq('is_active', true).order('name'),
           catq.order('name'),
           areaq.order('name'),
         ]);
@@ -402,8 +404,8 @@ export function PosWorkspacePage() {
         let loadedProds: Product[] = [];
         let loadedCats: Category[] = [];
         let loadedCusts: Customer[] = [];
-        let loadedSettings: Settings | null = null;
-        let loadedBranches: Branch[] = [];
+        const loadedSettings: Settings | null = settings;
+        const loadedBranches: Branch[] = branches;
 
         if (pRes.status === 'rejected') productLoadError = pRes.reason;
         else if (pRes.value.error) productLoadError = pRes.value.error;
@@ -417,20 +419,6 @@ export function PosWorkspacePage() {
         else {
           loadedCusts = (cRes.value.data as Customer[]) || [];
           setCustomers(loadedCusts);
-        }
-
-        if (sRes.status === 'rejected') secondaryErrors.push(sRes.reason);
-        else if (sRes.value.error) secondaryErrors.push(sRes.value.error);
-        else {
-          loadedSettings = sRes.value.data as Settings;
-          setSettings(loadedSettings);
-        }
-
-        if (bRes.status === 'rejected') secondaryErrors.push(bRes.reason);
-        else if (bRes.value.error) secondaryErrors.push(bRes.value.error);
-        else {
-          loadedBranches = (bRes.value.data as Branch[]) || [];
-          setBranches(loadedBranches);
         }
 
         if (catRes.status === 'rejected') secondaryErrors.push(catRes.reason);
@@ -477,7 +465,7 @@ export function PosWorkspacePage() {
             setProducts(fallbackProds);
             setCategories(fallbackCats);
             if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
-            if (offlineData.settings) setSettings(offlineData.settings);
+            if (offlineData.settings) setOfflineSettings(offlineData.settings);
             if (offlineData.stockMap && Object.keys(offlineData.stockMap).length > 0) setStockMap(offlineData.stockMap);
             if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
             if (productLoadError) {
@@ -503,7 +491,7 @@ export function PosWorkspacePage() {
               setProducts(fallbackProds);
               setCategories(fallbackCats);
               if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
-              if (offlineData.settings) setSettings(offlineData.settings);
+              if (offlineData.settings) setOfflineSettings(offlineData.settings);
             }
             return;
           }
