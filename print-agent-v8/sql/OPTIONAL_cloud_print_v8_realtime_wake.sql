@@ -44,6 +44,12 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $function$
 BEGIN
+  -- V8.1 is enabled for Smouha only. Cleopatra remains on V7 and must not
+  -- incur wake-state writes or Realtime behavior from this trigger.
+  IF NEW.branch_id IS DISTINCT FROM '19c3fd23-d784-455b-8840-f4f2ac619651'::uuid THEN
+    RETURN NEW;
+  END IF;
+
   INSERT INTO public.cloud_print_wake_state(branch_id, seq, last_kind, updated_at)
   VALUES (NEW.branch_id, 1, NEW.kind, now())
   ON CONFLICT (branch_id) DO UPDATE
