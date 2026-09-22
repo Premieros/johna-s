@@ -87,10 +87,8 @@ internal sealed class SetupForm : Form
         };
         var testKitchen = new Button { Text = "اختبار فورمة مطبخ", AutoSize = true };
         var testCash = new Button { Text = "اختبار فورمة كاش", AutoSize = true };
-        var testLegacy = new Button { Text = "اختبار Text fallback", AutoSize = true };
         tests.Controls.Add(testKitchen);
         tests.Controls.Add(testCash);
-        tests.Controls.Add(testLegacy);
         panel.Controls.Add(new Label { Text = "اختبار محلي", AutoSize = true }, 0, 7);
         panel.Controls.Add(tests, 1, 7);
 
@@ -126,8 +124,6 @@ internal sealed class SetupForm : Form
             await TestTemplateAsync(_kitchen, KitchenSample());
         testCash.Click += async (_, _) =>
             await TestTemplateAsync(_cash, CustomerSample());
-        testLegacy.Click += async (_, _) =>
-            await TestTextAsync(_cash);
     }
 
     private static void AddRow(
