@@ -1,0 +1,60 @@
+name: Build Smouha Print Agent V8
+
+on:
+  pull_request:
+    paths:
+      - 'print-agent-v8/**'
+      - '.github/workflows/smouha-print-agent-v8-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-v8:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj
+
+      - name: Publish self-contained Windows x64
+        run: >
+          dotnet publish print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o dist/Smouha-Form-Print-Agent-v8-Windows-x64
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item print-agent-v8/README.md dist/Smouha-Form-Print-Agent-v8-Windows-x64/README-V8.md
+          $exe = Get-ChildItem dist/Smouha-Form-Print-Agent-v8-Windows-x64 -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw 'V8 executable was not produced' }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "File: $($exe.Name)"
+            "SHA256: $hash"
+            "Branch: Smouha"
+            "QueueEnabledDefault: false"
+          ) | Set-Content dist/Smouha-Form-Print-Agent-v8-Windows-x64/SHA256.txt -Encoding UTF8
+
+      - name: Upload V8 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smouha-Form-Print-Agent-v8-Windows-x64
+          path: dist/Smouha-Form-Print-Agent-v8-Windows-x64/**
+          if-no-files-found: error
+          retention-days: 14
