@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createPostgrestDedupingFetch } from '@/lib/postgrestDedupingFetch';
 
 describe('PostgREST duplicate read coalescing', () => {
@@ -52,8 +52,10 @@ describe('PostgREST duplicate read coalescing', () => {
     expect(calls).toBe(4);
   });
 
-  it('does not keep a completed response cache after the shared read finishes', async () => {
+  it('reuses an immediate duplicate read but expires the microcache quickly', async () => {
     let calls = 0;
+    let now = 1_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
     const baseFetch = async () => {
       calls += 1;
       return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
@@ -63,7 +65,33 @@ describe('PostgREST duplicate read coalescing', () => {
 
     await fetcher(url);
     await fetcher(url);
+    expect(calls).toBe(1);
 
+    now += 1_501;
+    await fetcher(url);
     expect(calls).toBe(2);
+    nowSpy.mockRestore();
+  });
+
+  it('invalidates a completed read immediately after any PostgREST mutation/RPC', async () => {
+    let calls = 0;
+    const baseFetch = async () => {
+      calls += 1;
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const fetcher = createPostgrestDedupingFetch(baseFetch);
+    const url = 'https://example.supabase.co/rest/v1/warehouses?select=*';
+
+    await fetcher(url);
+    await fetcher(url);
+    expect(calls).toBe(1);
+
+    await fetcher('https://example.supabase.co/rest/v1/rpc/set_table_status', {
+      method: 'POST',
+      body: '{}',
+    });
+    await fetcher(url);
+
+    expect(calls).toBe(3);
   });
 });
