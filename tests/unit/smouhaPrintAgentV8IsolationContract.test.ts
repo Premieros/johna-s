@@ -19,7 +19,7 @@ describe('Smouha Print Agent V8 isolation and query budget', () => {
     expect(worker).toContain('ReconcileSeconds');
     expect(worker).toContain('DisconnectedPollSeconds');
     expect(worker).toContain('RealtimeWakeCount');
-    expect(realtime).toContain('cloud_print_wake_state');
+    expect(realtime).toContain('BuildConfig.WakeTable');\n    expect(read('print-agent-v8/BuildConfig.cs')).toContain('cloud_print_wake_state');
     expect(realtime).toContain('postgres_changes');
   });
 
