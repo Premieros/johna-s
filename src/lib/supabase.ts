@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { postgrestDedupingFetch } from './postgrestDedupingFetch';
 
 const supabaseUrl =
   (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ||
@@ -16,6 +17,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'placeholde
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+  },
+  global: {
+    fetch: postgrestDedupingFetch,
   },
 });
 
