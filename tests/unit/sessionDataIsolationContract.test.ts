@@ -15,6 +15,9 @@ describe('session and cached-data isolation', () => {
     expect(source).not.toContain('makeFallbackUser');
     expect(source).toContain("code: 'profile_missing'");
     expect(source).toContain("data.is_active === false");
+    expect(source).toContain('throw error');
+    expect(source).toContain('PROFILE_RETRY_MAX_MS');
+    expect(source).not.toContain('if (error || !data || data.is_active === false)');
   });
 
   it('requires an explicit branch before returning offline POS business data', () => {

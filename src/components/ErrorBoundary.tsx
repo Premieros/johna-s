@@ -6,7 +6,6 @@ interface Props { children: ReactNode; }
 interface State { error: Error | null; }
 
 const STALE_CHUNK_KEY = 'premier_stale_chunk_reload';
-const STALE_CHUNK_WINDOW_MS = 60_000;
 
 export function isStaleChunkError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -15,10 +14,10 @@ export function isStaleChunkError(error: unknown): boolean {
 
 function staleChunkReloadAlreadyAttempted(): boolean {
   try {
-    const raw = sessionStorage.getItem(STALE_CHUNK_KEY);
-    if (!raw) return false;
-    const at = Number(raw);
-    return Number.isFinite(at) && Date.now() - at < STALE_CHUNK_WINDOW_MS;
+    // sessionStorage survives a page reload but is cleared when the tab closes.
+    // This caps automatic stale-build recovery to once per working tab instead
+    // of repeatedly reloading operators after every deployment.
+    return sessionStorage.getItem(STALE_CHUNK_KEY) !== null;
   } catch {
     return false;
   }
@@ -68,7 +67,6 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={() => {
                 if (staleChunk) {
-                  try { sessionStorage.removeItem(STALE_CHUNK_KEY); } catch { /* ignore */ }
                   window.location.reload();
                   return;
                 }

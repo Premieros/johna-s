@@ -3,6 +3,7 @@ import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 
 const VERIFIED_PROFILE_KEY = 'premier_verified_profile_id';
+const PROFILE_REVALIDATION_RETRY_MS = 5_000;
 const LOCAL_CACHE_PREFIXES = [
   'pos_offline_products_cache_v1_',
   'pos_offline_categories_cache_v1_',
@@ -70,7 +71,9 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
     checkedUserIdRef.current = sessionUserId;
 
     let cancelled = false;
-    void (async () => {
+    let retryTimer: number | null = null;
+
+    const revalidateProfile = async (): Promise<void> => {
       const { data, error } = await supabase
         .from('users')
         .select('id, is_active')
@@ -78,7 +81,21 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (cancelled) return;
-      if (error || !data || data.is_active === false) {
+
+      if (error) {
+        // This guard is intentionally fail-safe for transport failures:
+        // RLS still protects every request, while a temporary network/PostgREST
+        // error must not destroy the user's valid Supabase session.
+        checkedUserIdRef.current = null;
+        retryTimer = window.setTimeout(() => {
+          if (cancelled) return;
+          checkedUserIdRef.current = sessionUserId;
+          void revalidateProfile();
+        }, PROFILE_REVALIDATION_RETRY_MS);
+        return;
+      }
+
+      if (!data || data.is_active === false) {
         checkedUserIdRef.current = null;
         await clearOfflineReadCache();
         try { localStorage.removeItem(VERIFIED_PROFILE_KEY); } catch { /* ignore storage errors */ }
@@ -92,9 +109,14 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
         await clearOfflineReadCache();
         try { localStorage.setItem(VERIFIED_PROFILE_KEY, sessionUserId); } catch { /* ignore storage errors */ }
       }
-    })();
+    };
 
-    return () => { cancelled = true; };
+    void revalidateProfile();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
   }, [session?.user?.id, user?.id]);
 
   // AuthContext already validates the application profile before exposing `user`.
