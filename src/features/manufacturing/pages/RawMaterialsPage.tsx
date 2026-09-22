@@ -48,7 +48,7 @@ export function RawMaterialsPage() {
   const [tab, setTab] = useState<Tab>('materials');
   const { rows: materials, loading: materialsLoading, error, total, hasMore, loadMore, loadingMore, refresh: reloadMaterials } = usePaginatedRows<RawMaterial>({
     table: 'raw_materials',
-    select: '*, unit:units(*)',
+    select: '*',
     order: { column: 'name', ascending: true },
     branch_id: branchFilter,
     pageSize: 100,

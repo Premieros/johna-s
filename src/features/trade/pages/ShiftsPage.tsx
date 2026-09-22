@@ -241,6 +241,27 @@ export function ShiftsPage() {
     }
   };
 
+  const closeShiftWithOpenOrders = async () => {
+    if (!closeTarget || closing || !can('shifts.close') || !can('shifts.close_with_open_orders')) return;
+    setClosing(true);
+    try {
+      const { data, error: closeError } = await api.shifts.closeWithOpenOrders({
+        p_shift_id: closeTarget.id,
+        p_actual_amount: closeForm.actual_amount,
+        p_notes: closeForm.notes || null,
+      });
+      if (closeError) { show(closeError.message, 'error'); return; }
+      const res = data as ShiftCloseResult | null;
+      if (!res?.success) {
+        show(res?.detail || res?.error || t('error'), 'error');
+        return;
+      }
+      await finishClose(res, true);
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const handlePrintZReport = async (shift: Shift, format: 'thermal' | 'a4') => {
     setPrintingId(shift.id);
     try {
@@ -476,7 +497,7 @@ export function ShiftsPage() {
           </div>
 
           {closeBlock && <div className="rounded-lg border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm">
-            <div className="flex items-start gap-2"><AlertTriangle className="w-5 h-5 text-ui-danger shrink-0 mt-0.5" /><div><p className="font-semibold text-ui-danger">{isAr ? 'لا يمكن إغلاق الوردية مع وجود طلبات مفتوحة' : 'Shift cannot close while orders remain open'}</p><p className="mt-1 text-ui-muted">{isAr ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق مرتبط بـ ${closeBlock.openTableCount} طاولة. يجب على المستخدم إغلاق أو تسوية كل الطلبات أولًا، ثم إعادة محاولة إغلاق الوردية.` : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s). The user must resolve every order before closing the shift.`}</p></div></div>
+            <div className="flex items-start gap-2"><AlertTriangle className="w-5 h-5 text-ui-danger shrink-0 mt-0.5" /><div><p className="font-semibold text-ui-danger">{isAr ? 'توجد طلبات مفتوحة في الفرع' : 'Open orders remain in the branch'}</p><p className="mt-1 text-ui-muted">{isAr ? `يوجد ${closeBlock.openOrderCount} طلب مفتوح/معلق مرتبط بـ ${closeBlock.openTableCount} طاولة. يمكنك تسويتها أولًا، أو استخدام صلاحية إغلاق الوردية مع إبقاء الطلبات المفتوحة إذا كانت ممنوحة لك.` : `${closeBlock.openOrderCount} open/held order(s) remain on ${closeBlock.openTableCount} table(s). Resolve them first, or use the separately-permitted close-with-open-orders action if you have it.`}</p></div></div>
           </div>}
 
           <div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'thermal')}><Printer className="w-4 h-4" /> {isAr ? 'معاينة إيصال Z-Report' : 'Preview Thermal'}</Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'a4')}><FileText className="w-4 h-4" /> {isAr ? 'معاينة تقرير A4' : 'Preview A4'}</Button></div>
@@ -484,6 +505,11 @@ export function ShiftsPage() {
           <Textarea label={isAr ? 'ملاحظات إغلاق الوردية' : t('notes')} value={closeForm.notes} onChange={(e) => setCloseForm({ ...closeForm, notes: e.target.value })} rows={2} />
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="secondary" disabled={closing} onClick={() => { setCloseTarget(null); setCloseBlock(null); }}>{t('cancel')}</Button>
+            {closeBlock && can('shifts.close') && can('shifts.close_with_open_orders') && (
+              <Button variant="outline" disabled={closing} onClick={closeShiftWithOpenOrders}>
+                <Square className="w-4 h-4" /> {isAr ? 'إغلاق الوردية مع إبقاء الطلبات المفتوحة' : 'Close Shift & Keep Open Orders'}
+              </Button>
+            )}
             <Button variant="danger" disabled={closing} onClick={closeShift}><Square className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق الوردية' : t('closeShift')}</Button>
           </div>
         </div>}
