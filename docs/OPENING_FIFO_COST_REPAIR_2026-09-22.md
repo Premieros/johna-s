@@ -32,8 +32,10 @@ Current Production evidence:
 - 162 zero-cost `opening_inventory` raw batches exist in Smouha.
 - 93 still have positive quantity; 69 are already exhausted.
 - every one of the 162 has exactly one positive opening ledger receipt, so identity is unambiguous.
-- 141 / 162 have at least one authoritative positive price event (purchase / applied stock count / manual pricing) that can anchor a repair.
-- 21 / 162 currently have no authoritative price event and must remain explicitly unresolved rather than guessed.
+- 141 / 162 have at least one authoritative positive price event (purchase / applied stock count / manual pricing).
+- 140 / 162 have authoritative evidence at the opening timestamp itself (applied stock count) and are eligible for automatic repair.
+- 1 / 162 has only a later purchase price, 11.81 days after opening; it is now explicitly FUTURE_PRICE_REQUIRES_REVIEW and is not auto-applied.
+- 21 / 162 currently have no authoritative price event and remain explicitly unresolved rather than guessed.
 - 93 remaining positive zero-cost opening batches hold 1,469.4842 units.
 - the 79 remaining-positive batches with a price candidate represent about 67,366.78 of currently unvalued opening inventory at their selected candidate prices.
 
@@ -48,9 +50,9 @@ Repair the missing **opening valuation** without replacing the existing FIFO eng
 
 1. identify every zero-cost opening raw batch and its unique opening ledger row;
 2. choose a traceable authoritative cost candidate:
-   - prefer the latest positive purchase/count/pricing event at or before opening time;
-   - otherwise use the earliest positive authoritative event after opening time;
-   - never use an invented cost and never auto-repair a row with no authoritative event;
+   - automatic repair requires a positive purchase/count/pricing event at or before opening time;
+   - later price events may be shown for review but are never auto-applied;
+   - never use an invented cost;
 3. prepare a dry-run plan with source/date/reference and unresolved rows;
 4. on explicit apply:
    - update only the opening batch unit_cost and matching positive opening ledger valuation;
@@ -58,7 +60,7 @@ Repair the missing **opening valuation** without replacing the existing FIFO eng
    - immediately run the existing historical FIFO prepare/apply engine so every affected sale, kitchen event, production and supported purchase return receives the corrected valuation delta;
    - let the existing FIFO accounting reconciliation post matching COGS/inventory adjustments;
 5. support guarded reversal by reversing the generated FIFO backfill first, then restoring only repair-owned opening valuations to zero;
-6. keep the 21 no-candidate materials untouched and visible as unresolved.
+6. keep all unresolved materials untouched: 21 with no candidate plus 1 with future-only evidence.
 
 ## Acceptance Criteria
 
@@ -96,3 +98,20 @@ Repair the missing **opening valuation** without replacing the existing FIFO eng
 - Added guarded reversal that first invokes the existing FIFO reversal, then restores only repair-owned opening valuation.
 - Added unit safety contract and integration coverage for prepare -> apply -> historical sale COGS delta -> reverse.
 - Production remains untouched; no migration or repair function has been executed there.
+
+
+### 2026-09-22 — Production pre-apply evidence tightened
+
+- Full Verify run 35718453901 was Green end-to-end on the first implementation head, including Browser Smoke.
+- Read-only Production review then tightened automatic eligibility:
+  - 140 candidates are applied stock-count prices timestamped exactly at opening and are safe for automatic valuation repair.
+  - 1 candidate (صوص هانى ماستر) exists only as a purchase 11.81 days after opening and is excluded from automatic repair.
+  - 21 have no authoritative price event and remain unresolved.
+- Automatic scope is therefore 140 / 162 opening batches; 22 / 162 remain review-only/unresolved.
+- Rough read-only valuation impact for opening-lot consumption under those 140 candidates:
+  - legacy sale ledger: about +41,761.12
+  - kitchen-send ledger: about +10,568.62
+  - purchase returns: about +9,601.18
+  - production: about +76.38
+  These are pre-apply estimates only; the authoritative result must come from the existing FIFO prepare/apply dry-run after migration installation.
+- No Production write performed.
