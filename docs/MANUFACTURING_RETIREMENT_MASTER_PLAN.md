@@ -95,7 +95,8 @@ Production read-only audit before implementation:
 - inventory_unit_recipe_units: 6;
 - 502 products currently have direct legacy raw recipe rows;
 - 110 products have reusable inventory-unit raw groups;
-- 104 products use both paths and therefore require deterministic combined handling;\n- 110/110 current group links have no same-name raw placeholder in the product recipe, confirming that name-based suppression is not a valid canonical rule.
+- 104 products use both paths and therefore require deterministic combined handling;
+- 110/110 current group links have no same-name raw placeholder in the product recipe, confirming that name-based suppression is not a valid canonical rule.
 
 Canonical Phase-2 interpretation:
 - `recipes/recipe_items` = direct raw components of a product;
@@ -127,7 +128,9 @@ Verification:
 - No Phase-2 migration applied to Production; production apply remains blocked until explicit approval.
 
 ### Phase 3 — Exact kitchen-send consumption snapshot
-Status: PENDING
+Status: IN PROGRESS
+Branch: development/retire-manufacturing-phase3-kitchen-snapshot-20260922
+Base: main@d036a963bf5681b52cc037abd1d583f38af701e9
 
 Goal:
 - send_to_kitchen resolves component graph once;
