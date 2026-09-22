@@ -99,7 +99,7 @@ internal sealed class TrayHostForm : Form
         });
 
         _tray.Icon = SystemIcons.Application;
-        _tray.Text = "Smouha Form Print Agent V8";
+        _tray.Text = "Smouha Form Print Agent V8.1 Lite";
         _tray.Visible = true;
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += (_, _) => ShowAgent();
