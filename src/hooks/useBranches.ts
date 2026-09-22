@@ -8,9 +8,9 @@ const BRANCHES_CHANGED_EVENT = 'premier:branches-changed';
 const branchCacheByUser = new Map<string, Branch[]>();
 const branchRequestByUser = new Map<string, Promise<Branch[]>>();
 
-async function fetchBranchesForUser(userId: string): Promise<Branch[]> {
+async function fetchBranchesForUser(userId: string, force = false): Promise<Branch[]> {
   const cached = branchCacheByUser.get(userId);
-  if (cached !== undefined) return cached;
+  if (!force && cached !== undefined) return cached;
 
   const existing = branchRequestByUser.get(userId);
   if (existing) return existing;
@@ -56,7 +56,7 @@ export function useBranches() {
 
     setLoading(branchCacheByUser.get(userId) === undefined);
     try {
-      const next = await fetchBranchesForUser(userId);
+      const next = await fetchBranchesForUser(userId, true);
       setBranches(next);
       setError(null);
     } catch (error) {
