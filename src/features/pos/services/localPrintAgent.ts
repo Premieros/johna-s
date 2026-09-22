@@ -2,6 +2,7 @@ import type { KitchenSendItem } from '../types';
 
 export const PRINT_AGENT_URL = 'http://127.0.0.1:17654';
 const PRINT_TIMEOUT_MS = 1800;
+const TEMPLATE_PRINT_TIMEOUT_MS = 12_000;
 const STORAGE_ROUTING_KEY = 'johns_pos_printer_routes';
 const STORAGE_DRAWER_KICK_KEY = 'johns_pos_auto_drawer_kick';
 const STORAGE_SILENT_PRINT_KEY = 'johns_pos_silent_print_enabled';
@@ -581,9 +582,9 @@ export function buildStationTicketText(
   return lines.join('\r\n');
 }
 
-async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
+async function fetchWithTimeout(input: string, init?: RequestInit, timeoutMs = PRINT_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), PRINT_TIMEOUT_MS);
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal, cache: 'no-store' });
   } finally {
@@ -651,13 +652,55 @@ export async function executeSilentPrintDetailed(options: {
   if (!printerName) return { success: false, error: 'PRINTER_NAME_REQUIRED' };
 
   if (isRunningInElectron() && window.electronAPI) {
+    // Prefer the installed localhost renderer for fixed thermal templates.
+    // That renderer consumes structured template v1 and produces the approved
+    // receipt/kitchen form without ever exposing HTML/CSS to the printer.
+    if (options.template) {
+      let localTemplateServiceAvailable = false;
+      try {
+        const health = await fetchWithTimeout(`${PRINT_AGENT_URL}/health`);
+        localTemplateServiceAvailable = health.ok;
+      } catch {
+        localTemplateServiceAvailable = false;
+      }
+
+      if (localTemplateServiceAvailable) {
+        try {
+          const response = await fetchWithTimeout(`${PRINT_AGENT_URL}/print`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              station: 'custom',
+              printer: printerName,
+              text: options.text || htmlToThermalText(buildFixedThermalTemplateHtml(options.template)),
+              template: options.template,
+            }),
+          }, TEMPLATE_PRINT_TIMEOUT_MS);
+          if (!response.ok) {
+            return { success: false, error: `LOCAL_TEMPLATE_HTTP_${response.status}` };
+          }
+          const localResult = await response.json() as { success?: boolean; error?: string };
+          return localResult.success
+            ? { success: true }
+            : { success: false, error: safeText(localResult.error) || 'LOCAL_TEMPLATE_PRINT_FAILED' };
+        } catch (error) {
+          // Once the localhost renderer accepted a template request, an unknown
+          // transport failure is ambiguous. Do not also send the same job through
+          // Electron because that could duplicate a physical ticket.
+          return {
+            success: false,
+            error: error instanceof Error
+              ? `LOCAL_TEMPLATE_PRINT_UNCONFIRMED:${error.message}`
+              : 'LOCAL_TEMPLATE_PRINT_UNCONFIRMED',
+          };
+        }
+      }
+    }
+
     try {
-      // Emergency compatibility guard:
-      // template-backed thermal jobs must never be sent to an installed Electron
-      // bridge as HTML. Older/field-installed bridges can treat that HTML as
-      // printable text, which exposes CSS on paper. Preserve the fixed template
-      // for preview/queue data, but use the already-authoritative thermal text
-      // for physical Electron output until the bridge version is explicitly known.
+      // Compatibility fallback for installations without the localhost template
+      // renderer. Template-backed jobs may fall back to thermal text, but never
+      // to HTML, so CSS/raw markup cannot reach paper.
       const templateText = options.template
         ? htmlToThermalText(buildFixedThermalTemplateHtml(options.template))
         : '';
