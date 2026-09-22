@@ -1,93 +1,80 @@
-# Smouha Form Print Agent V8 — isolated alternative
+# Smouha Form Print Agent V8.1 Lite
 
-This is a **new application identity**. It does not replace or modify the frozen
-Smouha V7 executable.
+برنامج بديل مستقل لطباعة فرع سموحة. لا يستبدل V7 تلقائياً ولا يغيّر نظام
+الطباعة الحالي في Production.
 
-## Goals
+## ما تغير في V8.1
 
-1. Print the structured fixed thermal **form** already present in
-   `cloud_print_jobs.payload.template` instead of ignoring it and rasterizing
-   only the small free-form `text`.
-2. Reduce the idle query storm caused by V7 polling
-   `claim_cloud_print_jobs` every 700ms.
-3. Avoid duplicate physical prints when Windows accepted the print but the
-   network failed before the completion callback.
+- نفس الفورمة الثابتة التي نجحت في الاختبار الورقي.
+- تصحيح اتجاه صندوق الإجماليات بالعربية: اسم البند يمين، والقيمة يسار.
+- تقليل الفراغات الرأسية مع الحفاظ على حجم خط واضح.
+- تنظيم صندوق بيانات الفاتورة وتقليل استهلاك الورق.
+- إزالة زر اختبار Text fallback من الواجهة حتى لا يخرج إيصال نصي صغير بالخطأ.
+- إذا كان Job يحتوي `payload.template` فإن V8.1 يطبع الفورمة فقط.
+- Text fallback موجود داخلياً فقط للـJobs التاريخية التي لا تحتوي template.
 
-## Isolation
+## لماذا Lite؟
 
-- App identity: `PremierSmouhaFormPrintAgentV08`
-- Separate config folder and Windows auto-start key.
-- Separate single-instance mutex.
-- Queue consumption is **OFF by default**.
-- V7 RPC names/signatures are reused without changes.
-- V7 executable/config/lock are not modified.
-- The optional Realtime SQL is stored under `print-agent-v8/sql`, not under
-  `supabase/migrations`; it is not automatically applied.
+نسخة V8 الأولى كانت Self-Contained وتحمل .NET Runtime بداخلها، لذلك كان حجمها
+كبيراً. V8.1 Lite لا يحمل Runtime.
 
-## Printing
+المطلوب على كمبيوتر الطباعة فقط:
 
-Current POS/cloud jobs already contain a structured `template` for customer
-receipts and kitchen tickets. V8 reads that object and draws a fixed GDI form
-directly to a monochrome ESC/POS raster:
+- Windows x64
+- Microsoft Windows Desktop Runtime 8 x64
 
-- large JOHNA'S header;
-- clear document title;
-- branch/station card;
-- order / invoice / table / user metadata;
-- fixed item columns for customer receipts;
-- large quantity badge for kitchen;
-- modifiers and notes preserved;
-- totals in dedicated fixed rows with an enlarged grand total;
-- Arabic RTL handling;
-- RAW ESC/POS raster + cut.
+يتم تثبيت Runtime مرة واحدة فقط على كمبيوتر الفرع. الموظفون الذين يعملون من
+الهاتف لا يثبتون أي برنامج ولا يتغير عليهم شيء.
 
-If a legacy job has no template, V8 falls back to enlarged text raster output.
+## الطباعة
 
-## Query budget
+البرنامج يقرأ `cloud_print_jobs.payload.template` الحالي ويرسمه مباشرة إلى
+ESC/POS Raster:
 
-V7 idle behavior:
+- عنوان JOHNA'S واضح.
+- رقم الفاتورة أو الطلب.
+- الطاولة والمستخدم والفرع.
+- أصناف بأعمدة ثابتة.
+- كميات كبيرة في المطبخ.
+- الإضافات والملاحظات.
+- صندوق إجماليات منظم.
+- دعم RTL عربي.
+- قص تلقائي.
 
-- one claim every 700ms;
-- about **123,429 claim RPCs/day/device** even when nothing is printing.
+## استهلاك الاستعلامات
 
-V8:
+V7 القديم:
 
-- startup/reconnect claim;
-- immediate claim on Realtime wake;
-- drains a batch of up to 25 jobs;
-- when Realtime is healthy: safety reconciliation every 5 minutes
-  (about **288 idle claim RPCs/day/device**, roughly **99.8% lower** than V7);
-- when Realtime is unavailable: fallback claim every 15 seconds
-  (about **5,760/day**, roughly **95.3% lower** than V7);
-- after a known print failure, one local retry wake after 35 seconds instead of
-  returning to aggressive polling.
+- claim كل 700ms
+- تقريباً 123,429 claim RPC/day/device حتى في وقت الخمول.
 
-Realtime requires the optional wake-state SQL. Without it, V8 remains functional
-through the 15-second fallback.
+V8.1:
 
-## Duplicate-print guard
+- Realtime wake عند Job جديد.
+- reconciliation كل 5 دقائق عند سلامة Realtime: حوالي 288 idle claims/day.
+- fallback كل 15 ثانية فقط إذا Realtime غير متاح: حوالي 5,760/day.
 
-Immediately after Windows accepts the RAW spool job, V8 records the cloud job ID
-in a local seven-day journal **before** calling the remote completion RPC.
+## الأمان والعزل
 
-If the network fails after physical submission, a future reclaim of the same job
-skips physical printing and retries only the completion callback.
+- AppId مستقل عن V7.
+- إعداداته منفصلة.
+- Production Queue = OFF افتراضياً.
+- لا تغيير في frozen cloud print RPCs.
+- لا تغيير في V7 executable.
+- optional Realtime SQL موجود تحت `print-agent-v8/sql` فقط وليس migration.
+- local print journal يمنع إعادة طباعة الورقة إذا انقطع الإنترنت بعد قبول Windows
+  للطباعة وقبل إرسال complete callback.
 
-## Safe test / rollout
+## تجربة V8.1
 
-1. Build V8.
-2. Keep **Production Queue disabled**.
-3. Configure the same dedicated Smouha device account.
-4. Select kitchen/bar/cash printers.
-5. Print the local kitchen form and customer form tests.
-6. Compare paper output with the approved fixed form.
-7. Only after acceptance:
-   - stop V7 on the Smouha PC;
-   - optionally apply the Realtime wake SQL;
-   - enable Production Queue in V8.
-8. Never run V7 and V8 as active consumers for the same branch at the same time.
+1. اترك V7 يعمل.
+2. شغّل V8.1 Lite.
+3. Production Queue يظل مغلقاً.
+4. اختر طابعات مطبخ / بار / كاش.
+5. استخدم فقط:
+   - اختبار فورمة مطبخ
+   - اختبار فورمة كاش
+6. راجع الورق.
+7. بعد الاعتماد فقط: أوقف V7 ثم فعّل Production Queue في V8.1.
 
-## Rollback
-
-Disable Production Queue in V8 and restart the unchanged V7 executable. No queue
-RPC migration is required to roll back.
+لا تشغّل V7 وV8.1 كمستهلكين نشطين لنفس الفرع في نفس الوقت.
