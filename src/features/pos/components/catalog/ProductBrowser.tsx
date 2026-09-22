@@ -7,22 +7,16 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
-import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
 import { uploadProductImage } from '@/features/catalog/services/productImages';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
-import type { Category, Product, ProductComponent } from '@/lib/types';
+import type { Category, Product } from '@/lib/types';
 
 interface ProductBrowserProps {
   products: Product[];
   categories: Category[];
-  stockMap: Record<string, number>;
-  sellableStock: Record<string, number>;
-  rawShortageOnly?: Record<string, boolean>;
-  availabilityErrors?: Record<string, string>;
-  recipeMap: Record<string, ProductComponent[]>;
   search: string;
   selectedCategory: string;
   currency: string;
@@ -35,7 +29,7 @@ interface ProductBrowserProps {
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
-export function ProductBrowser({ products, categories, availabilityErrors = {}, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export function ProductBrowser({ products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -92,26 +86,14 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
   const addBlockMessage = addBlockReason === 'shift'
     ? (isAr ? 'لا يمكن إضافة أصناف بدون شفت مفتوح' : 'Open a shift before adding items')
     : (isAr ? 'لا تملك صلاحية إنشاء أو تعديل الطلب الحالي' : 'You do not have permission to create or edit the current order');
-  const availabilityErrorLabel = (code: string) =>
-    userFacingErrorMessage(code, isAr ? 'ar' : 'en');
-
-  const ensureSellable = (product: Product) => {
-    const availabilityError = availabilityErrors[product.id];
-    if (availabilityError) {
-      show(availabilityErrorLabel(availabilityError), 'error');
-      return false;
-    }
-    return true;
-  };
-
   const selectProduct = (product: Product) => {
-    if (!canAddToCart || !ensureSellable(product)) return;
+    if (!canAddToCart) return;
     if (onConfigureProduct) onConfigureProduct(product);
     else onAddToCart(product);
   };
 
   const addProductDirectly = (product: Product) => {
-    if (!canAddToCart || !ensureSellable(product)) return;
+    if (!canAddToCart) return;
     onAddToCart(product);
   };
 
@@ -237,8 +219,7 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
         {!hasBranch ? <div className="flex h-full flex-col items-center justify-center text-center text-ui-subtle"><ShoppingCart className="mb-3 h-10 w-10 opacity-20" /><p className="font-black">{isAr ? 'اختر الفرع أولاً' : 'Select a branch first'}</p></div> : filteredProducts.length === 0 ? <div className="flex h-full flex-col items-center justify-center text-center text-ui-subtle"><Package className="mb-3 h-10 w-10 opacity-20" /><p className="font-black">{t('noData')}</p></div> : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]" data-testid="pos-product-grid">
             {filteredProducts.map((product) => {
-              const availabilityError = availabilityErrors[product.id];
-              const gated = !!availabilityError || !canAddToCart;
+              const gated = !canAddToCart;
               const productLabel = isAr ? product.name : product.name_en || product.name;
               const categoryLabel = product.category_id ? categoryById[product.category_id] : '';
               const imageUrl = imageOverrides[product.id] || product.image_url;
@@ -248,7 +229,6 @@ export function ProductBrowser({ products, categories, availabilityErrors = {}, 
                 <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[210px] flex-col overflow-hidden rounded-[22px] border bg-ui-surface text-start shadow-ui-sm transition sm:min-h-[190px] ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-32 w-full overflow-hidden bg-white text-start sm:h-28 ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full bg-white object-contain p-1.5" positionX={imageView.x} positionY={imageView.y} zoom={imageView.zoom} />
-                    {availabilityError && <span className="absolute end-2 top-2 rounded-lg bg-ui-danger/90 px-2 py-1 text-[9px] font-black text-white shadow-ui-sm">{availabilityErrorLabel(availabilityError)}</span>}
                   </button>
                   {can('products.edit') && (
                     <>
