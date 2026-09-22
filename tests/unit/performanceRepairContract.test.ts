@@ -4,28 +4,22 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 
 describe('performance repair contracts', () => {
-  it('keeps POS catalog sellability diagnostic-only and off inventory refresh events', () => {
+  it('keeps POS startup free from catalog-wide inventory/recipe preflight scans', () => {
     const workspace = read('src/features/pos/pages/PosWorkspacePage.tsx');
 
-    expect(workspace).toContain("supabase.rpc('get_pos_product_sellability'");
+    expect(workspace).not.toContain("supabase.rpc('get_pos_product_sellability'");
     expect(workspace).not.toContain("supabase.rpc('get_pos_product_availability'");
+    expect(workspace).not.toContain("from('product_components')");
     expect(workspace).not.toContain('onInventoryChanged:');
     expect(workspace).not.toContain('receiptSaleId && effectiveBranch');
-    expect(workspace).toContain('Quantity is not a client-side saleability gate.');
+    expect(workspace).toContain('authoritative inventory deduction point');
   });
 
-  it('validates configuration independently and then uses one quantity probe per product', () => {
+  it('keeps the legacy sellability RPC definition available for non-POS compatibility during staged retirement', () => {
     const migration = read('supabase/migrations/20260921153000_pos_sellability_configuration_validation.sql');
 
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.pos_product_configuration_error');
-    expect(migration).toContain('WITH RECURSIVE');
-    expect(migration).toContain("'MANUFACTURED_UNIT_HAS_NO_RECIPE'");
-    expect(migration).toContain('v_error := public.pos_product_configuration_error(v_product.id, p_branch_id);');
-    expect(migration).toContain('v_check := public.check_product_availability(');
-    expect(migration).not.toContain('v_low');
-    expect(migration).not.toContain('v_high');
-    expect(migration).not.toContain('v_mid');
-    expect(migration).toContain("'INSUFFICIENT_RAW_MATERIAL_STOCK'");
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.get_pos_product_sellability');
     expect(migration).toContain('public.user_may_access_branch(p_branch_id)');
   });
 
