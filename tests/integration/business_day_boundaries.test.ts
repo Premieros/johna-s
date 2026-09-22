@@ -85,6 +85,19 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     expect(def).not.toContain("'BUSINESS_DAY_NOT_FINISHED'");
   });
 
+  it('auto-close uses the configured cutoff instead of the live report end', async () => {
+    const { rows } = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('public.try_auto_close_branch_shift(uuid)'::regprocedure) def
+    `);
+    const def = rows[0].def.replace(/\s+/g, ' ');
+    expect(def).toContain('public._ensure_business_day_state');
+    expect(def).toContain("v_end_time<=v_start_time");
+    expect(def).toContain("AT TIME ZONE 'Africa/Cairo'");
+    expect(def).toContain('WHILE v_window_end<=v_shift.opened_at LOOP');
+    expect(def).toContain("'BUSINESS_DAY_NOT_FINISHED'");
+    expect(def).not.toContain('public._resolve_business_day_window');
+  });
+
   it('auto-close never bypasses open orders and never fakes an actual cash count', async () => {
     const { rows } = await client.query<{ def: string }>(`
       SELECT pg_get_functiondef('public.try_auto_close_branch_shift(uuid)'::regprocedure) def
