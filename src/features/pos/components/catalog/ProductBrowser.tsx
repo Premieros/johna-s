@@ -7,6 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
