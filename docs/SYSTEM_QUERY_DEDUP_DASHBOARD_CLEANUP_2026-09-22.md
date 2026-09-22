@@ -57,3 +57,18 @@ The POS workspace no longer independently fetches the global settings and active
 - no RLS or permission changes;
 - no printing/print-agent/queue changes;
 - no sale/payment/inventory mutation flow changes.
+
+
+## Main synchronization before merge
+
+Before merge, `main` advanced by one commit:
+
+- `3b994c4fa20e97fd909e9ec565eeab3ac04b159a`
+- title: `Fix business-day auto-close cutoff (#305)`
+
+That change touched only:
+- `docs/SHIFT_AUTO_CLOSE_CUTOFF_FIX_2026-09-22.md`;
+- `supabase/migrations/20260922064500_fix_auto_close_configured_cutoff.sql`;
+- `tests/integration/business_day_boundaries.test.ts`.
+
+There was no file overlap with the query-dedup/dashboard changes. The branch was synchronized with `main` via merge commit `38ce8bb6b982f6a5b5626e0d923f835fbce263c3` without force push. PR #304 became mergeable again and the full verification workflow was restarted on the synchronized head.
