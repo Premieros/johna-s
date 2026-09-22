@@ -1,6 +1,17 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
 
+## ACTIVE — Opening inventory / FIFO cost repair — 2026-09-22
+
+- Branch: `development/opening-fifo-cost-repair-20260922`
+- Base: `main@a59f4d91035f6637e25283ef76dcd0644a39e479`
+- Live log: `docs/OPENING_FIFO_COST_REPAIR_2026-09-22.md`
+- Scope: repair zero-cost positive raw opening inventory valuations and replay affected FIFO historical cost through the existing tested FIFO reconciliation engine.
+- Production audit: 162 zero-cost opening batches in Smouha; all have exactly one opening ledger receipt; 140 have opening-time authoritative stock-count valuation and are eligible; 1 future-only candidate + 21 with no candidate remain unresolved/review-only.
+- Safety: no physical stock quantity rewrite, no recipe/payment/sale-total changes, no printing changes.
+- Production migration/backfill is NOT applied. First implementation Full Verify run 35718453901 was Green; exact-head Full Verify is pending after tightened future-price exclusion. Explicit approval is still required before Production apply.
+
+
 ## ACTIVE — Stability / integrity monitor & historical repair — 2026-09-22
 
 - Branch: `development/stability-integrity-repair-20260922-v2`
