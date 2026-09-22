@@ -7,9 +7,9 @@
 - Base: `main@a59f4d91035f6637e25283ef76dcd0644a39e479`
 - Live log: `docs/OPENING_FIFO_COST_REPAIR_2026-09-22.md`
 - Scope: repair zero-cost positive raw opening inventory valuations and replay affected FIFO historical cost through the existing tested FIFO reconciliation engine.
-- Production audit: 162 zero-cost opening batches in Smouha; all have exactly one opening ledger receipt; 141 have an authoritative purchase/count/pricing candidate; 21 remain explicitly unresolved.
+- Production audit: 162 zero-cost opening batches in Smouha; all have exactly one opening ledger receipt; 140 have opening-time authoritative stock-count valuation and are eligible; 1 future-only candidate + 21 with no candidate remain unresolved/review-only.
 - Safety: no physical stock quantity rewrite, no recipe/payment/sale-total changes, no printing changes.
-- Production migration/backfill is NOT applied. Full Verify Green + explicit approval required.
+- Production migration/backfill is NOT applied. First implementation Full Verify run 35718453901 was Green; exact-head Full Verify is pending after tightened future-price exclusion. Explicit approval is still required before Production apply.
 
 
 ## ACTIVE — Stability / integrity monitor & historical repair — 2026-09-22
