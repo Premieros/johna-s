@@ -297,17 +297,21 @@ BEGIN
      AND rm.is_active = true
     WHERE e.target_type = 'raw_material'
   ),
+  selected_unit_effects AS (
+    SELECT *
+    FROM selected_effects
+    WHERE target_type = 'inventory_unit'
+  ),
   modifier_group_raw AS (
     SELECT
       r.raw_material_id,
       r.raw_name,
       (r.quantity_per_unit * e.quantity_delta)::numeric AS quantity_per_sale
-    FROM selected_effects e
+    FROM selected_unit_effects e
     CROSS JOIN LATERAL public.resolve_inventory_unit_raw_components(
       e.inventory_unit_id,
       p_branch_id
     ) r
-    WHERE e.target_type = 'inventory_unit'
   ),
   combined AS (
     SELECT * FROM base_raw
