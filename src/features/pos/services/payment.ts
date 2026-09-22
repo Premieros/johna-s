@@ -219,15 +219,37 @@ export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Prom
   }
 }
 
-export async function nextInvoiceNumber(): Promise<string> {
+function normalizeInvoicePrefix(value?: string | null): string {
+  return String(value || '')
+    .replace(/[\r\n\t]/g, '')
+    .trim()
+    .slice(0, 12);
+}
+
+export async function nextInvoiceNumber(branchPrefix?: string | null): Promise<string> {
+  // Offline identifiers stay on the established INV-OFF contract because the
+  // sync engine uses that marker to reconcile pending sales safely.
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     return `INV-OFF-${dateStr}-${createOfflineToken()}`;
   }
 
   try {
+    // The server still owns the atomic sequence allocation. The optional branch
+    // prefix only formats that already-allocated sequence for the new sale.
     const { data, error } = await posApi.nextDocumentNumber({ p_type: 'sale' });
-    const number = !error && data?.success ? (data as { number?: string }).number : null;
+    const payload = !error && data?.success
+      ? (data as RpcResult & { number?: string; raw?: number | string })
+      : null;
+    const number = payload?.number || null;
+    const prefix = normalizeInvoicePrefix(branchPrefix);
+    const rawFromPayload = Number(payload?.raw);
+    const rawFromNumber = Number(String(number || '').match(/(\d+)$/)?.[1] || '');
+    const raw = Number.isSafeInteger(rawFromPayload) && rawFromPayload > 0
+      ? rawFromPayload
+      : rawFromNumber;
+
+    if (prefix && Number.isSafeInteger(raw) && raw > 0) return `${prefix}${raw}`;
     if (number) return number;
     throw new Error(error?.message || (data as RpcResult | null)?.detail || (data as RpcResult | null)?.error || 'Could not allocate sale invoice number');
   } catch (err) {
