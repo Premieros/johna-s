@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -16,13 +17,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
   async function sendToKitchen(orderId: string) { return asUser(async () => { const res = await client.query(`SELECT public.send_to_kitchen($1) AS r`, [orderId]); return res.rows[0].r; }); }
   async function sendRows(orderId: string): Promise<number> { return (await client.query(`SELECT count(*)::int AS c FROM public.order_kitchen_sends WHERE order_id = $1`, [orderId])).rows[0].c; }
   async function batchQty(unitId = unitA): Promise<number> {
-    const r = await client.query<{ quantity: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS quantity
-         FROM public.inventory_unit_batches
-        WHERE unit_id = $1 AND warehouse_id = $2`,
-      [unitId, whId],
-    );
-    return Number(r.rows[0]?.quantity || 0);
+    return rawQtyForUnit(client, unitId, branchId, whId);
   }
 
   const orgId = randomUUID();
@@ -36,6 +31,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
       await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, cost_price, sale_price, is_active) VALUES ($1, $2, $3, 'ready', $4, 50, 100, true)`, [unit, `048-${name}-${randomUUID()}`, `048 Unit ${name}`, branchId]);
       await client.query(`INSERT INTO public.product_unit_links (product_id, unit_id, quantity) VALUES ($1, $2, 1)`, [prod, unit]);
       await client.query(`INSERT INTO public.inventory_unit_batches (unit_id, branch_id, warehouse_id, quantity, unit_cost) VALUES ($1, $2, $3, 100, 50)`, [unit, branchId, whId]);
+      await attachRawComponentToUnit(client, unit, branchId, whId, 100, 50);
     }
     await client.query(`INSERT INTO public.users (id, email, full_name, role, branch_id, is_active) VALUES ($1, $2, $3, 'cashier', $4, true)`, [cashierId, `k-${randomUUID()}@test.local`, 'Cashier', branchId]);
     await client.query(`INSERT INTO public.organization_members (organization_id, user_id, membership_role, is_active) VALUES ($1, $2, 'member', true)`, [orgId, cashierId]);
@@ -308,18 +304,19 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     expect(order.rows[0].status).toBe('open');
   });
 
-  it('insufficient stock blocks the whole multi-line send atomically and identifies the item', async () => {
+  it('raw shortage never blocks a multi-line send and negative stock is recorded exactly once', async () => {
     const beforeA = await batchQty(unitA);
+    const beforeB = await batchQty(unitB);
     const created = await createOrder(itemJson([{ product_id: prodA, quantity: 1 }, { product_id: prodB, quantity: 10000 }]));
     expect(created.success).toBe(true);
     const result = await sendToKitchen(created.order_id!);
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('INSUFFICIENT_STOCK');
-    expect(result.product_id).toBe(prodB);
-    expect(await batchQty(unitA)).toBe(beforeA);
-    expect(await sendRows(created.order_id!)).toBe(0);
+    expect(result.success, JSON.stringify(result)).toBe(true);
+    expect(result.items_sent_count).toBe(2);
+    expect(await batchQty(unitA)).toBe(beforeA - 1);
+    expect(await batchQty(unitB)).toBe(beforeB - 10000);
+    expect(await sendRows(created.order_id!)).toBe(2);
     const events = await client.query(`SELECT count(*)::int AS c FROM public.order_kitchen_inventory_events WHERE order_id=$1`, [created.order_id]);
-    expect(events.rows[0].c).toBe(0);
+    expect(events.rows[0].c).toBe(2);
   });
 
   it('send_to_kitchen rejects a completed order (ORDER_NOT_EDITABLE)', async () => { const created = await createOrder(); expect(created.success).toBe(true); await client.query(`UPDATE public.orders SET status = 'completed' WHERE id = $1`, [created.order_id]); const sent = await sendToKitchen(created.order_id!); expect(sent.success).toBe(false); expect(sent.error).toBe('ORDER_NOT_EDITABLE'); });
