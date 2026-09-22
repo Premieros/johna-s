@@ -193,7 +193,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
   if (saleIds.length > 0) {
     const { data: saleItems, error: saleItemsError } = await supabase
       .from('sale_items')
-      .select('sale_id,product_id,unit_name,quantity,unit_price,total,product:products(name,name_en)')
+      .select('sale_id,product_id,unit_name,quantity,unit_price,total,refunded_quantity,refunded_amount,product:products(name,name_en)')
       .in('sale_id', saleIds);
     if (saleItemsError) throw new Error(`SHIFT_REPORT_ITEMS_LOAD_FAILED: ${saleItemsError.message}`);
 
@@ -204,6 +204,8 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
       quantity: number;
       unit_price: number;
       total: number;
+      refunded_quantity?: number | null;
+      refunded_amount?: number | null;
       product?: { name?: string; name_en?: string } | null;
     }>;
 
@@ -216,8 +218,12 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
         unitName: item.unit_name || 'قطعة',
         total: 0,
       };
-      current.quantity += Number(item.quantity || 0);
-      current.total += Number(item.total || (Number(item.quantity || 0) * Number(item.unit_price || 0)));
+      const netQuantity = Math.max(0, Number(item.quantity || 0) - Number(item.refunded_quantity || 0));
+      const grossLineTotal = Number(item.total || (Number(item.quantity || 0) * Number(item.unit_price || 0)));
+      const netLineTotal = Math.max(0, grossLineTotal - Number(item.refunded_amount || 0));
+      if (netQuantity <= 0 && netLineTotal <= 0) continue;
+      current.quantity += netQuantity;
+      current.total += netLineTotal;
       productMap.set(productId, current);
     }
   }
