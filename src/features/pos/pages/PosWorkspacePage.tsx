@@ -135,60 +135,15 @@ export function PosWorkspacePage() {
     reloadShift();
   }, [reloadShift]);
 
-  const loadSellabilityStatus = useCallback(async (branchId: string) => {
-    if (!branchId) {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-      return;
-    }
-
-    const { data: warehouses } = await supabase
-      .from('warehouses')
-      .select('id,is_default,created_at')
-      .eq('branch_id', branchId)
-      .eq('is_active', true)
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true });
-    const warehouseId = ((warehouses || []) as { id: string }[])[0]?.id || null;
-    if (!warehouseId) {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-      return;
-    }
-
-    const { data, error } = await supabase.rpc('get_pos_product_sellability', {
-      p_branch_id: branchId,
-      p_warehouse_id: warehouseId,
-      p_probe_quantity: 100000,
-    });
-    if (error) {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-      return;
-    }
-
-    const rawShortage: Record<string, boolean> = {};
-    const availabilityErrors: Record<string, string> = {};
-    for (const row of (data || []) as {
-      product_id: string;
-      is_sellable?: boolean;
-      raw_shortage_only?: boolean;
-      availability_error?: string | null;
-    }[]) {
-      if (row.raw_shortage_only) rawShortage[row.product_id] = true;
-      if (row.availability_error) availabilityErrors[row.product_id] = row.availability_error;
-    }
-
-    // Quantity is not a client-side saleability gate. Keep the legacy map empty
-    // so the POS wrapper cannot accidentally reintroduce maximum-quantity scans.
+  // POS catalog is intentionally stock-agnostic.
+  // Inventory/component availability is never preflighted on workspace load:
+  // kitchen send is the authoritative deduction point and may drive stock negative.
+  // Keep legacy maps empty so old client-side gates cannot reappear accidentally.
+  useEffect(() => {
     setStockMap({});
-    setRawShortageMap(rawShortage);
-    setAvailabilityErrorMap(availabilityErrors);
-  }, []);
+    setRawShortageMap({});
+    setAvailabilityErrorMap({});
+  }, [effectiveBranch]);
 
   const currentBranchName = branches.find((b) => b.id === effectiveBranch)?.name || effectiveBranch;
 
@@ -372,8 +327,6 @@ export function PosWorkspacePage() {
               if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
               if (offlineData.settings) setOfflineSettings(offlineData.settings);
               if (offlineData.branches.length > 0) setOfflineBranches(offlineData.branches);
-              if (offlineData.stockMap) setStockMap(offlineData.stockMap);
-              if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
               setLoading(false);
             }
             return;
@@ -466,8 +419,6 @@ export function PosWorkspacePage() {
             setCategories(fallbackCats);
             if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
             if (offlineData.settings) setOfflineSettings(offlineData.settings);
-            if (offlineData.stockMap && Object.keys(offlineData.stockMap).length > 0) setStockMap(offlineData.stockMap);
-            if (offlineData.rawShortageOnly && Object.keys(offlineData.rawShortageOnly).length > 0) setRawShortageMap(offlineData.rawShortageOnly);
             if (productLoadError) {
               setLoadWarning(
                 isAr
@@ -508,15 +459,6 @@ export function PosWorkspacePage() {
       cancelled = true;
     };
   }, [effectiveBranch, reloadKey, cachePosData, loadCachedPosData, sharedSettings, sharedBranches, isAr]);
-
-  useEffect(() => {
-    if (effectiveBranch) void loadSellabilityStatus(effectiveBranch);
-    else {
-      setStockMap({});
-      setRawShortageMap({});
-      setAvailabilityErrorMap({});
-    }
-  }, [effectiveBranch, loadSellabilityStatus]);
 
   useEffect(() => {
     if (!effectiveBranch) {
