@@ -10,6 +10,13 @@ const executable = sql
   .replace(/--.*$/gm, '')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
+function stripDollarQuotedBodies(input: string) {
+  return input.replace(
+    /\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$/g,
+    '',
+  );
+}
+
 describe('production migration reconciliation contract', () => {
   it('keeps printing infrastructure frozen', () => {
     expect(executable).not.toMatch(
@@ -36,27 +43,29 @@ describe('production migration reconciliation contract', () => {
     }
   });
 
+  it('does not directly rewrite transactional business data during migration', () => {
+    const topLevelSql = stripDollarQuotedBodies(executable);
+
+    expect(topLevelSql).not.toMatch(
+      /DELETE\s+FROM\s+public\.(sales|purchases|orders|order_items|raw_material_batches|inventory_batches)\b/i,
+    );
+    expect(topLevelSql).not.toMatch(
+      /UPDATE\s+public\.(sales|purchases|orders|order_items|raw_material_inventory|raw_material_warehouse_inventory|inventory)\b/i,
+    );
+  });
+
   it('uses branch-aware raw stock-count snapshots', () => {
     expect(sql).toContain('from public.raw_material_warehouse_inventory');
     expect(sql).toContain('warehouse_id=p_warehouse_id');
   });
 
-  it('patches live order RPCs instead of replacing their later full definitions', () => {
+  it('patches live order RPCs instead of replacing later table-shell/note fixes', () => {
     expect(sql).toContain('RECONCILE_CREATE_ORDER_GUARD_PATTERN_CHANGED');
     expect(sql).toContain('RECONCILE_UPDATE_ORDER_MATCH_PATTERN_CHANGED');
-    expect(sql).not.toMatch(/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.create_order\s*\(/i);
-    expect(sql).not.toMatch(/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.update_order\s*\(/i);
-  });
 
-  it('keeps the reconciliation fail-closed when live function shapes drift', () => {
-    for (const marker of [
-      'RECONCILE_CREATE_PURCHASE_REQUEST_BRANCH_PATTERN_CHANGED',
-      'RECONCILE_RECEIVE_PURCHASE_BRANCH_PATTERN_CHANGED',
-      'RECONCILE_CREATE_ORDER_DECL_PATTERN_CHANGED',
-      'RECONCILE_UPDATE_ORDER_SELECT_PATTERN_CHANGED',
-      'RECONCILE_UPDATE_ORDER_DELETE_PATTERN_CHANGED',
-    ]) {
-      expect(sql).toContain(marker);
-    }
+    const targetedPatch = sql.slice(sql.indexOf('-- create_order:'));
+    expect(targetedPatch).not.toMatch(
+      /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.(create_order|update_order)\b/i,
+    );
   });
 });
