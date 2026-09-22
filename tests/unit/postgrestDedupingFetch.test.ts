@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createPostgrestDedupingFetch } from '@/lib/postgrestDedupingFetch';
 
 describe('PostgREST duplicate read coalescing', () => {
@@ -52,10 +52,8 @@ describe('PostgREST duplicate read coalescing', () => {
     expect(calls).toBe(4);
   });
 
-  it('reuses an immediate duplicate read but expires the microcache quickly', async () => {
+  it('never reuses a completed response', async () => {
     let calls = 0;
-    let now = 1_000;
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
     const baseFetch = async () => {
       calls += 1;
       return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
@@ -65,33 +63,31 @@ describe('PostgREST duplicate read coalescing', () => {
 
     await fetcher(url);
     await fetcher(url);
-    expect(calls).toBe(1);
 
-    now += 1_501;
-    await fetcher(url);
     expect(calls).toBe(2);
-    nowSpy.mockRestore();
   });
 
-  it('invalidates a completed read immediately after any PostgREST mutation/RPC', async () => {
+  it('does not attach a post-mutation read to an older in-flight read', async () => {
     let calls = 0;
-    const baseFetch = async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const baseFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       calls += 1;
+      if ((init?.method || 'GET').toUpperCase() === 'GET' && calls === 1) await gate;
       return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
     };
     const fetcher = createPostgrestDedupingFetch(baseFetch);
     const url = 'https://example.supabase.co/rest/v1/warehouses?select=*';
 
-    await fetcher(url);
-    await fetcher(url);
-    expect(calls).toBe(1);
-
+    const beforeWrite = fetcher(url);
     await fetcher('https://example.supabase.co/rest/v1/rpc/set_table_status', {
       method: 'POST',
       body: '{}',
     });
-    await fetcher(url);
-
+    const afterWrite = fetcher(url);
     expect(calls).toBe(3);
+
+    release();
+    await Promise.all([beforeWrite, afterWrite]);
   });
 });
