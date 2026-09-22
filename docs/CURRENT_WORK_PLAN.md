@@ -1,6 +1,17 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
 
+## ACTIVE — FIFO missing kitchen-event historical sale fallback — 2026-09-22
+
+- Branch: `development/fifo-missing-kitchen-sale-fallback-20260922`
+- Base: `main@67943a445e8444e6c63ef2a382e7c2c9c056b6a6`
+- Log: `docs/FIFO_MISSING_KITCHEN_SALE_FALLBACK_2026-09-22.md`
+- Trigger: approved opening-cost `apply` failed closed on a historical kitchen-send ledger whose event had been deleted while its completed sale survives.
+- Production rollback verification: complete; original opening repair run remains `prepared`, no valuation or quantity change occurred.
+- Scope: allow only missing-event historical rows that map to exactly one completed sale, with no live order and no event-keyed journal, to propagate valuation delta directly to sale COGS.
+- Production migration NOT applied. Full Verify Green + explicit approval required before retrying the opening-cost apply.
+
+
 ## ACTIVE — Opening inventory / FIFO cost repair — 2026-09-22
 
 - Branch: `development/opening-fifo-cost-repair-20260922`
