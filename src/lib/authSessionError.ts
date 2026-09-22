@@ -15,7 +15,7 @@ export function isAuthSessionError(input: unknown): boolean {
   ].filter(Boolean).join(' ');
 
   return /\bAUTH_REQUIRED\b/i.test(text)
-    || /\bPGRST301\b/i.test(text)
+    || /\bPGRST30[13]\b/i.test(text)
     || /\b(?:bad_jwt|invalid_jwt|session_not_found|refresh_token_not_found|refresh_token_already_used)\b/i.test(text)
     || /(?:jwt|access token|refresh token|session).*(?:expired|invalid|missing|not found)/i.test(text)
     || /(?:expired|invalid|missing).*(?:jwt|access token|refresh token|session)/i.test(text);
