@@ -147,6 +147,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
       return {
         saleId: String(item.sale_id || ''),
         invoiceNumber: String(item.invoice_number || ''),
+        orderNumber: '',
         userId: String(item.user_id || ''),
         userName: String(item.user_name || ''),
         subtotal: Number(item.subtotal || 0),
@@ -162,6 +163,51 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
       };
     })
     : [];
+
+  const traceSaleIds = Array.from(new Set(salesDetails.map((sale) => sale.saleId).filter(Boolean)));
+  if (traceSaleIds.length > 0) {
+    const { data: traceRows, error: traceError } = await supabase
+      .from('sales')
+      .select('id,source_order:orders!sales_source_order_id_fkey(order_number)')
+      .in('id', traceSaleIds);
+    if (traceError) throw new Error(`SHIFT_REPORT_ORDER_TRACE_LOAD_FAILED: ${traceError.message}`);
+
+    const orderBySale = new Map<string, string>();
+    for (const row of traceRows || []) {
+      const sourceOrder = row.source_order as unknown as { order_number?: string } | null;
+      if (sourceOrder?.order_number) orderBySale.set(String(row.id), String(sourceOrder.order_number));
+    }
+    for (const sale of salesDetails) {
+      sale.orderNumber = orderBySale.get(sale.saleId) || '';
+    }
+  }
+
+  const cashPurchaseDetails: NonNullable<ShiftClosingSummary['cashPurchaseDetails']> = [];
+  if (raw.branch_id && raw.opened_at) {
+    const endAt = raw.closed_at ? String(raw.closed_at) : new Date().toISOString();
+    const { data: purchaseRows, error: purchaseError } = await supabase
+      .from('purchases')
+      .select('id,invoice_number,paid_amount,returned_amount,payment_method,status,created_at')
+      .eq('branch_id', String(raw.branch_id))
+      .eq('payment_method', 'cash')
+      .in('status', ['completed', 'returned'])
+      .gte('created_at', String(raw.opened_at))
+      .lte('created_at', endAt)
+      .order('created_at', { ascending: true });
+    if (purchaseError) throw new Error(`SHIFT_REPORT_CASH_PURCHASES_LOAD_FAILED: ${purchaseError.message}`);
+
+    for (const row of purchaseRows || []) {
+      const cashOutflow = Math.max(0, Number(row.paid_amount || 0) - Number(row.returned_amount || 0));
+      if (cashOutflow <= 0) continue;
+      cashPurchaseDetails.push({
+        purchaseId: String(row.id),
+        invoiceNumber: String(row.invoice_number || ''),
+        amount: cashOutflow,
+        createdAt: String(row.created_at || ''),
+      });
+    }
+  }
+  const cashPurchases = cashPurchaseDetails.reduce((sum, purchase) => sum + purchase.amount, 0);
 
   const treasuryBalances = Array.isArray(raw.treasury)
     ? raw.treasury.map((row) => {
@@ -286,6 +332,8 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     returns: Number(raw.returns || 0),
     voids: Number(raw.voids || 0),
     expenses: Number(raw.expenses || 0),
+    cashPurchases,
+    cashPurchaseDetails,
     netRevenue: Number(raw.net_revenue || 0),
     totalTaxes: Number(raw.taxes || 0),
     netSales: Number(raw.net_sales || 0),
