@@ -62,6 +62,11 @@ Exit criteria:
 - POS can open without sellability/recipe scans;
 - no printing code changed.
 
+Verification:
+- Verify main #2354 ✅
+- Verify main #2355 ✅
+- No production migration required for Phase 1.
+
 Completion note:
 - POS no longer calls catalog-wide sellability/availability RPCs on startup;
 - POS no longer loads product_components recipes on startup;
