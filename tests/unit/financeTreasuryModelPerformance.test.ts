@@ -37,6 +37,10 @@ describe('finance treasury model and query stabilization contract', () => {
     expect(migration).toContain("WHEN NEW.account_type = 'bank' THEN 'bank'");
     expect(migration).toContain("ELSE 'branch_cash'");
     expect(migration).toContain('BEFORE INSERT OR UPDATE OF branch_id, account_type');
+    expect(migration).toContain('AND t.is_primary');
+    expect(migration).toContain('NEW.is_primary := false');
+    expect(migration).toContain("AND kind = 'branch_cash'");
+    expect(migration).toContain('AND is_primary;');
   });
 
   it('funds supplier payments from a real locked treasury account', () => {
