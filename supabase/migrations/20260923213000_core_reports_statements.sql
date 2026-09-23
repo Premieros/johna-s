@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION public.get_general_ledger(
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path TO public, pg_temp
 AS $function$
 DECLARE
@@ -487,7 +487,7 @@ CREATE OR REPLACE FUNCTION public.get_cash_flow(
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path TO public, pg_temp
 AS $function$
 DECLARE
