@@ -21,14 +21,25 @@ describe('permission contract workspace wiring', () => {
     const roles = read('src/features/admin/pages/RolesTab.tsx');
 
     expect(roles).toContain("can('roles.permissions.manage')");
-    expect(roles).toContain('const canEditCurrent = mayEditRole(currentRole)');
+    expect(roles).toContain('const canEditCurrent = mayEditRole(currentRole) && !currentHasUnownedPermissions');
     expect(roles).toContain('permissionContract(permission)');
     expect(roles).toContain('expandPermissionDependencies');
     expect(roles).toContain('removePermissionWithDependents');
     expect(roles).toContain('missingPermissionDependencies');
     expect(roles).toContain('const canGrantPermission');
     expect(roles).toContain('isPlatformAdmin || can(permission)');
-    expect(roles).toContain('لا تملك حق منحها');
+    expect(roles).toContain('.filter((permission) => isPlatformAdmin || canGrantPermission(permission))');
+    expect(roles).toContain('تم إخفاء هذه الصلاحيات');
+    expect(roles).not.toContain('يمكنك إزالتها فقط');
+    expect(roles).not.toContain('لا تملك حق منحها');
+  });
+
+  it('keeps technical permission details behind Super Admin advanced details', () => {
+    const roles = read('src/features/admin/pages/RolesTab.tsx');
+    expect(roles).toContain('const [showAdvancedDetails, setShowAdvancedDetails] = useState(false)');
+    expect(roles).toContain('isPlatformAdmin && showAdvancedDetails');
+    expect(roles).toContain('تفاصيل متقدمة');
+    expect(roles).toContain('إخفاء التفاصيل التقنية');
   });
 
   it('supports safe view-only and payment-only POS presets without touching print-agent permissions', () => {
