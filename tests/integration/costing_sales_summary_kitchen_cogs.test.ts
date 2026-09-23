@@ -182,4 +182,22 @@ describe.skipIf(skip)('costing sales summary kitchen COGS', () => {
     );
     expect(result.rows[0]?.prosecdef).toBe(false);
   });
+
+
+  it('evaluates history bounds once instead of per sale row', async () => {
+    const result = await client.query<{ def: string }>(
+      `SELECT pg_get_functiondef(
+         'public.get_costing_sales_summary(uuid,date,date)'::regprocedure
+       ) AS def`,
+    );
+
+    const def = result.rows[0]?.def || '';
+    expect(def).toContain('history_bounds AS MATERIALIZED');
+    expect(def).toContain('scoped_sales AS MATERIALIZED');
+    expect(def.match(/history_clamp_from/g) || []).toHaveLength(1);
+    expect(def.match(/history_clamp_to/g) || []).toHaveLength(1);
+    expect(def).toContain("je.reference_type IN ('sale','fifo_cogs_reconcile')");
+    expect(def).toContain('WHEN jc.sale_id IS NOT NULL');
+    expect(def).toContain('WHEN kc.sale_id IS NOT NULL');
+  });
 });
