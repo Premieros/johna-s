@@ -41,6 +41,10 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).not.toContain('aria-disabled="true"');
     expect(dashboard).not.toContain("role === 'branch_manager'");
     expect(dashboard).not.toContain("role === 'accountant'");
+    expect(dashboard).not.toContain("history.unlimited ? range : (range === 'today' ? 'today' : 'week')");
+    expect(dashboard).not.toContain("filter((item) => history.unlimited || item === 'today' || item === 'week')");
+    expect(dashboard).not.toContain('Maximum visible history: last 7 days');
+    expect(dashboard).toContain('Last 7 days are complete; older periods follow the visibility policy');
   });
 
   it('keeps active operational exceptions while historical rows are sampled by RLS', () => {
