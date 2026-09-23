@@ -32,6 +32,7 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
   const doubleOption = randomUUID();
   const extraCheeseOption = randomUUID();
   const noOnionOption = randomUUID();
+  const rawByUnit = new Map<string, string>();
 
   const asUser = async (userId: string, sql: string, params: unknown[] = []) => {
     const result = await runAsPersist(client, userId, sql, params);
@@ -91,7 +92,7 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
          VALUES($1,$2,$3,10,1)`,
         [id, ids.branchA, ids.whA],
       );
-      await attachRawComponentToUnit(client, id, ids.branchA, ids.whA, 10, 1);
+      rawByUnit.set(id, await attachRawComponentToUnit(client, id, ids.branchA, ids.whA, 10, 1));
     }
 
     await client.query(
@@ -250,9 +251,9 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
       [singleItem!.id],
     );
     const effects = Object.fromEntries(effectRows.rows.map((r) => [r.target_id, Number(r.quantity)]));
-    expect(effects[pattyUnit]).toBe(1);
-    expect(effects[cheeseUnit]).toBe(2);
-    expect(effects[onionUnit]).toBe(1);
+    expect(effects[rawByUnit.get(pattyUnit)!]).toBe(1);
+    expect(effects[rawByUnit.get(cheeseUnit)!]).toBe(2);
+    expect(effects[rawByUnit.get(onionUnit)!]).toBe(1);
 
     const refundItems = JSON.stringify([{ sale_item_id: singleItem!.id, quantity: 1 }]);
     const refunded = await rpc(
