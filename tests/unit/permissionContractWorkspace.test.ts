@@ -55,7 +55,9 @@ describe('permission contract workspace wiring', () => {
     expect(roles).toContain('missingPermissionDependencies');
     expect(roles).toContain('const canGrantPermission');
     expect(roles).toContain('isPlatformAdmin || can(permission)');
-    expect(roles).toContain('.filter((permission) => isPlatformAdmin || canGrantPermission(permission))');
+    expect(roles).toContain('const canOfferPermission');
+    expect(roles).toContain("expandPermissionDependencies([permission]).every((required) => canGrantPermission(required))");
+    expect(roles).toContain('.filter((permission) => canOfferPermission(permission))');
     expect(roles).toContain('تم إخفاء هذه الصلاحيات');
     expect(roles).not.toContain('يمكنك إزالتها فقط');
     expect(roles).not.toContain("(isAr ? 'لا تملك حق منحها' : 'Cannot grant')");
