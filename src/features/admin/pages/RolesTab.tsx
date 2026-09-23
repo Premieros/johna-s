@@ -23,7 +23,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { logAudit } from '@/lib/audit';
 import {
   ALL_PERMISSIONS,
-  PERMISSION_GROUPS,
+  OPERATIONAL_PERMISSION_SECTIONS,
   PERMISSION_LABELS,
   ROLE_META,
   useCan,
@@ -441,7 +441,7 @@ export function RolesTab() {
   };
 
   const permissionQuery = permissionSearch.trim().toLowerCase();
-  const visibleGroups = PERMISSION_GROUPS.map((group) => ({
+  const visibleGroups = OPERATIONAL_PERMISSION_SECTIONS.map((group) => ({
     ...group,
     permissions: group.permissions
       .filter((permission) => isPlatformAdmin || canGrantPermission(permission))
