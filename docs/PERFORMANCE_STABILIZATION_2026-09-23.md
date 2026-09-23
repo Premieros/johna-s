@@ -112,3 +112,42 @@ Replace pages that load a capped first page and then search/filter locally with 
 - Inventory Ledger selection narrowed to required columns and relation names only.
 - Inventory Ledger branch and entry-type filters moved to the server.
 - Full server-side ledger search across reference/batch/product/raw names remains pending; do not claim local search is complete yet.
+
+
+## Stage B measurement update — Costing / cart / create_order / kitchen
+
+Date: 2026-09-23
+Branch: `development/performance-costing-history-bounds`
+PR: #334
+
+### Runtime-caller audit
+
+- `get_costing_overview` is an active Costing Center caller.
+- Costing Center also calls `get_costing_sales_summary` in parallel with the overview request.
+- `get_pos_cart_product_availability` has historical Production samples at ~34.24s and ~65.87s, and its implementation performs an exponential + binary search for every active product by repeatedly invoking `check_pos_cart_availability`.
+- Current `main` does **not** call `useCartAwareAvailability`; unit contracts explicitly keep cart availability out of POS quantity gating. Treat the 34s cart snapshot as a historical/legacy client hotspot unless a current caller reappears.
+- `create_order` remains active. During this profiling window its pg_stat_statements call count increased by one and total time increased by only ~122ms, so the historical ~7.01s maximum was not reproduced.
+- `send_to_kitchen` remains active. During this profiling window its call count increased by one and total time increased by ~655ms, so the historical ~7.58s maximum was not reproduced. The kitchen/printing path remains frozen.
+
+### Costing measurements
+
+Read-only Production measurements:
+
+- `get_costing_overview`: ~450ms first observed run, then ~110ms and ~63ms; no current 7–8s spike reproduced.
+- `get_costing_sales_summary`: ~920–947ms reproducibly on Cleopatra.
+- Isolated COGS sources:
+  - journal COGS: ~19ms
+  - kitchen-event COGS: ~18ms
+  - legacy inventory-ledger fallback: ~2.8ms
+- Root cause: `history_clamp_from/to` were executed repeatedly inside the sales-row predicate. Those helpers reach `history_min_date()` / permission checks and created ~12k shared-buffer hits in the sales scan.
+- Equivalent query materializing the two history bounds once reduced execution from ~947ms to ~51ms while preserving COGS precedence and history semantics.
+
+### Fix in PR #334
+
+- New migration: `20260923134500_costing_sales_summary_history_bounds.sql`.
+- It evaluates `history_clamp_from/to` once in a `MATERIALIZED` CTE and reuses the resolved dates.
+- `scoped_sales` is materialized once for the three COGS sources.
+- SECURITY INVOKER, grants, COGS source precedence, and history permission semantics remain unchanged.
+- Integration contract added to prevent per-row history-bound regression.
+- No receipt, printer-agent, kitchen-routing, `send_to_kitchen`, or POS inventory behavior changes.
+- Production migration status: **NOT APPLIED**. Full Verify green + explicit approval are required before any Production application.
