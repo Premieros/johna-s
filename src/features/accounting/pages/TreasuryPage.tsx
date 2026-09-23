@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Landmark, ArrowLeftRight, PiggyBank, HandCoins, Wallet } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -20,7 +19,7 @@ import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { TreasuryAccount, TreasuryBalance, TreasuryTransaction } from '@/lib/types';
+import type { TreasurySource, TreasuryTransaction } from '@/lib/types';
 
 type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
 
@@ -35,8 +34,8 @@ export function TreasuryPage() {
   const { branches } = useBranches();
   const isAr = lang === 'ar';
 
-  const [balances, setBalances] = useState<TreasuryBalance[]>([]);
-  const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
+  const [balances, setBalances] = useState<TreasurySource[]>([]);
+  const [accounts, setAccounts] = useState<TreasurySource[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminBranchFilter, setAdminBranchFilter] = useState('');
 
@@ -50,11 +49,14 @@ export function TreasuryPage() {
 
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const transactionBranchScope = effectiveBranchFilter
+    ? `branch_id.eq.${effectiveBranchFilter},from_branch_id.eq.${effectiveBranchFilter},to_branch_id.eq.${effectiveBranchFilter}`
+    : undefined;
   const { rows: transactions, loading: txLoading, error: txError, total: txTotal, hasMore: txHasMore, loadMore: loadMoreTx, loadingMore: loadingMoreTx, refresh: reloadTx } = usePaginatedRows<TreasuryTransaction>({
     table: 'treasury_transactions',
-    select: '*, from_account:treasury_accounts!from_account_id(account_name), to_account:treasury_accounts!to_account_id(account_name)',
+    select: '*, from_account:treasury_accounts!from_account_id(account_name,branch_id,scope,kind), to_account:treasury_accounts!to_account_id(account_name,branch_id,scope,kind)',
     order: { column: 'created_at', ascending: false },
-    branch_id: effectiveBranchFilter,
+    or: transactionBranchScope,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
     enabled: !!effectiveBranchFilter,
@@ -68,12 +70,12 @@ export function TreasuryPage() {
     setLoading(true);
     try {
       if (effectiveBranchFilter) {
-        const [{ data: bal }, { data: acc }] = await Promise.all([
-          api.accounting.getTreasuryBalances({ p_branch_id: effectiveBranchFilter }),
-          supabase.from('treasury_accounts').select('*').eq('branch_id', effectiveBranchFilter).order('account_type'),
-        ]);
-        setBalances((bal as TreasuryBalance[]) || []);
-        setAccounts((acc as TreasuryAccount[]) || []);
+        const { data } = await api.accounting.getAccessibleTreasuryAccounts({
+          p_branch_id: effectiveBranchFilter,
+        });
+        const sourceRows = (data as TreasurySource[]) || [];
+        setBalances(sourceRows);
+        setAccounts(sourceRows);
       } else {
         setBalances([]);
         setAccounts([]);
@@ -98,8 +100,7 @@ export function TreasuryPage() {
     let result: { data: unknown; error: { message: string } | null };
     if (modal === 'transfer') {
       if (!form.from_account_id || !form.to_account_id) { setSaving(false); show(t('required'), 'error'); return; }
-      result = await api.accounting.processTransfer({
-        p_branch_id: effectiveBranchFilter,
+      result = await api.accounting.processTreasuryTransferV2({
         p_from_account_id: form.from_account_id,
         p_to_account_id: form.to_account_id,
         p_amount: amount,
@@ -133,10 +134,22 @@ export function TreasuryPage() {
     reloadTx();
   };
 
-  const totalCash = balances.filter((b) => b.account_type === 'cash').reduce((s, b) => s + Number(b.balance), 0);
-  const totalBank = balances.filter((b) => b.account_type === 'bank').reduce((s, b) => s + Number(b.balance), 0);
+  const visibleBalances = balances.filter(
+    (b) => b.scope === 'organization' || b.branch_id === effectiveBranchFilter,
+  );
+  const localAccounts = accounts.filter(
+    (a) => a.scope === 'branch' && a.branch_id === effectiveBranchFilter,
+  );
+  const totalCash = localAccounts.filter((b) => b.account_type === 'cash').reduce((s, b) => s + Number(b.balance), 0);
+  const totalBank = localAccounts.filter((b) => b.account_type === 'bank').reduce((s, b) => s + Number(b.balance), 0);
+  const mainTreasury = balances.find((b) => b.scope === 'organization' && b.kind === 'main_cash');
+  const mainTreasuryBalance = Number(mainTreasury?.balance || 0);
+  const accountLabel = (a: TreasurySource) => {
+    if (a.scope === 'organization') return isAr ? 'الخزنة الرئيسية' : 'Main Treasury';
+    return `${a.branch_name || ''} - ${a.account_name}`.replace(/^ - /, '');
+  };
 
-  const balanceColumns: Column<TreasuryBalance>[] = [
+  const balanceColumns: Column<TreasurySource>[] = [
     { key: 'account_name', header: t('accountName'), render: (b) => <span className="font-medium text-ui-text">{b.account_name}</span> },
     { key: 'account_type', header: t('accountType'), render: (b) => <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${b.account_type === 'cash' ? 'bg-ui-warning-soft text-ui-warning' : 'bg-ui-info-soft text-ui-info dark:text-ui-info'}`}>{b.account_type === 'cash' ? t('cash') : t('bank')}</span> },
     { key: 'account_number', header: t('accountCode'), render: (b) => <span className="font-mono text-xs">{b.code || '-'}</span> },
@@ -162,20 +175,26 @@ export function TreasuryPage() {
       <DesignPageHeader
         title={t('treasury')}
         subtitle={t('treasuryTransactions')}
-        actions={can('accounts.manage') && (
+        actions={(can('accounts.manage') || can('accounting.treasury.transfer')) && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => openModal('deposit')}><PiggyBank className="w-4 h-4" /> {t('deposit')}</Button>
-            <Button size="sm" variant="warning" onClick={() => openModal('withdrawal')}><HandCoins className="w-4 h-4" /> {t('withdrawal')}</Button>
-            <Button size="sm" variant="outline" onClick={() => openModal('transfer')}><ArrowLeftRight className="w-4 h-4" /> {t('transfer')}</Button>
+            {can('accounts.manage') && (
+              <>
+                <Button size="sm" onClick={() => openModal('deposit')}><PiggyBank className="w-4 h-4" /> {t('deposit')}</Button>
+                <Button size="sm" variant="warning" onClick={() => openModal('withdrawal')}><HandCoins className="w-4 h-4" /> {t('withdrawal')}</Button>
+              </>
+            )}
+            {can('accounting.treasury.transfer') && (
+              <Button size="sm" variant="outline" onClick={() => openModal('transfer')}><ArrowLeftRight className="w-4 h-4" /> {t('transfer')}</Button>
+            )}
           </div>
         )}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title={t('treasuryBalances')} value={formatCurrency(totalCash + totalBank, currency, lang)} icon={<Wallet className="w-5 h-5" />} color="brand" />
-        <StatCard title={t('cash')} value={formatCurrency(totalCash, currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
+        <StatCard title={isAr ? 'إجمالي خزائن الفرع' : 'Branch treasury total'} value={formatCurrency(totalCash + totalBank, currency, lang)} icon={<Wallet className="w-5 h-5" />} color="brand" />
+        <StatCard title={isAr ? 'خزنة الفرع' : 'Branch cash'} value={formatCurrency(totalCash, currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
         <StatCard title={t('bank')} value={formatCurrency(totalBank, currency, lang)} icon={<Landmark className="w-5 h-5" />} color="blue" />
-        <StatCard title={t('treasuryAccounts')} value={String(balances.length)} icon={<PiggyBank className="w-5 h-5" />} color="purple" />
+        <StatCard title={isAr ? 'الخزنة الرئيسية' : 'Main Treasury'} value={formatCurrency(mainTreasuryBalance, currency, lang)} icon={<PiggyBank className="w-5 h-5" />} color="purple" />
       </div>
 
       {isAdminRole(user?.role) && branches.length > 0 && (
@@ -192,7 +211,7 @@ export function TreasuryPage() {
       )}
 
       <DesignPanel title={t('treasuryBalances')} testId="treasury-balances-panel">
-        <DataTable columns={balanceColumns} data={balances} loading={loading} error={txError} emptyMessage={t('noData')} />
+        <DataTable columns={balanceColumns} data={visibleBalances} loading={loading} error={txError} emptyMessage={t('noData')} />
       </DesignPanel>
 
       <DesignPanel title={t('treasuryTransactions')} testId="treasury-transactions-panel">
@@ -204,11 +223,11 @@ export function TreasuryPage() {
         <div className="space-y-4">
           <Select label={t('fromAccount')} value={form.from_account_id} onChange={(e) => setForm({ ...form, from_account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}
+            {accounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
           </Select>
           <Select label={t('toAccount')} value={form.to_account_id} onChange={(e) => setForm({ ...form, to_account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}
+            {accounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
           </Select>
           <Input label={t('amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
@@ -223,7 +242,7 @@ export function TreasuryPage() {
         <div className="space-y-4">
           <Select label={t('accountName')} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}
+            {localAccounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
           </Select>
           <Input label={t('amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
@@ -238,7 +257,7 @@ export function TreasuryPage() {
         <div className="space-y-4">
           <Select label={t('accountName')} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.account_name}</option>)}
+            {localAccounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
           </Select>
           <Input label={t('amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
