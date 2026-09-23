@@ -1,0 +1,127 @@
+name: Fast Verify
+
+on:
+  push:
+    branches:
+      - 'development/**'
+      - 'feature/**'
+      - 'fix/**'
+      - 'hotfix/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fast-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
+  VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'dummy_anon_key_for_ci_build' }}
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      app_changed: ${{ steps.plan.outputs.app_changed }}
+      db_changed: ${{ steps.plan.outputs.db_changed }}
+      integration_tests: ${{ steps.plan.outputs.integration_tests }}
+      changed_count: ${{ steps.plan.outputs.changed_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch main baseline
+        run: git fetch --no-tags origin main
+      - name: Determine Fast Verify scope
+        id: plan
+        run: node scripts/ci/fast-verify-plan.mjs
+
+  app:
+    needs: scope
+    if: needs.scope.outputs.app_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify locked Supabase project identity
+        run: node scripts/db/verify-database-identity.js
+      - name: Verify frontend API contract is current
+        run: node scripts/db/gen-contract.js --check
+      - name: Typecheck application and tests
+        run: npm run typecheck:all
+      - name: Lint
+        run: npm run lint
+      - name: Unit and component tests
+        run: npm run test:unit
+
+  db:
+    needs: scope
+    if: needs.scope.outputs.db_changed == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify locked Supabase project identity
+        run: node scripts/db/verify-database-identity.js
+      - name: Apply auth stub
+        run: node scripts/db/apply-migration.js --file supabase/ci/stub_auth.sql
+      - name: Apply canonical migrations
+        run: node scripts/db/apply-migration.js --dir supabase/migrations
+      - name: Verify schema
+        run: node scripts/db/verify-schema.js
+      - name: Prepare integration fixtures
+        run: |
+          node scripts/db/apply-migration.js --file supabase/ci/disable_subscription_guard.sql
+          node scripts/db/apply-migration.js --file supabase/ci/seed_raw_material_branch.sql
+          node scripts/db/apply-migration.js --file supabase/ci/permission_first_role_fixture.sql
+      - name: Run changed integration tests
+        if: needs.scope.outputs.integration_tests != ''
+        run: npm run test:integration -- ${{ needs.scope.outputs.integration_tests }}
+      - name: No changed integration tests
+        if: needs.scope.outputs.integration_tests == ''
+        run: echo "DB schema/migrations verified; no changed integration test file was detected. Full Verify remains mandatory before merge."
+
+  summary:
+    needs: [scope, app, db]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fast Verify summary
+        run: |
+          echo "Changed files: ${{ needs.scope.outputs.changed_count }}"
+          echo "App checks requested: ${{ needs.scope.outputs.app_changed }}"
+          echo "DB checks requested: ${{ needs.scope.outputs.db_changed }}"
+          echo "App result: ${{ needs.app.result }}"
+          echo "DB result: ${{ needs.db.result }}"
+          if [ "${{ needs.app.result }}" = "failure" ] || [ "${{ needs.db.result }}" = "failure" ]; then
+            exit 1
+          fi
+          echo "Fast Verify passed. Full Verify is still required on the pull request before merge."
