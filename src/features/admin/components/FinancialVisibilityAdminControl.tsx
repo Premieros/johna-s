@@ -6,12 +6,12 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { useAuth } from '@/context/AuthContext';
+import { useCan } from '@/lib/permissions';
 import { useLanguage } from '@/context/LanguageContext';
 import { APP_ROUTES } from '@/core/navigation/routes';
 
 export function FinancialVisibilityAdminControl() {
-  const { user } = useAuth();
+  const can = useCan();
   const { lang } = useLanguage();
   const { show } = useToast();
   const location = useLocation();
@@ -22,7 +22,7 @@ export function FinancialVisibilityAdminControl() {
   const [recentDays, setRecentDays] = useState(7);
   const [historicalPercent, setHistoricalPercent] = useState(30);
 
-  const visible = user?.role === 'super_admin' && location.pathname === APP_ROUTES.superAdmin;
+  const visible = can('settings.manage') && location.pathname === APP_ROUTES.superAdmin;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,8 +98,8 @@ export function FinancialVisibilityAdminControl() {
                 </p>
                 <p>
                   {ar
-                    ? 'الـOwner يرى كامل التاريخ. بقية الأدوار ترى الفترة الحديثة كاملة، وما قبلها بالنسبة الثابتة المحددة هنا. المخزون والمحاسبة والخصم والاسترجاع تظل على 100% من الحقيقة.'
-                    : 'Owner sees full history. Other roles see the recent window in full and the configured stable percentage of older history. Inventory, accounting, deductions, and refunds still use 100% of operational truth.'}
+                    ? 'من يملك صلاحية عرض السجل التاريخي الكامل يرى كامل التاريخ. غير المخولين يرون الفترة الحديثة كاملة، وما قبلها بالنسبة الثابتة المحددة هنا. لا يعتمد هذا القرار على اسم الدور.'
+                    : 'Users with the unlimited historical-data permission see full history. Other users see the recent window in full and the configured stable percentage of older history. This never depends on a role name.'}
                 </p>
               </div>
             </div>
