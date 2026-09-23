@@ -59,20 +59,44 @@ export function FinancialReportsPage() {
   const [partyStmt, setPartyStmt] = useState<PartyStatementResult | null>(null);
 
   useEffect(() => {
-    if (effectiveBranchFilter) {
-      supabase.from('chart_of_accounts').select('id, code, name, name_en').eq('branch_id', effectiveBranchFilter).order('code').then(({ data }) => {
-        setAccounts((data as ChartOfAccount[]) || []);
-        setAccountId((prev) => prev || (data?.[0]?.id as string) || '');
-      });
-      supabase.from('customers').select('id, name, phone').eq('branch_id', effectiveBranchFilter).order('name').then(({ data }) => setCustomers((data as Customer[]) || []));
-      supabase.from('suppliers').select('id, name, phone').eq('branch_id', effectiveBranchFilter).order('name').then(({ data }) => setSuppliers((data as Supplier[]) || []));
-    } else {
+    if (!effectiveBranchFilter) {
       setAccounts([]);
       setAccountId('');
       setCustomers([]);
       setSuppliers([]);
+      return;
     }
-  }, [effectiveBranchFilter]);
+
+    if (view === 'ledger') {
+      void supabase
+        .from('chart_of_accounts')
+        .select('id, code, name, name_en')
+        .eq('branch_id', effectiveBranchFilter)
+        .order('code')
+        .then(({ data }) => {
+          setAccounts((data as ChartOfAccount[]) || []);
+          setAccountId((prev) => prev || (data?.[0]?.id as string) || '');
+        });
+    }
+
+    if (view === 'party_statement') {
+      if (partySide === 'ar') {
+        void supabase
+          .from('customers')
+          .select('id, name, phone')
+          .eq('branch_id', effectiveBranchFilter)
+          .order('name')
+          .then(({ data }) => setCustomers((data as Customer[]) || []));
+      } else {
+        void supabase
+          .from('suppliers')
+          .select('id, name, phone')
+          .eq('branch_id', effectiveBranchFilter)
+          .order('name')
+          .then(({ data }) => setSuppliers((data as Supplier[]) || []));
+      }
+    }
+  }, [effectiveBranchFilter, view, partySide]);
 
   const load = useCallback(async () => {
     if (!effectiveBranchFilter) {
@@ -88,12 +112,27 @@ export function FinancialReportsPage() {
       const safeFrom = allowed.from;
       const safeTo = allowed.to;
       if (view === 'trial_balance') {
-        const [{ data }, { data: summary }] = await Promise.all([
-          api.reporting.getTrialBalance({ p_branch_id: effectiveBranchFilter, p_to_date: safeTo }),
-          api.reporting.getTrialBalanceSummary({ p_branch_id: effectiveBranchFilter, p_to_date: safeTo }),
-        ]);
-        setTb((data as TrialBalanceRow[]) || []);
-        setTbSummary((summary as TrialBalanceSummary) || null);
+        const { data } = await api.reporting.getTrialBalance({
+          p_branch_id: effectiveBranchFilter,
+          p_to_date: safeTo,
+        });
+        const rows = (data as TrialBalanceRow[]) || [];
+        const totals = rows.reduce(
+          (acc, row) => ({
+            debit: acc.debit + Number(row.debit || 0),
+            credit: acc.credit + Number(row.credit || 0),
+          }),
+          { debit: 0, credit: 0 },
+        );
+        const totalDebit = Math.round((totals.debit + Number.EPSILON) * 100) / 100;
+        const totalCredit = Math.round((totals.credit + Number.EPSILON) * 100) / 100;
+        setTb(rows);
+        setTbSummary({
+          to_date: safeTo,
+          total_debit: totalDebit,
+          total_credit: totalCredit,
+          balanced: totalDebit === totalCredit,
+        });
       } else if (view === 'ledger') {
         const { data } = await api.reporting.getGeneralLedger( {
           p_branch_id: effectiveBranchFilter,
