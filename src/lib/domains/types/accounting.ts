@@ -198,6 +198,7 @@ export interface TreasurySource {
   account_type: 'cash' | 'bank';
   account_name: string;
   account_number: string | null;
+  code: string;
   is_primary: boolean;
   balance: number;
 }
