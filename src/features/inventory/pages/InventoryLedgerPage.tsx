@@ -37,8 +37,9 @@ interface LedgerRpcRow {
   warehouse_name: string | null;
 }
 
-interface LedgerRow extends LedgerRpcRow {
-  rowKey: string;
+interface LedgerRow extends Omit<LedgerRpcRow, 'id'> {
+  id: string;
+  ledger_id: number;
 }
 
 export function InventoryLedgerPage() {
@@ -101,7 +102,7 @@ export function InventoryLedgerPage() {
         p_search: debouncedSearch || null,
         p_min_created_at: history.minIso || null,
         p_before_created_at: cursor?.created_at || null,
-        p_before_id: cursor?.id || null,
+        p_before_id: cursor?.ledger_id || null,
         p_limit: PAGE_SIZE + 1,
       });
 
@@ -117,7 +118,7 @@ export function InventoryLedgerPage() {
         return;
       }
 
-      const fetched = (data || []).map((row) => ({ ...row, rowKey: String(row.id) }));
+      const fetched = (data || []).map((row) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
       const page = fetched.slice(0, PAGE_SIZE);
       const more = fetched.length > PAGE_SIZE;
 
