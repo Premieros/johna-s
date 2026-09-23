@@ -41,6 +41,8 @@ export interface UsePaginatedRowsResult<T> {
   hasMore: boolean;
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Fetch every matching server row independently of what the user has loaded. Intended for exports. */
+  fetchAll: () => Promise<T[]>;
 }
 
 type FilterBuilder = ReturnType<ReturnType<typeof supabase.from>['select']>;
@@ -152,6 +154,22 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     }
   }, [buildDataQuery, pageSize, rows.length, loading, loadingMore]);
 
+  const fetchAll = useCallback(async (): Promise<T[]> => {
+    if (!enabled) return [];
+    const batchSize = Math.max(pageSize, 1000);
+    const all: T[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error: err } = await buildDataQuery(offset, offset + batchSize - 1);
+      if (err) throw err;
+      const batch = (data as T[]) || [];
+      all.push(...batch);
+      if (batch.length < batchSize) break;
+      offset += batch.length;
+    }
+    return all;
+  }, [buildDataQuery, enabled, pageSize]);
+
   useEffect(() => {
     if (!enabled) {
       setRows([]);
@@ -163,5 +181,5 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     refresh();
   }, [refresh, enabled]);
 
-  return { rows, setRows, loading, loadingMore, error, total, hasMore, loadMore, refresh };
+  return { rows, setRows, loading, loadingMore, error, total, hasMore, loadMore, refresh, fetchAll };
 }
