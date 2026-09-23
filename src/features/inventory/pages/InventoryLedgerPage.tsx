@@ -1,21 +1,44 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpenText } from 'lucide-react';
 import { supabase } from '@/api';
+import { rpc } from '@/api/rpc';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { DesignSurface, DesignPageHeader, DesignSearch, DesignPanel, DesignPagination } from '@/components/design';
 import { DataTable, type Column } from '@/components/DataTable';
 import { BranchBadge } from '@/components/BranchBadge';
-import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { Select } from '@/components/Input';
 import { formatNumber, formatDateTime } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
-import type { InventoryLedgerEntry, Warehouse } from '@/lib/types';
 
-interface LedgerRow {
-  id: string;
-  entry: InventoryLedgerEntry;
+const PAGE_SIZE = 50;
+
+interface LedgerRpcRow {
+  id: number;
+  branch_id: string;
+  warehouse_id: string | null;
+  product_id: string | null;
+  raw_material_id: string | null;
+  batch_number: string | null;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  before_qty: number | null;
+  after_qty: number | null;
+  entry_type: string;
+  reference_type: string | null;
+  reference_id: string | null;
+  reference_number: string | null;
+  created_at: string;
+  product_name: string | null;
+  raw_material_name: string | null;
+  warehouse_name: string | null;
+}
+
+interface LedgerRow extends LedgerRpcRow {
+  rowKey: string;
 }
 
 export function InventoryLedgerPage() {
@@ -27,17 +50,15 @@ export function InventoryLedgerPage() {
   const [branchId, setBranchId] = useState(branchFilter || '');
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [rows, setRows] = useState<LedgerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState<number | null>(null);
+  const requestGeneration = useRef(0);
 
-  const { rows: rawRows, loading, error, total, hasMore, loadMore, loadingMore } = usePaginatedRows<InventoryLedgerEntry>({
-    table: 'inventory_ledger',
-    select: 'id,branch_id,warehouse_id,product_id,raw_material_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at,product:products(id,name),raw_material:raw_materials(id,name),warehouse:warehouses(id,name)',
-    order: { column: 'created_at', ascending: false },
-    branch_id: branchId || null,
-    filters: entryType !== 'all' ? [{ column: 'entry_type', value: entryType }] : undefined,
-    min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
-    pageSize: 50,
-  });
-  const rows = useMemo<LedgerRow[]>(() => rawRows.map((entry) => ({ id: String(entry.id), entry })), [rawRows]);
   const entryTypes: { key: string; label: string }[] = [
     { key: 'opening', label: t('entryOpening') },
     { key: 'purchase', label: t('entryPurchase') },
@@ -49,37 +70,106 @@ export function InventoryLedgerPage() {
     { key: 'adjustment', label: t('entryAdjustment') },
   ];
 
-  async function loadBranches() {
-    const br = await supabase.from('branches').select('id, name').eq('is_active', true).order('name');
-    setBranches((br.data as { id: string; name: string }[]) || []);
-  }
-  useEffect(() => { loadBranches(); }, []);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
+  useEffect(() => {
+    async function loadBranches() {
+      const br = await supabase.from('branches').select('id, name').eq('is_active', true).order('name');
+      setBranches((br.data as { id: string; name: string }[]) || []);
+    }
+    void loadBranches();
+  }, []);
+
+  const fetchPage = useCallback(async (reset: boolean) => {
+    const generation = reset ? ++requestGeneration.current : requestGeneration.current;
+    const cursor = !reset && rows.length > 0 ? rows[rows.length - 1] : null;
+
+    if (reset) {
+      setLoading(true);
+      setError(null);
+    } else {
+      setLoadingMore(true);
+    }
+
+    try {
+      const { data, error: rpcError } = await rpc<LedgerRpcRow[]>('search_inventory_ledger', {
+        p_branch_id: branchId || null,
+        p_entry_type: entryType === 'all' ? null : entryType,
+        p_search: debouncedSearch || null,
+        p_min_created_at: history.minIso || null,
+        p_before_created_at: cursor?.created_at || null,
+        p_before_id: cursor?.id || null,
+        p_limit: PAGE_SIZE + 1,
+      });
+
+      if (generation !== requestGeneration.current) return;
+
+      if (rpcError) {
+        setError(userFacingErrorMessage(rpcError, lang === 'ar' ? 'ar' : 'en'));
+        if (reset) {
+          setRows([]);
+          setTotal(0);
+          setHasMore(false);
+        }
+        return;
+      }
+
+      const fetched = (data || []).map((row) => ({ ...row, rowKey: String(row.id) }));
+      const page = fetched.slice(0, PAGE_SIZE);
+      const more = fetched.length > PAGE_SIZE;
+
+      setRows((prev) => {
+        const next = reset ? page : [...prev, ...page];
+        setTotal(more ? null : next.length);
+        return next;
+      });
+      setHasMore(more);
+      setError(null);
+    } catch (err) {
+      if (generation !== requestGeneration.current) return;
+      setError(userFacingErrorMessage(err, lang === 'ar' ? 'ar' : 'en'));
+      if (reset) {
+        setRows([]);
+        setTotal(0);
+        setHasMore(false);
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        if (reset) setLoading(false);
+        else setLoadingMore(false);
+      }
+    }
+  }, [branchId, entryType, debouncedSearch, history.minIso, lang, rows]);
+
+  useEffect(() => {
+    void fetchPage(true);
+    // rows changes after each fetch; only query inputs should reset page 1.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, entryType, debouncedSearch, history.minIso, lang]);
+
+  const loadMore = useCallback(async () => {
+    if (loading || loadingMore || !hasMore) return;
+    await fetchPage(false);
+  }, [fetchPage, hasMore, loading, loadingMore]);
 
   const branchName = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
 
-  const filtered = rows.filter((r) => {
-    const e = r.entry;
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (e.reference_number || '').toLowerCase().includes(q)
-      || (e.product?.name || '').toLowerCase().includes(q)
-      || (e.raw_material?.name || '').toLowerCase().includes(q)
-      || (e.batch_number || '').toLowerCase().includes(q);
-  });
-
   const handleExport = () => {
-    exportToExcel(filtered.map((r) => ({
-      Date: r.entry.created_at,
-      Type: entryTypes.find((x) => x.key === r.entry.entry_type)?.label || r.entry.entry_type,
-      Item: r.entry.product?.name || r.entry.raw_material?.name || '-',
-      Branch: branchName(r.entry.branch_id),
-      Reference: r.entry.reference_number || '',
-      Batch: r.entry.batch_number || '',
-      Quantity: r.entry.quantity,
-      UnitCost: r.entry.unit_cost,
-      TotalCost: r.entry.total_cost,
-      Before: r.entry.before_qty ?? '',
-      After: r.entry.after_qty ?? '',
+    exportToExcel(rows.map((r) => ({
+      Date: r.created_at,
+      Type: entryTypes.find((x) => x.key === r.entry_type)?.label || r.entry_type,
+      Item: r.product_name || r.raw_material_name || '-',
+      Branch: branchName(r.branch_id),
+      Reference: r.reference_number || '',
+      Batch: r.batch_number || '',
+      Quantity: r.quantity,
+      UnitCost: r.unit_cost,
+      TotalCost: r.total_cost,
+      Before: r.before_qty ?? '',
+      After: r.after_qty ?? '',
     })), 'inventory-ledger');
   };
 
@@ -87,14 +177,14 @@ export function InventoryLedgerPage() {
     const map: Record<string, string> = {
       opening: 'bg-ui-page-alt text-ui-muted',
       purchase: 'bg-ui-info-soft text-ui-info',
-      sale: 'bg-ui-success-soft text-ui-success  dark:text-ui-success',
+      sale: 'bg-ui-success-soft text-ui-success dark:text-ui-success',
       refund: 'bg-ui-info-soft text-ui-info',
       production: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
       waste: 'bg-ui-warning-soft text-ui-warning',
       transfer: 'bg-ui-info-soft text-ui-info',
       adjustment: 'bg-ui-danger-soft text-ui-danger',
     };
-    return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[type] || map.opening}`}>
+    return <span className={'px-2 py-0.5 rounded-full text-xs font-medium ' + (map[type] || map.opening)}>
       {entryTypes.find((x) => x.key === type)?.label || type}
     </span>;
   };
@@ -102,36 +192,36 @@ export function InventoryLedgerPage() {
   const columns: Column<LedgerRow>[] = [
     { key: 'created_at', header: t('from'), render: (r) => (
       <div className="text-sm">
-        <p className="text-ui-text">{formatDateTime(r.entry.created_at, lang)}</p>
-        <p className="text-xs text-ui-subtle">#{r.entry.id}</p>
+        <p className="text-ui-text">{formatDateTime(r.created_at, lang)}</p>
+        <p className="text-xs text-ui-subtle">#{r.id}</p>
       </div>
     )},
-    { key: 'entry_type', header: t('entryType'), render: (r) => typePill(r.entry.entry_type) },
+    { key: 'entry_type', header: t('entryType'), render: (r) => typePill(r.entry_type) },
     { key: 'item', header: t('product'), render: (r) => (
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">
           <BookOpenText className="w-4 h-4" />
         </div>
         <div>
-          <p className="font-medium text-ui-text">{r.entry.product?.name || r.entry.raw_material?.name || '-'}</p>
-          {r.entry.product && <p className="text-xs text-purple-500 dark:text-purple-400">{t('product')}</p>}
-          {r.entry.raw_material && <p className="text-xs text-ui-success dark:text-ui-success">{t('rawMaterial')}</p>}
+          <p className="font-medium text-ui-text">{r.product_name || r.raw_material_name || '-'}</p>
+          {r.product_id && <p className="text-xs text-purple-500 dark:text-purple-400">{t('product')}</p>}
+          {r.raw_material_id && <p className="text-xs text-ui-success dark:text-ui-success">{t('rawMaterial')}</p>}
         </div>
       </div>
     )},
-    { key: 'warehouse', header: t('warehouse'), render: (r) => (r.entry.warehouse as Warehouse | undefined)?.name || '-' },
-    { key: 'branch', header: t('branch'), render: (r) => <BranchBadge name={branchName(r.entry.branch_id)} /> },
-    { key: 'batch', header: t('batchNumber'), render: (r) => r.entry.batch_number || '-' },
+    { key: 'warehouse', header: t('warehouse'), render: (r) => r.warehouse_name || '-' },
+    { key: 'branch', header: t('branch'), render: (r) => <BranchBadge name={branchName(r.branch_id)} /> },
+    { key: 'batch', header: t('batchNumber'), render: (r) => r.batch_number || '-' },
     { key: 'quantity', header: t('quantity'), render: (r) => (
-      <span className={`font-semibold ${r.entry.quantity >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger'}`}>
-        {r.entry.quantity >= 0 ? '+' : ''}{formatNumber(Number(r.entry.quantity))}
+      <span className={'font-semibold ' + (r.quantity >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger')}>
+        {r.quantity >= 0 ? '+' : ''}{formatNumber(Number(r.quantity))}
       </span>
     )},
-    { key: 'before_qty', header: lang === 'ar' ? 'الرصيد قبل' : 'Before', render: (r) => r.entry.before_qty == null ? '-' : formatNumber(Number(r.entry.before_qty)) },
-    { key: 'after_qty', header: lang === 'ar' ? 'الرصيد بعد' : 'After', render: (r) => r.entry.after_qty == null ? '-' : formatNumber(Number(r.entry.after_qty)) },
-    { key: 'unit_cost', header: t('unitCost'), render: (r) => formatNumber(Number(r.entry.unit_cost), 2) },
-    { key: 'total_cost', header: t('totalCost'), render: (r) => formatNumber(Number(r.entry.total_cost), 2) },
-    { key: 'reference', header: t('referenceNumber'), render: (r) => r.entry.reference_number || '-' },
+    { key: 'before_qty', header: lang === 'ar' ? 'الرصيد قبل' : 'Before', render: (r) => r.before_qty == null ? '-' : formatNumber(Number(r.before_qty)) },
+    { key: 'after_qty', header: lang === 'ar' ? 'الرصيد بعد' : 'After', render: (r) => r.after_qty == null ? '-' : formatNumber(Number(r.after_qty)) },
+    { key: 'unit_cost', header: t('unitCost'), render: (r) => formatNumber(Number(r.unit_cost), 2) },
+    { key: 'total_cost', header: t('totalCost'), render: (r) => formatNumber(Number(r.total_cost), 2) },
+    { key: 'reference', header: t('referenceNumber'), render: (r) => r.reference_number || '-' },
   ];
 
   return (
@@ -157,7 +247,7 @@ export function InventoryLedgerPage() {
       </DesignPanel>
 
       <DesignPanel testId="inventory-ledger-table-panel">
-        <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} />
+        <DataTable columns={columns} data={rows} loading={loading} error={error} emptyMessage={t('noData')} />
         <DesignPagination loaded={rows.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
     </DesignSurface>
