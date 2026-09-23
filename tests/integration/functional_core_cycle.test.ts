@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
@@ -37,15 +38,7 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
     return (rows[0]?.r || {}) as RpcResult;
   };
 
-  const stockQty = async (): Promise<number> => {
-    const result = await client.query<{ quantity: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS quantity
-         FROM public.inventory_unit_batches
-        WHERE unit_id = $1 AND warehouse_id = $2`,
-      [unitId, ids.whA],
-    );
-    return Number(result.rows[0]?.quantity || 0);
-  };
+  const stockQty = async (): Promise<number> => rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
@@ -100,6 +93,7 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
        VALUES ($1, $2, $3, 10, 10)`,
       [unitId, ids.branchA, ids.whA],
     );
+    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
 
     await client.query(`UPDATE public.settings SET tax_enabled = false, tax_rate = 0`);
   });
