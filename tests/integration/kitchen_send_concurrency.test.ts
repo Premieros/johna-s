@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -21,6 +22,7 @@ describe.skipIf(skip)('send_to_kitchen concurrency serialization', () => {
   const cashierId = randomUUID();
   const tableId = randomUUID();
   let orderId = '';
+  let rawId = '';
 
   const itemJson = JSON.stringify([
     {
@@ -41,13 +43,7 @@ describe.skipIf(skip)('send_to_kitchen concurrency serialization', () => {
   }
 
   async function batchQty(): Promise<number> {
-    const result = await admin.query<{ quantity: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS quantity
-         FROM public.inventory_unit_batches
-        WHERE unit_id = $1 AND warehouse_id = $2`,
-      [unitId, warehouseId],
-    );
-    return Number(result.rows[0]?.quantity || 0);
+    return rawQtyForUnit(admin, unitId, branchId, warehouseId);
   }
 
   beforeAll(async () => {
@@ -90,6 +86,7 @@ describe.skipIf(skip)('send_to_kitchen concurrency serialization', () => {
          VALUES ($1, $2, $3, 100, 50)`,
         [unitId, branchId, warehouseId],
       );
+      rawId = await attachRawComponentToUnit(admin, unitId, branchId, warehouseId, 100, 50);
       await admin.query(
         `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
          VALUES ($1, $2, $3, 'cashier', $4, true)`,
@@ -157,6 +154,10 @@ describe.skipIf(skip)('send_to_kitchen concurrency serialization', () => {
       await admin.query(`DELETE FROM public.inventory_unit_batches WHERE unit_id = $1 AND warehouse_id = $2`, [unitId, warehouseId]).catch(() => {});
       await admin.query(`DELETE FROM public.product_unit_links WHERE product_id = $1 AND unit_id = $2`, [productId, unitId]).catch(() => {});
       await admin.query(`DELETE FROM public.inventory_units WHERE id = $1`, [unitId]).catch(() => {});
+      if (rawId) {
+        await admin.query(`DELETE FROM public.raw_material_batches WHERE raw_material_id = $1`, [rawId]).catch(() => {});
+        await admin.query(`DELETE FROM public.raw_materials WHERE id = $1`, [rawId]).catch(() => {});
+      }
       await admin.query(`DELETE FROM public.products WHERE id = $1`, [productId]).catch(() => {});
       await admin.query(`DELETE FROM public.warehouses WHERE id = $1`, [warehouseId]).catch(() => {});
       await admin.query(`DELETE FROM public.branches WHERE id = $1`, [branchId]).catch(() => {});

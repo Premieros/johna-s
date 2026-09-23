@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
@@ -31,6 +32,7 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
   const doubleOption = randomUUID();
   const extraCheeseOption = randomUUID();
   const noOnionOption = randomUUID();
+  const rawByUnit = new Map<string, string>();
 
   const asUser = async (userId: string, sql: string, params: unknown[] = []) => {
     const result = await runAsPersist(client, userId, sql, params);
@@ -43,15 +45,8 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
     return (rows[0]?.r || {}) as RpcResult;
   };
 
-  const unitQty = async (unitId: string) => {
-    const r = await client.query<{ qty: string }>(
-      `SELECT COALESCE(SUM(quantity),0)::text AS qty
-         FROM public.inventory_unit_batches
-        WHERE unit_id=$1 AND branch_id=$2 AND warehouse_id=$3`,
-      [unitId, ids.branchA, ids.whA],
-    );
-    return Number(r.rows[0]?.qty || 0);
-  };
+  const unitQty = async (unitId: string): Promise<number> =>
+    rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
@@ -97,6 +92,7 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
          VALUES($1,$2,$3,10,1)`,
         [id, ids.branchA, ids.whA],
       );
+      rawByUnit.set(id, await attachRawComponentToUnit(client, id, ids.branchA, ids.whA, 10, 1));
     }
 
     await client.query(
@@ -255,9 +251,9 @@ describe.skipIf(skip)('Burger modifier transactional lifecycle', () => {
       [singleItem!.id],
     );
     const effects = Object.fromEntries(effectRows.rows.map((r) => [r.target_id, Number(r.quantity)]));
-    expect(effects[pattyUnit]).toBe(1);
-    expect(effects[cheeseUnit]).toBe(2);
-    expect(effects[onionUnit]).toBe(1);
+    expect(effects[rawByUnit.get(pattyUnit)!]).toBe(1);
+    expect(effects[rawByUnit.get(cheeseUnit)!]).toBe(2);
+    expect(effects[rawByUnit.get(onionUnit)!]).toBe(1);
 
     const refundItems = JSON.stringify([{ sale_item_id: singleItem!.id, quantity: 1 }]);
     const refunded = await rpc(

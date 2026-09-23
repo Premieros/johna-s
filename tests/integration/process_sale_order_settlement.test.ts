@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -63,13 +64,7 @@ describe.skipIf(skip)('process_sale linked-order settlement (045 C1)', () => {
     return r.rows[0].c;
   }
 
-  async function batchQty(): Promise<number> {
-    const r = await client.query<{ q: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS q FROM public.inventory_unit_batches WHERE unit_id = $1 AND warehouse_id = $2`,
-      [unitId, warehouseId],
-    );
-    return Number(r.rows[0].q);
-  }
+  const batchQty = async (): Promise<number> => rawQtyForUnit(client, unitId, branchId, warehouseId);
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
@@ -99,6 +94,7 @@ describe.skipIf(skip)('process_sale linked-order settlement (045 C1)', () => {
        VALUES ($1, $2, $3, 10, 50)`,
       [unitId, branchId, warehouseId],
     );
+    await attachRawComponentToUnit(client, unitId, branchId, warehouseId, 10, 50);
     await client.query(
       `INSERT INTO public.dining_tables (id, name, branch_id, capacity, status) VALUES ($1, $2, $3, 4, 'vacant')`,
       [tableId, 'T1', branchId],

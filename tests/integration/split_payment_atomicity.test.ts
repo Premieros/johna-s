@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
@@ -23,14 +24,15 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
   const productId = randomUUID();
   const unitId = randomUUID();
 
-  const batchQty = async (): Promise<number> => {
-    const result = await client.query<{ quantity: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS quantity
+  const rawQty = async (): Promise<number> => rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
+  const unitBatchQty = async (): Promise<number> => {
+    const r = await client.query<{ quantity: string }>(
+      `SELECT COALESCE(sum(quantity),0)::text AS quantity
          FROM public.inventory_unit_batches
-        WHERE unit_id = $1::uuid AND warehouse_id = $2::uuid`,
-      [unitId, ids.whA],
+        WHERE unit_id=$1 AND branch_id=$2 AND warehouse_id=$3`,
+      [unitId, ids.branchA, ids.whA],
     );
-    return Number(result.rows[0]?.quantity || 0);
+    return Number(r.rows[0]?.quantity || 0);
   };
 
   const splitSale = async (invoice: string, payments: unknown[], orderId: string | null = null): Promise<SplitSaleResult> => {
@@ -112,6 +114,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
        VALUES ($1::uuid, $2::uuid, $3::uuid, 10, 10)`,
       [unitId, ids.branchA, ids.whA],
     );
+    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
     await client.query(`UPDATE public.settings SET tax_enabled = false, tax_rate = 0`);
   });
 
@@ -124,7 +127,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
   it('records Cash + Card tenders and deducts inventory exactly once', async (ctx) => {
     if (!impersonationAvailable) return ctx.skip();
 
-    const before = await batchQty();
+    const before = await unitBatchQty();
     expect(before).toBe(10);
 
     const invoice = `SPLIT-OK-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -176,7 +179,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
       ['cash', 5],
     ]);
 
-    expect(await batchQty()).toBe(9);
+    expect(await unitBatchQty()).toBe(9);
   });
 
   it('settles a kitchen-sent linked order without deducting inventory again', async (ctx) => {
@@ -201,7 +204,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
     const createdResult = created.rows[0].r as { success?: boolean; order_id?: string };
     expect(createdResult.success, JSON.stringify(createdResult)).toBe(true);
     const orderId = String(createdResult.order_id);
-    const beforeSend = await batchQty();
+    const beforeSend = await rawQty();
 
     const sent = await runAsPersist(
       client,
@@ -212,22 +215,22 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
     if (sent.error) throw new Error(sent.error);
     const sentResult = sent.rows[0].r as { success?: boolean };
     expect(sentResult.success, JSON.stringify(sentResult)).toBe(true);
-    expect(await batchQty()).toBe(beforeSend - 1);
+    expect(await rawQty()).toBe(beforeSend - 1);
 
-    const afterSend = await batchQty();
+    const afterSend = await rawQty();
     const result = await splitSale(
       `SPLIT-KITCHEN-${Date.now()}-${randomUUID().slice(0, 8)}`,
       [{ payment_method: 'cash', amount: 5 }, { payment_method: 'card', amount: 15 }],
       orderId,
     );
     expect(result.success, JSON.stringify(result)).toBe(true);
-    expect(await batchQty()).toBe(afterSend);
+    expect(await rawQty()).toBe(afterSend);
   });
 
   it('rejects a tender total mismatch without creating a sale or deducting stock', async (ctx) => {
     if (!impersonationAvailable) return ctx.skip();
 
-    const before = await batchQty();
+    const before = await unitBatchQty();
     const invoice = `SPLIT-BAD-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const result = await splitSale(invoice, [
       { payment_method: 'cash', amount: 5 },
@@ -241,6 +244,6 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
       [invoice],
     );
     expect(Number(sales.rows[0].count)).toBe(0);
-    expect(await batchQty()).toBe(before);
+    expect(await unitBatchQty()).toBe(before);
   });
 });

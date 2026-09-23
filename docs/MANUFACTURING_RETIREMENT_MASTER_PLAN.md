@@ -1,6 +1,6 @@
 # Manufacturing Retirement Master Plan
 
-Updated: 2026-09-22
+Updated: 2026-09-23
 Repository: Premieros/johna-s
 Production branch: main
 Production Supabase: azzdesuowpdcoflmyezn
@@ -16,6 +16,7 @@ Business rules:
 - POS must not run stock/recipe availability scans to decide whether a product may be sold.
 - Kitchen send is the authoritative inventory deduction point.
 - Raw-material inventory is allowed to go negative.
+- If a sold product has no configured raw/components, kitchen send must create/reuse a branch-scoped fallback raw material with the same product name and deduct the sold quantity from it; its balance may become negative.
 - Void/refund must reverse the exact components that were originally deducted.
 - Historical transactions must remain auditable.
 - Printing, print agents, routing, and receipt templates are outside this program unless explicitly requested.
@@ -95,7 +96,8 @@ Production read-only audit before implementation:
 - inventory_unit_recipe_units: 6;
 - 502 products currently have direct legacy raw recipe rows;
 - 110 products have reusable inventory-unit raw groups;
-- 104 products use both paths and therefore require deterministic combined handling;\n- 110/110 current group links have no same-name raw placeholder in the product recipe, confirming that name-based suppression is not a valid canonical rule.
+- 104 products use both paths and therefore require deterministic combined handling;
+- 110/110 current group links have no same-name raw placeholder in the product recipe, confirming that name-based suppression is not a valid canonical rule.
 
 Canonical Phase-2 interpretation:
 - `recipes/recipe_items` = direct raw components of a product;
@@ -127,7 +129,11 @@ Verification:
 - No Phase-2 migration applied to Production; production apply remains blocked until explicit approval.
 
 ### Phase 3 — Exact kitchen-send consumption snapshot
-Status: PENDING
+Status: COMPLETED
+Branch: development/retire-manufacturing-phase3-clean-recovery-20260922
+Base: main@d036a963bf5681b52cc037abd1d583f38af701e9
+PR: #330
+Recovery note: previous Phase-3 PR #329 was closed without merge after scope contamination; this branch was rebuilt cleanly and verified.
 
 Goal:
 - send_to_kitchen resolves component graph once;
@@ -135,10 +141,26 @@ Goal:
 - deduct in one transaction, allowing negative stock;
 - persist an immutable per-send/per-line consumption snapshot.
 
+Implementation:
+- internal kitchen-send path deducts canonical raw materials directly;
+- no auto-production is invoked for new kitchen sends;
+- new kitchen inventory events persist component_snapshot with snapshot_version=2;
+- unconfigured products create/reuse a same-name branch-scoped fallback raw and deduct directly from it;
+- raw stock may become negative;
+- integration fixtures were migrated from inventory-unit stock assertions to raw-material assertions where kitchen-send semantics changed.
+
 Exit criteria:
 - every sent item has an auditable raw/component snapshot;
 - no auto-production is invoked by kitchen send;
 - FIFO/cost ledger remains correct.
+
+Verification:
+- Verify main #2405 ✅
+- lint/typecheck/unit/build ✅
+- Fresh DB/schema ✅
+- integration + security/RLS 810/810 ✅
+- browser-smoke ✅
+- Production migration remains unapplied pending explicit approval.
 
 ### Phase 4 — Void/refund reversal from snapshot
 Status: PENDING
