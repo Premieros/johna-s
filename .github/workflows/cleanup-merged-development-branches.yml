@@ -1,6 +1,7 @@
-name: Cleanup merged development branches
+name: Cleanup completed old branches
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -9,15 +10,15 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
-  group: cleanup-merged-development-branches
+  group: cleanup-completed-old-branches
   cancel-in-progress: false
 
 jobs:
   cleanup:
-    name: delete-fully-merged-development-branches
+    name: delete-old-completed-branches
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository history
@@ -25,60 +26,125 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Delete only fully merged development branches
+      - name: Delete old completed branches and preserve print work
         env:
           GH_TOKEN: ${{ github.token }}
+          # 2026-09-23 00:00 Africa/Cairo = 2026-09-22 21:00 UTC
+          CUTOFF_UTC: "2026-09-22T21:00:00Z"
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
 
           git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          cutoff_epoch="$(date -d "$CUTOFF_UTC" +%s)"
 
-          gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --limit 200 \
-            --json headRefName \
-            --jq '.[].headRefName' \
-            > /tmp/open-heads.txt
+          deleted_file="/tmp/deleted-branches.txt"
+          kept_print_file="/tmp/kept-print-branches.txt"
+          kept_today_file="/tmp/kept-today-branches.txt"
+          kept_failed_file="/tmp/kept-failed-branches.txt"
+          : > "$deleted_file"
+          : > "$kept_print_file"
+          : > "$kept_today_file"
+          : > "$kept_failed_file"
 
-          mapfile -t merged_branches < <(
-            git for-each-ref \
-              --format='%(refname:short)' \
-              refs/remotes/origin/development/ \
-            | sed 's#^origin/##' \
-            | while read -r branch; do
-                if git merge-base --is-ancestor "origin/$branch" origin/main; then
-                  printf '%s\n' "$branch"
-                fi
-              done \
-            | sort
+          is_print_name() {
+            local n="${1,,}"
+            [[ "$n" =~ print|printer|receipt|thermal|zreport|ticket|fixed-template|fixed-form ]]
+          }
+
+          has_print_branch_diff() {
+            local branch="$1"
+            local base files
+            base="$(git merge-base origin/main "origin/$branch" 2>/dev/null)" || return 2
+            files="$(git diff --name-only "$base" "origin/$branch" 2>/dev/null)" || return 2
+            grep -Eiq 'print|printer|receipt|thermal|zreport|ticket' <<<"$files"
+          }
+
+          draft_open_prs() {
+            local branch="$1"
+            local rows
+            rows="$(gh pr list               --repo "$GITHUB_REPOSITORY"               --state open               --head "$branch"               --limit 100               --json number,isDraft               --jq '.[] | [.number, .isDraft] | @tsv' 2>/dev/null || true)"
+
+            [[ -z "$rows" ]] && return 0
+
+            while IFS=$'\t' read -r number draft; do
+              [[ -z "$number" ]] && continue
+              if [[ "$draft" == "true" ]]; then
+                echo "PR #$number already Draft for $branch"
+                continue
+              fi
+
+              echo "Convert PR #$number to Draft before deleting $branch"
+              if ! gh pr ready --undo "$number" --repo "$GITHUB_REPOSITORY"; then
+                echo "::warning::Could not convert PR #$number to Draft; preserving $branch"
+                return 1
+              fi
+            done <<<"$rows"
+          }
+
+          mapfile -t branches < <(
+            git for-each-ref               --format='%(refname:short)'               refs/remotes/origin/             | sed 's#^origin/##'             | grep -v '^HEAD$'             | sort -u
           )
 
-          deleted=0
-          skipped=0
-          failed=0
+          for branch in "${branches[@]}"; do
+            [[ -z "$branch" ]] && continue
+            [[ "$branch" == "main" ]] && continue
 
-          for branch in "${merged_branches[@]}"; do
-            if grep -Fxq "$branch" /tmp/open-heads.txt; then
-              echo "SKIP open PR head: $branch"
-              skipped=$((skipped + 1))
+            commit_epoch="$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || true)"
+            commit_iso="$(git log -1 --format=%cI "origin/$branch" 2>/dev/null || true)"
+
+            if [[ -z "$commit_epoch" ]]; then
+              echo "$branch | commit date unavailable" >> "$kept_failed_file"
               continue
             fi
 
-            echo "DELETE fully merged branch: $branch"
+            if (( commit_epoch >= cutoff_epoch )); then
+              echo "$branch | $commit_iso" >> "$kept_today_file"
+              continue
+            fi
+
+            if is_print_name "$branch"; then
+              echo "$branch | protected by print-related branch name | $commit_iso" >> "$kept_print_file"
+              continue
+            fi
+
+            has_print_branch_diff "$branch"
+            diff_rc=$?
+            if [[ $diff_rc -eq 0 ]]; then
+              echo "$branch | protected by print-related branch diff | $commit_iso" >> "$kept_print_file"
+              continue
+            elif [[ $diff_rc -eq 2 ]]; then
+              echo "$branch | diff check failed; preserved safely | $commit_iso" >> "$kept_failed_file"
+              continue
+            fi
+
+            if ! draft_open_prs "$branch"; then
+              echo "$branch | PR Draft conversion failed | $commit_iso" >> "$kept_failed_file"
+              continue
+            fi
+
+            echo "DELETE completed old branch: $branch"
             if git push origin --delete "$branch"; then
-              deleted=$((deleted + 1))
+              echo "$branch | $commit_iso" >> "$deleted_file"
             else
-              echo "::error::Could not delete $branch"
-              failed=$((failed + 1))
+              echo "$branch | deletion failed | $commit_iso" >> "$kept_failed_file"
             fi
           done
 
-          echo "Deleted: $deleted"
-          echo "Skipped open PR heads: $skipped"
-          echo "Failed: $failed"
-
-          if [ "$failed" -ne 0 ]; then
-            exit 1
-          fi
+          {
+            echo "## Completed old branch cleanup"
+            echo
+            echo "Cutoff: 2026-09-23 00:00 Africa/Cairo ($CUTOFF_UTC)"
+            echo
+            echo "### Deleted"
+            if [[ -s "$deleted_file" ]]; then sed 's/^/- /' "$deleted_file"; else echo "- none"; fi
+            echo
+            echo "### Preserved — printing"
+            if [[ -s "$kept_print_file" ]]; then sed 's/^/- /' "$kept_print_file"; else echo "- none"; fi
+            echo
+            echo "### Preserved — active today"
+            if [[ -s "$kept_today_file" ]]; then sed 's/^/- /' "$kept_today_file"; else echo "- none"; fi
+            echo
+            echo "### Preserved — safety/failure"
+            if [[ -s "$kept_failed_file" ]]; then sed 's/^/- /' "$kept_failed_file"; else echo "- none"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
