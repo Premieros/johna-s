@@ -134,7 +134,7 @@ Status: **COMPLETE**
 - [x] Confirm no printing changes are needed.
 - [x] Create isolated development branch.
 - [x] Create this live work log.
-- [ ] Register this work in `docs/CURRENT_WORK_PLAN.md`.
+- [x] Register this work in `docs/CURRENT_WORK_PLAN.md`.
 
 ### Phase 1 — Schema + Permission Contract
 Status: **NOT STARTED**
@@ -225,6 +225,8 @@ Status: **NOT STARTED**
 - Created development branch from `main@d036a963bf5681b52cc037abd1d583f38af701e9`.
 - Inspection confirmed reuse of the existing Approvals Center is preferable to creating a parallel approval UI.
 - Existing one-shot manager approval records will remain logically separate from shift/work authorization.
+- Work log creation commit: `9b9a2238a7ef81892fe7e2ce41fb18f08a7e600f`.
+- CURRENT_WORK_PLAN registration commit: `90bb61a5037b801d728378bd187d2ff0b503eb6a`.
 - No application code, migration, Production DB, printing, KDS or send-to-kitchen changes made yet.
 
 ## Verification Ledger
