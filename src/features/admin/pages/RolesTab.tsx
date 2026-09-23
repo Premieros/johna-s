@@ -116,6 +116,7 @@ export function RolesTab() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState('');
   const [permissionSearch, setPermissionSearch] = useState('');
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
 
   useEffect(() => {
     if (loading || Object.keys(rolePermissionsMap).length === 0) return;
@@ -128,8 +129,16 @@ export function RolesTab() {
     });
   }, [loading, rolePermissionsMap]);
 
-  const roles: string[] =
-    rolesList.length > 0 ? rolesList.map((role) => role.role) : Object.keys(ROLE_META);
+  const branchIsVisible = (branchId: string | null | undefined) =>
+    !branchId || branches.some((branch) => branch.id === branchId);
+
+  const roles: string[] = rolesList.length > 0
+    ? rolesList
+        .filter((role) =>
+          isPlatformAdmin || (role.scope === 'branch' && branchIsVisible(role.branch_id)),
+        )
+        .map((role) => role.role)
+    : (isPlatformAdmin ? Object.keys(ROLE_META) : []);
 
   useEffect(() => {
     if (roles.length === 0) return;
@@ -144,9 +153,6 @@ export function RolesTab() {
   const currentPermissions = drafts[currentRole] ?? rolePermissionsMap[currentRole] ?? [];
   const persistedPermissions = rolePermissionsMap[currentRole] ?? [];
 
-  const branchIsVisible = (branchId: string | null | undefined) =>
-    !branchId || branches.some((branch) => branch.id === branchId);
-
   const mayEditRole = (role: string) => {
     if (!canManageRoles || role === 'super_admin') return false;
     if (isPlatformAdmin) return true;
@@ -154,14 +160,14 @@ export function RolesTab() {
     return def?.scope === 'branch' && branchIsVisible(def.branch_id);
   };
 
-  const canEditCurrent = mayEditRole(currentRole);
-
   const canGrantPermission = (permission: Permission): boolean =>
     isPlatformAdmin || can(permission);
 
   const unavailablePermissions = isPlatformAdmin
     ? []
     : currentPermissions.filter((permission) => !canGrantPermission(permission));
+  const currentHasUnownedPermissions = unavailablePermissions.length > 0;
+  const canEditCurrent = mayEditRole(currentRole) && !currentHasUnownedPermissions;
 
   const dependencyErrors = missingPermissionDependencies(currentPermissions);
 
@@ -436,27 +442,26 @@ export function RolesTab() {
 
   const visibleGroups = useMemo(() => {
     const q = permissionSearch.trim().toLowerCase();
-    if (!q) return PERMISSION_GROUPS;
 
     return PERMISSION_GROUPS.map((group) => ({
       ...group,
-      permissions: group.permissions.filter((permission) => {
-        const labels = PERMISSION_LABELS[permission];
-        const contract = permissionContract(permission);
-        return (
-          permission.toLowerCase().includes(q)
-          || (labels?.ar || '').toLowerCase().includes(q)
-          || (labels?.en || '').toLowerCase().includes(q)
-          || contract.effectAr.toLowerCase().includes(q)
-          || contract.effectEn.toLowerCase().includes(q)
-          || (contract.notesAr || '').toLowerCase().includes(q)
-          || (contract.notesEn || '').toLowerCase().includes(q)
-          || group.ar.toLowerCase().includes(q)
-          || group.en.toLowerCase().includes(q)
-        );
-      }),
+      permissions: group.permissions
+        .filter((permission) => isPlatformAdmin || canGrantPermission(permission))
+        .filter((permission) => {
+          if (!q) return true;
+          const labels = PERMISSION_LABELS[permission];
+          const contract = permissionContract(permission);
+          return (
+            (labels?.ar || '').toLowerCase().includes(q)
+            || (labels?.en || '').toLowerCase().includes(q)
+            || contract.effectAr.toLowerCase().includes(q)
+            || contract.effectEn.toLowerCase().includes(q)
+            || group.ar.toLowerCase().includes(q)
+            || group.en.toLowerCase().includes(q)
+          );
+        }),
     })).filter((group) => group.permissions.length > 0);
-  }, [permissionSearch]);
+  }, [permissionSearch, isPlatformAdmin, can]);
 
   if (loading) {
     return (
@@ -480,8 +485,8 @@ export function RolesTab() {
             </h1>
             <p className="mt-1 text-sm text-ui-subtle max-w-3xl">
               {isAr
-                ? 'كل زر هنا مرتبط بصلاحية فعلية. تفعيل إجراء يضيف متطلباته تلقائيًا، وإلغاء صلاحية أساسية يزيل الإجراءات التابعة لها حتى لا يظهر زر لا يستطيع السيرفر تنفيذه.'
-                : 'Every control maps to a real capability. Enabling an action adds its prerequisites; removing a prerequisite also removes dependent actions so the UI never promises an operation the server will reject.'}
+                ? 'حدد فقط الوظائف التي تريد السماح بها لهذا الدور. المتطلبات التقنية تُدار تلقائيًا، ولن تظهر للمدير أي صلاحية أعلى من صلاحياته.'
+                : 'Choose only the functions this role may use. Technical prerequisites are handled automatically, and managers never see permissions above their own access.'}
             </p>
           </div>
           {canManageRoles && (
@@ -501,7 +506,13 @@ export function RolesTab() {
         >
           {roles.map((role) => {
             const def = rolesList.find((candidate) => candidate.role === role);
-            const count = (drafts[role] ?? rolePermissionsMap[role] ?? []).length;
+            const rolePermissions = drafts[role] ?? rolePermissionsMap[role] ?? [];
+            const visibleCount = isPlatformAdmin
+              ? rolePermissions.length
+              : rolePermissions.filter((permission) => canGrantPermission(permission)).length;
+            const visibleCatalogCount = isPlatformAdmin
+              ? ALL_PERMISSIONS.length
+              : ALL_PERMISSIONS.filter((permission) => canGrantPermission(permission)).length;
             const active = role === currentRole;
             const platformAdmin = role === 'super_admin';
             return (
@@ -524,7 +535,7 @@ export function RolesTab() {
                 <span className="block text-[11px] text-ui-subtle mt-0.5">
                   {platformAdmin
                     ? (isAr ? 'تجاوز منصة كامل' : 'Full platform bypass')
-                    : `${count}/${ALL_PERMISSIONS.length}`}
+                    : `${visibleCount}/${visibleCatalogCount}`}
                   {def?.scope === 'branch' ? ` · ${isAr ? 'فرع' : 'Branch'}` : ''}
                 </span>
               </button>
@@ -642,21 +653,20 @@ export function RolesTab() {
                 </div>
               )}
 
-              {!isPlatformAdmin && unavailablePermissions.length > 0 && (
-                <div className="mb-4 rounded-xl border border-ui-danger/40 bg-ui-danger-soft p-3 text-sm text-ui-danger">
+              {!isPlatformAdmin && currentHasUnownedPermissions && (
+                <div className="mb-4 rounded-xl border border-ui-warning/40 bg-ui-warning-soft p-3 text-sm text-ui-warning">
                   <div className="flex gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <Lock className="h-4 w-4 mt-0.5 shrink-0" />
                     <div>
                       <p className="font-semibold">
                         {isAr
-                          ? 'هذا الدور يحتوي صلاحيات أعلى من صلاحياتك الحالية.'
-                          : 'This role contains permissions above your current grant authority.'}
+                          ? 'هذا الدور يتضمن صلاحيات خارج نطاق إدارتك.'
+                          : 'This role contains permissions outside your management scope.'}
                       </p>
                       <p className="mt-1 text-xs">
                         {isAr
-                          ? 'السيرفر لن يقبل حفظ الدور حتى تُزال هذه الصلاحيات أو ينفذ التعديل Super Admin: '
-                          : 'The server will reject an update until these are removed or a Super Admin performs the change: '}
-                        <code>{unavailablePermissions.join(', ')}</code>
+                          ? 'تم إخفاء هذه الصلاحيات ولن تستطيع تعديل هذا الدور. يلزم مستخدم بصلاحيات أعلى لإدارته.'
+                          : 'Those permissions are hidden and this role is read-only for you. A higher-authority user must manage it.'}
                       </p>
                     </div>
                   </div>
@@ -669,15 +679,17 @@ export function RolesTab() {
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                     <div>
                       <p className="font-semibold">
-                        {isAr ? 'هناك صلاحيات تحتاج متطلبات أساسية.' : 'Some permissions are missing prerequisites.'}
+                        {isAr ? 'هذا الدور يحتاج استكمال صلاحيات أساسية.' : 'This role is missing required base permissions.'}
                       </p>
-                      <div className="mt-1 space-y-1 text-xs">
-                        {dependencyErrors.slice(0, 6).map((row) => (
-                          <p key={row.permission}>
-                            <code>{row.permission}</code> → {row.missing.join(', ')}
-                          </p>
-                        ))}
-                      </div>
+                      {isPlatformAdmin && showAdvancedDetails && (
+                        <div className="mt-1 space-y-1 text-xs">
+                          {dependencyErrors.slice(0, 6).map((row) => (
+                            <p key={row.permission}>
+                              <code>{row.permission}</code> → {row.missing.join(', ')}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -718,18 +730,31 @@ export function RolesTab() {
                 </div>
               )}
 
-              <div className="relative mb-4">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
                 <Search className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-ui-subtle" />
                 <input
                   value={permissionSearch}
                   onChange={(event) => setPermissionSearch(event.target.value)}
                   placeholder={
                     isAr
-                      ? 'ابحث باسم الزر أو الصلاحية: دفع، إلغاء، طباعة، pos.payment.take...'
-                      : 'Search action or key: payment, void, print, pos.payment.take...'
+                      ? 'ابحث باسم الوظيفة: دفع، إلغاء، طباعة...'
+                      : 'Search by function: payment, cancel, print...'
                   }
                   className="w-full rounded-xl border border-ui-border bg-ui-surface py-2.5 ps-9 pe-3 text-sm text-ui-text outline-none focus:border-brand-500"
                 />
+                </div>
+                {isPlatformAdmin && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowAdvancedDetails((value) => !value)}
+                  >
+                    {showAdvancedDetails
+                      ? (isAr ? 'إخفاء التفاصيل التقنية' : 'Hide technical details')
+                      : (isAr ? 'تفاصيل متقدمة' : 'Advanced details')}
+                  </Button>
+                )}
               </div>
 
               <div className="grid gap-3 xl:grid-cols-2">
@@ -775,9 +800,7 @@ export function RolesTab() {
                         {group.permissions.map((permission) => {
                           const contract = permissionContract(permission);
                           const checked = currentPermissions.includes(permission);
-                          const grantable = canGrantPermission(permission);
-                          const disabled =
-                            !canEditCurrent || (!checked && !grantable);
+                          const disabled = !canEditCurrent;
                           const risk = riskLabel(contract.risk, isAr);
 
                           return (
@@ -796,14 +819,18 @@ export function RolesTab() {
                                     <span className="text-sm font-semibold text-ui-text">
                                       {PERMISSION_LABELS[permission]?.[lang] || permission}
                                     </span>
-                                    <span
-                                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${risk.className}`}
-                                    >
-                                      {risk.text}
-                                    </span>
-                                    <span className="rounded-full bg-ui-info-soft px-1.5 py-0.5 text-[10px] text-ui-info">
-                                      {kindLabel(contract.kind, isAr)}
-                                    </span>
+                                    {isPlatformAdmin && showAdvancedDetails && (
+                                      <>
+                                        <span
+                                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${risk.className}`}
+                                        >
+                                          {risk.text}
+                                        </span>
+                                        <span className="rounded-full bg-ui-info-soft px-1.5 py-0.5 text-[10px] text-ui-info">
+                                          {kindLabel(contract.kind, isAr)}
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
 
                                   <p className="mt-1 text-xs leading-5 text-ui-muted">
@@ -816,26 +843,21 @@ export function RolesTab() {
                                     </p>
                                   )}
 
-                                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                                    <code className="rounded bg-ui-page-alt px-1.5 py-0.5 text-[10px] text-ui-subtle">
-                                      {permission}
-                                    </code>
-                                    {contract.requires.map((required) => (
-                                      <span
-                                        key={required}
-                                        className="rounded bg-ui-page-alt px-1.5 py-0.5 text-[10px] text-ui-subtle"
-                                      >
-                                        {isAr ? 'يتطلب' : 'requires'} {required}
-                                      </span>
-                                    ))}
-                                    {!isPlatformAdmin && !grantable && (
-                                      <span className="rounded bg-ui-danger-soft px-1.5 py-0.5 text-[10px] text-ui-danger">
-                                        {checked
-                                          ? (isAr ? 'يمكنك إزالتها فقط' : 'Remove only')
-                                          : (isAr ? 'لا تملك حق منحها' : 'Cannot grant')}
-                                      </span>
-                                    )}
-                                  </div>
+                                  {isPlatformAdmin && showAdvancedDetails && (
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                                      <code className="rounded bg-ui-page-alt px-1.5 py-0.5 text-[10px] text-ui-subtle">
+                                        {permission}
+                                      </code>
+                                      {contract.requires.map((required) => (
+                                        <span
+                                          key={required}
+                                          className="rounded bg-ui-page-alt px-1.5 py-0.5 text-[10px] text-ui-subtle"
+                                        >
+                                          {isAr ? 'يتطلب' : 'requires'} {required}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <input
