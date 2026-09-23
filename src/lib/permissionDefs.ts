@@ -234,6 +234,141 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'admin', ar: 'الإدارة', en: 'Administration', permissions: ['users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage', 'audit.view', 'settings.manage', 'branches.manage'] },
 ];
 
+export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
+  {
+    key: 'overview',
+    ar: 'لوحة التحكم والبيانات',
+    en: 'Dashboard & Data',
+    permissions: [
+      ...PERMISSION_GROUPS.find((group) => group.key === 'dashboard')!.permissions,
+      ...PERMISSION_GROUPS.find((group) => group.key === 'data_access')!.permissions,
+    ],
+  },
+  {
+    key: 'pos',
+    ar: 'نقطة البيع',
+    en: 'POS',
+    permissions: PERMISSION_GROUPS
+      .find((group) => group.key === 'pos')!
+      .permissions.filter((permission) => !permission.startsWith('floor_plan.')),
+  },
+  {
+    key: 'floor_plan',
+    ar: 'الطاولات والصالة',
+    en: 'Tables & Floor Plan',
+    permissions: PERMISSION_GROUPS
+      .find((group) => group.key === 'pos')!
+      .permissions.filter((permission) => permission.startsWith('floor_plan.')),
+  },
+  {
+    key: 'catalog',
+    ar: 'المنتجات والفئات',
+    en: 'Products & Categories',
+    permissions: ['products', 'categories', 'components'].flatMap(
+      (key) => PERMISSION_GROUPS.find((group) => group.key === key)!.permissions,
+    ),
+  },
+  {
+    key: 'purchases',
+    ar: 'المشتريات',
+    en: 'Purchases',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'purchases')!.permissions,
+  },
+  {
+    key: 'inventory',
+    ar: 'المخزون والمخازن',
+    en: 'Inventory & Warehouses',
+    permissions: ['inventory', 'warehouses'].flatMap(
+      (key) => PERMISSION_GROUPS.find((group) => group.key === key)!.permissions,
+    ),
+  },
+  {
+    key: 'raw_recipes',
+    ar: 'المواد الخام والوصفات',
+    en: 'Raw Materials & Recipes',
+    permissions: ['raw_materials', 'recipes'].flatMap(
+      (key) => PERMISSION_GROUPS.find((group) => group.key === key)!.permissions,
+    ),
+  },
+  {
+    key: 'production',
+    ar: 'الإنتاج والهالك',
+    en: 'Production & Waste',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'production')!.permissions,
+  },
+  {
+    key: 'customers',
+    ar: 'العملاء',
+    en: 'Customers',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'customers')!.permissions,
+  },
+  {
+    key: 'suppliers',
+    ar: 'الموردون',
+    en: 'Suppliers',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'suppliers')!.permissions,
+  },
+  {
+    key: 'expenses',
+    ar: 'المصروفات',
+    en: 'Expenses',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'expenses')!.permissions,
+  },
+  {
+    key: 'sales',
+    ar: 'المبيعات والمرتجعات',
+    en: 'Sales & Refunds',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'sales')!.permissions,
+  },
+  {
+    key: 'accounting',
+    ar: 'الحسابات والخزائن',
+    en: 'Accounting & Treasury',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'accounts')!.permissions,
+  },
+  {
+    key: 'shifts',
+    ar: 'الشيفتات واليوم',
+    en: 'Shifts & Business Day',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'shifts')!.permissions,
+  },
+  {
+    key: 'reports',
+    ar: 'التقارير',
+    en: 'Reports',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'reports')!.permissions,
+  },
+  {
+    key: 'users',
+    ar: 'المستخدمون والصلاحيات',
+    en: 'Users & Permissions',
+    permissions: PERMISSION_GROUPS
+      .find((group) => group.key === 'admin')!
+      .permissions.filter(
+        (permission) => permission.startsWith('users.') || permission === 'roles.permissions.manage',
+      ),
+  },
+  {
+    key: 'approvals',
+    ar: 'الموافقات',
+    en: 'Approvals',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'approvals')!.permissions,
+  },
+  {
+    key: 'settings',
+    ar: 'الإعدادات والفروع',
+    en: 'Settings & Branches',
+    permissions: PERMISSION_GROUPS
+      .find((group) => group.key === 'admin')!
+      .permissions.filter(
+        (permission) =>
+          permission === 'settings.manage'
+          || permission === 'branches.manage'
+          || permission === 'audit.view',
+      ),
+  },
+];
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   super_admin: [...ALL_PERMISSIONS],
   owner: ALL_PERMISSIONS.filter((permission) => permission !== 'history.unlimited'),
