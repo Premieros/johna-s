@@ -23,6 +23,11 @@ export function InventoryLedgerPage() {
   const branchFilter = useBranchFilter();
   const history = useHistoryAccess();
 
+  const [entryType, setEntryType] = useState('all');
+  const [branchId, setBranchId] = useState(branchFilter || '');
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [search, setSearch] = useState('');
+
   const { rows: rawRows, loading, error, total, hasMore, loadMore, loadingMore } = usePaginatedRows<InventoryLedgerEntry>({
     table: 'inventory_ledger',
     select: 'id,branch_id,warehouse_id,product_id,raw_material_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at,product:products(id,name),raw_material:raw_materials(id,name),warehouse:warehouses(id,name)',
@@ -33,11 +38,6 @@ export function InventoryLedgerPage() {
     pageSize: 50,
   });
   const rows = useMemo<LedgerRow[]>(() => rawRows.map((entry) => ({ id: String(entry.id), entry })), [rawRows]);
-  const [entryType, setEntryType] = useState('all');
-  const [branchId, setBranchId] = useState(branchFilter || '');
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
-  const [search, setSearch] = useState('');
-
   const entryTypes: { key: string; label: string }[] = [
     { key: 'opening', label: t('entryOpening') },
     { key: 'purchase', label: t('entryPurchase') },
