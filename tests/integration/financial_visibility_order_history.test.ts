@@ -118,7 +118,7 @@ describe.skipIf(skip)('financial order-history visibility', () => {
       await fn();
     });
 
-  guarded('owner sees all accessible old completed orders', async () => {
+  guarded('owner without history.unlimited sees sampled old completed orders', async () => {
     const result = await runAs(
       client,
       ids.users.owner,
@@ -126,7 +126,7 @@ describe.skipIf(skip)('financial order-history visibility', () => {
       [oldCompletedIds],
     );
     expect(result.error).toBeUndefined();
-    expect(sortedIds(result.rows)).toEqual([...oldCompletedIds].sort());
+    expect(sortedIds(result.rows)).toEqual(oldVisibleIds);
   });
 
   guarded('non-owner sees every completed order from the last seven days', async () => {
@@ -170,7 +170,7 @@ describe.skipIf(skip)('financial order-history visibility', () => {
     expect(sortedIds(result.rows)).toEqual([hiddenBucketActiveOrderId]);
   });
 
-  guarded('super_admin does not inherit owner-only historical order visibility', async () => {
+  guarded('super_admin bypass sees complete old completed orders', async () => {
     const result = await runAs(
       client,
       ids.users.super_admin,
@@ -178,7 +178,7 @@ describe.skipIf(skip)('financial order-history visibility', () => {
       [oldCompletedIds],
     );
     expect(result.error).toBeUndefined();
-    expect(sortedIds(result.rows)).toEqual(oldVisibleIds);
+    expect(sortedIds(result.rows)).toEqual([...oldCompletedIds].sort());
   });
 
   guarded('branch isolation still rejects another branch order even when its bucket is visible', async () => {
@@ -208,7 +208,7 @@ describe.skipIf(skip)('financial order-history visibility', () => {
     expect(restricted.error).toBeUndefined();
     expect(sortedIds(restricted.rows)).toEqual([visibleItemId]);
     expect(owner.error).toBeUndefined();
-    expect(sortedIds(owner.rows)).toEqual([hiddenItemId, visibleItemId].sort());
+    expect(sortedIds(owner.rows)).toEqual([visibleItemId]);
   });
 
   guarded('historical order visibility policies are restrictive', async () => {
