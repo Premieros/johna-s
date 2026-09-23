@@ -186,3 +186,40 @@ Development branch:
 
 Production migration status:
 **NOT APPLIED**. Full Verify + explicit approval are required before Production.
+
+
+## Stage D measurement update — income statement history bounds
+
+Production read-only measurements after the raw-cost branch-gate deployment:
+
+- Active callers confirmed:
+  - `ReportsPage.tsx`
+  - `DashboardDataPage.tsx`
+  - `VisualDashboardPage.tsx`
+  - `FinancialReportsPage.tsx`
+- Historical PostgREST stats for `get_income_statement`:
+  - calls: 1807
+  - mean: ~1046.47 ms
+  - max: ~7661.85 ms
+- Current authenticated Production measurement for Cleopatra, 2026-09-01..2026-09-23:
+  - current RPC: ~137.2 ms
+  - equivalent query with history bounds materialized once: ~8.4 ms
+- Root cause:
+  - `history_clamp_from` and `history_clamp_to` were evaluated inside the journal-entry row predicate.
+  - evaluating the same permission-aware bounds once per RPC allows the branch/date index to operate directly on fixed bounds.
+- Exact correctness proof on Production data:
+  - Cleopatra current JSON == optimized JSON
+  - Smouha current JSON == optimized JSON
+  - revenue, discount, net revenue, COGS, gross profit, expenses, and net income all matched exactly.
+- Security posture preserved:
+  - SECURITY INVOKER behavior unchanged
+  - search_path remains `public, pg_temp`
+  - authenticated/service_role execute
+  - anon no execute
+- Printing, printer agents, kitchen routing, `send_to_kitchen`, POS sale/inventory behavior, and journal-writing behavior remain untouched.
+
+Development branch:
+`development/performance-income-statement-history-bounds`
+
+Production migration status:
+**NOT APPLIED**. Full Verify + explicit approval are required before Production.
