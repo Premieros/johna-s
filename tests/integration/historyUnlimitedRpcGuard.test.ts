@@ -63,13 +63,12 @@ describe.skipIf(skip)('history.unlimited database guard', () => {
     expect(r.rows[0]?.granted ?? false).toBe(false);
   });
 
-  it('uses Cairo date and clamps restricted users to seven calendar days', async () => {
-    const limited = await asUser(limitedUserId, async () => client.query<{ days: number; from_date: string }>(
-      `SELECT (public.history_business_date() - public.history_min_date())::int AS days,
+  it('keeps older requested ranges selectable while database sampling enforces visibility', async () => {
+    const limited = await asUser(limitedUserId, async () => client.query<{ min_date: string | null; from_date: string }>(
+      `SELECT public.history_min_date()::text AS min_date,
               public.history_clamp_from(DATE '2020-01-01')::text AS from_date`,
     ));
-    expect(limited.rows[0].days).toBe(6);
-    expect(limited.rows[0].from_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(limited.rows[0]).toEqual({ min_date: null, from_date: '2020-01-01' });
 
     const unlimited = await asUser(unlimitedUserId, async () => client.query<{ min_date: string | null; from_date: string }>(
       `SELECT public.history_min_date()::text AS min_date,
@@ -102,7 +101,10 @@ describe.skipIf(skip)('history.unlimited database guard', () => {
     );
     expect(r.rows).toHaveLength(names.length);
     for (const row of r.rows) {
-      expect(row.def, row.proname).toMatch(/history_(clamp|min_)/);
+      expect(
+        /history_(clamp|min_)/.test(row.def) || row.def.includes('private.financial_row_visible'),
+        row.proname,
+      ).toBe(true);
     }
   });
 });
