@@ -142,6 +142,20 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
       [ids.shiftA],
     );
     expect(Number(after.rows[0]?.amount)).toBeCloseTo(Number(before.rows[0]?.amount) - 30, 2);
+
+    const reversed = await runAsPersist(
+      client,
+      ids.users.super_admin,
+      `SELECT public.reverse_shift_expense($1,'cleanup branch cash integration expense') AS r`,
+      [expenseId],
+    );
+    expect(reversed.rows[0].r).toMatchObject({ success: true, already_reversed: false, affects_shift_cash: true });
+
+    const restored = await client.query<{ amount: string }>(
+      `SELECT public._compute_shift_expected_cash($1)::text AS amount`,
+      [ids.shiftA],
+    );
+    expect(Number(restored.rows[0]?.amount)).toBeCloseTo(Number(before.rows[0]?.amount), 2);
   });
 
   it('reverses an expense once and preserves the original posting', async (ctx) => {
