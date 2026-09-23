@@ -84,11 +84,15 @@ vi.mock('@/context/RolesContext', () => ({
   }),
 }));
 
-function checkboxFor(label: string): HTMLInputElement {
-  const row = screen.getByText(label).closest('label');
-  if (!row) throw new Error(`Permission row not found: ${label}`);
+function checkboxFor(permission: string): HTMLInputElement {
+  const row = document.querySelector(`[data-permission="${permission}"]`);
+  if (!(row instanceof HTMLLabelElement)) {
+    throw new Error(`Permission row not found: ${permission}`);
+  }
   const input = row.querySelector('input[type="checkbox"]');
-  if (!(input instanceof HTMLInputElement)) throw new Error(`Checkbox not found: ${label}`);
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`Checkbox not found: ${permission}`);
+  }
   return input;
 }
 
@@ -121,27 +125,27 @@ describe('RolesTab permission controls', () => {
     expect(screen.queryByText('تغيير سعر البيع من نقطة البيع')).not.toBeInTheDocument();
     expect(screen.queryByText('تحديث حالة طلبات المطبخ')).not.toBeInTheDocument();
 
-    const createOrder = checkboxFor('إنشاء طلب من نقطة البيع');
+    const createOrder = checkboxFor('pos.order.create');
     expect(createOrder).not.toBeChecked();
 
     fireEvent.click(createOrder);
     expect(createOrder).toBeChecked();
 
     fireEvent.click(screen.getByRole('button', { name: 'تراجع' }));
-    expect(checkboxFor('إنشاء طلب من نقطة البيع')).not.toBeChecked();
+    expect(checkboxFor('pos.order.create')).not.toBeChecked();
 
     const posSection = screen.getByText('نقطة البيع').closest('section');
     if (!posSection) throw new Error('POS section not found');
     fireEvent.click(within(posSection).getByRole('button', { name: 'منح المتاح' }));
-    expect(checkboxFor('إنشاء طلب من نقطة البيع')).toBeChecked();
-    expect(checkboxFor('تحصيل مدفوعات نقطة البيع')).toBeChecked();
+    expect(checkboxFor('pos.order.create')).toBeChecked();
+    expect(checkboxFor('pos.payment.take')).toBeChecked();
 
     fireEvent.click(screen.getByRole('button', { name: 'عرض POS فقط' }));
-    expect(checkboxFor('إنشاء طلب من نقطة البيع')).not.toBeChecked();
-    expect(checkboxFor('تحصيل مدفوعات نقطة البيع')).not.toBeChecked();
-    expect(checkboxFor('عرض شاشة نقطة البيع')).toBeChecked();
+    expect(checkboxFor('pos.order.create')).not.toBeChecked();
+    expect(checkboxFor('pos.payment.take')).not.toBeChecked();
+    expect(checkboxFor('pos.view')).toBeChecked();
 
-    fireEvent.click(checkboxFor('إنشاء طلب من نقطة البيع'));
+    fireEvent.click(checkboxFor('pos.order.create'));
     fireEvent.click(screen.getByRole('button', { name: 'حفظ' }));
 
     await waitFor(() => {
