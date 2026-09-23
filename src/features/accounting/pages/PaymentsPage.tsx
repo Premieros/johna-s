@@ -16,7 +16,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment } from '@/lib/types';
+import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment, TreasurySource } from '@/lib/types';
 
 type Tab = 'ar' | 'ap';
 
@@ -40,16 +40,16 @@ export function PaymentsPage() {
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
-    enabled: !!effectiveBranchFilter,
+    enabled: !!effectiveBranchFilter && tab === 'ar',
   });
   const { rows: supplierPayments, loading: supplierPaymentsLoading, error: supplierPaymentsError, total: supplierPaymentsTotal, hasMore: supplierPaymentsHasMore, loadMore: loadMoreSupplierPayments, loadingMore: loadingMoreSupplierPayments, refresh: reloadSupplierPayments } = usePaginatedRows<SupplierPayment>({
     table: 'supplier_payments',
-    select: 'id, amount, payment_method, reference_number, notes, created_at, supplier:suppliers(name)',
+    select: 'id, amount, payment_method, reference_number, notes, created_at, treasury_account_id, treasury_transaction_id, supplier:suppliers(name), treasury_account:treasury_accounts(account_name,kind,scope)',
     order: { column: 'created_at', ascending: false },
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
-    enabled: !!effectiveBranchFilter,
+    enabled: !!effectiveBranchFilter && tab === 'ap',
   });
 
   const [collecting, setCollecting] = useState<ArAgingRow | null>(null);
@@ -59,19 +59,27 @@ export function PaymentsPage() {
 
   const [paying, setPaying] = useState<ApAgingRow | null>(null);
   const [openApInvoices, setOpenApInvoices] = useState<{ id: string; invoice_number: string; open: number }[]>([]);
-  const [apForm, setApForm] = useState({ purchase_id: '', amount: '', payment_method: 'cash', notes: '' });
+  const [treasurySources, setTreasurySources] = useState<TreasurySource[]>([]);
+  const [apForm, setApForm] = useState({ purchase_id: '', amount: '', treasury_account_id: '', notes: '' });
 
   const loadAging = useCallback(async () => {
     setLoading(true);
     try {
       if (effectiveBranchFilter) {
         const asOf = new Date().toISOString().slice(0, 10);
-        const [{ data: aging }, { data: apAging }] = await Promise.all([
-          api.accounting.getArAging({ p_branch_id: effectiveBranchFilter, p_as_of: asOf }),
-          api.accounting.getApAging({ p_branch_id: effectiveBranchFilter, p_as_of: asOf }),
-        ]);
-        setRows(((aging as ArAgingRow[]) || []).map((r) => ({ ...r, id: r.customer_id })));
-        setApRows(((apAging as ApAgingRow[]) || []).map((r) => ({ ...r, id: r.supplier_id })));
+        if (tab === 'ar') {
+          const { data: aging } = await api.accounting.getArAging({
+            p_branch_id: effectiveBranchFilter,
+            p_as_of: asOf,
+          });
+          setRows(((aging as ArAgingRow[]) || []).map((r) => ({ ...r, id: r.customer_id })));
+        } else {
+          const { data: apAging } = await api.accounting.getApAging({
+            p_branch_id: effectiveBranchFilter,
+            p_as_of: asOf,
+          });
+          setApRows(((apAging as ApAgingRow[]) || []).map((r) => ({ ...r, id: r.supplier_id })));
+        }
       } else {
         setRows([]);
         setApRows([]);
@@ -79,9 +87,21 @@ export function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveBranchFilter]);
+  }, [effectiveBranchFilter, tab]);
 
-  useEffect(() => { loadAging(); }, [loadAging]);
+  useEffect(() => { void loadAging(); }, [loadAging]);
+
+  useEffect(() => {
+    if (!effectiveBranchFilter || tab !== 'ap') {
+      setTreasurySources([]);
+      return;
+    }
+    void api.accounting.getAccessibleTreasuryAccounts({
+      p_branch_id: effectiveBranchFilter,
+    }).then(({ data }) => {
+      setTreasurySources((data as TreasurySource[]) || []);
+    });
+  }, [effectiveBranchFilter, tab]);
 
   const filtered = rows.filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
   const filteredAp = apRows.filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
@@ -104,7 +124,16 @@ export function PaymentsPage() {
 
   async function openPay(row: ApAgingRow) {
     setPaying(row);
-    setApForm({ purchase_id: '', amount: String(row.open_amount), payment_method: 'cash', notes: '' });
+    const preferredSource =
+      treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'branch_cash')
+      || treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'bank')
+      || treasurySources[0];
+    setApForm({
+      purchase_id: '',
+      amount: String(row.open_amount),
+      treasury_account_id: preferredSource?.id || '',
+      notes: '',
+    });
     const { data } = await supabase
       .from('purchases')
       .select('id, invoice_number, total, paid_amount, returned_amount')
@@ -145,13 +174,16 @@ export function PaymentsPage() {
   const paySupplier = async () => {
     if (!paying) return;
     const amount = Number(apForm.amount);
-    if (!amount || amount <= 0) { show(t('required'), 'error'); return; }
+    if (!amount || amount <= 0 || !apForm.treasury_account_id || !effectiveBranchFilter) {
+      show(t('required'), 'error');
+      return;
+    }
     setSaving(true);
-    const { data, error } = await api.accounting.paySupplier( {
+    const { data, error } = await api.accounting.paySupplierFromTreasury({
       p_supplier_id: paying.supplier_id,
       p_branch_id: effectiveBranchFilter,
       p_amount: amount,
-      p_payment_method: apForm.payment_method,
+      p_treasury_account_id: apForm.treasury_account_id,
       p_purchase_id: apForm.purchase_id || null,
       p_notes: apForm.notes || null,
     });
@@ -162,8 +194,11 @@ export function PaymentsPage() {
     show(`${t('paySupplier')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
     await logAudit('create', 'supplier_payments', undefined, { supplier_id: paying.supplier_id, amount });
     setPaying(null);
-    loadAging();
+    void loadAging();
     reloadSupplierPayments();
+    void api.accounting.getAccessibleTreasuryAccounts({
+      p_branch_id: effectiveBranchFilter,
+    }).then(({ data: sources }) => setTreasurySources((sources as TreasurySource[]) || []));
   };
 
   const columns: Column<ArAgingRow>[] = [
@@ -201,6 +236,7 @@ export function PaymentsPage() {
     { key: 'supplier', header: t('supplier'), render: (p) => p.supplier?.name || '-' },
     { key: 'reference_number', header: t('entryNumber'), render: (p) => <span className="font-mono text-xs">{p.reference_number}</span> },
     { key: 'payment_method', header: t('paymentMethod'), render: (p) => ({ cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit') })[p.payment_method] || p.payment_method },
+    { key: 'source', header: lang === 'ar' ? 'مصدر السداد' : 'Payment source', render: (p) => p.treasury_account?.account_name || '-' },
     { key: 'amount', header: t('amount'), render: (p) => <span className="font-semibold text-ui-success dark:text-ui-success">{formatCurrency(p.amount, currency, lang)}</span> },
   ];
 
@@ -318,12 +354,23 @@ export function PaymentsPage() {
                 <p className="font-bold text-ui-danger">{formatCurrency(paying.open_amount, currency, lang)}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input label={t('amount')} type="number" value={apForm.amount} onChange={(e) => setApForm({ ...apForm, amount: e.target.value })} required />
-              <Select label={t('paymentMethod')} value={apForm.payment_method} onChange={(e) => setApForm({ ...apForm, payment_method: e.target.value })}>
-                <option value="cash">{t('cash')}</option>
-                <option value="card">{t('card')}</option>
-                <option value="transfer">{t('transfer')}</option>
+              <Select
+                label={lang === 'ar' ? 'مصدر السداد' : 'Payment source'}
+                value={apForm.treasury_account_id}
+                onChange={(e) => setApForm({ ...apForm, treasury_account_id: e.target.value })}
+              >
+                <option value="">{t('selectAccount')}</option>
+                {treasurySources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.kind === 'main_cash'
+                      ? (lang === 'ar' ? 'الخزنة الرئيسية' : 'Main Treasury')
+                      : `${source.branch_name} - ${source.account_name}`}
+                    {' — '}
+                    {formatCurrency(source.balance, currency, lang)}
+                  </option>
+                ))}
               </Select>
             </div>
             {openApInvoices.length > 0 && (

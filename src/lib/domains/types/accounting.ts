@@ -162,20 +162,47 @@ export interface SupplierPayment {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  treasury_account_id?: string | null;
+  treasury_transaction_id?: string | null;
   supplier?: Pick<Supplier, 'name'>;
+  treasury_account?: Pick<TreasuryAccount, 'account_name' | 'kind' | 'scope'>;
 }
+
+export type TreasuryScope = 'branch' | 'organization';
+export type TreasuryKind = 'branch_cash' | 'main_cash' | 'bank';
 
 export interface TreasuryAccount {
   id: string;
   branch_id: string;
+  organization_id?: string | null;
   account_id: string;
   account_type: 'cash' | 'bank';
   account_name: string;
   account_number: string | null;
+  scope: TreasuryScope;
+  kind: TreasuryKind;
+  is_primary: boolean;
   is_active: boolean;
   opening_balance: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface TreasurySource {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  organization_id: string | null;
+  scope: TreasuryScope;
+  kind: TreasuryKind;
+  account_type: 'cash' | 'bank';
+  account_name: string;
+  account_number: string | null;
+  code: string;
+  is_primary: boolean;
+  is_active: boolean;
+  opening_balance: number;
+  balance: number;
 }
 
 export interface TreasuryBalance {
@@ -183,6 +210,8 @@ export interface TreasuryBalance {
   account_type: 'cash' | 'bank';
   account_name: string;
   account_number: string | null;
+  scope?: TreasuryScope;
+  kind?: TreasuryKind;
   code: string;
   is_active: boolean;
   opening_balance: number;

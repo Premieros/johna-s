@@ -1,5 +1,5 @@
 import type { ApiResult, JournalLineInput } from '../types';
-import type { RpcResult, TreasuryBalance, TrialBalanceRow, JournalDto, ArAgingRow, ApAgingRow, ReconciliationDetail } from '@/lib/types';
+import type { RpcResult, TreasuryBalance, TreasurySource, TrialBalanceRow, JournalDto, ArAgingRow, ApAgingRow, ReconciliationDetail } from '@/lib/types';
 import { rpc } from '../rpc';
 
 export const accounting = {
@@ -33,8 +33,11 @@ export const accounting = {
   receivePayment(p: { p_customer_id: string; p_branch_id: string | null; p_amount: number; p_payment_method: string; p_sale_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('receive_payment', p); },
   receiveEmployeeCreditPayment(p: { p_employee_id: string; p_branch_id: string; p_amount: number; p_payment_method: string; p_sale_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('receive_employee_credit_payment', p); },
   paySupplier(p: { p_supplier_id: string; p_branch_id: string | null; p_amount: number; p_payment_method: string; p_purchase_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('pay_supplier', p); },
+  paySupplierFromTreasury(p: { p_supplier_id: string; p_branch_id: string; p_amount: number; p_treasury_account_id: string; p_purchase_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('pay_supplier_from_treasury', p); },
   getTreasuryBalances(p: { p_branch_id: string | null }): ApiResult<TreasuryBalance[]> { return rpc('get_treasury_balances', p); },
+  getAccessibleTreasuryAccounts(p: { p_branch_id: string }): ApiResult<TreasurySource[]> { return rpc('get_accessible_treasury_accounts', p); },
   processTransfer(p: { p_branch_id: string | null; p_from_account_id: string; p_to_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_transfer', p); },
+  processTreasuryTransferV2(p: { p_from_account_id: string; p_to_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_treasury_transfer_v2', p); },
   processTreasuryDeposit(p: { p_branch_id: string | null; p_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_treasury_deposit', p); },
   processTreasuryWithdrawal(p: { p_branch_id: string | null; p_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_treasury_withdrawal', p); },
   getBankReconciliation(p: { p_reconciliation_id: string }): ApiResult<ReconciliationDetail> { return rpc('get_bank_reconciliation', p); },
