@@ -166,7 +166,7 @@ export function InventoryLedgerPage() {
     let beforeId: number | null = null;
 
     while (true) {
-      const { data, error: rpcError } = await rpc<LedgerRpcRow[]>('search_inventory_ledger', {
+      const result = await rpc<LedgerRpcRow[]>('search_inventory_ledger', {
         p_branch_id: branchId || null,
         p_entry_type: entryType === 'all' ? null : entryType,
         p_search: debouncedSearch || null,
@@ -175,13 +175,15 @@ export function InventoryLedgerPage() {
         p_before_id: beforeId,
         p_limit: PAGE_SIZE + 1,
       });
+      const data: LedgerRpcRow[] | null = result.data;
+      const rpcError = result.error;
       if (rpcError) {
         setError(userFacingErrorMessage(rpcError, lang === 'ar' ? 'ar' : 'en'));
         return;
       }
 
-      const fetched = (data || []).map((row) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
-      const page = fetched.slice(0, PAGE_SIZE);
+      const fetched: LedgerRow[] = (data || []).map((row: LedgerRpcRow) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
+      const page: LedgerRow[] = fetched.slice(0, PAGE_SIZE);
       all.push(...page);
       if (fetched.length <= PAGE_SIZE || page.length === 0) break;
 
