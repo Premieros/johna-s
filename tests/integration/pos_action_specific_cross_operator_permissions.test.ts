@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { attachRawComponentToUnit } from './componentTestFixtures';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { canImpersonate, runAs, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 import { getDbUrl, openDb } from './db';
@@ -273,12 +273,7 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
     const orderId = await createOwnedOrder(tableId);
     await setActorPermissions(['pos.view', 'pos.send_kitchen']);
 
-    const before = await client.query<{ qty: string }>(
-      `SELECT COALESCE(sum(quantity),0)::text qty
-       FROM public.inventory_unit_batches
-       WHERE unit_id=$1 AND warehouse_id=$2`,
-      [unitId, ids.whA],
-    );
+    const before = await rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
 
     const sent = await rpc(
       ids.users.branch_manager,
@@ -288,13 +283,8 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
     expect(sent.success, JSON.stringify(sent)).toBe(true);
     expect(sent.items_sent_count).toBe(1);
 
-    const after = await client.query<{ qty: string }>(
-      `SELECT COALESCE(sum(quantity),0)::text qty
-       FROM public.inventory_unit_batches
-       WHERE unit_id=$1 AND warehouse_id=$2`,
-      [unitId, ids.whA],
-    );
-    expect(Number(after.rows[0].qty)).toBe(Number(before.rows[0].qty) - 1);
+    const after = await rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
+    expect(after).toBe(before - 1);
 
     const row = await client.query<{ cashier_id: string; sent_by: string }>(
       `SELECT o.cashier_id,s.sent_by
