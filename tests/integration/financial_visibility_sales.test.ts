@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
@@ -11,12 +11,18 @@ function sortedIds(rows: Array<Record<string, unknown>>): string[] {
   return rows.map((row) => String(row.id)).sort();
 }
 
+function visibleOldBucket(branchId: string, rowId: string): boolean {
+  const first32 = createHash('md5').update(`${branchId}:${rowId}`).digest('hex').slice(0, 8);
+  return Number(BigInt(`0x${first32}`) % 100n) < 30;
+}
+
 describe.skipIf(skip)('financial sales visibility', () => {
   let client: pg.Client;
   let ids: RlsIds;
   let imp = false;
   const oldSaleIds: string[] = [];
   const recentSaleIds: string[] = [];
+  let oldVisibleIds: string[] = [];
   let visibleOldSaleId = '';
   let hiddenOldSaleId = '';
   let visibleItemId = '';
@@ -44,8 +50,12 @@ describe.skipIf(skip)('financial sales visibility', () => {
       );
     }
 
-    visibleOldSaleId = oldSaleIds[0];
-    hiddenOldSaleId = oldSaleIds[1];
+    oldVisibleIds = oldSaleIds.filter((saleId) => visibleOldBucket(ids.branchA, saleId)).sort();
+    visibleOldSaleId = oldSaleIds.find((saleId) => visibleOldBucket(ids.branchA, saleId)) || '';
+    hiddenOldSaleId = oldSaleIds.find((saleId) => !visibleOldBucket(ids.branchA, saleId)) || '';
+    if (!visibleOldSaleId || !hiddenOldSaleId) {
+      throw new Error('fixture did not produce both visible and hidden old-sale buckets');
+    }
 
     for (let i = 0; i < 3; i += 1) {
       const saleId = randomUUID();
@@ -92,7 +102,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
       await fn();
     });
 
-  guarded('owner sees all accessible old sales', async () => {
+  guarded('owner without history.unlimited sees only sampled old sales', async () => {
     const result = await runAs(
       client,
       ids.users.owner,
@@ -100,7 +110,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
       [oldSaleIds],
     );
     expect(result.error).toBeUndefined();
-    expect(sortedIds(result.rows)).toEqual([...oldSaleIds].sort());
+    expect(sortedIds(result.rows)).toEqual(oldVisibleIds);
   });
 
   guarded('non-owner sees all sales from the last seven days', async () => {
@@ -114,7 +124,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
     expect(sortedIds(result.rows)).toEqual([...recentSaleIds].sort());
   });
 
-  guarded('authorized non-owner users see complete old history for their branch', async () => {
+  guarded('authorized users without history.unlimited see the same stable sampled old history', async () => {
     const cashier = await runAs(
       client,
       ids.users.cashier,
@@ -130,8 +140,8 @@ describe.skipIf(skip)('financial sales visibility', () => {
 
     expect(cashier.error).toBeUndefined();
     expect(manager.error).toBeUndefined();
-    expect(sortedIds(cashier.rows)).toEqual([...oldSaleIds].sort());
-    expect(sortedIds(manager.rows)).toEqual([...oldSaleIds].sort());
+    expect(sortedIds(cashier.rows)).toEqual(oldVisibleIds);
+    expect(sortedIds(manager.rows)).toEqual(oldVisibleIds);
   });
 
   guarded('super_admin sees complete accessible old history', async () => {
@@ -156,7 +166,7 @@ describe.skipIf(skip)('financial sales visibility', () => {
     expect(result.rowCount).toBe(0);
   });
 
-  guarded('sale_items remain complete when their parent sales are authorized', async () => {
+  guarded('sale_items inherit their parent sampled historical visibility', async () => {
     const restricted = await runAs(
       client,
       ids.users.cashier,
@@ -171,9 +181,9 @@ describe.skipIf(skip)('financial sales visibility', () => {
     );
 
     expect(restricted.error).toBeUndefined();
-    expect(sortedIds(restricted.rows)).toEqual([hiddenItemId, visibleItemId].sort());
+    expect(sortedIds(restricted.rows)).toEqual([visibleItemId]);
     expect(owner.error).toBeUndefined();
-    expect(sortedIds(owner.rows)).toEqual([hiddenItemId, visibleItemId].sort());
+    expect(sortedIds(owner.rows)).toEqual([visibleItemId]);
   });
 
   guarded('financial visibility policies are restrictive and cannot OR around branch policies', async () => {
