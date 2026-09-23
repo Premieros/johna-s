@@ -38,4 +38,11 @@ describe('Phase 3 kitchen raw component snapshot contract', () => {
     expect(migration).not.toContain('UPDATE public.inventory_unit_batches');
     expect(migration).not.toContain('INSERT INTO public.inventory_unit_entries');
   });
+  it('materializes an unconfigured product as a same-name fallback raw instead of blocking send', () => {
+    expect(migration).toContain('public._ensure_pos_fallback_product_raw');
+    expect(migration).toContain('FALLBACK_RAW_CREATE_FAILED');
+    expect(migration).toContain('round(p_quantity, 6)');
+    expect(migration).not.toContain("'detail', 'NO_RAW_COMPONENTS'");
+  });
+
 });
