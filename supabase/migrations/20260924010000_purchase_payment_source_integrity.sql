@@ -83,7 +83,7 @@ $old$;
       );
     END IF;
 
-    IF NOT EXISTS (
+    IF p_supplier_id IS NOT NULL AND NOT EXISTS (
       SELECT 1
       FROM public.suppliers s
       WHERE s.id = p_supplier_id
