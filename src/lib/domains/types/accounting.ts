@@ -200,6 +200,8 @@ export interface TreasurySource {
   account_number: string | null;
   code: string;
   is_primary: boolean;
+  is_active: boolean;
+  opening_balance: number;
   balance: number;
 }
 
