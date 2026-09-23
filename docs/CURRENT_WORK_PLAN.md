@@ -1,5 +1,18 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
+## ACTIVE — Work Authorization Gate — 2026-09-23
+
+- Branch: `development/work-authorization-gate-20260923`
+- Base: `main@d036a963bf5681b52cc037abd1d583f38af701e9`
+- Live log: `docs/WORK_AUTHORIZATION_GATE_2026-09-23.md`
+- Goal: require branch/shift work authorization for configured users before protected operational mutations, while keeping login/session valid.
+- Reuse the existing Approvals & Authorizations Center; do not create a parallel approval system.
+- Authorization is Permission-First and branch-scoped; Super Admin remains the only implicit bypass.
+- Existing one-shot manager approvals remain separate because they expire/consume per operation and are not a shift authorization source of truth.
+- UI target: employee waiting gate + approver tabs for Pending / Working now / History / Settings, with realtime updates.
+- Safety: printing / Print Agent / printer routing / KDS / send-to-kitchen are frozen and out of scope.
+- Production migration: NOT applied. Merge/apply require exact-head Full Verify Green + explicit approval.
+- Status: Phase 0 baseline/audit/log complete; implementation phases pending.
 
 ## ACTIVE — FIFO missing kitchen-event historical sale fallback — 2026-09-22
 
