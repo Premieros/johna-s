@@ -72,7 +72,7 @@ describe('finance treasury model and query stabilization contract', () => {
 
   it('removes the duplicate trial-balance summary request and lazy-loads helpers', () => {
     expect(reports).not.toContain('getTrialBalanceSummary(');
-    expect(reports).toContain('const totalDebit = nextRows.reduce');
+    expect(reports).toContain('const totals = rows.reduce');
     expect(reports).toContain("view === 'ledger'");
     expect(reports).toContain("view === 'party_statement'");
     expect(reports).toContain('getTrialBalance({');
