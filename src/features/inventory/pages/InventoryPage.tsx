@@ -27,7 +27,7 @@ export function InventoryPage() {
   const can = useCan();
   const branchFilter = useBranchFilter();
   const { branches } = useBranches();
-  const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadInventory } = usePaginatedRows<Inventory>({
+  const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadInventory, fetchAll: fetchAllInventory } = usePaginatedRows<Inventory>({
     table: 'inventory',
     select: '*, product:products(*), warehouse:warehouses(*)',
     order: { column: 'updated_at', ascending: false },
@@ -94,8 +94,17 @@ export function InventoryPage() {
     reloadInventory();
   };
 
-  const handleExport = () => {
-    exportToExcel(items.map((item) => ({
+  const handleExport = async () => {
+    const all = await fetchAllInventory();
+    const exportRows = all.filter((item) => {
+      if (filterWarehouse && item.warehouse_id !== filterWarehouse) return false;
+      if (filterType === 'components' && !componentIds.has(item.product_id)) return false;
+      if (filterType === 'ready' && (item.product?.product_type !== 'ready' || componentIds.has(item.product_id))) return false;
+      const term = search.trim().toLowerCase();
+      if (term && ![item.product?.name, item.product?.barcode, item.warehouse?.name].some((value) => String(value || '').toLowerCase().includes(term))) return false;
+      return true;
+    });
+    exportToExcel(exportRows.map((item) => ({
       Product: item.product?.name || '',
       Barcode: item.product?.barcode || '',
       Warehouse: item.warehouse?.name || '',
