@@ -45,7 +45,6 @@ describe('permission-aware dashboard and system history contract', () => {
 
   it('keeps the seven-day guard on historical transaction screens', () => {
     const expectations: Array<[string, string]> = [
-      ['src/features/trade/pages/SalesPage.tsx', 'history.minIso'],
       ['src/features/trade/pages/PurchasesPage.tsx', 'history.minIso'],
       ['src/features/trade/pages/ExpensesPage.tsx', 'history.minDate'],
       ['src/features/trade/pages/ShiftsPage.tsx', 'status.eq.open'],
@@ -64,6 +63,10 @@ describe('permission-aware dashboard and system history contract', () => {
     for (const [path, marker] of expectations) {
       expect(read(path), path).toContain(marker);
     }
+
+    const sales = read('src/features/trade/pages/SalesPage.tsx');
+    expect(sales).not.toContain('history.minIso');
+    expect(sales).not.toContain('useHistoryAccess');
   });
 
   it('does not date-limit master/current-data catalogs', () => {
