@@ -262,7 +262,7 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
           p_tax_amount => 0,
           p_total => 130,
           p_paid_amount => 30,
-          p_payment_method => 'card',
+          p_payment_method => 'credit',
           p_notes => 'replace raw material',
           p_items => $4::jsonb
         ) AS r`,
@@ -296,8 +296,8 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
         id: replaced[0].r.purchase_id,
         status: 'completed',
         total: '130.00',
-        paid_amount: '30.00',
-        payment_method: 'card',
+        paid_amount: '0.00',
+        payment_method: 'credit',
       }]);
 
       const finalItems = await q<{ raw_material_id: string; quantity: string }>(
@@ -346,8 +346,8 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
         [branchId],
       );
       expect(Object.fromEntries(accountNets.map((row) => [row.account_key, Number(row.net)]))).toEqual({
-        ap: -100,
-        bank: -30,
+        ap: -130,
+        bank: 0,
         cash: 0,
         inventory_rm: 130,
       });
@@ -365,6 +365,162 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
         [rawAId]: 0,
         [rawBId]: 1300,
       });
+    });
+  });
+
+  it('enforces cash/credit routing in the database and never infers bank', async () => {
+    await asAdmin(async () => {
+      const items = JSON.stringify([
+        { raw_material_id: rawBId, unit_name: 'kg', quantity: 1, unit_cost: 40 },
+      ]);
+
+      const creditInvoice = `PUR-CREDIT-ROUTE-${randomUUID()}`;
+      const creditCreated = await q<{ r: { success: boolean; purchase_id?: string; error?: string } }>(
+        `SELECT public.process_purchase($1,$2,$3,$4,40,0,0,40,40,'credit','completed',NULL,$5::jsonb) AS r`,
+        [creditInvoice, supplierId, branchId, warehouseId, items],
+      );
+      expect(creditCreated[0].r.success).toBe(true);
+      if (!creditCreated[0].r.purchase_id) throw new Error(JSON.stringify(creditCreated[0].r));
+
+      const creditRow = await q<{ paid_amount: string; payment_method: string }>(
+        `SELECT paid_amount::text,payment_method FROM public.purchases WHERE id=$1`,
+        [creditCreated[0].r.purchase_id],
+      );
+      expect(creditRow).toEqual([{ paid_amount: '0.00', payment_method: 'credit' }]);
+
+      const creditPosting = await q<{ cash_credit: string; bank_credit: string; ap_credit: string }>(
+        `SELECT
+           ROUND(COALESCE(SUM(CASE WHEN a.code='1000' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS cash_credit,
+           ROUND(COALESCE(SUM(CASE WHEN a.code='1010' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS bank_credit,
+           ROUND(COALESCE(SUM(CASE WHEN a.code='2000' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS ap_credit
+         FROM public.journal_entries je
+         JOIN public.journal_entry_lines l ON l.journal_entry_id=je.id
+         JOIN public.chart_of_accounts a ON a.id=l.account_id
+         WHERE je.reference_type='purchase' AND je.reference_id=$1`,
+        [creditCreated[0].r.purchase_id],
+      );
+      expect({
+        cash: Number(creditPosting[0].cash_credit),
+        bank: Number(creditPosting[0].bank_credit),
+        ap: Number(creditPosting[0].ap_credit),
+      }).toEqual({ cash: 0, bank: 0, ap: 40 });
+
+      const cashInvoice = `PUR-CASH-ROUTE-${randomUUID()}`;
+      const cashCreated = await q<{ r: { success: boolean; purchase_id?: string; error?: string } }>(
+        `SELECT public.process_purchase($1,$2,$3,$4,25,0,0,25,0,'cash','completed',NULL,$5::jsonb) AS r`,
+        [cashInvoice, supplierId, branchId, warehouseId, JSON.stringify([
+          { raw_material_id: rawBId, unit_name: 'kg', quantity: 1, unit_cost: 25 },
+        ])],
+      );
+      expect(cashCreated[0].r.success).toBe(true);
+      if (!cashCreated[0].r.purchase_id) throw new Error(JSON.stringify(cashCreated[0].r));
+
+      const cashRow = await q<{ paid_amount: string; payment_method: string }>(
+        `SELECT paid_amount::text,payment_method FROM public.purchases WHERE id=$1`,
+        [cashCreated[0].r.purchase_id],
+      );
+      expect(cashRow).toEqual([{ paid_amount: '25.00', payment_method: 'cash' }]);
+
+      const cashPosting = await q<{ cash_credit: string; bank_credit: string; ap_credit: string }>(
+        `SELECT
+           ROUND(COALESCE(SUM(CASE WHEN a.code='1000' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS cash_credit,
+           ROUND(COALESCE(SUM(CASE WHEN a.code='1010' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS bank_credit,
+           ROUND(COALESCE(SUM(CASE WHEN a.code='2000' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS ap_credit
+         FROM public.journal_entries je
+         JOIN public.journal_entry_lines l ON l.journal_entry_id=je.id
+         JOIN public.chart_of_accounts a ON a.id=l.account_id
+         WHERE je.reference_type='purchase' AND je.reference_id=$1`,
+        [cashCreated[0].r.purchase_id],
+      );
+      expect({
+        cash: Number(cashPosting[0].cash_credit),
+        bank: Number(cashPosting[0].bank_credit),
+        ap: Number(cashPosting[0].ap_credit),
+      }).toEqual({ cash: 25, bank: 0, ap: 0 });
+
+      const unsupportedInvoice = `PUR-NO-IMPLICIT-BANK-${randomUUID()}`;
+      const unsupported = await q<{ r: { success: boolean; error?: string } }>(
+        `SELECT public.process_purchase($1,$2,$3,$4,30,0,0,30,30,'card','completed',NULL,$5::jsonb) AS r`,
+        [unsupportedInvoice, supplierId, branchId, warehouseId, JSON.stringify([
+          { raw_material_id: rawBId, unit_name: 'kg', quantity: 1, unit_cost: 30 },
+        ])],
+      );
+      expect(unsupported[0].r).toMatchObject({ success: false, error: 'TREASURY_ACCOUNT_REQUIRED' });
+      const unsupportedRows = await q<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM public.purchases WHERE invoice_number=$1`,
+        [unsupportedInvoice],
+      );
+      expect(Number(unsupportedRows[0].count)).toBe(0);
+
+      const legacyBankGuess = await q<{ r: { success: boolean; error?: string } }>(
+        `SELECT public.pay_supplier($1,$2,10,'transfer',$3,NULL) AS r`,
+        [supplierId, branchId, creditCreated[0].r.purchase_id],
+      );
+      expect(legacyBankGuess[0].r).toMatchObject({
+        success: false,
+        error: 'TREASURY_ACCOUNT_REQUIRED',
+      });
+    });
+  });
+
+  it('normalizes purchase-order receipt settlement without posting credit to bank', async () => {
+    await asAdmin(async () => {
+      const po = await q<{ r: { success: boolean; purchase_id?: string; error?: string } }>(
+        `SELECT public.create_purchase_order($1,$2,$3,'credit',NULL,$4::jsonb,NULL) AS r`,
+        [branchId, supplierId, warehouseId, JSON.stringify([
+          { raw_material_id: rawBId, unit_name: 'kg', quantity: 0.5, unit_cost: 40 },
+        ])],
+      );
+      expect(po[0].r.success).toBe(true);
+      if (!po[0].r.purchase_id) throw new Error(JSON.stringify(po[0].r));
+
+      const poId = po[0].r.purchase_id;
+      const submitted = await q<{ r: { success: boolean; error?: string } }>(
+        `SELECT public.update_purchase_order_status($1,'submitted') AS r`,
+        [poId],
+      );
+      expect(submitted[0].r.success).toBe(true);
+      const approved = await q<{ r: { success: boolean; error?: string } }>(
+        `SELECT public.update_purchase_order_status($1,'approved') AS r`,
+        [poId],
+      );
+      expect(approved[0].r.success).toBe(true);
+
+      // Simulate the historical inconsistent state that used to route credit to 1010.
+      await q(`UPDATE public.purchases SET paid_amount=total WHERE id=$1`, [poId]);
+
+      const poItem = await q<{ id: string; quantity: string }>(
+        `SELECT id,quantity::text FROM public.purchase_items WHERE purchase_id=$1 ORDER BY id LIMIT 1`,
+        [poId],
+      );
+      const received = await q<{ r: { success: boolean; error?: string; fully_received?: boolean } }>(
+        `SELECT public.receive_purchase_order($1,$2::jsonb) AS r`,
+        [poId, JSON.stringify([
+          { purchase_item_id: poItem[0].id, quantity_received: Number(poItem[0].quantity) },
+        ])],
+      );
+      expect(received[0].r.success).toBe(true);
+      expect(received[0].r.fully_received).toBe(true);
+
+      const settled = await q<{ paid_amount: string; payment_method: string; total: string }>(
+        `SELECT paid_amount::text,payment_method,total::text FROM public.purchases WHERE id=$1`,
+        [poId],
+      );
+      expect(settled[0].payment_method).toBe('credit');
+      expect(Number(settled[0].paid_amount)).toBe(0);
+
+      const posting = await q<{ bank_credit: string; ap_credit: string }>(
+        `SELECT
+           ROUND(COALESCE(SUM(CASE WHEN a.code='1010' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS bank_credit,
+           ROUND(COALESCE(SUM(CASE WHEN a.code='2000' THEN l.credit-l.debit ELSE 0 END),0),2)::text AS ap_credit
+         FROM public.journal_entries je
+         JOIN public.journal_entry_lines l ON l.journal_entry_id=je.id
+         JOIN public.chart_of_accounts a ON a.id=l.account_id
+         WHERE je.reference_type='purchase' AND je.reference_id=$1`,
+        [poId],
+      );
+      expect(Number(posting[0].bank_credit)).toBe(0);
+      expect(Number(posting[0].ap_credit)).toBe(Number(settled[0].total));
     });
   });
 

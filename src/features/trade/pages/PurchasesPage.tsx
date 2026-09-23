@@ -644,8 +644,6 @@ export function PurchasesPage() {
             </Select>
             <Select label={t('paymentMethod')} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               <option value="cash">{t('cash')}</option>
-              <option value="card">{t('card')}</option>
-              <option value="transfer">{t('transfer')}</option>
               <option value="credit">{t('credit')}</option>
             </Select>
           </div>
