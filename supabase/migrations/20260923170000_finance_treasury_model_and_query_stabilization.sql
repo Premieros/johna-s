@@ -60,7 +60,19 @@ BEGIN
   END IF;
 
   IF NEW.scope = 'branch' AND NEW.kind = 'branch_cash' THEN
-    NEW.is_primary := true;
+    IF EXISTS (
+      SELECT 1
+      FROM public.treasury_accounts t
+      WHERE t.branch_id = NEW.branch_id
+        AND t.scope = 'branch'
+        AND t.kind = 'branch_cash'
+        AND t.is_primary
+        AND t.id IS DISTINCT FROM NEW.id
+    ) THEN
+      NEW.is_primary := false;
+    ELSE
+      NEW.is_primary := true;
+    END IF;
   END IF;
 
   RETURN NEW;
@@ -96,7 +108,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_treasury_main_cash_org
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_treasury_branch_cash
   ON public.treasury_accounts(branch_id)
-  WHERE scope = 'branch' AND kind = 'branch_cash';
+  WHERE scope = 'branch'
+    AND kind = 'branch_cash'
+    AND is_primary;
 
 CREATE INDEX IF NOT EXISTS idx_treasury_accounts_org_scope
   ON public.treasury_accounts(organization_id, scope, kind)
