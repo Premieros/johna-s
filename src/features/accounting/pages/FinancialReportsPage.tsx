@@ -248,7 +248,7 @@ export function FinancialReportsPage() {
     { key: 'ar_aging', label: t('arAging'), icon: <Clock className="w-4 h-4" /> },
     { key: 'ap_aging', label: t('apAging'), icon: <Landmark className="w-4 h-4" /> },
     { key: 'aging_summary', label: t('agingSummary'), icon: <PieChart className="w-4 h-4" /> },
-    { key: 'cash_flow', label: t('cashFlow'), icon: <ArrowLeftRight className="w-4 h-4" /> },
+    { key: 'cash_flow', label: isAr ? 'ملخص حركة الخزائن والبنوك' : 'Treasury & Bank Movement Summary', icon: <ArrowLeftRight className="w-4 h-4" /> },
     { key: 'party_statement', label: t('partyStatement'), icon: <Receipt className="w-4 h-4" /> },
   ];
 
@@ -681,6 +681,7 @@ export function FinancialReportsPage() {
         </Card>
       ) : view === 'cash_flow' ? (
         <Card className="p-4">
+          <p className="mb-4 text-sm text-ui-muted">{isAr ? 'ملخص من نفس القيود اليومية المستخدمة في كشف حساب البنك والخزنة. الوارد = مدين حساب الخزنة، والمنصرف = دائن حساب الخزنة.' : 'Summary from the same journal source used by bank/treasury statements.'}</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
