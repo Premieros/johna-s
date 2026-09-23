@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCheck,
@@ -440,28 +440,25 @@ export function RolesTab() {
     setSelectedRole('');
   };
 
-  const visibleGroups = useMemo(() => {
-    const q = permissionSearch.trim().toLowerCase();
-
-    return PERMISSION_GROUPS.map((group) => ({
-      ...group,
-      permissions: group.permissions
-        .filter((permission) => isPlatformAdmin || canGrantPermission(permission))
-        .filter((permission) => {
-          if (!q) return true;
-          const labels = PERMISSION_LABELS[permission];
-          const contract = permissionContract(permission);
-          return (
-            (labels?.ar || '').toLowerCase().includes(q)
-            || (labels?.en || '').toLowerCase().includes(q)
-            || contract.effectAr.toLowerCase().includes(q)
-            || contract.effectEn.toLowerCase().includes(q)
-            || group.ar.toLowerCase().includes(q)
-            || group.en.toLowerCase().includes(q)
-          );
-        }),
-    })).filter((group) => group.permissions.length > 0);
-  }, [permissionSearch, isPlatformAdmin, can]);
+  const permissionQuery = permissionSearch.trim().toLowerCase();
+  const visibleGroups = PERMISSION_GROUPS.map((group) => ({
+    ...group,
+    permissions: group.permissions
+      .filter((permission) => isPlatformAdmin || canGrantPermission(permission))
+      .filter((permission) => {
+        if (!permissionQuery) return true;
+        const labels = PERMISSION_LABELS[permission];
+        const contract = permissionContract(permission);
+        return (
+          (labels?.ar || '').toLowerCase().includes(permissionQuery)
+          || (labels?.en || '').toLowerCase().includes(permissionQuery)
+          || contract.effectAr.toLowerCase().includes(permissionQuery)
+          || contract.effectEn.toLowerCase().includes(permissionQuery)
+          || group.ar.toLowerCase().includes(permissionQuery)
+          || group.en.toLowerCase().includes(permissionQuery)
+        );
+      }),
+  })).filter((group) => group.permissions.length > 0);
 
   if (loading) {
     return (
@@ -642,7 +639,7 @@ export function RolesTab() {
             </div>
           ) : (
             <>
-              {!canEditCurrent && (
+              {!canEditCurrent && !currentHasUnownedPermissions && (
                 <div className="mb-4 flex items-start gap-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-subtle">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
