@@ -323,6 +323,28 @@ USING (
   )
 );
 
+-- Organization-scoped main treasury stays hidden from ordinary branch users.
+-- Users with treasury-transfer permission may read it only when they can access
+-- at least one branch in the same organization.
+DROP POLICY IF EXISTS auth_select_organization_treasury_accounts
+  ON public.treasury_accounts;
+
+CREATE POLICY auth_select_organization_treasury_accounts
+ON public.treasury_accounts
+FOR SELECT
+TO authenticated
+USING (
+  scope = 'organization'
+  AND public.can_permission('accounting.treasury.transfer')
+  AND organization_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM public.branches b
+    WHERE b.organization_id = treasury_accounts.organization_id
+      AND public.user_may_access_branch(b.id)
+  )
+);
+
 -- ---------------------------------------------------------------------------
 -- Accessible treasury accounts + live balances.
 -- Main treasury is visible only to users explicitly allowed to transfer treasury.
@@ -382,6 +404,8 @@ BEGIN
         'account_number', t.account_number,
         'code', a.code,
         'is_primary', t.is_primary,
+        'is_active', t.is_active,
+        'opening_balance', round(COALESCE(t.opening_balance, 0), 2),
         'balance', round(
           COALESCE(t.opening_balance, 0)
           + COALESCE(SUM(l.debit - l.credit), 0),
