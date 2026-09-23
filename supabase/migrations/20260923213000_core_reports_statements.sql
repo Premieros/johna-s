@@ -512,9 +512,9 @@ BEGIN
         t.scope,
         t.kind,
         a.code,
-        round(COALESCE(sum(l.debit),0),2) AS inflow,
-        round(COALESCE(sum(l.credit),0),2) AS outflow,
-        round(COALESCE(sum(l.debit-l.credit),0),2) AS net
+        round(COALESCE(sum(CASE WHEN j.id IS NOT NULL THEN l.debit ELSE 0 END),0),2) AS inflow,
+        round(COALESCE(sum(CASE WHEN j.id IS NOT NULL THEN l.credit ELSE 0 END),0),2) AS outflow,
+        round(COALESCE(sum(CASE WHEN j.id IS NOT NULL THEN l.debit-l.credit ELSE 0 END),0),2) AS net
       FROM public.treasury_accounts t
       JOIN public.chart_of_accounts a ON a.id=t.account_id
       LEFT JOIN public.journal_entry_lines l ON l.account_id=a.id
@@ -526,7 +526,8 @@ BEGIN
        AND private.financial_row_visible(j.id,j.branch_id,j.created_at)
       WHERE t.branch_id=p_branch_id AND t.is_active
       GROUP BY t.id,t.account_name,t.account_type,t.scope,t.kind,a.code
-      HAVING COALESCE(sum(l.debit),0)<>0 OR COALESCE(sum(l.credit),0)<>0
+      HAVING COALESCE(sum(CASE WHEN j.id IS NOT NULL THEN l.debit ELSE 0 END),0)<>0
+          OR COALESCE(sum(CASE WHEN j.id IS NOT NULL THEN l.credit ELSE 0 END),0)<>0
     ) row
   );
 END;
