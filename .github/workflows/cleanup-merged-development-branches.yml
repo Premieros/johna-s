@@ -108,14 +108,15 @@ jobs:
               continue
             fi
 
-            has_print_branch_diff "$branch"
-            diff_rc=$?
-            if [[ $diff_rc -eq 0 ]]; then
+            if has_print_branch_diff "$branch"; then
               echo "$branch | protected by print-related branch diff | $commit_iso" >> "$kept_print_file"
               continue
-            elif [[ $diff_rc -eq 2 ]]; then
-              echo "$branch | diff check failed; preserved safely | $commit_iso" >> "$kept_failed_file"
-              continue
+            else
+              diff_rc=$?
+              if [[ $diff_rc -eq 2 ]]; then
+                echo "$branch | diff check failed; preserved safely | $commit_iso" >> "$kept_failed_file"
+                continue
+              fi
             fi
 
             if ! draft_open_prs "$branch"; then
