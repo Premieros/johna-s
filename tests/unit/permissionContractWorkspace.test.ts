@@ -31,7 +31,7 @@ describe('permission contract workspace wiring', () => {
     expect(roles).toContain('.filter((permission) => isPlatformAdmin || canGrantPermission(permission))');
     expect(roles).toContain('تم إخفاء هذه الصلاحيات');
     expect(roles).not.toContain('يمكنك إزالتها فقط');
-    expect(roles).not.toContain('لا تملك حق منحها');
+    expect(roles).not.toContain("(isAr ? 'لا تملك حق منحها' : 'Cannot grant')");
   });
 
   it('keeps technical permission details behind Super Admin advanced details', () => {
