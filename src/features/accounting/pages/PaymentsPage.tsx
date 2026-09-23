@@ -49,7 +49,7 @@ export function PaymentsPage() {
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
-    enabled: !!effectiveBranchFilter,
+    enabled: !!effectiveBranchFilter && tab === 'ap',
   });
 
   const [collecting, setCollecting] = useState<ArAgingRow | null>(null);
@@ -228,7 +228,6 @@ export function PaymentsPage() {
     { key: 'customer', header: t('customer'), render: (p) => p.customer?.name || '-' },
     { key: 'reference_number', header: t('entryNumber'), render: (p) => <span className="font-mono text-xs">{p.reference_number}</span> },
     { key: 'payment_method', header: t('paymentMethod'), render: (p) => ({ cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit') })[p.payment_method] || p.payment_method },
-    { key: 'source', header: lang === 'ar' ? 'مصدر السداد' : 'Payment source', render: (p) => p.treasury_account?.account_name || '-' },
     { key: 'amount', header: t('amount'), render: (p) => <span className="font-semibold text-ui-success dark:text-ui-success">{formatCurrency(p.amount, currency, lang)}</span> },
   ];
 
@@ -237,6 +236,7 @@ export function PaymentsPage() {
     { key: 'supplier', header: t('supplier'), render: (p) => p.supplier?.name || '-' },
     { key: 'reference_number', header: t('entryNumber'), render: (p) => <span className="font-mono text-xs">{p.reference_number}</span> },
     { key: 'payment_method', header: t('paymentMethod'), render: (p) => ({ cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit') })[p.payment_method] || p.payment_method },
+    { key: 'source', header: lang === 'ar' ? 'مصدر السداد' : 'Payment source', render: (p) => p.treasury_account?.account_name || '-' },
     { key: 'amount', header: t('amount'), render: (p) => <span className="font-semibold text-ui-success dark:text-ui-success">{formatCurrency(p.amount, currency, lang)}</span> },
   ];
 
