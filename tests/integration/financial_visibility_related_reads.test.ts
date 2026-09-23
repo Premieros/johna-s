@@ -88,17 +88,13 @@ describe.skipIf(skip)('related financial visibility reads', () => {
         [expenseId, ids.branchA],
       );
     }
-    do {
-      oldVisibleExpenseIds = oldExpenseIds.filter((expenseId) => visibleOldBucket(ids.branchA, expenseId)).sort();
+    oldVisibleExpenseIds = oldExpenseIds.filter((expenseId) => visibleOldBucket(ids.branchA, expenseId)).sort();
 
     do {
       visibleOldSaleId = randomUUID();
     } while (!visibleOldBucket(ids.branchA, visibleOldSaleId));
-    } while (!visibleOldBucket(ids.branchA, visibleOldSaleId));
     do {
-      do {
       hiddenOldSaleId = randomUUID();
-    } while (visibleOldBucket(ids.branchA, hiddenOldSaleId));
     } while (visibleOldBucket(ids.branchA, hiddenOldSaleId));
     await client.query(
       `INSERT INTO public.sales
