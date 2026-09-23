@@ -8,6 +8,11 @@ export interface DayClosingReport {
   businessDate: string;
   dailyCloseStatus: 'open' | 'closed';
   snapshot: boolean;
+  historicalReconciled: boolean;
+  snapshotCashExpenses: number;
+  snapshotCashAfterOutflows: number;
+  reconciliationCashExpenseDelta: number;
+  reconciliationCashAfterDelta: number;
   businessDayMode: 'fixed_time' | 'shift_span';
   windowStart: string;
   windowEnd: string;
@@ -65,6 +70,11 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
     businessDate: s(raw.business_date || businessDate),
     dailyCloseStatus: raw.daily_close_status === 'closed' ? 'closed' : 'open',
     snapshot: Boolean(raw.snapshot),
+    historicalReconciled: Boolean(raw.historical_reconciled),
+    snapshotCashExpenses: n(raw.snapshot_cash_expenses),
+    snapshotCashAfterOutflows: n(raw.snapshot_cash_after_outflows),
+    reconciliationCashExpenseDelta: n(raw.reconciliation_cash_expense_delta),
+    reconciliationCashAfterDelta: n(raw.reconciliation_cash_after_delta),
     businessDayMode: raw.business_day_mode === 'shift_span' ? 'shift_span' : 'fixed_time',
     windowStart: s(raw.window_start),
     windowEnd: s(raw.window_end),
@@ -149,6 +159,11 @@ table{width:100%;border-collapse:collapse;margin:6px 0 16px}th,td{border:1px sol
 <div class="meta"><div>${isAr ? 'تاريخ العمل' : 'Business date'}: <b>${escapeHtml(report.businessDate)}</b></div><div>${report.snapshot ? (isAr ? 'نسخة إغلاق ثابتة' : 'Immutable closing snapshot') : (isAr ? 'معاينة مباشرة' : 'Live preview')}</div></div>
 <div class="meta"><div><b>${isAr ? 'بداية اليوم:' : 'Day start:'}</b> ${report.windowStart ? formatDateTime(report.windowStart, lang) : '-'}</div><div><b>${isAr ? 'نهاية اليوم:' : 'Day end:'}</b> ${report.windowEnd ? formatDateTime(report.windowEnd, lang) : '-'}</div></div>
 <div class="meta"><div>${isAr ? 'طريقة تحديد اليوم:' : 'Boundary mode:'} <b>${report.businessDayMode === 'shift_span' ? (isAr ? 'أول شفت ← آخر شفت' : 'First shift → last shift') : (isAr ? 'وقت ثابت' : 'Fixed time')}</b></div></div>
+${report.historicalReconciled ? `<div style="margin-top:10px;padding:10px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb">
+<b>${isAr ? 'تمت مصالحة هذا الإغلاق التاريخي مع حركة الخزنة الفعلية.' : 'This historical close was reconciled to actual treasury movements.'}</b>
+<div>${isAr ? 'مصروفات الكاش المحفوظة سابقًا' : 'Stored cash expenses'}: ${money(report.snapshotCashExpenses)} → <b>${money(report.cashExpenses)}</b></div>
+<div>${isAr ? 'الكاش بعد الخارج المحفوظ سابقًا' : 'Stored cash after outflows'}: ${money(report.snapshotCashAfterOutflows)} → <b>${money(report.cashAfterOutflows)}</b></div>
+</div>` : ''}
 <div class="grid">
 <div class="card"><div class="label">${isAr ? 'صافي المبيعات' : 'Net sales'}</div><div class="value">${money(report.netSales)}</div></div>
 <div class="card"><div class="label">${isAr ? 'المصروفات' : 'Expenses'}</div><div class="value negative">-${money(report.expenses)}</div></div>
