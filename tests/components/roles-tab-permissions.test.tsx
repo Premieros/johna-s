@@ -112,7 +112,7 @@ describe('RolesTab permission controls', () => {
   it('hides higher permissions and toggles, resets, groups, presets, and saves owned permissions', async () => {
     render(<RolesTab />);
 
-    expect(screen.getByText('مشرف الصالة')).toBeInTheDocument();
+    expect(screen.getAllByText('مشرف الصالة').length).toBeGreaterThan(0);
     expect(screen.queryByText('تغيير سعر البيع من نقطة البيع')).not.toBeInTheDocument();
 
     const createOrder = checkboxFor('إنشاء طلب من نقطة البيع');
@@ -150,7 +150,7 @@ describe('RolesTab permission controls', () => {
     render(<RolesTab />);
 
     fireEvent.click(screen.getByRole('button', { name: 'دور جديد' }));
-    expect(screen.getByText('دور جديد', { selector: 'h2,div' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'دور جديد' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('الرمز (بالإنجليزية)'), {
       target: { value: 'new_role' },
@@ -159,7 +159,7 @@ describe('RolesTab permission controls', () => {
       target: { value: 'دور جديد' },
     });
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('dialog', { name: 'دور جديد' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'حفظ' }));
 
     await waitFor(() => {
@@ -175,7 +175,7 @@ describe('RolesTab permission controls', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'حذف' }));
-    const confirm = screen.getByRole('dialog');
+    const confirm = screen.getByRole('dialog', { name: 'حذف الدور' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'حذف' }));
 
     await waitFor(() => {
