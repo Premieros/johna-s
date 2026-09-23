@@ -149,7 +149,9 @@ export const V2_MODULES: V2ModuleDefinition[] = [
     actions: [
       { key: 'adjust', labelAr: 'تسوية مخزون', labelEn: 'Adjust stock', permission: 'inventory.adjust', backend: ['adjust_stock'] },
       { key: 'count', labelAr: 'جرد', labelEn: 'Stock count', permission: 'inventory.count.create', backend: ['create_stock_count', 'submit_stock_count'] },
-      { key: 'count_approve', labelAr: 'اعتماد الجرد', labelEn: 'Approve stock count', permission: 'inventory.count.approve', backend: ['approve_stock_count', 'apply_stock_count'] },
+      { key: 'count_approve', labelAr: 'اعتماد الجرد', labelEn: 'Approve stock count', permission: 'inventory.count.approve', backend: ['approve_stock_count'] },
+      { key: 'count_reject', labelAr: 'رفض الجرد', labelEn: 'Reject stock count', permission: 'inventory.count.reject', backend: ['reject_stock_count'] },
+      { key: 'count_apply', labelAr: 'تطبيق الجرد', labelEn: 'Apply stock count', permission: 'inventory.count.apply', backend: ['apply_stock_count'] },
       { key: 'transfer', labelAr: 'تحويل مخزني', labelEn: 'Warehouse transfer', permission: 'inventory.transfer.create', backend: ['create_warehouse_transfer'] },
       { key: 'transfer_approve', labelAr: 'اعتماد التحويل', labelEn: 'Approve transfer', permission: 'inventory.transfer.approve', backend: ['approve_warehouse_transfer'] },
     ],

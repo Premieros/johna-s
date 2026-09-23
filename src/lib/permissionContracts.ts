@@ -58,6 +58,8 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'inventory.adjust': ['inventory.view'],
   'inventory.count.create': ['inventory.view'],
   'inventory.count.approve': ['inventory.view'],
+  'inventory.count.reject': ['inventory.view'],
+  'inventory.count.apply': ['inventory.view'],
   'inventory.transfer.create': ['inventory.view'],
   'inventory.transfer.approve': ['inventory.view'],
 
@@ -115,6 +117,8 @@ const TRANSPORT = new Set<Permission>([
 
 const APPROVAL = new Set<Permission>([
   'inventory.count.approve',
+  'inventory.count.reject',
+  'inventory.count.apply',
   'inventory.transfer.approve',
   'waste.approve',
   'refunds.approve',
@@ -140,6 +144,8 @@ const CRITICAL = new Set<Permission>([
   'products.delete',
   'inventory.adjust',
   'inventory.count.approve',
+  'inventory.count.reject',
+  'inventory.count.apply',
   'inventory.transfer.approve',
   'waste.approve',
   'refunds.approve',

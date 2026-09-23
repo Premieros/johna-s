@@ -61,7 +61,7 @@ describe.skipIf(skip)('raw-material stock count regression', () => {
     );
     await client.query(
       `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
-       VALUES ($1,'جرد اختبار','Stock count QA','["inventory.count.create","inventory.count.approve"]'::jsonb,'global',true)`,
+       VALUES ($1,'جرد اختبار','Stock count QA','["inventory.count.create","inventory.count.approve","inventory.count.reject","inventory.count.apply"]'::jsonb,'global',true)`,
       [role],
     );
     await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
@@ -109,6 +109,22 @@ describe.skipIf(skip)('raw-material stock count regression', () => {
     if (!client) return;
     await client.query('ROLLBACK').catch(() => {});
     await client.end().catch(() => {});
+  });
+
+  it('uses exact backend permissions for approve, reject, and apply', async () => {
+    const defs = await client.query<{ name: string; definition: string }>(
+      `SELECT p.proname AS name, pg_get_functiondef(p.oid) AS definition
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public'
+         AND p.proname IN ('approve_stock_count','reject_stock_count','apply_stock_count')`,
+    );
+    const byName = new Map(defs.rows.map((row) => [row.name, row.definition]));
+    expect(byName.get('approve_stock_count')).toContain('inventory.count.approve');
+    expect(byName.get('reject_stock_count')).toContain('inventory.count.reject');
+    expect(byName.get('reject_stock_count')).not.toContain('inventory.count.approve');
+    expect(byName.get('apply_stock_count')).toContain('inventory.count.apply');
+    expect(byName.get('apply_stock_count')).not.toContain('inventory.count.approve');
   });
 
   it('creates and applies a raw-material count once', async () => {

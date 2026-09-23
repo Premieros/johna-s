@@ -184,24 +184,12 @@ export function StockCountsPage() {
     const id = count.id;
     let res: { data: { success?: boolean; error?: string; detail?: string } | null; error?: { message: string } | null };
     if (action === 'submit') res = await api.inventory.submitStockCount({ p_stock_count_id: id });
-    else if (action === 'approve') {
-      res = await api.inventory.approveStockCount({ p_stock_count_id: id });
-      if (res.error) { show(res.error.message, 'error'); return; }
-      if (!res.data?.success) { show(res.data?.detail || res.data?.error || t('error'), 'error'); return; }
-      const applyRes = await api.inventory.applyStockCount({ p_stock_count_id: id });
-      if (applyRes.error || !applyRes.data?.success) {
-        show((isAr ? 'تم اعتماد الجرد ولكن تعذر تطبيق الرصيد: ' : 'Count approved, but applying stock failed: ') + (applyRes.error?.message || applyRes.data?.detail || applyRes.data?.error || t('error')), 'error');
-        await logAudit('update', 'stock_counts', id, { action: 'approve', apply_failed: true, count_number: count.count_number });
-        setConfirmTarget(null); reloadCounts(); return;
-      }
-      show(t('countApplied'), 'success');
-      await logAudit('update', 'stock_counts', id, { action: 'approve_apply', count_number: count.count_number });
-      setConfirmTarget(null); setRejectReason(''); reloadCounts(); return;
-    } else if (action === 'reject') res = await api.inventory.rejectStockCount({ p_stock_count_id: id, p_reason: rejectReason || null });
+    else if (action === 'approve') res = await api.inventory.approveStockCount({ p_stock_count_id: id });
+    else if (action === 'reject') res = await api.inventory.rejectStockCount({ p_stock_count_id: id, p_reason: rejectReason || null });
     else res = await api.inventory.applyStockCount({ p_stock_count_id: id });
     if (res.error) { show(res.error.message, 'error'); return; }
     if (!res.data?.success) { show(res.data?.detail || res.data?.error || t('error'), 'error'); return; }
-    const keyMap = { submit: 'countSubmitted', reject: 'countRejected', apply: 'countApplied' } as const;
+    const keyMap = { submit: 'countSubmitted', approve: 'countApproved', reject: 'countRejected', apply: 'countApplied' } as const;
     show(t(keyMap[action as keyof typeof keyMap]), 'success');
     await logAudit('update', 'stock_counts', id, { action, count_number: count.count_number });
     setConfirmTarget(null); setRejectReason(''); reloadCounts();
@@ -226,8 +214,9 @@ export function StockCountsPage() {
       return <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => setViewTarget(c)} className="p-1.5 rounded-md hover:bg-ui-page-alt text-ui-subtle" title={t('viewCountItems')}><Eye className="w-4 h-4" /></button>
         {can('inventory.count.create') && c.status === 'draft' && <>{!hasRaw && <button onClick={() => openEdit(c)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('addCountItem')}><Plus className="w-4 h-4" /></button>}<button onClick={() => setConfirmTarget({ count: c, action: 'submit' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('submitCount')}><Send className="w-4 h-4" /></button></>}
-        {can('inventory.count.approve') && c.status === 'submitted' && <><button onClick={() => setConfirmTarget({ count: c, action: 'approve' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveCount')}><CheckCircle2 className="w-4 h-4" /></button><button onClick={() => { setConfirmTarget({ count: c, action: 'reject' }); setRejectReason(''); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectCount')}><XCircle className="w-4 h-4" /></button></>}
-        {can('inventory.count.approve') && c.status === 'approved' && <button onClick={() => setConfirmTarget({ count: c, action: 'apply' })} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={t('applyCount')}><CheckCheck className="w-4 h-4" /></button>}
+        {can('inventory.count.approve') && c.status === 'submitted' && <button onClick={() => setConfirmTarget({ count: c, action: 'approve' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveCount')}><CheckCircle2 className="w-4 h-4" /></button>}
+        {can('inventory.count.reject') && c.status === 'submitted' && <button onClick={() => { setConfirmTarget({ count: c, action: 'reject' }); setRejectReason(''); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectCount')}><XCircle className="w-4 h-4" /></button>}
+        {can('inventory.count.apply') && c.status === 'approved' && <button onClick={() => setConfirmTarget({ count: c, action: 'apply' })} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={t('applyCount')}><CheckCheck className="w-4 h-4" /></button>}
       </div>;
     }},
   ];
