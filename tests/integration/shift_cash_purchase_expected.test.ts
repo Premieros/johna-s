@@ -14,6 +14,7 @@ describe.skipIf(skip)('shift expected cash includes canonical outflows', () => {
   const expenseId = randomUUID();
   const unlinkedExpenseId = randomUUID();
   const role = `qa_shift_cash_${randomUUID().slice(0, 8)}`;
+  let treasuryBranchCashId = '';
 
   beforeAll(async () => {
     client = openDb(dbUrl!);
@@ -37,6 +38,19 @@ describe.skipIf(skip)('shift expected cash includes canonical outflows', () => {
     );
     await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
 
+    await client.query(`SELECT public.seed_treasury_accounts($1)`, [branchId]);
+    const treasury = await client.query<{ id: string }>(
+      `SELECT id
+       FROM public.treasury_accounts
+       WHERE branch_id=$1
+         AND COALESCE(scope,'branch')='branch'
+         AND COALESCE(kind,CASE WHEN account_type='bank' THEN 'bank' ELSE 'branch_cash' END)='branch_cash'
+       ORDER BY is_primary DESC, created_at
+       LIMIT 1`,
+      [branchId],
+    );
+    treasuryBranchCashId = treasury.rows[0]?.id || '';
+
     await client.query(
       `INSERT INTO public.shifts(id,branch_id,cashier_id,opened_at,opening_amount,status)
        VALUES ($1,$2,$3,now()-interval '1 hour',100,'open')`,
@@ -52,11 +66,11 @@ describe.skipIf(skip)('shift expected cash includes canonical outflows', () => {
     await client.query(
       `INSERT INTO public.expenses(
          id,category,description,amount,branch_id,payment_method,expense_date,
-         created_by,created_at,shift_id,status
+         created_by,created_at,shift_id,status,treasury_account_id
        ) VALUES
-       ($1,'qa','Linked expense',30,$3,'cash',current_date,$4,now()-interval '20 minutes',$2,'posted'),
-       ($5,'qa','Window expense',7,$3,'cash',current_date,$4,now()-interval '10 minutes',NULL,'posted')`,
-      [expenseId, shiftId, branchId, userId, unlinkedExpenseId],
+       ($1,'qa','Linked expense',30,$3,'cash',current_date,$4,now()-interval '20 minutes',$2,'posted',$6),
+       ($5,'qa','Window expense',7,$3,'cash',current_date,$4,now()-interval '10 minutes',NULL,'posted',$6)`,
+      [expenseId, shiftId, branchId, userId, unlinkedExpenseId, treasuryBranchCashId],
     );
 
     await client.query(
@@ -89,7 +103,8 @@ describe.skipIf(skip)('shift expected cash includes canonical outflows', () => {
     await client.end().catch(() => {});
   });
 
-  it('subtracts assigned cash expenses once, ignores unassigned expenses, and subtracts in-window cash purchases', async () => {
+  it('subtracts assigned branch-cash expenses once, ignores unassigned expenses, and subtracts in-window cash purchases', async () => {
+    expect(treasuryBranchCashId).toBeTruthy();
     const result = await client.query<{ expected: string }>(
       'SELECT public._compute_shift_expected_cash($1)::text AS expected',
       [shiftId],

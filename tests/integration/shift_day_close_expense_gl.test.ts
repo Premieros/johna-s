@@ -18,6 +18,7 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
   let client: pg.Client;
   let ids: RlsIds;
   let expenseAccountId = '';
+  let treasuryBranchCashA = '';
   let impersonationAvailable = false;
   const expenseKey = `expense-${randomUUID()}`;
 
@@ -32,6 +33,18 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
       [ids.branchA],
     );
     expenseAccountId = account.rows[0]?.id || '';
+    const branchCash = await client.query<{ id: string }>(
+      `SELECT id
+       FROM public.treasury_accounts
+       WHERE branch_id = $1
+         AND COALESCE(scope, 'branch') = 'branch'
+         AND COALESCE(kind, CASE WHEN account_type = 'bank' THEN 'bank' ELSE 'branch_cash' END) = 'branch_cash'
+         AND is_active
+       ORDER BY is_primary DESC, created_at
+       LIMIT 1`,
+      [ids.branchA],
+    );
+    treasuryBranchCashA = branchCash.rows[0]?.id || '';
   });
 
   afterAll(async () => {
@@ -42,6 +55,11 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
   it('posts one balanced expense and retries idempotently', async (ctx) => {
     if (!impersonationAvailable) return ctx.skip();
     expect(expenseAccountId).toBeTruthy();
+
+    const expectedBefore = await client.query<{ amount: string }>(
+      `SELECT public._compute_shift_expected_cash($1)::text AS amount`,
+      [ids.shiftA],
+    );
 
     const params = [
       expenseKey, ids.branchA, ids.shiftA, 'supplies', 'Test supplies', 25, 'cash',
@@ -75,6 +93,69 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
       [expenseId],
     );
     expect(counts.rows[0]).toMatchObject({ expenses: 1, journals: 1, debits: '25.00', credits: '25.00' });
+
+    const bankDrawerRows = await client.query<{ count: number }>(
+      `SELECT count(*)::int AS count
+       FROM public.shift_operations
+       WHERE reference_type = 'expense' AND reference_id = $1`,
+      [expenseId],
+    );
+    expect(bankDrawerRows.rows[0]?.count).toBe(0);
+
+    const expectedAfterBank = await client.query<{ amount: string }>(
+      `SELECT public._compute_shift_expected_cash($1)::text AS amount`,
+      [ids.shiftA],
+    );
+    expect(expectedAfterBank.rows[0]?.amount).toBe(expectedBefore.rows[0]?.amount);
+  });
+
+  it('deducts only same-branch branch_cash expenses from the shift drawer', async (ctx) => {
+    if (!impersonationAvailable) return ctx.skip();
+    expect(treasuryBranchCashA).toBeTruthy();
+
+    const before = await client.query<{ amount: string }>(
+      `SELECT public._compute_shift_expected_cash($1)::text AS amount`,
+      [ids.shiftA],
+    );
+
+    const result = await runAsPersist(
+      client,
+      ids.users.super_admin,
+      `SELECT public.post_shift_expense($1,$2,$3,'supplies','Branch cash expense',30,'cash',$4,$5,CURRENT_DATE,'integration') AS r`,
+      [`branch-cash-${randomUUID()}`, ids.branchA, ids.shiftA, expenseAccountId, treasuryBranchCashA],
+    );
+    expect(result.error).toBeUndefined();
+    const payload = result.rows[0].r as RpcPayload & { affects_shift_cash?: boolean };
+    expect(payload).toMatchObject({ success: true, affects_shift_cash: true });
+    const expenseId = String(payload.expense_id);
+
+    const drawerRows = await client.query<{ count: number }>(
+      `SELECT count(*)::int AS count
+       FROM public.shift_operations
+       WHERE reference_type = 'expense' AND reference_id = $1 AND operation_type = 'expense'`,
+      [expenseId],
+    );
+    expect(drawerRows.rows[0]?.count).toBe(1);
+
+    const after = await client.query<{ amount: string }>(
+      `SELECT public._compute_shift_expected_cash($1)::text AS amount`,
+      [ids.shiftA],
+    );
+    expect(Number(after.rows[0]?.amount)).toBeCloseTo(Number(before.rows[0]?.amount) - 30, 2);
+
+    const reversed = await runAsPersist(
+      client,
+      ids.users.super_admin,
+      `SELECT public.reverse_shift_expense($1,'cleanup branch cash integration expense') AS r`,
+      [expenseId],
+    );
+    expect(reversed.rows[0].r).toMatchObject({ success: true, already_reversed: false, affects_shift_cash: true });
+
+    const restored = await client.query<{ amount: string }>(
+      `SELECT public._compute_shift_expected_cash($1)::text AS amount`,
+      [ids.shiftA],
+    );
+    expect(Number(restored.rows[0]?.amount)).toBeCloseTo(Number(before.rows[0]?.amount), 2);
   });
 
   it('reverses an expense once and preserves the original posting', async (ctx) => {
@@ -99,6 +180,14 @@ describe.skipIf(!dbUrl)('shift/day close and expense GL contract', () => {
       [expenseId],
     );
     expect(rows.rows[0]).toEqual({ status: 'voided', entries: 1 });
+
+    const reversalDrawerRows = await client.query<{ count: number }>(
+      `SELECT count(*)::int AS count
+       FROM public.shift_operations
+       WHERE reference_type = 'expense_reversal' AND reference_id = $1`,
+      [expenseId],
+    );
+    expect(reversalDrawerRows.rows[0]?.count).toBe(0);
   });
 
   it('blocks cross-branch expense posting for a branch user', async (ctx) => {
