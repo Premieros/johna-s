@@ -119,10 +119,10 @@ export function ReportFilterBar({
                 <option value="today">{lang === 'ar' ? 'اليوم' : 'Today'}</option>
                 <option value="yesterday">{lang === 'ar' ? 'أمس' : 'Yesterday'}</option>
                 <option value="last7">{lang === 'ar' ? 'آخر 7 أيام' : 'Last 7 days'}</option>
-                {history.unlimited && <option value="last30">{lang === 'ar' ? 'آخر 30 يومًا' : 'Last 30 days'}</option>}
-                {history.unlimited && <option value="this_month">{lang === 'ar' ? 'هذا الشهر' : 'This month'}</option>}
-                {history.unlimited && <option value="last_month">{lang === 'ar' ? 'الشهر الماضي' : 'Last month'}</option>}
-                {history.unlimited && <option value="this_year">{lang === 'ar' ? 'هذه السنة' : 'This year'}</option>}
+                <option value="last30">{lang === 'ar' ? 'آخر 30 يومًا' : 'Last 30 days'}</option>
+                <option value="this_month">{lang === 'ar' ? 'هذا الشهر' : 'This month'}</option>
+                <option value="last_month">{lang === 'ar' ? 'الشهر الماضي' : 'Last month'}</option>
+                <option value="this_year">{lang === 'ar' ? 'هذه السنة' : 'This year'}</option>
               </select>
             </div>
           )}
