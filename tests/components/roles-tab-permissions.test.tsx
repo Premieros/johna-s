@@ -100,6 +100,8 @@ describe('RolesTab permission controls', () => {
       'pos.view',
       'pos.order.create',
       'pos.payment.take',
+      // Intentionally incomplete capability: kds_update requires kds_view.
+      'pos.kds_update',
     ]);
     state.saveRole.mockReset();
     state.saveRole.mockResolvedValue(true);
@@ -117,6 +119,7 @@ describe('RolesTab permission controls', () => {
 
     expect(screen.getAllByText('مشرف الصالة').length).toBeGreaterThan(0);
     expect(screen.queryByText('تغيير سعر البيع من نقطة البيع')).not.toBeInTheDocument();
+    expect(screen.queryByText('تحديث حالة طلبات المطبخ')).not.toBeInTheDocument();
 
     const createOrder = checkboxFor('إنشاء طلب من نقطة البيع');
     expect(createOrder).not.toBeChecked();
