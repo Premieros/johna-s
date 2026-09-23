@@ -73,12 +73,38 @@ CREATE INDEX IF NOT EXISTS idx_supplier_payments_treasury_account
 ALTER TABLE public.treasury_transactions
   ADD COLUMN IF NOT EXISTS organization_id uuid
     REFERENCES public.organizations(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS from_branch_id uuid
+    REFERENCES public.branches(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS to_branch_id uuid
+    REFERENCES public.branches(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS reference_type text,
   ADD COLUMN IF NOT EXISTS reference_id uuid;
+
+UPDATE public.treasury_transactions tx
+SET
+  organization_id = COALESCE(tx.organization_id, b.organization_id),
+  from_branch_id = COALESCE(
+    tx.from_branch_id,
+    (SELECT ta.branch_id FROM public.treasury_accounts ta WHERE ta.id = tx.from_account_id)
+  ),
+  to_branch_id = COALESCE(
+    tx.to_branch_id,
+    (SELECT ta.branch_id FROM public.treasury_accounts ta WHERE ta.id = tx.to_account_id)
+  )
+FROM public.branches b
+WHERE b.id = tx.branch_id;
 
 CREATE INDEX IF NOT EXISTS idx_treasury_transactions_reference
   ON public.treasury_transactions(reference_type, reference_id)
   WHERE reference_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_from_branch
+  ON public.treasury_transactions(from_branch_id, created_at DESC)
+  WHERE from_branch_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_to_branch
+  ON public.treasury_transactions(to_branch_id, created_at DESC)
+  WHERE to_branch_id IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- Accounting structure: internal treasury clearing per branch.
@@ -354,6 +380,7 @@ BEGIN
         'account_type', t.account_type,
         'account_name', t.account_name,
         'account_number', t.account_number,
+        'code', a.code,
         'is_primary', t.is_primary,
         'balance', round(
           COALESCE(t.opening_balance, 0)
@@ -363,6 +390,7 @@ BEGIN
       ) AS payload
     FROM public.treasury_accounts t
     JOIN public.branches b ON b.id = t.branch_id
+    JOIN public.chart_of_accounts a ON a.id = t.account_id
     LEFT JOIN public.journal_entry_lines l ON l.account_id = t.account_id
     WHERE t.is_active
       AND (
@@ -381,7 +409,7 @@ BEGIN
       )
     GROUP BY
       t.id, t.branch_id, b.name, t.organization_id, t.scope, t.kind,
-      t.account_type, t.account_name, t.account_number, t.is_primary,
+      t.account_type, t.account_name, t.account_number, a.code, t.is_primary,
       t.opening_balance
   ) s;
 
@@ -628,10 +656,12 @@ BEGIN
 
   INSERT INTO public.treasury_transactions (
     branch_id, organization_id, transaction_type, from_account_id,
+    from_branch_id, to_branch_id,
     amount, reference_number, notes, created_by, reference_type, reference_id
   )
   VALUES (
     p_branch_id, v_supplier_org, 'withdrawal', v_source.id,
+    v_source.branch_id, NULL,
     round(p_amount, 2), v_number,
     COALESCE(p_notes, 'سداد مورد ' || v_number),
     auth.uid(), 'supplier_payment', v_payment_id
@@ -924,7 +954,9 @@ BEGIN
 
   INSERT INTO public.treasury_transactions (
     branch_id, organization_id, transaction_type,
-    from_account_id, to_account_id, amount,
+    from_account_id, to_account_id,
+    from_branch_id, to_branch_id,
+    amount,
     reference_number, notes, created_by,
     reference_type
   )
@@ -934,6 +966,8 @@ BEGIN
     'transfer',
     v_from.id,
     v_to.id,
+    v_from.branch_id,
+    v_to.branch_id,
     round(p_amount, 2),
     v_number,
     p_notes,
@@ -1051,6 +1085,53 @@ $function$;
 REVOKE ALL ON FUNCTION public.process_treasury_transfer_v2(uuid,uuid,numeric,text)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.process_treasury_transfer_v2(uuid,uuid,numeric,text)
+  TO authenticated, service_role;
+
+
+-- Compatibility path: legacy same-branch transfer callers also inherit the
+-- balance guard and cross-branch-safe implementation.
+CREATE OR REPLACE FUNCTION public.process_transfer(
+  p_branch_id uuid,
+  p_from_account_id uuid,
+  p_to_account_id uuid,
+  p_amount numeric,
+  p_notes text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_from_branch uuid;
+BEGIN
+  SELECT branch_id
+    INTO v_from_branch
+  FROM public.treasury_accounts
+  WHERE id = p_from_account_id;
+
+  IF v_from_branch IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'TREASURY_ACCOUNT_NOT_FOUND');
+  END IF;
+
+  IF p_branch_id IS NOT NULL
+     AND p_branch_id <> v_from_branch
+     AND NOT public.user_may_access_branch(v_from_branch) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+  END IF;
+
+  RETURN public.process_treasury_transfer_v2(
+    p_from_account_id,
+    p_to_account_id,
+    p_amount,
+    p_notes
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.process_transfer(uuid,uuid,uuid,numeric,text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.process_transfer(uuid,uuid,uuid,numeric,text)
   TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
