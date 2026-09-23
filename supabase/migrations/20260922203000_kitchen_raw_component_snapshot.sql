@@ -353,6 +353,8 @@ DECLARE
   v_oversold jsonb := '[]'::jsonb;
   v_total_cost numeric(18,6) := 0;
   v_count integer := 0;
+  v_fallback_raw_id uuid;
+  v_fallback_raw_name text;
 BEGIN
   IF p_quantity IS NULL OR p_quantity <= 0 THEN
     RETURN jsonb_build_object(
@@ -387,11 +389,41 @@ BEGIN
   WHERE abs(required_qty) > 0.000001;
 
   IF v_count = 0 THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error', 'ORDER_ITEM_CONFIGURATION_INVALID',
-      'detail', 'NO_RAW_COMPONENTS'
+    -- Business rule: an unconfigured sellable product is still valid.
+    -- Materialize one branch-scoped fallback raw with the product name and
+    -- consume it directly. Because FIFO allows debt, the resulting raw balance
+    -- becomes negative when no stock exists.
+    v_fallback_raw_id := public._ensure_pos_fallback_product_raw(
+      p_product_id,
+      p_branch_id
     );
+
+    SELECT rm.name
+    INTO v_fallback_raw_name
+    FROM public.raw_materials rm
+    WHERE rm.id = v_fallback_raw_id
+      AND rm.branch_id = p_branch_id
+      AND rm.is_active = true;
+
+    IF v_fallback_raw_id IS NULL OR v_fallback_raw_name IS NULL THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'ORDER_ITEM_CONFIGURATION_INVALID',
+        'detail', 'FALLBACK_RAW_CREATE_FAILED'
+      );
+    END IF;
+
+    INSERT INTO pg_temp.kitchen_raw_need(
+      raw_material_id,
+      raw_name,
+      required_qty
+    ) VALUES (
+      v_fallback_raw_id,
+      v_fallback_raw_name,
+      round(p_quantity, 6)
+    );
+
+    v_count := 1;
   END IF;
 
   IF EXISTS (
