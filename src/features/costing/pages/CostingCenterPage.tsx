@@ -161,8 +161,8 @@ export function CostingCenterPage() {
       show(res.error.message, 'error');
       return;
     }
-    setRawHistory((res.data || []).filter((row) => history.unlimited || !history.minIso || row.priced_at >= history.minIso));
-  }, [show, history.unlimited, history.minIso]);
+    setRawHistory(res.data || []);
+  }, [show]);
 
   useEffect(() => { void loadBranches(); }, [loadBranches]);
   useEffect(() => { void loadSuppliers(); }, [loadSuppliers]);
