@@ -121,7 +121,7 @@ export function InventoryLedgerPage() {
       }
 
       const fetched: LedgerRow[] = (data || []).map((row: LedgerRpcRow) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
-      const page: LedgerRow[] = fetched.slice(0, PAGE_SIZE);
+      const page = fetched.slice(0, PAGE_SIZE);
       const more = fetched.length > PAGE_SIZE;
 
       setRows((prev) => {
