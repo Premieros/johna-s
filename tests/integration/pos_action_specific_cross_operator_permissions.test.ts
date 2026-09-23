@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { canImpersonate, runAs, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 import { getDbUrl, openDb } from './db';
@@ -124,6 +125,7 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
        ) VALUES($1,$2,$3,50,10)`,
       [unitId, ids.branchA, ids.whA],
     );
+    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 50, 10);
     await client.query(`UPDATE public.settings SET tax_enabled=false,tax_rate=0`);
   });
 
