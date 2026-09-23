@@ -18,6 +18,12 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
     imp = await canImpersonate(client);
+
+    await client.query(
+      `UPDATE public.roles
+       SET permissions = permissions || '["settings.manage","history.unlimited"]'::jsonb
+       WHERE role = 'branch_manager'`,
+    );
   });
 
   afterAll(async () => {
@@ -33,52 +39,71 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
       await fn();
     });
 
-  guarded('only super_admin can read the policy RPC', async () => {
-    const superResult = await runAs(
+  guarded('policy administration follows settings.manage rather than a role name', async () => {
+    const managerResult = await runAs(
       client,
-      ids.users.super_admin,
+      ids.users.branch_manager,
       'SELECT public.get_financial_visibility_settings() AS settings',
     );
-    const ownerResult = await runAs(
+    const cashierResult = await runAs(
       client,
-      ids.users.owner,
+      ids.users.cashier,
       'SELECT public.get_financial_visibility_settings() AS settings',
     );
 
-    expect(superResult.error).toBeUndefined();
-    expect(superResult.rows[0].settings).toMatchObject({ success: true, recent_days: 7, historical_percent: 30 });
-    expect(ownerResult.error).toBeUndefined();
-    expect(ownerResult.rows[0].settings).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
+    expect(managerResult.error).toBeUndefined();
+    expect(managerResult.rows[0].settings).toMatchObject({ success: true, recent_days: 7, historical_percent: 30 });
+    expect(cashierResult.error).toBeUndefined();
+    expect(cashierResult.rows[0].settings).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
   });
 
-  guarded('only super_admin can update the policy', async () => {
-    const ownerResult = await runAs(
-      client,
-      ids.users.owner,
-      'SELECT public.update_financial_visibility_settings(14, 55) AS result',
-    );
-    expect(ownerResult.error).toBeUndefined();
-    expect(ownerResult.rows[0].result).toMatchObject({ success: false, error: 'PERMISSION_DENIED' });
-
-    const superResult = await runAs(
-      client,
-      ids.users.super_admin,
-      'SELECT public.update_financial_visibility_settings(14, 55) AS result',
-    );
-    expect(superResult.error).toBeUndefined();
-    expect(superResult.rows[0].result).toMatchObject({ success: true, recent_days: 14, historical_percent: 55 });
-  });
-
-  guarded('financial history remains complete regardless of legacy sampling settings', async () => {
-    const rowId = randomUUID();
+  guarded('history.unlimited is the only historical visibility bypass', async () => {
+    const oldRow = randomUUID();
 
     const setAllHidden = await runAsPersist(
       client,
-      ids.users.super_admin,
+      ids.users.branch_manager,
       'SELECT public.update_financial_visibility_settings(7, 0) AS result',
     );
     expect(setAllHidden.error).toBeUndefined();
     expect(setAllHidden.rows[0].result).toMatchObject({ success: true, recent_days: 7, historical_percent: 0 });
+
+    const managerOld = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
+      [oldRow, ids.branchA],
+    );
+    const cashierOld = await runAs(
+      client,
+      ids.users.cashier,
+      `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
+      [oldRow, ids.branchA],
+    );
+    const cashierRecent = await runAs(
+      client,
+      ids.users.cashier,
+      `SELECT private.financial_row_visible($1::uuid, $2::uuid, now()) AS allowed`,
+      [randomUUID(), ids.branchA],
+    );
+
+    expect(managerOld.error).toBeUndefined();
+    expect(managerOld.rows[0].allowed).toBe(true);
+    expect(cashierOld.error).toBeUndefined();
+    expect(cashierOld.rows[0].allowed).toBe(false);
+    expect(cashierRecent.error).toBeUndefined();
+    expect(cashierRecent.rows[0].allowed).toBe(true);
+  });
+
+  guarded('configured historical percentage is deterministic and branch scoped', async () => {
+    const rowId = randomUUID();
+
+    const setAllVisible = await runAsPersist(
+      client,
+      ids.users.branch_manager,
+      'SELECT public.update_financial_visibility_settings(7, 100) AS result',
+    );
+    expect(setAllVisible.error).toBeUndefined();
 
     const ownBranch = await runAs(
       client,
@@ -86,23 +111,23 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
       `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
       [rowId, ids.branchA],
     );
-    expect(ownBranch.error).toBeUndefined();
-    expect(ownBranch.rows[0].allowed).toBe(true);
-
     const otherBranch = await runAs(
       client,
       ids.users.cashier,
       `SELECT private.financial_row_visible($1::uuid, $2::uuid, now() - interval '30 days') AS allowed`,
       [rowId, ids.branchB],
     );
+
+    expect(ownBranch.error).toBeUndefined();
+    expect(ownBranch.rows[0].allowed).toBe(true);
     expect(otherBranch.error).toBeUndefined();
     expect(otherBranch.rows[0].allowed).toBe(false);
   });
 
-  guarded('active orders remain fully visible even with zero historical percentage', async () => {
+  guarded('active orders remain visible inside the branch even when historical percentage is zero', async () => {
     const setAllHidden = await runAsPersist(
       client,
-      ids.users.super_admin,
+      ids.users.branch_manager,
       'SELECT public.update_financial_visibility_settings(7, 0) AS result',
     );
     expect(setAllHidden.error).toBeUndefined();
