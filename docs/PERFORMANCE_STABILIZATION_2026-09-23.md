@@ -151,3 +151,38 @@ Read-only Production measurements:
 - Integration contract added to prevent per-row history-bound regression.
 - No receipt, printer-agent, kitchen-routing, `send_to_kitchen`, or POS inventory behavior changes.
 - Production migration status: **NOT APPLIED**. Full Verify green + explicit approval are required before any Production application.
+
+
+## Stage C measurement update — raw material cost overview
+
+Production read-only measurements after PR #334 deployment:
+
+- Active UI caller confirmed in `CostingCenterPage.tsx` through `getRawMaterialCostOverview`.
+- Historical PostgREST stats for `get_raw_material_cost_overview`:
+  - calls: 19
+  - mean: ~1347.58 ms
+  - max: ~7838.51 ms
+- Current authenticated Production measurement:
+  - first observed cold run: ~1076 ms
+  - warm reruns: ~85.5 ms, ~77.8 ms, ~79.8 ms
+- Root cause isolated:
+  - per-material `user_may_access_branch(rm.branch_id)`: ~117 ms for 402 active Cleopatra materials
+  - equivalent single branch gate: ~2 ms
+- Full equivalent query with an `accessible_branches AS MATERIALIZED` gate:
+  - ~36.2 ms for the same 402 rows
+- Exact correctness proof on Production data:
+  - Cleopatra: 402 rows, current hash = optimized hash
+  - all accessible branches for the tested authorized user: 803 rows, current hash = optimized hash
+- Security semantics preserved:
+  - AUTH_REQUIRED unchanged
+  - `reports.costing` permission unchanged
+  - explicit inaccessible branch still raises BRANCH_MISMATCH
+  - all-branch mode still filters through `user_may_access_branch`
+  - SECURITY DEFINER/search_path/grants unchanged
+- Printing, printer agents, kitchen routing, `send_to_kitchen`, and POS sale/inventory behavior remain untouched.
+
+Development branch:
+`development/performance-raw-cost-branch-gate`
+
+Production migration status:
+**NOT APPLIED**. Full Verify + explicit approval are required before Production.
