@@ -19,9 +19,11 @@ describe('permission UI wiring', () => {
     expect(src).toContain("can('roles.permissions.manage')");
     expect(src).toContain('const canGrantPermission');
     expect(src).toContain('isPlatformAdmin || can(permission)');
+    expect(src).toContain('const canOfferPermission');
+    expect(src).toContain('expandPermissionDependencies([permission]).every((required) => canGrantPermission(required))');
     expect(src).toContain('const currentHasUnownedPermissions = unavailablePermissions.length > 0');
     expect(src).toContain('const canEditCurrent = mayEditRole(currentRole) && !currentHasUnownedPermissions');
-    expect(src).toContain('.filter((permission) => isPlatformAdmin || canGrantPermission(permission))');
+    expect(src).toContain('.filter((permission) => canOfferPermission(permission))');
     expect(src).toContain("role.scope === 'branch' && branchIsVisible(role.branch_id)");
     expect(src).not.toContain('!canEditCurrent || (!checked && !grantable)');
   });
