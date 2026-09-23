@@ -10,6 +10,22 @@ const state = vi.hoisted(() => ({
   show: vi.fn(),
   logAudit: vi.fn(),
   userRole: 'manager_custom',
+  rolePermissionsMap: {
+    floor_supervisor: ['pos.view'],
+  },
+  roleMeta: {
+    floor_supervisor: { ar: 'مشرف الصالة', en: 'Floor Supervisor' },
+  },
+  rolesList: [{
+    role: 'floor_supervisor',
+    name_ar: 'مشرف الصالة',
+    name_en: 'Floor Supervisor',
+    scope: 'branch',
+    branch_id: 'branch-1',
+    description_ar: '',
+    description_en: '',
+    permissions: ['pos.view'],
+  }],
 }));
 
 vi.mock('@/context/LanguageContext', () => ({
@@ -58,22 +74,9 @@ vi.mock('@/lib/permissions', async () => {
 
 vi.mock('@/context/RolesContext', () => ({
   useRoles: () => ({
-    rolePermissionsMap: {
-      floor_supervisor: ['pos.view'],
-    },
-    roleMeta: {
-      floor_supervisor: { ar: 'مشرف الصالة', en: 'Floor Supervisor' },
-    },
-    rolesList: [{
-      role: 'floor_supervisor',
-      name_ar: 'مشرف الصالة',
-      name_en: 'Floor Supervisor',
-      scope: 'branch',
-      branch_id: 'branch-1',
-      description_ar: '',
-      description_en: '',
-      permissions: ['pos.view'],
-    }],
+    rolePermissionsMap: state.rolePermissionsMap,
+    roleMeta: state.roleMeta,
+    rolesList: state.rolesList,
     loading: false,
     saveRole: state.saveRole,
     createRole: state.createRole,
