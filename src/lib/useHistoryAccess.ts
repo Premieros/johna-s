@@ -10,8 +10,9 @@ export const LIMITED_HISTORY_DAYS = 7;
 export function clampHistoryRange(
   from: string | null | undefined,
   to: string | null | undefined,
-  _unlimited: boolean,
+  unlimited: boolean,
 ): { from: string; to: string; clamped: boolean } {
+  void unlimited;
   return {
     from: from || '',
     to: to || '',
