@@ -221,9 +221,9 @@ LANGUAGE sql
 STABLE
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT NULL::date;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.history_clamp_from(p_from date)
 RETURNS date
@@ -231,9 +231,9 @@ LANGUAGE sql
 STABLE
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT p_from;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.history_clamp_to(p_to date)
 RETURNS date
@@ -241,9 +241,9 @@ LANGUAGE sql
 STABLE
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT p_to;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.history_clamp_as_of(p_as_of date)
 RETURNS date
@@ -251,9 +251,9 @@ LANGUAGE sql
 STABLE
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT COALESCE(p_as_of, public.history_business_date());
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.history_min_instant()
 RETURNS timestamptz
@@ -261,9 +261,9 @@ LANGUAGE sql
 STABLE
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT NULL::timestamptz;
-$;
+$$;
 
 -- Tables that previously relied on UI-only seven-day filtering now enforce the
 -- same permission-first sampling contract at RLS.
@@ -346,7 +346,7 @@ LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 DECLARE
   v_search text := NULLIF(btrim(COALESCE(p_search,'')),'');
   v_limit integer := LEAST(GREATEST(COALESCE(p_limit,51),1),51);
@@ -417,7 +417,7 @@ BEGIN
   ORDER BY il.created_at DESC, il.id DESC
   LIMIT v_limit;
 END;
-$;
+$$;
 
 -- SECURITY DEFINER historical/reporting RPCs apply deterministic sampling
 -- explicitly so widening the selectable date range never leaks full history.
@@ -436,7 +436,7 @@ RETURNS TABLE(
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
   IF NOT public.can_permission('waste.report') THEN RAISE EXCEPTION 'PERMISSION_DENIED:waste.report'; END IF;
@@ -454,7 +454,7 @@ BEGIN
   GROUP BY wc.name,we.waste_type
   ORDER BY sum(we.total_cost) DESC;
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.get_cost_history(p_product_id uuid, p_limit integer DEFAULT 50)
 RETURNS TABLE(
@@ -470,7 +470,7 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT
     ch.id,
     ch.product_id,
@@ -490,7 +490,7 @@ AS $
     AND private.financial_row_visible(ch.id, p.branch_id, ch.changed_at)
   ORDER BY ch.changed_at DESC
   LIMIT GREATEST(LEAST(COALESCE(p_limit, 50), 500), 1)
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.get_raw_material_cost_history(
   p_raw_material_id uuid,
@@ -515,7 +515,7 @@ LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 DECLARE
   v_material_branch uuid;
 BEGIN
@@ -591,7 +591,7 @@ BEGIN
     e.event_id DESC
   LIMIT GREATEST(LEAST(COALESCE(p_limit, 100), 500), 1);
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.get_supplier_price_impact(p_supplier_id uuid)
 RETURNS TABLE(
@@ -609,7 +609,7 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
   SELECT
     p.id,
     'product'::text,
@@ -660,7 +660,7 @@ AS $
     AND private.financial_row_visible(pc.id, pc.branch_id, pc.created_at)
   GROUP BY rm.id
   ORDER BY 2, 3
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.history_min_date() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.history_clamp_from(date) FROM PUBLIC, anon;
