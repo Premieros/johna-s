@@ -94,8 +94,12 @@ jobs:
               continue
             fi
 
-            has_open_pr "$branch"
-            open_rc=$?
+            open_rc=0
+            if has_open_pr "$branch"; then
+              open_rc=0
+            else
+              open_rc=$?
+            fi
             if [[ $open_rc -eq 0 ]]; then
               echo "$branch | has open PR" >> "$kept_active_file"
               continue
@@ -115,8 +119,12 @@ jobs:
               continue
             fi
 
-            branch_prs_touch_printing "$branch"
-            print_rc=$?
+            print_rc=0
+            if branch_prs_touch_printing "$branch"; then
+              print_rc=0
+            else
+              print_rc=$?
+            fi
             if [[ $print_rc -eq 0 ]]; then
               echo "$branch | protected because merged PR touched print-related files" >> "$kept_print_file"
               continue
