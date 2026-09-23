@@ -20,12 +20,14 @@ describe('system-wide duplicate query reduction contract', () => {
     expect(coordinator).toContain("request.headers.get('authorization')");
   });
 
-  it('returns list rows and their exact total in one paginated request', () => {
+  it('keeps list paging bounded without exact-count scans', () => {
     const hook = read('src/hooks/usePaginatedRows.ts');
 
-    expect(hook).toContain("select(select, { count: 'exact' })");
-    expect(hook).toContain('buildDataQuery(0, pageSize - 1, true)');
-    expect(hook).not.toContain("select('id', { count: 'exact', head: true })");
+    expect(hook).not.toContain("count: 'exact'");
+    expect(hook).not.toContain("head: true");
+    expect(hook).toContain('pageSize = 50');
+    expect(hook).toContain('buildDataQuery(0, pageSize)');
+    expect(hook).toContain('fetched.length > pageSize');
   });
 
   it('reuses the shared branch/settings sources in POS instead of querying them again', () => {
