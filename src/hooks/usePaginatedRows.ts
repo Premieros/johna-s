@@ -24,7 +24,7 @@ export interface PaginatedQueryOptions {
   search?: { term: string; columns: string[] };
   /** Optional lower-bound filter, used by centralized historical-data access. */
   min?: { column: string; value: string };
-  /** Rows fetched per HTTP request. Default 200. */
+  /** Rows exposed per page. The hook fetches one extra row to detect hasMore. Default 50. */
   pageSize?: number;
   /** Set to false to keep the hook idle (e.g. no branch selected yet). Default true. */
   enabled?: boolean;
@@ -52,7 +52,7 @@ function safeSearchTerm(value: string): string {
 }
 
 export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRowsResult<T> {
-  const { table, select = '*', order, branch_id, or, filters, search, min, pageSize = 200, enabled = true } = opts;
+  const { table, select = '*', order, branch_id, or, filters, search, min, pageSize = 50, enabled = true } = opts;
   const filterKey = JSON.stringify(filters ?? []);
   const searchKey = JSON.stringify({ term: search?.term ?? '', columns: search?.columns ?? [] });
   const orderKey = order?.column ?? '';
@@ -63,6 +63,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const gen = useRef(0);
 
   const applyFilters = useCallback(
@@ -85,17 +86,14 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   );
 
   const buildDataQuery = useCallback(
-    (from: number, to: number, includeCount = false): FilterBuilder => {
+    (from: number, to: number): FilterBuilder => {
       // `table` and `select` are intentionally dynamic in this generic hook.
       // Narrow the Supabase overload to the filter-builder shape once here so
       // TypeScript does not recursively instantiate schema-string error types.
       const source = supabase.from(table) as unknown as {
-        select: (columns: string, options?: { count?: 'exact'; head?: boolean }) => FilterBuilder;
+        select: (columns: string) => FilterBuilder;
       };
-      const baseQuery = includeCount
-        ? source.select(select, { count: 'exact' })
-        : source.select(select);
-      let q = applyFilters(baseQuery);
+      let q = applyFilters(source.select(select));
       if (order) q = q.order(order.column, { ascending: orderAsc });
       return q.range(from, to);
     },
@@ -108,18 +106,22 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     setLoading(true);
     setError(null);
     try {
-      // PostgREST can return the page and exact total count in one response.
-      // Avoid the historical second HEAD/count query for every list page.
-      const { data, error: err, count } = await buildDataQuery(0, pageSize - 1, true);
+      // Fetch one extra row instead of asking Postgres/RLS for an exact count.
+      // This keeps first paint bounded even on large or heavily protected tables.
+      const { data, error: err } = await buildDataQuery(0, pageSize);
       if (g !== gen.current) return;
       if (err) {
         setError(userFacingErrorMessage(err));
         setRows([]);
         setTotal(0);
+        setHasMore(false);
         return;
       }
-      setRows((data as T[]) || []);
-      setTotal(count ?? 0);
+      const page = ((data as T[]) || []).slice(0, pageSize);
+      const more = ((data as T[]) || []).length > pageSize;
+      setRows(page);
+      setHasMore(more);
+      setTotal(more ? null : page.length);
     } finally {
       if (g === gen.current) setLoading(false);
     }
@@ -130,13 +132,21 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     const g = gen.current;
     setLoadingMore(true);
     try {
-      const { data, error: err } = await buildDataQuery(rows.length, rows.length + pageSize - 1);
+      const { data, error: err } = await buildDataQuery(rows.length, rows.length + pageSize);
       if (g !== gen.current) return;
       if (err) {
         setError(userFacingErrorMessage(err));
         return;
       }
-      setRows((prev) => [...prev, ...((data as T[]) || [])]);
+      const fetched = (data as T[]) || [];
+      const page = fetched.slice(0, pageSize);
+      const more = fetched.length > pageSize;
+      setRows((prev) => {
+        const next = [...prev, ...page];
+        if (!more) setTotal(next.length);
+        return next;
+      });
+      setHasMore(more);
     } finally {
       if (g === gen.current) setLoadingMore(false);
     }
@@ -146,13 +156,12 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     if (!enabled) {
       setRows([]);
       setTotal(0);
+      setHasMore(false);
       setLoading(false);
       return;
     }
     refresh();
   }, [refresh, enabled]);
-
-  const hasMore = total !== null && rows.length < total;
 
   return { rows, setRows, loading, loadingMore, error, total, hasMore, loadMore, refresh };
 }
