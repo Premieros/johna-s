@@ -80,3 +80,35 @@ Replace pages that load a capped first page and then search/filter locally with 
 - Inventory Ledger initial request is bounded and no exact count is required.
 - Critical runtime paths have before/after evidence.
 - Full Verify green before merge.
+
+
+## Production read-only findings — 2026-09-23
+
+- pg_stat_statements is available.
+- inventory_ledger: ~12,985 rows, ~5.4 MB total relation size.
+- inventory_ledger already has branch+created_at plus single-column product/raw/warehouse/reference indexes.
+- Historical weighted/max timings:
+  - get_costing_overview: ~722 ms mean / 7,963 ms max
+  - get_raw_material_cost_overview: ~1,108 ms mean / 7,839 ms max
+  - get_income_statement: ~1,042 ms mean / 7,662 ms max
+  - send_to_kitchen: ~625 ms mean / 7,578 ms max
+  - get_pos_product_sellability: ~1,691 ms mean / 7,514 ms max
+  - create_order: ~306 ms mean / 7,014 ms max
+  - get_active_shift: ~80 ms mean / 6,556 ms max
+  - get_kitchen_queue: ~108 ms mean / 6,240 ms max
+- Current code has no src/ runtime callers for get_pos_product_sellability, check_pos_cart_availability, or check_product_availability. Treat these as legacy/compatibility for this stabilization; do not optimize them as POS startup paths.
+- Current read-only EXPLAIN on Cleopatra:
+  - get_costing_overview: ~841 ms for 498 rows.
+  - _raw_cost_events_for_costing: ~27 ms for 434 rows, so it is not the main costing bottleneck by itself.
+  - get_income_statement for 2026-09-01..2026-09-23: ~143 ms.
+- get_active_shift and get_kitchen_queue have low weighted means despite historical spikes; do not rewrite stable runtime paths without a reproducible current spike.
+- send_to_kitchen historical stats span multiple function versions. Keep the current kitchen/printing path frozen unless a current-version spike is reproduced.
+
+## Stage A implementation status
+
+- Shared usePaginatedRows exact count removed.
+- Shared default page size reduced from 200 to 50, using one-row lookahead for hasMore.
+- Inventory Ledger first page reduced to 50.
+- Inventory Ledger selection narrowed to required columns and relation names only.
+- Inventory Ledger branch and entry-type filters moved to the server.
+- Full server-side ledger search across reference/batch/product/raw names remains pending; do not claim local search is complete yet.
