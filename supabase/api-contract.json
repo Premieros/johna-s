@@ -392,6 +392,12 @@
       ]
     },
     {
+      "name": "get_accessible_treasury_accounts",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "get_active_shift",
       "params": [
         "branch_id"
@@ -716,6 +722,17 @@
       ]
     },
     {
+      "name": "pay_supplier_from_treasury",
+      "params": [
+        "amount",
+        "branch_id",
+        "notes",
+        "purchase_id",
+        "supplier_id",
+        "treasury_account_id"
+      ]
+    },
+    {
       "name": "perform_pos_order_action",
       "params": [
         "action_type",
@@ -848,6 +865,15 @@
         "amount",
         "branch_id",
         "notes"
+      ]
+    },
+    {
+      "name": "process_treasury_transfer_v2",
+      "params": [
+        "amount",
+        "from_account_id",
+        "notes",
+        "to_account_id"
       ]
     },
     {
