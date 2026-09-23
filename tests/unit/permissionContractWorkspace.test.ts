@@ -1,10 +1,37 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ALL_PERMISSIONS, OPERATIONAL_PERMISSION_SECTIONS } from '../../src/lib/permissionDefs';
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('permission contract workspace wiring', () => {
+  it('covers every canonical permission exactly once in operational display sections', () => {
+    const displayed = OPERATIONAL_PERMISSION_SECTIONS.flatMap((section) => section.permissions);
+    expect(new Set(displayed).size).toBe(displayed.length);
+    expect([...displayed].sort()).toEqual([...ALL_PERMISSIONS].sort());
+    expect(OPERATIONAL_PERMISSION_SECTIONS.map((section) => section.key)).toEqual([
+      'overview',
+      'pos',
+      'floor_plan',
+      'catalog',
+      'purchases',
+      'inventory',
+      'raw_recipes',
+      'production',
+      'customers',
+      'suppliers',
+      'expenses',
+      'sales',
+      'accounting',
+      'shifts',
+      'reports',
+      'users',
+      'approvals',
+      'settings',
+    ]);
+  });
+
   it('exposes a dedicated permission-managed route outside the Super Admin-only console', () => {
     const routes = read('src/app/routes.tsx');
     const routeDefs = read('src/core/navigation/routes.ts');
