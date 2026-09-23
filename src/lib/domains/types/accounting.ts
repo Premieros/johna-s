@@ -68,13 +68,83 @@ export interface TrialBalanceRow {
 
 export interface GeneralLedgerRow {
   line_id: string;
+  account_id?: string;
+  account_code?: string;
+  account_name?: string;
+  account_name_en?: string | null;
+  account_type?: AccountType;
   entry_date: string;
   entry_number: string;
+  reference_type?: string | null;
   description: string | null;
   reference_number: string | null;
+  note?: string | null;
   debit: number;
   credit: number;
   balance: number;
+}
+
+export interface TreasuryStatementRow {
+  line_id: number | string;
+  entry_date: string;
+  entry_number: string;
+  reference_type: string | null;
+  reference_number: string | null;
+  description: string | null;
+  note: string | null;
+  inflow: number;
+  outflow: number;
+  balance: number;
+}
+
+export interface TreasuryStatementResult {
+  treasury_account_id: string;
+  account_name: string;
+  account_number: string | null;
+  scope: TreasuryScope;
+  kind: TreasuryKind;
+  account_code: string;
+  from_date: string | null;
+  to_date: string | null;
+  opening_balance: number;
+  total_inflow: number;
+  total_outflow: number;
+  closing_balance: number;
+  rows: TreasuryStatementRow[];
+}
+
+export interface InventoryItemStatementRow {
+  id: number | string;
+  created_at: string;
+  entry_type: string;
+  reference_type: string | null;
+  reference_id: string | null;
+  reference_number: string | null;
+  batch_number: string | null;
+  warehouse_id: string | null;
+  warehouse_name: string | null;
+  quantity: number;
+  in_qty: number;
+  out_qty: number;
+  unit_cost: number;
+  total_cost: number;
+  before_qty: number | null;
+  after_qty: number | null;
+  balance: number;
+}
+
+export interface InventoryItemStatementResult {
+  item_type: 'product' | 'raw_material';
+  item_id: string;
+  item_name: string;
+  warehouse_id: string | null;
+  from_date: string | null;
+  to_date: string | null;
+  opening_quantity: number;
+  total_in: number;
+  total_out: number;
+  closing_quantity: number;
+  rows: InventoryItemStatementRow[];
 }
 
 export interface IncomeStatementResult {

@@ -45,7 +45,7 @@ export function PurchasesPage() {
   const { show } = useToast();
   const can = useCan();
   const navigate = useNavigate();
-  const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadPurchases } = usePaginatedRows<Purchase>({
+  const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadPurchases, fetchAll: fetchAllPurchases } = usePaginatedRows<Purchase>({
     table: 'purchases',
     select: '*, supplier:suppliers(*)',
     order: { column: 'created_at', ascending: false },
@@ -416,7 +416,10 @@ export function PurchasesPage() {
     })));
   };
 
-  const handleExport = () => exportToExcel(items.map((p) => ({ Invoice: p.invoice_number, Date: formatDate(p.created_at, lang), Supplier: (p as Purchase & { supplier?: Supplier }).supplier?.name || '', Total: p.total, Status: p.status })), 'purchases');
+  const handleExport = async () => {
+    const all = await fetchAllPurchases();
+    exportToExcel(all.map((p) => ({ Invoice: p.invoice_number, Date: formatDate(p.created_at, lang), Supplier: (p as Purchase & { supplier?: Supplier }).supplier?.name || '', Total: p.total, Status: p.status })), 'purchases');
+  };
 
   const changeOrderStatus = async (p: Purchase, status: string) => {
     const { data, error: err } = await api.procurement.updatePurchaseOrderStatus({ p_purchase_id: p.id, p_status: status });

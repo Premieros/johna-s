@@ -1,5 +1,5 @@
 import type { ApiResult } from '../types';
-import type { TrialBalanceRow, TrialBalanceSummary, GeneralLedgerRow, IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow, AgingSummaryResult, CashFlowRow, PartyStatementResult } from '@/lib/types';
+import type { TrialBalanceRow, TrialBalanceSummary, GeneralLedgerRow, IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow, AgingSummaryResult, CashFlowRow, PartyStatementResult, TreasuryStatementResult, InventoryItemStatementResult } from '@/lib/types';
 import { rpc } from '../rpc';
 
 export const reporting = {
@@ -13,4 +13,6 @@ export const reporting = {
   getAgingSummary(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<AgingSummaryResult> { return rpc('get_aging_summary', p); },
   getCashFlow(p: { p_branch_id: string | null; p_from_date: string; p_to_date: string }): ApiResult<CashFlowRow[]> { return rpc('get_cash_flow', p); },
   getPartyStatement(p: { p_branch_id: string | null; p_side: string; p_party_id: string | null; p_from_date: string | null; p_to_date: string | null }): ApiResult<PartyStatementResult> { return rpc('get_party_statement', p); },
+  getTreasuryAccountStatement(p: { p_branch_id: string; p_treasury_account_id: string; p_from_date: string; p_to_date: string }): ApiResult<TreasuryStatementResult> { return rpc('get_treasury_account_statement', p); },
+  getInventoryItemStatement(p: { p_branch_id: string; p_item_type: 'product' | 'raw_material'; p_item_id: string; p_warehouse_id: string | null; p_from_date: string | null; p_to_date: string | null }): ApiResult<InventoryItemStatementResult> { return rpc('get_inventory_item_statement', p); },
 };

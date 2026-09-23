@@ -40,7 +40,7 @@ export function ProductsPage() {
   const can = useCan();
   const branchFilter = useBranchFilter();
   const [search, setSearch] = useState('');
-  const { rows: products, loading, total, hasMore, loadMore, loadingMore, refresh: reloadProducts } = usePaginatedRows<Product>({
+  const { rows: products, loading, total, hasMore, loadMore, loadingMore, refresh: reloadProducts, fetchAll: fetchAllProducts } = usePaginatedRows<Product>({
     table: 'products',
     select: '*',
     order: { column: 'created_at', ascending: false },
@@ -247,7 +247,10 @@ export function ProductsPage() {
     reloadProducts();
   };
 
-  const handleExport = () => { exportToExcel(products.map(p => ({ Name: p.name, NameEn: p.name_en || '', Barcode: p.barcode || '', SKU: p.sku || '', ProductType: p.product_type || 'ready', CostPrice: p.cost_price, SalePrice: p.sale_price, WholesalePrice: p.wholesale_price, Category: productCategoryName(p), Active: p.is_active, LowStockThreshold: p.low_stock_threshold, MinStock: p.min_stock ?? 0, MaxStock: p.max_stock ?? 0, ReorderPoint: p.reorder_point ?? 0 })), 'products'); };
+  const handleExport = async () => {
+    const all = await fetchAllProducts();
+    exportToExcel(all.map(p => ({ Name: p.name, NameEn: p.name_en || '', Barcode: p.barcode || '', SKU: p.sku || '', ProductType: p.product_type || 'ready', CostPrice: p.cost_price, SalePrice: p.sale_price, WholesalePrice: p.wholesale_price, Category: productCategoryName(p), Active: p.is_active, LowStockThreshold: p.low_stock_threshold, MinStock: p.min_stock ?? 0, MaxStock: p.max_stock ?? 0, ReorderPoint: p.reorder_point ?? 0 })), 'products');
+  };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;

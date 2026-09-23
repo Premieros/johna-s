@@ -96,7 +96,7 @@ export function InventoryLedgerPage() {
     }
 
     try {
-      const { data, error: rpcError } = await rpc<LedgerRpcRow[]>('search_inventory_ledger', {
+      const result = await rpc<LedgerRpcRow[]>('search_inventory_ledger', {
         p_branch_id: branchId || null,
         p_entry_type: entryType === 'all' ? null : entryType,
         p_search: debouncedSearch || null,
@@ -108,6 +108,8 @@ export function InventoryLedgerPage() {
 
       if (generation !== requestGeneration.current) return;
 
+      const data: LedgerRpcRow[] | null = result.data;
+      const rpcError = result.error;
       if (rpcError) {
         setError(userFacingErrorMessage(rpcError, lang === 'ar' ? 'ar' : 'en'));
         if (reset) {
@@ -118,7 +120,7 @@ export function InventoryLedgerPage() {
         return;
       }
 
-      const fetched = (data || []).map((row) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
+      const fetched: LedgerRow[] = (data || []).map((row: LedgerRpcRow) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
       const page = fetched.slice(0, PAGE_SIZE);
       const more = fetched.length > PAGE_SIZE;
 
@@ -158,8 +160,39 @@ export function InventoryLedgerPage() {
 
   const branchName = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
 
-  const handleExport = () => {
-    exportToExcel(rows.map((r) => ({
+  const handleExport = async () => {
+    const all: LedgerRow[] = [];
+    let beforeCreatedAt: string | null = null;
+    let beforeId: number | null = null;
+
+    while (true) {
+      const result = await rpc<LedgerRpcRow[]>('search_inventory_ledger', {
+        p_branch_id: branchId || null,
+        p_entry_type: entryType === 'all' ? null : entryType,
+        p_search: debouncedSearch || null,
+        p_min_created_at: history.minIso || null,
+        p_before_created_at: beforeCreatedAt,
+        p_before_id: beforeId,
+        p_limit: PAGE_SIZE + 1,
+      });
+      const data: LedgerRpcRow[] | null = result.data;
+      const rpcError = result.error;
+      if (rpcError) {
+        setError(userFacingErrorMessage(rpcError, lang === 'ar' ? 'ar' : 'en'));
+        return;
+      }
+
+      const fetched: LedgerRow[] = (data || []).map((row: LedgerRpcRow) => ({ ...row, id: String(row.id), ledger_id: Number(row.id) }));
+      const page: LedgerRow[] = fetched.slice(0, PAGE_SIZE);
+      all.push(...page);
+      if (fetched.length <= PAGE_SIZE || page.length === 0) break;
+
+      const cursor: LedgerRow = page[page.length - 1];
+      beforeCreatedAt = cursor.created_at;
+      beforeId = cursor.ledger_id;
+    }
+
+    exportToExcel(all.map((r) => ({
       Date: r.created_at,
       Type: entryTypes.find((x) => x.key === r.entry_type)?.label || r.entry_type,
       Item: r.product_name || r.raw_material_name || '-',

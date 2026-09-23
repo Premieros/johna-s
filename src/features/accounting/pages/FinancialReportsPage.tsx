@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, BadgeAlert, Landmark, ArrowLeftRight, Receipt } from 'lucide-react';
+import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, BadgeAlert, Landmark, ArrowLeftRight, Receipt, WalletCards, PackageSearch } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -17,10 +17,10 @@ import type {
   TrialBalanceRow, GeneralLedgerRow, TrialBalanceSummary,
   IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow,
   AgingSummaryResult, CashFlowRow, PartyStatementResult,
-  Customer, Supplier, ChartOfAccount,
+  Customer, Supplier, ChartOfAccount, TreasuryStatementResult, InventoryItemStatementResult,
 } from '@/lib/types';
 
-type View = 'trial_balance' | 'ledger' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
+type View = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 
 export function FinancialReportsPage() {
   const { t, lang } = useLanguage();
@@ -30,7 +30,7 @@ export function FinancialReportsPage() {
   const history = useHistoryAccess();
 
   const requestedView = searchParams.get('view');
-  const validViews: View[] = ['trial_balance', 'ledger', 'income', 'balance_sheet', 'ar_aging', 'ap_aging', 'aging_summary', 'cash_flow', 'party_statement'];
+  const validViews: View[] = ['trial_balance', 'ledger', 'treasury_statement', 'inventory_movement', 'income', 'balance_sheet', 'ar_aging', 'ap_aging', 'aging_summary', 'cash_flow', 'party_statement'];
   const initialView = validViews.includes(requestedView as View) ? (requestedView as View) : 'trial_balance';
 
   const [view, setView] = useState<View>(initialView);
@@ -44,6 +44,13 @@ export function FinancialReportsPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [partySide, setPartySide] = useState<'ar' | 'ap'>('ar');
   const [partyId, setPartyId] = useState('');
+  const [treasuryAccounts, setTreasuryAccounts] = useState<{ id: string; account_name: string; kind: string; scope: string }[]>([]);
+  const [treasuryId, setTreasuryId] = useState('');
+  const [inventoryItemType, setInventoryItemType] = useState<'product' | 'raw_material'>('product');
+  const [inventoryItems, setInventoryItems] = useState<{ id: string; name: string }[]>([]);
+  const [inventoryItemId, setInventoryItemId] = useState('');
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
+  const [warehouseId, setWarehouseId] = useState('');
   const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
 
@@ -57,6 +64,8 @@ export function FinancialReportsPage() {
   const [agingSummary, setAgingSummary] = useState<AgingSummaryResult | null>(null);
   const [cashFlow, setCashFlow] = useState<CashFlowRow[]>([]);
   const [partyStmt, setPartyStmt] = useState<PartyStatementResult | null>(null);
+  const [treasuryStmt, setTreasuryStmt] = useState<TreasuryStatementResult | null>(null);
+  const [inventoryStmt, setInventoryStmt] = useState<InventoryItemStatementResult | null>(null);
 
   useEffect(() => {
     if (!effectiveBranchFilter) {
@@ -64,6 +73,12 @@ export function FinancialReportsPage() {
       setAccountId('');
       setCustomers([]);
       setSuppliers([]);
+      setTreasuryAccounts([]);
+      setTreasuryId('');
+      setInventoryItems([]);
+      setInventoryItemId('');
+      setWarehouses([]);
+      setWarehouseId('');
       return;
     }
 
@@ -77,6 +92,33 @@ export function FinancialReportsPage() {
           setAccounts((data as ChartOfAccount[]) || []);
           setAccountId((prev) => prev || (data?.[0]?.id as string) || '');
         });
+    }
+
+    if (view === 'treasury_statement') {
+      void supabase
+        .from('treasury_accounts')
+        .select('id, account_name, kind, scope')
+        .eq('branch_id', effectiveBranchFilter)
+        .eq('is_active', true)
+        .order('account_name')
+        .then(({ data }) => {
+          const rows = (data as { id: string; account_name: string; kind: string; scope: string }[]) || [];
+          setTreasuryAccounts(rows);
+          setTreasuryId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
+        });
+    }
+
+    if (view === 'inventory_movement') {
+      const table = inventoryItemType === 'product' ? 'products' : 'raw_materials';
+      void Promise.all([
+        supabase.from(table).select('id, name').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('name'),
+        supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('name'),
+      ]).then(([items, wh]) => {
+        const itemRows = (items.data as { id: string; name: string }[]) || [];
+        setInventoryItems(itemRows);
+        setInventoryItemId((prev) => itemRows.some((x) => x.id === prev) ? prev : (itemRows[0]?.id || ''));
+        setWarehouses((wh.data as { id: string; name: string }[]) || []);
+      });
     }
 
     if (view === 'party_statement') {
@@ -96,12 +138,12 @@ export function FinancialReportsPage() {
           .then(({ data }) => setSuppliers((data as Supplier[]) || []));
       }
     }
-  }, [effectiveBranchFilter, view, partySide]);
+  }, [effectiveBranchFilter, view, partySide, inventoryItemType]);
 
   const load = useCallback(async () => {
     if (!effectiveBranchFilter) {
       setTb([]); setTbSummary(null); setGl([]); setIncome(null); setSheet(null);
-      setArAging([]); setApAging([]); setAgingSummary(null); setCashFlow([]); setPartyStmt(null);
+      setArAging([]); setApAging([]); setAgingSummary(null); setCashFlow([]); setPartyStmt(null); setTreasuryStmt(null); setInventoryStmt(null);
       return;
     }
     setLoading(true);
@@ -141,6 +183,26 @@ export function FinancialReportsPage() {
           p_to_date: safeTo,
         });
         setGl((data as GeneralLedgerRow[]) || []);
+      } else if (view === 'treasury_statement') {
+        if (!treasuryId) { setTreasuryStmt(null); return; }
+        const { data } = await api.reporting.getTreasuryAccountStatement({
+          p_branch_id: effectiveBranchFilter,
+          p_treasury_account_id: treasuryId,
+          p_from_date: safeFrom,
+          p_to_date: safeTo,
+        });
+        setTreasuryStmt((data as TreasuryStatementResult) || null);
+      } else if (view === 'inventory_movement') {
+        if (!inventoryItemId) { setInventoryStmt(null); return; }
+        const { data } = await api.reporting.getInventoryItemStatement({
+          p_branch_id: effectiveBranchFilter,
+          p_item_type: inventoryItemType,
+          p_item_id: inventoryItemId,
+          p_warehouse_id: warehouseId || null,
+          p_from_date: safeFrom || null,
+          p_to_date: safeTo || null,
+        });
+        setInventoryStmt((data as InventoryItemStatementResult) || null);
       } else if (view === 'income') {
         const { data } = await api.reporting.getIncomeStatement( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo });
         setIncome((data as IncomeStatementResult) || null);
@@ -172,25 +234,29 @@ export function FinancialReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId, history.unlimited]);
+  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited]);
 
   useEffect(() => { load(); }, [load]);
 
   const views: { key: View; label: string; icon: React.ReactNode }[] = [
     { key: 'trial_balance', label: t('trialBalance'), icon: <Scale className="w-4 h-4" /> },
     { key: 'ledger', label: t('generalLedger'), icon: <BookOpen className="w-4 h-4" /> },
+    { key: 'treasury_statement', label: isAr ? 'كشف حساب بنك / خزنة' : 'Bank / Treasury Statement', icon: <WalletCards className="w-4 h-4" /> },
+    { key: 'inventory_movement', label: isAr ? 'حركة صنف' : 'Item Movement', icon: <PackageSearch className="w-4 h-4" /> },
     { key: 'income', label: t('incomeStatement'), icon: <TrendingUp className="w-4 h-4" /> },
     { key: 'balance_sheet', label: t('balanceSheet'), icon: <PieChart className="w-4 h-4" /> },
     { key: 'ar_aging', label: t('arAging'), icon: <Clock className="w-4 h-4" /> },
     { key: 'ap_aging', label: t('apAging'), icon: <Landmark className="w-4 h-4" /> },
     { key: 'aging_summary', label: t('agingSummary'), icon: <PieChart className="w-4 h-4" /> },
-    { key: 'cash_flow', label: t('cashFlow'), icon: <ArrowLeftRight className="w-4 h-4" /> },
+    { key: 'cash_flow', label: isAr ? 'ملخص حركة الخزائن والبنوك' : 'Treasury & Bank Movement Summary', icon: <ArrowLeftRight className="w-4 h-4" /> },
     { key: 'party_statement', label: t('partyStatement'), icon: <Receipt className="w-4 h-4" /> },
   ];
 
   const exportData = () => {
     if (view === 'trial_balance') exportToExcel(tb.map((r) => ({ Code: r.code, Name: isAr ? r.name : (r.name_en || r.name), Type: r.account_type, Debit: r.debit, Credit: r.credit, Balance: r.balance })), `trial_balance_${to}`);
     else if (view === 'ledger') exportToExcel(gl.map((r) => ({ Date: r.entry_date, Entry: r.entry_number, Description: r.description || '', Reference: r.reference_number || '', Debit: r.debit, Credit: r.credit, Balance: r.balance })), `general_ledger_${to}`);
+    else if (view === 'treasury_statement' && treasuryStmt) exportToExcel(treasuryStmt.rows.map((r) => ({ Date: r.entry_date, Entry: r.entry_number, Source: r.reference_type || '', Reference: r.reference_number || '', Description: r.description || r.note || '', Inflow: r.inflow, Outflow: r.outflow, Balance: r.balance })), `treasury_statement_${to}`);
+    else if (view === 'inventory_movement' && inventoryStmt) exportToExcel(inventoryStmt.rows.map((r) => ({ Date: r.created_at, Type: r.entry_type, Warehouse: r.warehouse_name || '', Reference: r.reference_number || '', Batch: r.batch_number || '', In: r.in_qty, Out: r.out_qty, Balance: r.balance, UnitCost: r.unit_cost, TotalCost: r.total_cost })), `inventory_movement_${to}`);
     else if (view === 'income' && income) exportToExcel([{ Item: t('revenue'), Amount: income.revenue }, { Item: t('grossProfit'), Amount: income.gross_profit }, { Item: t('netIncome'), Amount: income.net_income }], `income_statement_${to}`);
     else if (view === 'balance_sheet' && sheet) exportToExcel([{ Item: t('assets'), Amount: sheet.assets }, { Item: t('liabilities'), Amount: sheet.liabilities }, { Item: t('equity'), Amount: sheet.equity }], `balance_sheet_${to}`);
     else if (view === 'ar_aging') exportToExcel(arAging.map((r) => ({ Customer: r.name, Phone: r.phone || '', Open: r.open_amount, '0-30': r.bucket_0_30, '31-60': r.bucket_31_60, '61-90': r.bucket_61_90, '90+': r.bucket_90_plus })), `ar_aging_${to}`);
@@ -220,6 +286,24 @@ export function FinancialReportsPage() {
   const tbTotals = tb.reduce((acc, r) => ({ debit: acc.debit + Number(r.debit), credit: acc.credit + Number(r.credit) }), { debit: 0, credit: 0 });
 
   const partyList = partySide === 'ar' ? customers : suppliers;
+  const selectedLedgerAccount = accounts.find((a) => a.id === accountId);
+  const ledgerIsAsset = selectedLedgerAccount?.account_type === 'asset';
+  const movementLabel = (type: string | null | undefined) => {
+    const labels: Record<string, [string, string]> = {
+      sale: ['مبيعات', 'Sale'],
+      purchase: ['مشتريات', 'Purchase'],
+      expense: ['مصروف', 'Expense'],
+      expense_reversal: ['عكس مصروف', 'Expense reversal'],
+      customer_payment: ['تحصيل عميل', 'Customer payment'],
+      supplier_payment: ['سداد مورد', 'Supplier payment'],
+      treasury_transfer: ['تحويل خزينة', 'Treasury transfer'],
+      transfer: ['تحويل', 'Transfer'],
+      refund: ['مرتجع', 'Refund'],
+      manual: ['قيد يدوي', 'Manual journal'],
+    };
+    const pair = labels[String(type || '')];
+    return pair ? pair[isAr ? 0 : 1] : (type || '-');
+  };
 
   return (
     <DesignSurface testId="financial-reports-page">
@@ -236,13 +320,35 @@ export function FinancialReportsPage() {
             ))}
           </div>
           <div className="flex flex-wrap items-end gap-4">
-            {(view === 'ledger' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
-            <Input label={view === 'income' || view === 'ledger' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
+            {(view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
+            <Input label={view === 'income' || view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
             {view === 'ledger' && accounts.length > 0 && (
               <Select label={t('accountName')} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">{t('allAccounts')}</option>
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {isAr ? a.name : (a.name_en || a.name)}</option>)}
               </Select>
+            )}
+            {view === 'treasury_statement' && (
+              <Select label={isAr ? 'الحساب' : 'Account'} value={treasuryId} onChange={(e) => setTreasuryId(e.target.value)}>
+                <option value="">{isAr ? 'اختر البنك أو الخزنة' : 'Select bank or treasury'}</option>
+                {treasuryAccounts.map((a) => <option key={a.id} value={a.id}>{a.account_name} · {a.kind === 'bank' ? (isAr ? 'بنك' : 'Bank') : (isAr ? 'خزنة' : 'Cash')}</option>)}
+              </Select>
+            )}
+            {view === 'inventory_movement' && (
+              <>
+                <Select label={isAr ? 'نوع الصنف' : 'Item type'} value={inventoryItemType} onChange={(e) => { setInventoryItemType(e.target.value as 'product' | 'raw_material'); setInventoryItemId(''); }}>
+                  <option value="product">{isAr ? 'منتج' : 'Product'}</option>
+                  <option value="raw_material">{isAr ? 'خامة' : 'Raw material'}</option>
+                </Select>
+                <Select label={isAr ? 'الصنف' : 'Item'} value={inventoryItemId} onChange={(e) => setInventoryItemId(e.target.value)}>
+                  <option value="">{isAr ? 'اختر الصنف' : 'Select item'}</option>
+                  {inventoryItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </Select>
+                <Select label={t('warehouse')} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+                  <option value="">{isAr ? 'كل المخازن' : 'All warehouses'}</option>
+                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </Select>
+              </>
             )}
             {view === 'party_statement' && (
               <>
@@ -280,8 +386,8 @@ export function FinancialReportsPage() {
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('accountCode')}</th>
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('accountName')}</th>
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('accountType')}</th>
-                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('debit')}</th>
-                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('credit')}</th>
+                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{ledgerIsAsset ? (isAr ? 'وارد' : 'Inflow') : t('debit')}</th>
+                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{ledgerIsAsset ? (isAr ? 'منصرف' : 'Outflow') : t('credit')}</th>
                   <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('balance')}</th>
                 </tr>
               </thead>
@@ -340,6 +446,85 @@ export function FinancialReportsPage() {
               </tbody>
             </table>
           </div>
+        </Card>
+      ) : view === 'treasury_statement' ? (
+        <Card className="p-4">
+          {treasuryStmt && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                {summaryCard(isAr ? 'رصيد أول المدة' : 'Opening balance', treasuryStmt.opening_balance)}
+                {summaryCard(isAr ? 'إجمالي الوارد' : 'Total inflow', treasuryStmt.total_inflow, 'text-ui-success')}
+                {summaryCard(isAr ? 'إجمالي المنصرف' : 'Total outflow', treasuryStmt.total_outflow, 'text-ui-danger')}
+                {summaryCard(isAr ? 'رصيد آخر المدة' : 'Closing balance', treasuryStmt.closing_balance)}
+              </div>
+              <p className="text-sm text-ui-muted mb-3">{isAr ? 'هذا كشف حركة مفهوم للبنك أو الخزنة: الوارد يزيد الرصيد والمنصرف يخفضه. لا توجد تسمية Credit كطريقة دفع.' : 'Readable bank/treasury movement: inflow increases balance and outflow decreases it.'}</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-ui-border">
+                    <th className="px-3 py-3 text-start">{t('date')}</th>
+                    <th className="px-3 py-3 text-start">{isAr ? 'المصدر' : 'Source'}</th>
+                    <th className="px-3 py-3 text-start">{t('reference')}</th>
+                    <th className="px-3 py-3 text-start">{t('description')}</th>
+                    <th className="px-3 py-3 text-end">{isAr ? 'وارد' : 'Inflow'}</th>
+                    <th className="px-3 py-3 text-end">{isAr ? 'منصرف' : 'Outflow'}</th>
+                    <th className="px-3 py-3 text-end">{t('balance')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {treasuryStmt.rows.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-ui-subtle">{t('noData')}</td></tr>}
+                    {treasuryStmt.rows.map((r) => <tr key={String(r.line_id)} className="border-b border-ui-border">
+                      <td className="px-3 py-3">{formatDate(r.entry_date, lang)}</td>
+                      <td className="px-3 py-3">{movementLabel(r.reference_type)}</td>
+                      <td className="px-3 py-3">{r.reference_number || '-'}</td>
+                      <td className="px-3 py-3">{r.description || r.note || '-'}</td>
+                      <td className="px-3 py-3 text-end text-ui-success">{r.inflow > 0 ? formatCurrency(r.inflow, currency, lang) : '-'}</td>
+                      <td className="px-3 py-3 text-end text-ui-danger">{r.outflow > 0 ? formatCurrency(r.outflow, currency, lang) : '-'}</td>
+                      <td className="px-3 py-3 text-end font-semibold">{formatCurrency(r.balance, currency, lang)}</td>
+                    </tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Card>
+      ) : view === 'inventory_movement' ? (
+        <Card className="p-4">
+          {inventoryStmt && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'رصيد أول المدة' : 'Opening qty'}</p><p className="text-lg font-bold mt-1">{inventoryStmt.opening_quantity}</p></div>
+                <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'إجمالي الوارد' : 'Total in'}</p><p className="text-lg font-bold mt-1 text-ui-success">{inventoryStmt.total_in}</p></div>
+                <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'إجمالي المنصرف' : 'Total out'}</p><p className="text-lg font-bold mt-1 text-ui-danger">{inventoryStmt.total_out}</p></div>
+                <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'الرصيد الحالي للفترة' : 'Closing qty'}</p><p className="text-lg font-bold mt-1">{inventoryStmt.closing_quantity}</p></div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-ui-border">
+                    <th className="px-3 py-3 text-start">{t('date')}</th>
+                    <th className="px-3 py-3 text-start">{isAr ? 'نوع الحركة' : 'Movement'}</th>
+                    <th className="px-3 py-3 text-start">{t('warehouse')}</th>
+                    <th className="px-3 py-3 text-start">{t('reference')}</th>
+                    <th className="px-3 py-3 text-end">{isAr ? 'وارد' : 'In'}</th>
+                    <th className="px-3 py-3 text-end">{isAr ? 'منصرف' : 'Out'}</th>
+                    <th className="px-3 py-3 text-end">{t('balance')}</th>
+                    <th className="px-3 py-3 text-end">{t('unitCost')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {inventoryStmt.rows.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-ui-subtle">{t('noData')}</td></tr>}
+                    {inventoryStmt.rows.map((r) => <tr key={String(r.id)} className="border-b border-ui-border">
+                      <td className="px-3 py-3">{formatDate(r.created_at, lang)}</td>
+                      <td className="px-3 py-3">{r.entry_type}</td>
+                      <td className="px-3 py-3">{r.warehouse_name || '-'}</td>
+                      <td className="px-3 py-3">{r.reference_number || '-'}</td>
+                      <td className="px-3 py-3 text-end text-ui-success">{r.in_qty > 0 ? r.in_qty : '-'}</td>
+                      <td className="px-3 py-3 text-end text-ui-danger">{r.out_qty > 0 ? r.out_qty : '-'}</td>
+                      <td className="px-3 py-3 text-end font-semibold">{r.balance}</td>
+                      <td className="px-3 py-3 text-end">{formatCurrency(r.unit_cost, currency, lang)}</td>
+                    </tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </Card>
       ) : view === 'income' ? (
         <Card className="p-4">
@@ -496,6 +681,7 @@ export function FinancialReportsPage() {
         </Card>
       ) : view === 'cash_flow' ? (
         <Card className="p-4">
+          <p className="mb-4 text-sm text-ui-muted">{isAr ? 'ملخص من نفس القيود اليومية المستخدمة في كشف حساب البنك والخزنة. الوارد = مدين حساب الخزنة، والمنصرف = دائن حساب الخزنة.' : 'Summary from the same journal source used by bank/treasury statements.'}</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

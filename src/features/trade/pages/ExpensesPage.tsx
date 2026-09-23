@@ -30,7 +30,7 @@ export function ExpensesPage() {
   const { show } = useToast();
   const can = useCan();
   const history = useHistoryAccess();
-  const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadExpenses } = usePaginatedRows<Expense>({
+  const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadExpenses, fetchAll: fetchAllExpenses } = usePaginatedRows<Expense>({
     table: 'expenses',
     order: { column: 'expense_date', ascending: false },
     branch_id: branchFilter,
@@ -114,7 +114,14 @@ export function ExpensesPage() {
     reloadExpenses();
   };
 
-  const handleExport = () => exportToExcel(items.map((e) => ({ Date: e.expense_date, Category: e.category || '', Description: e.description || '', Amount: e.amount, PaymentMethod: e.payment_method })), 'expenses');
+  const handleExport = async () => {
+    const all = await fetchAllExpenses();
+    const term = search.trim().toLowerCase();
+    const exportRows = term
+      ? all.filter((e) => [e.category, e.description, e.payment_method].some((value) => String(value || '').toLowerCase().includes(term)))
+      : all;
+    exportToExcel(exportRows.map((e) => ({ Date: e.expense_date, Category: e.category || '', Description: e.description || '', Amount: e.amount, PaymentMethod: e.payment_method })), 'expenses');
+  };
 
   const columns: Column<Expense>[] = [
     { key: 'expense_date', header: t('date'), render: (e) => formatDate(e.expense_date, lang) },
