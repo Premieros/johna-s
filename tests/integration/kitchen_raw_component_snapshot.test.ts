@@ -16,6 +16,8 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
   const directRawId = randomUUID();
   const groupRawId = randomUUID();
   const eventId = randomUUID();
+  const unconfiguredProductId = randomUUID();
+  const unconfiguredEventId = randomUUID();
 
   async function rawQty(rawId: string): Promise<number> {
     const r = await client.query<{ q: string }>(
@@ -40,8 +42,8 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
       [directRawId, 'RD-' + randomUUID(), 'Direct Raw', branchId, groupRawId, 'RG-' + randomUUID(), 'Group Raw'],
     );
     await client.query(
-      'INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,$2,$3,100,0,true)',
-      [productId, 'Phase 3 Product', branchId],
+      'INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,$2,$3,100,0,true),($4,$5,$3,50,0,true)',
+      [productId, 'Phase 3 Product', branchId, unconfiguredProductId, 'Unconfigured Kitchen Product'],
     );
     await client.query(
       'INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active) VALUES($1,$2,$3,$4,1,true)',
@@ -107,5 +109,42 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
       [eventId],
     );
     expect(ledger.rows[0].c).toBeGreaterThanOrEqual(2);
+  });
+
+  it('creates a same-name fallback raw for an unconfigured product and records negative stock', async () => {
+    const result = await client.query<{
+      r: {
+        success: boolean;
+        raw_materials_deducted?: Array<{ raw_material_id: string; raw_name: string; quantity: number }>;
+      };
+    }>(
+      'SELECT public._deduct_kitchen_raw_components($1,$2,$3,2,$4::jsonb,$5,$6,NULL) AS r',
+      [unconfiguredProductId, branchId, warehouseId, '[]', unconfiguredEventId, 'PHASE3-FALLBACK'],
+    );
+
+    expect(result.rows[0].r.success, JSON.stringify(result.rows[0].r)).toBe(true);
+    expect(result.rows[0].r.raw_materials_deducted).toHaveLength(1);
+
+    const fallback = result.rows[0].r.raw_materials_deducted![0];
+    expect(fallback.raw_name).toBe('Unconfigured Kitchen Product');
+    expect(Number(fallback.quantity)).toBeCloseTo(2, 6);
+
+    const raw = await client.query<{ id: string; name: string; q: string }>(
+      `SELECT rm.id, rm.name, COALESCE(sum(rmb.quantity),0)::text AS q
+         FROM public.raw_materials rm
+         LEFT JOIN public.raw_material_batches rmb
+           ON rmb.raw_material_id=rm.id
+          AND rmb.branch_id=rm.branch_id
+          AND rmb.warehouse_id=$3
+        WHERE rm.branch_id=$1
+          AND rm.code=$2
+        GROUP BY rm.id,rm.name`,
+      [branchId, 'AUTO-PROD-' + unconfiguredProductId.replace(/-/g, ''), warehouseId],
+    );
+
+    expect(raw.rows).toHaveLength(1);
+    expect(raw.rows[0].name).toBe('Unconfigured Kitchen Product');
+    expect(Number(raw.rows[0].q)).toBeCloseTo(-2, 6);
+    expect(raw.rows[0].id).toBe(fallback.raw_material_id);
   });
 });
