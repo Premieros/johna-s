@@ -16,6 +16,7 @@ Business rules:
 - POS must not run stock/recipe availability scans to decide whether a product may be sold.
 - Kitchen send is the authoritative inventory deduction point.
 - Raw-material inventory is allowed to go negative.
+- If a sold product has no configured raw/components, kitchen send must create/reuse a branch-scoped fallback raw material with the same product name and deduct the sold quantity from it; its balance may become negative.
 - Void/refund must reverse the exact components that were originally deducted.
 - Historical transactions must remain auditable.
 - Printing, print agents, routing, and receipt templates are outside this program unless explicitly requested.
