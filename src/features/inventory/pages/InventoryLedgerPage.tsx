@@ -25,10 +25,12 @@ export function InventoryLedgerPage() {
 
   const { rows: rawRows, loading, error, total, hasMore, loadMore, loadingMore } = usePaginatedRows<InventoryLedgerEntry>({
     table: 'inventory_ledger',
-    select: '*, product:products(*), raw_material:raw_materials(*), warehouse:warehouses(*)',
+    select: 'id,branch_id,warehouse_id,product_id,raw_material_id,batch_number,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_at,product:products(id,name),raw_material:raw_materials(id,name),warehouse:warehouses(id,name)',
     order: { column: 'created_at', ascending: false },
+    branch_id: branchId || null,
+    filters: entryType !== 'all' ? [{ column: 'entry_type', value: entryType }] : undefined,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
-    pageSize: 100,
+    pageSize: 50,
   });
   const rows = useMemo<LedgerRow[]>(() => rawRows.map((entry) => ({ id: String(entry.id), entry })), [rawRows]);
   const [entryType, setEntryType] = useState('all');
@@ -57,8 +59,6 @@ export function InventoryLedgerPage() {
 
   const filtered = rows.filter((r) => {
     const e = r.entry;
-    if (entryType !== 'all' && e.entry_type !== entryType) return false;
-    if (branchId && e.branch_id !== branchId) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (e.reference_number || '').toLowerCase().includes(q)
