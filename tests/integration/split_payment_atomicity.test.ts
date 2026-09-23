@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
@@ -23,15 +24,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
   const productId = randomUUID();
   const unitId = randomUUID();
 
-  const batchQty = async (): Promise<number> => {
-    const result = await client.query<{ quantity: string }>(
-      `SELECT COALESCE(SUM(quantity), 0)::text AS quantity
-         FROM public.inventory_unit_batches
-        WHERE unit_id = $1::uuid AND warehouse_id = $2::uuid`,
-      [unitId, ids.whA],
-    );
-    return Number(result.rows[0]?.quantity || 0);
-  };
+  const batchQty = async (): Promise<number> => rawQtyForUnit(client, unitId, ids.branchA, ids.whA);
 
   const splitSale = async (invoice: string, payments: unknown[], orderId: string | null = null): Promise<SplitSaleResult> => {
     const items = JSON.stringify([{
@@ -112,6 +105,7 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
        VALUES ($1::uuid, $2::uuid, $3::uuid, 10, 10)`,
       [unitId, ids.branchA, ids.whA],
     );
+    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
     await client.query(`UPDATE public.settings SET tax_enabled = false, tax_rate = 0`);
   });
 
