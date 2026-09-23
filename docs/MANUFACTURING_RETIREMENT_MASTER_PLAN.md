@@ -163,7 +163,7 @@ Verification:
 - Production migration remains unapplied pending explicit approval.
 
 ### Phase 4 — Void/refund reversal from snapshot
-Status: IN PROGRESS
+Status: COMPLETED
 Branch: development/retire-manufacturing-phase4-snapshot-reversal-20260923
 Base: main@fb8ee6ecb004accd437ac5a0b29d47abeedf4228
 
@@ -182,6 +182,14 @@ Implementation intent:
 - current recipe changes after send must not affect reversal;
 - mixed/legacy transactions keep the existing effects/source-reversal compatibility path;
 - no printing, station routing, or UI changes.
+
+Verification:
+- Verify main #2408 ✅
+- lint/typecheck/unit/build ✅
+- Fresh DB/schema ✅
+- integration + security/RLS ✅
+- browser-smoke ✅
+- Production migration remains unapplied pending explicit approval.
 
 ### Phase 5 — Retire production UI/API/workflows
 Status: PENDING
