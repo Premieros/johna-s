@@ -127,7 +127,10 @@ Verification:
 - No Phase-2 migration applied to Production; production apply remains blocked until explicit approval.
 
 ### Phase 3 — Exact kitchen-send consumption snapshot
-Status: PENDING
+Status: IN PROGRESS
+Branch: development/retire-manufacturing-phase3-clean-recovery-20260922
+Base: main@d036a963bf5681b52cc037abd1d583f38af701e9
+Recovery note: previous Phase-3 PR #329 was closed without merge after scope contamination; this branch is clean and limited to four files.
 
 Goal:
 - send_to_kitchen resolves component graph once;
