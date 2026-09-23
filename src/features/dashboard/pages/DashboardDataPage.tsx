@@ -278,7 +278,7 @@ export function DashboardDataPage() {
 
     setLoading(false);
     setRefreshing(false);
-  }, [ar, branchFilter, range, history.unlimited, canViewSales]);
+  }, [ar, branchFilter, range, canViewSales]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -322,7 +322,7 @@ export function DashboardDataPage() {
       const profit = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
       setQuickStats({ expenses, profit, lowStockCount });
     })();
-  }, [branchFilter, branches, settings?.low_stock_threshold, history.unlimited, history.minDate, canViewInventory, canViewFinancial]);
+  }, [branchFilter, branches, settings?.low_stock_threshold, canViewInventory, canViewFinancial]);
 
   useEffect(() => {
     let cancelled = false;
@@ -377,7 +377,7 @@ export function DashboardDataPage() {
 
     return () => { cancelled = true; };
   }, [
-    branchFilter, range, history.unlimited,
+    branchFilter, range,
     canViewPos, canViewPurchases, canViewExpenses,
   ]);
 
@@ -445,7 +445,7 @@ export function DashboardDataPage() {
       const prevDate = new Date(window.previousStart); prevDate.setDate(prevDate.getDate() + index);
       return { label: date.toLocaleDateString(ar ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }), sales: currentMap.get(dateKey) || 0, previous: previousMap.get(prevDate.toISOString().slice(0, 10)) || 0 };
     });
-  }, [ar, previousSales, range, sales, history.unlimited]);
+  }, [ar, previousSales, range, sales]);
 
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
   const recent = sales.slice(0, 5);
