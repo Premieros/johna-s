@@ -67,4 +67,21 @@ describe('purchase invoice edit and inline raw-material contract', () => {
     expect(migration).toContain("'previous_revision_number'");
     expect(migration).toContain("'transactional_reversal', true");
   });
+
+  it('keeps corrections on the original purchase/accounting/inventory date', () => {
+    const migration = read('supabase/migrations/20260923174500_preserve_purchase_correction_original_dates.sql');
+
+    expect(migration).toContain('v_original_created_at');
+    expect(migration).toContain('v_original_entry_date');
+    expect(migration).toContain('UPDATE public.purchases');
+    expect(migration).toContain('UPDATE public.purchase_items');
+    expect(migration).toContain('UPDATE public.inventory_ledger');
+    expect(migration).toContain('UPDATE public.inventory_batches');
+    expect(migration).toContain('UPDATE public.raw_material_batches');
+    expect(migration).toContain('UPDATE public.journal_entries');
+    expect(migration).toContain('UPDATE public.journal_entry_lines');
+    expect(migration).toContain('_purchase_correction_audit_map');
+    expect(migration).toContain("'original_document_created_at'");
+    expect(migration).not.toContain('UPDATE public.audit_log');
+  });
 });

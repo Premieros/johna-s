@@ -126,6 +126,44 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
       expect(await rawQty(rawAId)).toBe(1000);
       expect(await rawQty(rawBId)).toBe(0);
 
+      const originalCreatedAt = '2026-09-01T09:30:00.000Z';
+      const originalEntryDate = '2026-09-01';
+      const originalPurchaseId = created[0].r.purchase_id;
+
+      // Simulate editing an invoice from a prior business day.
+      await q(`UPDATE public.purchases SET created_at=$2 WHERE id=$1`, [originalPurchaseId, originalCreatedAt]);
+      await q(`UPDATE public.purchase_items SET created_at=$2 WHERE purchase_id=$1`, [originalPurchaseId, originalCreatedAt]);
+      await q(
+        `UPDATE public.inventory_ledger SET created_at=$2
+         WHERE reference_type='purchase' AND reference_id=$1`,
+        [originalPurchaseId, originalCreatedAt],
+      );
+      await q(
+        `UPDATE public.raw_material_batches SET created_at=$2
+         WHERE source_type='purchase' AND source_id=$1`,
+        [originalPurchaseId, originalCreatedAt],
+      );
+      await q(
+        `UPDATE public.inventory_batches SET created_at=$2
+         WHERE source_type='purchase' AND source_id=$1`,
+        [originalPurchaseId, originalCreatedAt],
+      );
+      await q(
+        `UPDATE public.journal_entry_lines jel
+         SET created_at=$2
+         WHERE jel.journal_entry_id IN (
+           SELECT id FROM public.journal_entries
+           WHERE reference_type='purchase' AND reference_id=$1
+         )`,
+        [originalPurchaseId, originalCreatedAt],
+      );
+      await q(
+        `UPDATE public.journal_entries
+         SET created_at=$2, entry_date=$3::date
+         WHERE reference_type='purchase' AND reference_id=$1`,
+        [originalPurchaseId, originalCreatedAt, originalEntryDate],
+      );
+
       const corrected = await q<{ r: { success: boolean; purchase_id?: string; previous_purchase_id?: string; error?: string; detail?: string } }>(
         `SELECT public.update_purchase_invoice(
           p_purchase_id => $1,
@@ -148,6 +186,67 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
       expect(corrected[0].r.success).toBe(true);
       expect(corrected[0].r.previous_purchase_id).toBe(created[0].r.purchase_id);
       if (!corrected[0].r.purchase_id) throw new Error(JSON.stringify(corrected[0].r));
+
+      const correctedDates = await q<{ created_at: string }>(
+        `SELECT created_at::text
+         FROM public.purchases
+         WHERE id IN ($1,$2)
+         ORDER BY id`,
+        [created[0].r.purchase_id, corrected[0].r.purchase_id],
+      );
+      expect(new Set(correctedDates.map((row) => new Date(row.created_at).toISOString()))).toEqual(
+        new Set([new Date(originalCreatedAt).toISOString()]),
+      );
+
+      const correctionItems = await q<{ created_at: string }>(
+        `SELECT created_at::text FROM public.purchase_items WHERE purchase_id=$1`,
+        [corrected[0].r.purchase_id],
+      );
+      expect(correctionItems.every((row) => new Date(row.created_at).toISOString() === new Date(originalCreatedAt).toISOString())).toBe(true);
+
+      const correctionLedger = await q<{ created_at: string; reference_type: string }>(
+        `SELECT created_at::text,reference_type
+         FROM public.inventory_ledger
+         WHERE (reference_type='purchase' AND reference_id=$1)
+            OR (reference_type='purchase_return' AND reference_id=$2)`,
+        [corrected[0].r.purchase_id, created[0].r.purchase_id],
+      );
+      expect(correctionLedger.length).toBeGreaterThan(0);
+      expect(correctionLedger.every((row) => new Date(row.created_at).toISOString() === new Date(originalCreatedAt).toISOString())).toBe(true);
+
+      const correctionBatches = await q<{ created_at: string }>(
+        `SELECT created_at::text FROM public.raw_material_batches
+         WHERE source_type='purchase' AND source_id=$1`,
+        [corrected[0].r.purchase_id],
+      );
+      expect(correctionBatches.length).toBeGreaterThan(0);
+      expect(correctionBatches.every((row) => new Date(row.created_at).toISOString() === new Date(originalCreatedAt).toISOString())).toBe(true);
+
+      const correctionJournals = await q<{ created_at: string; entry_date: string; reference_type: string }>(
+        `SELECT created_at::text,entry_date::text,reference_type
+         FROM public.journal_entries
+         WHERE branch_id=$1
+           AND (
+             (reference_type='purchase' AND reference_id=$2)
+             OR (reference_type='purchase_return' AND reference_number=$3)
+           )
+         ORDER BY reference_type`,
+        [branchId, corrected[0].r.purchase_id, invoiceNumber],
+      );
+      expect(correctionJournals.length).toBeGreaterThanOrEqual(2);
+      expect(correctionJournals.every((row) => new Date(row.created_at).toISOString() === new Date(originalCreatedAt).toISOString())).toBe(true);
+      expect(correctionJournals.every((row) => row.entry_date === originalEntryDate)).toBe(true);
+
+      const auditRows = await q<{ created_at: string }>(
+        `SELECT created_at::text FROM public.audit_log
+         WHERE entity='purchase'
+           AND entity_id=$1
+           AND COALESCE((details->>'transactional_reversal')::boolean,false)
+         ORDER BY created_at DESC LIMIT 1`,
+        [corrected[0].r.purchase_id],
+      );
+      expect(auditRows.length).toBe(1);
+      expect(new Date(auditRows[0].created_at).getTime()).toBeGreaterThan(new Date(originalCreatedAt).getTime());
 
       // Old 1kg must be fully reversed before the corrected 2kg is posted.
       expect(await rawQty(rawAId)).toBe(2000);
@@ -173,6 +272,16 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
       );
       expect(replaced[0].r.success).toBe(true);
       if (!replaced[0].r.purchase_id) throw new Error(JSON.stringify(replaced[0].r));
+
+      const revisionDates = await q<{ created_at: string }>(
+        `SELECT created_at::text
+         FROM public.purchases
+         WHERE branch_id=$1
+           AND (invoice_number=$2 OR left(invoice_number,length($2)+5)=$2 || '-REV-')`,
+        [branchId, invoiceNumber],
+      );
+      expect(revisionDates.length).toBeGreaterThanOrEqual(3);
+      expect(revisionDates.every((row) => new Date(row.created_at).toISOString() === new Date(originalCreatedAt).toISOString())).toBe(true);
 
       // The second correction removes Raw A entirely and leaves only the final Raw B quantity.
       expect(await rawQty(rawAId)).toBe(0);
