@@ -33,6 +33,48 @@ SET
 FROM public.branches b
 WHERE b.id = t.branch_id;
 
+-- Backward compatibility: legacy callers and integration fixtures still insert
+-- treasury_accounts using the original columns only. Populate the extended
+-- model automatically instead of forcing every existing caller to change.
+CREATE OR REPLACE FUNCTION public.treasury_accounts_fill_model_defaults()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+BEGIN
+  NEW.scope := COALESCE(NULLIF(NEW.scope, ''), 'branch');
+
+  IF NEW.kind IS NULL OR btrim(NEW.kind) = '' THEN
+    NEW.kind := CASE
+      WHEN NEW.account_type = 'bank' THEN 'bank'
+      ELSE 'branch_cash'
+    END;
+  END IF;
+
+  IF NEW.organization_id IS NULL AND NEW.branch_id IS NOT NULL THEN
+    SELECT b.organization_id
+      INTO NEW.organization_id
+    FROM public.branches b
+    WHERE b.id = NEW.branch_id;
+  END IF;
+
+  IF NEW.scope = 'branch' AND NEW.kind = 'branch_cash' THEN
+    NEW.is_primary := true;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS treasury_accounts_fill_model_defaults
+  ON public.treasury_accounts;
+CREATE TRIGGER treasury_accounts_fill_model_defaults
+BEFORE INSERT OR UPDATE OF branch_id, account_type, organization_id, scope, kind
+ON public.treasury_accounts
+FOR EACH ROW
+EXECUTE FUNCTION public.treasury_accounts_fill_model_defaults();
+
 ALTER TABLE public.treasury_accounts
   ALTER COLUMN kind SET NOT NULL;
 
