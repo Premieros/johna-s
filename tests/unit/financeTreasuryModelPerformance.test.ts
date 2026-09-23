@@ -32,6 +32,13 @@ describe('finance treasury model and query stabilization contract', () => {
     expect(migration).toContain("'treasury_clearing','1190'");
   });
 
+  it('keeps legacy treasury account inserts backward compatible', () => {
+    expect(migration).toContain('treasury_accounts_fill_model_defaults');
+    expect(migration).toContain("WHEN NEW.account_type = 'bank' THEN 'bank'");
+    expect(migration).toContain("ELSE 'branch_cash'");
+    expect(migration).toContain('BEFORE INSERT OR UPDATE OF branch_id, account_type');
+  });
+
   it('funds supplier payments from a real locked treasury account', () => {
     expect(migration).toContain('pay_supplier_from_treasury');
     expect(migration).toContain('p_treasury_account_id uuid');
