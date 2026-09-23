@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
@@ -11,15 +11,24 @@ function idsOf(rows: Array<Record<string, unknown>>): string[] {
   return rows.map((row) => String(row.id)).sort();
 }
 
+function visibleOldBucket(branchId: string, rowId: string): boolean {
+  const first32 = createHash('md5').update(`${branchId}:${rowId}`).digest('hex').slice(0, 8);
+  return Number(BigInt(`0x${first32}`) % 100n) < 30;
+}
+
 describe.skipIf(skip)('related financial visibility reads', () => {
   let client: pg.Client;
   let ids: RlsIds;
   let imp = false;
   const oldPurchaseIds: string[] = [];
+  let oldVisiblePurchaseIds: string[] = [];
   const recentPurchaseIds: string[] = [];
   const oldExpenseIds: string[] = [];
+  let oldVisibleExpenseIds: string[] = [];
   let visibleOldSaleId = '';
   let hiddenOldSaleId = '';
+  let visiblePurchaseId = '';
+  let hiddenPurchaseId = '';
   let visiblePurchaseItemId = '';
   let hiddenPurchaseItemId = '';
   let visibleJournalEntryId = '';
@@ -43,6 +52,13 @@ describe.skipIf(skip)('related financial visibility reads', () => {
         [purchaseId, `FV-P-${i}-${purchaseId.slice(0, 8)}`, ids.suppA, ids.branchA, ids.whA],
       );
     }
+    oldVisiblePurchaseIds = oldPurchaseIds.filter((purchaseId) => visibleOldBucket(ids.branchA, purchaseId)).sort();
+    visiblePurchaseId = oldPurchaseIds.find((purchaseId) => visibleOldBucket(ids.branchA, purchaseId)) || '';
+    hiddenPurchaseId = oldPurchaseIds.find((purchaseId) => !visibleOldBucket(ids.branchA, purchaseId)) || '';
+    if (!visiblePurchaseId || !hiddenPurchaseId) {
+      throw new Error('fixture did not produce both visible and hidden old-purchase buckets');
+    }
+
     for (let i = 0; i < 3; i += 1) {
       const purchaseId = randomUUID();
       recentPurchaseIds.push(purchaseId);
@@ -59,7 +75,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
     await client.query(
       `INSERT INTO public.purchase_items (id, purchase_id, product_id, unit_name, quantity, unit_cost, total)
        VALUES ($1, $2, $3, 'piece', 1, 25, 25), ($4, $5, $3, 'piece', 1, 25, 25)`,
-      [visiblePurchaseItemId, oldPurchaseIds[0], ids.prodA, hiddenPurchaseItemId, oldPurchaseIds[1]],
+      [visiblePurchaseItemId, visiblePurchaseId, ids.prodA, hiddenPurchaseItemId, hiddenPurchaseId],
     );
 
     for (let i = 0; i < 40; i += 1) {
@@ -72,8 +88,14 @@ describe.skipIf(skip)('related financial visibility reads', () => {
         [expenseId, ids.branchA],
       );
     }
-    visibleOldSaleId = randomUUID();
-    hiddenOldSaleId = randomUUID();
+    oldVisibleExpenseIds = oldExpenseIds.filter((expenseId) => visibleOldBucket(ids.branchA, expenseId)).sort();
+
+    do {
+      visibleOldSaleId = randomUUID();
+    } while (!visibleOldBucket(ids.branchA, visibleOldSaleId));
+    do {
+      hiddenOldSaleId = randomUUID();
+    } while (visibleOldBucket(ids.branchA, hiddenOldSaleId));
     await client.query(
       `INSERT INTO public.sales
         (id, invoice_number, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status, created_at)
@@ -142,7 +164,7 @@ describe.skipIf(skip)('related financial visibility reads', () => {
       await fn();
     });
 
-  guarded('authorized branch users see complete old purchase history', async () => {
+  guarded('authorized users without history.unlimited see sampled old purchase history', async () => {
     const owner = await runAs(client, ids.users.owner,
       'SELECT id FROM public.purchases WHERE id = ANY($1::uuid[]) ORDER BY id', [oldPurchaseIds]);
     const cashier = await runAs(client, ids.users.cashier,
@@ -151,9 +173,9 @@ describe.skipIf(skip)('related financial visibility reads', () => {
       'SELECT id FROM public.purchases WHERE id = ANY($1::uuid[]) ORDER BY id', [oldPurchaseIds]);
 
     expect(owner.error).toBeUndefined();
-    expect(idsOf(owner.rows)).toEqual([...oldPurchaseIds].sort());
-    expect(idsOf(cashier.rows)).toEqual([...oldPurchaseIds].sort());
-    expect(idsOf(manager.rows)).toEqual([...oldPurchaseIds].sort());
+    expect(idsOf(owner.rows)).toEqual(oldVisiblePurchaseIds);
+    expect(idsOf(cashier.rows)).toEqual(oldVisiblePurchaseIds);
+    expect(idsOf(manager.rows)).toEqual(oldVisiblePurchaseIds);
   });
 
   guarded('all recent purchases remain visible to non-owner users', async () => {
@@ -171,21 +193,21 @@ describe.skipIf(skip)('related financial visibility reads', () => {
       'SELECT id FROM public.purchase_items WHERE id = ANY($1::uuid[]) ORDER BY id',
       [[visiblePurchaseItemId, hiddenPurchaseItemId]]);
 
-    expect(idsOf(restricted.rows)).toEqual([hiddenPurchaseItemId, visiblePurchaseItemId].sort());
-    expect(idsOf(owner.rows)).toEqual([hiddenPurchaseItemId, visiblePurchaseItemId].sort());
+    expect(idsOf(restricted.rows)).toEqual([visiblePurchaseItemId]);
+    expect(idsOf(owner.rows)).toEqual([visiblePurchaseItemId]);
   });
 
-  guarded('authorized branch users see complete old expense history', async () => {
+  guarded('authorized users without history.unlimited see sampled old expense history', async () => {
     const restricted = await runAs(client, ids.users.accountant,
       'SELECT id FROM public.expenses WHERE id = ANY($1::uuid[]) ORDER BY id', [oldExpenseIds]);
     const owner = await runAs(client, ids.users.owner,
       'SELECT id FROM public.expenses WHERE id = ANY($1::uuid[]) ORDER BY id', [oldExpenseIds]);
 
-    expect(idsOf(restricted.rows)).toEqual([...oldExpenseIds].sort());
-    expect(idsOf(owner.rows)).toEqual([...oldExpenseIds].sort());
+    expect(idsOf(restricted.rows)).toEqual(oldVisibleExpenseIds);
+    expect(idsOf(owner.rows)).toEqual(oldVisibleExpenseIds);
   });
 
-  guarded('sale-linked movement history stays complete within an authorized branch', async () => {
+  guarded('sale-linked movement history inherits the parent sale sampling', async () => {
     const stock = await runAs(client, ids.users.cashier,
       `SELECT reference_id AS id FROM public.stock_transactions
        WHERE reference_id = ANY($1::uuid[]) ORDER BY reference_id`,
@@ -195,11 +217,11 @@ describe.skipIf(skip)('related financial visibility reads', () => {
        WHERE reference_id = ANY($1::uuid[]) ORDER BY reference_id`,
       [[visibleOldSaleId, hiddenOldSaleId]]);
 
-    expect(idsOf(stock.rows)).toEqual([hiddenOldSaleId, visibleOldSaleId].sort());
-    expect(idsOf(ledger.rows)).toEqual([hiddenOldSaleId, visibleOldSaleId].sort());
+    expect(idsOf(stock.rows)).toEqual([visibleOldSaleId]);
+    expect(idsOf(ledger.rows)).toEqual([visibleOldSaleId]);
   });
 
-  guarded('journal headers and lines stay complete within an authorized branch', async () => {
+  guarded('journal headers and lines inherit linked sale sampling', async () => {
     const headers = await runAs(client, ids.users.accountant,
       'SELECT id FROM public.journal_entries WHERE id = ANY($1::uuid[]) ORDER BY id',
       [[visibleJournalEntryId, hiddenJournalEntryId]]);
@@ -208,16 +230,16 @@ describe.skipIf(skip)('related financial visibility reads', () => {
        WHERE journal_entry_id = ANY($1::uuid[]) ORDER BY journal_entry_id`,
       [[visibleJournalEntryId, hiddenJournalEntryId]]);
 
-    expect(idsOf(headers.rows)).toEqual([hiddenJournalEntryId, visibleJournalEntryId].sort());
-    expect(idsOf(lines.rows)).toEqual([hiddenJournalEntryId, visibleJournalEntryId].sort());
+    expect(idsOf(headers.rows)).toEqual([visibleJournalEntryId]);
+    expect(idsOf(lines.rows)).toEqual([visibleJournalEntryId]);
   });
 
-  guarded('customer payments linked to old sales stay complete within an authorized branch', async () => {
+  guarded('customer payments linked to old sales inherit the parent sale sampling', async () => {
     const restricted = await runAs(client, ids.users.accountant,
       `SELECT sale_id AS id FROM public.customer_payments
        WHERE sale_id = ANY($1::uuid[]) ORDER BY sale_id`,
       [[visibleOldSaleId, hiddenOldSaleId]]);
-    expect(idsOf(restricted.rows)).toEqual([hiddenOldSaleId, visibleOldSaleId].sort());
+    expect(idsOf(restricted.rows)).toEqual([visibleOldSaleId]);
   });
 
   guarded('current inventory truth is not sampled or reduced', async () => {

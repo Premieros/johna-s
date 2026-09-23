@@ -41,13 +41,14 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).not.toContain('aria-disabled="true"');
     expect(dashboard).not.toContain("role === 'branch_manager'");
     expect(dashboard).not.toContain("role === 'accountant'");
+    expect(dashboard).not.toContain("history.unlimited ? range : (range === 'today' ? 'today' : 'week')");
+    expect(dashboard).not.toContain("filter((item) => history.unlimited || item === 'today' || item === 'week')");
+    expect(dashboard).not.toContain('Maximum visible history: last 7 days');
+    expect(dashboard).toContain('Last 7 days are complete; older periods follow the visibility policy');
   });
 
-  it('keeps the seven-day guard on historical transaction screens', () => {
+  it('keeps active operational exceptions while historical rows are sampled by RLS', () => {
     const expectations: Array<[string, string]> = [
-      ['src/features/trade/pages/SalesPage.tsx', 'history.minIso'],
-      ['src/features/trade/pages/PurchasesPage.tsx', 'history.minIso'],
-      ['src/features/trade/pages/ExpensesPage.tsx', 'history.minDate'],
       ['src/features/trade/pages/ShiftsPage.tsx', 'status.eq.open'],
       ['src/features/inventory/pages/TransfersPage.tsx', 'status.eq.pending'],
       ['src/features/trade/pages/PurchaseRequestsPage.tsx', 'status.in.(draft,submitted,approved)'],
@@ -55,15 +56,21 @@ describe('permission-aware dashboard and system history contract', () => {
       ['src/features/inventory/pages/StockCountsPage.tsx', 'status.in.(draft,submitted,approved)'],
       ['src/features/manufacturing/pages/ProductionOrdersPage.tsx', 'status.in.(planned,in_progress)'],
       ['src/features/accounting/pages/ReconciliationPage.tsx', 'status.eq.open'],
-      ['src/features/accounting/pages/PaymentsPage.tsx', 'history.minIso'],
-      ['src/features/accounting/pages/TreasuryPage.tsx', 'history.minIso'],
-      ['src/features/inventory/pages/InventoryLedgerPage.tsx', 'history.minIso'],
-      ['src/features/reporting/pages/AuditLogPage.tsx', 'history.minIso'],
     ];
 
     for (const [path, marker] of expectations) {
       expect(read(path), path).toContain(marker);
     }
+
+    const historyAccess = read('src/lib/useHistoryAccess.ts');
+    expect(historyAccess).toContain('maxDays: null');
+    expect(historyAccess).toContain('minDate: undefined');
+    expect(historyAccess).toContain('minIso: undefined');
+
+    const reportFilters = read('src/features/reporting/ReportFilterBar.tsx');
+    expect(reportFilters).toContain('<option value="last30">');
+    expect(reportFilters).toContain('<option value="this_month">');
+    expect(reportFilters).not.toContain('history.unlimited && <option value="last30">');
   });
 
   it('does not date-limit master/current-data catalogs', () => {

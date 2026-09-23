@@ -173,7 +173,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       targetTo = iso(new Date(now.getFullYear(), now.getMonth(), 0));
     } else if (key === 'this_year') f = iso(new Date(now.getFullYear(), 0, 1));
     const allowed = history.clampRange(f, targetTo);
-    setPeriod(!history.unlimited && !['today', 'yesterday', 'last7', 'custom'].includes(key) ? 'last7' : key);
+    setPeriod(key);
     setFrom(allowed.from);
     setTo(allowed.to);
   }

@@ -240,7 +240,7 @@ export function DashboardDataPage() {
       setRefreshing(false);
       return;
     }
-    const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+    const effectiveRange: Range = range;
     const window = periodWindow(effectiveRange);
     const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
     const previousFields = 'id,total,paid_amount,payment_method,branch_id,created_at,refunded_amount,discount_amount';
@@ -278,7 +278,7 @@ export function DashboardDataPage() {
 
     setLoading(false);
     setRefreshing(false);
-  }, [ar, branchFilter, range, history.unlimited, canViewSales]);
+  }, [ar, branchFilter, range, canViewSales]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -311,9 +311,7 @@ export function DashboardDataPage() {
       );
       setStockAlerts(alerts);
       const lowStockCount = stockQueryFailed ? null : alerts.length;
-      const from = history.unlimited
-        ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-        : (history.minDate || now.toISOString().slice(0, 10));
+      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const to = now.toISOString().slice(0, 10);
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
       const statements = canViewFinancial
@@ -324,12 +322,12 @@ export function DashboardDataPage() {
       const profit = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
       setQuickStats({ expenses, profit, lowStockCount });
     })();
-  }, [branchFilter, branches, settings?.low_stock_threshold, history.unlimited, history.minDate, canViewInventory, canViewFinancial]);
+  }, [branchFilter, branches, settings?.low_stock_threshold, canViewInventory, canViewFinancial]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+      const effectiveRange: Range = range;
       const window = periodWindow(effectiveRange);
       const fromIso = window.start.toISOString();
       const fromDate = fromIso.slice(0, 10);
@@ -379,7 +377,7 @@ export function DashboardDataPage() {
 
     return () => { cancelled = true; };
   }, [
-    branchFilter, range, history.unlimited,
+    branchFilter, range,
     canViewPos, canViewPurchases, canViewExpenses,
   ]);
 
@@ -431,7 +429,7 @@ export function DashboardDataPage() {
   const lowStock = useMemo(() => stockAlerts.slice(0, 5), [stockAlerts]);
 
   const chart = useMemo<Point[]>(() => {
-    const effectiveRange: Range = history.unlimited ? range : (range === 'today' ? 'today' : 'week');
+    const effectiveRange: Range = range;
     const window = periodWindow(effectiveRange);
     const currentMap = new Map<string, number>();
     const previousMap = new Map<string, number>();
@@ -447,7 +445,7 @@ export function DashboardDataPage() {
       const prevDate = new Date(window.previousStart); prevDate.setDate(prevDate.getDate() + index);
       return { label: date.toLocaleDateString(ar ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }), sales: currentMap.get(dateKey) || 0, previous: previousMap.get(prevDate.toISOString().slice(0, 10)) || 0 };
     });
-  }, [ar, previousSales, range, sales, history.unlimited]);
+  }, [ar, previousSales, range, sales]);
 
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
   const recent = sales.slice(0, 5);
@@ -455,11 +453,11 @@ export function DashboardDataPage() {
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] w-full min-w-0 bg-ui-page py-3 sm:py-4" data-testid="dashboard-surface"><div className="w-full min-w-0 space-y-5">
     <DashboardStandbyBar canCreateSale={canCreateSale} />
 
-    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'الفترة الافتراضية: الشهر الحالي' : 'Default period: current month') : (ar ? 'الحد الأقصى للعرض: آخر 7 أيام' : 'Maximum visible history: last 7 days')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).filter((item) => history.unlimited || item === 'today' || item === 'week').map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
+    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'عرض كامل للتاريخ حسب الصلاحية' : 'Full historical access enabled') : (ar ? 'آخر 7 أيام كاملة، وما قبلها حسب سياسة العرض' : 'Last 7 days are complete; older periods follow the visibility policy')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
 
     {error && <div className="rounded-2xl border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm font-bold text-ui-danger">{error}</div>}
 
-    {(canViewSales || canViewFinancial || canViewInventory) && <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{history.unlimited ? (ar ? 'ملخص الشهر الحالي' : 'Current month summary') : (ar ? 'ملخص آخر 7 أيام' : 'Last 7 days summary')}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {(canViewSales || canViewFinancial || canViewInventory) && <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{ar ? `ملخص ${rangeLabels[range][0]}` : `${rangeLabels[range][1]} summary`}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {canViewFinancial && <div className="ui-accent-top ui-accent-finance rounded-2xl border border-ui-border bg-ui-surface p-4"><p className="text-xs text-ui-subtle">{ar ? 'المصروفات المحاسبية' : 'Accounting expenses'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.expenses, money)}</p></div>}
       {canViewFinancial && <div className="ui-accent-top ui-accent-inventory rounded-2xl border border-ui-border bg-ui-surface p-4"><p className="text-xs text-ui-subtle">{ar ? 'صافي الربح المحاسبي' : 'Accounting net profit'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.profit, money)}</p></div>}
       {canViewInventory && <div className="ui-accent-top ui-accent-inventory rounded-2xl border border-ui-border bg-ui-surface p-4"><p className="text-xs text-ui-subtle">{ar ? 'تنبيهات المخزون' : 'Low stock alerts'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.lowStockCount, (value) => formatNumber(value, 0))}</p></div>}
