@@ -163,9 +163,13 @@ export function RolesTab() {
   const canGrantPermission = (permission: Permission): boolean =>
     isPlatformAdmin || can(permission);
 
+  const canOfferPermission = (permission: Permission): boolean =>
+    isPlatformAdmin
+    || expandPermissionDependencies([permission]).every((required) => canGrantPermission(required));
+
   const unavailablePermissions = isPlatformAdmin
     ? []
-    : currentPermissions.filter((permission) => !canGrantPermission(permission));
+    : currentPermissions.filter((permission) => !canOfferPermission(permission));
   const currentHasUnownedPermissions = unavailablePermissions.length > 0;
   const canEditCurrent = mayEditRole(currentRole) && !currentHasUnownedPermissions;
 
@@ -444,7 +448,7 @@ export function RolesTab() {
   const visibleGroups = OPERATIONAL_PERMISSION_SECTIONS.map((group) => ({
     ...group,
     permissions: group.permissions
-      .filter((permission) => isPlatformAdmin || canGrantPermission(permission))
+      .filter((permission) => canOfferPermission(permission))
       .filter((permission) => {
         if (!permissionQuery) return true;
         const labels = PERMISSION_LABELS[permission];
@@ -509,7 +513,7 @@ export function RolesTab() {
               : rolePermissions.filter((permission) => canGrantPermission(permission)).length;
             const visibleCatalogCount = isPlatformAdmin
               ? ALL_PERMISSIONS.length
-              : ALL_PERMISSIONS.filter((permission) => canGrantPermission(permission)).length;
+              : ALL_PERMISSIONS.filter((permission) => canOfferPermission(permission)).length;
             const active = role === currentRole;
             const platformAdmin = role === 'super_admin';
             return (
