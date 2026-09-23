@@ -86,7 +86,7 @@ describe('usePaginatedRows', () => {
     mockState.calls = [];
   });
 
-  it('fetches the first page and exact count in one request', async () => {
+  it('fetches pageSize+1 without an exact count and exposes only pageSize rows', async () => {
     seed('sales', 25);
     const { result } = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
 
@@ -94,15 +94,27 @@ describe('usePaginatedRows', () => {
 
     expect(result.current.rows).toHaveLength(10);
     expect(result.current.rows[0]).toEqual({ id: 1 });
-    expect(result.current.total).toBe(25);
+    expect(result.current.total).toBeNull();
     expect(result.current.hasMore).toBe(true);
     const r = dataCalls('sales')[0].range;
-    expect(r).toEqual([0, 9]);
+    expect(r).toEqual([0, 10]);
     expect(dataCalls('sales')).toHaveLength(1);
     expect(countCalls('sales')).toHaveLength(0);
   });
 
-  it('applies branch_id and extra equality filters to the combined data/count query', async () => {
+  it('defaults to a bounded 50-row first page plus one lookahead row', async () => {
+    seed('products', 80);
+    const { result } = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'products' }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.rows).toHaveLength(50);
+    expect(result.current.hasMore).toBe(true);
+    expect(result.current.total).toBeNull();
+    expect(dataCalls('products')[0].range).toEqual([0, 50]);
+  });
+
+  it('applies branch_id and extra equality filters to the data query without a count request', async () => {
     seed('orders', 3);
     const { result } = renderHook(() =>
       usePaginatedRows<{ id: number }>({
@@ -140,10 +152,11 @@ describe('usePaginatedRows', () => {
     expect(result.current.rows).toHaveLength(25);
     expect(result.current.hasMore).toBe(false);
     expect(dataCalls('sales').map((c) => c.range)).toEqual([
-      [0, 9],
-      [10, 19],
-      [20, 29],
+      [0, 10],
+      [10, 20],
+      [20, 30],
     ]);
+    expect(result.current.total).toBe(25);
   });
 
   it('refresh reloads from the first page and resets accumulated rows', async () => {
@@ -156,12 +169,13 @@ describe('usePaginatedRows', () => {
     });
     expect(result.current.rows).toHaveLength(20);
 
-    mockState.tables.sales.count = 30;
+    seed('sales', 30);
     await act(async () => {
       await result.current.refresh();
     });
     expect(result.current.rows).toHaveLength(10);
-    expect(result.current.total).toBe(30);
+    expect(result.current.total).toBeNull();
+    expect(result.current.hasMore).toBe(true);
   });
 
   it('exposes setRows for optimistic local updates', async () => {
