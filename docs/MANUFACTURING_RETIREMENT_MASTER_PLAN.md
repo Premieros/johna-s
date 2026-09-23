@@ -163,7 +163,9 @@ Verification:
 - Production migration remains unapplied pending explicit approval.
 
 ### Phase 4 — Void/refund reversal from snapshot
-Status: PENDING
+Status: IN PROGRESS
+Branch: development/retire-manufacturing-phase4-snapshot-reversal-20260923
+Base: main@fb8ee6ecb004accd437ac5a0b29d47abeedf4228
 
 Goal:
 - void sent item and refund restore the exact stored snapshot;
@@ -173,6 +175,13 @@ Goal:
 Exit criteria:
 - send -> void and send -> sale -> refund return exact quantities/costs;
 - historical auto-production transactions still remain reversible through compatibility logic.
+
+Implementation intent:
+- snapshot_version=2 voids restore raw materials directly from component_snapshot;
+- all-v2 settled sale-item refunds restore from the same immutable snapshots;
+- current recipe changes after send must not affect reversal;
+- mixed/legacy transactions keep the existing effects/source-reversal compatibility path;
+- no printing, station routing, or UI changes.
 
 ### Phase 5 — Retire production UI/API/workflows
 Status: PENDING
