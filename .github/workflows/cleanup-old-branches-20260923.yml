@@ -1,0 +1,140 @@
+name: Cleanup old branches 2026-09-23
+
+on:
+  push:
+    branches:
+      - maintenance/cleanup-old-branches-20260923-v2
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      CLEANUP_BRANCH: maintenance/cleanup-old-branches-20260923-v2
+      # 2026-09-23 00:00 Africa/Cairo = 2026-09-22 21:00 UTC
+      CUTOFF_UTC: "2026-09-22T21:00:00Z"
+    steps:
+      - name: Cleanup branches older than today
+        shell: bash
+        run: |
+          set -u
+
+          deleted_file="$RUNNER_TEMP/deleted.txt"
+          kept_print_file="$RUNNER_TEMP/kept-print.txt"
+          kept_today_file="$RUNNER_TEMP/kept-today.txt"
+          kept_failed_file="$RUNNER_TEMP/kept-failed.txt"
+          : > "$deleted_file"
+          : > "$kept_print_file"
+          : > "$kept_today_file"
+          : > "$kept_failed_file"
+
+          is_print_name() {
+            local n="${1,,}"
+            [[ "$n" =~ print|printer|receipt|thermal|zreport|ticket ]]
+          }
+
+          is_print_diff() {
+            local sha="$1"
+            local files
+            if ! files="$(gh api "repos/$REPO/compare/main...$sha" --jq '.files[]?.filename' 2>/dev/null)"; then
+              return 2
+            fi
+            grep -Eiq 'print|printer|receipt|thermal|zreport|ticket' <<<"$files"
+          }
+
+          draft_open_prs() {
+            local branch="$1"
+            local rows
+            rows="$(gh api --method GET "repos/$REPO/pulls"               -f state=open               -f "head=Premieros:$branch"               --jq '.[] | [.number, .draft] | @tsv' 2>/dev/null || true)"
+
+            [[ -z "$rows" ]] && return 0
+
+            while IFS=$'\t' read -r number draft; do
+              [[ -z "$number" ]] && continue
+              if [[ "$draft" == "true" ]]; then
+                echo "PR #$number already draft for $branch"
+                continue
+              fi
+              echo "Converting PR #$number to draft before deleting $branch"
+              if ! gh pr ready --undo "$number" --repo "$REPO"; then
+                echo "Could not convert PR #$number to draft; preserving $branch"
+                return 1
+              fi
+            done <<<"$rows"
+          }
+
+          delete_branch() {
+            local branch="$1"
+            local ref encoded
+            ref="heads/$branch"
+            encoded="$(printf '%s' "$ref" | jq -sRr @uri)"
+            gh api -X DELETE "repos/$REPO/git/refs/$encoded"
+          }
+
+          gh api --paginate "repos/$REPO/branches?per_page=100"             --jq '.[] | [.name, .commit.sha] | @tsv' |
+          while IFS=$'\t' read -r branch sha; do
+            [[ -z "$branch" ]] && continue
+            [[ "$branch" == "main" ]] && continue
+            [[ "$branch" == "$CLEANUP_BRANCH" ]] && continue
+
+            commit_date="$(gh api "repos/$REPO/commits/$sha" --jq '.commit.committer.date // .commit.author.date' 2>/dev/null || true)"
+            if [[ -z "$commit_date" ]]; then
+              echo "$branch | could not read commit date" >> "$kept_failed_file"
+              continue
+            fi
+
+            if [[ "$commit_date" > "$CUTOFF_UTC" || "$commit_date" == "$CUTOFF_UTC" ]]; then
+              echo "$branch | $commit_date" >> "$kept_today_file"
+              continue
+            fi
+
+            if is_print_name "$branch"; then
+              echo "$branch | name matched print protection | $commit_date" >> "$kept_print_file"
+              continue
+            fi
+
+            is_print_diff "$sha"
+            diff_rc=$?
+            if [[ $diff_rc -eq 0 ]]; then
+              echo "$branch | changed print-related file(s) | $commit_date" >> "$kept_print_file"
+              continue
+            elif [[ $diff_rc -eq 2 ]]; then
+              echo "$branch | compare failed; preserved safely | $commit_date" >> "$kept_failed_file"
+              continue
+            fi
+
+            if ! draft_open_prs "$branch"; then
+              echo "$branch | PR draft conversion failed | $commit_date" >> "$kept_failed_file"
+              continue
+            fi
+
+            if delete_branch "$branch"; then
+              echo "$branch | $commit_date" >> "$deleted_file"
+              echo "Deleted $branch"
+            else
+              echo "$branch | branch deletion failed | $commit_date" >> "$kept_failed_file"
+            fi
+          done
+
+          {
+            echo "## Old branch cleanup"
+            echo
+            echo "Cutoff (Cairo midnight): $CUTOFF_UTC UTC"
+            echo
+            echo "### Deleted"
+            if [[ -s "$deleted_file" ]]; then sed 's/^/- /' "$deleted_file"; else echo "- none"; fi
+            echo
+            echo "### Preserved — printing"
+            if [[ -s "$kept_print_file" ]]; then sed 's/^/- /' "$kept_print_file"; else echo "- none"; fi
+            echo
+            echo "### Preserved — today"
+            if [[ -s "$kept_today_file" ]]; then sed 's/^/- /' "$kept_today_file"; else echo "- none"; fi
+            echo
+            echo "### Preserved — safety/failure"
+            if [[ -s "$kept_failed_file" ]]; then sed 's/^/- /' "$kept_failed_file"; else echo "- none"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
