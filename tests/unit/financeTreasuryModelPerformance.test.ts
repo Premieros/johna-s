@@ -58,7 +58,7 @@ describe('finance treasury model and query stabilization contract', () => {
   it('keeps treasury access permission-first and branch-aware', () => {
     expect(migration).toContain("public.can_permission('accounting.treasury.transfer')");
     expect(migration).toContain('public.user_may_access_branch');
-    expect(migration).toContain('treasury_main_account_select');
+    expect(migration).toContain('auth_select_organization_treasury_accounts');
     expect(migration).toContain('FROM PUBLIC, anon');
     expect(migration).toContain('TO authenticated, service_role');
   });
