@@ -554,48 +554,12 @@ Workflow:
 - `browser-smoke`: SKIPPED
 
 Failure:
-- mandatory worklog contract could not find `### CH-09 — Branch-local POS Realtime wake filtering
-
-Status: IMPLEMENTED / VERIFY PENDING.
-
-Files:
-- `src/features/pos/types.ts`
-- `src/features/pos/services/posOrders.ts`
-- `src/features/pos/services/posRealtime.ts`
-- `src/features/pos/hooks/usePosRealtime.ts`
-- `src/features/pos/hooks/useActiveOrderCount.ts`
-- `tests/unit/posRealtimeBranchWakeContract.test.ts`
-
-Change:
-- `PosRealtimeData` now carries internal `watchedOrderIds` for all branch open/held orders before empty-order UI filtering.
-- shared POS Realtime emits structured table/event payloads to listeners.
-- `order_items` events are checked against watched branch order ids before scheduling a snapshot refresh.
-- DELETE events without `order_id` are matched by locally known item id.
-- unknown payload shapes fail open so the optimization cannot hide valid work.
-- the lightweight active-order badge now shares the existing branch POS Realtime channel instead of opening a second `orders/order_items` channel.
-- the badge ignores dining-table/kitchen-send events and cross-branch `order_items` events.
-- PR #293 in-flight/trailing snapshot coalescing remains unchanged.
-
-Intentionally unchanged:
-- no database migration,
-- no table/RLS change,
-- no POS sale/order mutation behavior,
-- no kitchen send logic,
-- no printing / agent / routing / KDS changes,
-- no change to which active orders are displayed.
-
-Expected effect:
-- an `order_items` write in Smoha no longer forces Cleopatra POS snapshot/badge queries merely because `order_items` lacks `branch_id`,
-- redundant shell Realtime channel removed,
-- valid first-item events for previously empty branch orders remain refresh-triggering.
-
-`.
+- mandatory worklog contract could not find `## Verification ledger`.
 - no lint/typecheck/unit/build/DB/browser tests were executed for CH-07 on this run.
 
 Classification:
-- documentation structure regression only,
-- no evidence of a `RolesContext` implementation failure,
-- the missing heading is restored before rerunning exact-head verification.
+- documentation structure regression only.
+- no evidence of a RolesContext implementation failure.
 
 ### V-01 — Inventory Ledger implementation head
 
