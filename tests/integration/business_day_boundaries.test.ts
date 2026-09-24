@@ -68,8 +68,13 @@ describe.skipIf(skip)('business day boundaries and single shared branch shift', 
     expect(def).toContain('s.created_at>=v_start');
     expect(def).toContain('e.created_at>=v_start');
     expect(def).toContain('p.created_at>=v_start');
-    expect(def).toContain('public.sale_payments');
-    expect(def).toContain('sp.refunded_amount');
+    expect(def).toContain('private.report_sale_settlement_lines');
+    const helper = await client.query<{ def: string }>(`
+      SELECT pg_get_functiondef('private.report_sale_settlement_lines(uuid)'::regprocedure) def
+    `);
+    const helperDef = helper.rows[0].def.replace(/\\s+/g, ' ');
+    expect(helperDef).toContain('public.sale_payments');
+    expect(helperDef).toContain('sp.refunded_amount');
     expect(def).toContain("'business_day_mode'");
     expect(def).toContain("'window_start'");
     expect(def).toContain("'window_end'");
