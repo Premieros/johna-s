@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Clock3, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/Button';
+import { Select } from '@/components/Input';
 import type {
   MyWorkAuthorizationState,
   WorkAuthorizationClient,
@@ -14,14 +15,16 @@ export function WorkAuthorizationGate({
   branchName,
   children,
   onSignOut,
-  onChangeBranch,
+  branchOptions = [],
+  onBranchChange,
 }: {
   client: WorkAuthorizationClient;
   branchId: string;
   branchName?: string | null;
   children: ReactNode;
   onSignOut: () => void | Promise<void>;
-  onChangeBranch?: () => void;
+  branchOptions?: Array<{ id: string; name: string }>;
+  onBranchChange?: (branchId: string) => void;
 }) {
   const [state, setState] = useState<MyWorkAuthorizationState | null>(null);
   const [status, setStatus] = useState<GateStatus>('loading');
@@ -129,10 +132,16 @@ export function WorkAuthorizationGate({
             </Button>
           )}
 
-          {onChangeBranch && (
-            <Button variant="outline" onClick={onChangeBranch}>
-              تغيير الفرع
-            </Button>
+          {onBranchChange && branchOptions.length > 1 && (
+            <Select
+              value={branchId}
+              onChange={(event) => onBranchChange(event.target.value)}
+              aria-label="تغيير الفرع"
+            >
+              {branchOptions.map((branch) => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </Select>
           )}
 
           <Button variant="secondary" onClick={() => void onSignOut()}>
