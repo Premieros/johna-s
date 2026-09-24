@@ -193,6 +193,37 @@ Final required behavior:
   - `docs/EXECUTION_GUARDRAILS.md`
 - Final fence rollout checkpoint before verification: expected branch HEAD before this log write was `84b17faeef61d935d0924ae401600ce0c879e51f`.
 
+
+### 2026-09-24 — Direct-write bypass closure
+
+- Final security review found a real server-side bypass despite Green CI: several human-editable tables were written directly through the Supabase Data API and were not included in the initial mutation-guard trigger set.
+- Confirmed direct-write surfaces included: products, categories, customers, suppliers, raw_materials, warehouses, inventory_units, chart_of_accounts.
+- Expanded the curated branch-scoped mutation guard to human-editable catalog/master/config tables:
+  - products
+  - categories
+  - customers
+  - suppliers
+  - raw_materials
+  - warehouses
+  - inventory_units
+  - chart_of_accounts
+  - dining_areas
+  - dining_tables
+  - product_modifier_groups
+  - product_modifier_group_products
+  - product_modifier_options
+  - kitchen_stations
+  - user_kitchen_station_assignments
+  - recipes
+- Added a dedicated branch-derived trigger for `product_components`, which has no `branch_id` column and derives the branch from its parent product.
+- Deliberate exclusions remain unchanged for print transport, KDS/kitchen runtime transport, shift lifecycle, work-authorization tables, and approval tables.
+- Added integration coverage proving:
+  - the exact expanded guarded-table set;
+  - a direct Data API-style insert into `categories` is rejected while authorization is pending;
+  - a direct insert into `product_components` is rejected while authorization is pending;
+  - the dedicated product-components guard trigger exists.
+- Production remains untouched. Exact-head Fast Verify + Full Verify are required again before merge readiness.
+
 ## Verification ledger
 
 - Fast Verify #356 mutation-guard migration failure: `raw_material_warehouse_inventory` is a **view**, so PostgreSQL rejected the generic `BEFORE INSERT/UPDATE/DELETE` trigger. No Production impact; failure occurred on Fresh DB before schema/integration.
@@ -240,7 +271,9 @@ State: **BLOCKED**
 6. Pre-enforcement Full Verify #2666 Green. ✅
 7. Centralized mutation-time server guard added with transaction-local cache and explicit print/KDS/shift exclusions. ✅
 8. Run exact-head Fast Verify + Full Verify for the final mutation-guard head.
-9. If Green: **STOP BEFORE MERGE** and present final Production migration/activation gate. Do not merge, apply Production migration, or enable the feature flag.
+9. Close the direct Data API write bypasses found in final security review. ✅
+10. Re-run exact-head Fast Verify + Full Verify after the bypass closure.
+11. If Green: **STOP BEFORE MERGE** and present final Production migration/activation gate. Do not merge, apply Production migration, or enable the feature flag.
 
 ## Mandatory update protocol
 
