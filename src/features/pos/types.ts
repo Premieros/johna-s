@@ -72,4 +72,6 @@ export interface PosRealtimeData {
   tables: DiningTable[];
   orderItems: OrderItem[];
   kitchenSends: OrderKitchenSend[];
+  /** All branch open/held order ids, including empty shells hidden from operational UI. */
+  watchedOrderIds: string[];
 }
