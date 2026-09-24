@@ -10,7 +10,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
 
-- Current phase: centralized entry-gate + backend migration/security verification (not activated).
+- Current phase: final centralized entry-gate + revoke-to-pending + realtime verification (feature flag off; not activated).
 - Production enforcement: not started.
 - Production migration: not applied.
 - Main merge: not approved.
@@ -132,7 +132,7 @@ State: **BLOCKED**
 - Pre-migration code/contract verification is Full Green on run #2604.
 - No Production migration has been applied. Branch-only migration `20260924164500_work_authorization_backend.sql` now exists on the development branch only; Fresh DB + security verification is mandatory before any merge/apply.
 - No work-authorization server enforcement is active.
-- The centralized employee gate exists in code but is intentionally not mounted yet.
+- The centralized employee gate is mounted around `AppRoutes` behind `VITE_WORK_AUTHORIZATION_GATE=1`; the flag is off by default, so current Production behavior is unchanged.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
 - No Production activation until backend authority, RLS, RPC coverage, exact-head Full Verify Green, and explicit user approval.
 
@@ -158,7 +158,13 @@ State: **BLOCKED**
 18. Added `WorkAuthorizationGate.tsx` as a centralized gate component. It checks once on mount/branch change, does not poll, has no role-name guards, and keeps the authenticated session mounted while waiting. ✅
 19. Backend contract updated: approval/revocation changes will use Realtime to trigger a single lightweight state refresh; no page/button-level polling. ✅
 20. Added a unit contract that fails if the gate introduces polling, role-name authorization, direct Supabase access, or loses the centralized gate marker. ✅
-21. Next: exact-head Verify/Fresh DB for the migration + gate contract. Only after Green will the gate be mounted at the authenticated app boundary. Production apply remains BLOCKED.
+21. Centralized gate mounted around `AppRoutes` behind a default-off feature flag; `CloudPrintAgent` remains outside the gate. ✅
+22. Approval Center now uses the real RPC provider only when the feature flag is enabled and the user owns `work.authorization.approve`; settings require `work.authorization.manage`. ✅
+23. Final stop behavior locked: stopping an approved user atomically writes `revoked` and creates/reuses a new `pending` request for the same user+branch+shift. The worker therefore returns immediately to the waiting gate and cannot re-enter until a fresh approval. ✅
+24. Realtime wake-up added for `work_authorizations` and `work_authorization_policies`; the gate performs one RPC refresh per change and never polls. ✅
+25. Approval Center active/pending queues include active user accounts only. ✅
+26. Added integration coverage for `approved -> revoke -> pending -> blocked -> reapprove -> allowed`, plus unit coverage for the app-level boundary, default-off feature flag, no polling, and print-agent isolation. ✅
+27. Next: exact-head Verify/Fresh DB on this final architecture. Production apply and feature activation remain BLOCKED.
 
 ## Mandatory update protocol
 
