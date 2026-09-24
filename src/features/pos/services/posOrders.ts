@@ -7,6 +7,7 @@ export const EMPTY_POS_REALTIME: PosRealtimeData = {
   tables: [],
   orderItems: [],
   kitchenSends: [],
+  watchedOrderIds: [],
 };
 
 type PosOrderOperatorLabel = {
@@ -58,10 +59,11 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
       },
     } satisfies Order;
   }));
+  const watchedOrderIds = orders.map((o) => o.id);
   let orderItems: OrderItem[] = [];
   let kitchenSends: OrderKitchenSend[] = [];
-  if (orders.length > 0) {
-    const ids = orders.map((o) => o.id);
+  if (watchedOrderIds.length > 0) {
+    const ids = watchedOrderIds;
     const [iRes, kRes] = await Promise.all([
       supabase.from('order_items').select('*').in('order_id', ids),
       supabase.from('order_kitchen_sends').select('*').in('order_id', ids),
@@ -78,7 +80,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
     orderItems = orderItems.filter((item) => effectiveOrderIds.has(item.order_id));
     kitchenSends = kitchenSends.filter((send) => effectiveOrderIds.has(send.order_id));
   }
-  return { orders, tables, orderItems, kitchenSends };
+  return { orders, tables, orderItems, kitchenSends, watchedOrderIds };
 }
 
 export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: Order | null; items: OrderItem[]; products: Product[] }> {
