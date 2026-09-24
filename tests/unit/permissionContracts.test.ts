@@ -88,6 +88,7 @@ describe('permission operational contracts', () => {
     );
     expect(permissionContract('work.authorization.approve').kind).toBe('approval');
     expect(permissionContract('work.authorization.approve').risk).toBe('sensitive');
+    expect(permissionContract('work.authorization.approve').requires).toEqual(['approvals.review']);
     expect(permissionContract('work.authorization.manage').requires).toEqual([
       'work.authorization.approve',
     ]);
@@ -99,12 +100,14 @@ describe('permission operational contracts', () => {
 
     expect(expandPermissionDependencies(['work.authorization.manage'])).toEqual(
       expect.arrayContaining([
+        'approvals.review',
         'work.authorization.approve',
         'work.authorization.manage',
       ]),
     );
     expect(expandPermissionDependencies(['work.authorization.bypass'])).toEqual(
       expect.arrayContaining([
+        'approvals.review',
         'work.authorization.approve',
         'work.authorization.bypass',
       ]),
