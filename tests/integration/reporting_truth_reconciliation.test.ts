@@ -61,16 +61,7 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
     await q(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]);
     await q(`SELECT public.seed_account_mappings($1)`, [branchId]);
 
-    await q(
-      `INSERT INTO public.treasury_accounts
-        (branch_id,account_id,account_type,account_name,is_active,scope,kind,is_primary)
-       SELECT $1,id,'cash','Branch Cash',true,'branch','branch_cash',true
-       FROM public.chart_of_accounts WHERE branch_id=$1 AND code='1000'
-       UNION ALL
-       SELECT $1,id,'bank','Bank',true,'branch','bank',true
-       FROM public.chart_of_accounts WHERE branch_id=$1 AND code='1010'`,
-      [branchId],
-    );
+    await q(`SELECT public.seed_treasury_accounts($1)`, [branchId]);
 
     const openedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     await q(
