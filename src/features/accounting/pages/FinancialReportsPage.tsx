@@ -51,8 +51,10 @@ export function FinancialReportsPage() {
   const [inventoryItemId, setInventoryItemId] = useState('');
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
+  const [loadedSelectorContextKey, setLoadedSelectorContextKey] = useState('');
   const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const selectorContextKey = `${effectiveBranchFilter || ''}|${view}|${partySide}|${inventoryItemType}`;
 
   const [tb, setTb] = useState<TrialBalanceRow[]>([]);
   const [tbSummary, setTbSummary] = useState<TrialBalanceSummary | null>(null);
@@ -68,33 +70,38 @@ export function FinancialReportsPage() {
   const [inventoryStmt, setInventoryStmt] = useState<InventoryItemStatementResult | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoadedSelectorContextKey('');
+
     if (!effectiveBranchFilter) {
       setAccounts([]);
       setAccountId('');
       setCustomers([]);
       setSuppliers([]);
+      setPartyId('');
       setTreasuryAccounts([]);
       setTreasuryId('');
       setInventoryItems([]);
       setInventoryItemId('');
       setWarehouses([]);
       setWarehouseId('');
-      return;
+      return () => { cancelled = true; };
     }
 
     if (view === 'ledger') {
       void supabase
         .from('chart_of_accounts')
-        .select('id, code, name, name_en')
+        .select('id, code, name, name_en, account_type')
         .eq('branch_id', effectiveBranchFilter)
         .order('code')
         .then(({ data }) => {
-          setAccounts((data as ChartOfAccount[]) || []);
-          setAccountId((prev) => prev || (data?.[0]?.id as string) || '');
+          if (cancelled) return;
+          const rows = (data as ChartOfAccount[]) || [];
+          setAccounts(rows);
+          setAccountId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
+          setLoadedSelectorContextKey(selectorContextKey);
         });
-    }
-
-    if (view === 'treasury_statement') {
+    } else if (view === 'treasury_statement') {
       void supabase
         .from('treasury_accounts')
         .select('id, account_name, kind, scope')
@@ -102,43 +109,59 @@ export function FinancialReportsPage() {
         .eq('is_active', true)
         .order('account_name')
         .then(({ data }) => {
+          if (cancelled) return;
           const rows = (data as { id: string; account_name: string; kind: string; scope: string }[]) || [];
           setTreasuryAccounts(rows);
           setTreasuryId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
+          setLoadedSelectorContextKey(selectorContextKey);
         });
-    }
-
-    if (view === 'inventory_movement') {
+    } else if (view === 'inventory_movement') {
       const table = inventoryItemType === 'product' ? 'products' : 'raw_materials';
       void Promise.all([
         supabase.from(table).select('id, name').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('name'),
         supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('name'),
       ]).then(([items, wh]) => {
+        if (cancelled) return;
         const itemRows = (items.data as { id: string; name: string }[]) || [];
+        const warehouseRows = (wh.data as { id: string; name: string }[]) || [];
         setInventoryItems(itemRows);
         setInventoryItemId((prev) => itemRows.some((x) => x.id === prev) ? prev : (itemRows[0]?.id || ''));
-        setWarehouses((wh.data as { id: string; name: string }[]) || []);
+        setWarehouses(warehouseRows);
+        setWarehouseId((prev) => warehouseRows.some((x) => x.id === prev) ? prev : '');
+        setLoadedSelectorContextKey(selectorContextKey);
       });
-    }
-
-    if (view === 'party_statement') {
+    } else if (view === 'party_statement') {
       if (partySide === 'ar') {
         void supabase
           .from('customers')
           .select('id, name, phone')
           .eq('branch_id', effectiveBranchFilter)
           .order('name')
-          .then(({ data }) => setCustomers((data as Customer[]) || []));
+          .then(({ data }) => {
+            if (cancelled) return;
+            const rows = (data as Customer[]) || [];
+            setCustomers(rows);
+            setPartyId((prev) => rows.some((x) => x.id === prev) ? prev : '');
+            setLoadedSelectorContextKey(selectorContextKey);
+          });
       } else {
         void supabase
           .from('suppliers')
           .select('id, name, phone')
           .eq('branch_id', effectiveBranchFilter)
           .order('name')
-          .then(({ data }) => setSuppliers((data as Supplier[]) || []));
+          .then(({ data }) => {
+            if (cancelled) return;
+            const rows = (data as Supplier[]) || [];
+            setSuppliers(rows);
+            setPartyId((prev) => rows.some((x) => x.id === prev) ? prev : '');
+            setLoadedSelectorContextKey(selectorContextKey);
+          });
       }
     }
-  }, [effectiveBranchFilter, view, partySide, inventoryItemType]);
+
+    return () => { cancelled = true; };
+  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey]);
 
   const load = useCallback(async () => {
     if (!effectiveBranchFilter) {
@@ -146,6 +169,16 @@ export function FinancialReportsPage() {
       setArAging([]); setApAging([]); setAgingSummary(null); setCashFlow([]); setPartyStmt(null); setTreasuryStmt(null); setInventoryStmt(null);
       return;
     }
+
+    const selectorDependentView =
+      view === 'ledger'
+      || view === 'treasury_statement'
+      || view === 'inventory_movement'
+      || view === 'party_statement';
+    if (selectorDependentView && loadedSelectorContextKey !== selectorContextKey) {
+      return;
+    }
+
     setLoading(true);
     try {
       const allowed = history.clampRange(from, to);
@@ -234,7 +267,7 @@ export function FinancialReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited]);
+  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited, loadedSelectorContextKey, selectorContextKey]);
 
   useEffect(() => { load(); }, [load]);
 
