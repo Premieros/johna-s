@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-25 00:29 Africa/Cairo
+Last updated: 2026-09-25 00:58 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -32,6 +32,13 @@ State: **BLOCKED**
 - Existing PR #314 repair itself remains the canonical opening-cost repair.
 
 ## Root-cause ledger
+- Opening-cost apply after the historical-debt rebase migration stopped safely at source ledger `1881`: `FIFO_SALE_NOT_FOUND`.
+- Ledger 1881 belongs to deleted sale id `89fbcb31-fb02-4d1f-b726-9aaad1925a10` / invoice `Johna's-00009`; its original sale journal survives.
+- Opening-plan scope contains exactly two orphan sale references tied to eligible opening batches: `Johna's-00009` and `Johna's-00010`.
+- Both have exactly one surviving base sale journal, zero existing FIFO reconcile journals, and zero normal `raw_fifo_sale_cogs_adjustments` rows.
+- The old orphan fallback covered missing kitchen events and purchase returns but did not cover deleted sale headers.
+- Required handling is accounting-backed, not ledger-only: preserve the original sale journal, post FIFO cost changes in a separate reversible reconcile journal, and fail closed on ambiguous/mixed state.
+
 - Production apply attempt after warehouse-transfer support stopped safely at `FIFO_BACKFILL_EXISTING_DEBT_MISMATCH`.
 - Exact mismatch: source ledger `3611` / raw `عيش توست عدد`; old historical debt = 56, replay target debt = 6; both fully settled.
 - Production scope check: 4,525 existing FIFO debts in Smouha, zero target-zero legacy debts, exactly one nonzero debt mismatch.
@@ -46,6 +53,13 @@ State: **BLOCKED**
 - Therefore the opening repair now reaches a legitimate `warehouse_transfer` changed reference and stops at the safety guard.
 
 ## Change ledger
+- Added migration `20260925005500_raw_fifo_orphan_sale_journal_fallback.sql`.
+- Added internal table `raw_fifo_orphan_sale_cogs_adjustments` without a foreign key to `sales`, because the historical sale header is intentionally absent.
+- Added `_fifo_adjust_orphan_sale_cogs_delta`: requires a missing sale header and exactly one surviving base sale journal, validates account mappings and non-negative resulting COGS, preserves the base journal, and creates/updates a separate `fifo_cogs_reconcile` entry.
+- Signed reverse deltas reduce the orphan adjustment back to zero, delete the reconcile journal, and leave the historical base journal unchanged.
+- The sale branch of `_fifo_adjust_reference_delta` still uses the canonical sale helper when the sale exists; it uses the orphan helper only when the sale header is missing.
+- Added unit contract coverage plus an integration apply/reverse test.
+
 - Added migration `20260925000500_raw_fifo_historical_debt_rebase.sql`.
 - Added internal snapshot tables for original debt state and settlement rows.
 - Added `_raw_fifo_rebase_historical_debt_state`: identifies only replay/current settlement-map differences, refuses live debts, refuses partially settled debts, refuses target debt growth, snapshots exact state, deletes only affected settlement rows, and updates affected historical debt quantities to replay target.
@@ -64,6 +78,13 @@ State: **BLOCKED**
 - Printing-related files/functions are untouched.
 
 ## Verification ledger
+- Full Verify on `1ff4dc50a12b6db53e70ddd7cad546cf66ae0d42`: verify Green, DB/integration/RLS Green, Browser Smoke Green.
+- Production migration `raw_fifo_historical_debt_rebase` applied successfully.
+- Fresh Smouha opening prepare run `a353dfea-b47e-40c7-be07-effe22c47e21`: 162 opening batches; 140 eligible; 22 unresolved; candidate opening value 129389.08.
+- Its apply stopped transactionally at orphan sale ledger 1881; no partial opening/FIFO data change persisted.
+- Orphan-sale journal fallback code and tests now committed on the same development branch.
+- Exact-head Full Verify after orphan-sale fallback: pending.
+
 - Exact-head Full Verify on `fa9b17b1efb5bc53c22adbf0541019b83b2a8ec5`: verify job Green; DB integration still failed because the first midnight-fixture correction anchored sales at 12:00 Cairo, which is future time just after midnight and outside report `now() ± 2h` windows.
 - New FIFO rebase integration test remains Green.
 - Reporting fixture corrected again to use the database `now()` timestamp itself. This keeps fixture rows in the current Cairo business date and inside the report windows at all times, including midnight.
