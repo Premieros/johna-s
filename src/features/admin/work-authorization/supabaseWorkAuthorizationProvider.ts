@@ -112,8 +112,8 @@ export function createSupabaseWorkAuthorizationClient(): WorkAuthorizationClient
   };
 
   const subscribeToMyChanges: WorkAuthorizationClient['subscribeToMyChanges'] = async (branchId, onChange) => {
-    const { data } = await supabase.auth.getUser();
-    const userId = data.user?.id;
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user?.id;
     if (!userId) return () => {};
 
     const channel = supabase
