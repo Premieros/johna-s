@@ -122,6 +122,8 @@ State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
   - integration/security/RLS regression ✅
   - browser smoke ✅
 - Pre-migration preparation state: **FULL GREEN**.
+- Verify #2612 failed before DB execution at lint only: `work_authorization_backend.test.ts` used two explicit `any` types. No SQL/Fresh DB step ran in that attempt.
+- Fixed the test types to `pg.QueryResultRow` / typed RPC value without weakening lint or tests.
 
 ## Production gate
 
