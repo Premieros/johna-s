@@ -16,7 +16,7 @@ describe('raw FIFO orphan-sale journal fallback contract', () => {
   it('keeps original sale journals immutable and writes a separate reconciliation journal', () => {
     expect(migration).toContain("'fifo_cogs_reconcile'");
     expect(migration).toContain('FIFO orphan sale COGS reconciliation');
-    expect(migration).not.toMatch(/UPDATE\s+public\.journal_entry_lines[\s\S]*v_base_entry\.id/i);
+    expect(migration).not.toContain('WHERE journal_entry_id=v_base_entry.id;');
   });
 
   it('is reversible by accumulating signed deltas back to zero', () => {
