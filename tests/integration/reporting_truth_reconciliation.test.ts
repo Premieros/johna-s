@@ -11,6 +11,7 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
   const branchId = randomUUID();
   const userId = randomUUID();
   const shiftId = randomUUID();
+  const employeeCustomerId = randomUUID();
 
   const sales = {
     cash: randomUUID(),
@@ -58,6 +59,11 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
        VALUES ($1,$2,'Reporting Truth Admin','super_admin',$3,true)`,
       [userId, `reporting-truth-${userId}@example.test`, branchId],
     );
+    await q(
+      `INSERT INTO public.customers (id,name,branch_id,customer_type)
+       VALUES ($1,'Reporting Truth Employee',$2,'employee')`,
+      [employeeCustomerId, branchId],
+    );
     await q(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]);
     await q(`SELECT public.seed_account_mappings($1)`, [branchId]);
 
@@ -73,14 +79,14 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
     const createdAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     await q(
       `INSERT INTO public.sales
-        (id,invoice_number,branch_id,cashier_id,subtotal,discount_amount,tax_amount,total,paid_amount,payment_method,status,created_at)
+        (id,invoice_number,customer_id,branch_id,cashier_id,subtotal,discount_amount,tax_amount,total,paid_amount,payment_method,status,created_at)
        VALUES
-        ($1,'RT-CASH',$6,$7,100,0,0,100,100,'cash','completed',$8),
-        ($2,'RT-CARD',$6,$7,50,0,0,50,50,'card','completed',$8),
-        ($3,'RT-CREDIT',$6,$7,25,0,0,25,0,'credit','completed',$8),
-        ($4,'RT-SPLIT',$6,$7,100,0,0,100,100,'split','completed',$8),
-        ($5,'RT-LEGACY',$6,$7,100,0,0,100,80,'split','completed',$8)`,
-      [sales.cash, sales.card, sales.credit, sales.split, sales.legacy, branchId, userId, createdAt],
+        ($1,'RT-CASH',NULL,$6,$7,100,0,0,100,100,'cash','completed',$8),
+        ($2,'RT-CARD',NULL,$6,$7,50,0,0,50,50,'card','completed',$8),
+        ($3,'RT-CREDIT',$9,$6,$7,25,0,0,25,0,'credit','completed',$8),
+        ($4,'RT-SPLIT',NULL,$6,$7,100,0,0,100,100,'split','completed',$8),
+        ($5,'RT-LEGACY',NULL,$6,$7,100,0,0,100,80,'split','completed',$8)`,
+      [sales.cash, sales.card, sales.credit, sales.split, sales.legacy, branchId, userId, createdAt, employeeCustomerId],
     );
 
     await q(
