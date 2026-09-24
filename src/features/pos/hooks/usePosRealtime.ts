@@ -17,6 +17,8 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
   const inFlightRef = useRef(false);
   const trailingRefreshRef = useRef(false);
   const loadCyclePromiseRef = useRef<Promise<void> | null>(null);
+  const snapshotRef = useRef<PosRealtimeData>(EMPTY_POS_REALTIME);
+  const hasSnapshotRef = useRef(false);
   const watchedOrderIdsRef = useRef<Set<string>>(new Set());
   const visibleItemIdsRef = useRef<Set<string>>(new Set());
 
@@ -71,6 +73,8 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
     if (!branchId) {
       watchedOrderIdsRef.current = new Set();
       visibleItemIdsRef.current = new Set();
+      snapshotRef.current = EMPTY_POS_REALTIME;
+      hasSnapshotRef.current = false;
       setData(EMPTY_POS_REALTIME);
       setLoading(false);
       return;
@@ -79,6 +83,8 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
     // Never expose the previous branch snapshot or relevance ids under a newly selected branch.
     watchedOrderIdsRef.current = new Set();
     visibleItemIdsRef.current = new Set();
+    snapshotRef.current = EMPTY_POS_REALTIME;
+    hasSnapshotRef.current = false;
     setData(EMPTY_POS_REALTIME);
     setError('');
     setLoading(true);
