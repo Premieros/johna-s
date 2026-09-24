@@ -12,6 +12,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { ALL_PERMISSIONS, useCan } from '@/lib/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { useV2Can } from '@/v2/core/useV2Can';
+import { WorkAuthorizationPreview } from '@/features/admin/work-authorization/WorkAuthorizationPreview';
 
 type QueueItem = {
   source_type: 'manager_approval' | 'waste' | 'stock_count' | 'warehouse_transfer';
@@ -92,6 +93,10 @@ export function ApprovalCenterPage() {
         actions={<Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="w-4 h-4" />{ar ? 'تحديث' : 'Refresh'}</Button>}
       />
       <div className="space-y-4">
+        {canReviewApprovals && (
+          <WorkAuthorizationPreview ar={ar} branches={branches} canManageSettings={canManagePolicies} />
+        )}
+
         <DesignPanel testId="approval-center-filter-panel" className="ui-accent-system">
           <div className="flex flex-wrap items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-ui-primary" />
