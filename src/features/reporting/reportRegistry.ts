@@ -263,6 +263,19 @@ export const REPORT_REGISTRY: ReportDefinition[] = [
     dateDriven: true,
     deepLinkKey: 'production_waste',
   },
+  {
+    key: 'financial_reconciliation',
+    category: 'treasury_payments',
+    title: 'المطابقة المالية',
+    titleEn: 'Financial Reconciliation',
+    description: 'مطابقة الكاش والكارت والتحويل والآجل مع قيود الخزنة والبنك وكشف أي فرق',
+    descriptionEn: 'Reconcile cash, card, transfer and credit sales with treasury/bank journal movements',
+    icon: 'BadgeCheck',
+    permissions: ['reports.view', 'reports.financial'],
+    filterDimensions: [],
+    dateDriven: true,
+    deepLinkKey: 'financial_reconciliation',
+  },
 ];
 
 export function getReportsByCategory(category: ReportCategory): ReportDefinition[] {
