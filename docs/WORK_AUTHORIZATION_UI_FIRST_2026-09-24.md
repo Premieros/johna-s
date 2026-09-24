@@ -169,6 +169,10 @@ Final required behavior:
 
 ## Verification ledger
 
+- Verify #2664 / Fast Verify #349 reached Green on DB migration/schema/integration and Green on lint/typecheck. One unit assertion failed because `workAuthorizationUiFirstContract.test.ts` still expected the old `canManagePolicies` prop name after the live Work Authorization center moved to `canManageWorkAuthorization`. Runtime code was correct.
+- Fixed that single stale assertion at commit `afdff9e4fb875c62a7338be4c5c044d6c5846eaf` without changing runtime behavior or weakening coverage.
+
+
 - UI-first pre-backend Verify was Full Green.
 - Pre-migration preparation Verify #2604 was Full Green.
 - First backend verification caught explicit test typing/lint issues; they were fixed without weakening checks.
