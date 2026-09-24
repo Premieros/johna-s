@@ -17,6 +17,7 @@ concurrency:
 env:
   SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
   VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+  VITE_WORK_AUTHORIZATION_GATE: "1"
 
 jobs:
   build:
