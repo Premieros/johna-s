@@ -122,8 +122,8 @@ internal sealed class RealtimeWakeClient : IDisposable
             {
                 config = new
                 {
-                    broadcast = new { ack = false, self = false },
-                    presence = new { key = "" },
+                    broadcast = new { ack = false, self = false, replication_ready = true },
+                    presence = new { enabled = false, key = "" },
                     postgres_changes = new[]
                     {
                         new
@@ -230,7 +230,12 @@ internal sealed class RealtimeWakeClient : IDisposable
                 var status = ReadString(payload, "status");
                 if (!string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
                 {
-                    SetConnected(false, "Realtime join لم ينجح — fallback فعال");
+                    var reason = ReadNestedReason(payload);
+                    SetConnected(
+                        false,
+                        string.IsNullOrWhiteSpace(reason)
+                            ? "Realtime join لم ينجح — fallback فعال"
+                            : "Realtime join فشل: " + reason);
                     return;
                 }
 
@@ -245,6 +250,22 @@ internal sealed class RealtimeWakeClient : IDisposable
                 SetConnected(
                     true,
                     "Realtime متصل — postgres_changes مؤكد لسموحة");
+                return;
+            }
+
+            if (eventName == "system")
+            {
+                HandleSystemEvent(root, topic);
+                return;
+            }
+
+            if (eventName == "phx_error" || eventName == "phx_close")
+            {
+                SetConnected(
+                    false,
+                    eventName == "phx_error"
+                        ? "Realtime channel error — fallback فعال"
+                        : "Realtime channel closed — fallback فعال");
                 return;
             }
 
@@ -267,6 +288,72 @@ internal sealed class RealtimeWakeClient : IDisposable
             // Ignore protocol noise; reconciliation/fallback polling is the
             // safety net and remains active until a verified subscription exists.
         }
+    }
+
+    private void HandleSystemEvent(JsonElement root, string topic)
+    {
+        if (!string.Equals(
+                topic,
+                $"realtime:public:{BuildConfig.WakeTable}",
+                StringComparison.Ordinal))
+            return;
+
+        if (!root.TryGetProperty("payload", out var payload) ||
+            payload.ValueKind != JsonValueKind.Object)
+            return;
+
+        var extension = ReadString(payload, "extension");
+        var status = ReadString(payload, "status");
+        var message = ReadString(payload, "message");
+
+        if (string.Equals(extension, "postgres_changes", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                SetConnected(
+                    true,
+                    string.IsNullOrWhiteSpace(message)
+                        ? "Realtime متصل — PostgreSQL subscription جاهز"
+                        : "Realtime متصل — " + message);
+                return;
+            }
+
+            SetConnected(
+                false,
+                string.IsNullOrWhiteSpace(message)
+                    ? "Realtime postgres_changes غير جاهز — fallback فعال"
+                    : "Realtime postgres_changes: " + message);
+            return;
+        }
+
+        if (string.Equals(extension, "system", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnected(
+                false,
+                string.IsNullOrWhiteSpace(message)
+                    ? "Realtime system error — fallback فعال"
+                    : "Realtime system: " + message);
+        }
+    }
+
+    private static string ReadNestedReason(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("response", out var response))
+            return "";
+
+        if (response.ValueKind == JsonValueKind.Object)
+        {
+            var reason = ReadString(response, "reason");
+            if (!string.IsNullOrWhiteSpace(reason)) return reason;
+
+            var error = ReadString(response, "error");
+            if (!string.IsNullOrWhiteSpace(error)) return error;
+        }
+
+        return response.ValueKind == JsonValueKind.String
+            ? response.GetString() ?? ""
+            : "";
     }
 
     private static bool HasPostgresSubscriptionConfirmation(JsonElement payload)
