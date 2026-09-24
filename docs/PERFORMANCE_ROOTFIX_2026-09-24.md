@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — work resumed; unit-contract scope fix authorized
+Last updated: 2026-09-24 — CH-06 unit-contract scope correction implemented
 
 ## Work status
 
@@ -247,6 +247,34 @@ Required implementation:
 - The gate is wired in `.github/workflows/verify-main.yml`; because `db` needs `verify` and `browser-smoke` needs both, a failed log gate blocks the entire Full Verify chain.
 - Every later functional change must update this file before proceeding to merge/Production gates.
 
+
+### CH-06 — Inventory Ledger contract scope correction
+
+Status: IMPLEMENTED.
+
+File changed:
+- `tests/unit/inventoryLedgerPerformanceContract.test.ts`
+
+Change:
+- extract only the `CREATE OR REPLACE FUNCTION public.search_inventory_ledger(...)` body from the migration text,
+- keep the hot-path regression assertions against that function body,
+- continue forbidding:
+  - `public.user_may_access_branch(il.branch_id)`
+  - `private.financial_reference_visible(`
+  inside the Inventory Ledger RPC,
+- allow the same financial helper to exist elsewhere in the migration where the Journal RLS policy intentionally uses it.
+
+Intentionally unchanged:
+- migration SQL,
+- Inventory Ledger behavior,
+- RLS policies,
+- financial report logic,
+- Production,
+- printing / Print Agent / routing / KDS / `send_to_kitchen`.
+
+Rollback boundary:
+- this commit is test-only and can be reverted without any data/schema/runtime effect.
+
 ## Verification ledger
 
 ### V-01 — Inventory Ledger implementation head
@@ -378,11 +406,9 @@ User explicitly resumed work.
 
 Current mandatory sequence:
 
-1. Fix only the false-positive scope in `tests/unit/inventoryLedgerPerformanceContract.test.ts` so the forbidden helper assertion inspects the `public.search_inventory_ledger` function body rather than the entire migration file.
-2. Do **not** change the migration, RLS behavior, Inventory Ledger behavior, printing, agent, KDS, or `send_to_kitchen` for this fix.
-3. Record the exact test change in the Change ledger.
-4. Run/observe the exact-head Full Verify created by the commit.
-5. Record the exact run ID and all job results here.
+1. Test-scope correction completed and recorded as CH-06.
+2. Run/observe the exact-head Full Verify created by the current head.
+3. Record the exact run ID and all job results here.
 6. If Verify fails, diagnose only the actual failure and update this log before the next functional write.
 7. Do not merge PR #354 or apply Production migration without the required explicit approval and Production gate transition.
 
