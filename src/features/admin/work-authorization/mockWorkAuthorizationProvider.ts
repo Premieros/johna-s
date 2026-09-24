@@ -328,6 +328,8 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
     };
   };
 
+  const subscribeToMyChanges: WorkAuthorizationClient['subscribeToMyChanges'] = async () => () => {};
+
   return {
     getSnapshot,
     getMyState,
@@ -336,5 +338,6 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
     reject,
     revoke,
     setRequirement,
+    subscribeToMyChanges,
   };
 }
