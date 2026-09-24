@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   LayoutDashboard,
@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { useCan, type Permission } from '@/lib/permissions';
 import { ReportCard } from './ReportCard';
 import {
   REPORT_REGISTRY,
@@ -46,6 +47,21 @@ const CATEGORY_ICONS: Record<ReportCategory, React.ComponentType<{ className?: s
 const FAVORITES_KEY = 'premire_report_favorites';
 const RECENT_KEY = 'premire_report_recent';
 
+const FINANCIAL_REPORTS = [
+  { key: 'treasury_statement', ar: 'كشف حساب بنك / خزنة', en: 'Bank / Treasury Statement' },
+  { key: 'inventory_movement', ar: 'حركة صنف', en: 'Item Movement' },
+  { key: 'ledger', ar: 'دفتر الأستاذ', en: 'General Ledger' },
+  { key: 'trial_balance', ar: 'ميزان المراجعة', en: 'Trial Balance' },
+  { key: 'income', ar: 'قائمة الدخل', en: 'Income Statement' },
+  { key: 'balance_sheet', ar: 'الميزانية', en: 'Balance Sheet' },
+  { key: 'ar_aging', ar: 'أعمار ديون العملاء', en: 'AR Aging' },
+  { key: 'ap_aging', ar: 'أعمار ديون الموردين', en: 'AP Aging' },
+  { key: 'cash_flow', ar: 'التدفقات النقدية', en: 'Cash Flow' },
+  { key: 'party_statement', ar: 'كشف حساب عميل / مورد', en: 'Party Statement' },
+] as const;
+
+const QUICK_OPERATIONAL_REPORTS: ReportType[] = ['sales', 'sales_by_payment', 'financial_reconciliation'];
+
 function loadFavorites(): string[] {
   try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch { return []; }
 }
@@ -63,6 +79,8 @@ interface ReportingShellProps {
 
 export function ReportingShell({ activeReport, onSelectReport, children }: ReportingShellProps) {
   const { lang } = useLanguage();
+  const can = useCan();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ReportCategory | null>(null);
@@ -98,8 +116,13 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
     [activeReport]
   );
 
+  const permittedReports = useMemo(
+    () => REPORT_REGISTRY.filter((report) => report.permissions.every((permission) => can(permission as Permission))),
+    [can]
+  );
+
   const visibleReports = useMemo(() => {
-    let reports = REPORT_REGISTRY;
+    let reports = permittedReports;
     if (activeCategory) reports = reports.filter((r) => r.category === activeCategory);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -112,17 +135,27 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
       );
     }
     return reports;
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, permittedReports]);
 
   const favoriteReports = useMemo(
-    () => REPORT_REGISTRY.filter((r) => favorites.includes(r.key)),
-    [favorites]
+    () => permittedReports.filter((r) => favorites.includes(r.key)),
+    [favorites, permittedReports]
   );
 
   const recentReports = useMemo(
-    () => recent.map((k) => REPORT_REGISTRY.find((r) => r.key === k)).filter(Boolean) as ReportDefinition[],
-    [recent]
+    () => recent.map((k) => permittedReports.find((r) => r.key === k)).filter(Boolean) as ReportDefinition[],
+    [recent, permittedReports]
   );
+
+  const financialSearchResults = useMemo(() => {
+    if (!can('reports.financial') || !searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase().trim();
+    return FINANCIAL_REPORTS.filter((report) =>
+      report.ar.toLowerCase().includes(q)
+      || report.en.toLowerCase().includes(q)
+      || report.key.toLowerCase().includes(q)
+    );
+  }, [can, searchQuery]);
 
   const sortedCategories = useMemo(
     () => Object.entries(REPORT_CATEGORIES).sort(([, a], [, b]) => a.order - b.order),
@@ -142,35 +175,77 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
           <button
             type="button"
             onClick={() => setShowReportBrowser((open) => !open)}
-            className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-ui-primary px-3 text-xs font-black text-ui-primary-fg transition hover:bg-ui-primary-hover"
+            className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-ui-border bg-ui-page-alt px-3 text-xs font-black text-ui-text transition hover:border-ui-primary hover:text-ui-primary"
           >
             <SlidersHorizontal className="h-4 w-4" />
-            <span>{lang === 'ar' ? 'اختيار تقرير' : 'Choose report'}</span>
+            <span>{lang === 'ar' ? 'كل التقارير' : 'All reports'}</span>
             {showReportBrowser ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
 
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-subtle" />
+            <input
+              type="search"
+              value={searchQuery}
+              onFocus={() => setShowReportBrowser(true)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.trim()) setShowReportBrowser(true);
+              }}
+              placeholder={lang === 'ar' ? 'اكتب اسم التقرير: بنك، مبيعات، حركة صنف...' : 'Search: bank, sales, item movement...'}
+              className="h-10 w-full rounded-lg border border-ui-border bg-ui-surface-raised ps-9 pe-3 text-sm font-semibold text-ui-text placeholder:text-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring"
+            />
+          </div>
+
           {activeDefinition && (
-            <div className="min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-2">
-              <p className="break-words text-xs font-extrabold leading-5 text-ui-text">
+            <div className="hidden max-w-56 shrink-0 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-2 sm:block">
+              <p className="truncate text-xs font-extrabold text-ui-text">
                 {lang === 'ar' ? activeDefinition.title : activeDefinition.titleEn}
               </p>
             </div>
+          )}
+        </div>
+
+        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          {QUICK_OPERATIONAL_REPORTS
+            .map((key) => permittedReports.find((report) => report.key === key))
+            .filter(Boolean)
+            .map((report) => {
+              const item = report as ReportDefinition;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => selectReport(item.key)}
+                  className={`shrink-0 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${activeReport === item.key ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-page-alt text-ui-muted hover:border-ui-primary hover:text-ui-primary'}`}
+                >
+                  {lang === 'ar' ? item.title : item.titleEn}
+                </button>
+              );
+            })}
+          {can('reports.financial') && (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate('/financial-reports?view=treasury_statement')}
+                className="shrink-0 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5 text-[11px] font-bold text-ui-muted transition hover:border-ui-primary hover:text-ui-primary"
+              >
+                {lang === 'ar' ? 'كشف بنك / خزنة' : 'Bank / Treasury'}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/financial-reports?view=inventory_movement')}
+                className="shrink-0 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5 text-[11px] font-bold text-ui-muted transition hover:border-ui-primary hover:text-ui-primary"
+              >
+                {lang === 'ar' ? 'حركة صنف' : 'Item Movement'}
+              </button>
+            </>
           )}
         </div>
       </div>
 
       {showReportBrowser && (
         <section className="ui-accent-card ui-accent-system rounded-xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
-          <div className="relative mb-3">
-            <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-subtle" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={lang === 'ar' ? 'ابحث عن تقرير...' : 'Search reports...'}
-              className="h-9 w-full rounded-lg border border-ui-border bg-ui-page-alt ps-9 pe-3 text-sm text-ui-text placeholder:text-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring"
-            />
-          </div>
 
           <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             <button
@@ -241,23 +316,48 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
             </div>
           )}
 
-          {visibleReports.length === 0 ? (
+          {visibleReports.length === 0 && financialSearchResults.length === 0 ? (
             <div className="py-8 text-center text-sm text-ui-subtle">
               {lang === 'ar' ? 'لا توجد تقارير مطابقة' : 'No matching reports'}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-              {visibleReports.map((r) => (
-                <ReportCard
-                  key={r.key}
-                  report={r}
-                  isActive={activeReport === r.key}
-                  isFavorite={favorites.includes(r.key)}
-                  lang={lang}
-                  onSelect={() => selectReport(r.key)}
-                  onToggleFavorite={(e) => { e.stopPropagation(); toggleFavorite(r.key); }}
-                />
-              ))}
+            <div className="space-y-3">
+              {visibleReports.length > 0 && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {visibleReports.map((r) => (
+                    <ReportCard
+                      key={r.key}
+                      report={r}
+                      isActive={activeReport === r.key}
+                      isFavorite={favorites.includes(r.key)}
+                      lang={lang}
+                      onSelect={() => selectReport(r.key)}
+                      onToggleFavorite={(e) => { e.stopPropagation(); toggleFavorite(r.key); }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {financialSearchResults.length > 0 && (
+                <div>
+                  <div className="mb-2 flex items-center gap-1.5 text-[11px] font-black text-ui-muted">
+                    <Landmark className="h-3.5 w-3.5" />
+                    {lang === 'ar' ? 'التقارير المالية' : 'Financial reports'}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {financialSearchResults.map((report) => (
+                      <button
+                        key={report.key}
+                        type="button"
+                        onClick={() => navigate(`/financial-reports?view=${report.key}`)}
+                        className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-3 text-start text-xs font-bold text-ui-text transition hover:border-ui-primary hover:text-ui-primary"
+                      >
+                        {lang === 'ar' ? report.ar : report.en}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
