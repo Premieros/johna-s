@@ -237,3 +237,84 @@ EXECUTE FUNCTION public.enforce_work_authorization_product_component_mutation();
 
 COMMENT ON FUNCTION public.enforce_work_authorization_product_component_mutation()
 IS 'Work authorization guard for product_components, deriving branch scope from the parent product.';
+
+
+-- Branch bootstrap ordering:
+-- Grant the creator access to the newly-created branch before inserting guarded
+-- branch-scoped setup rows (such as the main warehouse). This preserves the
+-- direct-write guard without introducing a generic bypass for internal RPCs.
+CREATE OR REPLACE FUNCTION public.create_organization_branch(
+  p_organization_id uuid,
+  p_name text,
+  p_name_en text DEFAULT NULL::text,
+  p_address text DEFAULT NULL::text,
+  p_phone text DEFAULT NULL::text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_branch_id uuid;
+  v_warehouse_id uuid;
+  v_global_tax numeric(5,2);
+  v_global_tax_enabled boolean;
+  v_global_currency text;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+  END IF;
+
+  IF NOT public.is_pos_admin() THEN
+    IF NOT public.can_permission('branches.manage')
+       OR NOT public.user_can_access_organization(p_organization_id) THEN
+      RETURN jsonb_build_object('success', false, 'error', 'FORBIDDEN');
+    END IF;
+  END IF;
+
+  IF btrim(COALESCE(p_name, '')) = '' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MISSING_BRANCH_NAME');
+  END IF;
+
+  INSERT INTO public.branches (name, name_en, address, phone, is_active, organization_id)
+  VALUES (p_name, p_name_en, p_address, p_phone, true, p_organization_id)
+  RETURNING id INTO v_branch_id;
+
+  -- The creator must enter branch scope before any guarded setup rows are written.
+  INSERT INTO public.user_branch_access (user_id, branch_id)
+  VALUES (auth.uid(), v_branch_id)
+  ON CONFLICT (user_id, branch_id) DO NOTHING;
+
+  INSERT INTO public.warehouses (name, branch_id, is_active)
+  VALUES (p_name || ' - Main', v_branch_id, true)
+  RETURNING id INTO v_warehouse_id;
+
+  SELECT COALESCE(tax_rate, 15), COALESCE(tax_enabled, true), COALESCE(currency, 'EGP')
+  INTO v_global_tax, v_global_tax_enabled, v_global_currency
+  FROM public.settings
+  ORDER BY id
+  LIMIT 1;
+
+  INSERT INTO public.branch_settings (branch_id, tax_rate, tax_enabled, currency, low_stock_threshold)
+  VALUES (v_branch_id, v_global_tax, v_global_tax_enabled, v_global_currency, 10);
+
+  INSERT INTO public.branch_subscriptions (branch_id, status, trial_starts_at, trial_ends_at)
+  VALUES (v_branch_id, 'trial', now(), now() + interval '14 days');
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'branch_id', v_branch_id,
+    'warehouse_id', v_warehouse_id
+  );
+EXCEPTION WHEN OTHERS THEN
+  RETURN jsonb_build_object(
+    'success', false,
+    'error', 'BRANCH_CREATE_FAILED',
+    'detail', SQLERRM
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.create_organization_branch(uuid,text,text,text,text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_organization_branch(uuid,text,text,text,text) TO authenticated, service_role;
