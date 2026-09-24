@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — CH-06 unit-contract scope correction implemented
+Last updated: 2026-09-24 — Egress/PostgREST root audit added
 
 ## Work status
 
@@ -141,7 +141,34 @@ Most sampled 401s were automated `node` requests from Boydton without an authent
 
 Realtime 401 is tracked separately and remains outside the frozen printing/agent scope.
 
-## Change ledger
+### RC-05 — PostgREST / Egress growth audit
+
+Status: ACTIVE AUDIT / READ-ONLY.
+
+Trigger:
+- Supabase Usage screenshot for 23 Sep 2026 shows approximately:
+  - PostgREST Egress: 166.913 MB (78.2%)
+  - Realtime Egress: 33.589 MB (15.7%)
+  - Auth Egress: 12.879 MB (6.0%)
+- Current billing-cycle egress shown: 2.77 GB of 5 GB included.
+
+Audit objective:
+1. Measure Production API traffic by route/RPC/table using logs, not UI assumptions.
+2. Rank top consumers by response bytes when the log stream exposes response-size fields.
+3. Also rank by request count, latency, status, authenticated user, user-agent, and repeating cadence.
+4. Separate real branch/user traffic from CI/scanner/automation traffic.
+5. Identify repeated polling, duplicate fetches, oversized result sets, and report endpoints that can be reduced without changing business truth.
+6. Add only evidence-backed remediation items to this worklog.
+
+Audit safety:
+- Production is read-only for this phase.
+- No schema/data writes.
+- No RLS weakening.
+- No print/agent/routing/KDS/send-to-kitchen changes.
+- Realtime is measured separately from PostgREST; no realtime/print-agent repair is opened by this audit.
+- The screenshot is evidence of service-level volume, but route attribution must come from logs before any optimization.
+
+
 
 ### CH-01 — Inventory Ledger cached visibility context
 
@@ -402,15 +429,18 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-User explicitly resumed work.
+User explicitly resumed work and requested the Egress/PostgREST audit be added to the plan.
 
 Current mandatory sequence:
 
-1. Test-scope correction completed and recorded as CH-06.
-2. Run/observe the exact-head Full Verify created by the current head.
-3. Record the exact run ID and all job results here.
-6. If Verify fails, diagnose only the actual failure and update this log before the next functional write.
-7. Do not merge PR #354 or apply Production migration without the required explicit approval and Production gate transition.
+1. Keep CH-06 complete; do not reopen it unless regression evidence appears.
+2. Perform RC-05 as a read-only Production log audit for the 23 Sep usage spike and the most recent comparable window.
+3. Rank PostgREST/API routes by request volume, response size where available, latency, status, user-agent, authenticated user, and cadence.
+4. Separate branch-user traffic from scanner/CI/automation traffic.
+5. Add every evidence-backed high-egress/high-frequency source to the Root-cause ledger with a proposed minimal remediation.
+6. Do not implement an egress optimization until its exact source is proven and recorded here.
+7. Continue to track exact-head Full Verify after documentation changes.
+8. Do not merge PR #354 or apply Production migration without the required explicit approval and Production gate transition.
 
 ## Mandatory update protocol
 
