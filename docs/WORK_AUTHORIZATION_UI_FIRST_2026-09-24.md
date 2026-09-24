@@ -8,7 +8,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 ## Work status
 
-State: **BLOCKED**
+State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 
 - Current phase: UI-first scaffold and stable client contract.
 - Production enforcement: not started.
@@ -86,10 +86,19 @@ State: **BLOCKED**
 - Static UI contract test added: `tests/unit/workAuthorizationUiFirstContract.test.ts`.
 - Verify main run #2587 / `35996733090`: **FAILED AT MANDATORY WORKLOG GATE ONLY**. Cause: `activeWorklogGateContract.test.ts` still hard-coded the previous Performance log path; lint/type/unit/build were skipped.
 - Fixed the stale hard-coded expected path to `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md` without weakening any structural/branch/Production-gate assertions.
-- Code tests: pending fresh CI result after worklog-gate path fix.
-- Build: pending CI result.
-- Fast Verify: pending.
-- Full Verify: pending.
+- Verify main run #2593 / `35996970596`: **FULL GREEN** on head `24ba942786115bba1dcc8f95c9cb204ecf646b9c`.
+  - mandatory worklog gate ✅
+  - locked Supabase identity ✅
+  - frontend API contract ✅
+  - lint ✅
+  - app typecheck ✅
+  - app + test-suite typecheck ✅
+  - unit ✅
+  - build ✅
+  - fresh DB + schema ✅
+  - integration/security/RLS ✅
+  - browser smoke ✅
+- Full Verify for the UI-first scope: **GREEN**.
 
 ## Production gate
 
@@ -107,8 +116,9 @@ State: **BLOCKED**
 3. Build the employee waiting-screen preview.
 4. Integrate preview mode into the existing Approval Center without changing live approval behavior. ✅
 5. Add UI contract tests. ✅
-6. Wait for Verify main #2587; fix only verified UI/type/test issues.
-7. After Green, perform visual/runtime review of the preview before starting backend authority.
+6. Verify main #2593 is Green. ✅
+7. Perform visual/runtime review of the preview before starting backend authority. **IN PROGRESS**
+8. Keep backend/RLS/RPC/enforcement blocked until the visual review is recorded.
 
 ## Mandatory update protocol
 
