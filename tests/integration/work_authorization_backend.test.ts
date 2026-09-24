@@ -278,6 +278,49 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(activeAuth.rows[0].count).toBe('1');
   });
 
+  it('invalidates stale approvals when the requirement is disabled and does not restore them later', async () => {
+    const disabled = await rpcJson(
+      approverA,
+      `public.set_work_authorization_requirement($1,$2,false)`,
+      [worker, branchA],
+    );
+    expect(disabled.success).toBe(true);
+
+    const allowedWithoutRequirement = await asUser<{ allowed: boolean }>(
+      worker,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [branchA],
+    );
+    expect(allowedWithoutRequirement.rows[0].allowed).toBe(true);
+
+    const activeAfterDisable = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM public.work_authorizations
+       WHERE user_id=$1
+         AND branch_id=$2
+         AND status IN ('approved','pending')`,
+      [worker, branchA],
+    );
+    expect(activeAfterDisable.rows[0].count).toBe('0');
+
+    const reenabled = await rpcJson(
+      approverA,
+      `public.set_work_authorization_requirement($1,$2,true)`,
+      [worker, branchA],
+    );
+    expect(reenabled.success).toBe(true);
+
+    const blockedAgain = await asUser<{ allowed: boolean }>(
+      worker,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [branchA],
+    );
+    expect(blockedAgain.rows[0].allowed).toBe(false);
+
+    const state = await rpcJson(worker, `public.get_my_work_authorization_state($1)`, [branchA]);
+    expect(state.status).toBe('revoked');
+  });
+
   it('blocks authenticated direct writes to authorization tables', async () => {
     await client.query('SAVEPOINT wa_direct_write');
     try {
