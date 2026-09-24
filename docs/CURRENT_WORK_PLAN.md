@@ -1,5 +1,18 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
+## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
+
+- Mandatory active work log: `docs/PERFORMANCE_ROOTFIX_2026-09-24.md`
+- Current active branch: `development/performance-rootfix-20260924`
+- Current PR: `#354`
+- أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
+- بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
+- بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
+- لا Merge ولا Production migration ما لم يسجل `Production gate` صراحة أن exact-head Full Verify أخضر وأن موافقة Production موجودة.
+- السجل هو المرجع الإجباري للعمل؛ الذاكرة والمحادثة ليستا Source of Truth.
+- CI يجب أن يفشل إذا السجل الإلزامي مفقود أو ناقص البنية المطلوبة أو لا يطابق فرع الـPR.
+
+
 ## ACTIVE — Performance root-fix after reports truth merge — 2026-09-24
 
 - Branch: `development/performance-rootfix-20260924`
