@@ -2,112 +2,88 @@
 
 Repository: `Premieros/johna-s`
 Branch: `development/work-authorization-ui-20260924`
-Status: **DESIGN LOCKED / NOT MIGRATED / NOT ACTIVE**
+Status: **IMPLEMENTED ON DEVELOPMENT BRANCH / NOT ACTIVE**
 Production Supabase: `azzdesuowpdcoflmyezn`
 
 ## Purpose
 
-Define the exact server contract for branch/shift work authorization before creating the migration.
-This document is executable design, not a Production change.
+Provide a centralized work-entry authorization gate:
 
-The UI contract already exists in:
+`Login -> Resolve active branch -> Work Authorization Gate -> Application`
 
-- `src/features/admin/work-authorization/workAuthorizationContract.ts`
-- `src/features/admin/work-authorization/supabaseWorkAuthorizationProvider.ts`
+The authorization is **user + branch scoped and independent of shift lifecycle**. Once approved, it remains valid until explicitly revoked or otherwise expired administratively. Opening or closing a shift must not change the work authorization.
 
-The Production adapter is intentionally unmounted until this backend contract is implemented and verified.
+## Non-negotiable rules
 
-## Non-negotiable authorization rules
-
-1. **Permission-First only.**
-   - Role names such as `owner`, `branch_manager`, `cashier`, etc. never authorize review, policy management, revocation, or bypass.
-   - Super Admin remains the only implicit bypass through the existing canonical platform-admin function.
-2. Branch scope is always enforced with the existing canonical branch-access contract.
-3. No direct frontend writes to work-authorization tables.
-4. No self-approval path.
-5. No printing / Print Agent / printer routing / KDS / send-to-kitchen changes.
-6. Rollout is fail-open for users who do not have an explicit requirement row.
-   - **No policy row = work authorization not required.**
-   - This prevents migration deployment from blocking existing branches.
-7. Server authority is final. UI state cannot grant operational access.
-8. Completed transactions are never rewritten if authorization is revoked.
+1. Permission-First only; role names never authorize review, management, revoke, or bypass.
+2. Super Admin remains the only implicit bypass through the existing canonical platform-admin path.
+3. Branch scope is enforced through the canonical branch-access contract.
+4. No direct frontend mutations to work-authorization tables.
+5. No self-approval.
+6. No policy row means authorization is not required (fail-open rollout).
+7. Server authority is final; frontend state cannot grant access by itself.
+8. Revocation never rewrites completed transactions.
+9. Printing / Print Agent / printer routing / KDS / send-to-kitchen remain out of scope.
 
 ## Canonical permissions
 
-Add three permissions:
-
 - `work.authorization.approve`
-  - Review pending work-start requests.
-  - Approve / reject requests.
-  - Revoke active work authorization.
-  - Branch scoped.
+  - review pending requests;
+  - approve/reject;
+  - stop active authorization;
+  - branch scoped.
 - `work.authorization.manage`
-  - Configure which user requires authorization in which branch.
-  - Requires `work.authorization.approve`.
-  - Branch scoped.
+  - configure which user requires authorization in which branch;
+  - depends on `work.authorization.approve`.
 - `work.authorization.bypass`
-  - Explicitly bypass work authorization requirement for the holder.
-  - Requires `work.authorization.approve`.
-  - High-risk / critical permission.
-  - Super Admin does not need this permission because it remains the single implicit bypass.
+  - explicit bypass for the holder;
+  - depends on `work.authorization.approve`;
+  - critical permission.
 
 Capability-based migration seeding only:
 
-- roles that currently possess `approvals.review` may receive `work.authorization.approve`;
-- roles that currently possess `approvals.policy.manage` may receive `work.authorization.manage`;
-- roles that currently possess `approvals.override` may receive `work.authorization.bypass`.
+- existing `approvals.review` -> may receive `work.authorization.approve`;
+- existing `approvals.policy.manage` -> may receive `work.authorization.manage`;
+- existing `approvals.override` -> may receive `work.authorization.bypass`.
 
-No migration statement may match or assign by role name.
+No migration statement may assign by role name.
 
 ## Data model
 
-### 1. `work_authorization_policies`
+### `work_authorization_policies`
 
-One row per user + branch when a policy is explicitly configured.
+One row per user + branch when explicitly configured.
 
-Columns:
+Core columns:
 
-- `id uuid primary key default gen_random_uuid()`
-- `user_id uuid not null -> users(id) on delete cascade`
-- `branch_id uuid not null -> branches(id) on delete cascade`
-- `requires_authorization boolean not null default true`
-- `created_by uuid -> users(id) on delete set null`
-- `updated_by uuid -> users(id) on delete set null`
-- `created_at timestamptz not null default now()`
-- `updated_at timestamptz not null default now()`
-- unique `(user_id, branch_id)`
+- `id`
+- `user_id`
+- `branch_id`
+- `requires_authorization`
+- `created_by`
+- `updated_by`
+- timestamps
 
-Contract:
+Unique: `(user_id, branch_id)`.
 
-- absence of row means authorization is **not required**;
-- target user must actually have access to the branch through primary or explicit branch access;
-- only `work.authorization.manage` + branch access can create/update policy;
-- user may read own effective requirement through RPC but not mutate policy directly.
+Absence of a row means authorization is not required.
 
-### 2. `work_authorizations`
+### `work_authorizations`
 
-One durable request/authorization record.
+Durable request / authorization record scoped to user + branch.
 
-Columns:
+Core columns:
 
-- `id uuid primary key default gen_random_uuid()`
-- `user_id uuid not null -> users(id) on delete cascade`
-- `branch_id uuid not null -> branches(id) on delete cascade`
-- `shift_id uuid null -> shifts(id) on delete set null`
-- `status text not null`
-- `requested_at timestamptz not null default now()`
-- `requested_by uuid not null -> users(id)`
-- `decided_at timestamptz null`
-- `decided_by uuid null -> users(id)`
-- `decision_reason text null`
-- `revoked_at timestamptz null`
-- `revoked_by uuid null -> users(id)`
-- `revocation_reason text null`
-- `expires_at timestamptz null`
-- `created_at timestamptz not null default now()`
-- `updated_at timestamptz not null default now()`
+- `id`
+- `user_id`
+- `branch_id`
+- `status`
+- request / decision / revoke timestamps and actors
+- optional decision/revocation reason
+- `expires_at`
+- timestamps
 
-Allowed states:
+States:
 
 - `pending`
 - `approved`
@@ -115,304 +91,205 @@ Allowed states:
 - `revoked`
 - `expired`
 
-Meaning of `shift_id IS NULL` while approved:
+Uniqueness:
 
-- authorization is approved for the **next valid shift** in the branch;
-- it must be bound once, to the first open shift that becomes current after approval;
-- it cannot be reused by later shifts.
+- at most one pending row per user + branch;
+- at most one approved row per user + branch.
 
-Required uniqueness:
+No shift foreign key is used.
 
-- at most one pending request per `user_id + branch_id`;
-- at most one approved unbound authorization per `user_id + branch_id`;
-- at most one approved authorization per `user_id + branch_id + shift_id`.
+### `work_authorization_events`
 
-### 3. `work_authorization_events`
+Append-only timeline:
 
-Append-only authorization timeline.
+- requested
+- approved
+- rejected
+- revoked
+- expired
 
-Columns:
-
-- `id uuid primary key default gen_random_uuid()`
-- `authorization_id uuid not null -> work_authorizations(id) on delete cascade`
-- `user_id uuid not null -> users(id)`
-- `branch_id uuid not null -> branches(id)`
-- `shift_id uuid null -> shifts(id)`
-- `event_type text not null`
-- `actor_id uuid null -> users(id)`
-- `note text null`
-- `created_at timestamptz not null default now()`
-
-Events:
-
-- `requested`
-- `approved`
-- `rejected`
-- `bound_to_shift`
-- `revoked`
-- `expired`
-
-No direct update/delete from authenticated clients.
+No shift-binding events exist.
 
 ## Core server functions
 
-### `requires_work_authorization(p_user_id uuid, p_branch_id uuid) returns boolean`
-
-Rules:
+### `requires_work_authorization(p_user_id, p_branch_id)`
 
 - Super Admin => false;
-- caller with `work.authorization.bypass` when checking self => false;
-- otherwise true only when an explicit policy row exists with `requires_authorization=true`;
-- policy never expands branch access.
+- self with explicit bypass => false;
+- otherwise true only when an explicit policy row says `requires_authorization=true`.
 
-### `can_user_work(p_branch_id uuid) returns boolean`
-
-Canonical server gate for authenticated human operational mutations.
+### `can_user_work(p_branch_id)`
 
 Order:
 
-1. authenticated user exists and is active;
-2. caller can access branch;
+1. authenticated active user;
+2. branch access;
 3. Super Admin => true;
-4. `work.authorization.bypass` => true;
-5. if no requirement => true;
-6. find current open branch shift:
-   - if open shift exists: require approved authorization bound to that shift;
-   - if no open shift exists: require approved unbound authorization for the next shift.
+4. explicit bypass => true;
+5. no requirement => true;
+6. otherwise require one active approved user+branch authorization.
 
-No role-name conditions.
+No shift lookup and no role-name conditions.
 
-### `assert_user_work_authorized(p_branch_id uuid)`
+### `assert_user_work_authorized(p_branch_id)`
 
-Raises/returns one canonical error when `can_user_work` is false.
+Canonical mutation guard.
 
-Canonical error:
+Error:
 
-- `WORK_AUTHORIZATION_REQUIRED`
+`WORK_AUTHORIZATION_REQUIRED`
 
-UI mapping:
+Arabic UI mapping:
 
-- Arabic: `يلزم اعتماد بدء العمل من مسؤول مخول قبل تنفيذ هذه العملية.`
+`يلزم تصريح بدء العمل من مسؤول مخول قبل تنفيذ هذه العملية.`
 
-### `get_my_work_authorization_state(p_branch_id uuid)`
+### `get_my_work_authorization_state(p_branch_id)`
 
-Authenticated caller only.
+Returns only the caller state for that branch:
 
-Returns the UI contract shape:
-
-- branchId
-- branchName
+- branchId / branchName
 - requiresAuthorization
 - canWork
 - status
 - requestId
 - authorizationId
-- shiftId
 - requestedAt
 - decidedAt
 - decisionReason
 
-Must never expose another user's state.
+### `request_work_authorization(p_branch_id)`
 
-### `request_work_authorization(p_branch_id uuid)`
-
-Authenticated caller requests for self only.
-
-Rules:
-
-- branch must be accessible to caller;
-- if requirement is false, return `not_required / canWork=true`;
-- if valid approved authorization already exists, return it;
-- if pending request already exists, return same pending request (idempotent);
-- rejected/revoked/expired historical rows do not block a new request;
-- requester cannot set target user or approver;
-- append event + audit row.
-
-### `get_work_authorization_snapshot(p_branch_id uuid default null)`
-
-Requires `work.authorization.approve`.
-
-Scope:
-
-- supplied branch must be accessible;
-- null means all accessible branches only;
-- returns:
-  - pending
-  - active
-  - history
-  - policies
-- settings/policy rows should only be included if caller also has `work.authorization.manage`.
-
-The RPC must return UI-ready data but position/title values remain informational only.
-
-### `decide_work_authorization(p_request_id uuid, p_approve boolean, p_reason text default null)`
-
-Requires `work.authorization.approve`.
-
-Rules:
-
-- lock row `FOR UPDATE`;
-- request must be pending;
-- branch access required;
-- requester cannot equal approver;
-- target user must remain active and must still have branch access;
-- reject requires a clear reason;
-- approve with open shift => bind to current shift;
-- approve without open shift => leave `shift_id null` as next-shift authorization;
+- self only;
+- accessible branch only;
+- idempotent pending request;
+- approved users stay approved;
+- revoked/rejected/expired history does not block a new request;
 - append event + audit.
 
-### `revoke_work_authorization(p_authorization_id uuid, p_reason text)`
+### `get_work_authorization_snapshot(p_branch_id default null)`
 
 Requires `work.authorization.approve`.
 
-Rules:
+Returns UI-ready:
 
+- pending
+- active ("working now" = active user accounts with approved authorization)
+- history
+- policies (only when caller also has `work.authorization.manage`)
+
+Null branch means all accessible branches only.
+
+### `decide_work_authorization(...)`
+
+Requires `work.authorization.approve`.
+
+- pending only;
 - branch access required;
-- reason required;
-- only approved authorization can be revoked;
-- blocks future protected mutations immediately;
-- append event + audit;
-- if the user still has an explicit active requirement, create or reuse a new `pending` request for the same branch/current shift in the same transaction;
-- the employee remains on the authorization gate until a fresh approval;
-- does not change completed operations.
+- no self-approval;
+- target must still be active and branch-accessible;
+- rejection requires reason;
+- approval creates persistent branch authorization;
+- append event + audit.
 
-### `set_work_authorization_requirement(p_user_id uuid, p_branch_id uuid, p_required boolean)`
+### `revoke_work_authorization(...)`
 
-Creates or updates the effective user+branch policy.
+Requires `work.authorization.approve`.
+
+Atomic behavior:
+
+1. approved -> revoked;
+2. append revoke event + audit;
+3. if the explicit requirement is still active, create or reuse a new pending request for the same user + branch;
+4. `can_user_work` becomes false immediately;
+5. Realtime wakes the employee gate;
+6. employee returns to "waiting for authorization";
+7. fresh manager approval is required before re-entry.
+
+Completed transactions remain unchanged.
+
+### `set_work_authorization_requirement(user_id, branch_id, required)`
 
 Requires `work.authorization.manage`.
 
-Rules:
-
 - branch access required;
-- target user must belong to/access branch;
-- create the row when absent; update when present;
-- no role-name conditions;
-- append audit.
+- target user must have branch access;
+- creates or updates the user+branch policy;
+- append audit;
+- no role-name conditions.
 
-## Shift binding contract
+## Shift independence contract
 
-### When no shift is open
+Opening or closing a shift:
 
-An approved authorization with `shift_id null` permits the user to reach operations necessary to open the branch shift only when the caller also owns the normal operational permission (for example `shifts.open`).
+- does not create work authorization;
+- does not consume work authorization;
+- does not expire work authorization;
+- does not bind work authorization to a shift.
 
-Work authorization never substitutes for the existing operational permission.
+Shift permissions and normal shift business rules remain separate.
 
-### When a shift opens
+This is intentional to keep the entry gate simple and avoid repeated authorization checks caused by shift lifecycle changes.
 
-A server-side shift lifecycle hook binds eligible approved/unbound authorizations for that branch to the newly opened shift:
+## Entry gate
 
-- set `shift_id`;
-- append `bound_to_shift` event.
+Frontend:
 
-The binding must not touch printing, KDS, or kitchen send logic.
+- check once after authenticated profile + active branch are resolved;
+- check again on active branch change;
+- Realtime event triggers one lightweight state refresh;
+- no polling;
+- no per-page or per-button authorization queries;
+- blocked users do not mount operational routes.
 
-### When a shift closes
+An approver with `work.authorization.approve` may access the Approval Center itself while their own work authorization is pending to avoid approval deadlock. This exception does not open the rest of the application.
 
-A server-side lifecycle hook expires all still-approved authorizations bound to that shift:
+`CloudPrintAgent` stays outside the gate so background printing is unaffected.
 
-- status -> `expired`;
-- append `expired` event.
+## Realtime
 
-A later shift therefore requires a fresh authorization.
+Publication tables:
+
+- `work_authorizations`
+- `work_authorization_policies`
+
+Realtime only wakes the UI; RPC state remains authoritative.
+
+No polling loop.
 
 ## RLS / grants
 
-All three tables must have RLS enabled.
+- RLS enabled on all work-authorization tables.
+- Authenticated clients receive SELECT only where policy permits.
+- No authenticated direct INSERT / UPDATE / DELETE.
+- All mutations go through hardened SECURITY DEFINER RPCs.
+- Functions use `SET search_path = public, pg_temp`.
+- PUBLIC/anon execute revoked where applicable.
+- Branch access + canonical permission checks remain mandatory.
 
-Direct write policy:
+## Rollout safety
 
-- authenticated clients: **no direct INSERT / UPDATE / DELETE**;
-- mutations go through hardened RPCs only.
-
-Select policy:
-
-- user may read own authorization state/history rows when needed;
-- approver may read rows only for accessible branches and only with `work.authorization.approve`;
-- policy management rows visible to `work.authorization.manage` within accessible branches;
-- service_role/postgres retain required maintenance access.
-
-All SECURITY DEFINER functions:
-
-- explicit `SET search_path = public, pg_temp`;
-- explicit `auth.uid()` validation;
-- explicit permission and branch checks;
-- revoke PUBLIC/anon execute;
-- grant only required roles.
-
-## Entry-gate contract
-
-The employee flow is centralized:
-
-`Login -> Resolve active branch -> Work Authorization Gate -> Application`
-
-Frontend behavior:
-
-- check once after a verified login/profile is available;
-- check again only when the active branch changes;
-- do not mount Dashboard/POS/report pages while the gate is blocked;
-- keep the authenticated session mounted while waiting;
-- revocation/approval changes are pushed by Realtime and trigger one lightweight state refresh;
-- no page-level or button-level authorization polling.
-
-Server-side mutation guards remain authoritative and indexed; they are not a frontend polling mechanism.
-
-## Realtime contract
-
-No aggressive polling.
-
-Preferred behavior:
-
-- employee gate loads state once by RPC;
-- a Realtime signal for the current user's authorization **or policy** causes one lightweight state RPC refresh;
-- revocation moves the worker to `pending`, so the same Realtime update immediately returns the UI to the waiting gate;
-- manager center may subscribe to authorization changes for accessible branch scope;
-- no direct table mutations from Realtime client code.
-
-Realtime is not required to activate server enforcement; server gate remains authoritative if realtime is delayed.
-
-## Rollout order
-
-1. Add canonical permissions to frontend permission definitions/contracts.
-2. Add centralized entry gate component between Auth and the application shell.
-3. Create backend migration on the development branch and validate from a Fresh DB.
-4. Add schema + RLS + RPCs + shift lifecycle hooks.
-5. Add integration/security tests.
-6. Fresh DB verify.
-7. Mount production provider in Approval Center only.
-8. Verify manager center against real RPCs.
-9. Mount the employee entry gate once at the authenticated app boundary.
-10. Add Realtime status refresh for approval/revocation; no polling.
-11. Add server enforcement to selected operational mutation boundaries.
-12. Expand enforcement only after regression tests cover each protected boundary.
-13. Full Verify on exact head.
-14. Explicit approval before Production migration.
-15. Production apply.
-16. Controlled enablement by adding policy rows to selected user+branch pairs.
+- Feature flag: `VITE_WORK_AUTHORIZATION_GATE=0` by default.
+- Migration exists only on development branch until approved.
+- No Production activation until exact-head Full Verify is Green and explicit approval is given.
+- Controlled enablement is performed by adding policy rows to selected user+branch pairs.
+- No policy rows = current branch operation continues unchanged.
 
 ## Required regression matrix
 
-- user with no policy row continues working;
-- policy required + no request => denied by server gate;
-- pending => denied;
-- approved next-shift + no shift => only normal permitted pre-shift actions are possible;
-- approved authorization binds to opened shift;
-- approved bound user succeeds;
-- close shift expires authorization;
-- next shift requires new approval;
-- rejected request may be requested again;
-- revoked user is denied immediately;
+- no policy => allowed;
+- requirement + no request => blocked;
+- pending => blocked;
+- approved => allowed;
+- shift open/close does not change approved state;
+- revoke => revoked + pending + blocked immediately;
+- reapprove pending => allowed again;
 - self approval denied;
-- approver without `work.authorization.approve` denied;
-- manager outside branch denied;
-- manager with permission inside accessible branch succeeds;
-- manage permission cannot widen branch scope;
-- non-Super-Admin cannot grant work authorization permissions they do not own;
-- Super Admin implicit bypass works;
-- explicit bypass permission works only for its holder;
-- direct table mutations denied;
+- out-of-branch approver denied;
+- manage cannot widen branch scope;
+- direct table writes denied;
 - audit/events created;
-- duplicate concurrent requests collapse safely;
-- duplicate concurrent approvals do not create multiple active authorizations;
-- current operational approval queue remains unchanged;
-- printing/KDS/Print Agent/send-to-kitchen behavior unchanged.
+- duplicate pending requests collapse safely;
+- duplicate approvals cannot create multiple active approvals;
+- Realtime has no polling;
+- Approval Center displays active authorized users by branch;
+- Print Agent / printing / KDS / send-to-kitchen behavior unchanged.
