@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-06 finalized without roles Realtime; exact-head verify pending
+Last updated: 2026-09-24 — RC-06 Full Verify Green; RC-07 scheduling repair opened
 
 ## Work status
 
-Status: ACTIVE — RC-06 Roles refresh stabilization implemented; exact-head verification pending. No Production or printing changes.
+Status: ACTIVE — RC-06 Roles refresh stabilization verified Green. Current write scope moves to RC-07 auto-close request frequency only; no Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -428,6 +428,36 @@ Rollback boundary:
 
 ## Verification ledger
 
+### V-07 — RC-06 exact-head Full Verify Green
+
+Exact head:
+`27f8e10b09305b912ec3eabc8e66c860f44daa0a`
+
+Workflow:
+- Run: `35984897254`
+- `verify` ✅
+  - mandatory active worklog ✅
+  - Supabase project identity ✅
+  - frontend API contract ✅
+  - lint ✅
+  - app typecheck ✅
+  - test-suite typecheck ✅
+  - all unit tests ✅
+  - build ✅
+- `db` ✅
+  - fresh canonical migrations ✅
+  - schema verify ✅
+  - Permission-First fixtures ✅
+  - integration + security/RLS regression ✅
+- `browser-smoke` ✅
+  - build ✅
+  - Playwright smoke ✅
+
+RC-06 status after this run:
+- VERIFIED GREEN.
+- no Production migration required for RC-06.
+- Production has not been changed by this PR.
+
 ### V-06 — RC-06 superseded verification run
 
 Run `35984424946` on head `f33c3bbcd926ec0385e2484cc50c85be5ccfbc2b`:
@@ -588,14 +618,14 @@ To change this section to READY, ALL must be recorded here:
 
 Current mandatory sequence:
 
-1. RC-06 final implementation is now stable-user identity + bounded 5-minute refresh; no roles Realtime publication is introduced.
-2. Run exact-head Full Verify and record all jobs.
-3. If RC-06 is Green, proceed to RC-07 only: reduce auto-close request frequency while preserving PR #305 RPC/cutoff semantics exactly.
-4. Then RC-08 POS snapshot churn, preserving PR #260/#293.
-5. Then RC-09 Dashboard sale_payments oversized requests.
-6. One coherent change set at a time; update this log before moving to the next.
+1. RC-06 is VERIFIED GREEN on Run `35984897254`.
+2. RC-07 only: preserve `try_auto_close_branch_shift` and PR #305 cutoff semantics exactly, but replace per-minute per-device polling with scheduled checks.
+3. Use one immediate catch-up check after settings/session bootstrap, then schedule by the server-returned `window_end` when available; use a bounded retry only after cutoff when open orders block closure.
+4. When there is no open shift, schedule the next configured Cairo business-day end instead of polling every minute.
+5. Add DST-aware time helper/unit coverage and an auto-close scheduling contract.
+6. Run exact-head Full Verify before opening RC-08.
 7. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
-8. No merge or Production migration without the existing gate requirements.
+8. No merge or Production migration without existing gate requirements.
 
 ## Mandatory update protocol
 
