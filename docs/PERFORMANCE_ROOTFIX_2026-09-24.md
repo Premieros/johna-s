@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-08 stale shell contract corrected; exact-head verify pending
+Last updated: 2026-09-24 — RC-08 Full Verify Green; stage stopped before RC-09
 
 ## Work status
 
-Status: ACTIVE — RC-06 and RC-07 verified Green. RC-08 branch-local Realtime wake filtering implemented; exact-head verification pending. No Production or printing changes.
+Status: ACTIVE / STAGE STOP — RC-06, RC-07, and RC-08 verified Green. RC-09 has NOT started. No Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -221,7 +221,7 @@ Conclusion:
 
 ### RC-08 — POS full snapshot refresh remains after prior coalescing
 
-Status: CONFIRMED / BRANCH-WAKE FIX IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
+Status: CONFIRMED / BRANCH-WAKE FIX VERIFIED GREEN.
 
 Earlier repairs:
 - PR #260 removed full POS active-order snapshot loading from the global app shell.
@@ -471,7 +471,7 @@ No migration / no Production write / no printing change.
 
 ### CH-09 — Branch-local POS Realtime wake filtering
 
-Status: IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
+Status: VERIFIED GREEN.
 
 Files:
 - `src/features/pos/types.ts`
@@ -507,6 +507,40 @@ Intentionally unchanged:
 - no printing / Print Agent / routing / KDS changes.
 
 ## Verification ledger
+
+### V-10 — RC-08 exact-head Full Verify Green
+
+Exact head:
+`be88262a08aecfd00035c25adffe7ffc75963366`
+
+Workflow:
+- Full Verify Run: `35988845277` ✅
+- Fast Verify Run: `35988839271` ✅
+- `verify` ✅
+  - mandatory active worklog ✅
+  - Supabase project identity ✅
+  - frontend API contract ✅
+  - lint ✅
+  - application + test-suite typecheck ✅
+  - full unit suite ✅
+  - build ✅
+- `db` ✅
+  - canonical migrations on fresh CI DB ✅
+  - schema verify ✅
+  - Permission-First fixtures ✅
+  - integration + security/RLS regression ✅
+- `browser-smoke` ✅
+  - Chromium setup ✅
+  - browser build ✅
+  - Playwright smoke ✅
+
+RC-08 result:
+- cross-branch `order_items` wake filtering is verified,
+- empty-order first-item safety is covered,
+- DELETE matching by local item id is covered,
+- PR #293 coalescing remains covered,
+- no Production DB change,
+- no printing / Print Agent / KDS / routing / `send_to_kitchen` change.
 
 ### V-09 — RC-08 exact-head unit contract mismatch
 
@@ -751,17 +785,19 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-Current mandatory sequence:
+STAGE STOP — do not start RC-09 without a new explicit user instruction.
 
-1. RC-06 VERIFIED GREEN on Run `35984897254`.
-2. RC-07 VERIFIED GREEN on Run `35986306789`.
-3. RC-08 only: preserve PR #260/#293, but stop `order_items` Realtime events from unrelated branch orders from triggering POS full snapshots and shell-count refreshes.
-4. Keep all current branch-filtered subscriptions for `orders`, `dining_tables`, and `order_kitchen_sends`.
-5. Add regression contracts for event-batch relevance and empty-order safety.
-6. Run exact-head Full Verify before opening RC-09.
-7. Then RC-09 Dashboard `sale_payments` oversized failed requests.
-8. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
-9. No merge or Production migration without existing gate requirements.
+Completed in this performance/egress sequence:
+1. RC-06 Roles refresh amplification — VERIFIED GREEN.
+2. RC-07 Auto-close request amplification — VERIFIED GREEN.
+3. RC-08 POS cross-branch `order_items` wake filtering — VERIFIED GREEN on Full Verify Run `35988845277`.
+
+Pending but NOT STARTED:
+- RC-09 Dashboard `sale_payments` oversized/failed requests.
+
+Frozen scopes remain unchanged:
+- printing / Print Agent / routing / KDS / `send_to_kitchen`.
+- no merge and no Production migration under the current BLOCKED Production gate.
 
 ## Mandatory update protocol
 
