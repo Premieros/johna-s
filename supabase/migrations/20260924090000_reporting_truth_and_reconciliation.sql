@@ -481,12 +481,20 @@ AS $function$
     CROSS JOIN LATERAL private.report_sale_settlement_lines(x.sale_id) st
     WHERE st.method='cash'
   ),
+  legacy_unlinked_cash_sales AS (
+    SELECT COALESCE(sum(op.amount),0) amount
+    FROM target_shift s
+    JOIN public.shift_operations op ON op.shift_id=s.id
+    WHERE op.operation_type='sale'
+      AND COALESCE(op.payment_method,'cash')='cash'
+      AND op.reference_id IS NULL
+  ),
   cash_adjustments AS (
     SELECT COALESCE(sum(
       CASE
         WHEN COALESCE(op.payment_method,'cash')='cash' AND op.operation_type='cash_in'
           THEN op.amount
-        WHEN COALESCE(op.payment_method,'cash')='cash' AND op.operation_type='cash_out'
+        WHEN COALESCE(op.payment_method,'cash')='cash' AND op.operation_type IN ('cash_out','refund')
           THEN -op.amount
         WHEN COALESCE(op.payment_method,'cash')='cash'
              AND op.operation_type='expense'
@@ -535,6 +543,7 @@ AS $function$
   SELECT round(
     COALESCE(s.opening_amount,0)
     +COALESCE(cs.amount,0)
+    +COALESCE(ls.amount,0)
     +COALESCE(a.amount,0)
     -COALESCE(e.amount,0)
     -COALESCE(p.amount,0),
@@ -542,6 +551,7 @@ AS $function$
   )
   FROM target_shift s
   CROSS JOIN canonical_cash_sales cs
+  CROSS JOIN legacy_unlinked_cash_sales ls
   CROSS JOIN cash_adjustments a
   CROSS JOIN posted_branch_cash_expenses e
   CROSS JOIN cash_purchases p;
@@ -618,8 +628,7 @@ BEGIN
     'payments',COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'method',st.method,
-        'amount',round(st.amount,2),
-        'source',st.source
+        'amount',round(st.amount,2)
       ) ORDER BY st.method)
       FROM private.report_sale_settlement_lines(s.id) st
       WHERE st.amount>0
