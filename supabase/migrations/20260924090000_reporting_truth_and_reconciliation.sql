@@ -153,6 +153,7 @@ SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_rows jsonb;
+  v_summary jsonb;
 BEGIN
   IF auth.uid() IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
@@ -199,7 +200,24 @@ BEGIN
     GROUP BY s.branch_id,st.method
   ) q;
 
-  RETURN jsonb_build_object('success',true,'rows',v_rows);
+  SELECT jsonb_build_object(
+    'invoice_count',count(DISTINCT s.id)::int,
+    'sales_total',round(COALESCE(sum(st.amount),0),2)
+  )
+  INTO v_summary
+  FROM public.sales s
+  CROSS JOIN LATERAL private.report_sale_settlement_lines(s.id) st
+  WHERE s.branch_id=p_branch_id
+    AND COALESCE(s.is_archived,false)=false
+    AND s.created_at>=p_from
+    AND s.created_at<p_to
+    AND (p_payment_method IS NULL OR st.method=p_payment_method)
+    AND (p_order_type IS NULL OR s.order_type=p_order_type)
+    AND (p_warehouse_id IS NULL OR s.warehouse_id=p_warehouse_id)
+    AND (p_cashier_id IS NULL OR s.cashier_id=p_cashier_id)
+    AND (p_status IS NULL OR s.status=p_status);
+
+  RETURN jsonb_build_object('success',true,'summary',v_summary,'rows',v_rows);
 END;
 $function$;
 
