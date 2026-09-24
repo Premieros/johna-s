@@ -57,6 +57,10 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     expect(realtime).toContain('ReadNestedReason(payload)');
     expect(realtime).toContain('eventName == "phx_error"');
     expect(realtime).toContain('eventName == "phx_close"');
+    // Keep the user JWT out of the websocket HTTP handshake. Supabase Realtime
+    // authenticates the channel with access_token after the upgrade.
+    expect(realtime).toContain('access_token = _accessToken');
+    expect(realtime).not.toContain('SetRequestHeader("Authorization"');
   });
 
   it('removes the 700ms idle claim loop and uses event wake plus slow fallback', () => {
