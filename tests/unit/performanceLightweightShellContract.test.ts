@@ -11,7 +11,7 @@ describe('lightweight application shell contract', () => {
     expect(layout).toContain('useActiveOrderCount');
     expect(layout).not.toContain('useActiveOrders(');
     expect(countHook).toContain(".select('id')");
-    expect(countHook).toContain(".select('order_id,quantity')");
+    expect(countHook).toContain(".select('id,order_id,quantity')");
     expect(countHook).not.toContain('order_kitchen_sends');
     expect(countHook).not.toContain('dining_tables');
     expect(countHook).not.toContain('get_pos_order_operator_labels');
