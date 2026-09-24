@@ -54,4 +54,26 @@ describe('mandatory active worklog gate', () => {
     expect(plan).toContain('CI يجب أن يفشل');
     expect(plan).toContain('لا Merge ولا Production migration');
   });
+
+  it('enforces the single-writer execution fence', () => {
+    const logPath = pathMatch?.[1];
+    expect(logPath).toBeTruthy();
+    const log = readFileSync(logPath!, 'utf8');
+    const fence = readFileSync('docs/SINGLE_WRITER_EXECUTION_FENCE.md', 'utf8');
+
+    for (const marker of [
+      'Execution mode: **SINGLE_WRITER**',
+      'Parallel execution: **FORBIDDEN**',
+      'Unexpected HEAD policy: **STOP_AND_RECONCILE**',
+      'Write mode: **SEQUENTIAL_ONLY**',
+    ]) {
+      expect(plan).toContain(marker);
+      expect(log).toContain(marker);
+      expect(fence).toContain(marker);
+    }
+
+    expect(plan).toContain('Any other section historically labelled `ACTIVE` below is backlog/history only');
+    expect(fence).toContain('Never say “a parallel commit appeared” unless the user explicitly confirms another writer exists.');
+    expect(fence).toContain('Once an exact-head Verify is started for a stage, stop writing unless the run reports a real failure');
+  });
 });
