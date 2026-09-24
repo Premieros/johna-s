@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — CH-07 Roles refresh stabilization implemented
+Last updated: 2026-09-24 — worklog Verification ledger heading restored after Run 35983409403
 
 ## Work status
 
@@ -416,6 +416,28 @@ Rollback boundary:
 - frontend-only; no schema/data change.
 
 
+
+## Verification ledger
+
+### V-05 — CH-07 gate-structure failure
+
+Exact head:
+`182f703c2b963f7f9427ebab90dcc4e63ed2e9bf`
+
+Workflow:
+- Run: `35983409403`
+- `verify`: FAILED at **Verify mandatory active work log**
+- `db`: SKIPPED
+- `browser-smoke`: SKIPPED
+
+Failure:
+- mandatory worklog contract could not find `## Verification ledger`.
+- no lint/typecheck/unit/build/DB/browser tests were executed for CH-07 on this run.
+
+Classification:
+- documentation structure regression only,
+- no evidence of a `RolesContext` implementation failure,
+- the missing heading is restored before rerunning exact-head verification.
 
 ### V-01 — Inventory Ledger implementation head
 
