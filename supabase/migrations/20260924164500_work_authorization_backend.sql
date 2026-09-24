@@ -463,6 +463,7 @@ BEGIN
       JOIN public.users u ON u.id = wa.user_id
       JOIN public.branches b ON b.id = wa.branch_id
       WHERE wa.status = 'pending'
+        AND u.is_active = true
         AND (p_branch_id IS NULL OR wa.branch_id = p_branch_id)
         AND public.user_may_access_branch(wa.branch_id)
     ), '[]'::jsonb),
@@ -490,6 +491,7 @@ BEGIN
       JOIN public.branches b ON b.id = wa.branch_id
       LEFT JOIN public.users du ON du.id = wa.decided_by
       WHERE wa.status = 'approved'
+        AND u.is_active = true
         AND (wa.expires_at IS NULL OR wa.expires_at > now())
         AND (p_branch_id IS NULL OR wa.branch_id = p_branch_id)
         AND public.user_may_access_branch(wa.branch_id)
