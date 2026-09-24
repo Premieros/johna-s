@@ -43,11 +43,10 @@ CREATE TABLE IF NOT EXISTS public.work_authorizations (
   revoked_at timestamptz NULL,
   revoked_by uuid NULL REFERENCES public.users(id) ON DELETE SET NULL,
   revocation_reason text NULL,
-  expires_at timestamptz NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT work_authorizations_status_check
-    CHECK (status IN ('pending','approved','rejected','revoked','expired'))
+    CHECK (status IN ('pending','approved','rejected','revoked'))
 );
 
 CREATE TABLE IF NOT EXISTS public.work_authorization_events (
@@ -60,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.work_authorization_events (
   note text NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT work_authorization_events_type_check
-    CHECK (event_type IN ('requested','approved','rejected','revoked','expired'))
+    CHECK (event_type IN ('requested','approved','rejected','revoked'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS work_authorizations_one_pending_per_user_branch
@@ -186,7 +185,6 @@ BEGIN
     WHERE wa.user_id = v_user_id
       AND wa.branch_id = p_branch_id
       AND wa.status = 'approved'
-      AND (wa.expires_at IS NULL OR wa.expires_at > now())
   );
 END;
 $function$;
@@ -429,7 +427,6 @@ BEGIN
       LEFT JOIN public.users du ON du.id = wa.decided_by
       WHERE wa.status = 'approved'
         AND u.is_active = true
-        AND (wa.expires_at IS NULL OR wa.expires_at > now())
         AND (p_branch_id IS NULL OR wa.branch_id = p_branch_id)
         AND public.user_may_access_branch(wa.branch_id)
     ), '[]'::jsonb),
