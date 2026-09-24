@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const preview = readFileSync('src/features/admin/work-authorization/WorkAuthorizationPreview.tsx', 'utf8');
 const contract = readFileSync('src/features/admin/work-authorization/workAuthorizationContract.ts', 'utf8');
 const mock = readFileSync('src/features/admin/work-authorization/mockWorkAuthorizationProvider.ts', 'utf8');
+const provider = readFileSync('src/features/admin/work-authorization/supabaseWorkAuthorizationProvider.ts', 'utf8');
 const approvalCenter = readFileSync('src/features/admin/pages/ApprovalCenterPage.tsx', 'utf8');
 
 describe('work authorization UI-first contract', () => {
@@ -14,11 +15,23 @@ describe('work authorization UI-first contract', () => {
     expect(approvalCenter).toContain('canManageSettings={canManagePolicies}');
   });
 
-  it('keeps work authorization preview disconnected from Supabase writes', () => {
+  it('keeps preview disconnected from Supabase work-authorization writes', () => {
     expect(preview).not.toMatch(/from ['"]@\/api['"]/);
     expect(preview).not.toContain('supabase.');
     expect(mock).not.toContain('supabase.');
     expect(contract).toContain('Components must not read/write work-authorization tables directly.');
+  });
+
+  it('defines a RPC-only production provider but keeps it unmounted during UI-first', () => {
+    expect(provider).toContain("supabase.rpc(name, params)");
+    expect(provider).not.toMatch(/\.from\(['"][^'"]+['"]\)/);
+    expect(provider).toContain("'get_my_work_authorization_state'");
+    expect(provider).toContain("'request_work_authorization'");
+    expect(provider).toContain("'decide_work_authorization'");
+    expect(provider).toContain("'revoke_work_authorization'");
+    expect(provider).toContain("'set_work_authorization_requirement'");
+    expect(approvalCenter).not.toContain('createSupabaseWorkAuthorizationClient');
+    expect(preview).not.toContain('createSupabaseWorkAuthorizationClient');
   });
 
   it('mounts the staged preview without replacing the existing operational approval queue', () => {
