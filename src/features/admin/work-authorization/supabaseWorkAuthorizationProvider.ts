@@ -99,11 +99,12 @@ export function createSupabaseWorkAuthorizationClient(): WorkAuthorizationClient
     );
   };
 
-  const setRequirement: WorkAuthorizationClient['setRequirement'] = async (policyId, required) => {
+  const setRequirement: WorkAuthorizationClient['setRequirement'] = async (userId, branchId, required) => {
     await callRpc<unknown>(
       'set_work_authorization_requirement',
       {
-        p_policy_id: policyId,
+        p_user_id: userId,
+        p_branch_id: branchId,
         p_required: required,
       },
       'Failed to update work authorization policy',
