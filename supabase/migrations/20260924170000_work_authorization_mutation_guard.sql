@@ -59,6 +59,7 @@ DECLARE
   v_role text := COALESCE(current_setting('role', true), '');
   v_old_branch_id uuid;
   v_new_branch_id uuid;
+  v_bootstrap_branch_id uuid;
 BEGIN
   IF v_user_id IS NULL OR v_role = 'service_role' THEN
     IF TG_OP = 'DELETE' THEN
@@ -71,15 +72,12 @@ BEGIN
   -- transaction-local setting by create_organization_branch may bypass the
   -- work-authorization assertion while its controlled setup rows are created.
   -- Direct Data API writes cannot select an arbitrary branch through this path.
-  IF NULLIF(current_setting('app.work_authorization_bootstrap_branch_id', true), '')::uuid
-       IS NOT DISTINCT FROM CASE
-         WHEN TG_OP = 'DELETE' THEN NULL
-         ELSE NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid
-       END
-     AND NULLIF(current_setting('app.work_authorization_bootstrap_branch_id', true), '') IS NOT NULL THEN
-    IF TG_OP = 'DELETE' THEN
-      RETURN OLD;
-    END IF;
+  v_bootstrap_branch_id :=
+    NULLIF(current_setting('app.work_authorization_bootstrap_branch_id', true), '')::uuid;
+
+  IF TG_OP <> 'DELETE'
+     AND v_bootstrap_branch_id IS NOT NULL
+     AND v_bootstrap_branch_id = NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid THEN
     RETURN NEW;
   END IF;
 
