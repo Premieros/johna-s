@@ -111,6 +111,48 @@ export function createSupabaseWorkAuthorizationClient(): WorkAuthorizationClient
     );
   };
 
+  const subscribeToMyChanges: WorkAuthorizationClient['subscribeToMyChanges'] = async (branchId, onChange) => {
+    const { data } = await supabase.auth.getUser();
+    const userId = data.user?.id;
+    if (!userId) return () => {};
+
+    const channel = supabase
+      .channel('work-authorization-' + userId + '-' + branchId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'work_authorizations',
+          filter: 'user_id=eq.' + userId,
+        },
+        (payload) => {
+          const nextBranch = (payload.new as { branch_id?: string } | null)?.branch_id;
+          const prevBranch = (payload.old as { branch_id?: string } | null)?.branch_id;
+          if (nextBranch === branchId || prevBranch === branchId) onChange();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'work_authorization_policies',
+          filter: 'user_id=eq.' + userId,
+        },
+        (payload) => {
+          const nextBranch = (payload.new as { branch_id?: string } | null)?.branch_id;
+          const prevBranch = (payload.old as { branch_id?: string } | null)?.branch_id;
+          if (nextBranch === branchId || prevBranch === branchId) onChange();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  };
+
   return {
     getSnapshot,
     getMyState,
@@ -119,5 +161,6 @@ export function createSupabaseWorkAuthorizationClient(): WorkAuthorizationClient
     reject,
     revoke,
     setRequirement,
+    subscribeToMyChanges,
   };
 }
