@@ -47,7 +47,6 @@ function statusLabel(kind: WorkAuthorizationHistoryEntry['kind'], ar: boolean) {
     requested: ar ? 'طلب بدء عمل' : 'Work requested',
     approved: ar ? 'تمت الموافقة' : 'Approved',
     rejected: ar ? 'تم الرفض' : 'Rejected',
-    bound_to_shift: ar ? 'تم ربط التصريح بالشفت' : 'Bound to shift',
     revoked: ar ? 'تم سحب الاعتماد' : 'Revoked',
     expired: ar ? 'انتهى الاعتماد' : 'Expired',
   };
@@ -253,8 +252,7 @@ export function WorkAuthorizationPreview({
                       <span className="whitespace-nowrap text-xs text-ui-muted">{formatDate(row.requestedAt, ar)}</span>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ui-muted">
-                      <span className="rounded-full bg-ui-page-alt px-2.5 py-1">{row.shiftLabel}</span>
-                      <span>{ar ? 'طلب بدء العمل' : 'Start-work request'}</span>
+                      <span>{ar ? 'طلب تصريح دخول للنظام' : 'System-entry authorization request'}</span>
                     </div>
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
                       <Button disabled={busy === row.id} onClick={() => void act(row.id, 'approve')}>
