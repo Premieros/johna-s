@@ -17,7 +17,7 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
   const workerRole = `wa_worker_${randomUUID().slice(0, 8)}`;
   const approverRole = `wa_approver_${randomUUID().slice(0, 8)}`;
 
-  async function asUser<T = any>(userId: string, sql: string, params: unknown[] = []): Promise<pg.QueryResult<T>> {
+  async function asUser<T extends pg.QueryResultRow = pg.QueryResultRow>(userId: string, sql: string, params: unknown[] = []): Promise<pg.QueryResult<T>> {
     await client.query(`SELECT set_config('app.user_id',$1,true)`, [userId]);
     await client.query('SET LOCAL ROLE authenticated');
     try {
@@ -28,8 +28,10 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     }
   }
 
-  async function rpcJson(userId: string, sql: string, params: unknown[] = []) {
-    const result = await asUser<{ value: any }>(userId, `SELECT (${sql}) AS value`, params);
+  type RpcValue = { success?: boolean; error?: string; status?: string; requestId?: string };
+
+  async function rpcJson(userId: string, sql: string, params: unknown[] = []): Promise<RpcValue> {
+    const result = await asUser<{ value: RpcValue }>(userId, `SELECT (${sql}) AS value`, params);
     return result.rows[0].value;
   }
 
