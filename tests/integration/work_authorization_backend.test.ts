@@ -267,14 +267,15 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     );
     expect(after.rows[0].allowed).toBe(true);
 
-    const auth = await client.query<{ status: string }>(
-      `SELECT status
+    const activeAuth = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
        FROM public.work_authorizations
-       WHERE user_id=$1 AND branch_id=$2
-       ORDER BY updated_at DESC LIMIT 1`,
+       WHERE user_id=$1
+         AND branch_id=$2
+         AND status='approved'`,
       [worker, branchA],
     );
-    expect(auth.rows[0].status).toBe('approved');
+    expect(activeAuth.rows[0].count).toBe('1');
   });
 
   it('blocks authenticated direct writes to authorization tables', async () => {
