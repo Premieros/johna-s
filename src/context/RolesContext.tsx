@@ -46,9 +46,10 @@ export function RolesProvider({ children }: { children: ReactNode }) {
   const [rolesList, setRolesList] = useState<RoleDefRow[]>([]);
   const [loading, setLoading] = useState(true);
   const { session } = useAuth();
+  const sessionUserId = session?.user?.id ?? null;
 
   const refresh = useCallback(async () => {
-    if (!session) {
+    if (!sessionUserId) {
       setRolesList([]);
       setLoading(false);
       return;
@@ -85,11 +86,26 @@ export function RolesProvider({ children }: { children: ReactNode }) {
       setRolesList([]);
     }
     setLoading(false);
-  }, [session]);
+  }, [sessionUserId]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+
+    const channel = supabase
+      .channel(`roles-refresh-${sessionUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => {
+        void refresh();
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [sessionUserId, refresh]);
 
   const rolePermissionsMap = useMemo(() => {
     const map: Record<string, Permission[]> = {};
