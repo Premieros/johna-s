@@ -674,6 +674,7 @@ SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_row public.work_authorizations%ROWTYPE;
+  v_pending_id uuid;
 BEGIN
   IF auth.uid() IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
@@ -729,7 +730,50 @@ BEGIN
     jsonb_build_object('user_id', v_row.user_id, 'shift_id', v_row.shift_id, 'reason', btrim(p_reason))
   );
 
-  RETURN jsonb_build_object('success', true, 'authorization_id', v_row.id, 'status', 'revoked');
+  -- A revoked worker immediately returns to the waiting queue. The employee
+  -- does not need to submit a new request and cannot re-enter until approved.
+  IF EXISTS (
+    SELECT 1
+    FROM public.work_authorization_policies p
+    WHERE p.user_id = v_row.user_id
+      AND p.branch_id = v_row.branch_id
+      AND p.requires_authorization = true
+  ) THEN
+    INSERT INTO public.work_authorizations(
+      user_id, branch_id, shift_id, status, requested_by
+    )
+    VALUES (
+      v_row.user_id, v_row.branch_id, v_row.shift_id, 'pending', v_row.user_id
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id INTO v_pending_id;
+
+    IF v_pending_id IS NULL THEN
+      SELECT wa.id
+      INTO v_pending_id
+      FROM public.work_authorizations wa
+      WHERE wa.user_id = v_row.user_id
+        AND wa.branch_id = v_row.branch_id
+        AND wa.status = 'pending'
+      ORDER BY wa.requested_at DESC
+      LIMIT 1;
+    ELSE
+      INSERT INTO public.work_authorization_events(
+        authorization_id, user_id, branch_id, shift_id, event_type, actor_id, note
+      )
+      VALUES (
+        v_pending_id, v_row.user_id, v_row.branch_id, v_row.shift_id,
+        'requested', auth.uid(), 'auto_pending_after_revoke'
+      );
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'authorization_id', v_row.id,
+    'status', 'revoked',
+    'pending_request_id', v_pending_id
+  );
 END;
 $function$;
 
@@ -951,4 +995,32 @@ REVOKE ALL ON FUNCTION public.expire_work_authorizations_for_closed_shift() FROM
 COMMENT ON TABLE public.work_authorization_policies IS 'Explicit per-user/per-branch requirement for work-start approval. Absence means not required.';
 COMMENT ON TABLE public.work_authorizations IS 'Durable work-start requests and shift-bound approvals.';
 COMMENT ON TABLE public.work_authorization_events IS 'Append-only work authorization timeline.';
+-- Realtime wake-up for approval/revocation/policy changes. Guarded for CI/self-hosted
+-- environments where the Supabase publication does not exist.
+DO $
+DECLARE
+  pub_exists boolean;
+  tbl text;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime'
+  ) INTO pub_exists;
+
+  IF pub_exists THEN
+    FOREACH tbl IN ARRAY ARRAY[
+      'public.work_authorizations',
+      'public.work_authorization_policies'
+    ] LOOP
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_publication_tables pt
+        WHERE pt.pubname = 'supabase_realtime'
+          AND pt.schemaname || '.' || pt.tablename = tbl
+      ) THEN
+        EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE ' || tbl;
+      END IF;
+    END LOOP;
+  END IF;
+END $;
+
 COMMENT ON FUNCTION public.can_user_work(uuid) IS 'Canonical Permission-First work authorization gate for the current authenticated user.';
