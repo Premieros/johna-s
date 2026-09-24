@@ -6,11 +6,21 @@ const migration = readFileSync(
   'utf8',
 ).replace(/\r\n/g, '\n');
 
+const applyGuardMigration = readFileSync(
+  'supabase/migrations/20260924235200_raw_fifo_apply_warehouse_transfer_support.sql',
+  'utf8',
+).replace(/\r\n/g, '\n');
+
 describe('raw FIFO warehouse-transfer cost propagation contract', () => {
   it('supports warehouse_transfer in historical FIFO changed references', () => {
     expect(migration).toContain("'purchase_return','warehouse_transfer'");
     expect(migration).toContain("p_reference_type='warehouse_transfer'");
     expect(migration).toContain('public._fifo_adjust_warehouse_transfer_delta');
+  });
+
+  it('allows warehouse_transfer in the apply-stage supported reference guard too', () => {
+    expect(applyGuardMigration).toContain("'purchase_return','warehouse_transfer'");
+    expect(applyGuardMigration).toContain('CREATE OR REPLACE FUNCTION public.raw_fifo_apply_backfill');
   });
 
   it('updates valuation only on the destination transfer receipt and batch', () => {
