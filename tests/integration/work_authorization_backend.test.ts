@@ -321,6 +321,100 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(state.status).toBe('revoked');
   });
 
+  it('attaches mutation guards only to operational branch tables', async () => {
+    const rows = await client.query<{ table_name: string }>(
+      `SELECT c.relname AS table_name
+       FROM pg_trigger t
+       JOIN pg_class c ON c.oid = t.tgrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname='public'
+         AND t.tgname='trg_work_authorization_mutation_guard'
+         AND NOT t.tgisinternal
+       ORDER BY c.relname`,
+    );
+
+    const guarded = rows.rows.map((row) => row.table_name);
+    expect(guarded).toEqual([
+      'bank_reconciliations',
+      'customer_payments',
+      'employee_receivable_entries',
+      'expenses',
+      'inventory',
+      'inventory_batches',
+      'journal_entries',
+      'orders',
+      'purchase_receipts',
+      'purchase_requests',
+      'purchases',
+      'raw_material_batches',
+      'raw_material_inventory',
+      'raw_material_warehouse_inventory',
+      'rfqs',
+      'sale_payments',
+      'sales',
+      'stock_counts',
+      'stock_transactions',
+      'supplier_payments',
+      'supplier_quotations',
+      'treasury_transactions',
+      'warehouse_transfers',
+      'waste_entries',
+    ]);
+
+    expect(guarded).not.toContain('cloud_print_jobs');
+    expect(guarded).not.toContain('order_kitchen_sends');
+    expect(guarded).not.toContain('shifts');
+    expect(guarded).not.toContain('daily_closes');
+    expect(guarded).not.toContain('work_authorizations');
+  });
+
+  it('blocks an operational mutation while waiting and allows it after reapproval', async () => {
+    await client.query(`SELECT set_config('app.user_id',$1,true)`, [worker]);
+    await client.query('SAVEPOINT wa_operational_guard_blocked');
+    try {
+      await expect(
+        client.query(
+          `INSERT INTO public.expenses(branch_id,description,amount,created_by)
+           VALUES($1,'work authorization guard test',1,$2)`,
+          [branchA, worker],
+        ),
+      ).rejects.toThrow(/WORK_AUTHORIZATION_REQUIRED/);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT wa_operational_guard_blocked');
+      await client.query('RESET app.user_id').catch(() => {});
+    }
+
+    const requested = await rpcJson(worker, `public.request_work_authorization($1)`, [branchA]);
+    expect(requested.status).toBe('pending');
+    expect(requested.requestId).toBeTruthy();
+
+    const approved = await rpcJson(
+      approverA,
+      `public.decide_work_authorization($1,true,NULL)`,
+      [requested.requestId!],
+    );
+    expect(approved.success).toBe(true);
+    expect(approved.status).toBe('approved');
+
+    await client.query(`SELECT set_config('app.user_id',$1,true)`, [worker]);
+    try {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO public.expenses(branch_id,description,amount,created_by)
+         VALUES($1,'work authorization guard allowed',1,$2)
+         RETURNING id`,
+        [branchA, worker],
+      );
+      expect(inserted.rows[0].id).toBeTruthy();
+
+      const cache = await client.query<{ cache_key: string | null }>(
+        `SELECT current_setting('app.work_authorization_guard_key', true) AS cache_key`,
+      );
+      expect(cache.rows[0].cache_key).toBe(`${worker}:${branchA}`);
+    } finally {
+      await client.query('RESET app.user_id').catch(() => {});
+    }
+  });
+
   it('blocks authenticated direct writes to authorization tables', async () => {
     await client.query('SAVEPOINT wa_direct_write');
     try {
