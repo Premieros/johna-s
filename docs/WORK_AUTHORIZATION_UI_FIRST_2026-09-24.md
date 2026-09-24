@@ -295,3 +295,15 @@ State: **BLOCKED**
 - Keep branch / PR / Production state current.
 - If any change unexpectedly touches printing/KDS/send-to-kitchen, stop and record it.
 - This file and `docs/CURRENT_WORK_PLAN.md` are the source of truth; conversation memory is not.
+
+
+### Branch bootstrap root-cause correction — 9f50a47bdb1584f6b2bd595c0e208e15357d12d2
+
+- Full Verify failures were traced to branch `AFTER INSERT` seed triggers, not the later main-warehouse insert.
+- Those triggers create guarded branch-scoped rows during `INSERT INTO branches`, before a branch-id based bootstrap marker can exist.
+- Simplified the bootstrap exception to a private transaction-local marker keyed by authenticated caller + organization.
+- `create_organization_branch` now creates that marker before `INSERT INTO branches`; the mutation guard accepts only NEW rows whose `branch_id` belongs to the exact marked organization.
+- The marker remains inaccessible to `anon` / `authenticated` and is removed before successful return; exceptions roll it back with the transaction.
+- Existing branch-management permission checks and creator `user_branch_access` grant remain unchanged.
+- No generic bypass, no RLS weakening, no Production migration, no feature activation, and no printing/KDS/shift change.
+- Exact-head Fast Verify + Full Verify required on the documented head before merge readiness.
