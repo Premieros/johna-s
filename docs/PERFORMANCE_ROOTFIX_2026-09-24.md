@@ -502,6 +502,32 @@ Intentionally unchanged:
 
 ## Verification ledger
 
+### V-09 — RC-08 exact-head unit contract mismatch
+
+Exact head:
+`da94c023f0dd8766fed593366f8caa2600b77342`
+
+Workflow:
+- Run: `35988441628`
+- mandatory worklog ✅
+- project identity ✅
+- API contract ✅
+- lint ✅
+- app/test typecheck ✅
+- RC-08 contract `posRealtimeBranchWakeContract.test.ts`: 8/8 ✅
+- full unit suite: 1044 passed / 1 failed
+- DB and Browser Smoke skipped because unit failed.
+
+Failure:
+- `performanceLightweightShellContract.test.ts` still expected
+  `.select('order_id,quantity')`.
+- RC-08 intentionally selects `id,order_id,quantity` so DELETE events from default replica identity can be matched to locally known branch items.
+- this is a stale test contract, not a runtime regression.
+
+Required correction:
+- update only the old lightweight-shell assertion to accept the minimal additional primary-key field.
+- keep the shell prohibition on kitchen sends, dining tables, and operator labels.
+
 ### V-08 — RC-07 exact-head Full Verify Green
 
 Exact head:
