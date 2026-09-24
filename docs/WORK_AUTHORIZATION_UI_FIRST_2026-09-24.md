@@ -10,7 +10,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 
-- Current phase: UI-first scaffold and stable client contract.
+- Current phase: UI-first verified; backend contract preparation (not activated).
 - Production enforcement: not started.
 - Production migration: not applied.
 - Main merge: not approved.
@@ -68,6 +68,10 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 - Mounted preview inside existing `ApprovalCenterPage`; live operational approval queue/RPCs remain intact.
 - Permission gates: `approvals.review` for review surface; `approvals.policy.manage` for settings. No role-name guards.
 - Added regression contract test ensuring no role-name authorization and no Supabase work-authorization writes.
+- Extended client contract with employee-facing `getMyState(branchId)` and `requestAuthorization(branchId)` methods.
+- Updated the mock provider to support the employee request/state lifecycle without Production access.
+- Added `supabaseWorkAuthorizationProvider.ts` as an RPC-only production adapter; it is intentionally **not mounted** until verified backend RPCs exist.
+- Added tests that fail if the production provider reads/writes tables directly or is mounted prematurely.
 - Renamed preview display metadata from `roleLabel` to `positionLabel`; position/title is informational only and never used for authorization.
 - Planned UI deliverables:
   - manager center tabs: Pending / Working now / History / Settings;
@@ -80,7 +84,7 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 
 ## Verification ledger
 
-- Latest-main check: PASS — `main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da`.
+- Latest-main check: PASS — `main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da` (rechecked before backend contract preparation).
 - Parallel-work check: PASS for this scope; open PR #352 is print-agent-only and remains out of scope.
 - Old branch drift check: FAIL for reuse (240 commits behind main), therefore superseded safely.
 - Static UI contract test added: `tests/unit/workAuthorizationUiFirstContract.test.ts`.
@@ -104,7 +108,7 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 
 State: **BLOCKED**
 
-- No Production migration exists for this UI-first phase.
+- No Production migration has been applied. Backend work remains branch-only until Fresh DB + security verification.
 - No work-authorization server enforcement is active.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
 - No Production activation until backend authority, RLS, RPC coverage, exact-head Full Verify Green, and explicit user approval.
@@ -117,8 +121,9 @@ State: **BLOCKED**
 4. Integrate preview mode into the existing Approval Center without changing live approval behavior. ✅
 5. Add UI contract tests. ✅
 6. Verify main #2593 is Green. ✅
-7. Perform visual/runtime review of the preview before starting backend authority. **IN PROGRESS**
-8. Keep backend/RLS/RPC/enforcement blocked until the visual review is recorded.
+7. Browser smoke is Green, but it does not exercise the new Approval Center preview directly; no false claim of a visual review is made.
+8. Backend contract preparation has started **without activation**: Production schema/RPCs were inspected read-only, client RPC adapter is staged but unmounted.
+9. Next: generate the backend migration using the approved Supabase CLI flow, add RLS/RPC/security tests, then run Fresh DB + Full Verify. Production apply remains BLOCKED.
 
 ## Mandatory update protocol
 
