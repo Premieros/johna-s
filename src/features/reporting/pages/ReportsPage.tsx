@@ -15,6 +15,8 @@ import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useColumnPreferences } from '../useColumnPreferences';
 import { ColumnPicker } from '../ColumnPicker';
 import { useCustomReports } from '../useCustomReports';
+import { getReportExcelProfile } from '../reportExcelProfiles';
+import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
 import type { SavedReportConfig } from '../useCustomReports';
 import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
@@ -37,18 +39,15 @@ import {
   type EqBuilder,
 } from '../reportFilters';
 import {
-  aggregatePaymentMethods,
   allocateSaleNetRevenue,
   netPurchaseAmount,
   netSaleAmount,
   netSaleItemQuantity,
   netSaleItemRevenue,
   netSalePayment,
-  type SalePaymentFallbackLike,
-  type SalePaymentLike,
 } from '../numericIntegrity';
 
-type FinancialReportType = 'trial_balance' | 'ledger' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
+type FinancialReportType = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
 
 interface ReportsPageProps {
@@ -118,10 +117,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const filterQ = <T,>(q: T, f: ReportFilters, applier: (b: EqBuilder, x: ReportFilters) => EqBuilder): T =>
     applier(q as unknown as EqBuilder, f) as unknown as T;
+  const fetchRows = <T,>(query: unknown): Promise<T[]> => fetchAllReportRows(query as RangePageQuery<T>);
 
   const financialTypes: { key: FinancialReportType; label: string }[] = [
     { key: 'trial_balance', label: t('trialBalance') },
     { key: 'ledger', label: t('generalLedger') },
+    { key: 'treasury_statement', label: lang === 'ar' ? 'كشف حساب بنك / خزنة' : 'Bank / Treasury Statement' },
+    { key: 'inventory_movement', label: lang === 'ar' ? 'حركة صنف' : 'Item Movement' },
     { key: 'income', label: t('incomeStatement') },
     { key: 'balance_sheet', label: t('balanceSheet') },
     { key: 'ar_aging', label: t('arAging') },
@@ -224,11 +226,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
 
       if (reportType === 'sales') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
-        const { data: sales } = await q;
-        const rows = (sales || []).map((sale: Record<string, unknown>) => {
+        const sales = await fetchRows<Record<string, unknown>>(q);
+        const rows = sales.map((sale: Record<string, unknown>) => {
           const net = netSaleAmount(sale);
           return withBranch(sale.branch_id, {
             [lang === 'ar' ? 'الفاتورة' : 'Invoice']: sale.invoice_number,
@@ -240,14 +242,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           });
         });
         setData(rows);
-        setChartData((sales || []).slice(0, 10).map((sale: Record<string, unknown>) => ({ name: String(sale.invoice_number), value: netSaleAmount(sale) })));
-        setSummary({ total: (sales || []).reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: (sales || []).length });
+        setChartData(sales.slice(0, 10).map((sale: Record<string, unknown>) => ({ name: String(sale.invoice_number), value: netSaleAmount(sale) })));
+        setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
       } else if (reportType === 'purchases') {
-        let q = supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount, status, created_at, supplier:suppliers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);
+        let q = supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount, status, created_at, supplier:suppliers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyPurchaseFilters);
-        const { data: purchases } = await q;
-        const rows = (purchases || []).map((purchase: Record<string, unknown>) => withBranch(purchase.branch_id, {
+        const purchases = await fetchRows<Record<string, unknown>>(q);
+        const rows = purchases.map((purchase: Record<string, unknown>) => withBranch(purchase.branch_id, {
           [lang === 'ar' ? 'الفاتورة' : 'Invoice']: purchase.invoice_number,
           [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(purchase.created_at as string, lang),
           [lang === 'ar' ? 'المورد' : 'Supplier']: (purchase.supplier as { name?: string })?.name || '',
@@ -256,14 +258,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           [lang === 'ar' ? 'صافي المشتريات' : 'Net Purchases']: netPurchaseAmount(purchase),
         }));
         setData(rows);
-        setChartData((purchases || []).slice(0, 10).map((purchase: Record<string, unknown>) => ({ name: String(purchase.invoice_number), value: netPurchaseAmount(purchase) })));
-        setSummary({ total: (purchases || []).reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: (purchases || []).length });
+        setChartData(purchases.slice(0, 10).map((purchase: Record<string, unknown>) => ({ name: String(purchase.invoice_number), value: netPurchaseAmount(purchase) })));
+        setSummary({ total: purchases.reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: purchases.length });
       } else if (reportType === 'expenses') {
-        let q = supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date').eq('status', 'posted').gte('expense_date', from).lte('expense_date', to).order('expense_date', { ascending: false }).limit(5000);
+        let q = supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date').eq('status', 'posted').gte('expense_date', from).lte('expense_date', to).order('expense_date', { ascending: false });
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyExpenseFilters);
-        const { data: expenses } = await q;
-        const rows = (expenses || []).map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
+        const expenses = await fetchRows<Record<string, unknown>>(q);
+        const rows = expenses.map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
           [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(expense.expense_date as string, lang),
           [lang === 'ar' ? 'الفئة' : 'Category']: expense.category || '',
           [lang === 'ar' ? 'الوصف' : 'Description']: expense.description || '',
@@ -271,9 +273,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         }));
         setData(rows);
         const catMap = new Map<string, number>();
-        (expenses || []).forEach((expense: Record<string, unknown>) => catMap.set(String(expense.category || ''), (catMap.get(String(expense.category || '')) || 0) + Number(expense.amount || 0)));
+        expenses.forEach((expense: Record<string, unknown>) => catMap.set(String(expense.category || ''), (catMap.get(String(expense.category || '')) || 0) + Number(expense.amount || 0)));
         setChartData(Array.from(catMap.entries()).map(([name, value]) => ({ name: name || (lang === 'ar' ? 'غير محدد' : 'Other'), value })));
-        setSummary({ total: (expenses || []).reduce((sum: number, expense: Record<string, unknown>) => sum + Number(expense.amount || 0), 0), count: (expenses || []).length });
+        setSummary({ total: expenses.reduce((sum: number, expense: Record<string, unknown>) => sum + Number(expense.amount || 0), 0), count: expenses.length });
       } else if (reportType === 'profit') {
         const targetBranches = effectiveBranchFilter
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
@@ -309,9 +311,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           rawQuery = rawQuery.eq('warehouse_id', filters.warehouse);
           unitQuery = unitQuery.eq('warehouse_id', filters.warehouse);
         }
-        const [rawResult, unitResult] = await Promise.all([rawQuery.limit(20000), unitQuery.limit(20000)]);
+        const [rawRows, unitRows] = await Promise.all([
+          fetchRows<Record<string, unknown>>(rawQuery),
+          fetchRows<Record<string, unknown>>(unitQuery),
+        ]);
         const stockMap = new Map<string, { branchId: string; warehouse: string; item: string; code: string; type: string; quantity: number }>();
-        (rawResult.data || []).forEach((row: Record<string, unknown>) => {
+        rawRows.forEach((row: Record<string, unknown>) => {
           const material = row.raw_material as { id?: string; name?: string; code?: string } | null;
           const warehouse = row.warehouse as { name?: string } | null;
           const branchId = String(row.branch_id || '');
@@ -329,7 +334,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           current.quantity += Number(row.quantity || 0);
           stockMap.set(key, current);
         });
-        (unitResult.data || []).forEach((row: Record<string, unknown>) => {
+        unitRows.forEach((row: Record<string, unknown>) => {
           const unit = row.unit as { id?: string; name?: string; barcode?: string } | null;
           const warehouse = row.warehouse as { name?: string } | null;
           const branchId = String(row.branch_id || '');
@@ -360,38 +365,75 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'الصنف' : 'Item']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'الكمية' : 'Quantity'] || 0), 0), count: rows.length });
       } else if (reportType === 'sales_by_payment') {
-        const { payment_method: requestedMethod, ...saleFilters } = filters;
-        let q = supabase.from('sales').select('id, branch_id, payment_method, total, paid_amount, refunded_amount, status').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, saleFilters, applySalesFilters);
-        const { data: sales } = await q;
-        const saleRows = (sales || []) as SalePaymentFallbackLike[];
-        const saleIds = saleRows.map((sale) => sale.id);
-        const paymentResult = saleIds.length
-          ? await supabase.from('sale_payments').select('sale_id, branch_id, payment_method, amount, refunded_amount').in('sale_id', saleIds).limit(10000)
-          : { data: [] as SalePaymentLike[] };
-        let methodRows = aggregatePaymentMethods(saleRows, (paymentResult.data || []) as SalePaymentLike[]);
-        if (requestedMethod) methodRows = methodRows.filter((row) => row.method === requestedMethod);
+        const targetBranchIds = effectiveBranchFilter
+          ? [effectiveBranchFilter]
+          : branches.map((branch) => branch.id);
+        const results = await Promise.all(targetBranchIds.map((branchId) => reporting.getSalesByPaymentReport({
+          p_branch_id: branchId,
+          p_from: fromTs,
+          p_to: toExclusiveTs,
+          p_payment_method: filters.payment_method || null,
+          p_order_type: filters.order_type || null,
+          p_warehouse_id: filters.warehouse || null,
+          p_cashier_id: filters.cashier || null,
+          p_status: filters.status || null,
+        })));
         const methodLabels: Record<string, string> = {
-          cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit'),
-          bank: lang === 'ar' ? 'تحويل بنكي' : 'Bank', instapay: 'InstaPay', wallet: lang === 'ar' ? 'محفظة' : 'Wallet',
-          split: lang === 'ar' ? 'مختلط غير موزع' : 'Unallocated split', other: lang === 'ar' ? 'أخرى' : 'Other',
+          cash: t('cash'),
+          card: t('card'),
+          transfer: t('transfer'),
+          credit: t('credit'),
+          employee_credit: lang === 'ar' ? 'آجل موظفين' : 'Employee Credit',
+          bank_legacy: lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank (Unclassified)',
+          other: lang === 'ar' ? 'أخرى' : 'Other',
         };
+        let paymentSummaryTotal = 0;
+        let paymentInvoiceCount = 0;
+        const methodRows = results.flatMap((result, index) => {
+          const raw = (result.data as Record<string, unknown> | null) || {};
+          if (result.error || raw.success === false || !Array.isArray(raw.rows)) return [];
+          const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
+          paymentSummaryTotal += Number(summaryRow.sales_total || 0);
+          paymentInvoiceCount += Number(summaryRow.invoice_count || 0);
+          const branchId = targetBranchIds[index];
+          return raw.rows.map((item) => {
+            const row = item as Record<string, unknown>;
+            return {
+              branchId,
+              method: String(row.method || 'other'),
+              total: Number(row.sales_total || 0),
+              count: Number(row.invoice_count || 0),
+              sourceQuality: String(row.source_quality || 'canonical'),
+            };
+          });
+        });
         const rows = methodRows.map((row) => withBranch(row.branchId, {
           [lang === 'ar' ? 'طريقة الدفع' : 'Payment Method']: methodLabels[row.method] || row.method,
-          [lang === 'ar' ? 'صافي المدفوع' : 'Net Paid']: row.total,
-          [lang === 'ar' ? 'عدد الحركات' : 'Count']: row.count,
+          [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: row.total,
+          [lang === 'ar' ? 'عدد الفواتير' : 'Invoices']: row.count,
+          [lang === 'ar' ? 'مصدر البيانات' : 'Data Source']:
+            row.sourceQuality === 'legacy_journal_fallback'
+              ? (lang === 'ar' ? 'قيد تاريخي موثق' : 'Verified legacy journal')
+              : row.sourceQuality === 'receivable'
+                ? (lang === 'ar' ? 'ذمم مدينة' : 'Receivable')
+                : (lang === 'ar' ? 'تفاصيل الدفع' : 'Payment details'),
         }));
         setData(rows);
-        setChartData(methodRows.map((row) => ({ name: `${branchNameById(row.branchId)} — ${methodLabels[row.method] || row.method}`, value: row.total })));
-        setSummary({ total: methodRows.reduce((sum, row) => sum + row.total, 0), count: methodRows.reduce((sum, row) => sum + row.count, 0) });
+        setChartData(methodRows.map((row) => ({
+          name: `${branchNameById(row.branchId)} — ${methodLabels[row.method] || row.method}`,
+          value: row.total,
+        })));
+        setSummary({
+          total: paymentSummaryTotal,
+          count: paymentInvoiceCount,
+        });
       } else if (reportType === 'sales_by_employee') {
-        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
+        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
-        const { data: sales } = await q;
+        const sales = await fetchRows<Record<string, unknown>>(q);
         const empMap = new Map<string, { branchId: string; name: string; total: number; count: number }>();
-        (sales || []).forEach((sale: Record<string, unknown>) => {
+        sales.forEach((sale: Record<string, unknown>) => {
           const cashier = sale.users as { full_name?: string; email?: string } | null;
           const name = cashier?.full_name || cashier?.email || (lang === 'ar' ? 'غير معروف' : 'Unknown');
           const branchId = String(sale.branch_id || '');
@@ -409,13 +451,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         }));
         setData(rows);
         setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
-        setSummary({ total: (sales || []).reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: (sales || []).length });
+        setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
       } else if (reportType === 'sales_by_product') {
         let itemsQuery = supabase.from('sale_items').select('sale_id, quantity, refunded_quantity, total, refunded_amount, product:products(name), sale:sales(id, created_at, branch_id, status, order_type, warehouse_id, cashier_id, customer_id, payment_method, total, refunded_amount)');
         if (effectiveBranchFilter) itemsQuery = itemsQuery.eq('sale.branch_id', effectiveBranchFilter);
         itemsQuery = filterQ(itemsQuery, filters, applySaleItemFilters);
-        const { data: items } = await itemsQuery.limit(10000);
-        const filtered = (items || []).filter((item: Record<string, unknown>) => {
+        const items = await fetchRows<Record<string, unknown>>(itemsQuery);
+        const filtered = items.filter((item: Record<string, unknown>) => {
           const sale = item.sale as { created_at: string } | null;
           return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
         });
@@ -449,11 +491,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(prodMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((product) => ({ name: product.name, value: product.total })));
         setSummary({ total: Array.from(prodMap.values()).reduce((sum, product) => sum + product.total, 0), count: rows.length });
       } else if (reportType === 'detailed_invoices') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false }).limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
-        const { data: sales } = await q;
-        const rows = (sales || []).map((sale: Record<string, unknown>) => {
+        const sales = await fetchRows<Record<string, unknown>>(q);
+        const rows = sales.map((sale: Record<string, unknown>) => {
           const customer = sale.customer as { name?: string } | null;
           const cashier = sale.cashier as { full_name?: string } | null;
           return withBranch(sale.branch_id, {
@@ -471,14 +513,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         });
         setData(rows);
         setChartData([]);
-        setSummary({ total: (sales || []).reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: rows.length });
+        setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: rows.length });
       } else if (reportType === 'component_consumption') {
         let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, unit_cost, created_at, product:products(name), warehouse:warehouses(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyProductScopedFilters);
-        const { data: tx } = await q.limit(5000);
+        const tx = await fetchRows<Record<string, unknown>>(q);
         const map = new Map<string, { branchId: string; name: string; qty: number; cost: number; count: number }>();
-        (tx || []).forEach((row: Record<string, unknown>) => {
+        tx.forEach((row: Record<string, unknown>) => {
           const product = row.product as { name?: string } | null;
           const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
           const branchId = String(row.branch_id || '');
@@ -503,9 +545,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, product:products(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applyProductScopedFilters);
-        const { data: tx } = await q.limit(5000);
+        const tx = await fetchRows<Record<string, unknown>>(q);
         const map = new Map<string, { branchId: string; name: string; qty: number }>();
-        (tx || []).forEach((row: Record<string, unknown>) => {
+        tx.forEach((row: Record<string, unknown>) => {
           const product = row.product as { name?: string } | null;
           const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
           const branchId = String(row.branch_id || '');
@@ -525,8 +567,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         let itemsQuery = supabase.from('sale_items').select('quantity, refunded_quantity, product:products(name), sale:sales(created_at, branch_id, order_type, warehouse_id, cashier_id, customer_id)');
         if (effectiveBranchFilter) itemsQuery = itemsQuery.eq('sale.branch_id', effectiveBranchFilter);
         itemsQuery = filterQ(itemsQuery, filters, applySaleItemFilters);
-        const { data: items } = await itemsQuery.limit(10000);
-        const filtered = (items || []).filter((item: Record<string, unknown>) => {
+        const items = await fetchRows<Record<string, unknown>>(itemsQuery);
+        const filtered = items.filter((item: Record<string, unknown>) => {
           const sale = item.sale as { created_at: string } | null;
           return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
         });
@@ -581,24 +623,24 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           unitMasterQuery = unitMasterQuery.eq('branch_id', effectiveBranchFilter);
           unitBatchQuery = unitBatchQuery.eq('branch_id', effectiveBranchFilter);
         }
-        const [rawMastersResult, rawBalancesResult, unitMastersResult, unitBatchesResult] = await Promise.all([
-          rawMasterQuery.limit(10000),
-          rawBalanceQuery.limit(10000),
-          unitMasterQuery.limit(10000),
-          unitBatchQuery.limit(20000),
+        const [rawMasters, rawBalances, unitMasters, unitBatches] = await Promise.all([
+          fetchRows<Record<string, unknown>>(rawMasterQuery),
+          fetchRows<Record<string, unknown>>(rawBalanceQuery),
+          fetchRows<Record<string, unknown>>(unitMasterQuery),
+          fetchRows<Record<string, unknown>>(unitBatchQuery),
         ]);
         const rawQty = new Map<string, number>();
-        (rawBalancesResult.data || []).forEach((row: Record<string, unknown>) => {
+        rawBalances.forEach((row: Record<string, unknown>) => {
           const key = `${String(row.branch_id || '')}:${String(row.raw_material_id || '')}`;
           rawQty.set(key, (rawQty.get(key) || 0) + Number(row.quantity || 0));
         });
         const unitQty = new Map<string, number>();
-        (unitBatchesResult.data || []).forEach((row: Record<string, unknown>) => {
+        unitBatches.forEach((row: Record<string, unknown>) => {
           const key = `${String(row.branch_id || '')}:${String(row.unit_id || '')}`;
           unitQty.set(key, (unitQty.get(key) || 0) + Number(row.quantity || 0));
         });
         const stockRows: Array<{ branchId: string; item: string; code: string; type: string; qty: number; threshold: number }> = [];
-        (rawMastersResult.data || []).forEach((row: Record<string, unknown>) => {
+        rawMasters.forEach((row: Record<string, unknown>) => {
           const branchId = String(row.branch_id || '');
           const key = `${branchId}:${String(row.id || '')}`;
           stockRows.push({
@@ -610,7 +652,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
             threshold: Number(row.min_stock ?? 0),
           });
         });
-        (unitMastersResult.data || []).forEach((row: Record<string, unknown>) => {
+        unitMasters.forEach((row: Record<string, unknown>) => {
           const branchId = String(row.branch_id || '');
           const key = `${branchId}:${String(row.id || '')}`;
           stockRows.push({
@@ -636,11 +678,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'الصنف' : 'Item']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: 0, count: rows.length });
       } else if (reportType === 'cashier_performance') {
-        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, payment_method, status, created_at, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
+        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, payment_method, status, created_at, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        const { data: sales } = await q;
+        const sales = await fetchRows<Record<string, unknown>>(q);
         const empMap = new Map<string, { branchId: string; name: string; total: number; count: number; refundCount: number }>();
-        (sales || []).forEach((sale: Record<string, unknown>) => {
+        sales.forEach((sale: Record<string, unknown>) => {
           if (filters.cashier && sale.cashier_id !== filters.cashier) return;
           if (filters.warehouse && sale.warehouse_id !== filters.warehouse) return;
           const cashier = sale.users as { full_name?: string; email?: string } | null;
@@ -665,13 +707,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
         setSummary({ total: Array.from(empMap.values()).reduce((sum, employee) => sum + employee.total, 0), count: Array.from(empMap.values()).reduce((sum, employee) => sum + employee.count, 0) });
       } else if (reportType === 'returns') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).or('refunded_amount.gt.0,status.in.(returned,refunded,cancelled)').limit(5000);
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).or('refunded_amount.gt.0,status.in.(returned,refunded,cancelled)');
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        const { data: returns } = await q;
+        const returns = await fetchRows<Record<string, unknown>>(q);
         const statusLabels: Record<string, string> = {
           returned: lang === 'ar' ? 'مرتجع' : 'Returned', refunded: t('refunded'), cancelled: t('statusCancelled'),
         };
-        const rows = (returns || []).map((sale: Record<string, unknown>) => {
+        const rows = returns.map((sale: Record<string, unknown>) => {
           const customer = sale.customer as { name?: string } | null;
           const cashier = sale.cashier as { full_name?: string } | null;
           const refunded = Number(sale.refunded_amount || 0) || Number(sale.total || 0);
@@ -687,11 +729,59 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setData(rows);
         setChartData([]);
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount'] || 0), 0), count: rows.length });
+      } else if (reportType === 'financial_reconciliation') {
+        const targetBranchIds = effectiveBranchFilter
+          ? [effectiveBranchFilter]
+          : branches.map((branch) => branch.id);
+        const results = await Promise.all(targetBranchIds.map((branchId) => reporting.getFinancialReconciliationReport({
+          p_branch_id: branchId,
+          p_from: fromTs,
+          p_to: toExclusiveTs,
+        })));
+        const reconciliationRows: Record<string, unknown>[] = [];
+        let totalNetSales = 0;
+        let mismatchCount = 0;
+        results.forEach((result, index) => {
+          const raw = (result.data as Record<string, unknown> | null) || {};
+          if (result.error || raw.success === false) return;
+          const branchId = targetBranchIds[index];
+          const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
+          totalNetSales += Number(summaryRow.net_sales || 0);
+          mismatchCount += Number(summaryRow.mismatch_count || 0);
+          if (!Array.isArray(raw.rows)) return;
+          raw.rows.forEach((item) => {
+            const row = item as Record<string, unknown>;
+            const status = String(row.reconciliation_status || 'matched');
+            reconciliationRows.push(withBranch(branchId, {
+              [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(String(row.created_at || ''), lang),
+              [lang === 'ar' ? 'رقم الفاتورة' : 'Invoice']: String(row.invoice_number || ''),
+              [lang === 'ar' ? 'صافي الفاتورة' : 'Net Sale']: Number(row.net_sale || 0),
+              [lang === 'ar' ? 'كاش' : 'Cash']: Number(row.cash || 0),
+              [lang === 'ar' ? 'كارت' : 'Card']: Number(row.card || 0),
+              [lang === 'ar' ? 'تحويل' : 'Transfer']: Number(row.transfer || 0),
+              [lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank']: Number(row.legacy_bank || 0),
+              [lang === 'ar' ? 'آجل' : 'Credit']: Number(row.credit || 0),
+              [lang === 'ar' ? 'حركة الخزنة' : 'Cash GL']: Number(row.cash_gl || 0),
+              [lang === 'ar' ? 'حركة البنك' : 'Bank GL']: Number(row.bank_gl || 0),
+              [lang === 'ar' ? 'فرق الخزنة' : 'Cash Difference']: Number(row.cash_diff || 0),
+              [lang === 'ar' ? 'فرق البنك' : 'Bank Difference']: Number(row.bank_diff || 0),
+              [lang === 'ar' ? 'المطابقة' : 'Reconciliation']:
+                status === 'mismatch'
+                  ? (lang === 'ar' ? 'يوجد فرق' : 'Mismatch')
+                  : status === 'matched_legacy'
+                    ? (lang === 'ar' ? 'مطابق — مصدر تاريخي' : 'Matched — legacy source')
+                    : (lang === 'ar' ? 'مطابق' : 'Matched'),
+            }));
+          });
+        });
+        setData(reconciliationRows);
+        setChartData([]);
+        setSummary({ total: totalNetSales, count: mismatchCount });
       } else if (reportType === 'production_waste') {
         let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        const { data: waste } = await q;
-        const rows = (waste || []).map((row: Record<string, unknown>) => {
+        const waste = await fetchRows<Record<string, unknown>>(q);
+        const rows = waste.map((row: Record<string, unknown>) => {
           const product = row.product as { name?: string } | null;
           const warehouse = row.warehouse as { name?: string } | null;
           return withBranch(row.branch_id, {
@@ -714,14 +804,28 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }
 
   const handleExportExcel = () => {
+    const excelProfile = getReportExcelProfile(reportType, lang as 'ar' | 'en');
+    const totalRow = reportType === 'financial_reconciliation'
+      ? {
+        [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: summary.total,
+        [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: summary.count,
+      }
+      : {
+        [lang === 'ar' ? 'الإجمالي' : 'Total']: summary.total,
+        [lang === 'ar' ? 'عدد السجلات' : 'Record Count']: summary.count,
+      };
     void exportToExcelAdvanced({
       data,
       filename: `report_${reportType}_${from}_${to}`,
-      sheetName: reportType,
+      sheetName: (reportTypes.find((row) => row.key === reportType)?.label ?? reportType).slice(0, 31),
       title: reportTypes.find((row) => row.key === reportType)?.label ?? reportType,
       subtitle: `${reportBranchLabel} — ${from} — ${to}`,
-      totalRow: summary.total ? { [lang === 'ar' ? 'الإجمالي' : 'Total']: summary.total, [lang === 'ar' ? 'العدد' : 'Count']: summary.count } : undefined,
+      totalRow,
       currencyColumns: moneyKeys,
+      integerColumns: excelProfile.integerColumns,
+      columns: excelProfile.columns,
+      columnWidths: excelProfile.columnWidths,
+      sourceNote: excelProfile.sourceNote,
       lang,
     });
   };
@@ -746,6 +850,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     { key: 'returns', label: t('returnsReport'), icon: <RotateCcw className="w-4 h-4" /> },
     { key: 'production_waste', label: t('productionWasteReport'), icon: <Trash2 className="w-4 h-4" /> },
   ];
+  if (canFinancial) {
+    reportTypes.push({
+      key: 'financial_reconciliation',
+      label: lang === 'ar' ? 'المطابقة المالية' : 'Financial Reconciliation',
+      icon: <CreditCard className="w-4 h-4" />,
+    });
+  }
 
   const moneyKeys = [
     lang === 'ar' ? 'الإجمالي' : 'Total', lang === 'ar' ? 'المبلغ' : 'Amount',
@@ -760,6 +871,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     lang === 'ar' ? 'سعر البيع' : 'Sale Price', lang === 'ar' ? 'الهامش' : 'Margin',
     lang === 'ar' ? 'تكلفة الوحدة' : 'Unit Cost', lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost',
     lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount',
+    lang === 'ar' ? 'كاش' : 'Cash', lang === 'ar' ? 'كارت' : 'Card',
+    lang === 'ar' ? 'تحويل' : 'Transfer', lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank',
+    lang === 'ar' ? 'آجل' : 'Credit', lang === 'ar' ? 'حركة الخزنة' : 'Cash GL',
+    lang === 'ar' ? 'حركة البنك' : 'Bank GL', lang === 'ar' ? 'فرق الخزنة' : 'Cash Difference',
+    lang === 'ar' ? 'فرق البنك' : 'Bank Difference',
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);

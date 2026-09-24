@@ -9,7 +9,7 @@ import { Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { Input, Select } from '@/components/Input';
 import { formatCurrency, todayISO, formatDate } from '@/lib/format';
-import { exportToExcel } from '@/lib/excel';
+import { exportToExcelAdvanced } from '@/lib/excel';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
@@ -253,17 +253,161 @@ export function FinancialReportsPage() {
   ];
 
   const exportData = () => {
-    if (view === 'trial_balance') exportToExcel(tb.map((r) => ({ Code: r.code, Name: isAr ? r.name : (r.name_en || r.name), Type: r.account_type, Debit: r.debit, Credit: r.credit, Balance: r.balance })), `trial_balance_${to}`);
-    else if (view === 'ledger') exportToExcel(gl.map((r) => ({ Date: r.entry_date, Entry: r.entry_number, Description: r.description || '', Reference: r.reference_number || '', Debit: r.debit, Credit: r.credit, Balance: r.balance })), `general_ledger_${to}`);
-    else if (view === 'treasury_statement' && treasuryStmt) exportToExcel(treasuryStmt.rows.map((r) => ({ Date: r.entry_date, Entry: r.entry_number, Source: r.reference_type || '', Reference: r.reference_number || '', Description: r.description || r.note || '', Inflow: r.inflow, Outflow: r.outflow, Balance: r.balance })), `treasury_statement_${to}`);
-    else if (view === 'inventory_movement' && inventoryStmt) exportToExcel(inventoryStmt.rows.map((r) => ({ Date: r.created_at, Type: r.entry_type, Warehouse: r.warehouse_name || '', Reference: r.reference_number || '', Batch: r.batch_number || '', In: r.in_qty, Out: r.out_qty, Balance: r.balance, UnitCost: r.unit_cost, TotalCost: r.total_cost })), `inventory_movement_${to}`);
-    else if (view === 'income' && income) exportToExcel([{ Item: t('revenue'), Amount: income.revenue }, { Item: t('grossProfit'), Amount: income.gross_profit }, { Item: t('netIncome'), Amount: income.net_income }], `income_statement_${to}`);
-    else if (view === 'balance_sheet' && sheet) exportToExcel([{ Item: t('assets'), Amount: sheet.assets }, { Item: t('liabilities'), Amount: sheet.liabilities }, { Item: t('equity'), Amount: sheet.equity }], `balance_sheet_${to}`);
-    else if (view === 'ar_aging') exportToExcel(arAging.map((r) => ({ Customer: r.name, Phone: r.phone || '', Open: r.open_amount, '0-30': r.bucket_0_30, '31-60': r.bucket_31_60, '61-90': r.bucket_61_90, '90+': r.bucket_90_plus })), `ar_aging_${to}`);
-    else if (view === 'ap_aging') exportToExcel(apAging.map((r) => ({ Supplier: r.name, Phone: r.phone || '', Open: r.open_amount, '0-30': r.bucket_0_30, '31-60': r.bucket_31_60, '61-90': r.bucket_61_90, '90+': r.bucket_90_plus })), `ap_aging_${to}`);
-    else if (view === 'aging_summary' && agingSummary) exportToExcel([{ Item: 'AR', Amount: agingSummary.ar_open }, { Item: 'AP', Amount: agingSummary.ap_open }], `aging_summary_${to}`);
-    else if (view === 'cash_flow') exportToExcel(cashFlow.map((r) => ({ Account: r.account_name, Type: r.account_type, Inflow: r.inflow, Outflow: r.outflow, Net: r.net })), `cash_flow_${to}`);
-    else if (view === 'party_statement' && partyStmt) exportToExcel(partyStmt.rows.map((r) => ({ Date: r.entry_date, Entry: r.entry_number, Description: r.description || '', Reference: r.reference_number || '', Debit: r.debit, Credit: r.credit, Balance: r.balance })), `party_statement_${to}`);
+    const ar = (arabic: string, english: string) => isAr ? arabic : english;
+    const currentTitle = views.find((item) => item.key === view)?.label || view;
+    const base = {
+      title: currentTitle,
+      subtitle: `${from} — ${to}`,
+      lang: lang as 'ar' | 'en',
+      sourceNote: ar(
+        'الأرقام من نفس RPC المحاسبي المستخدم في الشاشة؛ لا يعاد حسابها داخل ملف Excel.',
+        'Figures use the same accounting RPC as the screen; Excel does not recompute them differently.',
+      ),
+    };
+
+    if (view === 'trial_balance') {
+      const rows = tb.map((r) => ({
+        [ar('كود الحساب', 'Account Code')]: r.code,
+        [ar('اسم الحساب', 'Account Name')]: isAr ? r.name : (r.name_en || r.name),
+        [ar('نوع الحساب', 'Account Type')]: r.account_type,
+        [ar('مدين', 'Debit')]: r.debit,
+        [ar('دائن', 'Credit')]: r.credit,
+        [ar('الرصيد', 'Balance')]: r.balance,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `trial_balance_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
+        columns: [ar('كود الحساب', 'Account Code'), ar('اسم الحساب', 'Account Name'), ar('نوع الحساب', 'Account Type'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
+        columnWidths: { [ar('كود الحساب', 'Account Code')]: 14, [ar('اسم الحساب', 'Account Name')]: 30, [ar('نوع الحساب', 'Account Type')]: 18 },
+        totalRow: { [ar('مدين', 'Debit')]: tbTotals.debit, [ar('دائن', 'Credit')]: tbTotals.credit, [ar('الرصيد', 'Balance')]: tbTotals.debit - tbTotals.credit },
+      });
+    } else if (view === 'ledger') {
+      const rows = gl.map((r) => ({
+        [ar('التاريخ', 'Date')]: r.entry_date,
+        [ar('رقم القيد', 'Entry')]: r.entry_number,
+        [ar('البيان', 'Description')]: r.description || '',
+        [ar('المرجع', 'Reference')]: r.reference_number || '',
+        [ar('مدين', 'Debit')]: r.debit,
+        [ar('دائن', 'Credit')]: r.credit,
+        [ar('الرصيد', 'Balance')]: r.balance,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `general_ledger_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
+        columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
+        columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('البيان', 'Description')]: 38, [ar('المرجع', 'Reference')]: 20 },
+      });
+    } else if (view === 'treasury_statement' && treasuryStmt) {
+      const rows = treasuryStmt.rows.map((r) => ({
+        [ar('التاريخ', 'Date')]: r.entry_date,
+        [ar('رقم القيد', 'Entry')]: r.entry_number,
+        [ar('نوع الحركة', 'Movement')]: movementLabel(r.reference_type),
+        [ar('المرجع', 'Reference')]: r.reference_number || '',
+        [ar('البيان', 'Description')]: r.description || r.note || '',
+        [ar('وارد', 'Inflow')]: r.inflow,
+        [ar('منصرف', 'Outflow')]: r.outflow,
+        [ar('الرصيد', 'Balance')]: r.balance,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `treasury_statement_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الرصيد', 'Balance')],
+        columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('نوع الحركة', 'Movement'), ar('المرجع', 'Reference'), ar('البيان', 'Description'), ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الرصيد', 'Balance')],
+        columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('نوع الحركة', 'Movement')]: 18, [ar('المرجع', 'Reference')]: 20, [ar('البيان', 'Description')]: 38 },
+        sourceNote: ar('الحركة من دفتر الأستاذ المرتبط بحساب الخزنة/البنك المختار.', 'Movement comes directly from the general ledger account linked to the selected treasury/bank account.'),
+      });
+    } else if (view === 'inventory_movement' && inventoryStmt) {
+      const rows = inventoryStmt.rows.map((r) => ({
+        [ar('التاريخ', 'Date')]: r.created_at,
+        [ar('نوع الحركة', 'Type')]: r.entry_type,
+        [ar('المخزن', 'Warehouse')]: r.warehouse_name || '',
+        [ar('المرجع', 'Reference')]: r.reference_number || '',
+        [ar('التشغيلة', 'Batch')]: r.batch_number || '',
+        [ar('وارد', 'In')]: r.in_qty,
+        [ar('منصرف', 'Out')]: r.out_qty,
+        [ar('الرصيد', 'Balance')]: r.balance,
+        [ar('تكلفة الوحدة', 'Unit Cost')]: r.unit_cost,
+        [ar('إجمالي التكلفة', 'Total Cost')]: r.total_cost,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `inventory_movement_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('تكلفة الوحدة', 'Unit Cost'), ar('إجمالي التكلفة', 'Total Cost')],
+        columns: [ar('التاريخ', 'Date'), ar('نوع الحركة', 'Type'), ar('المخزن', 'Warehouse'), ar('المرجع', 'Reference'), ar('التشغيلة', 'Batch'), ar('وارد', 'In'), ar('منصرف', 'Out'), ar('الرصيد', 'Balance'), ar('تكلفة الوحدة', 'Unit Cost'), ar('إجمالي التكلفة', 'Total Cost')],
+        columnWidths: { [ar('التاريخ', 'Date')]: 18, [ar('نوع الحركة', 'Type')]: 18, [ar('المخزن', 'Warehouse')]: 22, [ar('المرجع', 'Reference')]: 20, [ar('التشغيلة', 'Batch')]: 18 },
+      });
+    } else if (view === 'income' && income) {
+      const rows = [
+        { [ar('البند', 'Item')]: t('revenue'), [ar('القيمة', 'Amount')]: income.revenue },
+        { [ar('البند', 'Item')]: t('discounts'), [ar('القيمة', 'Amount')]: income.discount },
+        { [ar('البند', 'Item')]: t('netRevenue'), [ar('القيمة', 'Amount')]: income.net_revenue },
+        { [ar('البند', 'Item')]: t('cogs'), [ar('القيمة', 'Amount')]: income.cogs },
+        { [ar('البند', 'Item')]: t('grossProfit'), [ar('القيمة', 'Amount')]: income.gross_profit },
+        { [ar('البند', 'Item')]: t('expenses'), [ar('القيمة', 'Amount')]: income.expenses },
+        { [ar('البند', 'Item')]: t('netIncome'), [ar('القيمة', 'Amount')]: income.net_income },
+      ];
+      void exportToExcelAdvanced({ ...base, data: rows, filename: `income_statement_${to}`, sheetName: currentTitle, currencyColumns: [ar('القيمة', 'Amount')], columns: [ar('البند', 'Item'), ar('القيمة', 'Amount')], columnWidths: { [ar('البند', 'Item')]: 32 } });
+    } else if (view === 'balance_sheet' && sheet) {
+      const rows = [
+        { [ar('البند', 'Item')]: t('assets'), [ar('القيمة', 'Amount')]: sheet.assets },
+        { [ar('البند', 'Item')]: t('liabilities'), [ar('القيمة', 'Amount')]: sheet.liabilities },
+        { [ar('البند', 'Item')]: t('equity'), [ar('القيمة', 'Amount')]: sheet.equity },
+      ];
+      void exportToExcelAdvanced({ ...base, data: rows, filename: `balance_sheet_${to}`, sheetName: currentTitle, currencyColumns: [ar('القيمة', 'Amount')], columns: [ar('البند', 'Item'), ar('القيمة', 'Amount')], columnWidths: { [ar('البند', 'Item')]: 32 } });
+    } else if (view === 'ar_aging' || view === 'ap_aging') {
+      const partyLabel = view === 'ar_aging' ? ar('العميل', 'Customer') : ar('المورد', 'Supplier');
+      const source = view === 'ar_aging' ? arAging : apAging;
+      const rows = source.map((r) => ({
+        [partyLabel]: r.name,
+        [ar('الهاتف', 'Phone')]: r.phone || '',
+        [ar('الرصيد المفتوح', 'Open')]: r.open_amount,
+        '0-30': r.bucket_0_30,
+        '31-60': r.bucket_31_60,
+        '61-90': r.bucket_61_90,
+        '90+': r.bucket_90_plus,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `${view}_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('الرصيد المفتوح', 'Open'), '0-30', '31-60', '61-90', '90+'],
+        columns: [partyLabel, ar('الهاتف', 'Phone'), ar('الرصيد المفتوح', 'Open'), '0-30', '31-60', '61-90', '90+'],
+        columnWidths: { [partyLabel]: 30, [ar('الهاتف', 'Phone')]: 18 },
+      });
+    } else if (view === 'aging_summary' && agingSummary) {
+      const rows = [
+        { [ar('البند', 'Item')]: ar('ذمم العملاء', 'AR'), [ar('القيمة', 'Amount')]: agingSummary.ar_open },
+        { [ar('البند', 'Item')]: ar('ذمم الموردين', 'AP'), [ar('القيمة', 'Amount')]: agingSummary.ap_open },
+      ];
+      void exportToExcelAdvanced({ ...base, data: rows, filename: `aging_summary_${to}`, sheetName: currentTitle, currencyColumns: [ar('القيمة', 'Amount')], columns: [ar('البند', 'Item'), ar('القيمة', 'Amount')], columnWidths: { [ar('البند', 'Item')]: 30 } });
+    } else if (view === 'cash_flow') {
+      const rows = cashFlow.map((r) => ({
+        [ar('الحساب', 'Account')]: r.account_name,
+        [ar('النوع', 'Type')]: r.account_type,
+        [ar('وارد', 'Inflow')]: r.inflow,
+        [ar('منصرف', 'Outflow')]: r.outflow,
+        [ar('الصافي', 'Net')]: r.net,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `cash_flow_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الصافي', 'Net')],
+        columns: [ar('الحساب', 'Account'), ar('النوع', 'Type'), ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الصافي', 'Net')],
+        columnWidths: { [ar('الحساب', 'Account')]: 32, [ar('النوع', 'Type')]: 18 },
+        sourceNote: ar('ملخص حركة حسابات الخزائن والبنوك من قيود الأستاذ فقط.', 'Summary of treasury and bank movements from ledger postings only.'),
+      });
+    } else if (view === 'party_statement' && partyStmt) {
+      const rows = partyStmt.rows.map((r) => ({
+        [ar('التاريخ', 'Date')]: r.entry_date,
+        [ar('رقم القيد', 'Entry')]: r.entry_number,
+        [ar('البيان', 'Description')]: r.description || '',
+        [ar('المرجع', 'Reference')]: r.reference_number || '',
+        [ar('مدين', 'Debit')]: r.debit,
+        [ar('دائن', 'Credit')]: r.credit,
+        [ar('الرصيد', 'Balance')]: r.balance,
+      }));
+      void exportToExcelAdvanced({
+        ...base, data: rows, filename: `party_statement_${to}`, sheetName: currentTitle,
+        currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
+        columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
+        columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('البيان', 'Description')]: 38, [ar('المرجع', 'Reference')]: 20 },
+      });
+    }
   };
 
   const summaryCard = (label: string, value: number, color = 'text-ui-text dark:text-white') => (
