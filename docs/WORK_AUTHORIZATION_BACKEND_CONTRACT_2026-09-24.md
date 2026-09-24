@@ -338,6 +338,23 @@ All SECURITY DEFINER functions:
 - revoke PUBLIC/anon execute;
 - grant only required roles.
 
+## Entry-gate contract
+
+The employee flow is centralized:
+
+`Login -> Resolve active branch -> Work Authorization Gate -> Application`
+
+Frontend behavior:
+
+- check once after a verified login/profile is available;
+- check again only when the active branch changes;
+- do not mount Dashboard/POS/report pages while the gate is blocked;
+- keep the authenticated session mounted while waiting;
+- revocation/approval changes are pushed by Realtime and trigger one lightweight state refresh;
+- no page-level or button-level authorization polling.
+
+Server-side mutation guards remain authoritative and indexed; they are not a frontend polling mechanism.
+
 ## Realtime contract
 
 No aggressive polling.
@@ -354,19 +371,21 @@ Realtime is not required to activate server enforcement; server gate remains aut
 ## Rollout order
 
 1. Add canonical permissions to frontend permission definitions/contracts.
-2. Create backend migration locally with Supabase CLI.
-3. Add schema + RLS + RPCs + shift lifecycle hooks.
-4. Add integration/security tests.
-5. Fresh DB verify.
-6. Mount production provider in Approval Center only.
-7. Verify manager center against real RPCs.
-8. Mount employee gate in read/observe mode.
-9. Add server enforcement to selected operational RPC boundaries.
-10. Expand enforcement only after regression tests cover each protected boundary.
-11. Full Verify on exact head.
-12. Explicit approval before Production migration.
-13. Production apply.
-14. Controlled enablement by adding policy rows to selected user+branch pairs.
+2. Add centralized entry gate component between Auth and the application shell.
+3. Create backend migration on the development branch and validate from a Fresh DB.
+4. Add schema + RLS + RPCs + shift lifecycle hooks.
+5. Add integration/security tests.
+6. Fresh DB verify.
+7. Mount production provider in Approval Center only.
+8. Verify manager center against real RPCs.
+9. Mount the employee entry gate once at the authenticated app boundary.
+10. Add Realtime status refresh for approval/revocation; no polling.
+11. Add server enforcement to selected operational mutation boundaries.
+12. Expand enforcement only after regression tests cover each protected boundary.
+13. Full Verify on exact head.
+14. Explicit approval before Production migration.
+15. Production apply.
+16. Controlled enablement by adding policy rows to selected user+branch pairs.
 
 ## Required regression matrix
 
