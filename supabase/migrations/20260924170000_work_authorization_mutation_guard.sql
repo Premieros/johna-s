@@ -67,6 +67,22 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Narrow branch-bootstrap exception: only the exact branch id placed in a
+  -- transaction-local setting by create_organization_branch may bypass the
+  -- work-authorization assertion while its controlled setup rows are created.
+  -- Direct Data API writes cannot select an arbitrary branch through this path.
+  IF NULLIF(current_setting('app.work_authorization_bootstrap_branch_id', true), '')::uuid
+       IS NOT DISTINCT FROM CASE
+         WHEN TG_OP = 'DELETE' THEN NULL
+         ELSE NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid
+       END
+     AND NULLIF(current_setting('app.work_authorization_bootstrap_branch_id', true), '') IS NOT NULL THEN
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+    RETURN NEW;
+  END IF;
+
   IF TG_OP <> 'INSERT' THEN
     v_old_branch_id := NULLIF(to_jsonb(OLD)->>'branch_id', '')::uuid;
   END IF;
@@ -286,6 +302,11 @@ BEGIN
   VALUES (auth.uid(), v_branch_id)
   ON CONFLICT (user_id, branch_id) DO NOTHING;
 
+  -- The new branch cannot have an approval row before bootstrap completes.
+  -- Mark only this freshly-created branch as bootstrap-authorized for the
+  -- current transaction; the mutation guard accepts no other branch id.
+  PERFORM set_config('app.work_authorization_bootstrap_branch_id', v_branch_id::text, true);
+
   INSERT INTO public.warehouses (name, branch_id, is_active)
   VALUES (p_name || ' - Main', v_branch_id, true)
   RETURNING id INTO v_warehouse_id;
@@ -301,6 +322,8 @@ BEGIN
 
   INSERT INTO public.branch_subscriptions (branch_id, status, trial_starts_at, trial_ends_at)
   VALUES (v_branch_id, 'trial', now(), now() + interval '14 days');
+
+  PERFORM set_config('app.work_authorization_bootstrap_branch_id', '', true);
 
   RETURN jsonb_build_object(
     'success', true,
