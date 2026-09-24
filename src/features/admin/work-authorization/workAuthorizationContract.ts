@@ -8,8 +8,7 @@ export type WorkAuthorizationHistoryKind =
   | 'requested'
   | 'approved'
   | 'rejected'
-  | 'revoked'
-  | 'expired';
+  | 'revoked';
 
 export interface WorkAuthorizationPerson {
   userId: string;
