@@ -37,15 +37,12 @@ import {
   type EqBuilder,
 } from '../reportFilters';
 import {
-  aggregatePaymentMethods,
   allocateSaleNetRevenue,
   netPurchaseAmount,
   netSaleAmount,
   netSaleItemQuantity,
   netSaleItemRevenue,
   netSalePayment,
-  type SalePaymentFallbackLike,
-  type SalePaymentLike,
 } from '../numericIntegrity';
 
 type FinancialReportType = 'trial_balance' | 'ledger' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
@@ -360,31 +357,63 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'الصنف' : 'Item']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'الكمية' : 'Quantity'] || 0), 0), count: rows.length });
       } else if (reportType === 'sales_by_payment') {
-        const { payment_method: requestedMethod, ...saleFilters } = filters;
-        let q = supabase.from('sales').select('id, branch_id, payment_method, total, paid_amount, refunded_amount, status').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, saleFilters, applySalesFilters);
-        const { data: sales } = await q;
-        const saleRows = (sales || []) as SalePaymentFallbackLike[];
-        const saleIds = saleRows.map((sale) => sale.id);
-        const paymentResult = saleIds.length
-          ? await supabase.from('sale_payments').select('sale_id, branch_id, payment_method, amount, refunded_amount').in('sale_id', saleIds).limit(10000)
-          : { data: [] as SalePaymentLike[] };
-        let methodRows = aggregatePaymentMethods(saleRows, (paymentResult.data || []) as SalePaymentLike[]);
-        if (requestedMethod) methodRows = methodRows.filter((row) => row.method === requestedMethod);
+        const targetBranchIds = effectiveBranchFilter
+          ? [effectiveBranchFilter]
+          : branches.map((branch) => branch.id);
+        const results = await Promise.all(targetBranchIds.map((branchId) => reporting.getSalesByPaymentReport({
+          p_branch_id: branchId,
+          p_from: fromTs,
+          p_to: toExclusiveTs,
+          p_payment_method: filters.payment_method || null,
+          p_order_type: filters.order_type || null,
+          p_warehouse_id: filters.warehouse || null,
+          p_cashier_id: filters.cashier || null,
+          p_status: filters.status || null,
+        })));
         const methodLabels: Record<string, string> = {
-          cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit'),
-          bank: lang === 'ar' ? 'تحويل بنكي' : 'Bank', instapay: 'InstaPay', wallet: lang === 'ar' ? 'محفظة' : 'Wallet',
-          split: lang === 'ar' ? 'مختلط غير موزع' : 'Unallocated split', other: lang === 'ar' ? 'أخرى' : 'Other',
+          cash: t('cash'),
+          card: t('card'),
+          transfer: t('transfer'),
+          credit: t('credit'),
+          employee_credit: lang === 'ar' ? 'آجل موظفين' : 'Employee Credit',
+          bank_legacy: lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank (Unclassified)',
+          other: lang === 'ar' ? 'أخرى' : 'Other',
         };
+        const methodRows = results.flatMap((result, index) => {
+          const raw = (result.data as Record<string, unknown> | null) || {};
+          if (result.error || raw.success === false || !Array.isArray(raw.rows)) return [];
+          const branchId = targetBranchIds[index];
+          return raw.rows.map((item) => {
+            const row = item as Record<string, unknown>;
+            return {
+              branchId,
+              method: String(row.method || 'other'),
+              total: Number(row.sales_total || 0),
+              count: Number(row.invoice_count || 0),
+              sourceQuality: String(row.source_quality || 'canonical'),
+            };
+          });
+        });
         const rows = methodRows.map((row) => withBranch(row.branchId, {
           [lang === 'ar' ? 'طريقة الدفع' : 'Payment Method']: methodLabels[row.method] || row.method,
-          [lang === 'ar' ? 'صافي المدفوع' : 'Net Paid']: row.total,
-          [lang === 'ar' ? 'عدد الحركات' : 'Count']: row.count,
+          [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: row.total,
+          [lang === 'ar' ? 'عدد الفواتير' : 'Invoices']: row.count,
+          [lang === 'ar' ? 'مصدر البيانات' : 'Data Source']:
+            row.sourceQuality === 'legacy_journal_fallback'
+              ? (lang === 'ar' ? 'قيد تاريخي موثق' : 'Verified legacy journal')
+              : row.sourceQuality === 'receivable'
+                ? (lang === 'ar' ? 'ذمم مدينة' : 'Receivable')
+                : (lang === 'ar' ? 'تفاصيل الدفع' : 'Payment details'),
         }));
         setData(rows);
-        setChartData(methodRows.map((row) => ({ name: `${branchNameById(row.branchId)} — ${methodLabels[row.method] || row.method}`, value: row.total })));
-        setSummary({ total: methodRows.reduce((sum, row) => sum + row.total, 0), count: methodRows.reduce((sum, row) => sum + row.count, 0) });
+        setChartData(methodRows.map((row) => ({
+          name: `${branchNameById(row.branchId)} — ${methodLabels[row.method] || row.method}`,
+          value: row.total,
+        })));
+        setSummary({
+          total: methodRows.reduce((sum, row) => sum + row.total, 0),
+          count: methodRows.reduce((sum, row) => sum + row.count, 0),
+        });
       } else if (reportType === 'sales_by_employee') {
         let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
@@ -687,6 +716,54 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setData(rows);
         setChartData([]);
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount'] || 0), 0), count: rows.length });
+      } else if (reportType === 'financial_reconciliation') {
+        const targetBranchIds = effectiveBranchFilter
+          ? [effectiveBranchFilter]
+          : branches.map((branch) => branch.id);
+        const results = await Promise.all(targetBranchIds.map((branchId) => reporting.getFinancialReconciliationReport({
+          p_branch_id: branchId,
+          p_from: fromTs,
+          p_to: toExclusiveTs,
+        })));
+        const reconciliationRows: Record<string, unknown>[] = [];
+        let totalNetSales = 0;
+        let mismatchCount = 0;
+        results.forEach((result, index) => {
+          const raw = (result.data as Record<string, unknown> | null) || {};
+          if (result.error || raw.success === false) return;
+          const branchId = targetBranchIds[index];
+          const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
+          totalNetSales += Number(summaryRow.net_sales || 0);
+          mismatchCount += Number(summaryRow.mismatch_count || 0);
+          if (!Array.isArray(raw.rows)) return;
+          raw.rows.forEach((item) => {
+            const row = item as Record<string, unknown>;
+            const status = String(row.reconciliation_status || 'matched');
+            reconciliationRows.push(withBranch(branchId, {
+              [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(String(row.created_at || ''), lang),
+              [lang === 'ar' ? 'رقم الفاتورة' : 'Invoice']: String(row.invoice_number || ''),
+              [lang === 'ar' ? 'صافي الفاتورة' : 'Net Sale']: Number(row.net_sale || 0),
+              [lang === 'ar' ? 'كاش' : 'Cash']: Number(row.cash || 0),
+              [lang === 'ar' ? 'كارت' : 'Card']: Number(row.card || 0),
+              [lang === 'ar' ? 'تحويل' : 'Transfer']: Number(row.transfer || 0),
+              [lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank']: Number(row.legacy_bank || 0),
+              [lang === 'ar' ? 'آجل' : 'Credit']: Number(row.credit || 0),
+              [lang === 'ar' ? 'حركة الخزنة' : 'Cash GL']: Number(row.cash_gl || 0),
+              [lang === 'ar' ? 'حركة البنك' : 'Bank GL']: Number(row.bank_gl || 0),
+              [lang === 'ar' ? 'فرق الخزنة' : 'Cash Difference']: Number(row.cash_diff || 0),
+              [lang === 'ar' ? 'فرق البنك' : 'Bank Difference']: Number(row.bank_diff || 0),
+              [lang === 'ar' ? 'المطابقة' : 'Reconciliation']:
+                status === 'mismatch'
+                  ? (lang === 'ar' ? 'يوجد فرق' : 'Mismatch')
+                  : status === 'matched_legacy'
+                    ? (lang === 'ar' ? 'مطابق — مصدر تاريخي' : 'Matched — legacy source')
+                    : (lang === 'ar' ? 'مطابق' : 'Matched'),
+            }));
+          });
+        });
+        setData(reconciliationRows);
+        setChartData([]);
+        setSummary({ total: totalNetSales, count: mismatchCount });
       } else if (reportType === 'production_waste') {
         let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
@@ -746,6 +823,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     { key: 'returns', label: t('returnsReport'), icon: <RotateCcw className="w-4 h-4" /> },
     { key: 'production_waste', label: t('productionWasteReport'), icon: <Trash2 className="w-4 h-4" /> },
   ];
+  if (canFinancial) {
+    reportTypes.push({
+      key: 'financial_reconciliation',
+      label: lang === 'ar' ? 'المطابقة المالية' : 'Financial Reconciliation',
+      icon: <CreditCard className="w-4 h-4" />,
+    });
+  }
 
   const moneyKeys = [
     lang === 'ar' ? 'الإجمالي' : 'Total', lang === 'ar' ? 'المبلغ' : 'Amount',
@@ -760,6 +844,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     lang === 'ar' ? 'سعر البيع' : 'Sale Price', lang === 'ar' ? 'الهامش' : 'Margin',
     lang === 'ar' ? 'تكلفة الوحدة' : 'Unit Cost', lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost',
     lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount',
+    lang === 'ar' ? 'كاش' : 'Cash', lang === 'ar' ? 'كارت' : 'Card',
+    lang === 'ar' ? 'تحويل' : 'Transfer', lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank',
+    lang === 'ar' ? 'آجل' : 'Credit', lang === 'ar' ? 'حركة الخزنة' : 'Cash GL',
+    lang === 'ar' ? 'حركة البنك' : 'Bank GL', lang === 'ar' ? 'فرق الخزنة' : 'Cash Difference',
+    lang === 'ar' ? 'فرق البنك' : 'Bank Difference',
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
