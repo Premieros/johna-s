@@ -15,6 +15,7 @@ import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useColumnPreferences } from '../useColumnPreferences';
 import { ColumnPicker } from '../ColumnPicker';
 import { useCustomReports } from '../useCustomReports';
+import { getReportExcelProfile } from '../reportExcelProfiles';
 import type { SavedReportConfig } from '../useCustomReports';
 import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
@@ -379,9 +380,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           bank_legacy: lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank (Unclassified)',
           other: lang === 'ar' ? 'أخرى' : 'Other',
         };
+        let paymentSummaryTotal = 0;
+        let paymentInvoiceCount = 0;
         const methodRows = results.flatMap((result, index) => {
           const raw = (result.data as Record<string, unknown> | null) || {};
           if (result.error || raw.success === false || !Array.isArray(raw.rows)) return [];
+          const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
+          paymentSummaryTotal += Number(summaryRow.sales_total || 0);
+          paymentInvoiceCount += Number(summaryRow.invoice_count || 0);
           const branchId = targetBranchIds[index];
           return raw.rows.map((item) => {
             const row = item as Record<string, unknown>;
@@ -411,8 +417,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           value: row.total,
         })));
         setSummary({
-          total: methodRows.reduce((sum, row) => sum + row.total, 0),
-          count: methodRows.reduce((sum, row) => sum + row.count, 0),
+          total: paymentSummaryTotal,
+          count: paymentInvoiceCount,
         });
       } else if (reportType === 'sales_by_employee') {
         let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).limit(5000);
@@ -791,14 +797,28 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }
 
   const handleExportExcel = () => {
+    const excelProfile = getReportExcelProfile(reportType, lang as 'ar' | 'en');
+    const totalRow = reportType === 'financial_reconciliation'
+      ? {
+        [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: summary.total,
+        [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: summary.count,
+      }
+      : {
+        [lang === 'ar' ? 'الإجمالي' : 'Total']: summary.total,
+        [lang === 'ar' ? 'عدد السجلات' : 'Record Count']: summary.count,
+      };
     void exportToExcelAdvanced({
       data,
       filename: `report_${reportType}_${from}_${to}`,
-      sheetName: reportType,
+      sheetName: (reportTypes.find((row) => row.key === reportType)?.label ?? reportType).slice(0, 31),
       title: reportTypes.find((row) => row.key === reportType)?.label ?? reportType,
       subtitle: `${reportBranchLabel} — ${from} — ${to}`,
-      totalRow: summary.total ? { [lang === 'ar' ? 'الإجمالي' : 'Total']: summary.total, [lang === 'ar' ? 'العدد' : 'Count']: summary.count } : undefined,
+      totalRow,
       currencyColumns: moneyKeys,
+      integerColumns: excelProfile.integerColumns,
+      columns: excelProfile.columns,
+      columnWidths: excelProfile.columnWidths,
+      sourceNote: excelProfile.sourceNote,
       lang,
     });
   };
