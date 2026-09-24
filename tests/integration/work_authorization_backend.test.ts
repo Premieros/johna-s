@@ -336,18 +336,31 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     const guarded = rows.rows.map((row) => row.table_name);
     expect(guarded).toEqual([
       'bank_reconciliations',
+      'categories',
+      'chart_of_accounts',
       'customer_payments',
+      'customers',
+      'dining_areas',
+      'dining_tables',
       'employee_receivable_entries',
       'expenses',
       'inventory',
       'inventory_batches',
+      'inventory_units',
       'journal_entries',
+      'kitchen_stations',
       'orders',
+      'product_modifier_group_products',
+      'product_modifier_groups',
+      'product_modifier_options',
+      'products',
       'purchase_receipts',
       'purchase_requests',
       'purchases',
       'raw_material_batches',
       'raw_material_inventory',
+      'raw_materials',
+      'recipes',
       'rfqs',
       'sale_payments',
       'sales',
@@ -355,8 +368,11 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
       'stock_transactions',
       'supplier_payments',
       'supplier_quotations',
+      'suppliers',
       'treasury_transactions',
+      'user_kitchen_station_assignments',
       'warehouse_transfers',
+      'warehouses',
       'waste_entries',
     ]);
 
@@ -365,6 +381,59 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(guarded).not.toContain('shifts');
     expect(guarded).not.toContain('daily_closes');
     expect(guarded).not.toContain('work_authorizations');
+  });
+
+  it('blocks direct catalog/master writes while waiting, including branch-derived product components', async () => {
+    await client.query(`SELECT set_config('app.user_id',$1,true)`, [worker]);
+
+    await client.query('SAVEPOINT wa_catalog_guard_blocked');
+    try {
+      await expect(
+        client.query(
+          `INSERT INTO public.categories(name,branch_id) VALUES('WA blocked category',$1)`,
+          [branchA],
+        ),
+      ).rejects.toThrow(/WORK_AUTHORIZATION_REQUIRED/);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT wa_catalog_guard_blocked');
+      await client.query('RESET app.user_id').catch(() => {});
+    }
+
+    const parent = await client.query<{ id: string }>(
+      `INSERT INTO public.products(name,branch_id) VALUES('WA parent product',$1) RETURNING id`,
+      [branchA],
+    );
+    const component = await client.query<{ id: string }>(
+      `INSERT INTO public.products(name,branch_id) VALUES('WA component product',$1) RETURNING id`,
+      [branchA],
+    );
+
+    await client.query(`SELECT set_config('app.user_id',$1,true)`, [worker]);
+    await client.query('SAVEPOINT wa_product_component_guard_blocked');
+    try {
+      await expect(
+        client.query(
+          `INSERT INTO public.product_components(product_id,component_product_id,quantity)
+           VALUES($1,$2,1)`,
+          [parent.rows[0].id, component.rows[0].id],
+        ),
+      ).rejects.toThrow(/WORK_AUTHORIZATION_REQUIRED/);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT wa_product_component_guard_blocked');
+      await client.query('RESET app.user_id').catch(() => {});
+    }
+
+    const trigger = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM pg_trigger t
+       JOIN pg_class c ON c.oid=t.tgrelid
+       JOIN pg_namespace n ON n.oid=c.relnamespace
+       WHERE n.nspname='public'
+         AND c.relname='product_components'
+         AND t.tgname='trg_work_authorization_product_component_guard'
+         AND NOT t.tgisinternal`,
+    );
+    expect(trigger.rows[0].count).toBe('1');
   });
 
   it('blocks an operational mutation while waiting and allows it after reapproval', async () => {
