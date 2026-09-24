@@ -47,7 +47,7 @@ import {
   netSalePayment,
 } from '../numericIntegrity';
 
-type FinancialReportType = 'trial_balance' | 'ledger' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
+type FinancialReportType = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
 
 interface ReportsPageProps {
@@ -122,6 +122,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const financialTypes: { key: FinancialReportType; label: string }[] = [
     { key: 'trial_balance', label: t('trialBalance') },
     { key: 'ledger', label: t('generalLedger') },
+    { key: 'treasury_statement', label: lang === 'ar' ? 'كشف حساب بنك / خزنة' : 'Bank / Treasury Statement' },
+    { key: 'inventory_movement', label: lang === 'ar' ? 'حركة صنف' : 'Item Movement' },
     { key: 'income', label: t('incomeStatement') },
     { key: 'balance_sheet', label: t('balanceSheet') },
     { key: 'ar_aging', label: t('arAging') },
