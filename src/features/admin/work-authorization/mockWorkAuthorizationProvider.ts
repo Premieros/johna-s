@@ -294,12 +294,37 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
     };
   };
 
-  const setRequirement: WorkAuthorizationClient['setRequirement'] = async (policyId, required) => {
+  const setRequirement: WorkAuthorizationClient['setRequirement'] = async (userId, branchId, required) => {
+    const existing = state.policies.find((row) => row.userId === userId && row.branchId === branchId);
+    if (existing) {
+      state = {
+        ...state,
+        policies: state.policies.map((row) =>
+          row.userId === userId && row.branchId === branchId
+            ? { ...row, requiresAuthorization: required }
+            : row
+        ),
+      };
+      return;
+    }
+
+    const branchName = state.pending.find((row) => row.branchId === branchId)?.branchName
+      ?? state.active.find((row) => row.branchId === branchId)?.branchName
+      ?? 'الفرع الحالي';
     state = {
       ...state,
-      policies: state.policies.map((row) =>
-        row.id === policyId ? { ...row, requiresAuthorization: required } : row
-      ),
+      policies: [
+        ...state.policies,
+        {
+          id: `wa-policy-${userId}-${branchId}`,
+          branchId,
+          branchName,
+          userId,
+          userName: userId === 'preview-self' ? 'المستخدم الحالي' : userId,
+          positionLabel: '',
+          requiresAuthorization: required,
+        },
+      ],
     };
   };
 
