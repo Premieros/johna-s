@@ -156,6 +156,7 @@ Final required behavior:
 - That change was reviewed and accepted because it matches the approved simpler design.
 - Integration coverage now explicitly verifies authorization survives shift open/close.
 - Exact-head final Verify is still required before Production.
+- Fast Verify #333 applied the migration and schema successfully. The only integration failure was a test-ordering bug: the shift-independence assertion selected the most recent row by timestamp and could tie with an older revoked row. Backend `can_user_work` already returned true. The test now asserts exactly one active `approved` authorization instead of relying on timestamp ordering.
 
 ## Production gate
 
