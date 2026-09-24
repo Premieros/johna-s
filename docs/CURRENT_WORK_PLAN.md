@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md`
-- Current active branch: `development/enable-work-authorization-gate-20260925`
-- Current PR: `#358`
+- Mandatory active work log: `docs/OPENING_FIFO_COST_REPAIR_FOLLOWUP_2026-09-24.md`
+- Current active branch: `development/fifo-opening-repair-final-20260925`
+- Current PR: `#356`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -14,10 +14,19 @@
 
 
 
+## ACTIVE — Opening FIFO cost repair final integration — 2026-09-25
+
+- Branch: `development/fifo-opening-repair-final-20260925`
+- Base: `main@c4178c9bcdf662bdffceb855e2d2398b12200f51` (includes merged Work Authorization PR #358).
+- Live log: `docs/OPENING_FIFO_COST_REPAIR_FOLLOWUP_2026-09-24.md`.
+- Scope: integrate the verified FIFO opening-cost repair, raw warehouse-transfer valuation support, historical debt rebase, and orphan-sale journal fallback onto current main.
+- Printing / Print Agent / routing / KDS / send-to-kitchen remain frozen and untouched.
+- No direct write to main; merge only through PR after exact-head Full Verify Green.
+
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/enable-work-authorization-gate-20260925`
+- Executable branch: `development/fifo-opening-repair-final-20260925`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
