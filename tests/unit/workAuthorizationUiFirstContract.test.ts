@@ -15,7 +15,7 @@ describe('work authorization UI-first contract', () => {
     expect(preview).not.toMatch(/branch_manager|ownerOnly|isAdminRole|user\?\.role|user\.role/);
     expect(approvalCenter).toContain("can('approvals.review')");
     expect(approvalCenter).toContain("can('approvals.policy.manage')");
-    expect(approvalCenter).toContain('canManageSettings={canManagePolicies}');
+    expect(approvalCenter).toContain('canManageSettings={canManageWorkAuthorization}');
   });
 
   it('keeps preview disconnected from Supabase work-authorization writes', () => {
