@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/fifo-zero-cost-price-fallback-20260925`
-Current PR: `#0`
+Current PR: `#362`
 Last updated: 2026-09-25 01:48 Africa/Cairo
 State: **BLOCKED**
 
