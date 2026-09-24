@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-25 00:10 Africa/Cairo
+Last updated: 2026-09-25 00:22 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -64,6 +64,12 @@ State: **BLOCKED**
 - Printing-related files/functions are untouched.
 
 ## Verification ledger
+- Exact-head Full Verify on `b4086756549f16b368024851b11620f258aa139e`: verify job Green; DB integration failed twice on one unrelated midnight-boundary test in `reporting_truth_reconciliation.test.ts`.
+- New FIFO rebase integration test passed in both DB attempts.
+- Root cause of reporting failure: fixture used `Date.now() - 30m`, which crossed into the previous Cairo business date just after local midnight while the day-close report queried the new Cairo date.
+- Test fixture corrected to anchor shift/sales to 11:00/12:00 on the current Cairo business date; no production report logic changed.
+- Full Verify after Cairo-date fixture correction: pending.
+
 - Production diagnostic replay `f6bcfee7-f0c0-49fe-b0aa-6a885b0030fd` found 4,525 existing Smouha debts, zero target-zero legacy debts, and exactly one debt-quantity mismatch.
 - Full settlement-map comparison: 1,942 relations unchanged; 16 current-only, 15 target-only, 1 quantity mismatch.
 - Those differences affect exactly 14 debts; all 14 are older-backfill-owned, all 14 are fully settled currently, and all 14 are fully settled in target replay; only ledger 3611 changes total debt quantity.
