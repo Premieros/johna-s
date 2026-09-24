@@ -234,48 +234,47 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(allowed.rows[0].allowed).toBe(true);
   });
 
-  it('binds an approved next-shift authorization to the opened shift and expires it on close', async () => {
+  it('keeps authorization independent from shift open and close lifecycle', async () => {
+    const before = await asUser<{ allowed: boolean }>(
+      worker,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [branchA],
+    );
+    expect(before.rows[0].allowed).toBe(true);
+
     const shift = await client.query<{ id: string }>(
       `INSERT INTO public.shifts(branch_id,cashier_id,opening_amount,status)
        VALUES($1,$2,0,'open') RETURNING id`,
       [branchA, worker],
     );
-    const shiftId = shift.rows[0].id;
 
-    const bound = await client.query<{ shift_id: string; status: string }>(
-      `SELECT shift_id,status
-       FROM public.work_authorizations
-       WHERE user_id=$1 AND branch_id=$2 AND status='approved'`,
-      [worker, branchA],
-    );
-    expect(bound.rows[0].shift_id).toBe(shiftId);
-
-    const allowed = await asUser<{ allowed: boolean }>(
+    const during = await asUser<{ allowed: boolean }>(
       worker,
       `SELECT public.can_user_work($1) AS allowed`,
       [branchA],
     );
-    expect(allowed.rows[0].allowed).toBe(true);
+    expect(during.rows[0].allowed).toBe(true);
 
     await client.query(
       `UPDATE public.shifts SET status='closed',closed_at=now() WHERE id=$1`,
-      [shiftId],
+      [shift.rows[0].id],
     );
 
-    const expired = await client.query<{ status: string }>(
-      `SELECT status FROM public.work_authorizations
+    const after = await asUser<{ allowed: boolean }>(
+      worker,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [branchA],
+    );
+    expect(after.rows[0].allowed).toBe(true);
+
+    const auth = await client.query<{ status: string }>(
+      `SELECT status
+       FROM public.work_authorizations
        WHERE user_id=$1 AND branch_id=$2
        ORDER BY updated_at DESC LIMIT 1`,
       [worker, branchA],
     );
-    expect(expired.rows[0].status).toBe('expired');
-
-    const blocked = await asUser<{ allowed: boolean }>(
-      worker,
-      `SELECT public.can_user_work($1) AS allowed`,
-      [branchA],
-    );
-    expect(blocked.rows[0].allowed).toBe(false);
+    expect(auth.rows[0].status).toBe('approved');
   });
 
   it('blocks authenticated direct writes to authorization tables', async () => {
