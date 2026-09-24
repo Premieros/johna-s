@@ -79,4 +79,4 @@ V8.1.1:
 
 لا تشغّل V7 وV8.1.1 كمستهلكين نشطين لنفس الفرع في نفس الوقت.
 
-Build checkpoint: PR #352 V8.1.1 isolated identity verification.
+Build checkpoint: PR #357 V8.1.1 exact-head verification.
