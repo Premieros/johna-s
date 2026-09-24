@@ -3,8 +3,8 @@
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
 - Mandatory active work log: `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md`
-- Current active branch: `development/work-authorization-ui-20260924`
-- Current PR: `#355`
+- Current active branch: `development/enable-work-authorization-gate-20260925`
+- Current PR: `#358`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -17,7 +17,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/work-authorization-ui-20260924`
+- Executable branch: `development/enable-work-authorization-gate-20260925`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
@@ -28,15 +28,15 @@
 - Never attribute an unknown commit to another worker unless the user explicitly confirms another writer exists.
 
 
-## ACTIVE — Work Authorization UI-first — 2026-09-24
+## ACTIVE — Work Authorization Production activation — 2026-09-25
 
-- Branch: `development/work-authorization-ui-20260924`
+- Branch: `development/enable-work-authorization-gate-20260925`
 - Base: `main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da`.
 - Live log: `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md`.
-- Current scope: UI-first only — typed client contract, mock provider, manager authorization center preview, employee waiting-screen preview.
+- Current scope: production activation only — backend migrations are applied and verified; enable the existing gate in the GitHub Pages production build.
 - Live approval queue behavior remains unchanged; preview makes zero Production writes.
 - Printing / Print Agent / routing / KDS / send-to-kitchen remain frozen and untouched.
-- Backend/RLS/RPC/enforcement phases remain BLOCKED until the UI contract is reviewed and verified.
+- Backend/RLS/RPC/enforcement are applied on Production; only the frontend feature-flag deployment remains pending.
 - No merge or Production activation without exact-head verification and explicit approval.
 
 ## ACTIVE — Performance root-fix after reports truth merge — 2026-09-24
