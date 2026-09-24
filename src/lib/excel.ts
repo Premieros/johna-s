@@ -60,7 +60,7 @@ export async function exportToExcelAdvanced(options: ExcelExportOptions): Promis
       summaryRows.push([lang === 'ar' ? 'مصدر الأرقام' : 'Number source', sourceNote]);
     }
     summaryRows.push([
-      \`\${lang === 'ar' ? 'تاريخ الإنشاء' : 'Generated at'}: \${new Date().toLocaleString()}\`,
+      `${lang === 'ar' ? 'تاريخ الإنشاء' : 'Generated at'}: ${new Date().toLocaleString()}`,
       '',
     ]);
 
@@ -177,7 +177,7 @@ export async function exportToExcelAdvanced(options: ExcelExportOptions): Promis
   }
 
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-  XLSX.writeFile(wb, \`\${filename}.xlsx\`, { cellStyles: true, compression: true });
+  XLSX.writeFile(wb, `${filename}.xlsx`, { cellStyles: true, compression: true });
 }
 
 export async function exportToExcel(
