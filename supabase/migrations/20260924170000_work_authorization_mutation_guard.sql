@@ -124,7 +124,23 @@ DECLARE
     'raw_material_batches',
     'stock_transactions',
     'waste_entries',
-    'journal_entries'
+    'journal_entries',
+    'products',
+    'categories',
+    'customers',
+    'suppliers',
+    'raw_materials',
+    'warehouses',
+    'inventory_units',
+    'chart_of_accounts',
+    'dining_areas',
+    'dining_tables',
+    'product_modifier_groups',
+    'product_modifier_group_products',
+    'product_modifier_options',
+    'kitchen_stations',
+    'user_kitchen_station_assignments',
+    'recipes'
   ];
 BEGIN
   FOREACH v_table IN ARRAY v_tables LOOP
@@ -153,3 +169,71 @@ $guard$;
 --   order_kitchen_* / kitchen_*               -> KDS/print transport remains independent.
 --   shifts / daily_closes / business_day_state -> authorization stays shift-independent.
 --   work_authorization_* / approval_*          -> approvers can operate the authorization center.
+
+
+-- Child table without branch_id: derive authorization scope from the parent product.
+CREATE OR REPLACE FUNCTION public.enforce_work_authorization_product_component_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_role text := COALESCE(current_setting('role', true), '');
+  v_old_product_id uuid;
+  v_new_product_id uuid;
+  v_branch_id uuid;
+BEGIN
+  IF v_user_id IS NULL OR v_role = 'service_role' THEN
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP <> 'INSERT' THEN
+    v_old_product_id := OLD.product_id;
+  END IF;
+  IF TG_OP <> 'DELETE' THEN
+    v_new_product_id := NEW.product_id;
+  END IF;
+
+  IF v_old_product_id IS NOT NULL THEN
+    SELECT p.branch_id INTO v_branch_id
+    FROM public.products p
+    WHERE p.id = v_old_product_id;
+    IF v_branch_id IS NOT NULL THEN
+      PERFORM public.assert_user_work_authorized_cached(v_branch_id);
+    END IF;
+  END IF;
+
+  IF v_new_product_id IS NOT NULL
+     AND v_new_product_id IS DISTINCT FROM v_old_product_id THEN
+    SELECT p.branch_id INTO v_branch_id
+    FROM public.products p
+    WHERE p.id = v_new_product_id;
+    IF v_branch_id IS NOT NULL THEN
+      PERFORM public.assert_user_work_authorized_cached(v_branch_id);
+    END IF;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.enforce_work_authorization_product_component_mutation() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.enforce_work_authorization_product_component_mutation() FROM anon;
+REVOKE ALL ON FUNCTION public.enforce_work_authorization_product_component_mutation() FROM authenticated;
+
+DROP TRIGGER IF EXISTS trg_work_authorization_product_component_guard ON public.product_components;
+CREATE TRIGGER trg_work_authorization_product_component_guard
+BEFORE INSERT OR UPDATE OR DELETE ON public.product_components
+FOR EACH ROW
+EXECUTE FUNCTION public.enforce_work_authorization_product_component_mutation();
+
+COMMENT ON FUNCTION public.enforce_work_authorization_product_component_mutation()
+IS 'Work authorization guard for product_components, deriving branch scope from the parent product.';
