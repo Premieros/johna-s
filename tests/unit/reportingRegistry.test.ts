@@ -17,9 +17,9 @@ describe('Reporting system components (Phase 1-5)', () => {
     }
   });
 
-  it('has REPORT_REGISTRY with all 17 report definitions (14 original + 3 new)', () => {
+  it('has REPORT_REGISTRY with all active operational report definitions', () => {
     expect(registrySource).toContain('REPORT_REGISTRY');
-    const reportKeys = ['sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices', 'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'low_stock', 'cashier_performance', 'returns', 'production_waste'];
+    const reportKeys = ['sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices', 'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'low_stock', 'cashier_performance', 'returns', 'production_waste', 'financial_reconciliation'];
     for (const key of reportKeys) {
       expect(registrySource).toContain(`key: '${key}'`);
     }
