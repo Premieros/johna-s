@@ -276,10 +276,12 @@ BEGIN
     SELECT
       s.id sale_id,
       round(COALESCE(sum(CASE
-        WHEN COALESCE(t.kind,CASE WHEN t.account_type='bank' THEN 'bank' ELSE 'branch_cash' END)='branch_cash'
+        WHEN t.id IS NOT NULL
+         AND COALESCE(t.kind,CASE WHEN t.account_type='bank' THEN 'bank' ELSE 'branch_cash' END)='branch_cash'
           THEN l.debit-l.credit ELSE 0 END),0),2) cash_gl,
       round(COALESCE(sum(CASE
-        WHEN COALESCE(t.kind,CASE WHEN t.account_type='bank' THEN 'bank' ELSE 'branch_cash' END)='bank'
+        WHEN t.id IS NOT NULL
+         AND COALESCE(t.kind,CASE WHEN t.account_type='bank' THEN 'bank' ELSE 'branch_cash' END)='bank'
           THEN l.debit-l.credit ELSE 0 END),0),2) bank_gl
     FROM scoped_sales s
     LEFT JOIN public.journal_entries je
