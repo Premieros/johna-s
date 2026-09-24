@@ -7,6 +7,20 @@
 -- - printing/KDS/work-authorization tables are not guarded here
 -- - shift lifecycle remains independent from work authorization
 
+-- Private transaction-scoped bootstrap marker for create_organization_branch.
+-- Authenticated callers cannot read or write this table directly. The SECURITY
+-- DEFINER branch-creation RPC inserts and removes the marker in the same
+-- transaction, and the mutation guard uses it only for that exact user+branch.
+CREATE TABLE IF NOT EXISTS public.work_authorization_branch_bootstrap (
+  user_id uuid NOT NULL,
+  branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (user_id, branch_id)
+);
+
+ALTER TABLE public.work_authorization_branch_bootstrap ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.work_authorization_branch_bootstrap FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.assert_user_work_authorized_cached(
   p_branch_id uuid
 )
@@ -59,7 +73,6 @@ DECLARE
   v_role text := COALESCE(current_setting('role', true), '');
   v_old_branch_id uuid;
   v_new_branch_id uuid;
-  v_bootstrap_branch_id uuid;
 BEGIN
   IF v_user_id IS NULL OR v_role = 'service_role' THEN
     IF TG_OP = 'DELETE' THEN
@@ -68,16 +81,16 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Narrow branch-bootstrap exception: only the exact branch id placed in a
-  -- transaction-local setting by create_organization_branch may bypass the
-  -- work-authorization assertion while its controlled setup rows are created.
-  -- Direct Data API writes cannot select an arbitrary branch through this path.
-  v_bootstrap_branch_id :=
-    NULLIF(current_setting('app.work_authorization_bootstrap_branch_id', true), '')::uuid;
-
+  -- Narrow branch-bootstrap exception. The marker is private, uncommitted
+  -- outside this transaction, and keyed to the authenticated caller + branch.
+  -- This cannot be created through the Data API by authenticated users.
   IF TG_OP <> 'DELETE'
-     AND v_bootstrap_branch_id IS NOT NULL
-     AND v_bootstrap_branch_id = NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid THEN
+     AND EXISTS (
+       SELECT 1
+       FROM public.work_authorization_branch_bootstrap wab
+       WHERE wab.user_id = v_user_id
+         AND wab.branch_id = NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid
+     ) THEN
     RETURN NEW;
   END IF;
 
@@ -301,9 +314,10 @@ BEGIN
   ON CONFLICT (user_id, branch_id) DO NOTHING;
 
   -- The new branch cannot have an approval row before bootstrap completes.
-  -- Mark only this freshly-created branch as bootstrap-authorized for the
-  -- current transaction; the mutation guard accepts no other branch id.
-  PERFORM set_config('app.work_authorization_bootstrap_branch_id', v_branch_id::text, true);
+  -- Create a private marker for only this caller+branch and remove it before
+  -- returning. Any exception rolls the marker back with the whole transaction.
+  INSERT INTO public.work_authorization_branch_bootstrap (user_id, branch_id)
+  VALUES (auth.uid(), v_branch_id);
 
   INSERT INTO public.warehouses (name, branch_id, is_active)
   VALUES (p_name || ' - Main', v_branch_id, true)
@@ -321,7 +335,9 @@ BEGIN
   INSERT INTO public.branch_subscriptions (branch_id, status, trial_starts_at, trial_ends_at)
   VALUES (v_branch_id, 'trial', now(), now() + interval '14 days');
 
-  PERFORM set_config('app.work_authorization_bootstrap_branch_id', '', true);
+  DELETE FROM public.work_authorization_branch_bootstrap
+  WHERE user_id = auth.uid()
+    AND branch_id = v_branch_id;
 
   RETURN jsonb_build_object(
     'success', true,
