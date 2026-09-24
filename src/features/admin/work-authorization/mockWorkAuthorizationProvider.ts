@@ -140,6 +140,78 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
     });
   };
 
+  const getMyState: WorkAuthorizationClient['getMyState'] = async (branchId) => {
+    const pending = state.pending.find((row) => row.branchId === branchId && row.person.userId === 'preview-self');
+    if (pending) {
+      return {
+        branchId,
+        branchName: pending.branchName,
+        requiresAuthorization: true,
+        canWork: false,
+        status: 'pending',
+        requestId: pending.id,
+        requestedAt: pending.requestedAt,
+      };
+    }
+
+    const active = state.active.find((row) => row.branchId === branchId && row.person.userId === 'preview-self');
+    if (active) {
+      return {
+        branchId,
+        branchName: active.branchName,
+        requiresAuthorization: true,
+        canWork: true,
+        status: 'approved',
+        authorizationId: active.id,
+        requestedAt: active.requestedAt,
+        decidedAt: active.decidedAt ?? null,
+      };
+    }
+
+    const policy = state.policies.find((row) => row.branchId === branchId && row.userId === 'preview-self');
+    if (policy && !policy.requiresAuthorization) {
+      return {
+        branchId,
+        branchName: policy.branchName,
+        requiresAuthorization: false,
+        canWork: true,
+        status: 'not_required',
+      };
+    }
+
+    return {
+      branchId,
+      branchName: state.policies.find((row) => row.branchId === branchId)?.branchName ?? null,
+      requiresAuthorization: true,
+      canWork: false,
+      status: 'not_requested',
+    };
+  };
+
+  const requestAuthorization: WorkAuthorizationClient['requestAuthorization'] = async (branchId) => {
+    const current = await getMyState(branchId);
+    if (current.status !== 'not_requested') return current;
+
+    const policy = state.policies.find((row) => row.branchId === branchId);
+    const now = new Date().toISOString();
+    const request: WorkAuthorizationRecord = {
+      id: 'wa-pending-self',
+      branchId,
+      branchName: policy?.branchName ?? 'الفرع الحالي',
+      person: {
+        userId: 'preview-self',
+        fullName: 'المستخدم الحالي',
+        positionLabel: 'موظف',
+      },
+      status: 'pending',
+      requestedAt: now,
+      shiftLabel: 'الشفت الحالي',
+    };
+
+    state = { ...state, pending: [request, ...state.pending] };
+    return getMyState(branchId);
+  };
+
   const approve: WorkAuthorizationClient['approve'] = async (requestId) => {
     const record = state.pending.find((row) => row.id === requestId);
     if (!record) return;
@@ -231,5 +303,13 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
     };
   };
 
-  return { getSnapshot, approve, reject, revoke, setRequirement };
+  return {
+    getSnapshot,
+    getMyState,
+    requestAuthorization,
+    approve,
+    reject,
+    revoke,
+    setRequirement,
+  };
 }
