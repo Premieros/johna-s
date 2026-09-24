@@ -172,7 +172,7 @@ Audit safety:
 
 ### RC-06 — Roles refresh amplification
 
-Status: CONFIRMED / FIX IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
+Status: CONFIRMED / VERIFIED GREEN.
 
 Evidence from Production 23 Sep after PR #260/#293 were already merged:
 - `/rest/v1/roles`: 6,372 authenticated non-node requests/day.
@@ -724,14 +724,15 @@ To change this section to READY, ALL must be recorded here:
 
 Current mandatory sequence:
 
-1. RC-06 VERIFIED GREEN — Run `35984897254`.
-2. RC-07 VERIFIED GREEN — Run `35986306789`.
-3. RC-08 / CH-09 branch-local Realtime wake filtering is implemented.
-4. Run exact-head Full Verify for CH-09 and record all results.
-5. If Green, open RC-09 only: replace oversized/failing Dashboard `sale_payments` browser fetches with a bounded server-side source while preserving dashboard numeric truth.
-6. Keep PR #260 lightweight shell and PR #293 coalescing contracts.
-7. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
-8. No merge or Production migration without existing gate requirements.
+1. RC-06 VERIFIED GREEN on Run `35984897254`.
+2. RC-07 VERIFIED GREEN on Run `35986306789`.
+3. RC-08 only: preserve PR #260/#293, but stop `order_items` Realtime events from unrelated branch orders from triggering POS full snapshots and shell-count refreshes.
+4. Keep all current branch-filtered subscriptions for `orders`, `dining_tables`, and `order_kitchen_sends`.
+5. Add regression contracts for event-batch relevance and empty-order safety.
+6. Run exact-head Full Verify before opening RC-09.
+7. Then RC-09 Dashboard `sale_payments` oversized failed requests.
+8. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
+9. No merge or Production migration without existing gate requirements.
 
 ## Mandatory update protocol
 
