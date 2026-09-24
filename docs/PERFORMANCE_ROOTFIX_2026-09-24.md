@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-09 repair design verified and opened
+Last updated: 2026-09-24 — CH-10 Dashboard payment egress repair implemented; exact-head verify pending
 
 ## Work status
 
@@ -513,7 +513,43 @@ Intentionally unchanged:
 - no kitchen-send logic,
 - no printing / Print Agent / routing / KDS changes.
 
+### CH-10 — Dashboard payment egress bounding
+
+Status: IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
+
+Files:
+- `src/features/dashboard/services/dashboardPayments.ts`
+- `src/features/dashboard/pages/DashboardDataPage.tsx`
+- `src/features/dashboard/pages/VisualDashboardPage.tsx`
+- `tests/unit/dashboardPaymentEgressContract.test.ts`
+
+Change:
+- active Dashboard pages no longer issue one giant raw `sale_payments IN (...)` request.
+- preferred path uses existing `get_sales_by_payment_report` per visible branch/period and receives aggregated payment-method rows.
+- `VisualDashboardPage` passes the active order-type filter to the report RPC so payment mix stays aligned with the visible sales filter.
+- compatibility fallback preserves `sales.view`-only Dashboard access with sale ids chunked to 100 and at most four chunks in flight.
+- fallback retains the existing numeric-integrity aggregation rules.
+- no new DB function/migration and no RLS change.
+
+Scope correction:
+- `DashboardExecutiveInsightsV2.tsx` was investigated because it also contains raw payment-detail loading.
+- current `DashboardEnhancedPage` imports `DashboardDataPage` directly and does not import the V2 page, so the unused legacy surface is not modified in this stage.
+
+Expected effect:
+- eliminate the observed oversized active-Dashboard `sale_payments` URL/filter payloads and associated 403s,
+- reduce PostgREST response/request volume by returning payment-method aggregates rather than all payment rows where report permission is available,
+- bound the compatibility path when report permission is unavailable.
+
+Intentionally unchanged:
+- sale totals and refund arithmetic,
+- sales list queries,
+- sale-item/product dashboard data,
+- report RPC implementation,
+- printing / Print Agent / routing / KDS / `send_to_kitchen`.
+
 ## Verification ledger
+
+
 
 ### V-10 — RC-08 exact-head Full Verify Green
 
@@ -792,15 +828,12 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-RC-09 only:
+RC-09 / CH-10 only:
 
-1. Add a small Dashboard payment-summary loader that prefers the existing `get_sales_by_payment_report` RPC when report permission is available.
-2. Preserve `sales.view`-only Dashboard access through bounded `sale_payments` chunks; never send the current giant sale-id `IN (...)` request.
-3. Replace raw payment-detail loading in `DashboardDataPage.tsx` and `VisualDashboardPage.tsx`.
-4. Preserve period, branch and order-type semantics.
-5. Add regression coverage proving active Dashboard pages no longer issue oversized raw payment requests.
-6. Run exact-head Full Verify.
-7. STOP before merge / Production action.
+1. CH-10 is implemented.
+2. Run exact-head Full Verify and record mandatory-log, unit, build, DB/integration/security, and browser-smoke results.
+3. If Green, mark RC-09 complete and STOP before merge / Production action.
+4. Do not start any new optimization in this stage.
 
 No printing / Print Agent / routing / KDS / `send_to_kitchen` changes.
 
