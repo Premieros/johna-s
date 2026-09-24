@@ -68,6 +68,7 @@ State: **BLOCKED**
 - Mounted preview inside existing `ApprovalCenterPage`; live operational approval queue/RPCs remain intact.
 - Permission gates: `approvals.review` for review surface; `approvals.policy.manage` for settings. No role-name guards.
 - Added regression contract test ensuring no role-name authorization and no Supabase work-authorization writes.
+- Renamed preview display metadata from `roleLabel` to `positionLabel`; position/title is informational only and never used for authorization.
 - Planned UI deliverables:
   - manager center tabs: Pending / Working now / History / Settings;
   - mobile-first cards and desktop responsive layout;
@@ -83,8 +84,9 @@ State: **BLOCKED**
 - Parallel-work check: PASS for this scope; open PR #352 is print-agent-only and remains out of scope.
 - Old branch drift check: FAIL for reuse (240 commits behind main), therefore superseded safely.
 - Static UI contract test added: `tests/unit/workAuthorizationUiFirstContract.test.ts`.
-- Verify main run #2587 / `35996733090`: **PENDING** on head `1bc20f445858984662f55e199aec9db23513a5cf`.
-- Code tests: pending CI result.
+- Verify main run #2587 / `35996733090`: **FAILED AT MANDATORY WORKLOG GATE ONLY**. Cause: `activeWorklogGateContract.test.ts` still hard-coded the previous Performance log path; lint/type/unit/build were skipped.
+- Fixed the stale hard-coded expected path to `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md` without weakening any structural/branch/Production-gate assertions.
+- Code tests: pending fresh CI result after worklog-gate path fix.
 - Build: pending CI result.
 - Fast Verify: pending.
 - Full Verify: pending.
