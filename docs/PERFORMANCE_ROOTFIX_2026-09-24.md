@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — Egress/PostgREST root audit added
+Last updated: 2026-09-24 — prior performance fixes verified; RC-06..RC-09 classified
 
 ## Work status
 
-Status: ACTIVE — user explicitly resumed work on 2026-09-24. Current scope is the recorded unit-contract false-positive only; no Production or printing changes.
+Status: ACTIVE — user explicitly approved repair + logging after verification of recent fixes. Current first write scope: RC-06 Roles refresh amplification only; no Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -169,6 +169,88 @@ Audit safety:
 - The screenshot is evidence of service-level volume, but route attribution must come from logs before any optimization.
 
 
+
+### RC-06 — Roles refresh amplification
+
+Status: CONFIRMED / NOT COVERED BY EARLIER PERFORMANCE PRs.
+
+Evidence from Production 23 Sep after PR #260/#293 were already merged:
+- `/rest/v1/roles`: 6,372 authenticated non-node requests/day.
+- One Android WebView user generated 5,224 requests.
+- In one sampled hour the same user generated 616 `roles` requests while only ~12 `orders` requests occurred.
+- This rules out a whole-app reload loop as the primary explanation.
+
+Code evidence:
+- `RolesProvider` depends on the entire Supabase `session` object.
+- `AuthContext` intentionally replaces the session object on `TOKEN_REFRESHED` / repeated auth events without rehydrating the profile.
+- Therefore role data can be re-fetched on auth token/session object churn even though user identity/role permissions did not change.
+
+Earlier repairs checked:
+- PR #260: lightweight shell; did not modify `RolesContext`.
+- PR #293: POS/dashboard query churn; did not modify `RolesContext`.
+- PR #273: permission/history UI; did not modify `RolesContext`.
+
+Minimal remediation:
+- make role bootstrap depend on stable `session.user.id`, not the mutable session object,
+- keep explicit `refresh()` after role mutations,
+- add a contract test preventing regression to whole-session dependency.
+
+### RC-07 — Auto-close request amplification
+
+Status: CONFIRMED / EARLIER CORRECTNESS FIX EXISTS, FREQUENCY ISSUE REMAINS.
+
+Earlier repair:
+- PR #305 fixed the configured business-day cutoff and premature shift closure semantics.
+
+Remaining Production behavior on 23 Sep:
+- `try_auto_close_branch_shift`: 3,529 requests/day.
+- current `SettingsContext` still runs the RPC every 60 seconds from every logged-in client for every eligible branch.
+
+Conclusion:
+- do NOT change PR #305 cutoff semantics,
+- frequency/centralization is a separate optimization and must be designed independently.
+
+### RC-08 — POS full snapshot refresh remains after prior coalescing
+
+Status: CONFIRMED / PARTIALLY FIXED EARLIER.
+
+Earlier repairs:
+- PR #260 removed full POS active-order snapshot loading from the global app shell.
+- PR #293 coalesced simultaneous Realtime bursts and preserves one trailing refresh.
+
+Remaining Production traffic on 23 Sep, after those merges:
+- `orders`: 3,094 requests
+- `order_items`: 2,740
+- `dining_tables`: 2,580
+- `get_pos_order_operator_labels`: 1,796
+- `order_kitchen_sends`: 1,771
+
+Current design still calls `fetchActiveOrders()` after each Realtime refresh cycle, and that snapshot fetches the active POS data bundle again.
+
+Conclusion:
+- keep existing burst coalescing,
+- investigate a narrower/shared snapshot or incremental update; do not regress PR #260/#293.
+
+### RC-09 — Dashboard sale_payments oversized failed fetches
+
+Status: CONFIRMED / EARLIER DASHBOARD OPTIMIZATION INSUFFICIENT.
+
+Earlier repair:
+- PR #293 narrowed previous-period projection and parallelized payment/item detail loading.
+
+Remaining code:
+- `DashboardDataPage.tsx` and `VisualDashboardPage.tsx` still collect up to 5,000 sales then request `sale_payments` with a very large `IN (...)` list and `.limit(20000)`.
+
+Production 23 Sep:
+- 286 `sale_payments` GETs observed;
+- 258 were errors in the broad sample;
+- real browser requests include giant sale-id filters returning 403.
+
+Conclusion:
+- existing PR #293 optimization must be preserved,
+- payment aggregation/fetch scope needs a separate server-bounded or chunked correction.
+
+## Change ledger
 
 ### CH-01 — Inventory Ledger cached visibility context
 
@@ -429,18 +511,17 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-User explicitly resumed work and requested the Egress/PostgREST audit be added to the plan.
+User approved repair + registration, with a required pre-check for recent fixes. That pre-check is complete.
 
 Current mandatory sequence:
 
-1. Keep CH-06 complete; do not reopen it unless regression evidence appears.
-2. Perform RC-05 as a read-only Production log audit for the 23 Sep usage spike and the most recent comparable window.
-3. Rank PostgREST/API routes by request volume, response size where available, latency, status, user-agent, authenticated user, and cadence.
-4. Separate branch-user traffic from scanner/CI/automation traffic.
-5. Add every evidence-backed high-egress/high-frequency source to the Root-cause ledger with a proposed minimal remediation.
-6. Do not implement an egress optimization until its exact source is proven and recorded here.
-7. Continue to track exact-head Full Verify after documentation changes.
-8. Do not merge PR #354 or apply Production migration without the required explicit approval and Production gate transition.
+1. RC-06 first: change `RolesProvider` bootstrap dependency from mutable `session` object to stable `sessionUserId`, preserving explicit refresh after role CRUD.
+2. Add a unit contract that prevents role bootstrap from depending on the whole session object.
+3. Run exact-head Verify and record the result.
+4. Only after RC-06 is verified, proceed to RC-07/RC-08/RC-09 one at a time.
+5. Preserve PR #260 lightweight shell, PR #293 Realtime coalescing/dashboard parallelization, and PR #305 auto-close cutoff semantics.
+6. Do not touch printing / Print Agent / routing / KDS / `send_to_kitchen`.
+7. Do not merge PR #354 or apply Production migration without the existing gate requirements.
 
 ## Mandatory update protocol
 
