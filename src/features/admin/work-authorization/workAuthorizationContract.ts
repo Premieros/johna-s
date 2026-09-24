@@ -15,7 +15,7 @@ export type WorkAuthorizationHistoryKind =
 export interface WorkAuthorizationPerson {
   userId: string;
   fullName: string;
-  roleLabel: string;
+  positionLabel: string;
 }
 
 export interface WorkAuthorizationRecord {
@@ -49,7 +49,7 @@ export interface WorkAuthorizationPolicyRow {
   branchName: string;
   userId: string;
   userName: string;
-  roleLabel: string;
+  positionLabel: string;
   requiresAuthorization: boolean;
 }
 
