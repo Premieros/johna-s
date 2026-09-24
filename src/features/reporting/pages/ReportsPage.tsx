@@ -71,6 +71,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const [summary, setSummary] = useState({ total: 0, count: 0 });
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<ReportFilters>({});
+  const [filtersDirty, setFiltersDirty] = useState(false);
+  const [queryVersion, setQueryVersion] = useState(0);
   const [options, setOptions] = useState<{
     warehouses: { id: string; name: string }[];
     cashiers: { id: string; full_name: string | null; email: string | null }[];
@@ -87,6 +89,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setReportType((prev) => {
         if (prev !== controlledReportType) {
           setFilters({});
+          setFiltersDirty(false);
           onReportTypeChange?.(controlledReportType);
           return controlledReportType;
         }
@@ -141,6 +144,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       return;
     }
     setFilters({});
+    setFiltersDirty(false);
     setReportType(value as ReportType);
     onReportTypeChange?.(value as ReportType);
   }
@@ -154,6 +158,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const handleRestoreCustomReport = (config: SavedReportConfig) => {
     handleReportTypeSelect(config.reportType);
     setFilters(config.filters || {});
+    setFiltersDirty(false);
+    setQueryVersion((version) => version + 1);
+  };
+
+  const runReport = () => {
+    setFiltersDirty(false);
+    setQueryVersion((version) => version + 1);
   };
 
   function applyPeriod(key: PeriodKey) {
@@ -178,6 +189,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     setPeriod(key);
     setFrom(allowed.from);
     setTo(allowed.to);
+    setFiltersDirty(true);
   }
 
   useEffect(() => {
@@ -214,8 +226,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   useEffect(() => {
     void loadReport();
+    // Date/filter edits are intentionally applied only when the user presses
+    // "Run report". This avoids repeated report queries while configuring filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, from, to, effectiveBranchFilter, filters, branches, history.unlimited]);
+  }, [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion]);
 
   async function loadReport() {
     setLoading(true);
@@ -973,14 +987,17 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       <ReportFilterBar
         reportType={reportType}
         filters={filters}
-        onFilterChange={(dim, value) => setFilters((prev) => ({ ...prev, [dim]: value }))}
+        onFilterChange={(dim, value) => {
+          setFilters((prev) => ({ ...prev, [dim]: value }));
+          setFiltersDirty(true);
+        }}
         showDate={showDate}
         period={period}
         onPeriodChange={(key) => applyPeriod(key as PeriodKey)}
         from={from}
         to={to}
-        onFromChange={(value) => { setFrom(value); setPeriod('custom'); }}
-        onToChange={(value) => { setTo(value); setPeriod('custom'); }}
+        onFromChange={(value) => { setFrom(value); setPeriod('custom'); setFiltersDirty(true); }}
+        onToChange={(value) => { setTo(value); setPeriod('custom'); setFiltersDirty(true); }}
         showBranchFilter={false}
         branches={branches}
         branchFilterValue={branchFilter || ''}
@@ -998,6 +1015,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         onFinancialSelect={(key) => navigate(`/financial-reports?view=${key}&from=${from}&to=${to}`)}
         reportTypes={reportTypes}
         onReportTypeChange={handleReportTypeSelect}
+        onRunReport={runReport}
+        loading={loading}
+        pendingChanges={filtersDirty}
       />
 
       <Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
@@ -1007,12 +1027,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           <div className="text-center py-12 text-ui-subtle text-sm">{t('noData')}</div>
         ) : (
           <div>
-            {data.length >= 5000 && (
-              <div className="mb-3 rounded-lg border border-ui-warning/20 bg-ui-warning-soft px-3 py-2 text-xs text-ui-warning">
-                {lang === 'ar' ? 'تم عرض أول 5,000 سجل. استخدم الفلاتر لتضييق النتائج.' : 'Showing first 5,000 records. Use filters to narrow results.'}
-              </div>
-            )}
-
             <div data-testid="reports-mobile-results" className="space-y-2 sm:hidden">
               {data.map((row, index) => (
                 <article key={index} className="rounded-xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
