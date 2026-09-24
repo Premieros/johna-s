@@ -17,15 +17,16 @@ const OPERATIONAL_KEYS = [
   'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
   'top_consumed_components', 'top_consumed_products', 'low_stock',
+  'cashier_performance', 'returns', 'production_waste', 'financial_reconciliation',
 ];
 
 const FINANCIAL_KEYS = [
-  'trial_balance', 'ledger', 'income', 'balance_sheet', 'ar_aging', 'ap_aging',
+  'trial_balance', 'ledger', 'treasury_statement', 'inventory_movement', 'income', 'balance_sheet', 'ar_aging', 'ap_aging',
   'aging_summary', 'cash_flow', 'party_statement',
 ];
 
 describe('Reports Center contract (6H-P4)', () => {
-  it('provides a report-type dropdown covering all 14 operational types', () => {
+  it('provides a report-type dropdown covering all active operational types', () => {
     expect(reportFilterBarSource).toContain('data-testid="report-type-select"');
     expect(reportFilterBarSource).toContain('data-testid="report-context-filter"');
     expect(reportFilterBarSource).toContain('key={rt.key} value={rt.key}');
@@ -111,8 +112,9 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportsSource).toContain("const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch'");
     expect(reportsSource).toContain('const withBranch =');
     expect(reportsSource).toContain("select('id, branch_id, invoice_number, total, refunded_amount, status, created_at");
-    expect(reportsSource).toContain("select('id, branch_id, payment_method, total, paid_amount, refunded_amount, status')");
-    expect(reportsSource).toContain("select('sale_id, branch_id, payment_method, amount, refunded_amount')");
+    expect(reportsSource).toContain('reporting.getSalesByPaymentReport');
+    expect(reportsSource).toContain('reporting.getFinancialReconciliationReport');
+    expect(reportsSource).toContain('fetchAllReportRows');
     expect(reportsSource).toContain('withBranch(row.branchId, {');
     expect(reportsSource).toContain('productBranches.get(row.product_id)');
     expect(reportsSource).toContain('subtitle: `${reportBranchLabel} — ${from} — ${to}`');
@@ -130,6 +132,8 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(excelSource).toContain("ws['!cols']");
     expect(excelSource).toContain("ws['!autofilter']");
     expect(excelSource).toContain("ws['!freeze']");
+    expect(excelSource).toContain("ws['!margins']");
+    expect(excelSource).toContain("'!pageSetup'");
   });
 
   it('resets contextual filters when switching report type', () => {
