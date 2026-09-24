@@ -30,7 +30,6 @@ function seedState(branches: BranchSeed[]): MockState {
       person: { userId: 'preview-user-1', fullName: 'أحمد محمد', positionLabel: 'كابتن أوردر' },
       status: 'pending',
       requestedAt: minutesAgo(4),
-      shiftLabel: 'الشفت الحالي',
     },
     {
       id: 'wa-pending-2',
@@ -39,7 +38,6 @@ function seedState(branches: BranchSeed[]): MockState {
       person: { userId: 'preview-user-2', fullName: 'محمود حسن', positionLabel: 'كاشير' },
       status: 'pending',
       requestedAt: minutesAgo(9),
-      shiftLabel: 'الشفت الحالي',
     },
   ];
 
@@ -54,7 +52,6 @@ function seedState(branches: BranchSeed[]): MockState {
       decidedAt: minutesAgo(40),
       startedAt: minutesAgo(39),
       approverName: 'مدير الفرع',
-      shiftLabel: 'الشفت الحالي',
     },
     {
       id: 'wa-active-2',
@@ -66,7 +63,6 @@ function seedState(branches: BranchSeed[]): MockState {
       decidedAt: minutesAgo(30),
       startedAt: minutesAgo(29),
       approverName: 'مدير الفرع',
-      shiftLabel: 'الشفت الحالي',
     },
   ];
 
@@ -79,7 +75,7 @@ function seedState(branches: BranchSeed[]): MockState {
       kind: 'rejected',
       occurredAt: minutesAgo(78),
       actorName: 'مدير الفرع',
-      note: 'تم رفض بدء العمل لهذا الشفت.',
+      note: 'تم رفض تصريح الدخول للنظام.',
     },
     {
       id: 'wa-history-2',
@@ -205,7 +201,6 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
       },
       status: 'pending',
       requestedAt: now,
-      shiftLabel: 'الشفت الحالي',
     };
 
     state = { ...state, pending: [request, ...state.pending] };
