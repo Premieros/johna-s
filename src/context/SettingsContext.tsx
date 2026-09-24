@@ -6,6 +6,7 @@ import { hasLockedThemePreference, useTheme } from './ThemeContext';
 import { hasLockedLanguagePreference, useLanguage } from './LanguageContext';
 import { useAuth } from './AuthContext';
 import type { Settings, BranchSettings } from '../lib/types';
+import { nextCairoClockInstant } from '../lib/businessTime';
 
 export type EffectiveSettings = Settings;
 
@@ -84,30 +85,96 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!sessionUserId || Object.keys(branchSettingsMap).length === 0) return;
 
-    let cancelled = false;
-    const tick = async () => {
-      const eligible = Object.values(branchSettingsMap).filter(
-        (row) => row.auto_close_shift_at_day_end && row.business_day_mode === 'fixed_time',
-      );
-      if (eligible.length === 0) return;
+    const eligible = Object.values(branchSettingsMap).filter(
+      (row) => row.auto_close_shift_at_day_end && row.business_day_mode === 'fixed_time',
+    );
+    if (eligible.length === 0) return;
 
-      await Promise.all(eligible.map(async (row) => {
-        const { data, error } = await supabase.rpc('try_auto_close_branch_shift', {
-          p_branch_id: row.branch_id,
-        });
-        if (cancelled || error) return;
-        const result = data as { success?: boolean; closed?: boolean; error?: string } | null;
-        if (result?.closed && typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('shift:auto-closed', { detail: { branchId: row.branch_id } }));
-        }
-      }));
+    let cancelled = false;
+    const timers = new Map<string, number>();
+    const errorRetries = new Map<string, number>();
+    const RETRY_AFTER_BLOCK_MS = 5 * 60_000;
+    const MAX_ERROR_RETRIES = 3;
+
+    const clearBranchTimer = (branchId: string) => {
+      const timer = timers.get(branchId);
+      if (timer !== undefined) window.clearTimeout(timer);
+      timers.delete(branchId);
     };
 
-    void tick();
-    const timer = window.setInterval(() => { void tick(); }, 60_000);
+    const scheduleAt = (row: BranchSettings, when: Date) => {
+      if (cancelled) return;
+      clearBranchTimer(row.branch_id);
+      const delay = Math.max(1_000, when.getTime() - Date.now() + 1_000);
+      const timer = window.setTimeout(() => {
+        timers.delete(row.branch_id);
+        void run(row);
+      }, delay);
+      timers.set(row.branch_id, timer);
+    };
+
+    const scheduleConfiguredCutoff = (row: BranchSettings) => {
+      scheduleAt(row, nextCairoClockInstant(row.business_day_end));
+    };
+
+    const scheduleRetry = (row: BranchSettings) => {
+      scheduleAt(row, new Date(Date.now() + RETRY_AFTER_BLOCK_MS));
+    };
+
+    const run = async (row: BranchSettings) => {
+      const { data, error } = await supabase.rpc('try_auto_close_branch_shift', {
+        p_branch_id: row.branch_id,
+      });
+      if (cancelled) return;
+
+      if (error) {
+        const retries = (errorRetries.get(row.branch_id) || 0) + 1;
+        errorRetries.set(row.branch_id, retries);
+        if (retries <= MAX_ERROR_RETRIES) scheduleRetry(row);
+        else {
+          errorRetries.set(row.branch_id, 0);
+          scheduleConfiguredCutoff(row);
+        }
+        return;
+      }
+
+      errorRetries.set(row.branch_id, 0);
+      const result = data as {
+        success?: boolean;
+        closed?: boolean;
+        error?: string;
+        reason?: string;
+        window_end?: string;
+      } | null;
+
+      if (result?.closed && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('shift:auto-closed', { detail: { branchId: row.branch_id } }));
+      }
+
+      if (result?.reason === 'BUSINESS_DAY_NOT_FINISHED' && result.window_end) {
+        const serverCutoff = new Date(result.window_end);
+        if (!Number.isNaN(serverCutoff.getTime()) && serverCutoff.getTime() > Date.now()) {
+          scheduleAt(row, serverCutoff);
+          return;
+        }
+      }
+
+      if (result?.error === 'OPEN_ORDERS_BLOCK_SHIFT_CLOSE') {
+        scheduleRetry(row);
+        return;
+      }
+
+      scheduleConfiguredCutoff(row);
+    };
+
+    // One catch-up check after settings/session bootstrap. After that, schedule
+    // directly for the authoritative server cutoff instead of polling every minute.
+    for (const row of eligible) void run(row);
+
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      timers.clear();
     };
   }, [sessionUserId, branchSettingsMap]);
 
