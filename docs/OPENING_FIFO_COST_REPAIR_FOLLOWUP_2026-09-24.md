@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-24 23:29 Africa/Cairo
+Last updated: 2026-09-24 23:39 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -56,22 +56,26 @@ State: **BLOCKED**
 - No Production SQL write has been performed.
 - Exact-head Full Verify run `36054803170`: failed only because `activeWorklogGateContract.test.ts` was still hard-coded to the completed performance log path; structural log checks and PR-branch match passed.
 - Gate contract has now been updated to the current FIFO worklog path.
-- Exact-head Full Verify after the gate-contract correction: pending.
+- Exact-head Full Verify run `36054954504`: GREEN — verify, DB migrations/schema/integration/RLS, and browser-smoke all succeeded.
+- Production read-only pre-apply recheck: destination transfer lot downstream negative rows = 0.
+- Production read-only pre-apply recheck: Smouha zero-cost operating consumption rows = 5,971 across 149 raw materials.
+- Previous FIFO/opening repair runs remain `prepared` only; none were applied.
+- Because live inventory advanced after the old prepare cutoffs, old prepared runs must not be reused; a fresh prepare is required immediately before apply.
+- Exact-head Full Verify after recording these verification facts: pending.
 
 ## Production gate
 State: **BLOCKED**
-- Full Verify exact-head Green: pending.
+- Full Verify exact-head Green: previous code head Green at run `36054954504`; final documentation-only head reverify pending.
 - Production migration approval: not yet requested.
 - Production repair execution approval: not yet requested.
 - Required pre-apply read-only recheck: destination transfer lot must still have zero downstream consumption.
 - Required post-apply checks: quantity invariants, opening batch valuation, FIFO run success, trial balance, raw inventory valuation, COGS reconciliation, and zero-cost consumption count.
 
 ## Next action
-1. Wait for exact-head Full Verify on the current branch.
-2. If any CI failure appears, fix it on this branch and update this log before continuing.
-3. When Full Verify is Green, re-run the Production read-only transfer/downstream-consumption check.
-4. Present the exact migration/backfill plan and request explicit Production approval.
-5. Only after approval: apply migration, prepare fresh Smouha opening repair, review dry-run, apply, and verify accounting/inventory invariants.
+1. Wait for exact-head Full Verify on this documentation-only head.
+2. If Green, present the exact Production migration/backfill sequence and request explicit Production approval.
+3. Only after approval: apply the migration, perform a fresh Smouha opening-cost prepare, inspect its generated FIFO dry-run, apply only if guards remain Green, then verify quantity/accounting invariants.
+4. Never reuse the stale prepared runs created before the latest live ledger activity.
 
 ## Mandatory update protocol
 - Read this file before every new change in this workstream.
