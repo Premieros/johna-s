@@ -47,6 +47,7 @@ function statusLabel(kind: WorkAuthorizationHistoryEntry['kind'], ar: boolean) {
     requested: ar ? 'طلب بدء عمل' : 'Work requested',
     approved: ar ? 'تمت الموافقة' : 'Approved',
     rejected: ar ? 'تم الرفض' : 'Rejected',
+    bound_to_shift: ar ? 'تم ربط التصريح بالشفت' : 'Bound to shift',
     revoked: ar ? 'تم سحب الاعتماد' : 'Revoked',
     expired: ar ? 'انتهى الاعتماد' : 'Expired',
   };
