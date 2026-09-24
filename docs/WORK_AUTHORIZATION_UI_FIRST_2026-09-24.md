@@ -224,6 +224,17 @@ Final required behavior:
   - the dedicated product-components guard trigger exists.
 - Production remains untouched. Exact-head Fast Verify + Full Verify are required again before merge readiness.
 
+
+### 2026-09-24 — Branch bootstrap compatibility fix
+
+- Final Full Verify exposed 2 existing branch-management integration failures after the direct-write guard expansion.
+- Root cause: `create_organization_branch` created the guarded main warehouse before granting the creator access to the newly-created branch.
+- The guard correctly rejected the warehouse insert with `WORK_AUTHORIZATION_REQUIRED` because the creator was not yet in branch scope.
+- Fixed by moving the existing `user_branch_access` grant to immediately after the branch insert and before the guarded warehouse insert.
+- No generic bypass, service-role shortcut, role-name authorization, or guard weakening was introduced.
+- Existing branch-management permission checks remain unchanged.
+- Exact-head Fast Verify + Full Verify are required again before merge readiness.
+
 ## Verification ledger
 
 - Fast Verify #356 mutation-guard migration failure: `raw_material_warehouse_inventory` is a **view**, so PostgreSQL rejected the generic `BEFORE INSERT/UPDATE/DELETE` trigger. No Production impact; failure occurred on Fresh DB before schema/integration.
@@ -273,6 +284,8 @@ State: **BLOCKED**
 8. Run exact-head Fast Verify + Full Verify for the final mutation-guard head.
 9. Close the direct Data API write bypasses found in final security review. ✅
 10. Re-run exact-head Fast Verify + Full Verify after the bypass closure.
+11. Fix branch bootstrap ordering revealed by Full Verify without weakening the guard. ✅
+12. Re-run exact-head Fast Verify + Full Verify on the new HEAD.
 11. If Green: **STOP BEFORE MERGE** and present final Production migration/activation gate. Do not merge, apply Production migration, or enable the feature flag.
 
 ## Mandatory update protocol
