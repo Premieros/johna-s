@@ -41,6 +41,7 @@ interface RolesContextValue {
 }
 
 const RolesContext = createContext<RolesContextValue | undefined>(undefined);
+const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 export function RolesProvider({ children }: { children: ReactNode }) {
   const [rolesList, setRolesList] = useState<RoleDefRow[]>([]);
@@ -95,15 +96,12 @@ export function RolesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!sessionUserId) return;
 
-    const channel = supabase
-      .channel(`roles-refresh-${sessionUserId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => {
-        void refresh();
-      })
-      .subscribe();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, ROLE_REFRESH_INTERVAL_MS);
 
     return () => {
-      void supabase.removeChannel(channel);
+      window.clearInterval(timer);
     };
   }, [sessionUserId, refresh]);
 
