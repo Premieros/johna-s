@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-06 Full Verify Green; RC-07 scheduling repair opened
+Last updated: 2026-09-24 — CH-08 cutoff-based auto-close scheduling implemented
 
 ## Work status
 
-Status: ACTIVE — RC-06 Roles refresh stabilization verified Green. Current write scope moves to RC-07 auto-close request frequency only; no Production or printing changes.
+Status: ACTIVE — RC-06 verified Green; RC-07 cutoff-based auto-close scheduling implemented and awaiting exact-head verification. No Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -206,7 +206,7 @@ Traffic bound:
 
 ### RC-07 — Auto-close request amplification
 
-Status: CONFIRMED / EARLIER CORRECTNESS FIX EXISTS, FREQUENCY ISSUE REMAINS.
+Status: CONFIRMED / FIX IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
 
 Earlier repair:
 - PR #305 fixed the configured business-day cutoff and premature shift closure semantics.
@@ -426,7 +426,40 @@ Rollback boundary:
 
 
 
-## Verification ledger
+### CH-08 — Cutoff-based shift auto-close scheduling
+
+Status: IMPLEMENTED / VERIFY PENDING.
+
+Files:
+- `src/context/SettingsContext.tsx`
+- `src/lib/businessTime.ts`
+- `tests/unit/businessTime.test.ts`
+- `tests/unit/shiftAutoCloseSchedulingContract.test.ts`
+
+Change:
+- removed the unconditional per-minute `try_auto_close_branch_shift` polling loop,
+- kept one catch-up RPC after settings/session bootstrap,
+- when the RPC returns `BUSINESS_DAY_NOT_FINISHED`, schedule the next call directly from authoritative server `window_end`,
+- when no server cutoff is available (for example no open shift), schedule the next configured `business_day_end` using DST-aware Cairo time,
+- when open orders block closure after cutoff, retry every 5 minutes until the block clears,
+- network/RPC errors retry at most 3 times at five-minute spacing, then fall back to the next configured cutoff,
+- the existing `shift:auto-closed` browser event remains unchanged.
+
+Preserved from PR #305:
+- `try_auto_close_branch_shift(uuid)` implementation unchanged,
+- business-day cutoff semantics unchanged,
+- overnight-window logic unchanged,
+- open-order safety block unchanged,
+- cash-count/expected-cash behavior unchanged.
+
+Expected traffic effect:
+- before: every eligible logged-in client called every eligible branch once per minute all day,
+- after: one bootstrap catch-up call, then typically one scheduled cutoff call per branch/day per active client,
+- additional calls occur only in the short post-cutoff period if open orders block closure or during bounded transient-error retry.
+
+No migration / no Production write / no printing change.
+
+
 
 ### V-07 — RC-06 exact-head Full Verify Green
 
@@ -619,11 +652,11 @@ To change this section to READY, ALL must be recorded here:
 Current mandatory sequence:
 
 1. RC-06 is VERIFIED GREEN on Run `35984897254`.
-2. RC-07 only: preserve `try_auto_close_branch_shift` and PR #305 cutoff semantics exactly, but replace per-minute per-device polling with scheduled checks.
-3. Use one immediate catch-up check after settings/session bootstrap, then schedule by the server-returned `window_end` when available; use a bounded retry only after cutoff when open orders block closure.
-4. When there is no open shift, schedule the next configured Cairo business-day end instead of polling every minute.
-5. Add DST-aware time helper/unit coverage and an auto-close scheduling contract.
-6. Run exact-head Full Verify before opening RC-08.
+2. RC-07 / CH-08 is implemented with no RPC or database change.
+3. Run exact-head Full Verify for CH-08 and record all jobs.
+4. If Green, open RC-08 only: reduce remaining POS full-snapshot churn while preserving PR #260 lightweight shell and PR #293 burst coalescing.
+5. Then RC-09 Dashboard sale_payments oversized requests.
+6. One coherent change set at a time; update this log before moving to the next.
 7. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
 8. No merge or Production migration without existing gate requirements.
 
