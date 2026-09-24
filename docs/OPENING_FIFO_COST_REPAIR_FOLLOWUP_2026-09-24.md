@@ -1,34 +1,79 @@
 # Opening FIFO cost repair follow-up — 2026-09-24
 
-## Scope
-- Repository: Premieros/johna-s
-- Base: main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da
-- Branch: development/opening-fifo-transfer-followup-20260924
-- Production: azzdesuowpdcoflmyezn
-- Printing/agents/routing: frozen and untouched.
-- Production migration/backfill: not applied pending Full Verify Green + explicit approval.
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `development/opening-fifo-transfer-followup-20260924`
+Current PR: `#356`
+Last updated: 2026-09-24 23:26 Africa/Cairo
+State: **BLOCKED**
 
-## Confirmed blocker
-Smouha opening-cost repair prepares 140 eligible zero-cost opening batches but historical FIFO replay stops on one changed reference:
-- inventory_ledger.id = 19086
-- reference_type = warehouse_transfer
-- transfer = Johna's-00002
-- source raw = اعشاب عدد 1 باكت
-- source branch = Smouha
-- destination branch = Cleopatra
-- source and destination transfer valuation are both zero.
-- destination transfer lot has no downstream consumption at inspection time.
+## Work status
+- Code follow-up is implemented on the development branch only.
+- Production remains unchanged.
+- Current gate: exact-head Full Verify must be Green before asking for Production approval.
+- This work completes the blocked PR #314 opening-inventory FIFO repair path.
 
-## Fix
-- Add guarded warehouse-transfer valuation propagation to the existing FIFO reference dispatcher.
-- Update the exact destination positive transfer ledger row, matching destination batch cost, transfer-item unit cost, and destination avg-cost cache.
-- Never alter stock quantities.
-- Fail closed when destination identity is ambiguous or downstream consumption already exists.
-- Add warehouse_transfer to the historical FIFO supported-reference guard.
-- Preserve all existing sale/kitchen/production/purchase-return behavior by basing the overrides on the current Production function definitions.
+## Guardrails
+- Do not modify `main` directly.
+- Do not apply Production migrations or run the Production repair before exact-head Full Verify Green + explicit approval.
+- Do not touch printing, Print Agent, routing, KDS, or send-to-kitchen.
+- Preserve physical stock quantities exactly.
+- Preserve Permission-First and branch isolation.
+- Fail closed on ambiguous transfer identity or downstream destination consumption.
 
-## Safety
-- No Production write.
-- No automatic repair call in the migration.
-- No printing code touched.
-- Full Verify must be Green before Production approval is requested.
+## Baseline
+- Smouha opening repair prepare: 162 zero-cost opening batches; 140 eligible; 22 unresolved/review-only.
+- Historical replay blocker: inventory_ledger `19086`.
+- Reference type: `warehouse_transfer`.
+- Transfer: `Johna's-00002` / `e406a708-6d74-4510-8dc3-bdbd12427694`.
+- Source: Smouha / raw `اعشاب عدد 1 باكت` / quantity 1 / unit_cost 0.
+- Destination: Cleopatra / raw `91d22332-0087-429c-b0cd-93d47f7e5ede` / quantity 1 / unit_cost 0.
+- Destination transfer lot had no downstream negative ledger consumption at inspection time.
+- Existing PR #314 repair itself remains the canonical opening-cost repair.
+
+## Root-cause ledger
+- PR #314 correctly repairs zero-cost opening receipts and delegates historical valuation to the FIFO backfill.
+- FIFO backfill intentionally rejected changed reference types outside sale/kitchen_send/production/purchase_return.
+- A new raw-material warehouse transfer was created after the original repair design.
+- The transfer inherited zero cost from the unrepaired Smouha opening lot.
+- Therefore the opening repair now reaches a legitimate `warehouse_transfer` changed reference and stops at the safety guard.
+
+## Change ledger
+- Added migration `20260924223500_raw_fifo_warehouse_transfer_cost_propagation.sql`.
+- Added internal helper `_fifo_adjust_warehouse_transfer_delta`.
+- Added `warehouse_transfer` to the historical FIFO changed-reference allow-list.
+- Current Production `_fifo_adjust_reference_delta` definition is preserved and extended with the transfer handler.
+- Helper updates valuation only: destination transfer ledger total/unit cost, exact destination raw batch unit cost, transfer-item unit cost, and destination raw avg-cost cache.
+- Helper never updates quantity.
+- Helper rejects non-raw targets, wrong branch/warehouse scope, ambiguous item/ledger/batch identity, negative resulting valuation, and any downstream consumption.
+- Added unit contract test `raw_fifo_warehouse_transfer_cost_propagation.test.ts`.
+- Printing-related files/functions are untouched.
+
+## Verification ledger
+- PR #356 opened against `main`.
+- First Full Verify run `36054555738`: failed only at mandatory active-worklog gate because the unified plan still pointed to the completed performance branch.
+- Follow-up commit updated the unified plan and this mandatory log to the current branch/PR.
+- No Production SQL write has been performed.
+- Exact-head Full Verify after the worklog correction: pending.
+
+## Production gate
+State: **BLOCKED**
+- Full Verify exact-head Green: pending.
+- Production migration approval: not yet requested.
+- Production repair execution approval: not yet requested.
+- Required pre-apply read-only recheck: destination transfer lot must still have zero downstream consumption.
+- Required post-apply checks: quantity invariants, opening batch valuation, FIFO run success, trial balance, raw inventory valuation, COGS reconciliation, and zero-cost consumption count.
+
+## Next action
+1. Wait for exact-head Full Verify on the current branch.
+2. If any CI failure appears, fix it on this branch and update this log before continuing.
+3. When Full Verify is Green, re-run the Production read-only transfer/downstream-consumption check.
+4. Present the exact migration/backfill plan and request explicit Production approval.
+5. Only after approval: apply migration, prepare fresh Smouha opening repair, review dry-run, apply, and verify accounting/inventory invariants.
+
+## Mandatory update protocol
+- Read this file before every new change in this workstream.
+- Update `Change ledger` after each code/schema change.
+- Update `Verification ledger` after every CI/test/run result.
+- Keep `Production gate` at **BLOCKED** until exact-head Full Verify is Green and explicit Production approval is recorded.
+- If any unexpected inventory, accounting, printing, or branch-isolation behavior appears, stop and do not merge or apply Production changes.
