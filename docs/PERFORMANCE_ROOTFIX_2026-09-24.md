@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-07 Full Verify Green; RC-08 cross-branch wake repair opened
+Last updated: 2026-09-24 — CH-09 branch-local POS Realtime wake filtering implemented
 
 ## Work status
 
-Status: ACTIVE — RC-06 and RC-07 verified Green. Current write scope: RC-08 cross-branch order-item Realtime wake reduction only; no Production or printing changes.
+Status: ACTIVE — RC-06 and RC-07 verified Green. RC-08 branch-local Realtime wake filtering implemented; exact-head verification pending. No Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -221,7 +221,7 @@ Conclusion:
 
 ### RC-08 — POS full snapshot refresh remains after prior coalescing
 
-Status: CONFIRMED / PARTIALLY FIXED EARLIER.
+Status: CONFIRMED / BRANCH-WAKE FIX IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
 
 Earlier repairs:
 - PR #260 removed full POS active-order snapshot loading from the global app shell.
@@ -236,9 +236,17 @@ Remaining Production traffic on 23 Sep, after those merges:
 
 Current design still calls `fetchActiveOrders()` after each Realtime refresh cycle, and that snapshot fetches the active POS data bundle again.
 
+Production schema check for order_items:
+- `public.order_items` has no `branch_id`, so Supabase Realtime cannot apply a direct branch filter on that table.
+- replica identity is default (`relreplident='d'`), so DELETE payloads may expose only the primary key in OLD.
+- therefore branch relevance must be resolved client-side from known open/held order ids and locally visible item ids.
+
 Conclusion:
-- keep existing burst coalescing,
-- investigate a narrower/shared snapshot or incremental update; do not regress PR #260/#293.
+- keep PR #260 lightweight shell.
+- keep PR #293 shared-channel burst coalescing and trailing refresh.
+- suppress cross-branch `order_items` wakeups before they trigger a snapshot query.
+- retain all branch open/held order ids, including empty shells, so the first item added to an empty order is never missed.
+- for DELETE events, match against locally known item ids; unknown payload shapes fail open for correctness.
 
 ### RC-09 — Dashboard sale_payments oversized failed fetches
 
@@ -546,7 +554,42 @@ Workflow:
 - `browser-smoke`: SKIPPED
 
 Failure:
-- mandatory worklog contract could not find `## Verification ledger`.
+- mandatory worklog contract could not find `### CH-09 — Branch-local POS Realtime wake filtering
+
+Status: IMPLEMENTED / VERIFY PENDING.
+
+Files:
+- `src/features/pos/types.ts`
+- `src/features/pos/services/posOrders.ts`
+- `src/features/pos/services/posRealtime.ts`
+- `src/features/pos/hooks/usePosRealtime.ts`
+- `src/features/pos/hooks/useActiveOrderCount.ts`
+- `tests/unit/posRealtimeBranchWakeContract.test.ts`
+
+Change:
+- `PosRealtimeData` now carries internal `watchedOrderIds` for all branch open/held orders before empty-order UI filtering.
+- shared POS Realtime emits structured table/event payloads to listeners.
+- `order_items` events are checked against watched branch order ids before scheduling a snapshot refresh.
+- DELETE events without `order_id` are matched by locally known item id.
+- unknown payload shapes fail open so the optimization cannot hide valid work.
+- the lightweight active-order badge now shares the existing branch POS Realtime channel instead of opening a second `orders/order_items` channel.
+- the badge ignores dining-table/kitchen-send events and cross-branch `order_items` events.
+- PR #293 in-flight/trailing snapshot coalescing remains unchanged.
+
+Intentionally unchanged:
+- no database migration,
+- no table/RLS change,
+- no POS sale/order mutation behavior,
+- no kitchen send logic,
+- no printing / agent / routing / KDS changes,
+- no change to which active orders are displayed.
+
+Expected effect:
+- an `order_items` write in Smoha no longer forces Cleopatra POS snapshot/badge queries merely because `order_items` lacks `branch_id`,
+- redundant shell Realtime channel removed,
+- valid first-item events for previously empty branch orders remain refresh-triggering.
+
+`.
 - no lint/typecheck/unit/build/DB/browser tests were executed for CH-07 on this run.
 
 Classification:
@@ -683,13 +726,12 @@ Current mandatory sequence:
 
 1. RC-06 VERIFIED GREEN — Run `35984897254`.
 2. RC-07 VERIFIED GREEN — Run `35986306789`.
-3. RC-08 only: keep PR #260 lightweight shell and PR #293 shared-channel/coalescing behavior, but suppress `order_items` Realtime wakes that cannot belong to the current branch snapshot.
-4. Preserve all open/held order IDs (including empty order shells) as watch IDs so adding the first positive item still refreshes correctly.
-5. For DELETE payloads, use locally known item IDs because `order_items` uses default replica identity.
-6. Apply the same branch-local relevance gate to the lightweight active-order badge.
-7. No migration, RLS, POS mutation, print/KDS/agent/routing change.
-8. Add focused unit contracts/tests, then exact-head Full Verify before RC-09.
-9. No merge or Production migration without existing gate requirements.
+3. RC-08 / CH-09 branch-local Realtime wake filtering is implemented.
+4. Run exact-head Full Verify for CH-09 and record all results.
+5. If Green, open RC-09 only: replace oversized/failing Dashboard `sale_payments` browser fetches with a bounded server-side source while preserving dashboard numeric truth.
+6. Keep PR #260 lightweight shell and PR #293 coalescing contracts.
+7. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
+8. No merge or Production migration without existing gate requirements.
 
 ## Mandatory update protocol
 
