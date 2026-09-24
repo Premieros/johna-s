@@ -61,6 +61,7 @@ DECLARE
   v_debt public.raw_fifo_debts%ROWTYPE;
   v_rebased integer:=0;
   v_settlements integer:=0;
+  v_inserted integer:=0;
 BEGIN
   SELECT * INTO v_run
   FROM public.raw_fifo_backfill_runs
@@ -208,7 +209,8 @@ BEGIN
     WHERE s.debt_id=v_debt.id
     ON CONFLICT(run_id,settlement_id) DO NOTHING;
 
-    GET DIAGNOSTICS v_settlements = v_settlements + ROW_COUNT;
+    GET DIAGNOSTICS v_inserted = ROW_COUNT;
+    v_settlements:=v_settlements+v_inserted;
 
     DELETE FROM public.raw_fifo_settlements
     WHERE debt_id=v_debt.id;
