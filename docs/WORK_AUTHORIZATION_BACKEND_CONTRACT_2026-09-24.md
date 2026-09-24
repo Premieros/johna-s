@@ -274,9 +274,9 @@ Rules:
 - append event + audit;
 - does not change completed operations.
 
-### `set_work_authorization_requirement(p_policy_id uuid, p_required boolean)`
+### `set_work_authorization_requirement(p_user_id uuid, p_branch_id uuid, p_required boolean)`
 
-The frontend contract currently identifies a policy row by id.
+Creates or updates the effective user+branch policy.
 
 Requires `work.authorization.manage`.
 
@@ -284,10 +284,9 @@ Rules:
 
 - branch access required;
 - target user must belong to/access branch;
+- create the row when absent; update when present;
 - no role-name conditions;
 - append audit.
-
-Before implementation, the final RPC may be widened to accept `user_id + branch_id` for first-time policy creation; if so, the TypeScript contract must change in the same commit.
 
 ## Shift binding contract
 
