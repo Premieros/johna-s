@@ -28,6 +28,8 @@ State: **BLOCKED**
 - UI preview must not write to Production tables or invoke work-authorization RPCs before those RPCs exist and are verified.
 - Existing operational approvals continue to work unchanged.
 - Existing login/session flow stays unchanged during UI-first phase.
+- **No role-name authorization:** `owner`, `branch_manager`, `cashier`, etc. are labels only. UI visibility/actions use `useCan()` / canonical permissions plus branch scope. Only `super_admin` may be treated as the existing implicit bypass.
+- During UI-first preview, reuse existing canonical permissions instead of inventing frontend-only permissions: `approvals.review` controls review surfaces and `approvals.policy.manage` controls policy/settings surfaces. Dedicated `work.authorization.*` permissions are deferred to the backend-contract phase so frontend and DB never drift.
 
 ## Baseline
 
@@ -46,6 +48,8 @@ State: **BLOCKED**
 4. Therefore the approved architecture is:
    `UI shell -> typed client contract -> mock preview provider -> reviewed UX -> DB/RLS/RPC -> real provider -> server enforcement`.
 5. The preview must be clearly labeled and non-authoritative so it can be reviewed without affecting branch operations.
+6. PR #340 is merged and defines the current permissions UX direction: non-Super-Admins only see/grant permissions they own with their full dependency closure; higher capabilities are hidden rather than exposed disabled; backend still rejects privilege escalation.
+7. Work Authorization UI must follow the same pattern: never branch on `branch_manager`/`owner`; use canonical permissions and accessible-branch scope.
 
 ## Change ledger
 
@@ -54,6 +58,8 @@ State: **BLOCKED**
 - Created `development/work-authorization-ui-20260924` from `main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da`.
 - Confirmed old work branch had diverged by 240 main commits and will not be used for implementation.
 - Confirmed approval center and canonical permission files on current main before writes.
+- Reviewed merged PR #340 and `PERMISSIONS_UI_SIMPLIFICATION_PLAN_2026-09-23.md`; adopted its Permission-First visibility/grant rules.
+- Reviewed `PR19_PERMISSION_FIRST_CLOSURE_LOG.md` and `EXECUTION_GUARDRAILS.md`; confirmed all non-Super-Admin roles are labels only and branch/RLS scope remains mandatory.
 - Declared this new mandatory active work log.
 - Opened Draft PR #355 for staged UI-first implementation.
 - Planned UI deliverables:
@@ -86,7 +92,7 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Add the typed work-authorization client contract and mock provider.
+1. Add the typed work-authorization client contract and mock provider with **zero role checks**.
 2. Build the manager UI preview with four tabs.
 3. Build the employee waiting-screen preview.
 4. Integrate preview mode into the existing Approval Center without changing live approval behavior.
