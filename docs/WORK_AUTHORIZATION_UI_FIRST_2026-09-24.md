@@ -10,6 +10,11 @@ Last updated: 2026-09-24 17:00 Africa/Cairo
 
 State: **BLOCKED**
 
+Execution mode: **SINGLE_WRITER**
+Parallel execution: **FORBIDDEN**
+Unexpected HEAD policy: **STOP_AND_RECONCILE**
+Write mode: **SEQUENTIAL_ONLY**
+
 - Current phase: final branch-entry authorization verification.
 - Architecture: `Login -> Work Authorization Gate -> Application`.
 - Authorization scope: **user + branch only; independent of shifts**.
@@ -140,6 +145,22 @@ Final required behavior:
   - direct writes denied;
   - audit/events created.
 
+
+### 2026-09-24 — Single-writer drift prevention
+
+- Root cause of execution drift: the unified plan contained many historical sections still labelled `ACTIVE`, and an unexpected commit was incorrectly attributed to “parallel work”.
+- User confirmed there is **no parallel writer**.
+- Added `docs/SINGLE_WRITER_EXECUTION_FENCE.md`.
+- Only the branch declared in the mandatory execution gate is executable.
+- Other historical `ACTIVE` sections are backlog/history only unless explicitly promoted by the user.
+- Repository writes are sequential only; reads may remain parallel.
+- Every successful write commit becomes the expected HEAD for the next write.
+- Before every write: fetch branch HEAD and require an exact match.
+- Unexpected HEAD => stop, inspect commit metadata/files, reconcile active log; never invent a second worker.
+- After interruption/tool conflict/timeout/cancel: re-read branch HEAD + active log + execution gate before resuming.
+- While an exact-head Verify is running, no additional writes unless a real failure requires a fix.
+- This protocol is mandatory and will be enforced by CI contract tests.
+
 ## Verification ledger
 
 - UI-first pre-backend Verify was Full Green.
@@ -152,8 +173,8 @@ Final required behavior:
 - Both were corrected:
   - regex normalized;
   - Realtime block uses named `$realtime$ ... $realtime$` delimiter.
-- A concurrent commit `6f0328d7ead08cd0cff7fbd5d8c1dd0d2d204b2b` changed authorization from shift-bound to branch-entry authorization.
-- That change was reviewed and accepted because it matches the approved simpler design.
+- CORRECTION: commit `6f0328d7ead08cd0cff7fbd5d8c1dd0d2d204b2b` was previously described as a concurrent/parallel change. The user confirmed there is no other writer. It is therefore classified as **unaccounted self-drift during this execution**, not parallel work.
+- The content was reviewed and retained because it matches the approved simpler branch-entry design, but future unknown commits must trigger `STOP_AND_RECONCILE` before any further write.
 - Integration coverage now explicitly verifies authorization survives shift open/close.
 - Exact-head final Verify is still required before Production.
 - Fast Verify #333 applied the migration and schema successfully. The only integration failure was a test-ordering bug: the shift-independence assertion selected the most recent row by timestamp and could tie with an older revoked row. Backend `can_user_work` already returned true. The test now asserts exactly one active `approved` authorization instead of relying on timestamp ordering.
