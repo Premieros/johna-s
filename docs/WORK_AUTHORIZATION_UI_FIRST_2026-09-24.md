@@ -10,7 +10,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
 
-- Current phase: UI-first verified; backend contract + canonical permission preparation (not activated).
+- Current phase: backend migration + security test verification (not activated).
 - Production enforcement: not started.
 - Production migration: not applied.
 - Main merge: not approved.
@@ -128,7 +128,7 @@ State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
 State: **BLOCKED**
 
 - Pre-migration code/contract verification is Full Green on run #2604.
-- No Production migration has been applied. A branch-only migration may now be created using the documented timestamp fallback because CLI generation is unavailable; Fresh DB + security verification remains mandatory before any merge/apply.
+- No Production migration has been applied. Branch-only migration `20260924164500_work_authorization_backend.sql` now exists on the development branch only; Fresh DB + security verification is mandatory before any merge/apply.
 - No work-authorization server enforcement is active.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
 - No Production activation until backend authority, RLS, RPC coverage, exact-head Full Verify Green, and explicit user approval.
@@ -148,7 +148,10 @@ State: **BLOCKED**
 11. Supabase CLI generation attempt could not complete in the local environment. ✅ Recorded.
 12. Verify #2604 is Full Green for the pre-migration head. ✅
 13. Approved fallback for branch-only implementation: create one forward-only migration file in repository with a monotonic 2026-09-24 timestamp later than existing migrations, then let Fresh DB CI be the authority that validates ordering/application. This fallback does **not** apply anything to Production.
-14. Next executable step: implement schema/RLS/RPCs from the locked backend contract in that branch-only migration, add dedicated security tests, and run exact-head Full Verify. Production apply remains BLOCKED.
+14. Branch-only migration `20260924164500_work_authorization_backend.sql` implemented with capability-based permission seeding, tables, indexes, RLS, RPCs, audit, and shift bind/expire hooks. ✅
+15. Dedicated integration test `tests/integration/work_authorization_backend.test.ts` added for fail-open rollout, branch scope, self-approval denial, direct-write denial, shift binding/expiry, and audit. ✅
+16. Policy contract corrected to `userId + branchId + required` so first-time policy creation does not depend on a pre-existing policy row. ✅
+17. Next: exact-head Verify/Fresh DB. Any failure must be fixed before mounting the real provider or adding POS enforcement. Production apply remains BLOCKED.
 
 ## Mandatory update protocol
 
