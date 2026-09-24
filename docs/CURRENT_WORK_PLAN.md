@@ -14,6 +14,20 @@
 
 
 
+## SINGLE-WRITER EXECUTION FENCE
+
+- Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
+- Executable branch: `development/work-authorization-ui-20260924`
+- Execution mode: **SINGLE_WRITER**
+- Parallel execution: **FORBIDDEN**
+- Unexpected HEAD policy: **STOP_AND_RECONCILE**
+- Write mode: **SEQUENTIAL_ONLY**
+- Any other section historically labelled `ACTIVE` below is backlog/history only and MUST NOT be interpreted as concurrent execution.
+- Before every repository write, fetch the executable branch HEAD and require it to equal the expected HEAD from the prior successful write/checkpoint.
+- After any interruption/tool error/conflict/cancelled workflow, re-read branch HEAD + mandatory active log + this gate before resuming.
+- Never attribute an unknown commit to another worker unless the user explicitly confirms another writer exists.
+
+
 ## ACTIVE — Work Authorization UI-first — 2026-09-24
 
 - Branch: `development/work-authorization-ui-20260924`
