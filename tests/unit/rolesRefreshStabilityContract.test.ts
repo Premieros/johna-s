@@ -17,8 +17,12 @@ describe('roles refresh stability contract', () => {
     expect(source).toContain('deleteRole');
   });
 
-  it('refreshes roles on actual roles-table changes rather than token churn', () => {
-    expect(source).toContain(".on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }");
-    expect(source).toContain('void supabase.removeChannel(channel);');
+  it('uses a bounded low-frequency refresh instead of unavailable roles realtime', () => {
+    expect(source).toContain('const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;');
+    expect(source).toContain('window.setInterval(() => {');
+    expect(source).toContain('}, ROLE_REFRESH_INTERVAL_MS);');
+    expect(source).toContain('window.clearInterval(timer);');
+    expect(source).not.toContain("table: 'roles'");
+    expect(source).not.toContain('supabase.removeChannel(channel)');
   });
 });
