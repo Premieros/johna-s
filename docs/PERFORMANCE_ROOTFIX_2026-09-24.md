@@ -284,7 +284,48 @@ That run is NOT final anymore because documentation/CI-gate commits change the P
 
 ### V-04 — Mandatory gate verification
 
-Status: IMPLEMENTED / exact-head CI result pending after this final documentation synchronization.
+Status: GATE GREEN / FULL VERIFY RED ON ONE UNIT CONTRACT.
+
+Exact head checked:
+`ded8bf2470efe5a8bc682f833d3be5b6b7b4701b`
+
+Workflow:
+- Run: `35974822183`
+- Job `verify`: FAILED
+- Job `db`: SKIPPED because `verify` failed
+- Job `browser-smoke`: SKIPPED because upstream jobs did not complete
+
+Mandatory worklog gate result:
+- **Verify mandatory active work log ✅**
+- Supabase project identity ✅
+- frontend API contract ✅
+- lint ✅
+- application typecheck ✅
+- test-suite typecheck ✅
+
+Unit result:
+- 204 test files passed / 1 failed
+- 1026 tests passed / 1 failed
+- failing test:
+  `tests/unit/inventoryLedgerPerformanceContract.test.ts`
+  → `keeps Permission-First checks while resolving caller context once`
+
+Failure detail:
+- the contract asserts the ENTIRE migration file must not contain
+  `private.financial_reference_visible(`
+- the same migration now legitimately contains that helper in the newly added
+  Journal RLS policy block.
+- the Inventory Ledger hot scan itself still does not call
+  `private.financial_reference_visible(...)` row-by-row.
+- therefore this is currently classified as a **test-scope false positive**,
+  not evidence that the Inventory Ledger regression returned.
+
+Required next action before Full Verify can proceed:
+- narrow the unit assertion to the `search_inventory_ledger` function body / hot-scan scope only.
+- keep the Journal RLS occurrence allowed and separately covered by the new
+  `financialJournalRlsFastpathContract.test.ts`.
+
+This failure remains recorded and must not be overwritten by a later Green result.
 
 Gate implementation evidence:
 
