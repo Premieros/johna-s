@@ -2,7 +2,6 @@ export type WorkAuthorizationStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
-  | 'bound_to_shift'
   | 'revoked'
   | 'expired';
 
@@ -29,7 +28,6 @@ export interface WorkAuthorizationRecord {
   decidedAt?: string | null;
   approverName?: string | null;
   decisionReason?: string | null;
-  shiftLabel?: string | null;
   startedAt?: string | null;
 }
 
@@ -69,7 +67,6 @@ export interface MyWorkAuthorizationState {
   status: WorkAuthorizationStatus | 'not_required' | 'not_requested';
   requestId?: string | null;
   authorizationId?: string | null;
-  shiftId?: string | null;
   requestedAt?: string | null;
   decidedAt?: string | null;
   decisionReason?: string | null;
