@@ -10,7 +10,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
 
-- Current phase: backend migration + security test verification (not activated).
+- Current phase: centralized entry-gate + backend migration/security verification (not activated).
 - Production enforcement: not started.
 - Production migration: not applied.
 - Main merge: not approved.
@@ -130,6 +130,7 @@ State: **BLOCKED**
 - Pre-migration code/contract verification is Full Green on run #2604.
 - No Production migration has been applied. Branch-only migration `20260924164500_work_authorization_backend.sql` now exists on the development branch only; Fresh DB + security verification is mandatory before any merge/apply.
 - No work-authorization server enforcement is active.
+- The centralized employee gate exists in code but is intentionally not mounted yet.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
 - No Production activation until backend authority, RLS, RPC coverage, exact-head Full Verify Green, and explicit user approval.
 
@@ -151,7 +152,11 @@ State: **BLOCKED**
 14. Branch-only migration `20260924164500_work_authorization_backend.sql` implemented with capability-based permission seeding, tables, indexes, RLS, RPCs, audit, and shift bind/expire hooks. ✅
 15. Dedicated integration test `tests/integration/work_authorization_backend.test.ts` added for fail-open rollout, branch scope, self-approval denial, direct-write denial, shift binding/expiry, and audit. ✅
 16. Policy contract corrected to `userId + branchId + required` so first-time policy creation does not depend on a pre-existing policy row. ✅
-17. Next: exact-head Verify/Fresh DB. Any failure must be fixed before mounting the real provider or adding POS enforcement. Production apply remains BLOCKED.
+17. User approved the simpler architecture: `Login -> Work Authorization Gate -> Application`. ✅
+18. Added `WorkAuthorizationGate.tsx` as a centralized gate component. It checks once on mount/branch change, does not poll, has no role-name guards, and keeps the authenticated session mounted while waiting. ✅
+19. Backend contract updated: approval/revocation changes will use Realtime to trigger a single lightweight state refresh; no page/button-level polling. ✅
+20. Added a unit contract that fails if the gate introduces polling, role-name authorization, direct Supabase access, or loses the centralized gate marker. ✅
+21. Next: exact-head Verify/Fresh DB for the migration + gate contract. Only after Green will the gate be mounted at the authenticated app boundary. Production apply remains BLOCKED.
 
 ## Mandatory update protocol
 
