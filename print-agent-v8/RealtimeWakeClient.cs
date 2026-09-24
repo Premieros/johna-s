@@ -47,7 +47,6 @@ internal sealed class RealtimeWakeClient : IDisposable
             {
                 socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
                 socket.Options.SetRequestHeader("apikey", BuildConfig.PublishableKey);
-                socket.Options.SetRequestHeader("Authorization", "Bearer " + _accessToken);
 
                 SetConnected(false, "Realtime جاري الاتصال...");
 
