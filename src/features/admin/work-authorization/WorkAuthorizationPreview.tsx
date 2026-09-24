@@ -18,6 +18,7 @@ import { Select } from '@/components/Input';
 import { TabContent, TabList, Tabs, TabTrigger } from '@/components/Tabs';
 import { createMockWorkAuthorizationClient } from './mockWorkAuthorizationProvider';
 import type {
+  WorkAuthorizationClient,
   WorkAuthorizationHistoryEntry,
   WorkAuthorizationRecord,
   WorkAuthorizationSnapshot,
@@ -74,12 +75,19 @@ export function WorkAuthorizationPreview({
   ar,
   branches,
   canManageSettings,
+  client: providedClient,
+  live = false,
 }: {
   ar: boolean;
   branches: Branch[];
   canManageSettings: boolean;
+  client?: WorkAuthorizationClient;
+  live?: boolean;
 }) {
-  const client = useMemo(() => createMockWorkAuthorizationClient(branches), [branches]);
+  const client = useMemo(
+    () => providedClient ?? createMockWorkAuthorizationClient(branches),
+    [branches, providedClient],
+  );
   const [branchId, setBranchId] = useState('');
   const [snapshot, setSnapshot] = useState<WorkAuthorizationSnapshot>(EMPTY_SNAPSHOT);
   const [loading, setLoading] = useState(true);
@@ -106,7 +114,7 @@ export function WorkAuthorizationPreview({
         await client.reject(id, reason.trim() || (ar ? 'غير متاح لبدء العمل الآن' : 'Not available to start work now'));
       }
       if (action === 'revoke') {
-        const reason = window.prompt(ar ? 'سبب سحب الاعتماد في المعاينة:' : 'Preview revoke reason:');
+        const reason = window.prompt(ar ? (live ? 'سبب إيقاف التصريح:' : 'سبب سحب الاعتماد في المعاينة:') : (live ? 'Reason for stopping authorization:' : 'Preview revoke reason:'));
         if (reason === null) return;
         await client.revoke(id, reason.trim() || (ar ? 'تم إنهاء اعتماد العمل' : 'Work authorization ended'));
       }
@@ -138,13 +146,17 @@ export function WorkAuthorizationPreview({
               <ShieldCheck className="h-5 w-5 text-ui-primary" />
               <h2 className="text-lg font-bold text-ui-text">{ar ? 'اعتماد بدء العمل' : 'Work Authorization'}</h2>
               <span className="rounded-full border border-ui-border bg-ui-surface px-2.5 py-1 text-[11px] font-semibold text-ui-muted">
-                {ar ? 'معاينة فقط' : 'Preview only'}
+                {live ? (ar ? 'تشغيل فعلي' : 'Live') : (ar ? 'معاينة فقط' : 'Preview only')}
               </span>
             </div>
             <p className="mt-1 text-sm text-ui-muted">
-              {ar
-                ? 'واجهة تجريبية لا تمنع أي مستخدم ولا تكتب في بيانات التشغيل. الاعتماد الفعلي سيُربط بالخادم بعد اعتماد التصميم.'
-                : 'Preview UI only. It does not block users or write operational data; server enforcement comes after UI approval.'}
+              {live
+                ? (ar
+                    ? 'اعرض المصرح لهم حسب الفرع وأوقف التصريح فورًا. المستخدم الموقوف يعود تلقائيًا إلى انتظار التصريح.'
+                    : 'View authorized users by branch and stop authorization immediately. Revoked users return to the waiting queue.')
+                : (ar
+                    ? 'واجهة تجريبية لا تمنع أي مستخدم ولا تكتب في بيانات التشغيل.'
+                    : 'Preview UI only. It does not block users or write operational data.')}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -152,10 +164,12 @@ export function WorkAuthorizationPreview({
               <option value="">{ar ? 'كل الفروع المصرح بها' : 'All accessible branches'}</option>
               {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
             </Select>
-            <Button variant="outline" onClick={() => setEmployeePreview((value) => !value)}>
-              <Eye className="h-4 w-4" />
-              {employeePreview ? (ar ? 'إخفاء شاشة الموظف' : 'Hide employee view') : (ar ? 'معاينة شاشة الموظف' : 'Preview employee view')}
-            </Button>
+            {!live && (
+              <Button variant="outline" onClick={() => setEmployeePreview((value) => !value)}>
+                <Eye className="h-4 w-4" />
+                {employeePreview ? (ar ? 'إخفاء شاشة الموظف' : 'Hide employee view') : (ar ? 'معاينة شاشة الموظف' : 'Preview employee view')}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -179,7 +193,7 @@ export function WorkAuthorizationPreview({
         </div>
       </div>
 
-      {employeePreview && (
+      {!live && employeePreview && (
         <div className="border-b border-ui-border p-4 md:p-5">
           <div className="mx-auto max-w-xl rounded-2xl border border-ui-border bg-ui-page-alt p-5 text-center shadow-sm">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-ui-primary/10 text-ui-primary">
@@ -274,7 +288,7 @@ export function WorkAuthorizationPreview({
                     </div>
                     <div className="mt-4 flex justify-end">
                       <Button variant="outline" disabled={busy === row.id} onClick={() => void act(row.id, 'revoke')}>
-                        <RotateCcw className="h-4 w-4" />{ar ? 'سحب الاعتماد' : 'Revoke'}
+                        <RotateCcw className="h-4 w-4" />{live ? (ar ? 'إيقاف التصريح' : 'Stop authorization') : (ar ? 'سحب الاعتماد' : 'Revoke')}
                       </Button>
                     </div>
                   </article>
