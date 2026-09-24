@@ -116,10 +116,11 @@ export function WorkAuthorizationPreview({
     }
   };
 
-  const toggleRequirement = async (id: string, required: boolean) => {
-    setBusy(id);
+  const toggleRequirement = async (userId: string, branchId: string, required: boolean) => {
+    const busyKey = `${userId}:${branchId}`;
+    setBusy(busyKey);
     try {
-      await client.setRequirement(id, required);
+      await client.setRequirement(userId, branchId, required);
       await load();
     } finally {
       setBusy(null);
@@ -318,8 +319,8 @@ export function WorkAuthorizationPreview({
                     </div>
                     <button
                       type="button"
-                      disabled={busy === row.id}
-                      onClick={() => void toggleRequirement(row.id, !row.requiresAuthorization)}
+                      disabled={busy === `${row.userId}:${row.branchId}`}
+                      onClick={() => void toggleRequirement(row.userId, row.branchId, !row.requiresAuthorization)}
                       className={
                         'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors ' +
                         (row.requiresAuthorization
