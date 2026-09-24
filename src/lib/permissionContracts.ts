@@ -104,6 +104,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
 
   'approvals.override': ['approvals.review'],
   'approvals.policy.manage': ['approvals.review'],
+  'work.authorization.approve': ['approvals.review'],
   'work.authorization.manage': ['work.authorization.approve'],
   'work.authorization.bypass': ['work.authorization.approve'],
 
