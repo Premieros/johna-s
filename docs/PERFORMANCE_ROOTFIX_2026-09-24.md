@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — worklog Verification ledger heading restored after Run 35983409403
+Last updated: 2026-09-24 — RC-06 finalized without roles Realtime; exact-head verify pending
 
 ## Work status
 
@@ -172,7 +172,7 @@ Audit safety:
 
 ### RC-06 — Roles refresh amplification
 
-Status: CONFIRMED / NOT COVERED BY EARLIER PERFORMANCE PRs.
+Status: CONFIRMED / FIX IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
 
 Evidence from Production 23 Sep after PR #260/#293 were already merged:
 - `/rest/v1/roles`: 6,372 authenticated non-node requests/day.
@@ -190,10 +190,19 @@ Earlier repairs checked:
 - PR #293: POS/dashboard query churn; did not modify `RolesContext`.
 - PR #273: permission/history UI; did not modify `RolesContext`.
 
-Minimal remediation:
-- make role bootstrap depend on stable `session.user.id`, not the mutable session object,
-- keep explicit `refresh()` after role mutations,
-- add a contract test preventing regression to whole-session dependency.
+Production publication check:
+- read-only query of `pg_publication_tables` confirmed `public.roles` is **not** in any Realtime publication.
+- therefore the first draft Realtime roles subscription was rejected before deployment and replaced.
+
+Final remediation:
+- role bootstrap depends on stable `session.user.id`, not the mutable session object,
+- explicit `refresh()` after role create/update/delete remains immediate,
+- cross-client freshness uses a bounded 5-minute refresh while logged in,
+- no new Realtime publication and no database migration,
+- contract test prevents regression to whole-session dependency or an unavailable roles Realtime subscription.
+
+Traffic bound:
+- maximum periodic refresh cadence becomes ~12 role fetches/hour per continuously active device instead of the observed 30–50 requests/minute burst behavior.
 
 ### RC-07 — Auto-close request amplification
 
@@ -396,13 +405,13 @@ Change:
 - role bootstrap now keys off stable `sessionUserId` rather than the mutable Supabase session object,
 - token refresh / repeated auth session object replacement no longer recreates the role-loader callback,
 - explicit refresh after role create/update/delete remains unchanged,
-- a `roles` table Realtime subscription refreshes only when role data actually changes,
-- cleanup removes the channel on user change/unmount.
+- roles refresh is bounded to `ROLE_REFRESH_INTERVAL_MS = 5 * 60_000` while logged in,
+- no `roles` Realtime subscription is used because Production does not publish that table.
 
 Expected effect:
 - eliminate the observed `roles` request amplification caused by auth-session churn,
 - preserve immediate local CRUD refresh,
-- preserve cross-client permission-definition freshness without polling.
+- bound cross-client definition refresh to at most five minutes without adding Realtime publication or DB changes.
 
 Intentionally unchanged:
 - role/permission semantics,
@@ -418,6 +427,19 @@ Rollback boundary:
 
 
 ## Verification ledger
+
+### V-06 — RC-06 superseded verification run
+
+Run `35984424946` on head `f33c3bbcd926ec0385e2484cc50c85be5ccfbc2b`:
+- mandatory worklog gate ✅
+- project identity ✅
+- API contract ✅
+- lint ✅
+- app typecheck ✅
+- test-suite typecheck ✅
+- unit tests ✅
+- build was in progress when the Production publication check proved the draft roles Realtime subscription could not provide cross-client freshness.
+- this run is **superseded** by the corrected no-Realtime implementation and cannot be used as final evidence.
 
 ### V-05 — CH-07 gate-structure failure
 
@@ -566,14 +588,14 @@ To change this section to READY, ALL must be recorded here:
 
 Current mandatory sequence:
 
-1. CH-07 Roles refresh stabilization is implemented.
-2. Observe the exact-head Verify and record mandatory-log, unit, build, DB/integration, and browser-smoke results.
-3. If CH-07 is Green, measure/design RC-07 auto-close frequency without altering PR #305 cutoff semantics.
-4. Then address RC-08 POS snapshot churn while preserving PR #260/#293 optimizations.
-5. Then address RC-09 Dashboard sale_payments oversized requests.
+1. RC-06 final implementation is now stable-user identity + bounded 5-minute refresh; no roles Realtime publication is introduced.
+2. Run exact-head Full Verify and record all jobs.
+3. If RC-06 is Green, proceed to RC-07 only: reduce auto-close request frequency while preserving PR #305 RPC/cutoff semantics exactly.
+4. Then RC-08 POS snapshot churn, preserving PR #260/#293.
+5. Then RC-09 Dashboard sale_payments oversized requests.
 6. One coherent change set at a time; update this log before moving to the next.
-7. Do not touch printing / Print Agent / routing / KDS / `send_to_kitchen`.
-8. Do not merge or apply Production migrations without the existing gate requirements.
+7. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
+8. No merge or Production migration without the existing gate requirements.
 
 ## Mandatory update protocol
 
