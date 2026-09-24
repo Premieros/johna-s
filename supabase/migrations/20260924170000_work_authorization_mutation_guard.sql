@@ -8,14 +8,15 @@
 -- - shift lifecycle remains independent from work authorization
 
 -- Private transaction-scoped bootstrap marker for create_organization_branch.
--- Authenticated callers cannot read or write this table directly. The SECURITY
--- DEFINER branch-creation RPC inserts and removes the marker in the same
--- transaction, and the mutation guard uses it only for that exact user+branch.
+-- It is keyed by caller + organization so it can exist BEFORE INSERT INTO
+-- branches. That is required because branch AFTER INSERT seed triggers create
+-- guarded branch rows before create_organization_branch can grant branch access.
+-- Authenticated callers cannot read or write this table directly.
 CREATE TABLE IF NOT EXISTS public.work_authorization_branch_bootstrap (
   user_id uuid NOT NULL,
-  branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  PRIMARY KEY (user_id, branch_id)
+  PRIMARY KEY (user_id, organization_id)
 );
 
 ALTER TABLE public.work_authorization_branch_bootstrap ENABLE ROW LEVEL SECURITY;
@@ -82,14 +83,18 @@ BEGIN
   END IF;
 
   -- Narrow branch-bootstrap exception. The marker is private, uncommitted
-  -- outside this transaction, and keyed to the authenticated caller + branch.
-  -- This cannot be created through the Data API by authenticated users.
+  -- outside this transaction, and keyed to the authenticated caller + org.
+  -- For a NEW branch-scoped row, the target branch must belong to that exact
+  -- marked organization. Authenticated callers cannot create the marker through
+  -- the Data API.
   IF TG_OP <> 'DELETE'
      AND EXISTS (
        SELECT 1
        FROM public.work_authorization_branch_bootstrap wab
+       JOIN public.branches b
+         ON b.id = NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid
+        AND b.organization_id = wab.organization_id
        WHERE wab.user_id = v_user_id
-         AND wab.branch_id = NULLIF(to_jsonb(NEW)->>'branch_id', '')::uuid
      ) THEN
     RETURN NEW;
   END IF;
@@ -304,20 +309,21 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'MISSING_BRANCH_NAME');
   END IF;
 
+  -- Mark this exact caller + organization BEFORE the branch insert. Branch
+  -- AFTER INSERT triggers seed guarded rows immediately, so a branch-id marker
+  -- created after INSERT would be too late. This marker is private and is
+  -- removed before return; any exception rolls it back with the transaction.
+  INSERT INTO public.work_authorization_branch_bootstrap (user_id, organization_id)
+  VALUES (auth.uid(), p_organization_id);
+
   INSERT INTO public.branches (name, name_en, address, phone, is_active, organization_id)
   VALUES (p_name, p_name_en, p_address, p_phone, true, p_organization_id)
   RETURNING id INTO v_branch_id;
 
-  -- The creator must enter branch scope before any guarded setup rows are written.
+  -- Preserve the existing creator access grant after the branch now exists.
   INSERT INTO public.user_branch_access (user_id, branch_id)
   VALUES (auth.uid(), v_branch_id)
   ON CONFLICT (user_id, branch_id) DO NOTHING;
-
-  -- The new branch cannot have an approval row before bootstrap completes.
-  -- Create a private marker for only this caller+branch and remove it before
-  -- returning. Any exception rolls the marker back with the whole transaction.
-  INSERT INTO public.work_authorization_branch_bootstrap (user_id, branch_id)
-  VALUES (auth.uid(), v_branch_id);
 
   INSERT INTO public.warehouses (name, branch_id, is_active)
   VALUES (p_name || ' - Main', v_branch_id, true)
@@ -337,7 +343,7 @@ BEGIN
 
   DELETE FROM public.work_authorization_branch_bootstrap
   WHERE user_id = auth.uid()
-    AND branch_id = v_branch_id;
+    AND organization_id = p_organization_id;
 
   RETURN jsonb_build_object(
     'success', true,
