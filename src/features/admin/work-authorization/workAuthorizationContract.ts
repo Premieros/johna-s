@@ -2,8 +2,7 @@ export type WorkAuthorizationStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
-  | 'revoked'
-  | 'expired';
+  | 'revoked';
 
 export type WorkAuthorizationHistoryKind =
   | 'requested'
