@@ -36,7 +36,6 @@ function RouteScopedExtras() {
           <PrinterSettingsLauncher />
         </Suspense>
       )}
-      <CloudPrintAgent />
     </>
   );
 }
@@ -46,9 +45,12 @@ export default function App() {
     <AppProviders>
       <SessionProfileGuard>
         <WorkAuthorizationAppBoundary>
-          <AppRoutes />
+          <>
+            <AppRoutes />
+            <RouteScopedExtras />
+          </>
         </WorkAuthorizationAppBoundary>
-        <RouteScopedExtras />
+        <CloudPrintAgent />
       </SessionProfileGuard>
     </AppProviders>
   );
