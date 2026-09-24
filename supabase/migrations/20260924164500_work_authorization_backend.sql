@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS public.work_authorizations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,
-  shift_id uuid NULL REFERENCES public.shifts(id) ON DELETE SET NULL,
   status text NOT NULL,
   requested_at timestamptz NOT NULL DEFAULT now(),
   requested_by uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -56,26 +55,21 @@ CREATE TABLE IF NOT EXISTS public.work_authorization_events (
   authorization_id uuid NOT NULL REFERENCES public.work_authorizations(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,
-  shift_id uuid NULL REFERENCES public.shifts(id) ON DELETE SET NULL,
   event_type text NOT NULL,
   actor_id uuid NULL REFERENCES public.users(id) ON DELETE SET NULL,
   note text NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT work_authorization_events_type_check
-    CHECK (event_type IN ('requested','approved','rejected','bound_to_shift','revoked','expired'))
+    CHECK (event_type IN ('requested','approved','rejected','revoked','expired'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS work_authorizations_one_pending_per_user_branch
   ON public.work_authorizations(user_id, branch_id)
   WHERE status = 'pending';
 
-CREATE UNIQUE INDEX IF NOT EXISTS work_authorizations_one_unbound_approved_per_user_branch
+CREATE UNIQUE INDEX IF NOT EXISTS work_authorizations_one_approved_per_user_branch
   ON public.work_authorizations(user_id, branch_id)
-  WHERE status = 'approved' AND shift_id IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS work_authorizations_one_approved_per_shift
-  ON public.work_authorizations(user_id, branch_id, shift_id)
-  WHERE status = 'approved' AND shift_id IS NOT NULL;
+  WHERE status = 'approved';
 
 CREATE INDEX IF NOT EXISTS work_authorizations_branch_status_idx
   ON public.work_authorizations(branch_id, status, requested_at DESC);
@@ -162,7 +156,6 @@ SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_user_id uuid := auth.uid();
-  v_shift_id uuid;
 BEGIN
   IF v_user_id IS NULL OR p_branch_id IS NULL THEN
     RETURN false;
@@ -187,34 +180,12 @@ BEGIN
     RETURN true;
   END IF;
 
-  SELECT s.id
-  INTO v_shift_id
-  FROM public.shifts s
-  WHERE s.branch_id = p_branch_id
-    AND s.status = 'open'
-    AND s.closed_at IS NULL
-  ORDER BY s.opened_at DESC
-  LIMIT 1;
-
-  IF v_shift_id IS NULL THEN
-    RETURN EXISTS (
-      SELECT 1
-      FROM public.work_authorizations wa
-      WHERE wa.user_id = v_user_id
-        AND wa.branch_id = p_branch_id
-        AND wa.status = 'approved'
-        AND wa.shift_id IS NULL
-        AND (wa.expires_at IS NULL OR wa.expires_at > now())
-    );
-  END IF;
-
   RETURN EXISTS (
     SELECT 1
     FROM public.work_authorizations wa
     WHERE wa.user_id = v_user_id
       AND wa.branch_id = p_branch_id
       AND wa.status = 'approved'
-      AND wa.shift_id = v_shift_id
       AND (wa.expires_at IS NULL OR wa.expires_at > now())
   );
 END;
@@ -249,7 +220,6 @@ DECLARE
   v_branch_name text;
   v_required boolean;
   v_can_work boolean;
-  v_shift_id uuid;
   v_row public.work_authorizations%ROWTYPE;
 BEGIN
   IF v_user_id IS NULL THEN
@@ -268,22 +238,13 @@ BEGIN
   v_required := public.requires_work_authorization(v_user_id, p_branch_id);
   v_can_work := public.can_user_work(p_branch_id);
 
-  SELECT s.id INTO v_shift_id
-  FROM public.shifts s
-  WHERE s.branch_id = p_branch_id
-    AND s.status = 'open'
-    AND s.closed_at IS NULL
-  ORDER BY s.opened_at DESC
-  LIMIT 1;
-
   IF NOT v_required THEN
     RETURN jsonb_build_object(
       'branchId', p_branch_id,
       'branchName', v_branch_name,
       'requiresAuthorization', false,
       'canWork', true,
-      'status', 'not_required',
-      'shiftId', v_shift_id
+      'status', 'not_required'
     );
   END IF;
 
@@ -292,17 +253,6 @@ BEGIN
   FROM public.work_authorizations wa
   WHERE wa.user_id = v_user_id
     AND wa.branch_id = p_branch_id
-    AND (
-      wa.status = 'pending'
-      OR (
-        wa.status = 'approved'
-        AND (
-          (v_shift_id IS NULL AND wa.shift_id IS NULL)
-          OR wa.shift_id = v_shift_id
-        )
-      )
-      OR wa.status IN ('rejected','revoked','expired')
-    )
   ORDER BY
     CASE wa.status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
     wa.updated_at DESC
@@ -314,8 +264,7 @@ BEGIN
       'branchName', v_branch_name,
       'requiresAuthorization', true,
       'canWork', false,
-      'status', 'not_requested',
-      'shiftId', v_shift_id
+      'status', 'not_requested'
     );
   END IF;
 
@@ -327,7 +276,6 @@ BEGIN
     'status', v_row.status,
     'requestId', CASE WHEN v_row.status = 'pending' THEN v_row.id ELSE NULL END,
     'authorizationId', CASE WHEN v_row.status = 'approved' THEN v_row.id ELSE NULL END,
-    'shiftId', COALESCE(v_row.shift_id, v_shift_id),
     'requestedAt', v_row.requested_at,
     'decidedAt', v_row.decided_at,
     'decisionReason', COALESCE(v_row.decision_reason, v_row.revocation_reason)
@@ -344,7 +292,6 @@ SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_user_id uuid := auth.uid();
-  v_shift_id uuid;
   v_auth_id uuid;
 BEGIN
   IF v_user_id IS NULL THEN
@@ -375,27 +322,19 @@ BEGIN
     RETURN public.get_my_work_authorization_state(p_branch_id);
   END IF;
 
-  SELECT s.id INTO v_shift_id
-  FROM public.shifts s
-  WHERE s.branch_id = p_branch_id
-    AND s.status = 'open'
-    AND s.closed_at IS NULL
-  ORDER BY s.opened_at DESC
-  LIMIT 1;
-
   INSERT INTO public.work_authorizations(
-    user_id, branch_id, shift_id, status, requested_by
+    user_id, branch_id, status, requested_by
   )
   VALUES (
-    v_user_id, p_branch_id, v_shift_id, 'pending', v_user_id
+    v_user_id, p_branch_id, 'pending', v_user_id
   )
   RETURNING id INTO v_auth_id;
 
   INSERT INTO public.work_authorization_events(
-    authorization_id, user_id, branch_id, shift_id, event_type, actor_id
+    authorization_id, user_id, branch_id, event_type, actor_id
   )
   VALUES (
-    v_auth_id, v_user_id, p_branch_id, v_shift_id, 'requested', v_user_id
+    v_auth_id, v_user_id, p_branch_id, 'requested', v_user_id
   );
 
   PERFORM public.log_audit_action(
@@ -403,7 +342,7 @@ BEGIN
     'work_authorization_requested',
     'work_authorization',
     v_auth_id,
-    jsonb_build_object('user_id', v_user_id, 'shift_id', v_shift_id)
+    jsonb_build_object('user_id', v_user_id)
   );
 
   RETURN public.get_my_work_authorization_state(p_branch_id);
@@ -456,7 +395,6 @@ BEGIN
         'decidedAt', wa.decided_at,
         'approverName', NULL,
         'decisionReason', wa.decision_reason,
-        'shiftLabel', CASE WHEN wa.shift_id IS NULL THEN 'الشفت القادم' ELSE 'الشفت الحالي' END,
         'startedAt', NULL
       ) ORDER BY wa.requested_at ASC)
       FROM public.work_authorizations wa
@@ -483,7 +421,6 @@ BEGIN
         'decidedAt', wa.decided_at,
         'approverName', COALESCE(du.full_name, du.username, du.email),
         'decisionReason', wa.decision_reason,
-        'shiftLabel', CASE WHEN wa.shift_id IS NULL THEN 'الشفت القادم' ELSE 'الشفت الحالي' END,
         'startedAt', wa.decided_at
       ) ORDER BY wa.decided_at DESC)
       FROM public.work_authorizations wa
@@ -568,7 +505,6 @@ SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_row public.work_authorizations%ROWTYPE;
-  v_shift_id uuid;
   v_event text;
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -609,22 +545,9 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'REASON_REQUIRED');
   END IF;
 
-  SELECT s.id INTO v_shift_id
-  FROM public.shifts s
-  WHERE s.branch_id = v_row.branch_id
-    AND s.status = 'open'
-    AND s.closed_at IS NULL
-  ORDER BY s.opened_at DESC
-  LIMIT 1;
-
-  IF v_row.shift_id IS NOT NULL AND v_shift_id IS DISTINCT FROM v_row.shift_id THEN
-    RETURN jsonb_build_object('success', false, 'error', 'SHIFT_CHANGED_RETRY');
-  END IF;
-
   IF p_approve THEN
     UPDATE public.work_authorizations
     SET status = 'approved',
-        shift_id = COALESCE(v_row.shift_id, v_shift_id),
         decided_at = now(),
         decided_by = auth.uid(),
         decision_reason = NULLIF(btrim(COALESCE(p_reason, '')), ''),
@@ -643,11 +566,10 @@ BEGIN
   END IF;
 
   INSERT INTO public.work_authorization_events(
-    authorization_id, user_id, branch_id, shift_id, event_type, actor_id, note
+    authorization_id, user_id, branch_id, event_type, actor_id, note
   )
   VALUES (
     v_row.id, v_row.user_id, v_row.branch_id,
-    CASE WHEN p_approve THEN COALESCE(v_row.shift_id, v_shift_id) ELSE v_row.shift_id END,
     v_event, auth.uid(), NULLIF(btrim(COALESCE(p_reason, '')), '')
   );
 
@@ -656,7 +578,7 @@ BEGIN
     CASE WHEN p_approve THEN 'work_authorization_approved' ELSE 'work_authorization_rejected' END,
     'work_authorization',
     v_row.id,
-    jsonb_build_object('user_id', v_row.user_id, 'shift_id', COALESCE(v_row.shift_id, v_shift_id))
+    jsonb_build_object('user_id', v_row.user_id)
   );
 
   RETURN jsonb_build_object('success', true, 'authorization_id', v_row.id, 'status', v_event);
@@ -717,10 +639,10 @@ BEGIN
   WHERE id = v_row.id;
 
   INSERT INTO public.work_authorization_events(
-    authorization_id, user_id, branch_id, shift_id, event_type, actor_id, note
+    authorization_id, user_id, branch_id, event_type, actor_id, note
   )
   VALUES (
-    v_row.id, v_row.user_id, v_row.branch_id, v_row.shift_id,
+    v_row.id, v_row.user_id, v_row.branch_id,
     'revoked', auth.uid(), btrim(p_reason)
   );
 
@@ -729,7 +651,7 @@ BEGIN
     'work_authorization_revoked',
     'work_authorization',
     v_row.id,
-    jsonb_build_object('user_id', v_row.user_id, 'shift_id', v_row.shift_id, 'reason', btrim(p_reason))
+    jsonb_build_object('user_id', v_row.user_id, 'reason', btrim(p_reason))
   );
 
   -- A revoked worker immediately returns to the waiting queue. The employee
@@ -742,10 +664,10 @@ BEGIN
       AND p.requires_authorization = true
   ) THEN
     INSERT INTO public.work_authorizations(
-      user_id, branch_id, shift_id, status, requested_by
+      user_id, branch_id, status, requested_by
     )
     VALUES (
-      v_row.user_id, v_row.branch_id, v_row.shift_id, 'pending', v_row.user_id
+      v_row.user_id, v_row.branch_id, 'pending', v_row.user_id
     )
     ON CONFLICT DO NOTHING
     RETURNING id INTO v_pending_id;
@@ -761,10 +683,10 @@ BEGIN
       LIMIT 1;
     ELSE
       INSERT INTO public.work_authorization_events(
-        authorization_id, user_id, branch_id, shift_id, event_type, actor_id, note
+        authorization_id, user_id, branch_id, event_type, actor_id, note
       )
       VALUES (
-        v_pending_id, v_row.user_id, v_row.branch_id, v_row.shift_id,
+        v_pending_id, v_row.user_id, v_row.branch_id,
         'requested', auth.uid(), 'auto_pending_after_revoke'
       );
     END IF;
@@ -841,77 +763,7 @@ BEGIN
 END;
 $function$;
 
--- 7) Shift lifecycle binding / expiry.
-CREATE OR REPLACE FUNCTION public.bind_work_authorizations_to_open_shift()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO public, pg_temp
-AS $function$
-BEGIN
-  IF NEW.status = 'open' AND NEW.closed_at IS NULL THEN
-    WITH bound AS (
-      UPDATE public.work_authorizations wa
-      SET shift_id = NEW.id,
-          updated_at = now()
-      WHERE wa.branch_id = NEW.branch_id
-        AND wa.status = 'approved'
-        AND wa.shift_id IS NULL
-      RETURNING wa.id, wa.user_id, wa.branch_id
-    )
-    INSERT INTO public.work_authorization_events(
-      authorization_id, user_id, branch_id, shift_id, event_type, actor_id
-    )
-    SELECT id, user_id, branch_id, NEW.id, 'bound_to_shift', auth.uid()
-    FROM bound;
-  END IF;
-
-  RETURN NEW;
-END;
-$function$;
-
-CREATE OR REPLACE FUNCTION public.expire_work_authorizations_for_closed_shift()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO public, pg_temp
-AS $function$
-BEGIN
-  IF OLD.status = 'open'
-     AND (NEW.status <> 'open' OR NEW.closed_at IS NOT NULL) THEN
-    WITH expired AS (
-      UPDATE public.work_authorizations wa
-      SET status = 'expired',
-          expires_at = COALESCE(wa.expires_at, now()),
-          updated_at = now()
-      WHERE wa.shift_id = NEW.id
-        AND wa.status = 'approved'
-      RETURNING wa.id, wa.user_id, wa.branch_id
-    )
-    INSERT INTO public.work_authorization_events(
-      authorization_id, user_id, branch_id, shift_id, event_type, actor_id
-    )
-    SELECT id, user_id, branch_id, NEW.id, 'expired', auth.uid()
-    FROM expired;
-  END IF;
-
-  RETURN NEW;
-END;
-$function$;
-
-DROP TRIGGER IF EXISTS trg_bind_work_authorizations_to_open_shift ON public.shifts;
-CREATE TRIGGER trg_bind_work_authorizations_to_open_shift
-AFTER INSERT ON public.shifts
-FOR EACH ROW
-EXECUTE FUNCTION public.bind_work_authorizations_to_open_shift();
-
-DROP TRIGGER IF EXISTS trg_expire_work_authorizations_for_closed_shift ON public.shifts;
-CREATE TRIGGER trg_expire_work_authorizations_for_closed_shift
-AFTER UPDATE OF status, closed_at ON public.shifts
-FOR EACH ROW
-EXECUTE FUNCTION public.expire_work_authorizations_for_closed_shift();
-
--- 8) RLS: direct mutations are blocked; RPCs are authoritative.
+-- 7) RLS: direct mutations are blocked; RPCs are authoritative.
 ALTER TABLE public.work_authorization_policies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.work_authorizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.work_authorization_events ENABLE ROW LEVEL SECURITY;
@@ -991,11 +843,9 @@ GRANT EXECUTE ON FUNCTION public.revoke_work_authorization(uuid, text) TO authen
 REVOKE ALL ON FUNCTION public.set_work_authorization_requirement(uuid, uuid, boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.set_work_authorization_requirement(uuid, uuid, boolean) TO authenticated;
 
-REVOKE ALL ON FUNCTION public.bind_work_authorizations_to_open_shift() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.expire_work_authorizations_for_closed_shift() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON TABLE public.work_authorization_policies IS 'Explicit per-user/per-branch requirement for work-start approval. Absence means not required.';
-COMMENT ON TABLE public.work_authorizations IS 'Durable work-start requests and shift-bound approvals.';
+COMMENT ON TABLE public.work_authorizations IS 'Durable work-entry requests and branch-scoped approvals independent of shifts.';
 COMMENT ON TABLE public.work_authorization_events IS 'Append-only work authorization timeline.';
 -- Realtime wake-up for approval/revocation/policy changes. Guarded for CI/self-hosted
 -- environments where the Supabase publication does not exist.
@@ -1025,4 +875,4 @@ BEGIN
   END IF;
 END $realtime$;
 
-COMMENT ON FUNCTION public.can_user_work(uuid) IS 'Canonical Permission-First work authorization gate for the current authenticated user.';
+COMMENT ON FUNCTION public.can_user_work(uuid) IS 'Canonical Permission-First branch entry gate for the current authenticated user; independent of shift lifecycle.';
