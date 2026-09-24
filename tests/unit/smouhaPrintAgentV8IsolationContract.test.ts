@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
-describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
+describe('Smouha Print Agent V8.1.1 Lite isolation and query budget', () => {
   it('is a separate app identity and starts with Production queue disabled', () => {
     const build = read('print-agent-v8/BuildConfig.cs');
     const config = read('print-agent-v8/AgentConfig.cs');
-    expect(build).toContain('PremierSmouhaFormPrintAgentV08');
+    expect(build).toContain('PremierSmouhaFormPrintAgentV0811');
     expect(build).not.toContain('PremierSmouhaPrintAgentV07');
     expect(config).toContain('QueueEnabled { get; set; } = false');
   });
@@ -16,7 +16,7 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     const project = read('print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj');
     const workflow = read('.github/workflows/smouha-print-agent-v8-build.yml');
     expect(project).toContain('<SelfContained>false</SelfContained>');
-    expect(project).toContain('<Version>8.1.0</Version>');
+    expect(project).toContain('<Version>8.1.1</Version>');
     expect(workflow).toContain('--self-contained false');
     expect(workflow).toContain('Windows Desktop Runtime 8 x64');
   });
@@ -44,6 +44,23 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     expect(realtime).toContain('changes.GetArrayLength() > 0');
     expect(realtime).toContain('eventName == "postgres_changes"');
     expect(realtime).not.toContain('json.Contains(BuildConfig.WakeTable');
+  });
+
+  it('accepts Supabase system readiness for postgres_changes and exposes real join errors', () => {
+    const realtime = read('print-agent-v8/RealtimeWakeClient.cs');
+
+    expect(realtime).toContain('replication_ready = true');
+    expect(realtime).toContain('presence = new { enabled = false');
+    expect(realtime).toContain('eventName == "system"');
+    expect(realtime).toContain('extension, "postgres_changes"');
+    expect(realtime).toContain('Realtime متصل — PostgreSQL subscription جاهز');
+    expect(realtime).toContain('ReadNestedReason(payload)');
+    expect(realtime).toContain('eventName == "phx_error"');
+    expect(realtime).toContain('eventName == "phx_close"');
+    // Keep the user JWT out of the websocket HTTP handshake. Supabase Realtime
+    // authenticates the channel with access_token after the upgrade.
+    expect(realtime).toContain('access_token = _accessToken');
+    expect(realtime).not.toContain('SetRequestHeader("Authorization"');
   });
 
   it('removes the 700ms idle claim loop and uses event wake plus slow fallback', () => {
