@@ -69,10 +69,11 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
 
     await q(`SELECT public.seed_treasury_accounts($1)`, [branchId]);
 
+    // Anchor fixtures to the database clock itself: this keeps them inside
+    // both the current Cairo business date and the +/-2h report windows,
+    // including the first minutes after local midnight.
     const clock = await q<{ opened_at: string; created_at: string }>(
-      `SELECT
-         (((now() AT TIME ZONE 'Africa/Cairo')::date + time '11:00') AT TIME ZONE 'Africa/Cairo')::text AS opened_at,
-         (((now() AT TIME ZONE 'Africa/Cairo')::date + time '12:00') AT TIME ZONE 'Africa/Cairo')::text AS created_at`,
+      `SELECT now()::text AS opened_at, now()::text AS created_at`,
     );
     const openedAt = clock[0].opened_at;
     const createdAt = clock[0].created_at;
