@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-24 23:26 Africa/Cairo
+Last updated: 2026-09-24 23:29 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -54,7 +54,9 @@ State: **BLOCKED**
 - First Full Verify run `36054555738`: failed only at mandatory active-worklog gate because the unified plan still pointed to the completed performance branch.
 - Follow-up commit updated the unified plan and this mandatory log to the current branch/PR.
 - No Production SQL write has been performed.
-- Exact-head Full Verify after the worklog correction: pending.
+- Exact-head Full Verify run `36054803170`: failed only because `activeWorklogGateContract.test.ts` was still hard-coded to the completed performance log path; structural log checks and PR-branch match passed.
+- Gate contract has now been updated to the current FIFO worklog path.
+- Exact-head Full Verify after the gate-contract correction: pending.
 
 ## Production gate
 State: **BLOCKED**
