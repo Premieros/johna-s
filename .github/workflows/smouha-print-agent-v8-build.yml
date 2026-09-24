@@ -1,4 +1,4 @@
-name: Build Smouha Print Agent V8.1 Lite
+name: Build Smouha Print Agent V8.1.1 Lite
 
 on:
   pull_request:
@@ -26,7 +26,7 @@ jobs:
       - name: Restore
         run: dotnet restore print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj
 
-      - name: Publish V8.1 Lite Windows x64
+      - name: Publish V8.1.1 Lite Windows x64
         run: >
           dotnet publish print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj
           -c Release
@@ -35,14 +35,14 @@ jobs:
           -p:PublishSingleFile=true
           -p:UseAppHost=true
           -p:PublishReadyToRun=false
-          -o dist/Smouha-Form-Print-Agent-v8.1-Lite-Windows-x64
+          -o dist/Smouha-Form-Print-Agent-v8.1.1-Lite-Windows-x64
 
       - name: Package
         shell: pwsh
         run: |
-          Copy-Item print-agent-v8/README.md dist/Smouha-Form-Print-Agent-v8.1-Lite-Windows-x64/README-V8.1-LITE.md
-          $exe = Get-ChildItem dist/Smouha-Form-Print-Agent-v8.1-Lite-Windows-x64 -Filter *.exe | Select-Object -First 1
-          if (-not $exe) { throw 'V8.1 Lite executable was not produced' }
+          Copy-Item print-agent-v8/README.md dist/Smouha-Form-Print-Agent-v8.1.1-Lite-Windows-x64/README-V8.1.1-LITE.md
+          $exe = Get-ChildItem dist/Smouha-Form-Print-Agent-v8.1.1-Lite-Windows-x64 -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw 'V8.1.1 Lite executable was not produced' }
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           $size = $exe.Length
           @(
@@ -50,15 +50,15 @@ jobs:
             "SHA256: $hash"
             "SizeBytes: $size"
             "Branch: Smouha"
-            "Version: 8.1 Lite"
+            "Version: 8.1.1 Lite"
             "QueueEnabledDefault: false"
             "Requires: Microsoft Windows Desktop Runtime 8 x64"
-          ) | Set-Content dist/Smouha-Form-Print-Agent-v8.1-Lite-Windows-x64/SHA256.txt -Encoding UTF8
+          ) | Set-Content dist/Smouha-Form-Print-Agent-v8.1.1-Lite-Windows-x64/SHA256.txt -Encoding UTF8
 
-      - name: Upload V8.1 Lite package
+      - name: Upload V8.1.1 Lite package
         uses: actions/upload-artifact@v4
         with:
-          name: Smouha-Form-Print-Agent-v8.1-Lite-Windows-x64
-          path: dist/Smouha-Form-Print-Agent-v8.1-Lite-Windows-x64/**
+          name: Smouha-Form-Print-Agent-v8.1.1-Lite-Windows-x64
+          path: dist/Smouha-Form-Print-Agent-v8.1.1-Lite-Windows-x64/**
           if-no-files-found: error
           retention-days: 14
