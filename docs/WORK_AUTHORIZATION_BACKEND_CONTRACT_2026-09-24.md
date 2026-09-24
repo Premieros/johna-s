@@ -11,7 +11,7 @@ Provide a centralized work-entry authorization gate:
 
 `Login -> Resolve active branch -> Work Authorization Gate -> Application`
 
-The authorization is **user + branch scoped and independent of shift lifecycle**. Once approved, it remains valid until explicitly revoked or otherwise expired administratively. Opening or closing a shift must not change the work authorization.
+The authorization is **user + branch scoped and independent of shift lifecycle**. Once approved, it remains valid until explicitly revoked, the policy is disabled, branch access is removed, or the account is deactivated. Opening or closing a shift must not change the work authorization.
 
 ## Non-negotiable rules
 
@@ -80,7 +80,6 @@ Core columns:
 - `status`
 - request / decision / revoke timestamps and actors
 - optional decision/revocation reason
-- `expires_at`
 - timestamps
 
 States:
@@ -89,7 +88,6 @@ States:
 - `approved`
 - `rejected`
 - `revoked`
-- `expired`
 
 Uniqueness:
 
@@ -106,7 +104,6 @@ Append-only timeline:
 - approved
 - rejected
 - revoked
-- expired
 
 No shift-binding events exist.
 
@@ -163,7 +160,7 @@ Returns only the caller state for that branch:
 - accessible branch only;
 - idempotent pending request;
 - approved users stay approved;
-- revoked/rejected/expired history does not block a new request;
+- revoked/rejected history does not block a new request;
 - append event + audit.
 
 ### `get_work_authorization_snapshot(p_branch_id default null)`
