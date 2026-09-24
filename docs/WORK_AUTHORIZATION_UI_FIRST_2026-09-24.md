@@ -2,9 +2,9 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/work-authorization-ui-20260924`
-Current PR: `#355`
-Last updated: 2026-09-24 17:00 Africa/Cairo
+Branch: `development/enable-work-authorization-gate-20260925`
+Current PR: `#358`
+Last updated: 2026-09-25 00:36 Africa/Cairo
 
 ## Work status
 
@@ -15,13 +15,13 @@ Parallel execution: **FORBIDDEN**
 Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
-- Current phase: final mutation-time server guard verification.
+- Current phase: Production activation after verified backend rollout.
 - Architecture: `Login -> Work Authorization Gate -> Application`.
 - Authorization scope: **user + branch only; independent of shifts**.
-- Feature flag: `VITE_WORK_AUTHORIZATION_GATE=0` by default.
-- Production migration: not applied.
-- Production feature activation: not enabled.
-- Main merge: not approved.
+- Feature flag: `VITE_WORK_AUTHORIZATION_GATE=1` is proposed in PR #358 for the GitHub Pages production build.
+- Production migration: backend + mutation guard applied successfully to `azzdesuowpdcoflmyezn`.
+- Production feature activation: pending PR #358 merge/deploy verification.
+- Main merge: Work Authorization implementation PR #355 merged; activation PR #358 pending verification.
 - Printing / Print Agent / printer routing / KDS / send-to-kitchen remain untouched by this feature.
 
 ## Guardrails
@@ -307,3 +307,17 @@ State: **BLOCKED**
 - Existing branch-management permission checks and creator `user_branch_access` grant remain unchanged.
 - No generic bypass, no RLS weakening, no Production migration, no feature activation, and no printing/KDS/shift change.
 - Exact-head Fast Verify + Full Verify required on the documented head before merge readiness.
+
+
+### 2026-09-25 — Production activation
+
+- User explicitly approved Production migration and feature activation after PR #355 merged.
+- Applied Production migrations successfully:
+  - `work_authorization_backend`
+  - `work_authorization_mutation_guard`
+- Verified Production objects exist, RLS is enabled on all four work-authorization tables, and mutation guards are installed.
+- Printing / Print Agent / KDS / shift lifecycle exclusions remain intact.
+- Activation PR #358 changes only `.github/workflows/deploy.yml` to pass `VITE_WORK_AUTHORIZATION_GATE=1` into the GitHub Pages build.
+- Fast Verify #415 Green on activation head before worklog correction.
+- Full Verify #2711 failed only because the mandatory active log still declared the completed implementation branch; no runtime/code failure occurred.
+- This log and `CURRENT_WORK_PLAN.md` now declare the activation branch so exact-head verification can resume.
