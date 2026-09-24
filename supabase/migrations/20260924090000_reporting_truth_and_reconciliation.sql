@@ -432,5 +432,231 @@ $function$;
 REVOKE ALL ON FUNCTION public.get_shift_sale_tenders(uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_shift_sale_tenders(uuid) TO authenticated,service_role;
 
+
+-- Shift expected cash uses the same canonical settlement truth as reports.
+CREATE OR REPLACE FUNCTION public._compute_shift_expected_cash(p_shift_id uuid)
+RETURNS numeric
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+  WITH target_shift AS (
+    SELECT
+      s.id,
+      s.branch_id,
+      s.opening_amount,
+      s.opened_at,
+      COALESCE(s.closed_at,now()) effective_closed_at
+    FROM public.shifts s
+    WHERE s.id=p_shift_id
+  ),
+  sale_ids AS (
+    SELECT DISTINCT op.reference_id sale_id
+    FROM public.shift_operations op
+    JOIN target_shift s ON s.id=op.shift_id
+    WHERE op.reference_type='sale'
+      AND op.reference_id IS NOT NULL
+  ),
+  canonical_cash_sales AS (
+    SELECT COALESCE(sum(st.amount),0) amount
+    FROM sale_ids x
+    CROSS JOIN LATERAL private.report_sale_settlement_lines(x.sale_id) st
+    WHERE st.method='cash'
+  ),
+  cash_adjustments AS (
+    SELECT COALESCE(sum(
+      CASE
+        WHEN COALESCE(op.payment_method,'cash')='cash' AND op.operation_type='cash_in'
+          THEN op.amount
+        WHEN COALESCE(op.payment_method,'cash')='cash' AND op.operation_type='cash_out'
+          THEN -op.amount
+        WHEN COALESCE(op.payment_method,'cash')='cash'
+             AND op.operation_type='expense'
+             AND NOT EXISTS (
+               SELECT 1
+               FROM public.expenses e
+               WHERE e.id=op.reference_id
+                 AND e.status='posted'
+             )
+          THEN -op.amount
+        ELSE 0
+      END
+    ),0) amount
+    FROM target_shift s
+    LEFT JOIN public.shift_operations op ON op.shift_id=s.id
+  ),
+  posted_branch_cash_expenses AS (
+    SELECT COALESCE(sum(e.amount),0) amount
+    FROM target_shift s
+    JOIN public.expenses e
+      ON e.branch_id=s.branch_id
+     AND e.status='posted'
+     AND COALESCE(e.payment_method,'cash')='cash'
+     AND e.shift_id=s.id
+    JOIN public.treasury_accounts t
+      ON t.id=e.treasury_account_id
+     AND t.branch_id=s.branch_id
+     AND COALESCE(t.scope,'branch')='branch'
+     AND COALESCE(
+       t.kind,
+       CASE WHEN t.account_type='bank' THEN 'bank' ELSE 'branch_cash' END
+     )='branch_cash'
+  ),
+  cash_purchases AS (
+    SELECT COALESCE(sum(
+      GREATEST(COALESCE(p.paid_amount,0)-COALESCE(p.returned_amount,0),0)
+    ),0) amount
+    FROM target_shift s
+    JOIN public.purchases p
+      ON p.branch_id=s.branch_id
+     AND COALESCE(p.payment_method,'cash')='cash'
+     AND COALESCE(p.status,'completed') IN ('completed','returned')
+     AND p.created_at>=s.opened_at
+     AND p.created_at<=s.effective_closed_at
+  )
+  SELECT round(
+    COALESCE(s.opening_amount,0)
+    +COALESCE(cs.amount,0)
+    +COALESCE(a.amount,0)
+    -COALESCE(e.amount,0)
+    -COALESCE(p.amount,0),
+    2
+  )
+  FROM target_shift s
+  CROSS JOIN canonical_cash_sales cs
+  CROSS JOIN cash_adjustments a
+  CROSS JOIN posted_branch_cash_expenses e
+  CROSS JOIN cash_purchases p;
+$function$;
+
+REVOKE ALL ON FUNCTION public._compute_shift_expected_cash(uuid)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public._compute_shift_expected_cash(uuid)
+  TO service_role,postgres;
+
+-- Day close payment details + payment totals use the exact same settlement helper.
+DO $patch_day_close_truth$
+DECLARE
+  v_oid regprocedure := to_regprocedure('public._build_day_closing_report(uuid,date)');
+  v_def text;
+  v_old text;
+  v_new text;
+BEGIN
+  IF v_oid IS NULL THEN
+    RAISE EXCEPTION 'REPORTING_TRUTH: _build_day_closing_report missing';
+  END IF;
+  SELECT pg_get_functiondef(v_oid) INTO v_def;
+
+  v_old := $old$
+'payments',COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'method',sp.payment_method,
+        'amount',round(GREATEST(sp.amount-COALESCE(sp.refunded_amount,0),0),2)
+      ) ORDER BY sp.created_at,sp.id)
+      FROM public.sale_payments sp
+      WHERE sp.sale_id=s.id
+        AND GREATEST(sp.amount-COALESCE(sp.refunded_amount,0),0)>0
+    ),jsonb_build_array(jsonb_build_object(
+      'method',COALESCE(s.payment_method,'cash'),
+      'amount',round(GREATEST(COALESCE(s.paid_amount,0)-COALESCE(s.refunded_amount,0),0),2)
+    )))
+$old$;
+  v_new := $new$
+'payments',COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'method',st.method,
+        'amount',round(st.amount,2),
+        'source',st.source
+      ) ORDER BY st.method)
+      FROM private.report_sale_settlement_lines(s.id) st
+      WHERE st.amount>0
+    ),'[]'::jsonb)
+$new$;
+  IF position(v_new IN v_def)=0 THEN
+    IF position(v_old IN v_def)=0 THEN
+      RAISE EXCEPTION 'REPORTING_TRUTH: day close sale-payment marker changed';
+    END IF;
+    v_def := replace(v_def,v_old,v_new);
+  END IF;
+
+  v_old := $old$
+WITH sale_rows AS (
+    SELECT s.id,s.payment_method,s.paid_amount,COALESCE(s.refunded_amount,0) refunded_amount
+    FROM public.sales s
+    WHERE s.branch_id=p_branch_id
+      AND COALESCE(s.is_archived,false)=false
+      AND s.created_at>=v_start AND s.created_at<=v_end
+  ),
+  tenders AS (
+    SELECT sr.id sale_id,sp.payment_method method,
+           GREATEST(sp.amount-COALESCE(sp.refunded_amount,0),0) amount
+    FROM sale_rows sr
+    JOIN public.sale_payments sp ON sp.sale_id=sr.id
+    WHERE GREATEST(sp.amount-COALESCE(sp.refunded_amount,0),0)>0
+    UNION ALL
+    SELECT sr.id,COALESCE(sr.payment_method,'cash'),
+           GREATEST(COALESCE(sr.paid_amount,0)-sr.refunded_amount,0)
+    FROM sale_rows sr
+    WHERE NOT EXISTS (SELECT 1 FROM public.sale_payments sp WHERE sp.sale_id=sr.id)
+      AND GREATEST(COALESCE(sr.paid_amount,0)-sr.refunded_amount,0)>0
+  )
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'method',q.method,'invoice_count',q.invoice_count,'sales_total',q.sales_total
+  ) ORDER BY q.method),'[]'::jsonb),
+  COALESCE(sum(CASE WHEN q.method='cash' THEN q.sales_total ELSE 0 END),0)
+  INTO v_payments,v_cash_sales
+  FROM (
+    SELECT method,count(DISTINCT sale_id)::int invoice_count,round(sum(amount),2) sales_total
+    FROM tenders
+    GROUP BY method
+  ) q;
+$old$;
+  v_new := $new$
+WITH sale_rows AS (
+    SELECT s.id
+    FROM public.sales s
+    WHERE s.branch_id=p_branch_id
+      AND COALESCE(s.is_archived,false)=false
+      AND s.created_at>=v_start AND s.created_at<=v_end
+  ),
+  tenders AS (
+    SELECT sr.id sale_id,st.method,st.amount,st.source
+    FROM sale_rows sr
+    CROSS JOIN LATERAL private.report_sale_settlement_lines(sr.id) st
+    WHERE st.amount>0
+  )
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'method',q.method,
+    'invoice_count',q.invoice_count,
+    'sales_total',q.sales_total,
+    'source_quality',q.source_quality
+  ) ORDER BY q.method),'[]'::jsonb),
+  COALESCE(sum(CASE WHEN q.method='cash' THEN q.sales_total ELSE 0 END),0)
+  INTO v_payments,v_cash_sales
+  FROM (
+    SELECT
+      method,
+      count(DISTINCT sale_id)::int invoice_count,
+      round(sum(amount),2) sales_total,
+      CASE
+        WHEN bool_or(source='journal_legacy_split') THEN 'legacy_journal_fallback'
+        WHEN bool_or(source='receivable') THEN 'receivable'
+        ELSE 'canonical'
+      END source_quality
+    FROM tenders
+    GROUP BY method
+  ) q;
+$new$;
+  IF position(v_new IN v_def)=0 THEN
+    IF position(v_old IN v_def)=0 THEN
+      RAISE EXCEPTION 'REPORTING_TRUTH: day close tender aggregate marker changed';
+    END IF;
+    v_def := replace(v_def,v_old,v_new);
+  END IF;
+
+  EXECUTE v_def;
+END
+$patch_day_close_truth$;
+
 NOTIFY pgrst,'reload schema';
 COMMIT;
