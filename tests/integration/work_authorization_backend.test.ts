@@ -184,6 +184,56 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(allowed.rows[0].allowed).toBe(true);
   });
 
+  it('moves a stopped authorization back to pending until a manager approves again', async () => {
+    const active = await client.query<{ id: string }>(
+      `SELECT id
+       FROM public.work_authorizations
+       WHERE user_id=$1 AND branch_id=$2 AND status='approved'
+       ORDER BY updated_at DESC LIMIT 1`,
+      [worker, branchA],
+    );
+
+    const revoked = await rpcJson(
+      approverA,
+      `public.revoke_work_authorization($1,$2)`,
+      [active.rows[0].id, 'stop current work authorization'],
+    );
+    expect(revoked.success).toBe(true);
+
+    const statuses = await client.query<{ status: string; id: string }>(
+      `SELECT id,status
+       FROM public.work_authorizations
+       WHERE user_id=$1 AND branch_id=$2
+       ORDER BY created_at DESC`,
+      [worker, branchA],
+    );
+    expect(statuses.rows.some((row) => row.status === 'revoked')).toBe(true);
+    const pending = statuses.rows.find((row) => row.status === 'pending');
+    expect(pending?.id).toBeTruthy();
+
+    const blocked = await asUser<{ allowed: boolean }>(
+      worker,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [branchA],
+    );
+    expect(blocked.rows[0].allowed).toBe(false);
+
+    const reapproved = await rpcJson(
+      approverA,
+      `public.decide_work_authorization($1,true,NULL)`,
+      [pending!.id],
+    );
+    expect(reapproved.success).toBe(true);
+    expect(reapproved.status).toBe('approved');
+
+    const allowed = await asUser<{ allowed: boolean }>(
+      worker,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [branchA],
+    );
+    expect(allowed.rows[0].allowed).toBe(true);
+  });
+
   it('binds an approved next-shift authorization to the opened shift and expires it on close', async () => {
     const shift = await client.query<{ id: string }>(
       `INSERT INTO public.shifts(branch_id,cashier_id,opening_amount,status)
