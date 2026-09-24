@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-25 00:02 Africa/Cairo
+Last updated: 2026-09-25 00:10 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -46,6 +46,13 @@ State: **BLOCKED**
 - Therefore the opening repair now reaches a legitimate `warehouse_transfer` changed reference and stops at the safety guard.
 
 ## Change ledger
+- Added migration `20260925000500_raw_fifo_historical_debt_rebase.sql`.
+- Added internal snapshot tables for original debt state and settlement rows.
+- Added `_raw_fifo_rebase_historical_debt_state`: identifies only replay/current settlement-map differences, refuses live debts, refuses partially settled debts, refuses target debt growth, snapshots exact state, deletes only affected settlement rows, and updates affected historical debt quantities to replay target.
+- Added `_raw_fifo_restore_rebased_debt_state`: restores original debt quantities/provenance and exact settlement IDs/receipt links/quantities/run IDs during backfill reversal.
+- `raw_fifo_apply_backfill` now invokes the rebase before historical debt materialization; `raw_fifo_reverse_backfill` restores snapshots after current-run settlements are removed.
+- Added unit contract coverage and integration coverage for apply -> rebuilt settlement map -> reverse -> exact old settlement restoration.
+
 - Added migration `20260924223500_raw_fifo_warehouse_transfer_cost_propagation.sql`.
 - Added internal helper `_fifo_adjust_warehouse_transfer_delta`.
 - Added `warehouse_transfer` to the historical FIFO changed-reference allow-list.
@@ -57,6 +64,12 @@ State: **BLOCKED**
 - Printing-related files/functions are untouched.
 
 ## Verification ledger
+- Production diagnostic replay `f6bcfee7-f0c0-49fe-b0aa-6a885b0030fd` found 4,525 existing Smouha debts, zero target-zero legacy debts, and exactly one debt-quantity mismatch.
+- Full settlement-map comparison: 1,942 relations unchanged; 16 current-only, 15 target-only, 1 quantity mismatch.
+- Those differences affect exactly 14 debts; all 14 are older-backfill-owned, all 14 are fully settled currently, and all 14 are fully settled in target replay; only ledger 3611 changes total debt quantity.
+- Follow-up code + tests committed on the development branch.
+- Exact-head Full Verify after historical-debt rebase change: pending.
+
 - PR #356 opened against `main`.
 - First Full Verify run `36054555738`: failed only at mandatory active-worklog gate because the unified plan still pointed to the completed performance branch.
 - Follow-up commit updated the unified plan and this mandatory log to the current branch/PR.
