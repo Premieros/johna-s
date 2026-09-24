@@ -139,7 +139,11 @@ CREATE OR REPLACE FUNCTION public.get_sales_by_payment_report(
   p_branch_id uuid,
   p_from timestamptz,
   p_to timestamptz,
-  p_payment_method text DEFAULT NULL
+  p_payment_method text DEFAULT NULL,
+  p_order_type text DEFAULT NULL,
+  p_warehouse_id uuid DEFAULT NULL,
+  p_cashier_id uuid DEFAULT NULL,
+  p_status text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -188,6 +192,10 @@ BEGIN
       AND s.created_at>=p_from
       AND s.created_at<p_to
       AND (p_payment_method IS NULL OR st.method=p_payment_method)
+      AND (p_order_type IS NULL OR s.order_type=p_order_type)
+      AND (p_warehouse_id IS NULL OR s.warehouse_id=p_warehouse_id)
+      AND (p_cashier_id IS NULL OR s.cashier_id=p_cashier_id)
+      AND (p_status IS NULL OR s.status=p_status)
     GROUP BY s.branch_id,st.method
   ) q;
 
@@ -195,9 +203,9 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.get_sales_by_payment_report(uuid,timestamptz,timestamptz,text)
+REVOKE ALL ON FUNCTION public.get_sales_by_payment_report(uuid,timestamptz,timestamptz,text,text,uuid,uuid,text)
   FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.get_sales_by_payment_report(uuid,timestamptz,timestamptz,text)
+GRANT EXECUTE ON FUNCTION public.get_sales_by_payment_report(uuid,timestamptz,timestamptz,text,text,uuid,uuid,text)
   TO authenticated,service_role;
 
 CREATE OR REPLACE FUNCTION public.get_financial_reconciliation_report(
