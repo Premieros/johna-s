@@ -1,6 +1,10 @@
 import { supabase } from '@/api';
 
-export type PosRealtimeTable = 'orders' | 'dining_tables' | 'order_items' | 'order_kitchen_sends';
+export type PosRealtimeTable =
+  | 'orders'
+  | 'dining_tables'
+  | 'order_items'
+  | 'order_kitchen_sends';
 
 export interface PosRealtimeEvent {
   table: PosRealtimeTable;
@@ -11,66 +15,71 @@ export interface PosRealtimeEvent {
 
 export interface PosRealtimeOptions {
   branchId: string;
-  onEvent: (events: PosRealtimeEvent[]) => void;
+  onEvent: () => void;
+  shouldRefresh?: (event: PosRealtimeEvent) => boolean;
   debounceMs?: number;
+}
+
+interface ListenerRegistration {
+  onEvent: () => void;
+  shouldRefresh?: (event: PosRealtimeEvent) => boolean;
 }
 
 interface SharedChannel {
   channel: ReturnType<typeof supabase.channel>;
-  listeners: Set<(events: PosRealtimeEvent[]) => void>;
+  listeners: Set<ListenerRegistration>;
+  pendingListeners: Set<() => void>;
   timer: ReturnType<typeof setTimeout> | null;
   debounceMs: number;
-  pendingEvents: PosRealtimeEvent[];
 }
 
-function normalizeEvent(
-  table: PosRealtimeTable,
-  payload: unknown,
-): PosRealtimeEvent {
-  const row = (payload || {}) as {
-    eventType?: string;
-    new?: Record<string, unknown> | null;
-    old?: Record<string, unknown> | null;
-  };
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function toEvent(table: PosRealtimeTable, payload: unknown): PosRealtimeEvent {
+  const source = asRecord(payload);
   return {
     table,
-    eventType: row.eventType || '',
-    newRow: row.new || {},
-    oldRow: row.old || {},
+    eventType: typeof source.eventType === 'string' ? source.eventType : '',
+    newRow: asRecord(source.new),
+    oldRow: asRecord(source.old),
   };
 }
 
-export function posRealtimeEventsAffectWatchedOrders(
-  events: PosRealtimeEvent[],
-  watchedOrderIds: Iterable<string>,
-  watchedItemIds: Iterable<string>,
-  hasSnapshot = true,
-): boolean {
-  if (!hasSnapshot) return true;
-
-  const orderIds = new Set(watchedOrderIds);
-  const itemIds = new Set(watchedItemIds);
-
-  return events.some((event) => {
-    if (event.table !== 'order_items') return true;
-
-    const orderId =
-      (typeof event.newRow.order_id === 'string' && event.newRow.order_id) ||
-      (typeof event.oldRow.order_id === 'string' && event.oldRow.order_id) ||
-      null;
-    if (orderId && orderIds.has(orderId)) return true;
-
-    const itemId =
-      (typeof event.newRow.id === 'string' && event.newRow.id) ||
-      (typeof event.oldRow.id === 'string' && event.oldRow.id) ||
-      null;
-    return !!itemId && itemIds.has(itemId);
-  });
+function stringField(row: Record<string, unknown>, key: string): string {
+  const value = row[key];
+  return typeof value === 'string' ? value : '';
 }
 
-// One realtime channel per branch, ref-counted, so multiple consumers
-// (Top Bar badge, Active Orders Center, workspace summary) never create
-// duplicate subscriptions.
+/**
+ * order_items has no branch_id, so its Realtime subscription cannot be scoped
+ * server-side by branch. Match inserts/updates by order_id and deletes by the
+ * locally known item id (default replica identity may only expose the PK in OLD).
+ * Unknown payload shapes fail open so correctness wins over optimization.
+ */
+export function posRealtimeEventMatchesWatchedOrders(
+  event: PosRealtimeEvent,
+  watchedOrderIds: ReadonlySet<string>,
+  visibleItemIds: ReadonlySet<string>,
+): boolean {
+  if (event.table !== 'order_items') return true;
+
+  const orderId =
+    stringField(event.newRow, 'order_id') ||
+    stringField(event.oldRow, 'order_id');
+  if (orderId) return watchedOrderIds.has(orderId);
+
+  const itemId =
+    stringField(event.newRow, 'id') ||
+    stringField(event.oldRow, 'id');
+  if (itemId) return visibleItemIds.has(itemId);
+
+  return true;
+}
+
+// One realtime channel per branch, ref-counted. Server-side branch filters remain
+// on tables that carry branch_id; order_items relevance is filtered per listener.
 const sharedChannels = new Map<string, SharedChannel>();
 
 function getSharedChannel(branchId: string, debounceMs: number): SharedChannel {
@@ -80,42 +89,72 @@ function getSharedChannel(branchId: string, debounceMs: number): SharedChannel {
   const entry: SharedChannel = {
     channel: null as never,
     listeners: new Set(),
+    pendingListeners: new Set(),
     timer: null,
     debounceMs,
-    pendingEvents: [],
   };
 
-  const trigger = (table: PosRealtimeTable, payload: unknown) => {
-    entry.pendingEvents.push(normalizeEvent(table, payload));
+  const trigger = (event: PosRealtimeEvent) => {
+    for (const listener of entry.listeners) {
+      if (!listener.shouldRefresh || listener.shouldRefresh(event)) {
+        entry.pendingListeners.add(listener.onEvent);
+      }
+    }
+    if (entry.pendingListeners.size === 0) return;
+
     if (entry.timer) clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
       entry.timer = null;
-      const batch = entry.pendingEvents;
-      entry.pendingEvents = [];
-      entry.listeners.forEach((listener) => listener(batch));
+      const pending = [...entry.pendingListeners];
+      entry.pendingListeners.clear();
+      pending.forEach((listener) => listener());
     }, entry.debounceMs);
   };
 
   entry.channel = supabase
     .channel(`pos-realtime-${branchId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` }, (payload) => trigger('orders', payload))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'dining_tables', filter: `branch_id=eq.${branchId}` }, (payload) => trigger('dining_tables', payload))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, (payload) => trigger('order_items', payload))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_kitchen_sends', filter: `branch_id=eq.${branchId}` }, (payload) => trigger('order_kitchen_sends', payload))
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
+      (payload) => trigger(toEvent('orders', payload)),
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'dining_tables', filter: `branch_id=eq.${branchId}` },
+      (payload) => trigger(toEvent('dining_tables', payload)),
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_items' },
+      (payload) => trigger(toEvent('order_items', payload)),
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_kitchen_sends', filter: `branch_id=eq.${branchId}` },
+      (payload) => trigger(toEvent('order_kitchen_sends', payload)),
+    )
     .subscribe();
+
   sharedChannels.set(branchId, entry);
   return entry;
 }
 
-export function subscribePosRealtime({ branchId, onEvent, debounceMs = 300 }: PosRealtimeOptions): () => void {
+export function subscribePosRealtime({
+  branchId,
+  onEvent,
+  shouldRefresh,
+  debounceMs = 300,
+}: PosRealtimeOptions): () => void {
   const entry = getSharedChannel(branchId, debounceMs);
-  entry.listeners.add(onEvent);
+  const registration: ListenerRegistration = { onEvent, shouldRefresh };
+  entry.listeners.add(registration);
 
   return () => {
-    entry.listeners.delete(onEvent);
+    entry.listeners.delete(registration);
+    entry.pendingListeners.delete(onEvent);
     if (entry.listeners.size === 0) {
       if (entry.timer) clearTimeout(entry.timer);
-      entry.pendingEvents = [];
+      entry.pendingListeners.clear();
       void supabase.removeChannel(entry.channel);
       sharedChannels.delete(branchId);
     }
