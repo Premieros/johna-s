@@ -4,7 +4,7 @@
 
 - Mandatory active work log: `docs/OPENING_FIFO_COST_REPAIR_FOLLOWUP_2026-09-24.md`
 - Current active branch: `development/fifo-opening-repair-final-20260925`
-- Current PR: `#356`
+- Current PR: `#361`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
