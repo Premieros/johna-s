@@ -60,12 +60,28 @@ export interface WorkAuthorizationSnapshot {
   policies: WorkAuthorizationPolicyRow[];
 }
 
+export interface MyWorkAuthorizationState {
+  branchId: string;
+  branchName?: string | null;
+  requiresAuthorization: boolean;
+  canWork: boolean;
+  status: WorkAuthorizationStatus | 'not_required' | 'not_requested';
+  requestId?: string | null;
+  authorizationId?: string | null;
+  shiftId?: string | null;
+  requestedAt?: string | null;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+}
+
 export interface WorkAuthorizationQuery {
   branchId?: string | null;
 }
 
 export interface WorkAuthorizationClient {
   getSnapshot(query?: WorkAuthorizationQuery): Promise<WorkAuthorizationSnapshot>;
+  getMyState(branchId: string): Promise<MyWorkAuthorizationState>;
+  requestAuthorization(branchId: string): Promise<MyWorkAuthorizationState>;
   approve(requestId: string): Promise<void>;
   reject(requestId: string, reason: string): Promise<void>;
   revoke(authorizationId: string, reason: string): Promise<void>;
@@ -77,5 +93,5 @@ export interface WorkAuthorizationClient {
  *
  * Production will satisfy this interface with protected RPCs.
  * Components must not read/write work-authorization tables directly.
- * Authorization decisions are permission-first; role labels are display-only.
+ * Authorization decisions are permission-first; position labels are display-only.
  */
