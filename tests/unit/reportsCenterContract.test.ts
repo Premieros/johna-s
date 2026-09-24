@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 const reportsSource = read('src/features/reporting/pages/ReportsPage.tsx');
 const reportFilterBarSource = read('src/features/reporting/ReportFilterBar.tsx');
+const reportingShellSource = read('src/features/reporting/ReportingShell.tsx');
 const deepLinkSource = read('src/features/reporting/pages/ReportDeepLinkPage.tsx');
 const financialSource = read('src/features/accounting/pages/FinancialReportsPage.tsx');
 const reportFiltersSource = read('src/features/reporting/reportFilters.ts');
@@ -62,6 +63,27 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(financialSource).toContain("searchParams.get('from')");
     expect(financialSource).toContain("searchParams.get('to')");
     expect(financialSource).toContain('data-report-type={v.key}');
+  });
+
+  it('makes report discovery immediate with visible search and common financial shortcuts', () => {
+    expect(reportingShellSource).toContain('type="search"');
+    expect(reportingShellSource).toContain("'كل التقارير'");
+    expect(reportingShellSource).toContain('QUICK_OPERATIONAL_REPORTS');
+    expect(reportingShellSource).toContain("'financial_reconciliation'");
+    expect(reportingShellSource).toContain("navigate('/financial-reports?view=treasury_statement')");
+    expect(reportingShellSource).toContain("navigate('/financial-reports?view=inventory_movement')");
+    expect(reportingShellSource).toContain("can('reports.financial')");
+    expect(reportingShellSource).toContain('report.permissions.every');
+  });
+
+  it('runs configured filters explicitly instead of re-querying on every filter edit', () => {
+    expect(reportFilterBarSource).toContain('data-testid="run-report-button"');
+    expect(reportFilterBarSource).toContain("'عرض التقرير'");
+    expect(reportFilterBarSource).toContain('pendingChanges');
+    expect(reportsSource).toContain('const [queryVersion, setQueryVersion]');
+    expect(reportsSource).toContain('const [filtersDirty, setFiltersDirty]');
+    expect(reportsSource).toContain('setQueryVersion((version) => version + 1)');
+    expect(reportsSource).toContain('[reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion]');
   });
 
   it('provides a contextual period filter that drives from/to', () => {
