@@ -1,5 +1,15 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
+## ACTIVE — Opening FIFO transfer valuation follow-up — 2026-09-24
+
+- Branch: `development/opening-fifo-transfer-followup-20260924`
+- PR: #356
+- Scope: complete PR #314 by supporting raw-material `warehouse_transfer` valuation propagation during historical FIFO replay.
+- Confirmed blocker: Smouha ledger 19086 / transfer `Johna's-00002` moved one raw-material unit to Cleopatra with zero valuation on both sides.
+- Safety: quantity invariant; fail closed on downstream destination consumption; printing/agents/routing untouched.
+- Production apply: BLOCKED until Full Verify Green + explicit approval.
+- Detailed log: `docs/OPENING_FIFO_COST_REPAIR_FOLLOWUP_2026-09-24.md`
+
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
 - Mandatory active work log: `docs/PERFORMANCE_ROOTFIX_2026-09-24.md`
