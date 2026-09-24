@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — CH-08 cutoff-based auto-close scheduling implemented
+Last updated: 2026-09-24 — RC-07 Full Verify Green; RC-08 cross-branch wake repair opened
 
 ## Work status
 
-Status: ACTIVE — RC-06 verified Green; RC-07 cutoff-based auto-close scheduling implemented and awaiting exact-head verification. No Production or printing changes.
+Status: ACTIVE — RC-06 and RC-07 verified Green. Current write scope: RC-08 cross-branch order-item Realtime wake reduction only; no Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -206,7 +206,7 @@ Traffic bound:
 
 ### RC-07 — Auto-close request amplification
 
-Status: CONFIRMED / FIX IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
+Status: CONFIRMED / FIX IMPLEMENTED / FULL VERIFY GREEN.
 
 Earlier repair:
 - PR #305 fixed the configured business-day cutoff and premature shift closure semantics.
@@ -461,6 +461,36 @@ No migration / no Production write / no printing change.
 
 
 
+### V-08 — RC-07 exact-head Full Verify Green
+
+Exact head:
+`fc67b9c7f5f19ef6da7033284e44c78a7d331a0d`
+
+Workflow:
+- Full Verify Run: `35986306789` ✅
+- `verify` ✅
+  - mandatory worklog
+  - project identity
+  - API contract
+  - lint
+  - application/test typecheck
+  - all unit tests
+  - build
+- `db` ✅
+  - canonical migrations on fresh DB
+  - schema verify
+  - Permission-First fixtures
+  - integration + security/RLS regression
+- `browser-smoke` ✅
+  - Chromium
+  - build
+  - Playwright smoke
+- Fast Verify on the same head: `35986167891` ✅
+
+RC-07 result:
+- cutoff-based scheduling is verified without changing the authoritative auto-close RPC or PR #305 semantics.
+- no Production database change was required.
+
 ### V-07 — RC-06 exact-head Full Verify Green
 
 Exact head:
@@ -651,14 +681,15 @@ To change this section to READY, ALL must be recorded here:
 
 Current mandatory sequence:
 
-1. RC-06 is VERIFIED GREEN on Run `35984897254`.
-2. RC-07 / CH-08 is implemented with no RPC or database change.
-3. Run exact-head Full Verify for CH-08 and record all jobs.
-4. If Green, open RC-08 only: reduce remaining POS full-snapshot churn while preserving PR #260 lightweight shell and PR #293 burst coalescing.
-5. Then RC-09 Dashboard sale_payments oversized requests.
-6. One coherent change set at a time; update this log before moving to the next.
-7. Printing / Print Agent / routing / KDS / `send_to_kitchen` remain out of scope.
-8. No merge or Production migration without existing gate requirements.
+1. RC-06 VERIFIED GREEN — Run `35984897254`.
+2. RC-07 VERIFIED GREEN — Run `35986306789`.
+3. RC-08 only: keep PR #260 lightweight shell and PR #293 shared-channel/coalescing behavior, but suppress `order_items` Realtime wakes that cannot belong to the current branch snapshot.
+4. Preserve all open/held order IDs (including empty order shells) as watch IDs so adding the first positive item still refreshes correctly.
+5. For DELETE payloads, use locally known item IDs because `order_items` uses default replica identity.
+6. Apply the same branch-local relevance gate to the lightweight active-order badge.
+7. No migration, RLS, POS mutation, print/KDS/agent/routing change.
+8. Add focused unit contracts/tests, then exact-head Full Verify before RC-09.
+9. No merge or Production migration without existing gate requirements.
 
 ## Mandatory update protocol
 
