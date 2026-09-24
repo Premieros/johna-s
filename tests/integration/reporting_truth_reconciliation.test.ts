@@ -92,9 +92,9 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
     await q(
       `INSERT INTO public.sale_payments (sale_id,branch_id,payment_method,amount,created_by,created_at)
        VALUES
-        ($1,$3,'cash',40,$4,$5),
-        ($1,$3,'card',60,$4,$5)`,
-      [sales.split, null, branchId, userId, createdAt],
+        ($1,$2,'cash',40,$3,$4),
+        ($1,$2,'card',60,$3,$4)`,
+      [sales.split, branchId, userId, createdAt],
     );
 
     await postSaleJournal(sales.cash, 'RT-CASH', [
