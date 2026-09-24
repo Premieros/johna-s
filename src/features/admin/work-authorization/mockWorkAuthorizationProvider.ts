@@ -270,9 +270,20 @@ export function createMockWorkAuthorizationClient(branches: BranchSeed[]): WorkA
     if (!record) return;
     const now = new Date().toISOString();
 
+    const replacement: WorkAuthorizationRecord = {
+      ...record,
+      id: `wa-pending-after-revoke-${record.person.userId}`,
+      status: 'pending',
+      requestedAt: now,
+      decidedAt: null,
+      startedAt: null,
+      approverName: null,
+      decisionReason: null,
+    };
     state = {
       ...state,
       active: state.active.filter((row) => row.id !== authorizationId),
+      pending: [replacement, ...state.pending],
       history: [
         {
           id: `wa-history-revoked-${record.id}`,
