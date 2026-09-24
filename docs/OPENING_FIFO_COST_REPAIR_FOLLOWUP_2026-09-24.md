@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-25 00:22 Africa/Cairo
+Last updated: 2026-09-25 00:29 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -64,6 +64,12 @@ State: **BLOCKED**
 - Printing-related files/functions are untouched.
 
 ## Verification ledger
+- Exact-head Full Verify on `fa9b17b1efb5bc53c22adbf0541019b83b2a8ec5`: verify job Green; DB integration still failed because the first midnight-fixture correction anchored sales at 12:00 Cairo, which is future time just after midnight and outside report `now() ± 2h` windows.
+- New FIFO rebase integration test remains Green.
+- Reporting fixture corrected again to use the database `now()` timestamp itself. This keeps fixture rows in the current Cairo business date and inside the report windows at all times, including midnight.
+- No production reporting logic changed.
+- Full Verify after database-clock fixture correction: pending.
+
 - Exact-head Full Verify on `b4086756549f16b368024851b11620f258aa139e`: verify job Green; DB integration failed twice on one unrelated midnight-boundary test in `reporting_truth_reconciliation.test.ts`.
 - New FIFO rebase integration test passed in both DB attempts.
 - Root cause of reporting failure: fixture used `Date.now() - 30m`, which crossed into the previous Cairo business date just after local midnight while the day-close report queried the new Cairo date.
