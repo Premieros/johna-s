@@ -1,5 +1,16 @@
 # CURRENT WORK PLAN — johna-s — UNIFIED SOURCE OF TRUTH
 
+## ACTIVE — Performance root-fix after reports truth merge — 2026-09-24
+
+- Branch: `development/performance-rootfix-20260924`
+- Base: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5` (includes #351 and #353).
+- Live log: `docs/PERFORMANCE_ROOTFIX_2026-09-24.md`.
+- First priority: eliminate Inventory Ledger statement-timeout root cause without weakening Permission-First, branch isolation, or historical visibility.
+- Then: income statement, trial balance/general ledger, and confirmed UI failures, each measured before/after.
+- Printing / Print Agent / routing / KDS / send-to-kitchen remain frozen and untouched.
+- Production migration: BLOCKED until exact-head Full Verify Green + explicit approval.
+
+
 
 ## ACTIVE — FIFO missing kitchen-event historical sale fallback — 2026-09-22
 
