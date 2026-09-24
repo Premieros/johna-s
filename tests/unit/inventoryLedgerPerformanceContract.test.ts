@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(
-  'supabase/migrations/20260923113000_inventory_ledger_search_pagination.sql',
+  'supabase/migrations/20260924075209_inventory_ledger_visibility_context_cache.sql',
   'utf8',
 );
 const page = readFileSync(
@@ -11,9 +11,32 @@ const page = readFileSync(
 );
 
 describe('Inventory Ledger performance/search contract', () => {
-  it('uses permission-first keyset pagination with a hard 51-row cap', () => {
+  it('keeps Permission-First checks while resolving caller context once', () => {
     expect(migration).toContain("public.can_permission('inventory.ledger.view')");
-    expect(migration).toContain('public.user_may_access_branch');
+    expect(migration).toContain('public.user_may_access_branch(p_branch_id)');
+    expect(migration).toContain('v_accessible_branch_ids');
+    expect(migration).toContain("public.can_permission('history.unlimited')");
+    expect(migration).toContain('private.get_financial_visibility_limits()');
+    expect(migration).toContain('v_cutoff');
+
+    // These calls caused the production timeout when evaluated for every
+    // scanned ledger row. They must not return to the hot WHERE path.
+    expect(migration).not.toContain('public.user_may_access_branch(il.branch_id)');
+    expect(migration).not.toContain('private.financial_reference_visible(');
+  });
+
+  it('preserves exact referenced financial visibility without nested row helpers', () => {
+    expect(migration).toContain('LEFT JOIN public.sales ref_sale');
+    expect(migration).toContain('LEFT JOIN public.purchases ref_purchase');
+    expect(migration).toContain('LEFT JOIN public.expenses ref_expense');
+    expect(migration).toContain('LEFT JOIN public.customer_payments ref_customer_payment');
+    expect(migration).toContain('LEFT JOIN public.supplier_payments ref_supplier_payment');
+    expect(migration).toContain("md5(vis.vis_branch_id::text || ':' || vis.vis_row_id::text)");
+    expect(migration).toContain('v_historical_percent');
+    expect(migration).toContain('v_history_unlimited');
+  });
+
+  it('uses keyset pagination with a hard 51-row cap and no count scan', () => {
     expect(migration).toContain('p_before_created_at');
     expect(migration).toContain('p_before_id');
     expect(migration).toContain('LEAST(GREATEST(COALESCE(p_limit,51),1),51)');
