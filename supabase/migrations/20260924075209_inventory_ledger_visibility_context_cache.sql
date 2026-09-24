@@ -297,4 +297,70 @@ GRANT EXECUTE ON FUNCTION public.search_inventory_ledger(uuid,text,text,timestam
 COMMENT ON FUNCTION public.search_inventory_ledger(uuid,text,text,timestamptz,timestamptz,bigint,integer)
 IS 'Permission-first Inventory Ledger search with statement-level auth/history context, exact referenced financial visibility, full server-side search, and created_at/id keyset pagination.';
 
+
+-- Financial report root performance repair.
+--
+-- Production EXPLAIN as the same authenticated Super Admin showed the
+-- September journal aggregate taking ~2032 ms with RLS versus ~10.9 ms
+-- without row-policy overhead. The expensive path repeatedly re-opened
+-- journal_entries from journal_entry_lines and re-ran financial visibility.
+--
+-- Super Admin is already the project's only implicit bypass. Expose that
+-- existing fact to the planner as a statement-level initPlan so PostgreSQL can
+-- short-circuit the row-dependent branch/history checks for Super Admin only.
+-- Non-admin policy predicates are unchanged.
+
+DROP POLICY IF EXISTS auth_select_journal_entries ON public.journal_entries;
+CREATE POLICY auth_select_journal_entries
+ON public.journal_entries
+FOR SELECT
+TO authenticated
+USING (
+  (SELECT public.is_pos_admin())
+  OR public.user_may_access_branch(branch_id)
+);
+
+DROP POLICY IF EXISTS financial_visibility_journal_entries ON public.journal_entries;
+CREATE POLICY financial_visibility_journal_entries
+ON public.journal_entries
+AS RESTRICTIVE
+FOR SELECT
+TO authenticated
+USING (
+  (SELECT public.is_pos_admin())
+  OR private.financial_reference_visible(
+    reference_type,
+    reference_id,
+    id,
+    branch_id,
+    created_at
+  )
+);
+
+DROP POLICY IF EXISTS auth_select_journal_entry_lines ON public.journal_entry_lines;
+CREATE POLICY auth_select_journal_entry_lines
+ON public.journal_entry_lines
+FOR SELECT
+TO authenticated
+USING (
+  (SELECT public.is_pos_admin())
+  OR EXISTS (
+    SELECT 1
+    FROM public.journal_entries je
+    WHERE je.id = journal_entry_lines.journal_entry_id
+      AND public.user_may_access_branch(je.branch_id)
+  )
+);
+
+DROP POLICY IF EXISTS financial_visibility_journal_entry_lines ON public.journal_entry_lines;
+CREATE POLICY financial_visibility_journal_entry_lines
+ON public.journal_entry_lines
+AS RESTRICTIVE
+FOR SELECT
+TO authenticated
+USING (
+  (SELECT public.is_pos_admin())
+  OR private.journal_entry_read_visible_by_id(journal_entry_id)
+);
+
 COMMIT;
