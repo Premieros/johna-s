@@ -128,7 +128,7 @@ State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
 State: **BLOCKED**
 
 - Pre-migration code/contract verification is Full Green on run #2604.
-- No Production migration has been applied. No migration file has been created manually; backend work remains branch-only until CLI-generated migration + Fresh DB + security verification.
+- No Production migration has been applied. A branch-only migration may now be created using the documented timestamp fallback because CLI generation is unavailable; Fresh DB + security verification remains mandatory before any merge/apply.
 - No work-authorization server enforcement is active.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
 - No Production activation until backend authority, RLS, RPC coverage, exact-head Full Verify Green, and explicit user approval.
@@ -145,9 +145,10 @@ State: **BLOCKED**
 8. Backend contract preparation has started **without activation**: Production schema/RPCs were inspected read-only, client RPC adapter is staged but unmounted.
 9. Backend contract document is locked. ✅
 10. Canonical frontend permissions + dependency tests added. ✅
-11. Supabase CLI generation attempt could not complete in the local environment; no migration filename was invented manually.
+11. Supabase CLI generation attempt could not complete in the local environment. ✅ Recorded.
 12. Verify #2604 is Full Green for the pre-migration head. ✅
-13. Next executable step: create the migration only through the approved Supabase CLI path, implement schema/RLS/RPCs from the locked backend contract, then add dedicated security tests and run exact-head Full Verify again. Production apply remains BLOCKED.
+13. Approved fallback for branch-only implementation: create one forward-only migration file in repository with a monotonic 2026-09-24 timestamp later than existing migrations, then let Fresh DB CI be the authority that validates ordering/application. This fallback does **not** apply anything to Production.
+14. Next executable step: implement schema/RLS/RPCs from the locked backend contract in that branch-only migration, add dedicated security tests, and run exact-head Full Verify. Production apply remains BLOCKED.
 
 ## Mandatory update protocol
 
