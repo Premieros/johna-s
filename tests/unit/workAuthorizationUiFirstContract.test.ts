@@ -27,7 +27,7 @@ describe('work authorization UI-first contract', () => {
 
   it('uses a RPC-only production provider behind the work-authorization feature flag', () => {
     expect(provider).toContain("supabase.rpc(name, params)");
-    expect(provider).not.toMatch(/\.from\(['\"][^'\"]+['\"]\)/);
+    expect(provider).not.toMatch(/\.from\(['"][^'"]+['"]\)/);
     expect(provider).toContain("'get_my_work_authorization_state'");
     expect(provider).toContain("'request_work_authorization'");
     expect(provider).toContain("'decide_work_authorization'");
