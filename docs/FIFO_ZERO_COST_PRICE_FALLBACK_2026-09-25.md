@@ -43,12 +43,16 @@ State: **BLOCKED**
 - Rows without open debt can receive the fallback as final valuation because no later debt settlement can add cost to them.
 
 ## Change ledger
-- Pending implementation.
+- Added migration `20260925013000_raw_fifo_prior_price_fallback.sql` with audited prepare/apply/reverse tables and RPCs.
+- Added `raw_fifo_debt_price_estimates` to track provisional open-debt valuation.
+- Extended `_raw_fifo_settle_receipt` so later positive-cost receipts post actual-minus-estimate only; zero-cost receipts preserve fallback basis.
+- Added unit contract `raw_fifo_prior_price_fallback.test.ts`.
+- Added integration test `raw_fifo_prior_price_fallback.test.ts` covering quantity invariance, difference-only settlement, zero-cost receipt preservation, and reversal refusal after estimate consumption.
 
 ## Verification ledger
 - Read-only Production classification completed.
 - No Production writes performed for this phase.
-- Exact-head Full Verify: pending.
+- Exact-head Full Verify: pending on implementation head.
 
 ## Production gate
 State: **BLOCKED**
