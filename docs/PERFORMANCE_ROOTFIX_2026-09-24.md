@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-08 Full Verify Green; stage stopped before RC-09
+Last updated: 2026-09-24 — RC-09 repair design verified and opened
 
 ## Work status
 
-Status: ACTIVE / STAGE STOP — RC-06, RC-07, and RC-08 verified Green. RC-09 has NOT started. No Production or printing changes.
+Status: ACTIVE — RC-06, RC-07, and RC-08 verified Green. RC-09 Dashboard payment egress repair is the only active write scope. No Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -250,7 +250,7 @@ Conclusion:
 
 ### RC-09 — Dashboard sale_payments oversized failed fetches
 
-Status: CONFIRMED / EARLIER DASHBOARD OPTIMIZATION INSUFFICIENT.
+Status: CONFIRMED / REPAIR OPENED.
 
 Earlier repair:
 - PR #293 narrowed previous-period projection and parallelized payment/item detail loading.
@@ -263,9 +263,16 @@ Production 23 Sep:
 - 258 were errors in the broad sample;
 - real browser requests include giant sale-id filters returning 403.
 
-Conclusion:
-- existing PR #293 optimization must be preserved,
-- payment aggregation/fetch scope needs a separate server-bounded or chunked correction.
+RC-09 verified repair design:
+- Production already has `public.get_sales_by_payment_report(...)`; no new database function or migration is needed.
+- the RPC returns small server-aggregated payment-method rows and uses the canonical settlement resolver from the reporting truth repair.
+- for users authorized for `reports.view` / `reports.financial`, Dashboard payment totals will use that existing RPC per visible sales branch and period.
+- users who can view sales but do not have report permission must retain Dashboard access; their compatibility path will fetch `sale_payments` in bounded sale-id chunks instead of one oversized `IN (...)` request.
+- both paths return the same `PaymentMethodAggregate` shape to the Dashboard.
+- `DashboardDataPage.tsx` and `VisualDashboardPage.tsx` are in scope.
+- `DashboardExecutiveInsightsV2.tsx` was rechecked and is not imported by the current `DashboardEnhancedPage`; it is not added to this stage.
+- existing PR #293 optimizations remain intact.
+- no schema/RLS/printing/kitchen change.
 
 ## Change ledger
 
@@ -785,19 +792,17 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-STAGE STOP — do not start RC-09 without a new explicit user instruction.
+RC-09 only:
 
-Completed in this performance/egress sequence:
-1. RC-06 Roles refresh amplification — VERIFIED GREEN.
-2. RC-07 Auto-close request amplification — VERIFIED GREEN.
-3. RC-08 POS cross-branch `order_items` wake filtering — VERIFIED GREEN on Full Verify Run `35988845277`.
+1. Add a small Dashboard payment-summary loader that prefers the existing `get_sales_by_payment_report` RPC when report permission is available.
+2. Preserve `sales.view`-only Dashboard access through bounded `sale_payments` chunks; never send the current giant sale-id `IN (...)` request.
+3. Replace raw payment-detail loading in `DashboardDataPage.tsx` and `VisualDashboardPage.tsx`.
+4. Preserve period, branch and order-type semantics.
+5. Add regression coverage proving active Dashboard pages no longer issue oversized raw payment requests.
+6. Run exact-head Full Verify.
+7. STOP before merge / Production action.
 
-Pending but NOT STARTED:
-- RC-09 Dashboard `sale_payments` oversized/failed requests.
-
-Frozen scopes remain unchanged:
-- printing / Print Agent / routing / KDS / `send_to_kitchen`.
-- no merge and no Production migration under the current BLOCKED Production gate.
+No printing / Print Agent / routing / KDS / `send_to_kitchen` changes.
 
 ## Mandatory update protocol
 
