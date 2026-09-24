@@ -2,8 +2,8 @@ namespace PremierSmouhaFormPrintAgentV08;
 
 internal static class BuildConfig
 {
-    internal const string AppName = "Premier Smouha Form Print Agent V8.1 Lite";
-    internal const string AppId = "PremierSmouhaFormPrintAgentV08";
+    internal const string AppName = "Premier Smouha Form Print Agent V8.1.1 Lite";
+    internal const string AppId = "PremierSmouhaFormPrintAgentV0811";
     internal const string SupabaseUrl = "https://azzdesuowpdcoflmyezn.supabase.co";
     internal const string PublishableKey = "sb_publishable_Vnv7uRZCJ-Oq5mA1fKG7LA_oWShi3xe";
     internal const string BranchId = "19c3fd23-d784-455b-8840-f4f2ac619651";
