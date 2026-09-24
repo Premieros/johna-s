@@ -32,7 +32,7 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportFilterBarSource).toContain('key={rt.key} value={rt.key}');
     expect(reportFilterBarSource).toContain('key={ft.key} value={ft.key}');
     for (const key of OPERATIONAL_KEYS) {
-      expect(reportsSource).toContain(`{ key: '${key}',`);
+      expect(reportsSource).toContain(`key: '${key}'`);
     }
   });
 
