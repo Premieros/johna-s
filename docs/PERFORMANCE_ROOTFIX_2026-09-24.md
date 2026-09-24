@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — RC-08 reconciled cleanly; exact-head verify pending
+Last updated: 2026-09-24 — RC-08 stale shell contract corrected; exact-head verify pending
 
 ## Work status
 
@@ -480,6 +480,12 @@ Files:
 - `src/features/pos/hooks/usePosRealtime.ts`
 - `src/features/pos/hooks/useActiveOrderCount.ts`
 - `tests/unit/posRealtimeBranchWakeContract.test.ts`
+- `tests/unit/performanceLightweightShellContract.test.ts`
+
+Lightweight shell contract correction:
+- the badge query now selects `id,order_id,quantity` instead of `order_id,quantity`.
+- `id` is required only to match DELETE Realtime events when OLD payload lacks `order_id`.
+- no additional table, payload family, or full POS snapshot was added.
 
 Change:
 - retain all branch open/held order ids before empty-order UI filtering,
