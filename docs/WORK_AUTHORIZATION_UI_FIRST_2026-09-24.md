@@ -321,3 +321,12 @@ State: **BLOCKED**
 - Fast Verify #415 Green on activation head before worklog correction.
 - Full Verify #2711 failed only because the mandatory active log still declared the completed implementation branch; no runtime/code failure occurred.
 - This log and `CURRENT_WORK_PLAN.md` now declare the activation branch so exact-head verification can resume.
+
+
+### 2026-09-25 — Midnight business-date CI fix
+
+- Activation Full Verify #2713 passed app verify but failed one integration assertion in `reporting_truth_reconciliation.test.ts`.
+- Root cause was a time-dependent test assumption: it passed the Cairo civil date to the live day-closing report even when the open shift belongs to the previous business date because `business_day_start` has not been crossed yet.
+- Runtime reporting logic was not changed.
+- The test now derives the business date from the open shift + branch `business_day_start`, matching the production day-close contract.
+- Work Authorization migration/guard and feature activation logic remain unchanged.
