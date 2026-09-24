@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/work-authorization-ui-20260924`
-Current PR: `#0`
+Current PR: `#355`
 Last updated: 2026-09-24 14:58 Africa/Cairo
 
 ## Work status
@@ -55,6 +55,7 @@ State: **BLOCKED**
 - Confirmed old work branch had diverged by 240 main commits and will not be used for implementation.
 - Confirmed approval center and canonical permission files on current main before writes.
 - Declared this new mandatory active work log.
+- Opened Draft PR #355 for staged UI-first implementation.
 - Planned UI deliverables:
   - manager center tabs: Pending / Working now / History / Settings;
   - mobile-first cards and desktop responsive layout;
