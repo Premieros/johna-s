@@ -6,6 +6,7 @@ const contract = readFileSync('src/features/admin/work-authorization/workAuthori
 const mock = readFileSync('src/features/admin/work-authorization/mockWorkAuthorizationProvider.ts', 'utf8');
 const provider = readFileSync('src/features/admin/work-authorization/supabaseWorkAuthorizationProvider.ts', 'utf8');
 const approvalCenter = readFileSync('src/features/admin/pages/ApprovalCenterPage.tsx', 'utf8');
+const gate = readFileSync('src/features/admin/work-authorization/WorkAuthorizationGate.tsx', 'utf8');
 
 describe('work authorization UI-first contract', () => {
   it('keeps preview authorization permission-first with no role-name guards', () => {
@@ -38,6 +39,14 @@ describe('work authorization UI-first contract', () => {
     expect(approvalCenter).toContain('<WorkAuthorizationPreview');
     expect(approvalCenter).toContain("supabase.rpc('get_operational_approval_queue'");
     expect(approvalCenter).toContain("supabase.rpc('decide_operational_approval'");
+  });
+
+  it('keeps the employee gate centralized and free of polling or role-name checks', () => {
+    expect(gate).toContain('data-testid="work-authorization-gate"');
+    expect(gate).toContain('client.getMyState(branchId)');
+    expect(gate).toContain('client.requestAuthorization(branchId)');
+    expect(gate).not.toMatch(/setInterval|setTimeout|poll|branch_manager|ownerOnly|user\\?\\.role|user\\.role/);
+    expect(gate).not.toContain('supabase.');
   });
 
   it('keeps policy settings separately permission-gated', () => {
