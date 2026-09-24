@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — prior performance fixes verified; RC-06..RC-09 classified
+Last updated: 2026-09-24 — CH-07 Roles refresh stabilization implemented
 
 ## Work status
 
-Status: ACTIVE — user explicitly approved repair + logging after verification of recent fixes. Current first write scope: RC-06 Roles refresh amplification only; no Production or printing changes.
+Status: ACTIVE — RC-06 Roles refresh stabilization implemented; exact-head verification pending. No Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -384,7 +384,38 @@ Intentionally unchanged:
 Rollback boundary:
 - this commit is test-only and can be reverted without any data/schema/runtime effect.
 
-## Verification ledger
+### CH-07 — Roles refresh stabilization
+
+Status: IMPLEMENTED / VERIFY PENDING.
+
+Files:
+- `src/context/RolesContext.tsx`
+- `tests/unit/rolesRefreshStabilityContract.test.ts`
+
+Change:
+- role bootstrap now keys off stable `sessionUserId` rather than the mutable Supabase session object,
+- token refresh / repeated auth session object replacement no longer recreates the role-loader callback,
+- explicit refresh after role create/update/delete remains unchanged,
+- a `roles` table Realtime subscription refreshes only when role data actually changes,
+- cleanup removes the channel on user change/unmount.
+
+Expected effect:
+- eliminate the observed `roles` request amplification caused by auth-session churn,
+- preserve immediate local CRUD refresh,
+- preserve cross-client permission-definition freshness without polling.
+
+Intentionally unchanged:
+- role/permission semantics,
+- RLS,
+- AuthContext token handling,
+- user profile hydration,
+- printing / Print Agent / KDS / routing / `send_to_kitchen`,
+- Production.
+
+Rollback boundary:
+- frontend-only; no schema/data change.
+
+
 
 ### V-01 — Inventory Ledger implementation head
 
@@ -511,17 +542,16 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-User approved repair + registration, with a required pre-check for recent fixes. That pre-check is complete.
-
 Current mandatory sequence:
 
-1. RC-06 first: change `RolesProvider` bootstrap dependency from mutable `session` object to stable `sessionUserId`, preserving explicit refresh after role CRUD.
-2. Add a unit contract that prevents role bootstrap from depending on the whole session object.
-3. Run exact-head Verify and record the result.
-4. Only after RC-06 is verified, proceed to RC-07/RC-08/RC-09 one at a time.
-5. Preserve PR #260 lightweight shell, PR #293 Realtime coalescing/dashboard parallelization, and PR #305 auto-close cutoff semantics.
-6. Do not touch printing / Print Agent / routing / KDS / `send_to_kitchen`.
-7. Do not merge PR #354 or apply Production migration without the existing gate requirements.
+1. CH-07 Roles refresh stabilization is implemented.
+2. Observe the exact-head Verify and record mandatory-log, unit, build, DB/integration, and browser-smoke results.
+3. If CH-07 is Green, measure/design RC-07 auto-close frequency without altering PR #305 cutoff semantics.
+4. Then address RC-08 POS snapshot churn while preserving PR #260/#293 optimizations.
+5. Then address RC-09 Dashboard sale_payments oversized requests.
+6. One coherent change set at a time; update this log before moving to the next.
+7. Do not touch printing / Print Agent / routing / KDS / `send_to_kitchen`.
+8. Do not merge or apply Production migrations without the existing gate requirements.
 
 ## Mandatory update protocol
 
