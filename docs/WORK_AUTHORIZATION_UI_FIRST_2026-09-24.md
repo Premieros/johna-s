@@ -8,7 +8,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 ## Work status
 
-State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
+State: **PRE-MIGRATION FULL GREEN / PRODUCTION BLOCKED**
 
 - Current phase: UI-first verified; backend contract + canonical permission preparation (not activated).
 - Production enforcement: not started.
@@ -95,7 +95,7 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 - Static UI contract test added: `tests/unit/workAuthorizationUiFirstContract.test.ts`.
 - Verify main run #2587 / `35996733090`: **FAILED AT MANDATORY WORKLOG GATE ONLY**. Cause: `activeWorklogGateContract.test.ts` still hard-coded the previous Performance log path; lint/type/unit/build were skipped.
 - Fixed the stale hard-coded expected path to `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md` without weakening any structural/branch/Production-gate assertions.
-- Verify main run #2593 / `35996970596`: **FULL GREEN** on head `24ba942786115bba1dcc8f95c9cb204ecf646b9c`.
+- Verify main run #2593 / `35996733090`: **FULL GREEN** on head `24ba942786115bba1dcc8f95c9cb204ecf646b9c`.
   - mandatory worklog gate ✅
   - locked Supabase identity ✅
   - frontend API contract ✅
@@ -108,11 +108,26 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
   - integration/security/RLS ✅
   - browser smoke ✅
 - Full Verify for the UI-first scope: **GREEN**.
+- Verify main run #2604 / `36001815036`: **FULL GREEN** on pre-migration head `bea008e611c804ea425e933a5905f09c371b84ac`.
+  - mandatory worklog gate ✅
+  - locked Supabase identity ✅
+  - frontend API contract ✅
+  - lint ✅
+  - app typecheck ✅
+  - app + test-suite typecheck ✅
+  - unit including work-authorization permission dependency tests ✅
+  - build ✅
+  - fresh DB + canonical migrations ✅
+  - schema verify ✅
+  - integration/security/RLS regression ✅
+  - browser smoke ✅
+- Pre-migration preparation state: **FULL GREEN**.
 
 ## Production gate
 
 State: **BLOCKED**
 
+- Pre-migration code/contract verification is Full Green on run #2604.
 - No Production migration has been applied. No migration file has been created manually; backend work remains branch-only until CLI-generated migration + Fresh DB + security verification.
 - No work-authorization server enforcement is active.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
@@ -131,7 +146,8 @@ State: **BLOCKED**
 9. Backend contract document is locked. ✅
 10. Canonical frontend permissions + dependency tests added. ✅
 11. Supabase CLI generation attempt could not complete in the local environment; no migration filename was invented manually.
-12. Next: wait for exact-head Verify, then create the migration only through the approved CLI path; add RLS/RPC/security tests and Fresh DB verification. Production apply remains BLOCKED.
+12. Verify #2604 is Full Green for the pre-migration head. ✅
+13. Next executable step: create the migration only through the approved Supabase CLI path, implement schema/RLS/RPCs from the locked backend contract, then add dedicated security tests and run exact-head Full Verify again. Production apply remains BLOCKED.
 
 ## Mandatory update protocol
 
