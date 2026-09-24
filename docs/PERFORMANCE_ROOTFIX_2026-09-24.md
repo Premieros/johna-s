@@ -6,7 +6,7 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — CH-09 branch-local POS Realtime wake filtering implemented
+Last updated: 2026-09-24 — RC-08 reconciled cleanly; exact-head verify pending
 
 ## Work status
 
@@ -403,7 +403,7 @@ Rollback boundary:
 
 ### CH-07 — Roles refresh stabilization
 
-Status: IMPLEMENTED / VERIFY PENDING.
+Status: VERIFIED GREEN.
 
 Files:
 - `src/context/RolesContext.tsx`
@@ -436,7 +436,7 @@ Rollback boundary:
 
 ### CH-08 — Cutoff-based shift auto-close scheduling
 
-Status: IMPLEMENTED / VERIFY PENDING.
+Status: VERIFIED GREEN.
 
 Files:
 - `src/context/SettingsContext.tsx`
@@ -468,6 +468,39 @@ Expected traffic effect:
 No migration / no Production write / no printing change.
 
 
+
+### CH-09 — Branch-local POS Realtime wake filtering
+
+Status: IMPLEMENTED / EXACT-HEAD VERIFY PENDING.
+
+Files:
+- `src/features/pos/types.ts`
+- `src/features/pos/services/posOrders.ts`
+- `src/features/pos/services/posRealtime.ts`
+- `src/features/pos/hooks/usePosRealtime.ts`
+- `src/features/pos/hooks/useActiveOrderCount.ts`
+- `tests/unit/posRealtimeBranchWakeContract.test.ts`
+
+Change:
+- retain all branch open/held order ids before empty-order UI filtering,
+- filter unscoped `order_items` Realtime events by watched branch order ids,
+- match DELETE events by locally known item id when `order_id` is absent,
+- unknown payload shapes fail open for correctness,
+- share the existing POS branch Realtime channel with the lightweight active-order badge,
+- preserve PR #293 in-flight/trailing refresh coalescing.
+
+Concurrency reconciliation:
+- a parallel implementation was detected before verification,
+- the three conflicting hook/service files were restored to the earlier complete implementation at `48718260451e94e9b655557bbdcb2a0080477dc4`,
+- current RC-08 files and regression test match that clean implementation exactly.
+
+Intentionally unchanged:
+- no migration or RLS/schema change,
+- no sale/order mutation behavior,
+- no kitchen-send logic,
+- no printing / Print Agent / routing / KDS changes.
+
+## Verification ledger
 
 ### V-08 — RC-07 exact-head Full Verify Green
 
