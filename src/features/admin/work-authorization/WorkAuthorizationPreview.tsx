@@ -60,7 +60,7 @@ function PersonIdentity({ row }: { row: WorkAuthorizationRecord }) {
       </div>
       <div className="min-w-0">
         <p className="truncate font-semibold text-ui-text">{row.person.fullName}</p>
-        <p className="truncate text-xs text-ui-muted">{row.person.roleLabel} · {row.branchName}</p>
+        <p className="truncate text-xs text-ui-muted">{row.person.positionLabel} · {row.branchName}</p>
       </div>
     </div>
   );
@@ -291,7 +291,7 @@ export function WorkAuthorizationPreview({
                   <div key={row.id} className="flex flex-col gap-2 border-b border-ui-border p-3 last:border-b-0 md:flex-row md:items-center">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-ui-text">{row.person.fullName}</p>
-                      <p className="text-xs text-ui-muted">{row.person.roleLabel} · {row.branchName}</p>
+                      <p className="text-xs text-ui-muted">{row.person.positionLabel} · {row.branchName}</p>
                     </div>
                     <div className="text-sm text-ui-text">{statusLabel(row.kind, ar)}</div>
                     <div className="text-xs text-ui-muted">{formatDate(row.occurredAt, ar)}</div>
@@ -314,7 +314,7 @@ export function WorkAuthorizationPreview({
                   <div key={row.id} className="flex flex-col gap-3 rounded-xl border border-ui-border p-3 sm:flex-row sm:items-center">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-ui-text">{row.userName}</p>
-                      <p className="text-xs text-ui-muted">{row.roleLabel} · {row.branchName}</p>
+                      <p className="text-xs text-ui-muted">{row.positionLabel} · {row.branchName}</p>
                     </div>
                     <button
                       type="button"
