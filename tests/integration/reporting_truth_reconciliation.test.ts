@@ -237,7 +237,18 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
   it('uses canonical payment truth in the live day closing report', async () => {
     await asAdmin(async () => {
       const date = await q<{ d: string }>(
-        `SELECT (now() AT TIME ZONE 'Africa/Cairo')::date::text AS d`,
+        `SELECT (
+           CASE
+             WHEN (s.opened_at AT TIME ZONE 'Africa/Cairo')::time
+                    < COALESCE(bs.business_day_start, '00:00'::time)
+               THEN (s.opened_at AT TIME ZONE 'Africa/Cairo')::date - 1
+             ELSE (s.opened_at AT TIME ZONE 'Africa/Cairo')::date
+           END
+         )::text AS d
+         FROM public.shifts s
+         LEFT JOIN public.branch_settings bs ON bs.branch_id = s.branch_id
+         WHERE s.id = $1`,
+        [shiftId],
       );
       const result = await q<{ r: Record<string, unknown> }>(
         `SELECT public._build_day_closing_report($1,$2::date) AS r`,
