@@ -49,6 +49,15 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage('BRANCH_ACCESS_DENIED', 'ar')).toContain('الفروع المسموح');
   });
 
+  it('explains work authorization revocation without exposing a technical code', () => {
+    const ar = userFacingErrorMessage('WORK_AUTHORIZATION_REQUIRED', 'ar');
+    const en = userFacingErrorMessage('WORK_AUTHORIZATION_REQUIRED', 'en');
+    expect(ar).toContain('تصريح العمل');
+    expect(ar).toContain('موافقة المسؤول');
+    expect(ar).not.toContain('WORK_AUTHORIZATION_REQUIRED');
+    expect(en).toContain('Work authorization');
+  });
+
   it('explains sent-item ownership void failures instead of showing a generic system error', () => {
     expect(userFacingErrorMessage('ORDER_OPERATOR_REQUIRED', 'ar')).toContain('مستخدم آخر');
     expect(userFacingErrorMessage('SENT_ITEM_NOT_FOUND', 'ar')).toContain('الصنف المرسل');

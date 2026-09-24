@@ -47,6 +47,7 @@ export type Permission =
   | 'shifts.view' | 'shifts.open' | 'shifts.close' | 'shifts.close_with_open_orders' | 'shifts.manage'
   | 'shifts.report.user' | 'shifts.report.shift' | 'shifts.day_close'
   | 'approvals.review' | 'approvals.override' | 'approvals.policy.manage'
+  | 'work.authorization.approve' | 'work.authorization.manage' | 'work.authorization.bypass'
   | 'procurement.request.create' | 'procurement.order.create' | 'procurement.receive' | 'procurement.payment.create'
   | 'accounting.journal.post' | 'accounting.treasury.transfer' | 'accounting.reconciliation.manage'
   | 'users.create' | 'users.branches.manage' | 'roles.permissions.manage'
@@ -85,6 +86,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage',
   'shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close',
   'approvals.review', 'approvals.override', 'approvals.policy.manage',
+  'work.authorization.approve', 'work.authorization.manage', 'work.authorization.bypass',
   'users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage',
   'audit.view', 'settings.manage', 'branches.manage',
 ];
@@ -195,6 +197,9 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'approvals.review': { ar: 'مراجعة واعتماد الطلبات', en: 'Review & Decide Approvals' },
   'approvals.override': { ar: 'تجاوز منع الموافقة الذاتية', en: 'Self-Approval Override' },
   'approvals.policy.manage': { ar: 'إدارة سياسات الموافقات', en: 'Manage Approval Policies' },
+  'work.authorization.approve': { ar: 'اعتماد بدء العمل وسحب الاعتماد', en: 'Approve & Revoke Work Authorization' },
+  'work.authorization.manage': { ar: 'إدارة متطلبات اعتماد بدء العمل', en: 'Manage Work Authorization Requirements' },
+  'work.authorization.bypass': { ar: 'تجاوز اعتماد بدء العمل', en: 'Bypass Work Authorization' },
   'users.view': { ar: 'عرض المستخدمين', en: 'View Users' },
   'users.manage': { ar: 'إدارة المستخدمين', en: 'Manage Users' },
   'users.create': { ar: 'إنشاء مستخدم', en: 'Create Users' },
@@ -231,7 +236,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', permissions: ['expenses.view', 'expenses.manage', 'expenses.print'] },
   { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage'] },
   { key: 'shifts', ar: 'الشيفتات', en: 'Shifts', permissions: ['shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close'] },
-  { key: 'approvals', ar: 'الموافقات', en: 'Approvals', permissions: ['approvals.review', 'approvals.override', 'approvals.policy.manage'] },
+  { key: 'approvals', ar: 'الموافقات', en: 'Approvals', permissions: ['approvals.review', 'approvals.override', 'approvals.policy.manage', 'work.authorization.approve', 'work.authorization.manage', 'work.authorization.bypass'] },
   { key: 'reports', ar: 'التقارير', en: 'Reports', permissions: ['reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export'] },
   { key: 'admin', ar: 'الإدارة', en: 'Administration', permissions: ['users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage', 'audit.view', 'settings.manage', 'branches.manage'] },
 ];

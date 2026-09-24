@@ -77,4 +77,40 @@ describe('permission operational contracts', () => {
     expect(ALL_PERMISSIONS).toContain('sales.refund.create');
     expect(ALL_PERMISSIONS).toContain('refunds.approve');
   });
+
+  it('models work authorization as permission-first with explicit dependency closure', () => {
+    expect(ALL_PERMISSIONS).toEqual(
+      expect.arrayContaining([
+        'work.authorization.approve',
+        'work.authorization.manage',
+        'work.authorization.bypass',
+      ]),
+    );
+    expect(permissionContract('work.authorization.approve').kind).toBe('approval');
+    expect(permissionContract('work.authorization.approve').risk).toBe('sensitive');
+    expect(permissionContract('work.authorization.approve').requires).toEqual(['approvals.review']);
+    expect(permissionContract('work.authorization.manage').requires).toEqual([
+      'work.authorization.approve',
+    ]);
+    expect(permissionContract('work.authorization.manage').risk).toBe('critical');
+    expect(permissionContract('work.authorization.bypass').requires).toEqual([
+      'work.authorization.approve',
+    ]);
+    expect(permissionContract('work.authorization.bypass').risk).toBe('critical');
+
+    expect(expandPermissionDependencies(['work.authorization.manage'])).toEqual(
+      expect.arrayContaining([
+        'approvals.review',
+        'work.authorization.approve',
+        'work.authorization.manage',
+      ]),
+    );
+    expect(expandPermissionDependencies(['work.authorization.bypass'])).toEqual(
+      expect.arrayContaining([
+        'approvals.review',
+        'work.authorization.approve',
+        'work.authorization.bypass',
+      ]),
+    );
+  });
 });

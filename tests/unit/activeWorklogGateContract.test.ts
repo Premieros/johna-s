@@ -6,7 +6,7 @@ const pathMatch = plan.match(/Mandatory active work log:\s*`([^`]+)`/i);
 
 describe('mandatory active worklog gate', () => {
   it('declares the mandatory active work log from the unified work plan', () => {
-    expect(pathMatch?.[1]).toBe('docs/PERFORMANCE_ROOTFIX_2026-09-24.md');
+    expect(pathMatch?.[1]).toBe('docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md');
   });
 
   it('keeps the mandatory log structurally complete', () => {
@@ -53,5 +53,27 @@ describe('mandatory active worklog gate', () => {
     expect(plan).toContain('السجل هو المرجع الإجباري للعمل');
     expect(plan).toContain('CI يجب أن يفشل');
     expect(plan).toContain('لا Merge ولا Production migration');
+  });
+
+  it('enforces the single-writer execution fence', () => {
+    const logPath = pathMatch?.[1];
+    expect(logPath).toBeTruthy();
+    const log = readFileSync(logPath!, 'utf8');
+    const fence = readFileSync('docs/SINGLE_WRITER_EXECUTION_FENCE.md', 'utf8');
+
+    for (const marker of [
+      'Execution mode: **SINGLE_WRITER**',
+      'Parallel execution: **FORBIDDEN**',
+      'Unexpected HEAD policy: **STOP_AND_RECONCILE**',
+      'Write mode: **SEQUENTIAL_ONLY**',
+    ]) {
+      expect(plan).toContain(marker);
+      expect(log).toContain(marker);
+      expect(fence).toContain(marker);
+    }
+
+    expect(plan).toContain('Any other section historically labelled `ACTIVE` below is backlog/history only');
+    expect(fence).toContain('Never say “a parallel commit appeared” unless the user explicitly confirms another writer exists.');
+    expect(fence).toContain('Once an exact-head Verify is started for a stage, stop writing unless the run reports a real failure');
   });
 });

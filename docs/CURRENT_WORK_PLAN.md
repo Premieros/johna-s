@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/PERFORMANCE_ROOTFIX_2026-09-24.md`
-- Current active branch: `development/performance-rootfix-20260924`
-- Current PR: `#354`
+- Mandatory active work log: `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md`
+- Current active branch: `development/work-authorization-ui-20260924`
+- Current PR: `#355`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -12,6 +12,32 @@
 - السجل هو المرجع الإجباري للعمل؛ الذاكرة والمحادثة ليستا Source of Truth.
 - CI يجب أن يفشل إذا السجل الإلزامي مفقود أو ناقص البنية المطلوبة أو لا يطابق فرع الـPR.
 
+
+
+## SINGLE-WRITER EXECUTION FENCE
+
+- Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
+- Executable branch: `development/work-authorization-ui-20260924`
+- Execution mode: **SINGLE_WRITER**
+- Parallel execution: **FORBIDDEN**
+- Unexpected HEAD policy: **STOP_AND_RECONCILE**
+- Write mode: **SEQUENTIAL_ONLY**
+- Any other section historically labelled `ACTIVE` below is backlog/history only and MUST NOT be interpreted as concurrent execution.
+- Before every repository write, fetch the executable branch HEAD and require it to equal the expected HEAD from the prior successful write/checkpoint.
+- After any interruption/tool error/conflict/cancelled workflow, re-read branch HEAD + mandatory active log + this gate before resuming.
+- Never attribute an unknown commit to another worker unless the user explicitly confirms another writer exists.
+
+
+## ACTIVE — Work Authorization UI-first — 2026-09-24
+
+- Branch: `development/work-authorization-ui-20260924`
+- Base: `main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da`.
+- Live log: `docs/WORK_AUTHORIZATION_UI_FIRST_2026-09-24.md`.
+- Current scope: UI-first only — typed client contract, mock provider, manager authorization center preview, employee waiting-screen preview.
+- Live approval queue behavior remains unchanged; preview makes zero Production writes.
+- Printing / Print Agent / routing / KDS / send-to-kitchen remain frozen and untouched.
+- Backend/RLS/RPC/enforcement phases remain BLOCKED until the UI contract is reviewed and verified.
+- No merge or Production activation without exact-head verification and explicit approval.
 
 ## ACTIVE — Performance root-fix after reports truth merge — 2026-09-24
 

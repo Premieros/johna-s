@@ -91,3 +91,23 @@ This standing approval does not authorize:
 **Simple inside. Same capabilities outside. Clearer for the user.**
 
 Backend simplification must reduce duplication and legacy risk while preserving user-facing capabilities. UX changes should make the system easier to understand and operate, not merely make the code cleaner.
+
+## 7. Single-writer execution fence
+
+For the currently declared executable branch, the repository operates in **single-writer mode** unless the user explicitly states in the current conversation that another writer is active.
+
+Mandatory rules:
+
+- only the branch declared as `Current active branch` in `docs/CURRENT_WORK_PLAN.md` is executable;
+- historical sections labelled `ACTIVE` do not imply concurrent execution;
+- reads may be parallel, but repository writes must be sequential;
+- after each successful write, the returned commit SHA becomes the expected HEAD for the next write;
+- before every write, fetch the active branch HEAD and require an exact match with the expected HEAD;
+- if HEAD differs, stop and reconcile the unexpected commit/diff against the mandatory active log;
+- an unexpected commit is classified as self-drift/unaccounted change unless the user explicitly confirms another writer;
+- never accept or build on an unknown commit automatically because it “looks correct”;
+- after any user interruption, tool error, timeout, conflict, or cancelled workflow, re-read branch HEAD + mandatory active log + execution gate before resuming;
+- once exact-head verification starts for a stage, do not add further commits unless a real verification failure requires a fix;
+- see `docs/SINGLE_WRITER_EXECUTION_FENCE.md` for the full protocol.
+
+This fence is additive to all existing Production, RLS, permission-first, data-preservation, and merge gates.

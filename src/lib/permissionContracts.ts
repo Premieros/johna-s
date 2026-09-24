@@ -104,6 +104,9 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
 
   'approvals.override': ['approvals.review'],
   'approvals.policy.manage': ['approvals.review'],
+  'work.authorization.approve': ['approvals.review'],
+  'work.authorization.manage': ['work.authorization.approve'],
+  'work.authorization.bypass': ['work.authorization.approve'],
 
   'users.manage': ['users.view'],
   'users.create': ['users.view'],
@@ -124,6 +127,8 @@ const APPROVAL = new Set<Permission>([
   'refunds.approve',
   'approvals.review',
   'approvals.override',
+  'work.authorization.approve',
+  'work.authorization.bypass',
 ]);
 
 const ADMIN = new Set<Permission>([
@@ -135,6 +140,7 @@ const ADMIN = new Set<Permission>([
   'audit.view',
   'settings.manage',
   'branches.manage',
+  'work.authorization.manage',
 ]);
 
 const CRITICAL = new Set<Permission>([
@@ -152,6 +158,8 @@ const CRITICAL = new Set<Permission>([
   'shifts.close_with_open_orders',
   'shifts.day_close',
   'approvals.override',
+  'work.authorization.manage',
+  'work.authorization.bypass',
   'roles.permissions.manage',
   'settings.manage',
   'branches.manage',
@@ -173,6 +181,7 @@ const SENSITIVE = new Set<Permission>([
   'shifts.close',
   'approvals.review',
   'approvals.policy.manage',
+  'work.authorization.approve',
 ]);
 
 const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: string; notesEn?: string }>> = {
@@ -237,6 +246,24 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
   'approvals.override': {
     ar: 'يتجاوز قيد الموافقة الذاتية في المسارات التي تسمح بذلك؛ صلاحية عالية الحساسية.',
     en: 'Overrides self-approval restrictions where supported; this is a high-risk capability.',
+  },
+  'work.authorization.approve': {
+    ar: 'يراجع طلبات بدء العمل ويوافق أو يرفض ويسحب الاعتماد داخل الفروع المسموح بها فقط.',
+    en: 'Reviews work-start requests and approves, rejects, or revokes authorization only inside accessible branches.',
+    notesAr: 'لا يسمح بالموافقة الذاتية ولا يوسع نطاق الفروع.',
+    notesEn: 'Does not permit self-approval and never expands branch scope.',
+  },
+  'work.authorization.manage': {
+    ar: 'يحدد من يحتاج اعتماد بدء العمل داخل الفروع المسموح بها.',
+    en: 'Configures which users require work authorization inside accessible branches.',
+    notesAr: 'يتطلب صلاحية اعتماد بدء العمل ولا يسمح بإدارة مستخدم خارج نطاق الفروع.',
+    notesEn: 'Requires work authorization approval capability and cannot manage users outside accessible branches.',
+  },
+  'work.authorization.bypass': {
+    ar: 'يتجاوز شرط اعتماد بدء العمل لحامل الصلاحية نفسه.',
+    en: 'Bypasses the work-authorization requirement for the permission holder.',
+    notesAr: 'صلاحية حرجة ولا تمنح أي صلاحية تشغيل أخرى؛ صلاحيات العملية الأصلية تبقى مطلوبة.',
+    notesEn: 'Critical capability that grants no operational permission by itself; the original action permission is still required.',
   },
 };
 

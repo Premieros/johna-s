@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Clock3, Plus, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 import { supabase } from '@/api';
 import { Button } from '@/components/Button';
@@ -12,6 +12,8 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { ALL_PERMISSIONS, useCan } from '@/lib/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { useV2Can } from '@/v2/core/useV2Can';
+import { WorkAuthorizationPreview } from '@/features/admin/work-authorization/WorkAuthorizationPreview';
+import { createSupabaseWorkAuthorizationClient } from '@/features/admin/work-authorization/supabaseWorkAuthorizationProvider';
 
 type QueueItem = {
   source_type: 'manager_approval' | 'waste' | 'stock_count' | 'warehouse_transfer';
@@ -43,6 +45,10 @@ export function ApprovalCenterPage() {
   const { show } = useToast();
   const canReviewApprovals = can('approvals.review');
   const canManagePolicies = can('approvals.policy.manage');
+  const canReviewWorkAuthorization = can('work.authorization.approve');
+  const canManageWorkAuthorization = can('work.authorization.manage');
+  const workAuthorizationEnabled = import.meta.env.VITE_WORK_AUTHORIZATION_GATE === '1';
+  const workAuthorizationClient = useMemo(() => createSupabaseWorkAuthorizationClient(), []);
   const [branchId, setBranchId] = useState(activeBranch || user?.branch_id || '');
   const [rows, setRows] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -92,6 +98,16 @@ export function ApprovalCenterPage() {
         actions={<Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="w-4 h-4" />{ar ? 'تحديث' : 'Refresh'}</Button>}
       />
       <div className="space-y-4">
+        {workAuthorizationEnabled && canReviewWorkAuthorization && (
+          <WorkAuthorizationPreview
+            ar={ar}
+            branches={branches}
+            canManageSettings={canManageWorkAuthorization}
+            client={workAuthorizationClient}
+            live
+          />
+        )}
+
         <DesignPanel testId="approval-center-filter-panel" className="ui-accent-system">
           <div className="flex flex-wrap items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-ui-primary" />
