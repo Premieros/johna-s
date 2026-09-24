@@ -83,7 +83,8 @@ export async function exportToExcelAdvanced(options: ExcelExportOptions): Promis
   const normalizedData = data.map((row) =>
     Object.fromEntries(columns.map((column) => [column, row[column] ?? ''])),
   );
-  const normalizedTotal = totalRow
+  const hasTableTotal = !!totalRow && columns.some((column) => Object.prototype.hasOwnProperty.call(totalRow, column));
+  const normalizedTotal = hasTableTotal && totalRow
     ? Object.fromEntries(columns.map((column) => [column, totalRow[column] ?? '']))
     : null;
   const allRows = normalizedTotal ? [...normalizedData, normalizedTotal] : normalizedData;
