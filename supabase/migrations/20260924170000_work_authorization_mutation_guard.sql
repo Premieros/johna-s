@@ -122,7 +122,6 @@ DECLARE
     'inventory_batches',
     'raw_material_inventory',
     'raw_material_batches',
-    'raw_material_warehouse_inventory',
     'stock_transactions',
     'waste_entries',
     'journal_entries'
