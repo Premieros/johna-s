@@ -40,7 +40,21 @@ export function WorkAuthorizationGate({
 
   useEffect(() => {
     void load();
-  }, [load]);
+
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    void client.subscribeToMyChanges(branchId, () => {
+      if (!disposed) void load();
+    }).then((cleanup) => {
+      if (disposed) cleanup();
+      else unsubscribe = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [branchId, client, load]);
 
   const request = async () => {
     setRequesting(true);
@@ -128,7 +142,7 @@ export function WorkAuthorizationGate({
         </div>
 
         <p className="mt-4 text-center text-xs text-ui-muted">
-          يتم التحقق عند الدخول أو تغيير الفرع فقط. لا يوجد فحص دوري مستمر.
+          يتم التحقق عند الدخول أو تغيير الفرع، وتصل تغييرات التصريح فورًا. لا يوجد فحص دوري مستمر.
         </p>
       </section>
     </main>
