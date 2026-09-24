@@ -59,6 +59,10 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'انتهت جلسة الدخول أو لم يتم تسجيل الدخول. سجّل الدخول مرة أخرى ثم حاول.',
     en: 'Your session is missing or expired. Sign in again and retry.',
   },
+  WORK_AUTHORIZATION_REQUIRED: {
+    ar: 'تم إيقاف تصريح العمل لهذا الفرع. انتظر موافقة المسؤول قبل متابعة العمل.',
+    en: 'Work authorization for this branch is not active. Wait for an authorized reviewer before continuing.',
+  },
   PERMISSION_DENIED: {
     ar: 'لا تملك الصلاحية المطلوبة لتنفيذ هذه العملية.',
     en: 'You do not have the required permission for this action.',
