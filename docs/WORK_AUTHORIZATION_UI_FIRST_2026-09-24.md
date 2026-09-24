@@ -160,6 +160,12 @@ Final required behavior:
 - After interruption/tool conflict/timeout/cancel: re-read branch HEAD + active log + execution gate before resuming.
 - While an exact-head Verify is running, no additional writes unless a real failure requires a fix.
 - This protocol is mandatory and will be enforced by CI contract tests.
+- Single-writer fence files:
+  - `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
+  - `docs/CURRENT_WORK_PLAN.md`
+  - `tests/unit/activeWorklogGateContract.test.ts`
+  - `docs/EXECUTION_GUARDRAILS.md`
+- Final fence rollout checkpoint before verification: expected branch HEAD before this log write was `84b17faeef61d935d0924ae401600ce0c879e51f`.
 
 ## Verification ledger
 
