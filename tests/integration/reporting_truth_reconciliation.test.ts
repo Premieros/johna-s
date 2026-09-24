@@ -69,14 +69,20 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
 
     await q(`SELECT public.seed_treasury_accounts($1)`, [branchId]);
 
-    const openedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // Anchor fixtures to the database clock itself: this keeps them inside
+    // both the current Cairo business date and the +/-2h report windows,
+    // including the first minutes after local midnight.
+    const clock = await q<{ opened_at: string; created_at: string }>(
+      `SELECT now()::text AS opened_at, now()::text AS created_at`,
+    );
+    const openedAt = clock[0].opened_at;
+    const createdAt = clock[0].created_at;
+
     await q(
       `INSERT INTO public.shifts (id,branch_id,cashier_id,opened_at,opening_amount,status)
        VALUES ($1,$2,$3,$4,10,'open')`,
       [shiftId, branchId, userId, openedAt],
     );
-
-    const createdAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     await q(
       `INSERT INTO public.sales
         (id,invoice_number,customer_id,branch_id,cashier_id,subtotal,discount_amount,tax_amount,total,paid_amount,payment_method,status,created_at)
