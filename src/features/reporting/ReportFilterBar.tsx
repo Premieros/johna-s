@@ -40,6 +40,9 @@ export interface ReportFilterBarProps {
   onFinancialSelect?: (key: string) => void;
   reportTypes?: Array<{ key: string; label: string; icon: React.ReactNode }>;
   onReportTypeChange?: (key: string) => void;
+  onRunReport?: () => void;
+  loading?: boolean;
+  pendingChanges?: boolean;
 }
 
 export function ReportFilterBar({
@@ -70,6 +73,9 @@ export function ReportFilterBar({
   onFinancialSelect,
   reportTypes = [],
   onReportTypeChange,
+  onRunReport,
+  loading = false,
+  pendingChanges = false,
 }: ReportFilterBarProps) {
   const { t } = useLanguage();
   const history = useHistoryAccess();
@@ -186,15 +192,36 @@ export function ReportFilterBar({
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-ui-border pt-2 text-xs">
-          <div className="rounded-lg bg-ui-page-alt px-3 py-1.5 border border-ui-border">
-            <span className="text-ui-muted">{t('total')}: </span>
-            <span className="font-extrabold tabular-nums text-ui-accent">{formatCurrency(total, currency, lang)}</span>
+        <div className="flex flex-col gap-2 border-t border-ui-border pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
+              <span className="text-ui-muted">{t('total')}: </span>
+              <span className="font-extrabold tabular-nums text-ui-accent">{formatCurrency(total, currency, lang)}</span>
+            </div>
+            <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
+              <span className="text-ui-muted">{t('count')}: </span>
+              <span className="font-extrabold tabular-nums text-ui-text">{count}</span>
+            </div>
+            {pendingChanges && (
+              <span className="rounded-lg border border-ui-warning/30 bg-ui-warning-soft px-3 py-1.5 font-semibold text-ui-warning">
+                {lang === 'ar' ? 'تم تعديل الفلاتر — اضغط عرض التقرير' : 'Filters changed — run the report'}
+              </span>
+            )}
           </div>
-          <div className="rounded-lg bg-ui-page-alt px-3 py-1.5 border border-ui-border">
-            <span className="text-ui-muted">{t('count')}: </span>
-            <span className="font-extrabold tabular-nums text-ui-text">{count}</span>
-          </div>
+
+          {onRunReport && (
+            <button
+              type="button"
+              onClick={onRunReport}
+              disabled={loading}
+              data-testid="run-report-button"
+              className="h-10 min-w-32 rounded-lg bg-ui-primary px-4 text-sm font-black text-ui-primary-fg transition hover:bg-ui-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading
+                ? (lang === 'ar' ? 'جاري الجلب...' : 'Loading...')
+                : (lang === 'ar' ? 'عرض التقرير' : 'Run report')}
+            </button>
+          )}
         </div>
       </div>
     </Card>
