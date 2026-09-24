@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-24 23:39 Africa/Cairo
+Last updated: 2026-09-25 00:02 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -32,6 +32,13 @@ State: **BLOCKED**
 - Existing PR #314 repair itself remains the canonical opening-cost repair.
 
 ## Root-cause ledger
+- Production apply attempt after warehouse-transfer support stopped safely at `FIFO_BACKFILL_EXISTING_DEBT_MISMATCH`.
+- Exact mismatch: source ledger `3611` / raw `عيش توست عدد`; old historical debt = 56, replay target debt = 6; both fully settled.
+- Production scope check: 4,525 existing FIFO debts in Smouha, zero target-zero legacy debts, exactly one nonzero debt mismatch.
+- The old debt belongs to historical backfill `ce72c9e6-3ab0-4eaa-aac8-0642d24175c7`, not live-created debt.
+- Old settlements on ledger 3611 consumed later receipt capacity; current replay reallocates those receipts to later debts/FIFO. Therefore changing only the debt quantity is unsafe.
+- Required follow-up: audited, reversible debt settlement rebase that snapshots the old debt + all settlement rows, replaces only fully-settled historical backfill-owned mismatch state with current replay target, and restores the snapshot on backfill reversal.
+
 - PR #314 correctly repairs zero-cost opening receipts and delegates historical valuation to the FIFO backfill.
 - FIFO backfill intentionally rejected changed reference types outside sale/kitchen_send/production/purchase_return.
 - A new raw-material warehouse transfer was created after the original repair design.
@@ -72,6 +79,11 @@ State: **BLOCKED**
 - Required post-apply checks: quantity invariants, opening batch valuation, FIFO run success, trial balance, raw inventory valuation, COGS reconciliation, and zero-cost consumption count.
 
 ## Next action
+1. Implement audited/reversible historical debt rebase on the same branch.
+2. Restrict automatic rebase to prior-backfill-owned debts where current debt is fully settled, target debt is fully settled, and target debt is positive and no larger than current debt.
+3. Add integration coverage for snapshot -> rebase -> restore.
+4. Run exact-head Full Verify.
+5. Only after Green, apply the follow-up migration to Production and rerun a fresh Smouha opening-cost prepare/apply.
 1. Wait for exact-head Full Verify on this documentation-only head.
 2. If Green, present the exact Production migration/backfill sequence and request explicit Production approval.
 3. Only after approval: apply the migration, perform a fresh Smouha opening-cost prepare, inspect its generated FIFO dry-run, apply only if guards remain Green, then verify quantity/accounting invariants.
