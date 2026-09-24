@@ -348,7 +348,6 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
       'purchases',
       'raw_material_batches',
       'raw_material_inventory',
-      'raw_material_warehouse_inventory',
       'rfqs',
       'sale_payments',
       'sales',
