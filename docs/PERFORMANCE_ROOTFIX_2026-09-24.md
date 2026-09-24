@@ -6,11 +6,11 @@ Current PR: `#354`
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — mandatory worklog gate setup
+Last updated: 2026-09-24 — work resumed; unit-contract scope fix authorized
 
 ## Work status
 
-Status: ACTIVE — documentation/CI gate setup only; functional repair work is PAUSED until the user explicitly says to continue.
+Status: ACTIVE — user explicitly resumed work on 2026-09-24. Current scope is the recorded unit-contract false-positive only; no Production or printing changes.
 
 Current completed implementation inside PR #354:
 
@@ -374,15 +374,17 @@ To change this section to READY, ALL must be recorded here:
 
 ## Next action
 
-Functional repair work remains PAUSED by user request.
+User explicitly resumed work.
 
-The only allowed next actions for the current documentation request are:
+Current mandatory sequence:
 
-1. Observe Verify on the resulting exact head.
-2. Record its exact run result here before any merge or Production action.
-3. Stop functional repair work unless the user explicitly says **استمر**.
-
-When functional work resumes, read this file first and continue from the first unresolved root cause/change item. Do not reconstruct state from chat memory.
+1. Fix only the false-positive scope in `tests/unit/inventoryLedgerPerformanceContract.test.ts` so the forbidden helper assertion inspects the `public.search_inventory_ledger` function body rather than the entire migration file.
+2. Do **not** change the migration, RLS behavior, Inventory Ledger behavior, printing, agent, KDS, or `send_to_kitchen` for this fix.
+3. Record the exact test change in the Change ledger.
+4. Run/observe the exact-head Full Verify created by the commit.
+5. Record the exact run ID and all job results here.
+6. If Verify fails, diagnose only the actual failure and update this log before the next functional write.
+7. Do not merge PR #354 or apply Production migration without the required explicit approval and Production gate transition.
 
 ## Mandatory update protocol
 
