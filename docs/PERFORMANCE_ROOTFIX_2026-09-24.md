@@ -43,7 +43,7 @@ This preserves authorization semantics but makes row scanning expensive and is c
 
 ## Phase 1 — Inventory Ledger root fix
 
-Status: IN PROGRESS.
+Status: IMPLEMENTED / VERIFY GREEN THROUGH DB+INTEGRATION; Browser Smoke pending on the earlier head.
 
 Implementation intent:
 
@@ -57,10 +57,37 @@ Implementation intent:
 8. Preserve full server-side search and keyset pagination.
 9. Add structural and integration regressions for branch isolation, recent visibility, historical sampling, unlimited history, and referenced-row semantics.
 
+## Phase 2 — Financial journal RLS root fix
+
+Status: IN PROGRESS.
+
+Production read-only evidence using the same authenticated Super Admin behind the slow requests:
+
+- September branch journal aggregate under current RLS: ~2031.8 ms.
+- Same aggregate as database owner without row-policy overhead: ~10.9 ms.
+- Current RLS plan reopened `journal_entries` from `journal_entry_lines` for every visible line and re-ran:
+  - `private.journal_entry_read_visible_by_id`
+  - `private.financial_reference_visible`
+  - `public.user_may_access_branch`
+- Observed inner journal lookup loops: 1696 for the measured aggregate.
+- Slow Production calls were from Super Admin sessions, so this repeated work adds no authorization value for that caller: Super Admin is already the sole implicit bypass by project contract.
+
+Implementation:
+
+- Add `(SELECT public.is_pos_admin())` as a statement-level fast-path to:
+  - `auth_select_journal_entries`
+  - `financial_visibility_journal_entries`
+  - `auth_select_journal_entry_lines`
+  - `financial_visibility_journal_entry_lines`
+- Preserve all existing non-admin branch and financial visibility predicates exactly.
+- Keep financial visibility policies RESTRICTIVE.
+- Add unit and integration regressions proving Super Admin cross-branch visibility remains unchanged and ordinary users remain branch-scoped.
+
 ## Next phases
 
-- Income statement latency.
-- Trial balance / general ledger latency.
+- Re-run exact-head Full Verify after Phase 2.
+- Measure income statement / trial balance / general ledger after deployment readiness; do not infer Production improvement before the migration is actually approved/applied.
+- Confirmed UI failures and invalid-selection handling.
 - Confirmed UI failures and invalid-selection handling.
 - Auth/session 401 bursts after separating real user traffic from scanner/test traffic.
 - Measured RLS/index adviser cleanup one item at a time.
