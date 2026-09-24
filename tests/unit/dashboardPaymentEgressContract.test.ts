@@ -9,7 +9,7 @@ describe('dashboard payment egress contract', () => {
   it('removes oversized raw sale_payments requests from active dashboard pages', () => {
     for (const source of [dashboard, visual]) {
       expect(source).not.toContain("from('sale_payments')");
-      expect(source).not.toContain('.limit(20000)');
+      expect(source).not.toContain("select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id'");
       expect(source).toContain('loadDashboardPaymentAggregates');
     }
   });
