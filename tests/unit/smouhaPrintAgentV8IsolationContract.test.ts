@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
-describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
+describe('Smouha Print Agent V8.1.1 Lite isolation and query budget', () => {
   it('is a separate app identity and starts with Production queue disabled', () => {
     const build = read('print-agent-v8/BuildConfig.cs');
     const config = read('print-agent-v8/AgentConfig.cs');
-    expect(build).toContain('PremierSmouhaFormPrintAgentV08');
+    expect(build).toContain('PremierSmouhaFormPrintAgentV0811');
     expect(build).not.toContain('PremierSmouhaPrintAgentV07');
     expect(config).toContain('QueueEnabled { get; set; } = false');
   });
@@ -16,7 +16,7 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     const project = read('print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj');
     const workflow = read('.github/workflows/smouha-print-agent-v8-build.yml');
     expect(project).toContain('<SelfContained>false</SelfContained>');
-    expect(project).toContain('<Version>8.1.0</Version>');
+    expect(project).toContain('<Version>8.1.1</Version>');
     expect(workflow).toContain('--self-contained false');
     expect(workflow).toContain('Windows Desktop Runtime 8 x64');
   });
