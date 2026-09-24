@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/opening-fifo-transfer-followup-20260924`
 Current PR: `#356`
-Last updated: 2026-09-25 00:58 Africa/Cairo
+Last updated: 2026-09-25 01:05 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -78,6 +78,15 @@ State: **BLOCKED**
 - Printing-related files/functions are untouched.
 
 ## Verification ledger
+- Full Verify on `1ff4dc50a12b6db53e70ddd7cad546cf66ae0d42`: verify Green, DB/integration/RLS Green, Browser Smoke Green.
+- Production migration `raw_fifo_historical_debt_rebase` applied successfully.
+- Fresh Smouha opening prepare run `a353dfea-b47e-40c7-be07-effe22c47e21`: 162 opening batches; 140 eligible; 22 unresolved; candidate opening value 129389.08.
+- Its apply stopped transactionally at orphan sale ledger 1881; no partial opening/FIFO data change persisted.
+- Orphan-sale fallback Fast Verify DB path Green, including changed integration test and canonical migration apply.
+- First Fast Verify app path failed only because the new unit immutability assertion used an over-broad cross-file regex; code/integration behavior was Green.
+- The assertion was narrowed to reject the actual forbidden base-journal update predicate directly.
+- Exact-head verification after unit-contract correction: pending.
+
 - Full Verify on `1ff4dc50a12b6db53e70ddd7cad546cf66ae0d42`: verify Green, DB/integration/RLS Green, Browser Smoke Green.
 - Production migration `raw_fifo_historical_debt_rebase` applied successfully.
 - Fresh Smouha opening prepare run `a353dfea-b47e-40c7-be07-effe22c47e21`: 162 opening batches; 140 eligible; 22 unresolved; candidate opening value 129389.08.
