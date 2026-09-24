@@ -62,6 +62,12 @@ State: **BLOCKED**
 - Reviewed `PR19_PERMISSION_FIRST_CLOSURE_LOG.md` and `EXECUTION_GUARDRAILS.md`; confirmed all non-Super-Admin roles are labels only and branch/RLS scope remains mandatory.
 - Declared this new mandatory active work log.
 - Opened Draft PR #355 for staged UI-first implementation.
+- Implemented typed client contract: `workAuthorizationContract.ts` (no Supabase access).
+- Implemented in-memory preview provider: `mockWorkAuthorizationProvider.ts` (no Production writes).
+- Implemented `WorkAuthorizationPreview.tsx` with Pending / Working now / History / Settings and employee waiting-screen preview.
+- Mounted preview inside existing `ApprovalCenterPage`; live operational approval queue/RPCs remain intact.
+- Permission gates: `approvals.review` for review surface; `approvals.policy.manage` for settings. No role-name guards.
+- Added regression contract test ensuring no role-name authorization and no Supabase work-authorization writes.
 - Planned UI deliverables:
   - manager center tabs: Pending / Working now / History / Settings;
   - mobile-first cards and desktop responsive layout;
@@ -76,8 +82,10 @@ State: **BLOCKED**
 - Latest-main check: PASS — `main@189973bb04e6ea81e766d2cea568ccbe7ab6c8da`.
 - Parallel-work check: PASS for this scope; open PR #352 is print-agent-only and remains out of scope.
 - Old branch drift check: FAIL for reuse (240 commits behind main), therefore superseded safely.
-- Code tests: pending implementation.
-- Build: pending implementation.
+- Static UI contract test added: `tests/unit/workAuthorizationUiFirstContract.test.ts`.
+- Verify main run #2587 / `35996733090`: **PENDING** on head `1bc20f445858984662f55e199aec9db23513a5cf`.
+- Code tests: pending CI result.
+- Build: pending CI result.
 - Fast Verify: pending.
 - Full Verify: pending.
 
@@ -95,9 +103,10 @@ State: **BLOCKED**
 1. Add the typed work-authorization client contract and mock provider with **zero role checks**.
 2. Build the manager UI preview with four tabs.
 3. Build the employee waiting-screen preview.
-4. Integrate preview mode into the existing Approval Center without changing live approval behavior.
-5. Add UI contract tests.
-6. Run targeted verification and update this log before the next code group.
+4. Integrate preview mode into the existing Approval Center without changing live approval behavior. ✅
+5. Add UI contract tests. ✅
+6. Wait for Verify main #2587; fix only verified UI/type/test issues.
+7. After Green, perform visual/runtime review of the preview before starting backend authority.
 
 ## Mandatory update protocol
 
