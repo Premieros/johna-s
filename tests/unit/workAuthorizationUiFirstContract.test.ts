@@ -50,7 +50,7 @@ describe('work authorization UI-first contract', () => {
     expect(gate).toContain('data-testid="work-authorization-gate"');
     expect(gate).toContain('client.getMyState(branchId)');
     expect(gate).toContain('client.requestAuthorization(branchId)');
-    expect(gate).not.toMatch(/setInterval|setTimeout|poll|branch_manager|ownerOnly|user\\?\\.role|user\\.role/);
+    expect(gate).not.toMatch(/setInterval|setTimeout|poll|branch_manager|ownerOnly|user\?\.role|user\.role/);
     expect(gate).not.toContain('supabase.');
   });
 
