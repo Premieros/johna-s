@@ -237,13 +237,14 @@ Coverage includes:
 
 ### CH-05 — Mandatory worklog execution gate
 
-Status: IN PROGRESS in this documentation-only step.
+Status: IMPLEMENTED.
 
 Required implementation:
 
 - `docs/CURRENT_WORK_PLAN.md` must declare this file as the Mandatory active work log.
-- CI must run a dedicated worklog contract before ordinary verification.
-- CI must fail if the active log is missing, lacks required sections, or the PR branch does not match the branch declared here.
+- CI now runs `tests/unit/activeWorklogGateContract.test.ts` as the dedicated **Verify mandatory active work log** step before the normal verification sequence.
+- CI fails if the active log is missing, lacks required sections, or the PR branch does not match the branch declared here.
+- The gate is wired in `.github/workflows/verify-main.yml`; because `db` needs `verify` and `browser-smoke` needs both, a failed log gate blocks the entire Full Verify chain.
 - Every later functional change must update this file before proceeding to merge/Production gates.
 
 ## Verification ledger
@@ -283,11 +284,20 @@ That run is NOT final anymore because documentation/CI-gate commits change the P
 
 ### V-04 — Mandatory gate verification
 
+Status: IMPLEMENTED / exact-head CI result pending after this final documentation synchronization.
+
+Gate implementation evidence:
+
+- `docs/CURRENT_WORK_PLAN.md` declares the mandatory log.
+- `tests/unit/activeWorklogGateContract.test.ts` validates path, required sections, repository/project identity, Production BLOCKED state, and PR branch identity.
+- `.github/workflows/verify-main.yml` executes the contract before normal lint/typecheck/unit/build work.
+- A failure in the verify job blocks DB integration and Browser Smoke through workflow dependencies.
+
 Current requirement:
 
-- After the mandatory log contract and workflow step are committed, the resulting new PR head must complete the whole Verify pipeline.
+- The resulting final PR head must complete the whole Verify pipeline.
 - Only the run attached to that final head counts.
-- Record the final run ID and every job result in this section before changing the Production gate.
+- The next work session must record its run ID/result here before any merge or Production action.
 
 ## Production gate
 
@@ -327,10 +337,9 @@ Functional repair work remains PAUSED by user request.
 
 The only allowed next actions for the current documentation request are:
 
-1. Finish the mandatory active-worklog CI contract.
-2. Trigger/observe Verify on the resulting exact head.
-3. Update THIS Verification ledger with the exact final run result.
-4. Stop again unless the user explicitly says **استمر**.
+1. Observe Verify on the resulting exact head.
+2. Record its exact run result here before any merge or Production action.
+3. Stop functional repair work unless the user explicitly says **استمر**.
 
 When functional work resumes, read this file first and continue from the first unresolved root cause/change item. Do not reconstruct state from chat memory.
 
