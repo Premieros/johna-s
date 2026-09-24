@@ -86,6 +86,7 @@ export interface WorkAuthorizationClient {
   reject(requestId: string, reason: string): Promise<void>;
   revoke(authorizationId: string, reason: string): Promise<void>;
   setRequirement(userId: string, branchId: string, required: boolean): Promise<void>;
+  subscribeToMyChanges(branchId: string, onChange: () => void): Promise<() => void>;
 }
 
 /**
