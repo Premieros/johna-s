@@ -164,7 +164,10 @@ State: **BLOCKED**
 24. Realtime wake-up added for `work_authorizations` and `work_authorization_policies`; the gate performs one RPC refresh per change and never polls. ✅
 25. Approval Center active/pending queues include active user accounts only. ✅
 26. Added integration coverage for `approved -> revoke -> pending -> blocked -> reapprove -> allowed`, plus unit coverage for the app-level boundary, default-off feature flag, no polling, and print-agent isolation. ✅
-27. Next: exact-head Verify/Fresh DB on this final architecture. Production apply and feature activation remain BLOCKED.
+27. Kept only `CloudPrintAgent` outside the authorization boundary; route-scoped UI extras remain blocked with the application. ✅
+28. Added `bound_to_shift` to the typed/history UI contract so shift-binding events render correctly. ✅
+29. Documented `VITE_WORK_AUTHORIZATION_GATE=0` in `.env.example`; the gate remains disabled by default until backend migration + explicit activation approval. ✅
+30. Next: exact-head Verify/Fresh DB on this final architecture. Production apply and feature activation remain BLOCKED.
 
 ## Mandatory update protocol
 
