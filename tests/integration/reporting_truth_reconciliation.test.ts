@@ -11,7 +11,6 @@ describe.skipIf(skip)('reporting truth and financial reconciliation', () => {
   const branchId = randomUUID();
   const userId = randomUUID();
   const shiftId = randomUUID();
-  const nowIso = new Date().toISOString();
 
   const sales = {
     cash: randomUUID(),
