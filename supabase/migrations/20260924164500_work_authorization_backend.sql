@@ -999,7 +999,7 @@ COMMENT ON TABLE public.work_authorizations IS 'Durable work-start requests and 
 COMMENT ON TABLE public.work_authorization_events IS 'Append-only work authorization timeline.';
 -- Realtime wake-up for approval/revocation/policy changes. Guarded for CI/self-hosted
 -- environments where the Supabase publication does not exist.
-DO $
+DO $realtime$
 DECLARE
   pub_exists boolean;
   tbl text;
@@ -1023,6 +1023,6 @@ BEGIN
       END IF;
     END LOOP;
   END IF;
-END $;
+END $realtime$;
 
 COMMENT ON FUNCTION public.can_user_work(uuid) IS 'Canonical Permission-First work authorization gate for the current authenticated user.';
