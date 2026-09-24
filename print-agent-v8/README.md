@@ -78,3 +78,5 @@ V8.1.1:
 7. بعد الاعتماد فقط: أوقف V7 ثم فعّل Production Queue في V8.1.1.
 
 لا تشغّل V7 وV8.1.1 كمستهلكين نشطين لنفس الفرع في نفس الوقت.
+
+Build checkpoint: PR #352 V8.1.1 isolated identity verification.
