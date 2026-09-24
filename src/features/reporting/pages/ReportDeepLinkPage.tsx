@@ -4,18 +4,35 @@ import { useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
 
 const REPORT_LABELS = {
-  sales: ['المبيعات', 'Sales'], sales_by_payment: ['المبيعات حسب طريقة الدفع', 'Sales by Payment'], sales_by_employee: ['المبيعات حسب الموظف', 'Sales by Employee'], sales_by_product: ['المبيعات حسب المنتج', 'Sales by Product'], detailed_invoices: ['الفواتير التفصيلية', 'Detailed Invoices'],
-  purchases: ['المشتريات', 'Purchases'], expenses: ['المصروفات', 'Expenses'], profit: ['الربحية', 'Profitability'], inventory: ['المخزون', 'Inventory'], component_consumption: ['استهلاك المكونات', 'Component Consumption'], recipe_costs: ['تكلفة الوصفات', 'Recipe Costs'], top_consumed_components: ['أكثر المكونات استهلاكًا', 'Top Components'], top_consumed_products: ['أكثر المنتجات استهلاكًا', 'Top Consumed Products'], low_stock: ['المخزون المنخفض', 'Low Stock'],
+  sales: ['المبيعات', 'Sales'],
+  sales_by_payment: ['المبيعات حسب طريقة الدفع', 'Sales by Payment'],
+  sales_by_employee: ['المبيعات حسب الموظف', 'Sales by Employee'],
+  sales_by_product: ['المبيعات حسب المنتج', 'Sales by Product'],
+  detailed_invoices: ['الفواتير التفصيلية', 'Detailed Invoices'],
+  returns: ['المرتجعات', 'Returns'],
+  purchases: ['المشتريات', 'Purchases'],
+  expenses: ['المصروفات', 'Expenses'],
+  profit: ['الربحية', 'Profitability'],
+  cashier_performance: ['أداء أمين الصندوق', 'Cashier Performance'],
+  inventory: ['المخزون', 'Inventory'],
+  low_stock: ['المخزون المنخفض', 'Low Stock'],
+  component_consumption: ['استهلاك المكونات', 'Component Consumption'],
+  recipe_costs: ['تكلفة الوصفات', 'Recipe Costs'],
+  top_consumed_components: ['أكثر المكونات استهلاكًا', 'Top Components'],
+  top_consumed_products: ['أكثر المنتجات مبيعًا', 'Top Selling Products'],
+  production_waste: ['هالك الإنتاج', 'Production Waste'],
+  financial_reconciliation: ['المطابقة المالية', 'Financial Reconciliation'],
 } as const;
 
 type ReportType = keyof typeof REPORT_LABELS;
 type Lang = 'ar' | 'en';
 const GROUPS: { key: string; icon: typeof BarChart3; reports: ReportType[]; ar: string; en: string }[] = [
-  { key: 'sales', icon: BarChart3, reports: ['sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices'], ar: 'المبيعات', en: 'Sales' },
+  { key: 'sales', icon: BarChart3, reports: ['sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices', 'returns'], ar: 'المبيعات', en: 'Sales' },
   { key: 'trade', icon: ShoppingCart, reports: ['purchases', 'expenses'], ar: 'المشتريات والمصروفات', en: 'Purchases & Expenses' },
-  { key: 'performance', icon: CreditCard, reports: ['profit'], ar: 'الأداء والربحية', en: 'Performance & Profit' },
+  { key: 'performance', icon: CreditCard, reports: ['profit', 'cashier_performance'], ar: 'الأداء والربحية', en: 'Performance & Profit' },
+  { key: 'treasury', icon: CreditCard, reports: ['financial_reconciliation'], ar: 'الخزنة والبنك', en: 'Treasury & Bank' },
   { key: 'inventory', icon: Package, reports: ['inventory', 'low_stock'], ar: 'المخزون', en: 'Inventory' },
-  { key: 'manufacturing', icon: Factory, reports: ['component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products'], ar: 'التصنيع والتكلفة', en: 'Manufacturing & Costing' },
+  { key: 'manufacturing', icon: Factory, reports: ['component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'production_waste'], ar: 'التصنيع والتكلفة', en: 'Manufacturing & Costing' },
 ];
 function isReportType(value: string | null): value is ReportType { return value !== null && Object.prototype.hasOwnProperty.call(REPORT_LABELS, value); }
 function selectReport(report: string) { document.querySelector<HTMLButtonElement>(`button[data-report-type="${report}"]`)?.click(); }
