@@ -15,7 +15,7 @@ Parallel execution: **FORBIDDEN**
 Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
-- Current phase: final branch-entry authorization verification.
+- Current phase: final mutation-time server guard verification.
 - Architecture: `Login -> Work Authorization Gate -> Application`.
 - Authorization scope: **user + branch only; independent of shifts**.
 - Feature flag: `VITE_WORK_AUTHORIZATION_GATE=0` by default.
@@ -108,7 +108,7 @@ Final authorization lifecycle is independent of shifts:
 
 - no `shift_id` in authorization state;
 - shift open/close does not bind, consume, revoke, or expire authorization;
-- approved authorization persists until explicitly revoked/expired.
+- approved authorization persists until explicitly revoked, policy-disabled, branch access removed, or account deactivated.
 
 ### Stop authorization behavior
 
@@ -122,6 +122,32 @@ Final required behavior:
 6. Realtime wakes employee gate;
 7. employee returns to waiting screen;
 8. fresh approval is required before re-entry.
+
+### Mutation-time server enforcement
+
+- Full Verify #2666 / run `36013208864` was **FULL GREEN** on pre-enforcement head `c5a5df72fc37059c2860217af57c121ae3808bbf`:
+  - mandatory worklog gate ✅
+  - lint/typecheck/unit/build ✅
+  - Fresh DB + migrations/schema ✅
+  - integration/security/RLS ✅
+  - Browser Smoke ✅
+- Added branch-only migration `supabase/migrations/20260924170000_work_authorization_mutation_guard.sql`.
+- Enforcement is server-side at mutation time only; it does **not** poll and does not add a frontend round-trip.
+- `assert_user_work_authorized_cached(branch_id)` caches the successful user+branch decision transaction-locally, so one transaction does not repeatedly re-query authorization.
+- Generic mutation trigger is attached only to curated operational branch tables.
+- Explicit exclusions preserve independence and safety:
+  - printing: `cloud_print_jobs`, `cloud_print_wake_state`;
+  - KDS/kitchen transport tables: `order_kitchen_*` / kitchen tables;
+  - shift lifecycle: `shifts`, `daily_closes`, `business_day_state`;
+  - work authorization / approval tables themselves.
+- Service/background calls without an authenticated employee identity remain outside the employee work gate.
+- Added integration coverage proving:
+  - exact guarded table set;
+  - printing/KDS/shifts/work-authorization tables are not guarded;
+  - operational mutation is rejected with `WORK_AUTHORIZATION_REQUIRED` while waiting;
+  - the same mutation succeeds after approval;
+  - one transaction stores the expected work-authorization guard cache key.
+- Added user-facing `WORK_AUTHORIZATION_REQUIRED` mapping so a rare revoke/action race shows a clear waiting-for-approval message rather than a technical database error.
 
 ### Tests
 
@@ -186,7 +212,7 @@ Final required behavior:
 - CORRECTION: commit `6f0328d7ead08cd0cff7fbd5d8c1dd0d2d204b2b` was previously described as a concurrent/parallel change. The user confirmed there is no other writer. It is therefore classified as **unaccounted self-drift during this execution**, not parallel work.
 - The content was reviewed and retained because it matches the approved simpler branch-entry design, but future unknown commits must trigger `STOP_AND_RECONCILE` before any further write.
 - Integration coverage now explicitly verifies authorization survives shift open/close.
-- Exact-head final Verify is still required before Production.
+- Pre-enforcement exact-head Full Verify #2666 is Green. A final exact-head Verify is required after the mutation-time guard group before Production.
 - Fast Verify #333 applied the migration and schema successfully. The only integration failure was a test-ordering bug: the shift-independence assertion selected the most recent row by timestamp and could tie with an older revoked row. Backend `can_user_work` already returned true. The test now asserts exactly one active `approved` authorization instead of relying on timestamp ordering.
 
 ## Production gate
@@ -207,10 +233,10 @@ State: **BLOCKED**
 3. Keep Realtime wake-up with no polling. ✅
 4. Run exact-head Fast Verify.
 5. Run exact-head Full Verify including Fresh DB + integration/RLS + browser smoke.
-6. If Green, review remaining server mutation enforcement boundaries.
-7. Add only centralized mutation-time server guard points; do not add periodic frontend checks.
-8. Re-run exact-head Full Verify.
-9. Present final Production migration/activation gate for explicit approval.
+6. Pre-enforcement Full Verify #2666 Green. ✅
+7. Centralized mutation-time server guard added with transaction-local cache and explicit print/KDS/shift exclusions. ✅
+8. Run exact-head Fast Verify + Full Verify for the final mutation-guard head.
+9. If Green: **STOP BEFORE MERGE** and present final Production migration/activation gate. Do not merge, apply Production migration, or enable the feature flag.
 
 ## Mandatory update protocol
 
