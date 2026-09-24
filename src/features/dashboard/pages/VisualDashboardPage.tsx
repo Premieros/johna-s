@@ -13,11 +13,11 @@ import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
-  aggregatePaymentMethods,
   netSaleAmount,
   netSaleItemQuantity,
-  type SalePaymentLike,
+  type PaymentMethodAggregate,
 } from '@/features/reporting/numericIntegrity';
+import { loadDashboardPaymentAggregates } from '../services/dashboardPayments';
 
 type Range = 'today' | 'week' | 'month' | 'year';
 type Sale = {
@@ -71,8 +71,8 @@ function windowFor(range: Range) {
   const span = end.getTime() - start.getTime();
   return { start, end, previousStart: new Date(start.getTime() - span - (range === 'today' ? 86400000 : 0)), previousEnd: new Date(start) };
 }
-function summarize(rows: Sale[], payments: SalePaymentLike[]) {
-  const paymentTotal = aggregatePaymentMethods(rows, payments).reduce((sum, row) => sum + row.total, 0);
+function summarize(rows: Sale[], payments: PaymentMethodAggregate[]) {
+  const paymentTotal = payments.reduce((sum, row) => sum + row.total, 0);
   return {
     sales: rows.reduce((sum, row) => sum + netSaleAmount(row), 0),
     payments: paymentTotal,
@@ -113,8 +113,9 @@ export function VisualDashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [previousSales, setPreviousSales] = useState<Sale[]>([]);
-  const [salePayments, setSalePayments] = useState<SalePaymentLike[]>([]);
-  const [previousSalePayments, setPreviousSalePayments] = useState<SalePaymentLike[]>([]);
+  const [paymentAggregates, setPaymentAggregates] = useState<PaymentMethodAggregate[]>([]);
+  const [previousPaymentAggregates, setPreviousPaymentAggregates] = useState<PaymentMethodAggregate[]>([]);
+  const [paymentWindow, setPaymentWindow] = useState<ReturnType<typeof windowFor> | null>(null);
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [wasteRows, setWasteRows] = useState<{ waste_category: string; waste_type: string; total_quantity: number; total_cost: number; entry_count: number }[]>([]);
@@ -137,15 +138,7 @@ export function VisualDashboardPage() {
       const rows = (a.data || []) as unknown as Sale[];
       const previousRows = (b.data || []) as unknown as Sale[];
       setSales(rows); setPreviousSales(previousRows); setInventory((c.data || []) as unknown as Inventory[]);
-      const allSaleIds = [...rows, ...previousRows].map((row) => row.id);
-      if (allSaleIds.length) {
-        const paymentResult = await supabase.from('sale_payments').select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id', allSaleIds).limit(20000);
-        const details = paymentResult.error ? [] : ((paymentResult.data || []) as SalePaymentLike[]);
-        const currentIds = new Set(rows.map((row) => row.id));
-        const previousIds = new Set(previousRows.map((row) => row.id));
-        setSalePayments(details.filter((row) => currentIds.has(row.sale_id)));
-        setPreviousSalePayments(details.filter((row) => previousIds.has(row.sale_id)));
-      } else { setSalePayments([]); setPreviousSalePayments([]); }
+      setPaymentWindow(w);
       if (rows.length) {
         const si = await supabase.from('sale_items').select('quantity,refunded_quantity,product:products(name)').in('sale_id', rows.map((r) => r.id)).limit(10000);
         setItems(si.error ? [] : ((si.data || []) as unknown as SaleItem[]));
@@ -156,10 +149,46 @@ export function VisualDashboardPage() {
       setWasteRows(wr.error ? [] : ((wr.data || []) as typeof wasteRows));
     } catch (e) {
       console.error('Dashboard load failed', e);
-      setSales([]); setPreviousSales([]); setSalePayments([]); setPreviousSalePayments([]); setInventory([]); setItems([]);
+      setSales([]); setPreviousSales([]); setPaymentAggregates([]); setPreviousPaymentAggregates([]); setPaymentWindow(null); setInventory([]); setItems([]);
     } finally { setLoading(false); setRefreshing(false); }
   }, [range, effectiveBranch]);
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!paymentWindow) return;
+    let cancelled = false;
+    const currentSales = orderTypeFilter
+      ? sales.filter((row) => String(row.order_type || '').toLowerCase() === orderTypeFilter)
+      : sales;
+    const priorSales = orderTypeFilter
+      ? previousSales.filter((row) => String(row.order_type || '').toLowerCase() === orderTypeFilter)
+      : previousSales;
+
+    void (async () => {
+      const results = await Promise.allSettled([
+        loadDashboardPaymentAggregates({
+          sales: currentSales,
+          from: paymentWindow.start.toISOString(),
+          to: paymentWindow.end.toISOString(),
+          orderType: orderTypeFilter || null,
+        }),
+        loadDashboardPaymentAggregates({
+          sales: priorSales,
+          from: paymentWindow.previousStart.toISOString(),
+          to: paymentWindow.previousEnd.toISOString(),
+          orderType: orderTypeFilter || null,
+        }),
+      ]);
+      if (cancelled) return;
+      setPaymentAggregates(results[0].status === 'fulfilled' ? results[0].value : []);
+      setPreviousPaymentAggregates(results[1].status === 'fulfilled' ? results[1].value : []);
+      if (results.some((result) => result.status === 'rejected')) {
+        console.error('Dashboard payment summary load failed');
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [orderTypeFilter, paymentWindow, previousSales, sales]);
 
   useEffect(() => {
     void (async () => {
@@ -188,9 +217,10 @@ export function VisualDashboardPage() {
   }, [effectiveBranch, branches]);
 
   const filteredSales = useMemo(() => orderTypeFilter ? sales.filter((r) => String(r.order_type || '').toLowerCase() === orderTypeFilter) : sales, [sales, orderTypeFilter]);
-  const current = useMemo(() => summarize(filteredSales, salePayments), [filteredSales, salePayments]);
-  const previous = useMemo(() => summarize(previousSales, previousSalePayments), [previousSales, previousSalePayments]);
-  const paymentRows = useMemo(() => aggregatePaymentMethods(filteredSales, salePayments), [filteredSales, salePayments]);
+  const filteredPreviousSales = useMemo(() => orderTypeFilter ? previousSales.filter((r) => String(r.order_type || '').toLowerCase() === orderTypeFilter) : previousSales, [previousSales, orderTypeFilter]);
+  const current = useMemo(() => summarize(filteredSales, paymentAggregates), [filteredSales, paymentAggregates]);
+  const previous = useMemo(() => summarize(filteredPreviousSales, previousPaymentAggregates), [filteredPreviousSales, previousPaymentAggregates]);
+  const paymentRows = paymentAggregates;
 
   const chart = useMemo<Point[]>(() => {
     const w = windowFor(range); const cm = new Map<number, number>(); const pm = new Map<number, number>();

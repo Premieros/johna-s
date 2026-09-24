@@ -30,6 +30,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify mandatory active work log
+        run: npx vitest run tests/unit/activeWorklogGateContract.test.ts
       - name: Verify locked Supabase project identity
         run: node scripts/db/verify-database-identity.js
       - name: Verify frontend API contract is current

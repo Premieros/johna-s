@@ -73,3 +73,25 @@ export function reportDateRangeUtc(from: string, to: string): { startIso: string
     endExclusiveIso: cairoLocalDateTimeToUtc(addIsoDays(to, 1), 0, 0, 0).toISOString(),
   };
 }
+
+
+export function nextCairoClockInstant(time: string, now = new Date()): Date {
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time);
+  if (!match) throw new Error(`Invalid Cairo clock time: ${time}`);
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] || 0);
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new Error(`Invalid Cairo clock time: ${time}`);
+  }
+
+  const current = partsAt(now);
+  const currentDate =
+    `${current.year}-${String(current.month).padStart(2, '0')}-${String(current.day).padStart(2, '0')}`;
+  let candidate = cairoLocalDateTimeToUtc(currentDate, hour, minute, second);
+  if (candidate.getTime() <= now.getTime()) {
+    candidate = cairoLocalDateTimeToUtc(addIsoDays(currentDate, 1), hour, minute, second);
+  }
+  return candidate;
+}

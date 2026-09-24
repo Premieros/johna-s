@@ -15,11 +15,11 @@ import { useCan } from '@/lib/permissions';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { formatFinancialCurrency, formatNumber, formatPercent } from '@/lib/format';
 import {
-  aggregatePaymentMethods,
   netSaleAmount,
   netSaleItemQuantity,
-  type SalePaymentLike,
+  type PaymentMethodAggregate,
 } from '@/features/reporting/numericIntegrity';
+import { loadDashboardPaymentAggregates } from '../services/dashboardPayments';
 import { DashboardStandbyBar } from '../components/DashboardStandbyBar';
 
 type Range = 'today' | 'week' | 'month' | 'year';
@@ -214,8 +214,8 @@ export function DashboardDataPage() {
   const [error, setError] = useState<string | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [previousSales, setPreviousSales] = useState<Sale[]>([]);
-  const [salePayments, setSalePayments] = useState<SalePaymentLike[]>([]);
-  const [previousSalePayments, setPreviousSalePayments] = useState<SalePaymentLike[]>([]);
+  const [paymentAggregates, setPaymentAggregates] = useState<PaymentMethodAggregate[]>([]);
+  const [previousPaymentAggregates, setPreviousPaymentAggregates] = useState<PaymentMethodAggregate[]>([]);
   const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [quickStats, setQuickStats] = useState<QuickStats>({ expenses: null, profit: null, lowStockCount: null });
@@ -233,8 +233,8 @@ export function DashboardDataPage() {
     if (!canViewSales) {
       setSales([]);
       setPreviousSales([]);
-      setSalePayments([]);
-      setPreviousSalePayments([]);
+      setPaymentAggregates([]);
+      setPreviousPaymentAggregates([]);
       setItems([]);
       setLoading(false);
       setRefreshing(false);
@@ -258,22 +258,30 @@ export function DashboardDataPage() {
     setPreviousSales(previousRows);
     if (currentResult.error) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
 
-    const ids = [...currentRows, ...previousRows].map((sale) => sale.id);
-    const paymentPromise = ids.length
-      ? supabase.from('sale_payments').select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id', ids).limit(20000)
-      : Promise.resolve({ data: [], error: null });
+    const paymentPromise = Promise.allSettled([
+      loadDashboardPaymentAggregates({
+        sales: currentRows,
+        from: window.start.toISOString(),
+        to: window.end.toISOString(),
+      }),
+      loadDashboardPaymentAggregates({
+        sales: previousRows,
+        from: window.previousStart.toISOString(),
+        to: window.previousEnd.toISOString(),
+      }),
+    ]);
     const itemPromise = currentRows.length
       ? supabase.from('sale_items').select('quantity,refunded_quantity,product:products(name)').in('sale_id', currentRows.map((sale) => sale.id)).limit(20000)
       : Promise.resolve({ data: [], error: null });
 
-    // Payment and item details are independent once sale ids are known.
-    // Load them together instead of serially extending dashboard latency.
-    const [paymentResult, itemResult] = await Promise.all([paymentPromise, itemPromise]);
-    const details = paymentResult.error ? [] : ((paymentResult.data || []) as SalePaymentLike[]);
-    const currentIds = new Set(currentRows.map((sale) => sale.id));
-    const previousIds = new Set(previousRows.map((sale) => sale.id));
-    setSalePayments(details.filter((payment) => currentIds.has(payment.sale_id)));
-    setPreviousSalePayments(details.filter((payment) => previousIds.has(payment.sale_id)));
+    const [paymentResults, itemResult] = await Promise.all([paymentPromise, itemPromise]);
+    const currentPaymentResult = paymentResults[0];
+    const previousPaymentResult = paymentResults[1];
+    setPaymentAggregates(currentPaymentResult.status === 'fulfilled' ? currentPaymentResult.value : []);
+    setPreviousPaymentAggregates(previousPaymentResult.status === 'fulfilled' ? previousPaymentResult.value : []);
+    if (paymentResults.some((result) => result.status === 'rejected')) {
+      setError(ar ? 'تعذر تحميل تفاصيل طرق الدفع. أعد المحاولة.' : 'Payment-method details could not be loaded. Please retry.');
+    }
     setItems(itemResult.error ? [] : ((itemResult.data || []) as unknown as SaleItem[]));
 
     setLoading(false);
@@ -382,7 +390,7 @@ export function DashboardDataPage() {
   ]);
 
   const current = useMemo(() => {
-    const methods = aggregatePaymentMethods(sales, salePayments);
+    const methods = paymentAggregates;
     return {
       orders: sales.length,
       sales: sales.reduce((sum, sale) => sum + netSaleAmount(sale), 0),
@@ -390,9 +398,9 @@ export function DashboardDataPage() {
       returns: sales.reduce((sum, sale) => sum + Number(sale.refunded_amount || 0), 0),
       discounts: sales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0),
     };
-  }, [sales, salePayments]);
+  }, [sales, paymentAggregates]);
   const previous = useMemo(() => {
-    const methods = aggregatePaymentMethods(previousSales, previousSalePayments);
+    const methods = previousPaymentAggregates;
     return {
       orders: previousSales.length,
       sales: previousSales.reduce((sum, sale) => sum + netSaleAmount(sale), 0),
@@ -400,8 +408,8 @@ export function DashboardDataPage() {
       returns: previousSales.reduce((sum, sale) => sum + Number(sale.refunded_amount || 0), 0),
       discounts: previousSales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0),
     };
-  }, [previousSales, previousSalePayments]);
-  const paymentRows = useMemo(() => aggregatePaymentMethods(sales, salePayments).slice(0, 5), [sales, salePayments]);
+  }, [previousSales, previousPaymentAggregates]);
+  const paymentRows = useMemo(() => paymentAggregates.slice(0, 5), [paymentAggregates]);
   const orderRows = useMemo(() => {
     const map = new Map<string, number>();
     sales.forEach((sale) => map.set(sale.order_type || 'other', (map.get(sale.order_type || 'other') || 0) + 1));

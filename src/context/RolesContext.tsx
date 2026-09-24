@@ -41,14 +41,16 @@ interface RolesContextValue {
 }
 
 const RolesContext = createContext<RolesContextValue | undefined>(undefined);
+const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 export function RolesProvider({ children }: { children: ReactNode }) {
   const [rolesList, setRolesList] = useState<RoleDefRow[]>([]);
   const [loading, setLoading] = useState(true);
   const { session } = useAuth();
+  const sessionUserId = session?.user?.id ?? null;
 
   const refresh = useCallback(async () => {
-    if (!session) {
+    if (!sessionUserId) {
       setRolesList([]);
       setLoading(false);
       return;
@@ -85,11 +87,23 @@ export function RolesProvider({ children }: { children: ReactNode }) {
       setRolesList([]);
     }
     setLoading(false);
-  }, [session]);
+  }, [sessionUserId]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, ROLE_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [sessionUserId, refresh]);
 
   const rolePermissionsMap = useMemo(() => {
     const map: Record<string, Permission[]> = {};
