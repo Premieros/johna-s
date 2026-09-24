@@ -2,6 +2,7 @@ export type WorkAuthorizationStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
+  | 'bound_to_shift'
   | 'revoked'
   | 'expired';
 
