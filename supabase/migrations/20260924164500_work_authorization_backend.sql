@@ -742,6 +742,26 @@ BEGIN
       updated_at = now()
   RETURNING id INTO v_policy_id;
 
+  IF NOT p_required THEN
+    WITH stopped AS (
+      UPDATE public.work_authorizations wa
+      SET status = 'revoked',
+          revoked_at = now(),
+          revoked_by = auth.uid(),
+          revocation_reason = 'policy_disabled',
+          updated_at = now()
+      WHERE wa.user_id = p_user_id
+        AND wa.branch_id = p_branch_id
+        AND wa.status IN ('approved', 'pending')
+      RETURNING wa.id, wa.user_id, wa.branch_id
+    )
+    INSERT INTO public.work_authorization_events(
+      authorization_id, user_id, branch_id, event_type, actor_id, note
+    )
+    SELECT id, user_id, branch_id, 'revoked', auth.uid(), 'policy_disabled'
+    FROM stopped;
+  END IF;
+
   PERFORM public.log_audit_action(
     p_branch_id,
     'work_authorization_policy_changed',
