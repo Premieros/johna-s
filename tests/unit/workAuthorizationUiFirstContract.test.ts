@@ -7,6 +7,8 @@ const mock = readFileSync('src/features/admin/work-authorization/mockWorkAuthori
 const provider = readFileSync('src/features/admin/work-authorization/supabaseWorkAuthorizationProvider.ts', 'utf8');
 const approvalCenter = readFileSync('src/features/admin/pages/ApprovalCenterPage.tsx', 'utf8');
 const gate = readFileSync('src/features/admin/work-authorization/WorkAuthorizationGate.tsx', 'utf8');
+const boundary = readFileSync('src/features/admin/work-authorization/WorkAuthorizationAppBoundary.tsx', 'utf8');
+const app = readFileSync('src/app/App.tsx', 'utf8');
 
 describe('work authorization UI-first contract', () => {
   it('keeps preview authorization permission-first with no role-name guards', () => {
@@ -23,16 +25,19 @@ describe('work authorization UI-first contract', () => {
     expect(contract).toContain('Components must not read/write work-authorization tables directly.');
   });
 
-  it('defines a RPC-only production provider but keeps it unmounted during UI-first', () => {
+  it('uses a RPC-only production provider behind the work-authorization feature flag', () => {
     expect(provider).toContain("supabase.rpc(name, params)");
-    expect(provider).not.toMatch(/\.from\(['"][^'"]+['"]\)/);
+    expect(provider).not.toMatch(/\.from\(['\"][^'\"]+['\"]\)/);
     expect(provider).toContain("'get_my_work_authorization_state'");
     expect(provider).toContain("'request_work_authorization'");
     expect(provider).toContain("'decide_work_authorization'");
     expect(provider).toContain("'revoke_work_authorization'");
     expect(provider).toContain("'set_work_authorization_requirement'");
-    expect(approvalCenter).not.toContain('createSupabaseWorkAuthorizationClient');
-    expect(preview).not.toContain('createSupabaseWorkAuthorizationClient');
+    expect(provider).toContain(".channel('work-authorization-' + userId + '-' + branchId)");
+    expect(approvalCenter).toContain('createSupabaseWorkAuthorizationClient');
+    expect(approvalCenter).toContain("VITE_WORK_AUTHORIZATION_GATE === '1'");
+    expect(boundary).toContain("VITE_WORK_AUTHORIZATION_GATE === '1'");
+    expect(preview).not.toContain('supabase.');
   });
 
   it('mounts the staged preview without replacing the existing operational approval queue', () => {
@@ -47,6 +52,14 @@ describe('work authorization UI-first contract', () => {
     expect(gate).toContain('client.requestAuthorization(branchId)');
     expect(gate).not.toMatch(/setInterval|setTimeout|poll|branch_manager|ownerOnly|user\\?\\.role|user\\.role/);
     expect(gate).not.toContain('supabase.');
+  });
+
+  it('mounts one app-level boundary while keeping the print agent outside it', () => {
+    expect(app).toContain('<WorkAuthorizationAppBoundary>');
+    expect(app).toContain('<AppRoutes />');
+    expect(app).toContain('<RouteScopedExtras />');
+    expect(boundary).toContain("location.pathname === APP_ROUTES.approvals");
+    expect(boundary).toContain("can('work.authorization.approve')");
   });
 
   it('keeps policy settings separately permission-gated', () => {
