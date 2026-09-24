@@ -10,6 +10,22 @@ const page = readFileSync(
   'utf8',
 );
 
+const inventoryLedgerFunctionStart = migration.indexOf(
+  'CREATE OR REPLACE FUNCTION public.search_inventory_ledger(',
+);
+const inventoryLedgerFunctionEnd = migration.indexOf(
+  '$function$;',
+  inventoryLedgerFunctionStart,
+);
+const inventoryLedgerFunction =
+  inventoryLedgerFunctionStart >= 0 && inventoryLedgerFunctionEnd >= 0
+    ? migration.slice(
+        inventoryLedgerFunctionStart,
+        inventoryLedgerFunctionEnd + '$function$;'.length,
+      )
+    : '';
+
+
 describe('Inventory Ledger performance/search contract', () => {
   it('keeps Permission-First checks while resolving caller context once', () => {
     expect(migration).toContain("public.can_permission('inventory.ledger.view')");
@@ -21,8 +37,15 @@ describe('Inventory Ledger performance/search contract', () => {
 
     // These calls caused the production timeout when evaluated for every
     // scanned ledger row. They must not return to the hot WHERE path.
-    expect(migration).not.toContain('public.user_may_access_branch(il.branch_id)');
-    expect(migration).not.toContain('private.financial_reference_visible(');
+    expect(inventoryLedgerFunction).toContain(
+      'CREATE OR REPLACE FUNCTION public.search_inventory_ledger(',
+    );
+    expect(inventoryLedgerFunction).not.toContain(
+      'public.user_may_access_branch(il.branch_id)',
+    );
+    expect(inventoryLedgerFunction).not.toContain(
+      'private.financial_reference_visible(',
+    );
   });
 
   it('preserves exact referenced financial visibility without nested row helpers', () => {
