@@ -63,8 +63,6 @@ export function useActiveOrderCount(branchId: string): number {
   const cached = branchId ? countCache.get(branchId) : undefined;
   const [count, setCount] = useState(cached?.value ?? 0);
   const refreshTimer = useRef<number | null>(null);
-  const activeOrderIdsRef = useRef<Set<string>>(new Set(cached?.activeOrderIds || []));
-  const positiveItemIdsRef = useRef<Set<string>>(new Set(cached?.positiveItemIds || []));
   const watchedOrderIdsRef = useRef<Set<string>>(new Set(cached?.watchedOrderIds ?? []));
   const visibleItemIdsRef = useRef<Set<string>>(new Set(cached?.visibleItemIds ?? []));
 
