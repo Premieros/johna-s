@@ -10,7 +10,7 @@ Last updated: 2026-09-24 14:58 Africa/Cairo
 
 State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 
-- Current phase: UI-first verified; backend contract preparation (not activated).
+- Current phase: UI-first verified; backend contract + canonical permission preparation (not activated).
 - Production enforcement: not started.
 - Production migration: not applied.
 - Main merge: not approved.
@@ -72,6 +72,11 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 - Updated the mock provider to support the employee request/state lifecycle without Production access.
 - Added `supabaseWorkAuthorizationProvider.ts` as an RPC-only production adapter; it is intentionally **not mounted** until verified backend RPCs exist.
 - Added tests that fail if the production provider reads/writes tables directly or is mounted prematurely.
+- Locked backend design in `docs/WORK_AUTHORIZATION_BACKEND_CONTRACT_2026-09-24.md` after read-only inspection of Production schema/RPC/RLS patterns.
+- Added canonical permissions to the frontend permission catalog only: `work.authorization.approve`, `work.authorization.manage`, `work.authorization.bypass`.
+- Added dependency/risk contracts: manage -> approve, bypass -> approve; manage/bypass critical, approve sensitive.
+- Added unit coverage for work-authorization permission dependency closure.
+- No role template was used to authorize the feature; no runtime role-name gate was added.
 - Renamed preview display metadata from `roleLabel` to `positionLabel`; position/title is informational only and never used for authorization.
 - Planned UI deliverables:
   - manager center tabs: Pending / Working now / History / Settings;
@@ -108,7 +113,7 @@ State: **UI-FIRST VERIFIED / BACKEND STILL BLOCKED**
 
 State: **BLOCKED**
 
-- No Production migration has been applied. Backend work remains branch-only until Fresh DB + security verification.
+- No Production migration has been applied. No migration file has been created manually; backend work remains branch-only until CLI-generated migration + Fresh DB + security verification.
 - No work-authorization server enforcement is active.
 - No merge to `main` until UI tests/verify are green and user reviews the staged interface.
 - No Production activation until backend authority, RLS, RPC coverage, exact-head Full Verify Green, and explicit user approval.
@@ -123,7 +128,10 @@ State: **BLOCKED**
 6. Verify main #2593 is Green. ✅
 7. Browser smoke is Green, but it does not exercise the new Approval Center preview directly; no false claim of a visual review is made.
 8. Backend contract preparation has started **without activation**: Production schema/RPCs were inspected read-only, client RPC adapter is staged but unmounted.
-9. Next: generate the backend migration using the approved Supabase CLI flow, add RLS/RPC/security tests, then run Fresh DB + Full Verify. Production apply remains BLOCKED.
+9. Backend contract document is locked. ✅
+10. Canonical frontend permissions + dependency tests added. ✅
+11. Supabase CLI generation attempt could not complete in the local environment; no migration filename was invented manually.
+12. Next: wait for exact-head Verify, then create the migration only through the approved CLI path; add RLS/RPC/security tests and Fresh DB verification. Production apply remains BLOCKED.
 
 ## Mandatory update protocol
 
