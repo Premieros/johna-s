@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reportDateRangeUtc } from '@/lib/businessTime';
+import { nextCairoClockInstant, reportDateRangeUtc } from '@/lib/businessTime';
 
 describe('reportDateRangeUtc', () => {
   it('uses Cairo daylight-saving offset for September business dates', () => {
@@ -20,5 +20,26 @@ describe('reportDateRangeUtc', () => {
     const range = reportDateRangeUtc('2026-09-17', '2026-09-19');
     expect(range.startIso).toBe('2026-09-16T21:00:00.000Z');
     expect(range.endExclusiveIso).toBe('2026-09-19T21:00:00.000Z');
+  });
+});
+
+
+describe('nextCairoClockInstant', () => {
+  it('schedules the same-day Cairo cutoff when it is still ahead', () => {
+    expect(
+      nextCairoClockInstant('03:00:00', new Date('2026-09-23T20:00:00.000Z')).toISOString(),
+    ).toBe('2026-09-24T00:00:00.000Z');
+  });
+
+  it('rolls to the next Cairo day after the cutoff has passed', () => {
+    expect(
+      nextCairoClockInstant('03:00:00', new Date('2026-09-24T01:00:00.000Z')).toISOString(),
+    ).toBe('2026-09-25T00:00:00.000Z');
+  });
+
+  it('uses Cairo standard-time offset in winter', () => {
+    expect(
+      nextCairoClockInstant('03:00', new Date('2026-01-10T00:00:00.000Z')).toISOString(),
+    ).toBe('2026-01-10T01:00:00.000Z');
   });
 });
