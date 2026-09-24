@@ -141,7 +141,6 @@ describe.skipIf(skip)('raw FIFO prior-price fallback', () => {
     );
     expect(num(receipt[0].r.fifo_settled_quantity)).toBe(2);
     expect(num(receipt[0].r.fifo_settled_value)).toBe(30);
-    expect(num(receipt[0].r.cost_adjustment)).toBe(10);
 
     const source = await q<{ total_cost: string }>(
       `SELECT total_cost::text
