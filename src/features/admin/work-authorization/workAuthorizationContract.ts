@@ -85,7 +85,7 @@ export interface WorkAuthorizationClient {
   approve(requestId: string): Promise<void>;
   reject(requestId: string, reason: string): Promise<void>;
   revoke(authorizationId: string, reason: string): Promise<void>;
-  setRequirement(policyId: string, required: boolean): Promise<void>;
+  setRequirement(userId: string, branchId: string, required: boolean): Promise<void>;
 }
 
 /**
