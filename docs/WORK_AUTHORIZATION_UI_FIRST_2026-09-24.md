@@ -195,6 +195,10 @@ Final required behavior:
 
 ## Verification ledger
 
+- Fast Verify #356 mutation-guard migration failure: `raw_material_warehouse_inventory` is a **view**, so PostgreSQL rejected the generic `BEFORE INSERT/UPDATE/DELETE` trigger. No Production impact; failure occurred on Fresh DB before schema/integration.
+- Removed that view from the trigger set and from the exact trigger-list integration assertion. Physical raw inventory remains protected through `raw_material_inventory` and `raw_material_batches`.
+
+
 - Verify #2664 / Fast Verify #349 reached Green on DB migration/schema/integration and Green on lint/typecheck. One unit assertion failed because `workAuthorizationUiFirstContract.test.ts` still expected the old `canManagePolicies` prop name after the live Work Authorization center moved to `canManageWorkAuthorization`. Runtime code was correct.
 - Fixed that single stale assertion at commit `afdff9e4fb875c62a7338be4c5c044d6c5846eaf` without changing runtime behavior or weakening coverage.
 
