@@ -272,6 +272,8 @@ Rules:
 - only approved authorization can be revoked;
 - blocks future protected mutations immediately;
 - append event + audit;
+- if the user still has an explicit active requirement, create or reuse a new `pending` request for the same branch/current shift in the same transaction;
+- the employee remains on the authorization gate until a fresh approval;
 - does not change completed operations.
 
 ### `set_work_authorization_requirement(p_user_id uuid, p_branch_id uuid, p_required boolean)`
@@ -362,7 +364,8 @@ No aggressive polling.
 Preferred behavior:
 
 - employee gate loads state once by RPC;
-- a Realtime signal for the current user's authorization causes a lightweight state RPC refresh;
+- a Realtime signal for the current user's authorization **or policy** causes one lightweight state RPC refresh;
+- revocation moves the worker to `pending`, so the same Realtime update immediately returns the UI to the waiting gate;
 - manager center may subscribe to authorization changes for accessible branch scope;
 - no direct table mutations from Realtime client code.
 
