@@ -105,8 +105,7 @@ export function ProductsPage() {
     if (branchFilter) cq = cq.eq('branch_id', branchFilter);
     const { data: c } = await cq.order('name');
     setCategories((c as Category[]) || []);
-    await loadStockComponents();
-  }, [branchFilter, loadStockComponents]);
+  }, [branchFilter]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
 
@@ -117,6 +116,7 @@ export function ProductsPage() {
   const openAdd = () => { window.location.hash = '/products/setup'; };
 
   const openEdit = async (p: Product) => {
+    const stockComponentsPromise = loadStockComponents();
     setEditing(p);
     setForm({ name: p.name, name_en: p.name_en || '', barcode: p.barcode || '', sku: p.sku || '', category_id: p.category_id || '', description: p.description || '', cost_price: p.cost_price, sale_price: p.sale_price, wholesale_price: p.wholesale_price, image_url: p.image_url || '', image_position_x: Number(p.image_position_x) || 0, image_position_y: Number(p.image_position_y) || 0, image_zoom: Number(p.image_zoom) || 1, is_active: p.is_active, low_stock_threshold: p.low_stock_threshold, min_stock: p.min_stock ?? 0, max_stock: p.max_stock ?? 0, reorder_point: p.reorder_point ?? 0, product_type: p.product_type || 'ready', branch_id: p.branch_id || branchFilter || '' });
     const [u, comps] = await Promise.all([
@@ -145,6 +145,7 @@ export function ProductsPage() {
     } else {
       setManufacturedInventoryUnits([]);
     }
+    await stockComponentsPromise;
     setRecipeYield(currentYield);
     setRecipeIngredients(recipeRows);
     setLinkedInventoryUnits(displayInventoryLinks);
