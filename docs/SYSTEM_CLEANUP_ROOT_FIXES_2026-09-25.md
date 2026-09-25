@@ -76,7 +76,9 @@ Cleanup implementation is isolated on PR #372. Merge remains blocked until exact
 - Initial PR #372 Verify run `36180155015`: failed only at mandatory active-worklog structure before lint/type/unit/build executed.
 - Follow-up Verify run `36183410233`: failed only because this log still lacked the required `## Baseline` heading.
 - No application-code failure has been observed yet because both runs stopped at the worklog gate.
-- Exact-head verification must rerun after this structural correction.
+- Exact-head verification rerun `36183550578`: worklog gate and Supabase identity passed; frontend API contract failed because the retired production RPCs and `inventory_unit_productions` table were still present in the generated contract.
+- Regenerated `supabase/api-contract.json` to remove only those no-longer-referenced frontend contract entries. Historical DB objects/migrations remain untouched.
+- Exact-head verification must rerun on the new head.
 
 ## Production gate
 
@@ -89,7 +91,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Run exact-head Full Verify on the current PR #372 head. Fix only regressions caused by this cleanup. Do not begin P2 writes and do not merge until the branch is Green.
+Run exact-head Full Verify on the current PR #372 head after the API-contract regeneration. Fix only regressions caused by this cleanup. Do not begin P2 writes and do not merge until the branch is Green.
 
 ## Mandatory update protocol
 
