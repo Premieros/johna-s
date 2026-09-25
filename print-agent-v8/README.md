@@ -79,4 +79,4 @@ V8.1.1:
 
 لا تشغّل V7 وV8.1.1 كمستهلكين نشطين لنفس الفرع في نفس الوقت.
 
-Build checkpoint: Cleopatra V8.1.1 isolated branch verification.
+Build checkpoint: PR #365 Cleopatra V8.1.1 exact-head verification.
