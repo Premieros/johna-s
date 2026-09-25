@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/session-data-performance-20260925`
-Current PR: `#0`
+Current PR: `#371`
 Base: `main@3d5dd1fcd20e933f9dd8148b5a196ed6f415de9e`
 Last updated: 2026-09-25
 
@@ -43,13 +43,13 @@ Make common pages feel near-instant while preserving server truth:
 
 ## Change ledger
 
-- Pending: add user-scoped session-memory cache to `usePaginatedRows`.
-- Pending: stale-while-revalidate without hiding already displayed rows behind a loading state.
-- Pending: dedupe identical in-flight first-page queries (including React StrictMode remounts).
-- Pending: retain cache updates after load-more and explicit refresh.
-- Pending: verify `fetchAll()` bypasses display cache and always hits the database.
-- Pending: audit export paths on sales/purchases/inventory/reporting and fix any page-only export.
-- Pending: regression tests for user/branch/filter isolation, revalidation, dedupe, and full export.
+- Added user-scoped RAM-only session-memory cache to `usePaginatedRows`.
+- Added stale-while-revalidate so revisited lists keep known rows visible while Supabase refreshes in the background.
+- Verified existing mutation-aware PostgREST GET dedupe and intentionally reused it instead of adding a second stale-prone dedupe layer.
+- Session cache is refreshed after first-page refresh and load-more.
+- `fetchAll()` explicitly bypasses display cache and reads all matching server rows in batches.
+- Audited export paths; DataTable now supports an authoritative full-row provider. Customers and suppliers use full server fetch; products/purchases/expenses/inventory/reports/inventory ledger already use full-data server paths.
+- Added regression tests for session reuse, user isolation, and full-server export.
 
 ## Verification ledger
 
