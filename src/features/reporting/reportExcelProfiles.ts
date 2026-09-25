@@ -97,6 +97,41 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       columnWidths: { [branch]: 24, [pick(lang, 'المنتج', 'Product')]: 28, [pick(lang, 'التاريخ', 'Date')]: 18, [pick(lang, 'السبب', 'Reason')]: 32, [pick(lang, 'المستودع', 'Warehouse')]: 22 },
       integerColumns: [],
     },
+    raw_material_consumption: {
+      columns: [
+        branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
+        pick(lang, 'رصيد أول المدة', 'Opening Qty'), pick(lang, 'المشتريات كمية', 'Purchase Qty'),
+        pick(lang, 'تحويلات داخلة', 'Transfer In'), pick(lang, 'تحويلات خارجة', 'Transfer Out'),
+        pick(lang, 'استهلاك المبيعات', 'Sales Consumption Qty'), pick(lang, 'قيمة الاستهلاك', 'Consumption Value'),
+        pick(lang, 'الهالك', 'Waste Qty'), pick(lang, 'تسويات وحركات أخرى', 'Other Net Qty'),
+        pick(lang, 'رصيد آخر المدة', 'Closing Qty'), pick(lang, 'قيمة آخر المدة', 'Closing Value'),
+      ],
+      columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30, [pick(lang, 'الكود', 'Code')]: 18, [pick(lang, 'الوحدة', 'Unit')]: 14 },
+      integerColumns: [],
+    },
+    raw_material_current_cost: {
+      columns: [
+        branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
+        pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'تكلفة الوحدة الحالية FIFO', 'Current FIFO Unit Cost'),
+        pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'), pick(lang, 'آخر تكلفة معتمدة', 'Latest Authoritative Cost'),
+        pick(lang, 'مصدر السعر', 'Price Source'), pick(lang, 'طبقات FIFO المفتوحة', 'Open FIFO Batches'),
+      ],
+      columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30, [pick(lang, 'مصدر السعر', 'Price Source')]: 20 },
+      integerColumns: [pick(lang, 'طبقات FIFO المفتوحة', 'Open FIFO Batches')],
+    },
+    raw_material_financial: {
+      columns: [
+        branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الوحدة', 'Unit'),
+        pick(lang, 'كمية أول المدة', 'Opening Qty'), pick(lang, 'قيمة أول المدة', 'Opening Value'),
+        pick(lang, 'كمية المشتريات', 'Purchase Qty'), pick(lang, 'قيمة المشتريات', 'Purchase Value'),
+        pick(lang, 'صافي المبيعات', 'Net Sales'), pick(lang, 'كمية استهلاك المبيعات', 'Sales Consumption Qty'),
+        pick(lang, 'قيمة استهلاك المبيعات', 'Sales Consumption Value'), pick(lang, 'كمية آخر المدة', 'Closing Qty'),
+        pick(lang, 'قيمة آخر المدة', 'Closing Value'), pick(lang, 'مجمل الربح', 'Gross Profit'),
+        pick(lang, 'نسبة تكلفة الخامات %', 'Food Cost %'),
+      ],
+      columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30, [pick(lang, 'الوحدة', 'Unit')]: 14 },
+      integerColumns: [],
+    },
     financial_reconciliation: {
       columns: [branch, pick(lang, 'التاريخ', 'Date'), pick(lang, 'رقم الفاتورة', 'Invoice'), pick(lang, 'صافي الفاتورة', 'Net Sale'), pick(lang, 'كاش', 'Cash'), pick(lang, 'كارت', 'Card'), pick(lang, 'تحويل', 'Transfer'), pick(lang, 'بنك تاريخي غير مصنف', 'Legacy Bank'), pick(lang, 'آجل', 'Credit'), pick(lang, 'حركة الخزنة', 'Cash GL'), pick(lang, 'حركة البنك', 'Bank GL'), pick(lang, 'فرق الخزنة', 'Cash Difference'), pick(lang, 'فرق البنك', 'Bank Difference'), pick(lang, 'المطابقة', 'Reconciliation')],
       columnWidths: { [branch]: 24, [pick(lang, 'التاريخ', 'Date')]: 18, [pick(lang, 'رقم الفاتورة', 'Invoice')]: 20, [pick(lang, 'المطابقة', 'Reconciliation')]: 24 },
