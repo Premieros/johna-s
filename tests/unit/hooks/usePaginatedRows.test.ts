@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { usePaginatedRows } from '@/hooks/usePaginatedRows';
+import { clearPaginatedRowsSessionCache, usePaginatedRows } from '@/hooks/usePaginatedRows';
 
 interface Call {
   table: string;
@@ -8,6 +8,8 @@ interface Call {
   filters: { col: string; val: unknown }[];
   head: boolean;
 }
+
+const mockAuth = vi.hoisted(() => ({ userId: 'user-1' }));
 
 const mockState = vi.hoisted(() => ({
   tables: {} as Record<string, { data: unknown[]; count: number }>,
@@ -68,6 +70,7 @@ const mockSupabase = vi.hoisted(() => {
 });
 
 vi.mock('@/api', () => ({ supabase: mockSupabase }));
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: mockAuth.userId } }) }));
 
 function seed(table: string, n: number) {
   mockState.tables[table] = {
@@ -84,6 +87,8 @@ describe('usePaginatedRows', () => {
     mockState.tables = {};
     mockState.errors = {};
     mockState.calls = [];
+    mockAuth.userId = 'user-1';
+    clearPaginatedRowsSessionCache();
   });
 
   it('fetches pageSize+1 without an exact count and exposes only pageSize rows', async () => {
@@ -209,5 +214,52 @@ describe('usePaginatedRows', () => {
     expect(result.current.error).toContain('تعذر إكمال العملية بسبب خطأ في النظام');
     expect(result.current.rows).toHaveLength(0);
     expect(result.current.hasMore).toBe(false);
+  });
+
+  it('reuses session rows immediately on remount and revalidates from the server', async () => {
+    seed('sales', 12);
+    const first = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    expect(first.result.current.rows).toHaveLength(10);
+    first.unmount();
+
+    mockState.calls = [];
+    seed('sales', 13);
+    const second = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
+
+    expect(second.result.current.rows).toHaveLength(10);
+    expect(second.result.current.loading).toBe(false);
+    await waitFor(() => expect(dataCalls('sales')).toHaveLength(1));
+    await waitFor(() => expect(second.result.current.rows).toHaveLength(10));
+  });
+
+  it('does not reuse cached rows across authenticated users', async () => {
+    seed('sales', 5);
+    const first = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    expect(first.result.current.rows).toHaveLength(5);
+    first.unmount();
+
+    mockAuth.userId = 'user-2';
+    mockState.calls = [];
+    seed('sales', 2);
+    const second = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
+    expect(second.result.current.rows).toHaveLength(0);
+    expect(second.result.current.loading).toBe(true);
+    await waitFor(() => expect(second.result.current.loading).toBe(false));
+    expect(second.result.current.rows).toHaveLength(2);
+  });
+
+  it('fetchAll bypasses session display cache and fetches the full server dataset', async () => {
+    seed('sales', 25);
+    const { result } = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales', pageSize: 10 }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.rows).toHaveLength(10);
+
+    mockState.calls = [];
+    const all = await act(async () => result.current.fetchAll());
+    expect(all).toHaveLength(25);
+    expect(dataCalls('sales')).toHaveLength(1);
+    expect(dataCalls('sales')[0].range).toEqual([0, 999]);
   });
 });
