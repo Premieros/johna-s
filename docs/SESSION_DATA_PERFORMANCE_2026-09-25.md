@@ -41,6 +41,14 @@ Make common pages feel near-instant while preserving server truth:
 - Reports use `fetchAllReportRows` for full-dataset export/report loading.
 - Inventory ledger export already walks the full cursor-paginated result set.
 
+## Root-cause ledger
+
+1. List pages backed by `usePaginatedRows` always start empty after navigation/remount and wait for the first server round-trip before showing rows.
+2. The application already has mutation-aware PostgREST GET dedupe, so duplicate-read suppression must reuse that layer instead of adding a second in-hook dedupe.
+3. Display pagination is intentionally bounded, but exports must bypass display state/cache and fetch every matching server row.
+4. Some DataTable exports previously had access only to currently loaded rows, which could produce incomplete files.
+5. Browser-persistent caching is not appropriate for operational finance/trade lists; session RAM is the safe acceleration layer.
+
 ## Change ledger
 
 - Added user-scoped RAM-only session-memory cache to `usePaginatedRows`.
