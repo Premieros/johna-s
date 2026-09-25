@@ -286,25 +286,25 @@ export function PosWorkspacePage() {
       try {
         const fixedBranch = effectiveBranch;
         
-        // If navigator is offline, immediately try offline cache first
+        // Hydrate branch-scoped cache immediately, even while online, so resumed orders
+        // can render the product catalog without waiting for the network round-trip.
+        const cachedData = await loadCachedPosData(fixedBranch || undefined);
+        const cachedCatalog = offlinePosManager.getCatalogCache(fixedBranch || 'default');
+        const cachedProducts = cachedData.products.length > 0 ? cachedData.products : cachedCatalog?.products || [];
+        const cachedCategories = cachedData.categories.length > 0 ? cachedData.categories : cachedCatalog?.categories || [];
+
+        if (cachedProducts.length > 0 && !cancelled) {
+          setProducts(cachedProducts);
+          setCategories(cachedCategories);
+          if (cachedData.customers.length > 0) setCustomers(cachedData.customers);
+          if (cachedData.settings) setOfflineSettings(cachedData.settings);
+          if (cachedData.branches.length > 0) setOfflineBranches(cachedData.branches);
+          setLoading(false);
+        }
+
+        // If navigator is offline, the hydrated cache is the terminal source.
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          const offlineData = await loadCachedPosData(fixedBranch || undefined);
-          const catalogFallback = offlinePosManager.getCatalogCache(fixedBranch || 'default');
-
-          const prodList = offlineData.products.length > 0 ? offlineData.products : catalogFallback?.products || [];
-          const catList = offlineData.categories.length > 0 ? offlineData.categories : catalogFallback?.categories || [];
-
-          if (prodList.length > 0) {
-            if (!cancelled) {
-              setProducts(prodList);
-              setCategories(catList);
-              if (offlineData.customers.length > 0) setCustomers(offlineData.customers);
-              if (offlineData.settings) setOfflineSettings(offlineData.settings);
-              if (offlineData.branches.length > 0) setOfflineBranches(offlineData.branches);
-              setLoading(false);
-            }
-            return;
-          }
+          if (cachedProducts.length > 0) return;
         }
 
         let cusq = supabase.from('customers').select('*');
