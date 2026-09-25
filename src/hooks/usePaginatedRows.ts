@@ -55,17 +55,12 @@ interface SessionCacheEntry<T> {
   updatedAt: number;
 }
 
-interface FirstPageResult<T> {
-  data: T[] | null;
-  error: unknown;
-}
 
 // RAM-only cache. Nothing here is written to localStorage/IndexedDB. The query
 // key includes the authenticated user and every business scope/filter so cached
 // rows can never be reused across users, branches, searches, or history ranges.
 const SESSION_CACHE_LIMIT = 80;
 const sessionRowsCache = new Map<string, SessionCacheEntry<unknown>>();
-const firstPageRequests = new Map<string, Promise<FirstPageResult<unknown>>>();
 
 function readSessionCache<T>(key: string): SessionCacheEntry<T> | undefined {
   return sessionRowsCache.get(key) as SessionCacheEntry<T> | undefined;
@@ -83,7 +78,6 @@ function writeSessionCache<T>(key: string, entry: Omit<SessionCacheEntry<T>, 'up
 
 export function clearPaginatedRowsSessionCache(): void {
   sessionRowsCache.clear();
-  firstPageRequests.clear();
 }
 
 function safeSearchTerm(value: string): string {
@@ -202,16 +196,10 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     setError(null);
 
     try {
-      let pending = firstPageRequests.get(queryKey) as Promise<FirstPageResult<T>> | undefined;
-      if (!pending) {
-        pending = Promise.resolve(buildDataQuery(0, pageSize) as unknown as PromiseLike<FirstPageResult<T>>)
-          .finally(() => {
-            firstPageRequests.delete(queryKey);
-          });
-        firstPageRequests.set(queryKey, pending as Promise<FirstPageResult<unknown>>);
-      }
-
-      const { data, error: err } = await pending;
+      // Identical concurrent PostgREST GET requests are already coalesced by
+      // createPostgrestDedupingFetch, which also avoids attaching post-mutation
+      // reads to older in-flight responses. Keep this hook focused on display SWR.
+      const { data, error: err } = await buildDataQuery(0, pageSize);
       if (g !== gen.current) return;
       if (err) {
         setError(userFacingErrorMessage(err));
