@@ -78,6 +78,20 @@ If the operational KPI and ledger differ, the product must:
 - Invoice total, paid, returned, and supplier outstanding must reconcile to AP aging.
 - Credit purchase label is explicit: supplier outstanding, not bank/card/credit jargon.
 
+## Visibility / permission scope
+
+Unified metrics never bypass `history.unlimited`, branch isolation, or table/RPC visibility rules.
+
+For users without `history.unlimited`:
+- the most recent 7 days are fully visible;
+- older history follows the deterministic historical visibility policy;
+- every displayed total, reconciliation, and export must mean **total of data visible to this user**, not the absolute branch total;
+- current inventory truth is not historically sampled, but historical inventory movement is;
+- per-visible-invoice supplier/customer outstanding remains exact for that visible invoice;
+- a screen must disclose when historical totals are permission-scoped.
+
+A metric is considered "the same number everywhere" only when compared under the same branch, date range, filters, and visibility permissions.
+
 ## Verification checklist
 
 - [ ] Same supplier outstanding in Purchases, Finance, and Reports.
