@@ -55,13 +55,14 @@ User requested a compact two-row Reports Center UI, quantity columns visible in 
 - Fixed raw-material financial quantity visibility: period-total row now declares all quantity columns with `—` instead of hiding them; per-material quantities remain authoritative and no incompatible units are summed.
 - Raw-material financial Excel export now exports detail rows with the period-total row as the styled table total.
 - Reworked Excel layout into one professional sheet with a large colored title, period subtitle, larger colored column headers, Auto Filter, frozen header, controlled widths, and styled totals/source note.
+- Restored central number formatting for the compact summary total and semantic report accent classes; updated stale ReportingShell unit contracts to the intentionally minimal two-row design.
 
 ## Verification ledger
 
 - Previous PR #363 run `36137790704`: failed only at stale active-worklog gate before lint/typecheck/tests.
 - Active-worklog gate corrected on branch.
 - Exact-head Verify main run `36138051390` on `83a0ebdff903944e21e56ce8fcf988d1312bb7ac`: previous **FULL GREEN**, superseded by new UI/export changes.
-- New compact UI / quantity visibility / Excel verification: pending exact-head runs.
+- New compact UI / quantity visibility / Excel verification: Fast Verify run `36143810442` on `852ff7182d9b9937f1099430931d5f881275a3fa` failed only in 4 unit-contract assertions after typecheck + lint passed. Causes: one direct `toLocaleString()` display, two stale ReportingShell browser/favorites expectations, and one semantic accent-class expectation. Fixed on the same branch without restoring browser cards/search.
 - verify ✅
 - db ✅
 - browser-smoke ✅
