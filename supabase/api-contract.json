@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-24T00:00:00.000Z",
+  "generated_at": "2026-09-26T00:00:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -339,6 +339,22 @@
       ]
     },
     {
+      "name": "edit_shift_expense",
+      "params": [
+        "amount",
+        "category",
+        "description",
+        "expense_account_id",
+        "expense_date",
+        "expense_id",
+        "idempotency_key",
+        "notes",
+        "payment_method",
+        "reason",
+        "treasury_account_id"
+      ]
+    },
+    {
       "name": "enqueue_cloud_open_order_print",
       "params": [
         "idempotency_key",
@@ -481,6 +497,12 @@
     },
     {
       "name": "get_employee_credit_balances",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
+      "name": "get_expense_routing_rules",
       "params": [
         "branch_id"
       ]
@@ -1199,6 +1221,17 @@
       "params": [
         "new_password",
         "user_id"
+      ]
+    },
+    {
+      "name": "upsert_expense_routing_rule",
+      "params": [
+        "branch_id",
+        "category",
+        "expense_account_id",
+        "is_active",
+        "payment_method",
+        "treasury_account_id"
       ]
     }
   ],
