@@ -1,84 +1,101 @@
-# SYSTEM CLEANUP ROOT FIXES — 2026-09-25
+# SYSTEM CLEANUP ROOT FIXES — ACTIVE WORK LOG
 
 Repository: `Premieros/johna-s`
-Base: `main@29f99187574fd700cee5da6b71d9b4b13339022c`
-Branch: `development/system-cleanup-root-fixes-20260925`
 Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `development/system-cleanup-root-fixes-20260925`
+Current PR: `#372`
+Last updated: 2026-09-25 23:05 Africa/Cairo
 
 ## Work status
 
 State: **BLOCKED**
 
-## Execution state
-
-Current PR: `#372`
-Current branch: `development/system-cleanup-root-fixes-20260925`
-Exact-head verification: **PENDING**
+Cleanup implementation is isolated on PR #372. Merge remains blocked until exact-head Full Verify is Green and explicit approval is given.
 
 ## Guardrails
 
-- Single Writer.
+- Single Writer only.
 - No direct write to `main`.
-- Check branch/main before each write; unexpected movement = STOP_AND_RECONCILE.
+- Before every write, verify the expected branch HEAD and current `main`; unexpected movement = STOP_AND_RECONCILE.
 - No force push.
 - No Production migration in this phase.
-- No RLS weakening.
+- No RLS or test weakening.
 - Printing / Print Agent / printer routing / KDS / send-to-kitchen / shifts are frozen and out of scope.
 - Historical applied migrations are append-only and are not deleted or rewritten.
+- Production is not a test environment.
 
-## Goal
+## Baseline
 
-Remove dormant or duplicated application paths that can create inconsistent behavior, starting with the retired manufacturing workflow, while keeping historical database compatibility intact until a separate DB-retirement phase is explicitly approved.
+- Base: `main@29f99187574fd700cee5da6b71d9b4b13339022c`.
+- That main head is the merge result of PR #371 (session-memory SWR/full-server export work).
+- PR #371 exact-head Verify was Green before this cleanup branch was created.
+- This cleanup branch was created directly from that exact main head.
+- No Production database write or migration has been performed by this cleanup.
 
-## Phase ledger
+## Root-cause ledger
 
-### P0 — Legacy manufacturing actions fail closed
-Status: **DONE**
+1. The retired manufacturing application surface still existed even though production routes were already redirected away from the old workflow.
+2. Legacy manufacturing API methods still contained client-side fallback writes to `production_orders`, creating a second mutation path outside the authoritative RPC transactions.
+3. Production-only UI permissions and `guardProduction` kept obsolete application concepts alive after the business model moved to direct component/raw-material consumption.
+4. `InventoryUnitsPage` still depended on `production.manage` to edit unit component definitions, coupling reusable component configuration to the retired production workflow.
+5. Historical database functions/migrations still exist for compatibility and audit history; deleting or rewriting applied migrations is not a safe application cleanup strategy.
 
-- Removed all direct browser writes to `production_orders` from the manufacturing domain API.
-- create/start/complete/cancel now delegate only to their authoritative RPC and fail closed on RPC/client errors.
-- No Production database change.
+## Change ledger
 
-Commit: `3a5c23cd4d0333c3d0c579f5e48806f587a7e154`
+### P0 — Fail closed
+- Removed all client-side fallback writes from legacy manufacturing create/start/cancel actions.
+- During the transition, create/start/complete/cancel delegated only to authoritative RPCs and failed closed.
 
 ### P1 — Retire production application surface
-Status: **DONE**
-
-Target:
-- remove `ProductionOrdersPage`;
-- remove `UnitProductionPage`;
-- remove unused `ManufacturingCenterPage`;
-- remove application export of the legacy manufacturing API;
-- remove `catalog.produceInventoryUnit`;
-- retire production-only UI permissions/guards;
-- keep old route URLs as safe redirects to the reusable recipe/component surface;
-- update tests/contracts so they guard the retired state instead of preserving dead UI.
+- Removed `src/api/domains/manufacturing.ts`.
+- Removed `ProductionOrdersPage.tsx`.
+- Removed `UnitProductionPage.tsx`.
+- Removed unused `ManufacturingCenterPage.tsx`.
+- Removed manufacturing API export from `src/api/modules.ts`.
+- Removed `catalog.produceInventoryUnit`.
+- Removed production-only application permissions and permission dependencies.
+- Removed `guardProduction`.
+- Rebound inventory-unit component editing from `production.manage` to `recipes.manage`.
+- Preserved old `/production`, `/production/units`, and manufacturing-center URLs as safe redirects to Recipes instead of breaking bookmarks.
+- Removed tests that artificially preserved the retired UI.
+- Added `tests/unit/manufacturingRetirementContract.test.ts` to prevent the retired application surface/API/permissions from silently returning.
 
 ### P2 — Dead/dormant code cleanup
-Status: **PENDING**
-
-- Re-prove callers before deleting dormant subscription/report/V2 wrappers.
-- One small PR/commit group at a time.
+- Read-only re-proof started while verification runs.
+- Legacy subscription runtime/UI cleanup is already present on current main and protected by `legacySubscriptionCleanupContract.test.ts`; it will not be duplicated.
+- `ReportDeepLinkPage` and remaining V2 wrappers require current caller/contract proof before any write.
 
 ### P3 — Data-source unification
-Status: **PENDING**
-
-- Inventory/finance/report authoritative reads only.
-- No broad mechanical replacement of harmless lookup reads.
+- Pending until P1 is exact-head Green.
 
 ### P4 — Database retirement
-Status: **BLOCKED / SEPARATE APPROVAL**
-
-- Additive retirement migration only.
-- No applied migration rewrite/delete.
-- Full Verify + explicit approval before Production.
+- Separate future phase only; no action in PR #372.
 
 ## Verification ledger
 
-- Source baseline: PR #371 merged to `main@29f99187574fd700cee5da6b71d9b4b13339022c`.
-- PR #371 head Verify main: Green.
-- Branch verification: pending after P1 changes.
+- Initial PR #372 Verify run `36180155015`: failed only at mandatory active-worklog structure before lint/type/unit/build executed.
+- Follow-up Verify run `36183410233`: failed only because this log still lacked the required `## Baseline` heading.
+- No application-code failure has been observed yet because both runs stopped at the worklog gate.
+- Exact-head verification must rerun after this structural correction.
+
+## Production gate
+
+State: **BLOCKED**
+
+- No Production migration is included in PR #372.
+- No Production SQL write is authorized by this phase.
+- Historical production tables/functions remain untouched for compatibility.
+- Any future DB retirement must be additive/forward-only, pass Full Verify, and receive explicit approval before Production application.
 
 ## Next action
 
-Run exact-head Full Verify for PR #372. Fix only regressions caused by this cleanup. Do not merge until Green and explicit approval.
+Run exact-head Full Verify on the current PR #372 head. Fix only regressions caused by this cleanup. Do not begin P2 writes and do not merge until the branch is Green.
+
+## Mandatory update protocol
+
+- Check branch HEAD and current `main` before every write.
+- Unexpected HEAD = STOP_AND_RECONCILE.
+- Update this log after each logical change group and after every verification result.
+- Keep `docs/CURRENT_WORK_PLAN.md` pointing to this file while PR #372 is the active work scope.
+- No parallel writer on this branch.
+- No Merge and no Production migration before exact-head Full Verify Green plus explicit approval.
