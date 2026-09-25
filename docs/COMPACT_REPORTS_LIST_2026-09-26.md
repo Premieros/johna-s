@@ -28,10 +28,15 @@ State: **BLOCKED**
 3. Master sales report exposes too few columns, pushing users into multiple derivative reports for the same business question.
 
 ## Change ledger
-- Pending.
+- Replaced the report-card/category/favorites browser with one compact Excel-like row list.
+- Operational and financial reports now share the same visible list; users no longer need to understand internal report sections.
+- Added responsive behavior: persistent 240px list on desktop, single compact chooser on mobile.
+- Financial report selection is synchronized from URL/list and the old financial view-button strip is hidden when embedded in the unified center.
+- Expanded the main Sales report into a master invoice report with customer, user, warehouse, order type, payment method, status, subtotal, discount, tax, invoice total, paid, refunded and net collection columns.
+- Added unit contract `compactReportsCenter.test.ts` to prevent regression back to cards and narrow sales output.
 
 ## Verification ledger
-- Pending.
+- Local/CI verification pending.
 
 ## Production gate
 - Production migration: **NOT REQUIRED / OUT OF SCOPE**.
