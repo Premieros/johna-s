@@ -134,7 +134,6 @@ import { ReconciliationPage } from '@/features/accounting/pages/ReconciliationPa
 import { JournalPage } from '@/features/accounting/pages/JournalPage';
 import { RecipesPage } from '@/features/manufacturing/pages/RecipesPage';
 import { RawMaterialsPage } from '@/features/manufacturing/pages/RawMaterialsPage';
-import { ProductionOrdersPage } from '@/features/manufacturing/pages/ProductionOrdersPage';
 import { ActiveOrdersPage } from '@/features/pos/pages/ActiveOrdersPage';
 
 describe('design primitives (stable test identity)', () => {
@@ -210,7 +209,6 @@ const pageSurfaceCases: Array<[string, React.ComponentType, string, string]> = [
   ['JournalPage', JournalPage, 'journal-page', 'journal-search'],
   ['RecipesPage', RecipesPage, 'recipes-page', 'recipes-search'],
   ['RawMaterialsPage', RawMaterialsPage, 'raw-materials-page', 'raw-materials-search'],
-  ['ProductionOrdersPage', ProductionOrdersPage, 'production-orders-page', 'production-orders-search'],
   ['ActiveOrdersPage', ActiveOrdersPage, 'active-orders-page', ''],
 ];
 

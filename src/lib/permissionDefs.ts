@@ -34,7 +34,6 @@ export type Permission =
   | 'inventory.transfer.create' | 'inventory.transfer.approve' | 'inventory.ledger.view'
   | 'raw_materials.view' | 'raw_materials.manage'
   | 'recipes.view' | 'recipes.manage'
-  | 'production.view' | 'production.manage' | 'production.waste'
   | 'waste.view' | 'waste.create' | 'waste.approve' | 'waste.report'
   | 'warehouses.view' | 'warehouses.manage'
   | 'customers.view' | 'customers.manage'
@@ -75,7 +74,6 @@ export const ALL_PERMISSIONS: Permission[] = [
   'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view',
   'raw_materials.view', 'raw_materials.manage',
   'recipes.view', 'recipes.manage',
-  'production.view', 'production.manage', 'production.waste',
   'waste.view', 'waste.create', 'waste.approve', 'waste.report',
   'warehouses.view', 'warehouses.manage',
   'customers.view', 'customers.manage', 'customers.print', 'customers.export',
@@ -159,9 +157,6 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'raw_materials.manage': { ar: 'إدارة المواد الخام', en: 'Manage Raw Materials' },
   'recipes.view': { ar: 'عرض الوصفات', en: 'View Recipes' },
   'recipes.manage': { ar: 'إدارة الوصفات', en: 'Manage Recipes' },
-  'production.view': { ar: 'عرض أوامر الإنتاج', en: 'View Production Orders' },
-  'production.manage': { ar: 'إدارة أوامر الإنتاج', en: 'Manage Production Orders' },
-  'production.waste': { ar: 'تسجيل هالك الإنتاج', en: 'Record Production Waste' },
   'waste.view': { ar: 'عرض مركز الهالك', en: 'View Waste Center' },
   'waste.create': { ar: 'تسجيل هالك', en: 'Record Waste' },
   'waste.approve': { ar: 'اعتماد الهالك', en: 'Approve Waste' },
@@ -228,7 +223,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'inventory', ar: 'المخزون', en: 'Inventory', permissions: ['inventory.view', 'inventory.adjust', 'inventory.count.create', 'inventory.count.approve', 'inventory.count.reject', 'inventory.count.apply', 'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view'] },
   { key: 'raw_materials', ar: 'المواد الخام', en: 'Raw Materials', permissions: ['raw_materials.view', 'raw_materials.manage'] },
   { key: 'recipes', ar: 'الوصفات', en: 'Recipes', permissions: ['recipes.view', 'recipes.manage'] },
-  { key: 'production', ar: 'الإنتاج والهالك', en: 'Production & Waste', permissions: ['production.view', 'production.manage', 'production.waste', 'waste.view', 'waste.create', 'waste.approve', 'waste.report'] },
+  { key: 'waste', ar: 'الهالك', en: 'Waste', permissions: ['waste.view', 'waste.create', 'waste.approve', 'waste.report'] },
   { key: 'warehouses', ar: 'المخازن', en: 'Warehouses', permissions: ['warehouses.view', 'warehouses.manage'] },
   { key: 'customers', ar: 'العملاء', en: 'Customers', permissions: ['customers.view', 'customers.manage', 'customers.print', 'customers.export'] },
   { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.print'] },
@@ -298,10 +293,10 @@ export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
     ),
   },
   {
-    key: 'production',
-    ar: 'الإنتاج والهالك',
-    en: 'Production & Waste',
-    permissions: PERMISSION_GROUPS.find((group) => group.key === 'production')!.permissions,
+    key: 'waste',
+    ar: 'الهالك',
+    en: 'Waste',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'waste')!.permissions,
   },
   {
     key: 'customers',
@@ -383,7 +378,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   cashier: ['dashboard.view', 'pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print', 'pos.hold', 'pos.send_kitchen', 'pos.print_kitchen', 'pos.void', 'floor_plan.view', 'products.view', 'customers.view', 'customers.manage', 'inventory.view', 'sales.view', 'sales.print', 'shifts.view', 'shifts.open', 'shifts.close'],
   warehouse_manager: ['dashboard.view', 'products.view', 'products.create', 'products.edit', 'products.delete', 'products.print', 'products.export', 'products.import', 'categories.view', 'categories.manage', 'components.view', 'components.manage', 'inventory.view', 'inventory.adjust', 'inventory.count.create', 'inventory.count.approve', 'inventory.count.reject', 'inventory.count.apply', 'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view', 'warehouses.view', 'warehouses.manage', 'purchases.view', 'purchases.manage', 'purchases.print', 'purchases.requests', 'purchases.rfq', 'purchases.receiving', 'purchases.evaluation', 'suppliers.view', 'suppliers.manage', 'suppliers.print', 'shifts.view'],
   accountant: ['dashboard.view', 'sales.view', 'sales.print', 'sales.export', 'purchases.view', 'purchases.print', 'expenses.view', 'expenses.manage', 'expenses.print', 'inventory.view', 'customers.view', 'customers.print', 'customers.export', 'suppliers.view', 'suppliers.print', 'reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export', 'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage', 'shifts.view'],
-  production_manager: ['dashboard.view', 'pos.kds_view', 'pos.kds_update', 'products.view', 'products.create', 'products.edit', 'products.delete', 'products.print', 'products.export', 'products.import', 'categories.view', 'categories.manage', 'raw_materials.view', 'raw_materials.manage', 'recipes.view', 'recipes.manage', 'production.view', 'production.manage', 'production.waste', 'waste.view', 'waste.create', 'waste.approve', 'waste.report', 'inventory.view', 'inventory.adjust', 'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view', 'warehouses.view', 'warehouses.manage', 'purchases.view', 'purchases.manage', 'purchases.print', 'suppliers.view', 'suppliers.manage', 'suppliers.print', 'shifts.view'],
+  production_manager: ['dashboard.view', 'pos.kds_view', 'pos.kds_update', 'products.view', 'products.create', 'products.edit', 'products.delete', 'products.print', 'products.export', 'products.import', 'categories.view', 'categories.manage', 'raw_materials.view', 'raw_materials.manage', 'recipes.view', 'recipes.manage', 'waste.view', 'waste.create', 'waste.approve', 'waste.report', 'inventory.view', 'inventory.adjust', 'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view', 'warehouses.view', 'warehouses.manage', 'purchases.view', 'purchases.manage', 'purchases.print', 'suppliers.view', 'suppliers.manage', 'suppliers.print', 'shifts.view'],
 };
 
 export interface RoleDef {

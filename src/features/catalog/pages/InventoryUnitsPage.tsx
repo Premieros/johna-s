@@ -122,7 +122,7 @@ export function InventoryUnitsPage() {
   };
 
   const openRecipe = async (unit: InventoryUnit) => {
-    if (unit.unit_type !== 'manufactured' || !can('production.manage')) return;
+    if (unit.unit_type !== 'manufactured' || !can('recipes.manage')) return;
     setRecipeUnit(unit);
     setRecipeModalOpen(true);
     setRecipeLoading(true);
@@ -181,7 +181,7 @@ export function InventoryUnitsPage() {
     { key: 'cost_price', header: t('costPrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.cost_price), 1)}</span> },
     { key: 'sale_price', header: t('salePrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.sale_price), 1)}</span> },
     { key: 'actions', header: t('actions'), render: (unit) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-      {unit.unit_type === 'manufactured' && can('production.manage') && <button onClick={() => openRecipe(unit)} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={isAr ? 'وصفة المصنع' : 'Manufactured item recipe'}><Beaker className="w-4 h-4" /></button>}
+      {unit.unit_type === 'manufactured' && can('recipes.manage') && <button onClick={() => openRecipe(unit)} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={isAr ? 'مكونات الوحدة' : 'Unit components'}><Beaker className="w-4 h-4" /></button>}
       {can('raw_materials.manage') && <button onClick={() => openEdit(unit)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>}
       {can('raw_materials.manage') && <button onClick={() => setDeleteId(unit.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>}
     </div> },
@@ -214,7 +214,7 @@ export function InventoryUnitsPage() {
         </div>
       </Modal>
 
-      <Modal open={recipeModalOpen} onClose={() => setRecipeModalOpen(false)} title={recipeUnit ? `${isAr ? 'وصفة المصنع' : 'Manufactured item recipe'} — ${recipeUnit.name}` : (isAr ? 'وصفة المصنع' : 'Manufactured item recipe')} size="lg">
+      <Modal open={recipeModalOpen} onClose={() => setRecipeModalOpen(false)} title={recipeUnit ? `${isAr ? 'مكونات الوحدة' : 'Unit components'} — ${recipeUnit.name}` : (isAr ? 'مكونات الوحدة' : 'Unit components')} size="lg">
         <div className="space-y-4">
           <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-sm text-purple-800">{isAr ? 'الخامات هنا تخص تصنيع هذا المصنع فقط. البيع لا يخصم خاماته مباشرة.' : 'These raw materials are consumed only when manufacturing this item. Sales do not deduct them directly.'}</div>
           {recipeRows.map((row, index) => {

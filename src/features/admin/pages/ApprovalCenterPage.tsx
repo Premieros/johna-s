@@ -9,9 +9,8 @@ import { useToast } from '@/components/Toast';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { ALL_PERMISSIONS, useCan } from '@/lib/permissions';
+import { ALL_PERMISSIONS, type Permission, useCan } from '@/lib/permissions';
 import { useAuth } from '@/context/AuthContext';
-import { useV2Can } from '@/v2/core/useV2Can';
 import { WorkAuthorizationPreview } from '@/features/admin/work-authorization/WorkAuthorizationPreview';
 import { createSupabaseWorkAuthorizationClient } from '@/features/admin/work-authorization/supabaseWorkAuthorizationProvider';
 
@@ -38,7 +37,6 @@ export function ApprovalCenterPage() {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
   const { user } = useAuth();
-  const v2Can = useV2Can();
   const can = useCan();
   const { branches } = useBranches();
   const activeBranch = useBranchFilter();
@@ -68,7 +66,9 @@ export function ApprovalCenterPage() {
 
   // The server supplies the exact permission required for each queue item.
   // Super Admin bypass, when applicable, is handled only by canonical useCan().
-  const mayDecide = (row: QueueItem) => canReviewApprovals && v2Can(row.required_permission);
+  const mayDecide = (row: QueueItem) => canReviewApprovals
+    && ALL_PERMISSIONS.includes(row.required_permission as Permission)
+    && can(row.required_permission as Permission);
 
   const decide = async (row: QueueItem, approve: boolean) => {
     let reason: string | null = null;

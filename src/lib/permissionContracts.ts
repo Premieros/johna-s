@@ -65,8 +65,6 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
 
   'raw_materials.manage': ['raw_materials.view'],
   'recipes.manage': ['recipes.view'],
-  'production.manage': ['production.view'],
-  'production.waste': ['production.view'],
   'waste.create': ['waste.view'],
   'waste.approve': ['waste.view'],
   'waste.report': ['waste.view'],
