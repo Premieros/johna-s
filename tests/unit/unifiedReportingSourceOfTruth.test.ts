@@ -19,7 +19,7 @@ describe('unified reporting source-of-truth contract', () => {
   it('forces costing summary and order margin through the same net-sales contract', () => {
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.get_costing_sales_summary');
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.get_order_margin');
-    expect(migration.match(/private\\.report_net_sale_amount/g)?.length || 0).toBeGreaterThanOrEqual(4);
+    expect(migration.match(/private\.report_net_sale_amount/g)?.length || 0).toBeGreaterThanOrEqual(4);
   });
 
   it('keeps COGS resolution journal-first with settled kitchen and legacy sale fallbacks', () => {
