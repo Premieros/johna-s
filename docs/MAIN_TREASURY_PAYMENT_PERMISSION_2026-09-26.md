@@ -49,7 +49,8 @@ State: **BLOCKED**
 ## Verification ledger
 - Baseline main: `8ea407b3de1313a4809e409312d9b003e7a3b11e`.
 - PR #375 Production API parity/deploy: Green.
-- Draft PR #376 opened. Exact-head verification for this change: pending.
+- Full Verify run `36202103538` on `de4007604b8808439af9c3acf468e8eab09ddb1f`: **FULL GREEN** — worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, typecheck ✅, unit ✅, build ✅, canonical migrations ✅, schema ✅, integration + security/RLS ✅, Browser Smoke ✅.
+- Final docs-head exact verification after recording this result: pending.
 
 ## Production gate
 - BLOCKED pending exact-head Full Verify Green + explicit approval.
