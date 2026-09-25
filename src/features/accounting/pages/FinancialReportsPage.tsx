@@ -27,6 +27,8 @@ export function FinancialReportsPage() {
   const { t, lang } = useLanguage();
   const branchFilter = useBranchFilter();
   const isAr = lang === 'ar';
+  const accountingDebitLabel = isAr ? 'مدين' : 'Debit';
+  const accountingCreditLabel = isAr ? 'دائن' : 'Credit';
   const [searchParams] = useSearchParams();
   const history = useHistoryAccess();
 
@@ -573,8 +575,8 @@ export function FinancialReportsPage() {
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('accountCode')}</th>
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('accountName')}</th>
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('accountType')}</th>
-                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{ledgerIsAsset ? (isAr ? 'وارد' : 'Inflow') : t('debit')}</th>
-                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{ledgerIsAsset ? (isAr ? 'منصرف' : 'Outflow') : t('credit')}</th>
+                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{accountingDebitLabel}</th>
+                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{accountingCreditLabel}</th>
                   <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('balance')}</th>
                 </tr>
               </thead>
@@ -612,8 +614,8 @@ export function FinancialReportsPage() {
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('entryNumber')}</th>
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('description')}</th>
                   <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('reference')}</th>
-                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('debit')}</th>
-                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('credit')}</th>
+                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{accountingDebitLabel}</th>
+                  <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{accountingCreditLabel}</th>
                   <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('balance')}</th>
                 </tr>
               </thead>
@@ -914,8 +916,8 @@ export function FinancialReportsPage() {
                       <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('date')}</th>
                       <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('entryNumber')}</th>
                       <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('description')}</th>
-                      <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('debit')}</th>
-                      <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('credit')}</th>
+                      <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{accountingDebitLabel}</th>
+                      <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{accountingCreditLabel}</th>
                       <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('balance')}</th>
                     </tr>
                   </thead>
