@@ -21,6 +21,45 @@ export const accounting = {
   reverseShiftExpense(p: { p_expense_id: string; p_reason: string }): ApiResult<RpcResult & { journal_entry_id?: string; already_reversed?: boolean }> {
     return rpc('reverse_shift_expense', p);
   },
+  editShiftExpense(p: {
+    p_expense_id: string;
+    p_idempotency_key: string;
+    p_category: string;
+    p_description: string | null;
+    p_amount: number;
+    p_payment_method: string;
+    p_expense_account_id: string;
+    p_treasury_account_id: string;
+    p_expense_date: string;
+    p_notes: string | null;
+    p_reason: string;
+  }): ApiResult<RpcResult & { old_expense_id?: string; replacement_expense_id?: string; journal_entry_id?: string }> {
+    return rpc('edit_shift_expense', p);
+  },
+  getExpenseRoutingRules(p: { p_branch_id: string }): ApiResult<Array<{
+    id: string;
+    category: string;
+    expense_account_id: string;
+    expense_account_code: string;
+    expense_account_name: string;
+    treasury_account_id: string;
+    treasury_account_name: string;
+    treasury_account_type: string;
+    payment_method: string;
+    is_active: boolean;
+  }>> {
+    return rpc('get_expense_routing_rules', p);
+  },
+  upsertExpenseRoutingRule(p: {
+    p_branch_id: string;
+    p_category: string;
+    p_expense_account_id: string;
+    p_treasury_account_id: string;
+    p_payment_method: string;
+    p_is_active: boolean;
+  }): ApiResult<RpcResult & { id?: string }> {
+    return rpc('upsert_expense_routing_rule', p);
+  },
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p); },
   seedOpeningBalances(p: { p_branch_id: string | null }): ApiResult<RpcResult> { return rpc('seed_opening_balances', p); },
   getJournals(p: { p_branch_id: string | null; p_from_date: string | null; p_to_date: string | null; p_reference_type: string | null; p_search: string | null }): ApiResult<JournalDto[]> { return rpc('get_journals', p); },

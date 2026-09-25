@@ -78,6 +78,8 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'suppliers.manage': ['suppliers.view'],
   'suppliers.print': ['suppliers.view'],
   'expenses.manage': ['expenses.view'],
+  'expenses.edit': ['expenses.view', 'expenses.manage'],
+  'expenses.routing.manage': ['expenses.view', 'expenses.manage', 'accounts.view'],
   'expenses.print': ['expenses.view'],
 
   'sales.refund.create': ['sales.view'],

@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/COMPACT_REPORTS_LIST_2026-09-26.md`
-- Current active branch: `development/reports-compact-list-20260926`
-- Current PR: `#374`
+- Mandatory active work log: `docs/EXPENSE_ROUTING_EDIT_2026-09-26.md`
+- Current active branch: `development/expense-routing-edit-20260926`
+- Current PR: `#375`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
