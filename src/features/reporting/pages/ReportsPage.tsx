@@ -197,23 +197,52 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setOptions({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [] });
       return;
     }
+
+    let cancelled = false;
     (async () => {
+      const dims = new Set(REPORT_FILTER_DIMS[reportType]);
+      const needsWarehouse = dims.has('warehouse');
+      const needsCashier = dims.has('cashier') || dims.has('buyer');
+      const needsCustomer = dims.has('customer');
+      const needsSupplier = dims.has('supplier');
+      const needsProduct = dims.has('product');
+      const needsCategory = dims.has('category') && reportType !== 'expenses';
+      const needsTable = dims.has('table');
+
       const [warehouses, cashiers, customers, suppliers, products, categories, tables] = await Promise.all([
-        supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter),
-        supabase.from('users').select('id, full_name, email').eq('branch_id', effectiveBranchFilter),
-        supabase.from('customers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
-        supabase.from('suppliers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
-        supabase.from('products').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
-        supabase.from('categories').select('id, name, name_en').eq('branch_id', effectiveBranchFilter),
-        supabase.from('dining_tables').select('id, name').eq('branch_id', effectiveBranchFilter),
+        needsWarehouse
+          ? supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
+        needsCashier
+          ? supabase.from('users').select('id, full_name, email').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
+        needsCustomer
+          ? supabase.from('customers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
+        needsSupplier
+          ? supabase.from('suppliers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
+        needsProduct
+          ? supabase.from('products').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
+        needsCategory
+          ? supabase.from('categories').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
+        needsTable
+          ? supabase.from('dining_tables').select('id, name').eq('branch_id', effectiveBranchFilter)
+          : Promise.resolve({ data: [] }),
       ]);
+
+      if (cancelled) return;
       setOptions({
         warehouses: warehouses.data || [], cashiers: cashiers.data || [], customers: customers.data || [],
         suppliers: suppliers.data || [], products: products.data || [], categories: categories.data || [],
         tables: tables.data || [], expenseCategories: [],
       });
     })();
-  }, [effectiveBranchFilter]);
+
+    return () => { cancelled = true; };
+  }, [reportType, effectiveBranchFilter]);
 
   useEffect(() => {
     if (reportType !== 'expenses' || !effectiveBranchFilter) return;
