@@ -73,7 +73,7 @@ State: **BLOCKED**
 
 No Production migration planned. Merge requires exact-head Full Verify Green + explicit user approval.
 
-## Mandatory protocol
+## Mandatory update protocol
 
 - Check branch HEAD before every write.
 - Unexpected HEAD = STOP_AND_RECONCILE.
