@@ -1,8 +1,23 @@
-import { supabase } from '@/lib/supabase';
-import type { ApiError, ApiResult } from '../types';
+import type { ApiResult } from '../types';
 import type { RpcResult } from '@/lib/types';
 import { rpc } from '../rpc';
 
+function failClosedResult(err: unknown, fallback: string): ApiResult<RpcResult> {
+  return {
+    data: { success: false, error: err instanceof Error ? err.message : fallback },
+    error: null,
+  };
+}
+
+/**
+ * Legacy production-order API.
+ *
+ * The production-order UI is being retired. Until the remaining application
+ * surface is removed, every legacy action is RPC-authoritative and fail-closed.
+ * Client-side table mutations are intentionally forbidden here: falling back to
+ * direct production_orders writes can bypass the transaction/inventory/accounting
+ * authority owned by the database RPCs.
+ */
 export const manufacturing = {
   async createOrder(p: {
     p_product_id: string;
@@ -14,82 +29,17 @@ export const manufacturing = {
     p_notes: string | null;
   }): ApiResult<RpcResult> {
     try {
-      const res = await rpc<RpcResult>('create_production_order', p);
-      if (!res.error && res.data && res.data.success) {
-        return res;
-      }
-    } catch {
-      // Proceed to resilient fallback
-    }
-
-    try {
-      const orderNumber = `PO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const { data, error } = await supabase
-        .from('production_orders')
-        .insert({
-          order_number: orderNumber,
-          product_id: p.p_product_id,
-          branch_id: p.p_branch_id,
-          warehouse_id: p.p_warehouse_id || null,
-          quantity: p.p_quantity,
-          batch_number: p.p_batch_number || null,
-          planned_at: p.p_planned_at || new Date().toISOString(),
-          notes: p.p_notes || null,
-          status: 'planned',
-          total_cost: 0,
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { data: { success: false, error: error.message }, error: error as unknown as ApiError };
-      }
-
-      return {
-        data: {
-          success: true,
-          order_id: data.id,
-          order_number: data.order_number,
-        },
-        error: null,
-      };
+      return await rpc<RpcResult>('create_production_order', p);
     } catch (err) {
-      return {
-        data: { success: false, error: err instanceof Error ? err.message : 'Failed to create production order' },
-        error: null,
-      };
+      return failClosedResult(err, 'Failed to create production order');
     }
   },
 
   async startOrder(p: { p_order_id: string }): ApiResult<RpcResult> {
     try {
-      const res = await rpc<RpcResult>('start_production_order', p);
-      if (!res.error && res.data && res.data.success) {
-        return res;
-      }
-    } catch {
-      // Proceed to fallback
-    }
-
-    try {
-      const { error } = await supabase
-        .from('production_orders')
-        .update({
-          status: 'in_progress',
-        })
-        .eq('id', p.p_order_id);
-
-      if (error) {
-        return { data: { success: false, error: error.message }, error: error as unknown as ApiError };
-      }
-
-      return { data: { success: true }, error: null };
+      return await rpc<RpcResult>('start_production_order', p);
     } catch (err) {
-      return {
-        data: { success: false, error: err instanceof Error ? err.message : 'Failed to start order' },
-        error: null,
-      };
+      return failClosedResult(err, 'Failed to start production order');
     }
   },
 
@@ -98,48 +48,17 @@ export const manufacturing = {
     p_waste: { raw_material_id: string; quantity: number; reason: string | null }[] | null;
   }): ApiResult<RpcResult> {
     try {
-      // Production completion is transactional stock/accounting authority and must
-      // never fall back to client-side balance mutations. If the RPC is missing or
-      // rejects the operation, surface that result and fail closed.
       return await rpc<RpcResult>('complete_production_order', p);
     } catch (err) {
-      return {
-        data: { success: false, error: err instanceof Error ? err.message : 'Failed to complete production order' },
-        error: null,
-      };
+      return failClosedResult(err, 'Failed to complete production order');
     }
   },
 
   async cancelOrder(p: { p_order_id: string; p_reason: string | null }): ApiResult<RpcResult> {
     try {
-      const res = await rpc<RpcResult>('cancel_production_order', p);
-      if (!res.error && res.data && res.data.success) {
-        return res;
-      }
-    } catch {
-      // Fallback
-    }
-
-    try {
-      const { error } = await supabase
-        .from('production_orders')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancel_reason: p.p_reason || null,
-        })
-        .eq('id', p.p_order_id);
-
-      if (error) {
-        return { data: { success: false, error: error.message }, error: error as unknown as ApiError };
-      }
-
-      return { data: { success: true }, error: null };
+      return await rpc<RpcResult>('cancel_production_order', p);
     } catch (err) {
-      return {
-        data: { success: false, error: err instanceof Error ? err.message : 'Failed to cancel order' },
-        error: null,
-      };
+      return failClosedResult(err, 'Failed to cancel production order');
     }
   },
 };
