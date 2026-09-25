@@ -53,6 +53,8 @@ Implementation is in review. Merge and Production application remain blocked unt
 - Removed legacy duplicate report options from the active operational selector.
 - Added Excel profile/source note for component reconciliation.
 - Added unit contracts for component reconciliation and unified reporting source-of-truth behavior.
+- Removed the duplicate Financial Reports sidebar entry and made the single Reports entry accessible with either `reports.view` or `reports.financial`.
+- Added any-of permission support to navigation, command palette and the `/reports` route while keeping `/financial-reports` as a compatibility alias.
 
 ## Verification ledger
 - Production inspection: read-only only.
@@ -61,6 +63,7 @@ Implementation is in review. Merge and Production application remain blocked unt
 - PR #373 marked ready to trigger exact-head Verify.
 - Verify run 36188959349 started on prior head; mandatory log pointer was still stale from merged performance work and is being corrected by this update.
 - Current exact-head Full Verify: **PENDING**.
+- Added navigation permission contract test after unifying the sidebar destination.
 
 ## Production gate
 - Production migration: **BLOCKED**.
