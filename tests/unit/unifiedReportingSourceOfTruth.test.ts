@@ -31,7 +31,7 @@ describe('unified reporting source-of-truth contract', () => {
 
   it('uses one unified reports center for operational and financial reports', () => {
     expect(reportsCenter).toContain('data-testid="unified-reports-center"');
-    expect(reportsCenter).toContain('<FinancialReportsPage />');
+    expect(reportsCenter).toContain('<FinancialReportsPage hideViewPicker />');
     expect(reportsCenter).toContain('<ReportsPage controlledReportType=');
     expect(routes).toContain('permission="reports.financial"><ReportsCenterPage');
   });
