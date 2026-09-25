@@ -57,7 +57,7 @@ describe('Reports Center contract (6H-P4)', () => {
 
   it('preserves financial selections with view + period context through the unified center', () => {
     expect(reportsSource).toContain('const allowed = history.clampRange(from, to)');
-    expect(reportsSource).toContain('navigate(`/financial-reports?view=${value}&from=${allowed.from}&to=${allowed.to}`)');
+    expect(reportsSource).toContain('navigate(`/reports?section=financial&view=${value}&from=${allowed.from}&to=${allowed.to}`)');
     expect(financialSource).toContain('useSearchParams');
     expect(financialSource).toContain("searchParams.get('view')");
     expect(financialSource).toContain("searchParams.get('from')");
