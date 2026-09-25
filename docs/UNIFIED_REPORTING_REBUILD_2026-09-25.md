@@ -7,7 +7,7 @@ Current PR: `#373`
 Last updated: 2026-09-25
 
 ## Work status
-State: **BLOCKED**
+State: **READY_FOR_FINAL_VERIFY**
 
 Implementation is in review. Merge and Production application remain blocked until exact-head Full Verify is Green and Production application receives explicit approval.
 
@@ -71,12 +71,17 @@ Implementation is in review. Merge and Production application remain blocked unt
 - User approved semantic split: collection/day-close sales stay gross of tax after refunds; Costing Center/Food Cost uses operational net sales before tax after refunds.
 - Added `private.report_operational_net_sale_amount(total,tax,refunded)` using proportional tax removal after partial refunds, and switched costing summary/order margin to it.
 - Added unit contract for the pre-tax Food Cost basis and restored the costing integration expectation to 400 net sales / 28.13% COGS on the tax fixture.
-- Current exact-head Full Verify: **PENDING**.
+- Verify #2858 on head `8f0ea6c1ecacb3e2f99ef9d8719604b3e7d5b135`: **GREEN**.
+  - core verify: lint ✅ typecheck ✅ unit ✅ build ✅
+  - DB integration / security / RLS: ✅
+  - browser smoke: ✅
+- PR #373 is open, mergeable, rebaseable and `mergeable_state=clean`.
+- This documentation-only update requires one final exact-head Verify before merge.
 - Added navigation permission contract test after unifying the sidebar destination.
 
 ## Production gate
 - Production migration: **BLOCKED**.
-- Merge: **BLOCKED**.
+- Merge: **BLOCKED pending final exact-head Verify after this documentation update**.
 - Required before merge:
   1. exact-head Full Verify Green;
   2. no type/lint/unit/build regressions;
@@ -87,11 +92,9 @@ Implementation is in review. Merge and Production application remain blocked unt
 - No Production SQL write has been executed from this branch.
 
 ## Next action
-1. Point `docs/CURRENT_WORK_PLAN.md` mandatory gate to this log/branch/PR.
-2. Re-run exact-head Verify on the resulting head.
-3. Fix any lint/type/unit/build failures without weakening tests.
-4. Audit report catalog for any remaining duplicate labels/sources.
-5. Keep merge and Production application blocked until all gates are Green.
+1. Run the final exact-head Verify caused by this documentation update.
+2. If Green, mark merge gate READY.
+3. Keep Production migration blocked until merged-main verification Green + explicit Production approval.
 
 ## Mandatory update protocol
 - Before every repository write, verify the branch HEAD is the expected prior head.
