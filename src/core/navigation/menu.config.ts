@@ -15,6 +15,7 @@ export interface MenuItemConfig {
   labelKey: TranslationKey;
   label?: { ar: string; en: string };
   permission?: Permission;
+  permissionsAny?: Permission[];
   group: MenuGroup;
   superAdminOnly?: boolean;
   ownerOnly?: boolean;
@@ -51,10 +52,9 @@ export const MENU_ITEMS: MenuItemConfig[] = [
   { id: 'journal', route: APP_ROUTES.journal, icon: 'journal', labelKey: 'journalEntries', permission: 'accounts.view', group: 'finance' },
   { id: 'treasury', route: APP_ROUTES.treasury, icon: 'treasury', labelKey: 'treasury', permission: 'accounts.view', group: 'finance' },
   { id: 'reconciliation', route: APP_ROUTES.reconciliation, icon: 'reconciliation', labelKey: 'bankReconciliation', permission: 'accounts.view', group: 'finance' },
-  { id: 'financial-reports', route: APP_ROUTES.financialReports, icon: 'financialReports', labelKey: 'financialReports', permission: 'reports.financial', group: 'finance' },
   { id: 'sales', route: APP_ROUTES.sales, icon: 'sales', labelKey: 'salesInvoices', permission: 'sales.view', group: 'finance' },
   { id: 'shifts', route: APP_ROUTES.shifts, icon: 'shifts', labelKey: 'shifts', permission: 'shifts.view', group: 'finance' },
-  { id: 'reports', route: APP_ROUTES.reports, icon: 'reports', labelKey: 'reports', permission: 'reports.view', group: 'finance' },
+  { id: 'reports', route: APP_ROUTES.reports, icon: 'reports', labelKey: 'reports', permissionsAny: ['reports.view', 'reports.financial'], group: 'finance' },
   { id: 'super-admin', route: APP_ROUTES.superAdmin, icon: 'superAdmin', labelKey: 'superAdmin', permission: 'settings.manage', group: 'admin', superAdminOnly: true },
   { id: 'users', route: APP_ROUTES.users, icon: 'users', labelKey: 'users', permission: 'users.view', group: 'admin' },
   { id: 'permissions', route: APP_ROUTES.permissions, icon: 'users', labelKey: 'settings', label: { ar: 'الصلاحيات والأدوار', en: 'Roles & Permissions' }, permission: 'roles.permissions.manage', group: 'admin' },
