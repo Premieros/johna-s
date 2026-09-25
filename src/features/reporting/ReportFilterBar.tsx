@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { Input } from '@/components/Input';
+import { formatCurrency } from '@/lib/format';
 import type { Language } from '@/lib/types';
 import type { ReportFilterKey, ReportFilters } from './reportFilters';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
@@ -48,7 +49,7 @@ export function ReportFilterBar({
   reportType, filters, onFilterChange, showDate, period, onPeriodChange,
   from, to, onFromChange, onToChange, showBranchFilter, branches,
   branchFilterValue, onBranchFilterChange, filterOptions, filterLabel, allLabel,
-  filterDimensions, total, count, lang, financialTypes = [], canFinancial = false,
+  filterDimensions, total, count, currency, lang, financialTypes = [], canFinancial = false,
   onFinancialSelect, reportTypes = [], onReportTypeChange, onRunReport,
   loading = false, pendingChanges = false, actions,
 }: ReportFilterBarProps) {
@@ -61,7 +62,7 @@ export function ReportFilterBar({
   };
 
   return (
-    <div className="mb-3 border-y border-ui-border bg-ui-surface">
+    <div className="ui-accent-system mb-3 border-y border-ui-border bg-ui-surface">
       <div data-testid="reports-primary-row" className="flex min-h-14 flex-wrap items-center gap-2 px-2 py-2">
         <label className="sr-only" htmlFor="reports-report-select">{lang === 'ar' ? 'التقرير' : 'Report'}</label>
         <select
@@ -160,7 +161,7 @@ export function ReportFilterBar({
 
         <div className="ms-auto flex min-h-9 items-center gap-3 text-xs text-ui-muted">
           <span>{lang === 'ar' ? 'السجلات' : 'Rows'}: <b className="text-ui-text">{count}</b></span>
-          <span>{lang === 'ar' ? 'الإجمالي' : 'Total'}: <b className="text-ui-text">{Number(total || 0).toLocaleString()}</b></span>
+          <span>{lang === 'ar' ? 'الإجمالي' : 'Total'}: <b className="text-ui-text">{formatCurrency(total, currency, lang)}</b></span>
           {pendingChanges && <span className="font-semibold text-ui-warning">{lang === 'ar' ? 'الفلاتر تغيرت' : 'Filters changed'}</span>}
         </div>
 

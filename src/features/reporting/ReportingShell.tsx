@@ -20,7 +20,7 @@ export function ReportingShell({ onSelectReport, children }: ReportingShellProps
   }, [searchParams, onSelectReport]);
 
   return (
-    <div className="min-w-0">
+    <div className="ui-accent-top ui-accent-system min-w-0">
       {children}
     </div>
   );
