@@ -488,6 +488,14 @@ export function FinancialReportsPage() {
     <DesignSurface testId="financial-reports-page">
       <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
 
+      {!history.unlimited && (
+        <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
+          {isAr
+            ? 'الأرقام المالية المعروضة مقيدة بصلاحية التاريخ: آخر 7 أيام كاملة، وما قبلها حسب سياسة العرض. لا تعتبر أرقام الفترات القديمة إجمالي الفرع الكامل إلا مع صلاحية عرض التاريخ بالكامل.'
+            : 'Financial figures are history-permission scoped: the last 7 days are complete, while older periods follow the visibility policy. Older-period figures are not the full branch totals unless full-history access is granted.'}
+        </div>
+      )}
+
       <DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-2">
