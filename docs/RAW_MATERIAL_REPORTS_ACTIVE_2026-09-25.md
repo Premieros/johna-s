@@ -2,13 +2,13 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/raw-material-financial-reports-20260925`
-Current PR: `#363`
+Branch: `development/cleopatra-realtime-wake-main-sync-20260925`
+Current PR: `#367`
 Last updated: 2026-09-25
 
 ## Work status
 
-State: **READY_FOR_MERGE_APPROVAL**
+State: **VERIFYING_CLEOPATRA_REALTIME_SYNC**
 
 Implementation is complete on the development branch. Exact-head Full Verify is green. Merge still requires explicit approval. Production migration remains blocked until a separate explicit approval after merge.
 
@@ -80,3 +80,12 @@ Wait for explicit merge approval for PR #363. After merge, verify main again. Pr
 - After each change group, update Change ledger.
 - After each verification, update Verification ledger with exact run/result.
 - Keep Production gate BLOCKED until exact-head Full Verify is green and explicit approval exists.
+
+
+## PR #367 — Cleopatra Realtime wake main sync
+
+- Scope: repository sync only for the already-approved Production Cleopatra Realtime wake.
+- Code scope remains one forward-only migration: `20260925163000_cloud_print_v8_cleopatra_realtime_wake.sql`.
+- No Smouha print-agent source, workflow, routing, renderer, queue RPC, or branch identity changes.
+- Production already has this exact wake behavior applied and verified; this PR prevents repository/schema drift.
+- Exact-head Full Verify must be Green before merge.
