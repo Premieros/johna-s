@@ -5,6 +5,10 @@ const migration = readFileSync(
   'supabase/migrations/20260925013000_raw_fifo_prior_price_fallback.sql',
   'utf8',
 ).replace(/\r\n/g, '\n');
+const nullGuard = readFileSync(
+  'supabase/migrations/20260925014500_raw_fifo_prior_price_prepare_null_guard.sql',
+  'utf8',
+).replace(/\r\n/g, '\n');
 
 describe('raw FIFO prior-price fallback contract', () => {
   it('uses only authoritative prices at or before the consumption timestamp', () => {
@@ -12,6 +16,13 @@ describe('raw FIFO prior-price fallback contract', () => {
     expect(migration).toContain("'NO_PRIOR_AUTHORITATIVE_PRICE'");
     expect(migration).toContain("'FUTURE_PRICE_REFUSED'");
     expect(migration).not.toContain('earliest_after');
+  });
+
+
+  it('marks rows without prior price ineligible instead of producing NULL eligibility', () => {
+    expect(nullGuard).toContain('COALESCE((');
+    expect(nullGuard).toContain('),false),');
+    expect(nullGuard).toContain("'NO_PRIOR_AUTHORITATIVE_PRICE'");
   });
 
   it('supports only reference types with explicit cost propagation', () => {
