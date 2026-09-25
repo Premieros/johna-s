@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/accounting-credit-label-20260925`
-Current PR: `#0`
+Current PR: `#369`
 Last updated: 2026-09-25
 
 ## Work status
@@ -35,10 +35,10 @@ Small UI/accounting-label correction. Merge is blocked until exact-head Full Ver
 
 ## Change ledger
 
-- Pending: make Trial Balance headers fixed `مدين / دائن / الرصيد`.
-- Pending: make General Ledger and party accounting statement use `مدين / دائن`.
-- Keep payment-method label `آجل` unchanged outside accounting.
-- Add regression contract test.
+- Trial Balance headers fixed to `مدين / دائن / الرصيد`.
+- General Ledger and party accounting statement use `مدين / دائن`.
+- Payment-method label `آجل` remains unchanged outside accounting.
+- Added regression contract test.
 
 ## Verification ledger
 
