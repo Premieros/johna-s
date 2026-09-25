@@ -1,64 +1,89 @@
-# Unified Reporting Rebuild — Source of Truth
+# UNIFIED REPORTING REBUILD — ACTIVE WORK LOG
 
-Status: IN PROGRESS
-Branch: development/component-consumption-reconciliation-20260925
-Production: NOT APPLIED
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `development/component-consumption-reconciliation-20260925`
+Current PR: `#373`
+Last updated: 2026-09-25
 
-## Goal
-One Reports Center. A business metric has one canonical definition and one canonical data source. Screens and Excel exports must consume the same result instead of recalculating the same metric independently.
+## Work status
+State: **BLOCKED**
 
-## Canonical metric contracts
+Implementation is in review. Merge and Production application remain blocked until exact-head Full Verify is Green and Production application receives explicit approval.
 
-| Metric family | Canonical source | Contract |
-| --- | --- | --- |
-| Net sales | sales + canonical refunds/settlements | SUM(max(total - refunded_amount, 0)); tax is shown separately, not silently removed from net sales |
-| Payment split | private.report_sale_settlement_lines / get_sales_by_payment_report | cash/card/transfer/credit/legacy_bank derived from one settlement resolver |
-| Day close | get_day_closing_report / get_day_closing_range_report | same net sales and payment settlement resolver as sales reports |
-| Shift close | get_shift_closing_report | must reconcile to the same sales/refund semantics for the shift scope |
-| COGS / sales consumption value | canonical COGS resolver: journal COGS, then settled kitchen, then legacy sale ledger fallback | used by Costing Center and reports |
-| Raw material movement | inventory_ledger | quantities and historical movement/value |
-| Current raw inventory valuation | raw_material_batches | remaining FIFO quantity/value |
-| Theoretical component consumption | resolve_product_raw_components × net sold quantity | read-only theoretical BOM metric |
-| Actual component consumption | inventory_ledger tied to same direct sale or settled kitchen sale | compared with theoretical consumption |
-| Purchases | purchases / purchase_items | returned amount handled explicitly |
-| Expenses | posted expenses; accounting statements use journal postings | operational and accounting labels must not imply they are the same basis |
-| Treasury/bank | journal_entry_lines + treasury_accounts | no purchase/credit inference from payment_method |
-| Income statement / balance sheet / ledgers / aging | accounting RPCs over journal entries | accounting source of truth |
+## Guardrails
+- Single writer on this reporting branch.
+- No direct changes to `main`.
+- No Production migration from this branch before exact-head Full Verify Green + explicit approval.
+- Printing / Print Agent / routing / KDS / send-to-kitchen are out of scope and untouched.
+- Reporting changes are read-only with respect to sales, inventory quantities, payments, shifts and accounting business data.
+- Permission-First and branch visibility remain mandatory.
+- Legacy report code may remain for compatibility, but legacy/ambiguous reports are removed from discovery before physical deletion.
 
-## Reports kept in the new center
-- Sales summary and invoice detail
-- Sales by payment
-- Sales by product
-- Returns
-- Purchases
-- Expenses
-- Day closing range
-- Shift/day links where applicable
-- Raw material movement & consumption
-- Current raw material valuation
-- Sales vs component consumption reconciliation
-- Inventory item statement
-- Treasury/bank statement
-- Trial balance
-- General ledger
-- Income statement
-- Balance sheet
-- AR/AP aging and summary
-- Cash flow / treasury movement
-- Party statement
-- Financial reconciliation
-- Costing sales summary/order margin (same COGS contract)
+## Baseline
+- Base: `main@29f99187574fd700cee5da6b71d9b4b13339022c`.
+- Existing reporting was split between `ReportsPage`, `FinancialReportsPage`, Costing Center RPCs and direct-table queries.
+- Production read-only audit found a semantic mismatch in net sales:
+  - Cleopatra 2026-09-01..2026-09-25 canonical net sales: 509,064.21.
+  - old Costing Center net sales: 446,547.60.
+  - difference: 62,516.61, equal to tax in scope.
+- Component reconciliation baseline:
+  - theoretical value: 94,955.78.
+  - actual matched ledger value: 92,928.68.
+  - difference: 2,027.10.
+  - 33 raw-material quantity mismatches.
 
-## Legacy/ambiguous reports removed from discovery
-- component_consumption based on stock_transactions.component_flow
-- recipe_costs / manufacturing language as a separate production system
-- duplicate profit calculations that do not use the accounting income statement
-- any report that recomputes payment split outside report_sale_settlement_lines
+## Root-cause ledger
+1. `get_costing_sales_summary` defined net sales as `total - tax`, while day close/reporting defined net sales as `total - refunded_amount`.
+2. Operational reports, finance reports and costing used separate UI entry points and multiple independent data paths.
+3. Legacy component reports still used `stock_transactions.component_flow`, which no longer represents the canonical raw-consumption path.
+4. Financial navigation left the reports center and opened a separate financial page.
+5. The same business label could therefore represent different formulas depending on page.
 
-## Invariants
-1. Net sales in Reports, Day Close, Shift Close and Costing use the same semantic definition.
-2. Payment-method totals use the settlement resolver and must sum to settled amount.
-3. COGS shown in reports and Costing Center must resolve through the same COGS contract.
-4. Raw consumption reports use inventory_ledger, never legacy stock_transactions component flow.
-5. Excel is a presentation of screen data and never recomputes business totals.
-6. No reporting change mutates sales, inventory, kitchen, printing, shifts or accounting data.
+## Change ledger
+- Added `docs/UNIFIED_REPORTING_REBUILD_2026-09-25.md` as this active log and source-of-truth map.
+- Added read-only sales/component reconciliation RPC and report UI.
+- Added `private.report_net_sale_amount(total, refunded_amount)` as canonical reporting net-sales helper.
+- Reworked `get_costing_sales_summary` and `get_order_margin` to use canonical net sales.
+- Preserved COGS resolution order: accounting journal -> settled kitchen -> legacy sale ledger fallback.
+- Unified `/reports` and legacy `/financial-reports` on `ReportsCenterPage`.
+- Added operational/financial sections inside the unified center.
+- Redirected financial shortcuts to `/reports?section=financial&view=...`.
+- Hid legacy duplicate component/manufacturing reports from report discovery.
+- Removed legacy duplicate report options from the active operational selector.
+- Added Excel profile/source note for component reconciliation.
+- Added unit contracts for component reconciliation and unified reporting source-of-truth behavior.
+
+## Verification ledger
+- Production inspection: read-only only.
+- Cleopatra canonical-vs-old net-sales mismatch reproduced: 62,516.61.
+- Cleopatra component reconciliation reproduced: theoretical 94,955.78 vs actual 92,928.68.
+- PR #373 marked ready to trigger exact-head Verify.
+- Verify run 36188959349 started on prior head; mandatory log pointer was still stale from merged performance work and is being corrected by this update.
+- Current exact-head Full Verify: **PENDING**.
+
+## Production gate
+- Production migration: **BLOCKED**.
+- Merge: **BLOCKED**.
+- Required before merge:
+  1. exact-head Full Verify Green;
+  2. no type/lint/unit/build regressions;
+  3. source-of-truth contract tests Green.
+- Required before Production migration:
+  1. merged main verification Green;
+  2. explicit Production approval.
+- No Production SQL write has been executed from this branch.
+
+## Next action
+1. Point `docs/CURRENT_WORK_PLAN.md` mandatory gate to this log/branch/PR.
+2. Re-run exact-head Verify on the resulting head.
+3. Fix any lint/type/unit/build failures without weakening tests.
+4. Audit report catalog for any remaining duplicate labels/sources.
+5. Keep merge and Production application blocked until all gates are Green.
+
+## Mandatory update protocol
+- Before every repository write, verify the branch HEAD is the expected prior head.
+- After every code batch, update **Change ledger**.
+- After every measurement/test/workflow, update **Verification ledger**.
+- Before any merge decision, update **Production gate** with exact-head Verify status.
+- After any interruption, tool error, conflict or unexpected commit, re-read this log and `docs/CURRENT_WORK_PLAN.md` before resuming.
