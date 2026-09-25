@@ -166,15 +166,7 @@ export function PaymentsPage() {
     setSaving(false);
     if (error) { show(error.message, 'error'); return; }
     const r = data as { success: boolean; error?: string; detail?: string; reference_number?: string } | null;
-    if (!r?.success) {
-      const message = r?.error === 'MAIN_TREASURY_PAYMENT_PERMISSION_REQUIRED'
-        ? (lang === 'ar'
-          ? 'لا تملك صلاحية «السداد من الخزنة الرئيسية». صلاحية تسجيل دفعة المورد وحدها لا تسمح باستخدام الخزنة الرئيسية.'
-          : 'You do not have “Pay from Main Treasury”. Supplier-payment permission alone does not allow Main Treasury funding.')
-        : r?.detail || r?.error || t('error');
-      show(message, 'error');
-      return;
-    }
+    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error'); return; }
     show(`${t('collect')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
     await logAudit('create', 'customer_payments', undefined, { customer_id: collecting.customer_id, amount });
     setCollecting(null);
