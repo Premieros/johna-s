@@ -47,16 +47,16 @@ State: **BLOCKED**
 - Added `raw_fifo_debt_price_estimates` to track provisional open-debt valuation.
 - Extended `_raw_fifo_settle_receipt` so later positive-cost receipts post actual-minus-estimate only; zero-cost receipts preserve fallback basis.
 - Added unit contract `raw_fifo_prior_price_fallback.test.ts`.
-- Added integration test `raw_fifo_prior_price_fallback.test.ts` covering quantity invariance, difference-only settlement, zero-cost receipt preservation, and reversal refusal after estimate consumption.
+- Added integration test `raw_fifo_prior_price_fallback.test.ts` covering quantity invariance, difference-only settlement, zero-cost receipt preservation, reversal refusal after estimate consumption, and unresolved no-price rows.\n- Added follow-up migration `20260925014500_raw_fifo_prior_price_prepare_null_guard.sql` after Production exposed SQL three-valued NULL eligibility for rows with no prior price.
 
 ## Verification ledger
 - Read-only Production classification completed.
 - No Production writes performed for this phase.
-- Exact-head Full Verify: pending on implementation head.
+- Exact-head Full Verify on `9d10c979a867405e0f119e0da092220ac8503d7b`: Green (verify + DB/integration + browser-smoke).\n- Production migration `raw_fifo_prior_price_fallback` applied after that Green gate.\n- First Production prepare failed atomically before valuation/quantity mutation because no-price rows produced NULL `eligible` against a NOT NULL column.\n- Added follow-up migration `20260925014500_raw_fifo_prior_price_prepare_null_guard.sql` using explicit `COALESCE(...,false)`.\n- Added unit + integration coverage for `NO_PRIOR_AUTHORITATIVE_PRICE`; new exact-head Full Verify pending.
 
 ## Production gate
 State: **BLOCKED**
-- Code complete: no.
+- Code complete: follow-up pending exact-head verification.
 - Exact-head Full Verify Green: no.
 - Production migration approval: not yet eligible.
 - Production repair apply approval: not yet eligible.
