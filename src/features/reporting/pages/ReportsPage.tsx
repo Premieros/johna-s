@@ -975,6 +975,67 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           total: results.reduce((sum, result) => sum + Number(result.summary.net_sales || 0), 0),
           count: results.reduce((sum, result) => sum + result.rows.length, 0),
         });
+      } else if (reportType === 'sales_component_reconciliation') {
+        const targetBranches = effectiveBranchFilter
+          ? branches.filter((branch) => branch.id === effectiveBranchFilter)
+          : branches;
+        const results = await Promise.all(targetBranches.map(async (branch) => {
+          const result = await supabase.rpc('get_sales_component_reconciliation_report', {
+            p_branch_id: branch.id,
+            p_from_date: allowed.from,
+            p_to_date: allowed.to,
+          });
+          if (result.error) throw result.error;
+          const payload = (result.data || {}) as Record<string, unknown>;
+          return {
+            branchId: branch.id,
+            summary: (payload.summary || {}) as Record<string, unknown>,
+            rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
+          };
+        }));
+        const rows = results.flatMap(({ branchId, summary: reconciliation, rows: rawRows }) => {
+          const summaryRow = withBranch(branchId, {
+            [lang === 'ar' ? 'الخامة' : 'Raw Material']: lang === 'ar' ? 'إجمالي الفترة' : 'Period Total',
+            [lang === 'ar' ? 'عدد المنتجات' : 'Products']: '',
+            [lang === 'ar' ? 'الاستهلاك النظري كمية' : 'Theoretical Qty']: Number(reconciliation.theoretical_quantity || 0),
+            [lang === 'ar' ? 'الاستهلاك الفعلي كمية' : 'Actual Qty']: Number(reconciliation.actual_quantity || 0),
+            [lang === 'ar' ? 'فرق الكمية' : 'Qty Difference']: Number(reconciliation.theoretical_quantity || 0) - Number(reconciliation.actual_quantity || 0),
+            [lang === 'ar' ? 'تكلفة الوحدة للمقارنة' : 'Comparison Unit Cost']: '',
+            [lang === 'ar' ? 'قيمة الاستهلاك النظري' : 'Theoretical Value']: Number(reconciliation.theoretical_value || 0),
+            [lang === 'ar' ? 'قيمة الاستهلاك الفعلي' : 'Actual Value']: Number(reconciliation.actual_value || 0),
+            [lang === 'ar' ? 'فرق القيمة' : 'Value Difference']: Number(reconciliation.value_difference || 0),
+            [lang === 'ar' ? 'نسبة الفرق %' : 'Variance %']: Number(reconciliation.theoretical_value || 0) !== 0
+              ? Number(reconciliation.value_difference || 0) / Number(reconciliation.theoretical_value || 0) * 100
+              : 0,
+            [lang === 'ar' ? 'مصدر التسعير' : 'Price Source']: lang === 'ar'
+              ? `نظري ${Number(reconciliation.theoretical_food_cost_pct || 0).toFixed(2)}% / فعلي ${Number(reconciliation.actual_food_cost_pct || 0).toFixed(2)}%`
+              : `Theo ${Number(reconciliation.theoretical_food_cost_pct || 0).toFixed(2)}% / Actual ${Number(reconciliation.actual_food_cost_pct || 0).toFixed(2)}%`,
+            [lang === 'ar' ? 'الحالة' : 'Status']: lang === 'ar'
+              ? `فروق خامات: ${Number(reconciliation.mismatched_raws || 0)} · بنود غير قابلة للمطابقة: ${Number(reconciliation.unmatched_sale_rows || 0)} · منتجات بلا مكونات: ${Number(reconciliation.componentless_products || 0)}`
+              : `Raw mismatches: ${Number(reconciliation.mismatched_raws || 0)} · Unmatched sale rows: ${Number(reconciliation.unmatched_sale_rows || 0)} · Products without components: ${Number(reconciliation.componentless_products || 0)}`,
+          });
+          const detailRows = rawRows.map((row) => withBranch(branchId, {
+            [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
+            [lang === 'ar' ? 'عدد المنتجات' : 'Products']: Number(row.product_count || 0),
+            [lang === 'ar' ? 'الاستهلاك النظري كمية' : 'Theoretical Qty']: Number(row.theoretical_quantity || 0),
+            [lang === 'ar' ? 'الاستهلاك الفعلي كمية' : 'Actual Qty']: Number(row.actual_quantity || 0),
+            [lang === 'ar' ? 'فرق الكمية' : 'Qty Difference']: Number(row.quantity_difference || 0),
+            [lang === 'ar' ? 'تكلفة الوحدة للمقارنة' : 'Comparison Unit Cost']: Number(row.compare_unit_cost || 0),
+            [lang === 'ar' ? 'قيمة الاستهلاك النظري' : 'Theoretical Value']: Number(row.theoretical_value || 0),
+            [lang === 'ar' ? 'قيمة الاستهلاك الفعلي' : 'Actual Value']: Number(row.actual_value || 0),
+            [lang === 'ar' ? 'فرق القيمة' : 'Value Difference']: Number(row.value_difference || 0),
+            [lang === 'ar' ? 'نسبة الفرق %' : 'Variance %']: Number(row.variance_pct || 0),
+            [lang === 'ar' ? 'مصدر التسعير' : 'Price Source']: row.price_source || '',
+            [lang === 'ar' ? 'الحالة' : 'Status']: row.status || '',
+          }));
+          return [summaryRow, ...detailRows];
+        });
+        setData(rows);
+        setChartData([]);
+        setSummary({
+          total: results.reduce((sum, result) => sum + Number(result.summary.theoretical_value || 0), 0),
+          count: results.reduce((sum, result) => sum + Number(result.summary.mismatched_raws || 0), 0),
+        });
       } else if (reportType === 'production_waste') {
         let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
@@ -1052,6 +1113,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     reportTypes.push(
       { key: 'raw_material_consumption', label: lang === 'ar' ? 'حركة واستهلاك الخامات' : 'Raw Material Consumption', icon: <Layers className="w-4 h-4" /> },
       { key: 'raw_material_current_cost', label: lang === 'ar' ? 'تكلفة الخامات الحالية' : 'Current Raw Material Cost', icon: <Package className="w-4 h-4" /> },
+      { key: 'sales_component_reconciliation', label: lang === 'ar' ? 'مطابقة المبيعات مع استهلاك المكونات' : 'Sales vs Component Consumption', icon: <BarChart3 className="w-4 h-4" /> },
     );
   }
   if (canFinancial) {
@@ -1105,6 +1167,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     lang === 'ar' ? 'طرق دفع أخرى' : 'Other Payment',
     lang === 'ar' ? 'مشتريات كاش' : 'Cash Purchases',
     lang === 'ar' ? 'صافي كاش بعد المنصرف' : 'Cash After Outflows',
+    lang === 'ar' ? 'تكلفة الوحدة للمقارنة' : 'Comparison Unit Cost',
+    lang === 'ar' ? 'قيمة الاستهلاك النظري' : 'Theoretical Value',
+    lang === 'ar' ? 'قيمة الاستهلاك الفعلي' : 'Actual Value',
+    lang === 'ar' ? 'فرق القيمة' : 'Value Difference',
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
