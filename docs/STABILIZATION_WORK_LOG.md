@@ -183,3 +183,13 @@ Workflow: Verify main #1456 / run `35024776511` — **FULL GREEN** ✅
 - Browser Smoke ✅
 
 This documentation commit changes the PR HEAD, therefore Full Verify must run again on the new exact head before merge. Production migration remains blocked until a separate explicit approval after final Full Green.
+
+
+### 2026-09-25 — Raw material financial reports
+- Started on `development/raw-material-financial-reports-20260925` from main `7900e15a0d6bddecb630e3316a446bd3367332fb`.
+- New migration: `20260925153500_raw_material_financial_reports.sql`.
+- UI/report center/Excel profiles wired for three reports.
+- Added contract test `rawMaterialFinancialReportsContract.test.ts`.
+- Pending: CI/full verification. No merge/production apply yet.
+
+- Extended PR #363 with `daily_closing_range`: date-range day closing/payment-method report. One row per business day; source is the existing authoritative `get_day_closing_report`. Added migration `20260925155500_day_closing_range_report.sql`, UI, Excel profile, report registry/deep-link wiring, and contract test. No merge / Production migration.

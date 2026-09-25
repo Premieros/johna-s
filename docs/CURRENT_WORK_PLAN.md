@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/OPENING_FIFO_COST_REPAIR_FOLLOWUP_2026-09-24.md`
-- Current active branch: `development/fifo-opening-repair-final-20260925`
-- Current PR: `#361`
+- Mandatory active work log: `docs/RAW_MATERIAL_REPORTS_ACTIVE_2026-09-25.md`
+- Current active branch: `development/raw-material-financial-reports-20260925`
+- Current PR: `#363`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -26,7 +26,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/fifo-opening-repair-final-20260925`
+- Executable branch: `development/raw-material-financial-reports-20260925`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
@@ -348,3 +348,13 @@ User explicitly approved a renderer-only redesign of customer and kitchen receip
 `Baseline -> Root Cause -> Small Change -> Focused Tests -> Integration/Regression -> Full Verify -> PR -> Merge only when allowed -> Verify main -> Deploy`
 
 لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ، ولا يُحذف Legacy إلا بعد إثبات الاستخدام/الاستبدال/التغطية ثم Full Verify.
+
+
+## 2026-09-25 — Raw material reporting rebuild (in progress)
+- Branch: `development/raw-material-financial-reports-20260925`.
+- Added three reports: raw-material movement/consumption, current residual FIFO valuation, and finance summary/detail.
+- Authoritative sources: `inventory_ledger` for period movement/COGS and `raw_material_batches` for current residual FIFO value.
+- Quantity totals remain per material; financial summaries aggregate values only to avoid mixing kg/litre/piece quantities.
+- No main merge and no Production migration without Full Verify green + approval.
+
+- Added `daily_closing_range`: open date-range day closing report with one row per business day and payment-method split (cash/card/transfer/credit/legacy/other), sourced from `get_day_closing_report` so monthly/period totals reconcile to day closing.

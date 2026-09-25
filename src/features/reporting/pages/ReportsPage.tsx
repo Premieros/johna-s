@@ -791,6 +791,161 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setData(reconciliationRows);
         setChartData([]);
         setSummary({ total: totalNetSales, count: mismatchCount });
+      } else if (reportType === 'daily_closing_range') {
+        const targetBranches = effectiveBranchFilter
+          ? branches.filter((branch) => branch.id === effectiveBranchFilter)
+          : branches;
+        const results = await Promise.all(targetBranches.map(async (branch) => {
+          const result = await supabase.rpc('get_day_closing_range_report', {
+            p_branch_id: branch.id,
+            p_from_date: allowed.from,
+            p_to_date: allowed.to,
+          });
+          if (result.error) throw result.error;
+          const payload = (result.data || {}) as Record<string, unknown>;
+          return {
+            branchId: branch.id,
+            rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
+          };
+        }));
+        const rows = results.flatMap(({ branchId, rows: dayRows }) => dayRows.map((row) => withBranch(branchId, {
+          [lang === 'ar' ? 'اليوم' : 'Business Date']: String(row.business_date || ''),
+          [lang === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales']: Number(row.gross_sales || 0),
+          [lang === 'ar' ? 'الخصومات' : 'Discounts']: Number(row.discounts || 0),
+          [lang === 'ar' ? 'الضرائب' : 'Taxes']: Number(row.taxes || 0),
+          [lang === 'ar' ? 'المرتجعات' : 'Returns']: Number(row.returns || 0),
+          [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: Number(row.net_sales || 0),
+          [lang === 'ar' ? 'كاش' : 'Cash']: Number(row.cash || 0),
+          [lang === 'ar' ? 'كارت' : 'Card']: Number(row.card || 0),
+          [lang === 'ar' ? 'تحويل' : 'Transfer']: Number(row.transfer || 0),
+          [lang === 'ar' ? 'آجل' : 'Credit']: Number(row.credit || 0),
+          [lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank']: Number(row.legacy_bank || 0),
+          [lang === 'ar' ? 'طرق دفع أخرى' : 'Other Payment']: Number(row.other_payment || 0),
+          [lang === 'ar' ? 'المصروفات' : 'Expenses']: Number(row.expenses || 0),
+          [lang === 'ar' ? 'مشتريات كاش' : 'Cash Purchases']: Number(row.cash_purchases || 0),
+          [lang === 'ar' ? 'صافي كاش بعد المنصرف' : 'Cash After Outflows']: Number(row.cash_after_outflows || 0),
+          [lang === 'ar' ? 'عدد الفواتير' : 'Invoices']: Number(row.invoice_count || 0),
+          [lang === 'ar' ? 'عدد الشفتات' : 'Shifts']: Number(row.shift_count || 0),
+          [lang === 'ar' ? 'حالة اليوم' : 'Day Status']:
+            row.daily_close_status === 'closed'
+              ? (lang === 'ar' ? 'مغلق' : 'Closed')
+              : (lang === 'ar' ? 'مفتوح' : 'Open'),
+        })));
+        setData(rows);
+        setChartData([]);
+        setSummary({
+          total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'صافي المبيعات' : 'Net Sales'] || 0), 0),
+          count: rows.length,
+        });
+      } else if (reportType === 'raw_material_consumption') {
+        const targetBranches = effectiveBranchFilter
+          ? branches.filter((branch) => branch.id === effectiveBranchFilter)
+          : branches;
+        const results = await Promise.all(targetBranches.map(async (branch) => {
+          const result = await supabase.rpc('get_raw_material_consumption_report', {
+            p_branch_id: branch.id,
+            p_from_date: allowed.from,
+            p_to_date: allowed.to,
+          });
+          if (result.error) throw result.error;
+          return { branchId: branch.id, rows: Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [] };
+        }));
+        const rows = results.flatMap(({ branchId, rows: rawRows }) => rawRows.map((row) => withBranch(branchId, {
+          [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
+          [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
+          [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name || '',
+          [lang === 'ar' ? 'رصيد أول المدة' : 'Opening Qty']: Number(row.opening_quantity || 0),
+          [lang === 'ar' ? 'المشتريات كمية' : 'Purchase Qty']: Number(row.purchase_quantity || 0),
+          [lang === 'ar' ? 'تحويلات داخلة' : 'Transfer In']: Number(row.transfer_in_quantity || 0),
+          [lang === 'ar' ? 'تحويلات خارجة' : 'Transfer Out']: Number(row.transfer_out_quantity || 0),
+          [lang === 'ar' ? 'استهلاك المبيعات' : 'Sales Consumption Qty']: Number(row.sales_consumption_quantity || 0),
+          [lang === 'ar' ? 'قيمة الاستهلاك' : 'Consumption Value']: Number(row.sales_consumption_value || 0),
+          [lang === 'ar' ? 'الهالك' : 'Waste Qty']: Number(row.waste_quantity || 0),
+          [lang === 'ar' ? 'تسويات وحركات أخرى' : 'Other Net Qty']: Number(row.other_net_quantity || 0),
+          [lang === 'ar' ? 'رصيد آخر المدة' : 'Closing Qty']: Number(row.closing_quantity || 0),
+          [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(row.closing_value || 0),
+        })));
+        setData(rows);
+        setChartData([]);
+        setSummary({
+          total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'قيمة الاستهلاك' : 'Consumption Value'] || 0), 0),
+          count: rows.length,
+        });
+      } else if (reportType === 'raw_material_current_cost') {
+        const targetBranches = effectiveBranchFilter
+          ? branches.filter((branch) => branch.id === effectiveBranchFilter)
+          : branches;
+        const results = await Promise.all(targetBranches.map(async (branch) => {
+          const result = await supabase.rpc('get_current_raw_material_valuation', { p_branch_id: branch.id });
+          if (result.error) throw result.error;
+          return { branchId: branch.id, rows: Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [] };
+        }));
+        const rows = results.flatMap(({ branchId, rows: rawRows }) => rawRows.map((row) => withBranch(branchId, {
+          [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
+          [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
+          [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name || '',
+          [lang === 'ar' ? 'الكمية الحالية' : 'Current Qty']: Number(row.current_quantity || 0),
+          [lang === 'ar' ? 'تكلفة الوحدة الحالية FIFO' : 'Current FIFO Unit Cost']: Number(row.fifo_current_unit_cost || 0),
+          [lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value']: Number(row.current_inventory_value || 0),
+          [lang === 'ar' ? 'آخر تكلفة معتمدة' : 'Latest Authoritative Cost']: Number(row.latest_authoritative_cost || 0),
+          [lang === 'ar' ? 'مصدر السعر' : 'Price Source']: row.price_source || '',
+          [lang === 'ar' ? 'طبقات FIFO المفتوحة' : 'Open FIFO Batches']: Number(row.open_fifo_batches || 0),
+        })));
+        setData(rows);
+        setChartData([]);
+        setSummary({
+          total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value'] || 0), 0),
+          count: rows.length,
+        });
+      } else if (reportType === 'raw_material_financial') {
+        const targetBranches = effectiveBranchFilter
+          ? branches.filter((branch) => branch.id === effectiveBranchFilter)
+          : branches;
+        const results = await Promise.all(targetBranches.map(async (branch) => {
+          const result = await supabase.rpc('get_raw_material_financial_report', {
+            p_branch_id: branch.id,
+            p_from_date: allowed.from,
+            p_to_date: allowed.to,
+          });
+          if (result.error) throw result.error;
+          const payload = (result.data || {}) as Record<string, unknown>;
+          return {
+            branchId: branch.id,
+            summary: (payload.summary || {}) as Record<string, unknown>,
+            rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
+          };
+        }));
+        const rows = results.flatMap(({ branchId, summary: financial, rows: rawRows }) => {
+          const summaryRow = withBranch(branchId, {
+            [lang === 'ar' ? 'الخامة' : 'Raw Material']: lang === 'ar' ? 'إجمالي الفترة' : 'Period Total',
+            [lang === 'ar' ? 'قيمة أول المدة' : 'Opening Value']: Number(financial.opening_inventory_value || 0),
+            [lang === 'ar' ? 'قيمة المشتريات' : 'Purchase Value']: Number(financial.purchases_value || 0),
+            [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: Number(financial.net_sales || 0),
+            [lang === 'ar' ? 'قيمة استهلاك المبيعات' : 'Sales Consumption Value']: Number(financial.sales_consumption_value || 0),
+            [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(financial.closing_inventory_value || 0),
+            [lang === 'ar' ? 'مجمل الربح' : 'Gross Profit']: Number(financial.gross_profit || 0),
+            [lang === 'ar' ? 'نسبة تكلفة الخامات %' : 'Food Cost %']: Number(financial.food_cost_pct || 0),
+          });
+          const detailRows = rawRows.map((row) => withBranch(branchId, {
+            [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
+            [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name || '',
+            [lang === 'ar' ? 'كمية أول المدة' : 'Opening Qty']: Number(row.opening_quantity || 0),
+            [lang === 'ar' ? 'قيمة أول المدة' : 'Opening Value']: Number(row.opening_value || 0),
+            [lang === 'ar' ? 'كمية المشتريات' : 'Purchase Qty']: Number(row.purchase_quantity || 0),
+            [lang === 'ar' ? 'قيمة المشتريات' : 'Purchase Value']: Number(row.purchase_value || 0),
+            [lang === 'ar' ? 'كمية استهلاك المبيعات' : 'Sales Consumption Qty']: Number(row.sales_consumption_quantity || 0),
+            [lang === 'ar' ? 'قيمة استهلاك المبيعات' : 'Sales Consumption Value']: Number(row.sales_consumption_value || 0),
+            [lang === 'ar' ? 'كمية آخر المدة' : 'Closing Qty']: Number(row.closing_quantity || 0),
+            [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(row.closing_value || 0),
+          }));
+          return [summaryRow, ...detailRows];
+        });
+        setData(rows);
+        setChartData([]);
+        setSummary({
+          total: results.reduce((sum, result) => sum + Number(result.summary.net_sales || 0), 0),
+          count: results.reduce((sum, result) => sum + result.rows.length, 0),
+        });
       } else if (reportType === 'production_waste') {
         let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
@@ -864,7 +1019,23 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     { key: 'returns', label: t('returnsReport'), icon: <RotateCcw className="w-4 h-4" /> },
     { key: 'production_waste', label: t('productionWasteReport'), icon: <Trash2 className="w-4 h-4" /> },
   ];
+  if (can('reports.costing') || canFinancial) {
+    reportTypes.push(
+      { key: 'raw_material_consumption', label: lang === 'ar' ? 'حركة واستهلاك الخامات' : 'Raw Material Consumption', icon: <Layers className="w-4 h-4" /> },
+      { key: 'raw_material_current_cost', label: lang === 'ar' ? 'تكلفة الخامات الحالية' : 'Current Raw Material Cost', icon: <Package className="w-4 h-4" /> },
+    );
+  }
   if (canFinancial) {
+    reportTypes.push({
+      key: 'raw_material_financial',
+      label: lang === 'ar' ? 'التقرير المالي للخامات والمبيعات' : 'Raw Material Financial Report',
+      icon: <BarChart3 className="w-4 h-4" />,
+    });
+    reportTypes.push({
+      key: 'daily_closing_range',
+      label: lang === 'ar' ? 'حركة الأيام وطرق الدفع' : 'Daily Closing & Payments',
+      icon: <CreditCard className="w-4 h-4" />,
+    });
     reportTypes.push({
       key: 'financial_reconciliation',
       label: lang === 'ar' ? 'المطابقة المالية' : 'Financial Reconciliation',
@@ -890,6 +1061,21 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     lang === 'ar' ? 'آجل' : 'Credit', lang === 'ar' ? 'حركة الخزنة' : 'Cash GL',
     lang === 'ar' ? 'حركة البنك' : 'Bank GL', lang === 'ar' ? 'فرق الخزنة' : 'Cash Difference',
     lang === 'ar' ? 'فرق البنك' : 'Bank Difference',
+    lang === 'ar' ? 'قيمة الاستهلاك' : 'Consumption Value',
+    lang === 'ar' ? 'قيمة أول المدة' : 'Opening Value',
+    lang === 'ar' ? 'قيمة المشتريات' : 'Purchase Value',
+    lang === 'ar' ? 'قيمة استهلاك المبيعات' : 'Sales Consumption Value',
+    lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value',
+    lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value',
+    lang === 'ar' ? 'تكلفة الوحدة الحالية FIFO' : 'Current FIFO Unit Cost',
+    lang === 'ar' ? 'آخر تكلفة معتمدة' : 'Latest Authoritative Cost',
+    lang === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales',
+    lang === 'ar' ? 'الخصومات' : 'Discounts',
+    lang === 'ar' ? 'الضرائب' : 'Taxes',
+    lang === 'ar' ? 'المرتجعات' : 'Returns',
+    lang === 'ar' ? 'طرق دفع أخرى' : 'Other Payment',
+    lang === 'ar' ? 'مشتريات كاش' : 'Cash Purchases',
+    lang === 'ar' ? 'صافي كاش بعد المنصرف' : 'Cash After Outflows',
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
