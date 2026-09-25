@@ -19,7 +19,7 @@ const OPERATIONAL_KEYS = [
   'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
   'top_consumed_components', 'top_consumed_products', 'low_stock',
   'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption',
-  'raw_material_current_cost', 'raw_material_financial', 'daily_closing_range', 'financial_reconciliation',
+  'raw_material_current_cost', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ];
 
 const FINANCIAL_KEYS = [
