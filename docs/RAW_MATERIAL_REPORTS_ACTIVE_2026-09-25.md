@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/reports-compact-ui-excel-20260925`
-Current PR: `#0`
+Current PR: `#366`
 Last updated: 2026-09-25
 
 ## Work status
@@ -78,10 +78,9 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Verify the clean post-merge branch contains only the compact Reports UI / quantity visibility / Excel refinements.
-2. Open a new PR for this post-merge refinement and record its number here.
-3. Run exact-head Fast Verify + Full Verify on that PR head.
-4. Stop before merge and request explicit merge approval.
+1. Run exact-head Fast Verify + Full Verify on PR #366 head.
+2. Fix any failure on the same branch only.
+3. Stop before merge and request explicit merge approval.
 
 ## Mandatory update protocol
 
