@@ -1159,6 +1159,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         </div>
       } />
 
+      {!history.unlimited && (
+        <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
+          {lang === 'ar'
+            ? 'نطاق العرض محدود حسب الصلاحية: آخر 7 أيام تظهر كاملة، وما قبلها يخضع لسياسة العرض التاريخي. الإجماليات والتصدير تشمل فقط البيانات المسموح لك برؤيتها.'
+            : 'Visibility is permission-limited: the last 7 days are complete, while older history follows the historical visibility policy. Totals and exports include only data you are allowed to see.'}
+        </div>
+      )}
+
       <CustomReportBar
         savedReports={savedReports}
         currentReportType={reportType}
