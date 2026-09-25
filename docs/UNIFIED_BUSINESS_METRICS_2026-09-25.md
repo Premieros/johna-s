@@ -3,7 +3,15 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/unified-business-metrics-20260925`
-Date: 2026-09-25
+Current PR: `#368`
+Last updated: 2026-09-25
+
+## Work status
+
+State: **BLOCKED**
+
+Implementation is under verification. Merge and Production remain blocked until exact-head Full Verify is green and explicit approval is given.
+
 
 ## Goal
 
@@ -19,6 +27,27 @@ The user-facing surface must not expose accounting implementation details as if 
 - No Production migration without Full Verify Green + explicit approval.
 - Printing / Print Agent / KDS / shifts are out of scope.
 - Preserve branch isolation and permission checks.
+
+## Baseline
+
+- Base main: `6726103b3dbadf82f4b81b18c6648fc148479a9f`.
+- Existing historical visibility: last 7 days complete; older rows follow permission-scoped historical visibility unless `history.unlimited` is granted.
+- Existing authoritative sources include operational tables/RPCs, accounting journals, `inventory_ledger`, FIFO `raw_material_batches`, and day-closing RPCs.
+
+## Root-cause ledger
+
+1. The same business meaning was surfaced from different sources across Finance, Reports, Inventory, and Purchases.
+2. Generic `credit` labels obscured whether the value meant supplier payable, customer receivable, or a payment method.
+3. Raw-material inventory value could be shown from local average cost while finance used FIFO valuation.
+4. Historical visibility limits could make a visible total look like a full-branch total unless the scope was disclosed.
+
+## Change ledger
+
+- Added shared user-facing business metric helpers.
+- Aligned supplier/customer outstanding labels across Finance, Reports, and Purchases.
+- Removed conflicting raw-material avg-cost valuation from the inventory user surface.
+- Added permission-scope disclosure on Reports, Finance, Purchases, and Inventory Ledger.
+- Added contract coverage for metric semantics and history-scoped disclosure.
 
 ## User-facing metric contract
 
@@ -102,3 +131,30 @@ A metric is considered "the same number everywhere" only when compared under the
 - [ ] Bank balance is never presented as card sales.
 - [ ] Split payments are decomposed before user-facing totals.
 - [ ] Excel exports match screen values and labels.
+
+## Verification ledger
+
+- PR #368 first verify failed on stale active-worklog branch/path hard-coding.
+- Active worklog pointer was corrected to this file and branch.
+- Latest verify then failed because the gate still hard-coded the prior log filename and this log lacked mandatory structural headings.
+- Gate repair now validates the declared active log path dynamically while preserving strict structure and branch matching.
+- Exact-head Full Verify: pending.
+
+## Production gate
+
+State: **BLOCKED**
+
+- Merge: blocked until exact-head Full Verify Green + explicit approval.
+- Production migration: not required by this UI/semantic work and remains blocked.
+- Printing / Print Agent / KDS / shifts remain untouched.
+
+## Next action
+
+Run exact-head verification for PR #368 and stop before merge.
+
+## Mandatory update protocol
+
+- Before every write, verify branch HEAD against the expected prior commit.
+- Unexpected HEAD = STOP_AND_RECONCILE.
+- Update this log after each change group and verification result.
+- Do not merge or change Production while State is BLOCKED.
