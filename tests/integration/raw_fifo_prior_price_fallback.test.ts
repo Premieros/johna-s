@@ -14,6 +14,7 @@ describe.skipIf(skip)('raw FIFO prior-price fallback', () => {
   const warehouse = randomUUID();
   const unit = randomUUID();
   const raw = randomUUID();
+  const rawNoPrice = randomUUID();
   const sale = randomUUID();
 
   const q = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> =>
@@ -37,8 +38,17 @@ describe.skipIf(skip)('raw FIFO prior-price fallback', () => {
     );
     await q(
       `INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost,is_active)
-       VALUES($1,$2,'Fallback Raw',$3,$4,0,true)`,
-      [raw, 'FRAW-' + randomUUID().slice(0, 6), branch, unit],
+       VALUES
+         ($1,$3,'Fallback Raw',$4,$5,0,true),
+         ($2,$6,'Fallback No Price Raw',$4,$5,0,true)`,
+      [
+        raw,
+        rawNoPrice,
+        'FRAW-' + randomUUID().slice(0, 6),
+        branch,
+        unit,
+        'FNOP-' + randomUUID().slice(0, 6),
+      ],
     );
     await q(
       `INSERT INTO public.sales(
@@ -65,6 +75,14 @@ describe.skipIf(skip)('raw FIFO prior-price fallback', () => {
        )`,
       [raw, branch, warehouse, sale],
     );
+
+    // A second zero-cost debt intentionally has no authoritative prior price.
+    await q(
+      `SELECT public._raw_remove_fifo(
+         $1,$2,$3,1,'sale','sale',$4,'FF-SALE',NULL,true
+       )`,
+      [rawNoPrice, branch, warehouse, sale],
+    );
   });
 
   afterAll(async () => {
@@ -86,8 +104,20 @@ describe.skipIf(skip)('raw FIFO prior-price fallback', () => {
       [branch],
     );
     expect(prep[0].r.success).toBe(true);
+    expect(num(prep[0].r.zero_cost_rows)).toBe(2);
     expect(num(prep[0].r.eligible_rows)).toBe(1);
+    expect(num(prep[0].r.unresolved_rows)).toBe(1);
     expect(num(prep[0].r.target_cost_value)).toBe(50);
+
+    const unresolved = await q<{ eligible: boolean; unresolved_reason: string }>(
+      `SELECT eligible,unresolved_reason
+       FROM public.raw_fifo_price_fallback_plan
+       WHERE run_id=$1 AND raw_material_id=$2`,
+      [String(prep[0].r.run_id), rawNoPrice],
+    );
+    expect(unresolved).toHaveLength(1);
+    expect(unresolved[0].eligible).toBe(false);
+    expect(unresolved[0].unresolved_reason).toBe('NO_PRIOR_AUTHORITATIVE_PRICE');
 
     const runId = String(prep[0].r.run_id);
     const applied = await q<{ r: Record<string, unknown> }>(
