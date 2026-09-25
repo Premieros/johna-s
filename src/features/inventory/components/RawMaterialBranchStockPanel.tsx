@@ -4,7 +4,7 @@ import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useBranches } from '@/hooks/useBranches';
-import { formatNumber, formatRawMaterialQuantity } from '@/lib/format';
+import { formatRawMaterialQuantity } from '@/lib/format';
 import { DesignPanel } from '@/components/design';
 import { Select } from '@/components/Input';
 
@@ -184,6 +184,8 @@ export function RawMaterialBranchStockPanel() {
             {selectedBranchName && <p className="mt-1 text-xs text-ui-muted">{selectedBranchName}</p>}
           </div>
         ) : (
+          <>
+          <p className="text-xs text-ui-muted">{isAr ? 'هذه الشاشة تعرض الكمية التشغيلية فقط. قيمة المخزون وتكلفة الخامات تعرض من تقييم FIFO المعتمد في التقارير المالية حتى لا يظهر رقمان مختلفان لنفس الرصيد.' : 'This screen shows operational quantity only. Inventory value and raw-material cost come from the authoritative FIFO valuation in financial reports so users do not see two values for the same stock.'}</p>
           <div className="overflow-x-auto rounded-xl border border-ui-border">
             <table className="w-full text-sm">
               <thead className="bg-ui-page-alt text-ui-muted">
@@ -192,8 +194,6 @@ export function RawMaterialBranchStockPanel() {
                   {showBranchColumn && <th className="px-3 py-2 text-start">{isAr ? 'الفرع' : 'Branch'}</th>}
                   <th className="px-3 py-2 text-start">{isAr ? 'الوحدة' : 'Unit'}</th>
                   <th className="px-3 py-2 text-end">{isAr ? 'المتاح' : 'Available'}</th>
-                  <th className="px-3 py-2 text-end">{isAr ? 'متوسط التكلفة' : 'Average Cost'}</th>
-                  <th className="px-3 py-2 text-end">{isAr ? 'قيمة الرصيد' : 'Stock Value'}</th>
                   <th className="px-3 py-2 text-end">{isAr ? 'الحد الأدنى' : 'Minimum'}</th>
                   <th className="px-3 py-2 text-start">{isAr ? 'الحالة' : 'Status'}</th>
                 </tr>
@@ -201,8 +201,6 @@ export function RawMaterialBranchStockPanel() {
               <tbody className="divide-y divide-ui-border">
                 {rows.map((row) => {
                   const quantity = Number(row.quantity || 0);
-                  const averageCost = Number(row.avg_cost || 0);
-                  const stockValue = quantity * averageCost;
                   const minimum = Number(row.min_stock || 0);
                   const low = quantity <= minimum;
                   const measurementUnit = row.raw_material.measurement_unit;
@@ -214,8 +212,6 @@ export function RawMaterialBranchStockPanel() {
                       {showBranchColumn && <td className="px-3 py-2 text-ui-muted">{branchName}</td>}
                       <td className="px-3 py-2 text-ui-muted">{unit}</td>
                       <td className="px-3 py-2 text-end font-bold text-ui-text">{formatRawMaterialQuantity(quantity, measurementUnit, { lang })}</td>
-                      <td className="px-3 py-2 text-end text-ui-muted">{formatNumber(averageCost, 2)}</td>
-                      <td className="px-3 py-2 text-end font-semibold text-ui-text">{formatNumber(stockValue, 2)}</td>
                       <td className="px-3 py-2 text-end text-ui-muted">{formatRawMaterialQuantity(minimum, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${quantity <= 0 ? 'bg-ui-danger-soft text-ui-danger' : low ? 'bg-ui-warning-soft text-ui-warning' : 'bg-ui-success-soft text-ui-success'}`}>
@@ -229,6 +225,7 @@ export function RawMaterialBranchStockPanel() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </DesignPanel>

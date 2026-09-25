@@ -151,7 +151,7 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       integerColumns: [],
     },
     financial_reconciliation: {
-      columns: [branch, pick(lang, 'التاريخ', 'Date'), pick(lang, 'رقم الفاتورة', 'Invoice'), pick(lang, 'صافي الفاتورة', 'Net Sale'), pick(lang, 'كاش', 'Cash'), pick(lang, 'كارت', 'Card'), pick(lang, 'تحويل', 'Transfer'), pick(lang, 'بنك تاريخي غير مصنف', 'Legacy Bank'), pick(lang, 'آجل', 'Credit'), pick(lang, 'حركة الخزنة', 'Cash GL'), pick(lang, 'حركة البنك', 'Bank GL'), pick(lang, 'فرق الخزنة', 'Cash Difference'), pick(lang, 'فرق البنك', 'Bank Difference'), pick(lang, 'المطابقة', 'Reconciliation')],
+      columns: [branch, pick(lang, 'التاريخ', 'Date'), pick(lang, 'رقم الفاتورة', 'Invoice'), pick(lang, 'صافي الفاتورة', 'Net Sale'), pick(lang, 'كاش', 'Cash'), pick(lang, 'كارت', 'Card'), pick(lang, 'تحويل', 'Transfer'), pick(lang, 'بنك تاريخي غير مصنف', 'Legacy Bank'), pick(lang, 'آجل — مستحق من العميل', 'Credit — Customer outstanding'), pick(lang, 'حركة الخزنة', 'Cash GL'), pick(lang, 'حركة البنك', 'Bank GL'), pick(lang, 'فرق الخزنة', 'Cash Difference'), pick(lang, 'فرق البنك', 'Bank Difference'), pick(lang, 'المطابقة', 'Reconciliation')],
       columnWidths: { [branch]: 24, [pick(lang, 'التاريخ', 'Date')]: 18, [pick(lang, 'رقم الفاتورة', 'Invoice')]: 20, [pick(lang, 'المطابقة', 'Reconciliation')]: 24 },
       integerColumns: [],
     },

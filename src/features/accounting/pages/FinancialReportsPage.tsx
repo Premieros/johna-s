@@ -13,6 +13,7 @@ import { exportToExcelAdvanced } from '@/lib/excel';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
+import { businessMetricLabel } from '@/lib/businessMetrics';
 import type {
   TrialBalanceRow, GeneralLedgerRow, TrialBalanceSummary,
   IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow,
@@ -278,9 +279,9 @@ export function FinancialReportsPage() {
     { key: 'inventory_movement', label: isAr ? 'حركة صنف' : 'Item Movement', icon: <PackageSearch className="w-4 h-4" /> },
     { key: 'income', label: t('incomeStatement'), icon: <TrendingUp className="w-4 h-4" /> },
     { key: 'balance_sheet', label: t('balanceSheet'), icon: <PieChart className="w-4 h-4" /> },
-    { key: 'ar_aging', label: t('arAging'), icon: <Clock className="w-4 h-4" /> },
-    { key: 'ap_aging', label: t('apAging'), icon: <Landmark className="w-4 h-4" /> },
-    { key: 'aging_summary', label: t('agingSummary'), icon: <PieChart className="w-4 h-4" /> },
+    { key: 'ar_aging', label: isAr ? 'مستحق من العملاء' : 'Customer outstanding', icon: <Clock className="w-4 h-4" /> },
+    { key: 'ap_aging', label: isAr ? 'مستحق للموردين' : 'Supplier outstanding', icon: <Landmark className="w-4 h-4" /> },
+    { key: 'aging_summary', label: isAr ? 'ملخص المستحقات' : 'Outstanding summary', icon: <PieChart className="w-4 h-4" /> },
     { key: 'cash_flow', label: isAr ? 'ملخص حركة الخزائن والبنوك' : 'Treasury & Bank Movement Summary', icon: <ArrowLeftRight className="w-4 h-4" /> },
     { key: 'party_statement', label: t('partyStatement'), icon: <Receipt className="w-4 h-4" /> },
   ];
@@ -387,11 +388,12 @@ export function FinancialReportsPage() {
       void exportToExcelAdvanced({ ...base, data: rows, filename: `balance_sheet_${to}`, sheetName: currentTitle, currencyColumns: [ar('القيمة', 'Amount')], columns: [ar('البند', 'Item'), ar('القيمة', 'Amount')], columnWidths: { [ar('البند', 'Item')]: 32 } });
     } else if (view === 'ar_aging' || view === 'ap_aging') {
       const partyLabel = view === 'ar_aging' ? ar('العميل', 'Customer') : ar('المورد', 'Supplier');
+      const outstandingLabel = view === 'ar_aging' ? businessMetricLabel('customer_outstanding', lang as 'ar' | 'en') : businessMetricLabel('supplier_outstanding', lang as 'ar' | 'en');
       const source = view === 'ar_aging' ? arAging : apAging;
       const rows = source.map((r) => ({
         [partyLabel]: r.name,
         [ar('الهاتف', 'Phone')]: r.phone || '',
-        [ar('الرصيد المفتوح', 'Open')]: r.open_amount,
+        [outstandingLabel]: r.open_amount,
         '0-30': r.bucket_0_30,
         '31-60': r.bucket_31_60,
         '61-90': r.bucket_61_90,
@@ -399,14 +401,14 @@ export function FinancialReportsPage() {
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `${view}_${to}`, sheetName: currentTitle,
-        currencyColumns: [ar('الرصيد المفتوح', 'Open'), '0-30', '31-60', '61-90', '90+'],
-        columns: [partyLabel, ar('الهاتف', 'Phone'), ar('الرصيد المفتوح', 'Open'), '0-30', '31-60', '61-90', '90+'],
+        currencyColumns: [outstandingLabel, '0-30', '31-60', '61-90', '90+'],
+        columns: [partyLabel, ar('الهاتف', 'Phone'), outstandingLabel, '0-30', '31-60', '61-90', '90+'],
         columnWidths: { [partyLabel]: 30, [ar('الهاتف', 'Phone')]: 18 },
       });
     } else if (view === 'aging_summary' && agingSummary) {
       const rows = [
-        { [ar('البند', 'Item')]: ar('ذمم العملاء', 'AR'), [ar('القيمة', 'Amount')]: agingSummary.ar_open },
-        { [ar('البند', 'Item')]: ar('ذمم الموردين', 'AP'), [ar('القيمة', 'Amount')]: agingSummary.ap_open },
+        { [ar('البند', 'Item')]: businessMetricLabel('customer_outstanding', lang as 'ar' | 'en'), [ar('القيمة', 'Amount')]: agingSummary.ar_open },
+        { [ar('البند', 'Item')]: businessMetricLabel('supplier_outstanding', lang as 'ar' | 'en'), [ar('القيمة', 'Amount')]: agingSummary.ap_open },
       ];
       void exportToExcelAdvanced({ ...base, data: rows, filename: `aging_summary_${to}`, sheetName: currentTitle, currencyColumns: [ar('القيمة', 'Amount')], columns: [ar('البند', 'Item'), ar('القيمة', 'Amount')], columnWidths: { [ar('البند', 'Item')]: 30 } });
     } else if (view === 'cash_flow') {
@@ -485,6 +487,14 @@ export function FinancialReportsPage() {
   return (
     <DesignSurface testId="financial-reports-page">
       <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+
+      {!history.unlimited && (
+        <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
+          {isAr
+            ? 'الأرقام المالية المعروضة مقيدة بصلاحية التاريخ: آخر 7 أيام كاملة، وما قبلها حسب سياسة العرض. لا تعتبر أرقام الفترات القديمة إجمالي الفرع الكامل إلا مع صلاحية عرض التاريخ بالكامل.'
+            : 'Financial figures are history-permission scoped: the last 7 days are complete, while older periods follow the visibility policy. Older-period figures are not the full branch totals unless full-history access is granted.'}
+        </div>
+      )}
 
       <DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">

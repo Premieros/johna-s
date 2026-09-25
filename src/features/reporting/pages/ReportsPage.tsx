@@ -396,7 +396,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           cash: t('cash'),
           card: t('card'),
           transfer: t('transfer'),
-          credit: t('credit'),
+          credit: lang === 'ar' ? 'آجل — مستحق من العميل' : 'Credit — Customer outstanding',
           employee_credit: lang === 'ar' ? 'آجل موظفين' : 'Employee Credit',
           bank_legacy: lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank (Unclassified)',
           other: lang === 'ar' ? 'أخرى' : 'Other',
@@ -774,7 +774,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
               [lang === 'ar' ? 'كارت' : 'Card']: Number(row.card || 0),
               [lang === 'ar' ? 'تحويل' : 'Transfer']: Number(row.transfer || 0),
               [lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank']: Number(row.legacy_bank || 0),
-              [lang === 'ar' ? 'آجل' : 'Credit']: Number(row.credit || 0),
+              [lang === 'ar' ? 'آجل — مستحق من العميل' : 'Credit — Customer outstanding']: Number(row.credit || 0),
               [lang === 'ar' ? 'حركة الخزنة' : 'Cash GL']: Number(row.cash_gl || 0),
               [lang === 'ar' ? 'حركة البنك' : 'Bank GL']: Number(row.bank_gl || 0),
               [lang === 'ar' ? 'فرق الخزنة' : 'Cash Difference']: Number(row.cash_diff || 0),
@@ -1158,6 +1158,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           {can('reports.print') && <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="w-4 h-4" /> {t('print')}</Button>}
         </div>
       } />
+
+      {!history.unlimited && (
+        <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
+          {lang === 'ar'
+            ? 'نطاق العرض محدود حسب الصلاحية: آخر 7 أيام تظهر كاملة، وما قبلها يخضع لسياسة العرض التاريخي. الإجماليات والتصدير تشمل فقط البيانات المسموح لك برؤيتها.'
+            : 'Visibility is permission-limited: the last 7 days are complete, while older history follows the historical visibility policy. Totals and exports include only data you are allowed to see.'}
+        </div>
+      )}
 
       <CustomReportBar
         savedReports={savedReports}
