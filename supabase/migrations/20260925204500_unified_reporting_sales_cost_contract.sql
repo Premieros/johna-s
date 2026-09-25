@@ -13,8 +13,8 @@ AS $function$
   SELECT round(GREATEST(COALESCE(p_total,0)-COALESCE(p_refunded_amount,0),0),2);
 $function$;
 
-REVOKE ALL ON FUNCTION private.report_net_sale_amount(numeric,numeric) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION private.report_net_sale_amount(numeric,numeric) TO service_role;
+REVOKE ALL ON FUNCTION private.report_net_sale_amount(numeric,numeric) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.report_net_sale_amount(numeric,numeric) TO authenticated, service_role;
 
 COMMENT ON FUNCTION private.report_net_sale_amount(numeric,numeric)
 IS 'Canonical reporting net-sale definition: max(sale total - refunded amount, 0). Tax remains separately reportable and is never silently removed from net sales.';
@@ -43,7 +43,7 @@ scoped_sales AS MATERIALIZED (
   CROSS JOIN history_bounds hb
   WHERE (p_branch_id IS NULL OR s.branch_id=p_branch_id)
     AND COALESCE(s.is_archived,false)=false
-    AND COALESCE(s.status,'') <> 'cancelled'
+    AND COALESCE(s.status,'') NOT IN ('returned','cancelled')
     AND (hb.from_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date>=hb.from_date)
     AND (hb.to_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date<=hb.to_date)
 ),
