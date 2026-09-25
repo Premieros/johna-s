@@ -114,13 +114,28 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   );
 
   const initialCache = readSessionCache<T>(queryKey);
-  const [rows, setRows] = useState<T[]>(() => initialCache?.rows ?? []);
+  const [rows, setRowsState] = useState<T[]>(() => initialCache?.rows ?? []);
   const [loading, setLoading] = useState(() => enabled && !initialCache);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState<number | null>(() => initialCache?.total ?? null);
   const [hasMore, setHasMore] = useState(() => initialCache?.hasMore ?? false);
   const gen = useRef(0);
+
+  const setRows = useCallback<Dispatch<SetStateAction<T[]>>>((update) => {
+    setRowsState((previous) => {
+      const next = typeof update === 'function'
+        ? (update as (rows: T[]) => T[])(previous)
+        : update;
+      const cached = readSessionCache<T>(queryKey);
+      writeSessionCache<T>(queryKey, {
+        rows: next,
+        total: cached?.total ?? total,
+        hasMore: cached?.hasMore ?? hasMore,
+      });
+      return next;
+    });
+  }, [queryKey, total, hasMore]);
 
   const applyFilters = useCallback(
     (q: FilterBuilder): FilterBuilder => {
@@ -165,7 +180,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     setLoadingMore(false);
 
     if (!enabled) {
-      setRows([]);
+      setRowsState([]);
       setTotal(0);
       setHasMore(false);
       setLoading(false);
@@ -174,12 +189,12 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
 
     const cached = readSessionCache<T>(queryKey);
     if (cached) {
-      setRows(cached.rows);
+      setRowsState(cached.rows);
       setTotal(cached.total);
       setHasMore(cached.hasMore);
       setLoading(false);
     } else {
-      setRows([]);
+      setRowsState([]);
       setTotal(null);
       setHasMore(false);
       setLoading(true);
@@ -206,7 +221,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
         // If there is no safe session snapshot, fail empty. If there is one,
         // preserve it and surface the refresh error without blocking the user.
         if (!cached) {
-          setRows([]);
+          setRowsState([]);
           setTotal(0);
           setHasMore(false);
         }
@@ -217,7 +232,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       const page = fetched.slice(0, pageSize);
       const more = fetched.length > pageSize;
       const nextTotal = more ? null : page.length;
-      setRows(page);
+      setRowsState(page);
       setHasMore(more);
       setTotal(nextTotal);
       writeSessionCache<T>(queryKey, { rows: page, hasMore: more, total: nextTotal });
@@ -240,7 +255,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       const fetched = (data as T[]) || [];
       const page = fetched.slice(0, pageSize);
       const more = fetched.length > pageSize;
-      setRows((prev) => {
+      setRowsState((prev) => {
         const next = [...prev, ...page];
         const nextTotal = more ? null : next.length;
         writeSessionCache<T>(queryKey, { rows: next, hasMore: more, total: nextTotal });
