@@ -86,7 +86,7 @@ function resolveLandingRoute(can: (permission: Permission) => boolean, role?: st
   return null;
 }
 
-function ProtectedRoute({ children, permission, fullscreen, superAdminOnly = false, ownerOnly = false }: { children: ReactNode; permission?: Permission; fullscreen?: boolean; superAdminOnly?: boolean; ownerOnly?: boolean }) {
+function ProtectedRoute({ children, permission, permissionsAny, fullscreen, superAdminOnly = false, ownerOnly = false }: { children: ReactNode; permission?: Permission; permissionsAny?: Permission[]; fullscreen?: boolean; superAdminOnly?: boolean; ownerOnly?: boolean }) {
   const { session, loading, user } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
@@ -97,6 +97,7 @@ function ProtectedRoute({ children, permission, fullscreen, superAdminOnly = fal
   if (superAdminOnly && user.role !== 'super_admin') return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (ownerOnly && !isAdminRole(user.role)) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (permission && !can(permission)) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
+  if (permissionsAny && !permissionsAny.some((candidate) => can(candidate))) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (fullscreen) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
@@ -175,7 +176,7 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.expenses} element={<ProtectedRoute permission="expenses.view"><ExpensesPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.sales} element={<ProtectedRoute permission="sales.view"><SalesPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.shifts} element={<ProtectedRoute permission="shifts.view"><ShiftsPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.reports} element={<ProtectedRoute permission="reports.view"><ReportsCenterPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.reports} element={<ProtectedRoute permissionsAny={["reports.view", "reports.financial"]}><ReportsCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.financialReports} element={<ProtectedRoute permission="reports.financial"><ReportsCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.accounting} element={<ProtectedRoute permission="reports.financial"><Navigate to={APP_ROUTES.financialReports} replace /></ProtectedRoute>} />
         <Route path={APP_ROUTES.accounts} element={<ProtectedRoute permission="accounts.view"><AccountsPage /></ProtectedRoute>} />
