@@ -21,6 +21,7 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
+import { purchasePaymentLabel, supplierOutstanding } from '@/lib/businessMetrics';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { Purchase, Supplier, Product, Warehouse, RpcResult, RawMaterial } from '@/lib/types';
 
@@ -503,6 +504,10 @@ export function PurchasesPage() {
     { key: 'branch', header: t('branch'), render: (p) => <BranchBadge name={branches.find((b) => b.id === p.branch_id)?.name || '-'} /> },
     { key: 'created_at', header: t('date'), render: (p) => formatDate(p.created_at, lang) },
     { key: 'total', header: t('total'), render: (p) => <span className="font-semibold text-ui-text">{formatCurrency(p.total, currency, lang)}</span> },
+    { key: 'supplier_outstanding', header: lang === 'ar' ? 'مستحق للمورد' : 'Supplier outstanding', render: (p) => {
+      const outstanding = supplierOutstanding(p.total, p.paid_amount, p.returned_amount);
+      return <span className={outstanding > 0 ? 'font-semibold text-ui-warning' : 'text-ui-subtle'}>{formatCurrency(outstanding, currency, lang)}</span>;
+    }},
     { key: 'status', header: t('status'), render: (p) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.status === 'returned' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'bg-ui-success-soft text-ui-success'}`}>{purchaseStatusLabel(p.status)}</span> },
     { key: 'actions', header: t('actions'), render: (p) => (
       <div className="flex items-center gap-1 justify-end">
@@ -644,7 +649,7 @@ export function PurchasesPage() {
             </Select>
             <Select label={t('paymentMethod')} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               <option value="cash">{t('cash')}</option>
-              <option value="credit">{t('credit')}</option>
+              <option value="credit">{purchasePaymentLabel('credit', lang as 'ar' | 'en')}</option>
             </Select>
           </div>
 
@@ -745,7 +750,8 @@ export function PurchasesPage() {
               <div><span className="text-ui-subtle">{t('invoice')}: </span><span className="font-medium">{viewModal.invoice_number}</span></div>
               <div><span className="text-ui-subtle">{t('date')}: </span><span className="font-medium">{formatDate(viewModal.created_at, lang)}</span></div>
               <div><span className="text-ui-subtle">{t('supplier')}: </span><span className="font-medium">{(viewModal as Purchase & { supplier?: Supplier }).supplier?.name || '-'}</span></div>
-              <div><span className="text-ui-subtle">{t('paymentMethod')}: </span><span className="font-medium capitalize">{viewModal.payment_method}</span></div>
+              <div><span className="text-ui-subtle">{t('paymentMethod')}: </span><span className="font-medium">{purchasePaymentLabel(viewModal.payment_method, lang as 'ar' | 'en')}</span></div>
+              <div><span className="text-ui-subtle">{lang === 'ar' ? 'مستحق للمورد' : 'Supplier outstanding'}: </span><span className="font-semibold">{formatCurrency(supplierOutstanding(viewModal.total, viewModal.paid_amount, viewModal.returned_amount), currency, lang)}</span></div>
               <div><span className="text-ui-subtle">{t('status')}: </span><span className={`font-semibold ${viewModal.status === 'returned' ? 'text-amber-700 dark:text-amber-300' : ''}`}>{purchaseStatusLabel(viewModal.status)}</span></div>
             </div>
             <div className="border-t border-ui-border pt-3">
