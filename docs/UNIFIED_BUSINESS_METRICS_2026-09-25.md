@@ -10,7 +10,7 @@ Last updated: 2026-09-25
 
 State: **BLOCKED**
 
-Implementation is under verification. Merge and Production remain blocked until exact-head Full Verify is green and explicit approval is given.
+Implementation reached Full Verify Green on `6f701fb512b2dbb63f2dbe9f64683286a718e7e2` (Verify #2782), then `main` advanced by 3 commits. The branch was reconciled with `main` using a normal merge commit with no force push. Merge remains blocked until the reconciled exact-head Full Verify is green and explicit approval is given.
 
 
 ## Goal
@@ -138,7 +138,10 @@ A metric is considered "the same number everywhere" only when compared under the
 - Active worklog pointer was corrected to this file and branch.
 - Latest verify then failed because the gate still hard-coded the prior log filename and this log lacked mandatory structural headings.
 - Gate repair now validates the declared active log path dynamically while preserving strict structure and branch matching.
-- Exact-head Full Verify: pending.
+- Verify #2782 on `6f701fb512b2dbb63f2dbe9f64683286a718e7e2`: FULL GREEN (verify + DB + integration/RLS + browser-smoke).
+- `main` then advanced to `1f2bbadac7f6d27faa571f2726c028f5366a856d` with PR #367 Cleopatra realtime wake repository sync.
+- Reconciled via merge commit `baa396d10f92164256907e878b17c5f5e2280491`; branch is now ahead 25 / behind 0.
+- Reconciled exact-head Full Verify: pending.
 
 ## Production gate
 
@@ -150,7 +153,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Run exact-head verification for PR #368 and stop before merge.
+Run exact-head Full Verify for reconciled head `baa396d10f92164256907e878b17c5f5e2280491` (or the subsequent log-update head) and stop before merge.
 
 ## Mandatory update protocol
 
