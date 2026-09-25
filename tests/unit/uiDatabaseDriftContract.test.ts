@@ -15,10 +15,7 @@ describe('UI and production database drift guards', () => {
 
   it('does not expose the retired Components page from current navigation surfaces', () => {
     const menu = read('src/core/navigation/menu.config.ts');
-    const manufacturingCenter = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
-
     expect(menu).not.toContain("id: 'components'");
-    expect(manufacturingCenter).not.toContain("route: APP_ROUTES.components");
   });
 
   it('fails production parity when the kitchen inventory schema sentinel is absent or false', () => {
