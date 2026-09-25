@@ -191,3 +191,5 @@ This documentation commit changes the PR HEAD, therefore Full Verify must run ag
 - UI/report center/Excel profiles wired for three reports.
 - Added contract test `rawMaterialFinancialReportsContract.test.ts`.
 - Pending: CI/full verification. No merge/production apply yet.
+
+- Extended PR #363 with `daily_closing_range`: date-range day closing/payment-method report. One row per business day; source is the existing authoritative `get_day_closing_report`. Added migration `20260925155500_day_closing_range_report.sql`, UI, Excel profile, report registry/deep-link wiring, and contract test. No merge / Production migration.
