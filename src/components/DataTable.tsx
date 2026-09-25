@@ -30,6 +30,8 @@ interface DataTableProps<T> {
   enableExport?: boolean;
   enableTemplate?: boolean;
   exportFilename?: string;
+  /** Optional authoritative full-row provider used only for export. */
+  exportDataProvider?: () => Promise<T[]> | T[];
   templateFilename?: string;
   onImportFile?: (file: File) => void | Promise<void>;
   importAccept?: string;
@@ -91,6 +93,7 @@ export function DataTable<T extends { id?: string }>({
   enableExport = false,
   enableTemplate = false,
   exportFilename,
+  exportDataProvider,
   templateFilename,
   onImportFile,
   importAccept = '.xlsx,.xls,.csv',
@@ -175,7 +178,37 @@ export function DataTable<T extends { id?: string }>({
     [visibleColumns],
   );
 
-  const buildExportRows = () => displayData.map((row) => {
+  const applyCurrentViewToRows = (source: T[]): T[] => {
+    let next = source;
+    if (enableColumnFilters) {
+      const activeFilters = Object.entries(filters).filter(([, state]) => state.query.trim() || state.selectedValues !== null);
+      if (activeFilters.length > 0) {
+        next = next.filter((row) => activeFilters.every(([key, state]) => {
+          const column = columns.find((col) => col.key === key);
+          if (!column || column.filterable === false || column.key === 'actions') return true;
+          const value = filterValueForRow(row, column);
+          const normalizedValue = normalizeFilterText(value);
+          const matchesQuery = !state.query.trim() || normalizedValue.includes(normalizeFilterText(state.query));
+          const matchesSelected = state.selectedValues === null || state.selectedValues.includes(value);
+          return matchesQuery && matchesSelected;
+        }));
+      }
+    }
+    if (sortState) {
+      const column = columns.find((col) => col.key === sortState.key);
+      if (column) {
+        next = [...next].sort((a, b) => {
+          const left = filterValueForRow(a, column);
+          const right = filterValueForRow(b, column);
+          const comparison = left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+          return sortState.direction === 'asc' ? comparison : -comparison;
+        });
+      }
+    }
+    return next;
+  };
+
+  const buildExportRows = (source: T[] = displayData) => source.map((row) => {
     const out: Record<string, unknown> = {};
     exportColumns.forEach((col) => {
       const explicit = col.exportValue?.(row) ?? col.filterValue?.(row);
@@ -189,7 +222,10 @@ export function DataTable<T extends { id?: string }>({
 
   const handleExport = async () => {
     const fallback = tableId || 'table-export';
-    await exportToExcel(buildExportRows(), exportFilename || fallback);
+    const source = exportDataProvider
+      ? applyCurrentViewToRows(await exportDataProvider())
+      : displayData;
+    await exportToExcel(buildExportRows(source), exportFilename || fallback);
   };
 
   const handleTemplate = async () => {
