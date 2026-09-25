@@ -8,9 +8,9 @@ Last updated: 2026-09-25
 
 ## Work status
 
-State: **READY_FOR_MERGE_APPROVAL**
+State: **IN_PROGRESS**
 
-Implementation is complete on the development branch. Exact-head Full Verify is green. Merge still requires explicit approval. Production migration remains blocked until a separate explicit approval after merge.
+User requested a compact two-row Reports Center UI, quantity columns visible in the raw-material financial summary row, and a more professional Excel export with visible title/header styling, filter, and totals. Previous exact-head Full Verify is now superseded by this new UI/export work. Production migration remains blocked.
 
 ## Guardrails
 
@@ -68,11 +68,14 @@ State: **BLOCKED**
 - Explicit merge approval: NO.
 - Explicit Production approval: NO.
 - Production migration: NOT ALLOWED.
-- Merge: READY only after explicit approval.
+- Merge: BLOCKED by new UI/export changes until a new exact-head Full Verify is Green.
 
 ## Next action
 
-Wait for explicit merge approval for PR #363. After merge, verify main again. Production migration remains a separate gate requiring explicit approval.
+1. Collapse the Reports Center controls to exactly two compact rows: report dropdown, then contextual filters/run controls; remove report-browser cards/search clutter from the active page.
+2. Ensure the raw-material financial period-total row includes opening/purchase/consumption/closing quantities so quantity columns are visible.
+3. Improve Excel output: prominent title, colored/larger headers, visible filter, frozen header, and a clear total/summary row.
+4. Update contract tests, run exact-head Fast Verify + Full Verify, then stop before merge.
 
 ## Mandatory update protocol
 
