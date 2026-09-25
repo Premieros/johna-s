@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
-describe('Smouha Print Agent V8.1.1 Lite isolation and query budget', () => {
+describe('Cleopatra Print Agent V8.1.1 Lite isolation and query budget', () => {
   it('is a separate app identity and starts with Production queue disabled', () => {
     const build = read('print-agent-v8/BuildConfig.cs');
     const config = read('print-agent-v8/AgentConfig.cs');
-    expect(build).toContain('PremierSmouhaFormPrintAgentV0811');
+    expect(build).toContain('PremierCleopatraFormPrintAgentV0811');
     expect(build).not.toContain('PremierSmouhaPrintAgentV07');
     expect(config).toContain('QueueEnabled { get; set; } = false');
   });
@@ -86,15 +86,13 @@ describe('Smouha Print Agent V8.1.1 Lite isolation and query budget', () => {
     expect(renderer).toContain('totals');
   });
 
-  it('scopes realtime wake strictly to Smouha and leaves Cleopatra on V7', () => {
-    const migration = read('supabase/migrations/20260922165000_cloud_print_v8_realtime_wake.sql');
+  it('scopes the agent identity strictly to Cleopatra while Production wake enablement remains separate', () => {
     const build = read('print-agent-v8/BuildConfig.cs');
-    const smouha = '19c3fd23-d784-455b-8840-f4f2ac619651';
+    const cleopatra = '279e6662-e901-40b2-9170-7dda0b471ba7';
 
-    expect(build).toContain(`BranchId = "${smouha}"`);
-    expect(migration).toContain(`WHEN (NEW.branch_id = '${smouha}'::uuid)`);
-    expect(migration).toContain(`branch_id = '${smouha}'::uuid`);
-    expect(migration).toContain(`NEW.branch_id IS DISTINCT FROM '${smouha}'::uuid`);
+    expect(build).toContain(`BranchId = "${cleopatra}"`);
+    expect(build).toContain('PremierCleopatraFormPrintAgentV0811');
+    expect(build).not.toContain('19c3fd23-d784-455b-8840-f4f2ac619651');
   });
 
   it('does not alter frozen V7 RPC definitions in the optional wake SQL', () => {
