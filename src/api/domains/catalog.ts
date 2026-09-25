@@ -107,15 +107,6 @@ export const catalog = {
     }
   },
 
-  // ─── Production ───────────────────────────────────────────
-  async produceInventoryUnit(p_unit_id: string, p_quantity: number, p_warehouse_id: string, p_notes?: string) {
-    const { data, error } = await supabase.rpc('produce_inventory_unit', {
-      p_unit_id, p_quantity, p_warehouse_id, p_notes: p_notes ?? null,
-    });
-    if (error) throw error;
-    return data;
-  },
-
   // ─── Kitchen ──────────────────────────────────────────────
   async listKitchenStations() {
     const { data, error } = await supabase.from('kitchen_stations').select('*').order('sort_order');
