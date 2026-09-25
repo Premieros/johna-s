@@ -26,6 +26,15 @@ describe('raw material financial reports contract', () => {
     expect(migration).toContain("'closing_inventory_value'");
   });
 
+  it('keeps quantity columns visible while refusing meaningless cross-unit quantity totals', () => {
+    expect(page).toContain("[lang === 'ar' ? 'كمية أول المدة' : 'Opening Qty']: '—'");
+    expect(page).toContain("[lang === 'ar' ? 'كمية المشتريات' : 'Purchase Qty']: '—'");
+    expect(page).toContain("[lang === 'ar' ? 'كمية استهلاك المبيعات' : 'Sales Consumption Qty']: '—'");
+    expect(page).toContain("[lang === 'ar' ? 'كمية آخر المدة' : 'Closing Qty']: '—'");
+    expect(page).toContain("const exportData = isRawMaterialFinancial ? data.slice(1) : data");
+    expect(page).toContain("isRawMaterialFinancial\n      ? data[0]");
+  });
+
   it('exposes the three reports in the report page', () => {
     expect(page).toContain("key: 'raw_material_consumption'");
     expect(page).toContain("key: 'raw_material_current_cost'");
