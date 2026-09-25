@@ -8,7 +8,6 @@ export { procurement } from './domains/procurement';
 export { shifts } from './domains/shifts';
 export { inventory } from './domains/inventory';
 export { costing } from './domains/costing';
-export { manufacturing } from './domains/manufacturing';
 export { catalog } from './domains/catalog';
 export { accounting } from './domains/accounting';
 export { reporting } from './domains/reporting';
