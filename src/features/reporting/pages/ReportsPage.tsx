@@ -140,7 +140,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   function handleReportTypeSelect(value: string) {
     if (financialTypes.some((f) => f.key === value)) {
       const allowed = history.clampRange(from, to);
-      navigate(`/financial-reports?view=${value}&from=${allowed.from}&to=${allowed.to}`);
+      navigate(`/reports?section=financial&view=${value}&from=${allowed.from}&to=${allowed.to}`);
       return;
     }
     setFilters({});
