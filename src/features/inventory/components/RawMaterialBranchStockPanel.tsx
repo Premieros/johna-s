@@ -225,6 +225,7 @@ export function RawMaterialBranchStockPanel() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </DesignPanel>
