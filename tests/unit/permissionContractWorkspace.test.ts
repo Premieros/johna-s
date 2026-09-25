@@ -18,7 +18,7 @@ describe('permission contract workspace wiring', () => {
       'purchases',
       'inventory',
       'raw_recipes',
-      'production',
+      'waste',
       'customers',
       'suppliers',
       'expenses',
