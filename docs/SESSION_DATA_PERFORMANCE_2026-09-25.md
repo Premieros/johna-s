@@ -63,6 +63,10 @@ Make common pages feel near-instant while preserving server truth:
 
 - Pending.
 
+## Next action
+
+Run exact-head Full Verify on PR #371. If the shared session-SWR/export foundation is green, continue only with measured first-open optimizations for heavy pages without adding browser-persistent operational data cache.
+
 ## Production gate
 
 State: **BLOCKED**
