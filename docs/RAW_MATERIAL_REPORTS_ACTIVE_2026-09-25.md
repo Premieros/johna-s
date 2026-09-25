@@ -50,12 +50,19 @@ User requested a compact two-row Reports Center UI, quantity columns visible in 
 - Wired Reports Center, deep links, Excel profiles, filters, and report registry.
 - Added unit contract tests for raw-material reports and day-closing range source-of-truth behavior.
 - Updated mandatory active work-log gate to this report branch.
+- Simplified Reports Center shell by removing search/category/favorite/recent report cards from the active page.
+- Rebuilt report controls as exactly two compact rows: visible report dropdown + actions, then contextual filters/run controls.
+- Moved column picker / Excel / CSV / print actions into the first compact row and removed the extra page header/custom-report bar from the active layout.
+- Fixed raw-material financial quantity visibility: period-total row now declares all quantity columns with `—` instead of hiding them; per-material quantities remain authoritative and no incompatible units are summed.
+- Raw-material financial Excel export now exports detail rows with the period-total row as the styled table total.
+- Reworked Excel layout into one professional sheet with a large colored title, period subtitle, larger colored column headers, Auto Filter, frozen header, controlled widths, and styled totals/source note.
 
 ## Verification ledger
 
 - Previous PR #363 run `36137790704`: failed only at stale active-worklog gate before lint/typecheck/tests.
 - Active-worklog gate corrected on branch.
-- Exact-head Verify main run `36138051390` on `83a0ebdff903944e21e56ce8fcf988d1312bb7ac`: **FULL GREEN**.
+- Exact-head Verify main run `36138051390` on `83a0ebdff903944e21e56ce8fcf988d1312bb7ac`: previous **FULL GREEN**, superseded by new UI/export changes.
+- New compact UI / quantity visibility / Excel verification: pending exact-head runs.
 - verify ✅
 - db ✅
 - browser-smoke ✅
