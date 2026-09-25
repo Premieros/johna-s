@@ -68,6 +68,9 @@ Implementation is in review. Merge and Production application remain blocked unt
 - Fixed both without changing the canonical net-sale formula: authenticated/service_role can execute only the immutable private helper, and costing scope again excludes returned/cancelled invoices as before.
 - Verify #2848: core verify fully Green; DB integration reached 850/851 passing with one stale costing assertion still expecting net sales without tax.
 - Updated that integration contract to the unified definition: sale total less refunds, tax reported separately; fixture net sales is 460 and COGS ratio 24.46%.
+- User approved semantic split: collection/day-close sales stay gross of tax after refunds; Costing Center/Food Cost uses operational net sales before tax after refunds.
+- Added `private.report_operational_net_sale_amount(total,tax,refunded)` using proportional tax removal after partial refunds, and switched costing summary/order margin to it.
+- Added unit contract for the pre-tax Food Cost basis and restored the costing integration expectation to 400 net sales / 28.13% COGS on the tax fixture.
 - Current exact-head Full Verify: **PENDING**.
 - Added navigation permission contract test after unifying the sidebar destination.
 
