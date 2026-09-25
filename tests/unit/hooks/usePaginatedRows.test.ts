@@ -257,7 +257,7 @@ describe('usePaginatedRows', () => {
     expect(result.current.rows).toHaveLength(10);
 
     mockState.calls = [];
-    const all = await act(async () => result.current.fetchAll());
+    const all = await result.current.fetchAll();
     expect(all).toHaveLength(25);
     expect(dataCalls('sales')).toHaveLength(1);
     expect(dataCalls('sales')[0].range).toEqual([0, 999]);
