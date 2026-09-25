@@ -14,6 +14,8 @@ Cleanup implementation is isolated on PR #372. Merge remains blocked until exact
 
 ## Guardrails
 
+- Parallel report-rebuild work is active elsewhere: this branch must not modify reporting pages, financial report pages, report metric sources, report export code, or report-specific tests unless separately reconciled first.
+
 - Single Writer only.
 - No direct write to `main`.
 - Before every write, verify the expected branch HEAD and current `main`; unexpected movement = STOP_AND_RECONCILE.
@@ -78,6 +80,8 @@ Cleanup implementation is isolated on PR #372. Merge remains blocked until exact
 - No application-code failure has been observed yet because both runs stopped at the worklog gate.
 - Exact-head verification rerun `36183550578`: worklog gate and Supabase identity passed; frontend API contract failed because the retired production RPCs and `inventory_unit_productions` table were still present in the generated contract.
 - Regenerated `supabase/api-contract.json` to remove only those no-longer-referenced frontend contract entries. Historical DB objects/migrations remain untouched.
+- Exact-head verification run `36187315353`: worklog, Supabase identity, frontend API contract and lint passed; typecheck failed only on three stale production permissions still present in the `production_manager` default-role array.
+- Removed only those three retired permission strings; no report files or report data sources touched.
 - Exact-head verification must rerun on the new head.
 
 ## Production gate
