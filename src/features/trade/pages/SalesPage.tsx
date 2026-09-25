@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -73,6 +73,7 @@ export function SalesPage() {
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [viewSale, setViewSale] = useState<SaleRow | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersBranchId, setCustomersBranchId] = useState('');
   const [editForm, setEditForm] = useState({ customer_id: '', payment_method: '', status: '', notes: '' });
   const [refundSale, setRefundSale] = useState<SaleRow | null>(null);
   const [refundQty, setRefundQty] = useState<Record<string, string>>({});
@@ -93,11 +94,20 @@ export function SalesPage() {
   const canPreviewReceipt = can('sales.view');
   const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint');
 
-  async function loadMeta() {
-    const { data: customersRes } = await supabase.from('customers').select('*').order('name');
+  async function loadCustomersForBranch(branchId: string) {
+    if (!canEditSaleMetadata || !branchId || customersBranchId === branchId) return;
+    const { data: customersRes, error: customersError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('branch_id', branchId)
+      .order('name');
+    if (customersError) {
+      show(customersError.message, 'error');
+      return;
+    }
     setCustomers((customersRes as Customer[]) || []);
+    setCustomersBranchId(branchId);
   }
-  useEffect(() => { loadMeta(); }, []);
 
   const filtered = items.filter((i) => {
     if (!search) return true;
@@ -255,6 +265,7 @@ export function SalesPage() {
 
   const openViewSale = (sale: SaleRow) => {
     setViewSale(sale);
+    if (canEditSaleMetadata) void loadCustomersForBranch(sale.branch_id);
     setEditForm({
       customer_id: sale.customer_id || '',
       payment_method: sale.payment_method,

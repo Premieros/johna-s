@@ -31,7 +31,7 @@ export function SuppliersPage() {
   const can = useCan();
   const branchFilter = useBranchFilter();
   const { guidedContext, completePrerequisiteAndReturn } = useGuidedWorkflow();
-  const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadSuppliers } = usePaginatedRows<Supplier>({
+  const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadSuppliers, fetchAll: fetchAllSuppliers } = usePaginatedRows<Supplier>({
     table: 'suppliers',
     select: '*',
     order: { column: 'created_at', ascending: false },
@@ -192,6 +192,13 @@ export function SuppliersPage() {
               enableExport={can('suppliers.manage')}
               enableTemplate={can('suppliers.manage')}
               exportFilename="suppliers"
+              exportDataProvider={async () => {
+                const all = await fetchAllSuppliers();
+                const term = search.trim().toLowerCase();
+                return term
+                  ? all.filter((supplier) => supplier.name.toLowerCase().includes(term) || supplier.phone?.includes(search))
+                  : all;
+              }}
               templateFilename="suppliers-template"
             />
             <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />

@@ -29,7 +29,7 @@ export function CustomersPage() {
   const { show } = useToast();
   const can = useCan();
   const branchFilter = useBranchFilter();
-  const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadCustomers } = usePaginatedRows<Customer>({
+  const { rows: items, loading, total, hasMore, loadMore, loadingMore, refresh: reloadCustomers, fetchAll: fetchAllCustomers } = usePaginatedRows<Customer>({
     table: 'customers',
     select: '*',
     order: { column: 'created_at', ascending: false },
@@ -148,6 +148,13 @@ export function CustomersPage() {
           enableTemplate={can('customers.manage')}
           onImportFile={can('customers.manage') ? handleImport : undefined}
           exportFilename="customers"
+          exportDataProvider={async () => {
+            const all = await fetchAllCustomers();
+            const term = search.trim().toLowerCase();
+            return term
+              ? all.filter((customer) => customer.name.toLowerCase().includes(term) || customer.phone?.includes(search))
+              : all;
+          }}
           templateFilename="customers-template"
         />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
