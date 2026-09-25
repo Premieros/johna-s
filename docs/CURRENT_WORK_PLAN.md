@@ -356,3 +356,5 @@ User explicitly approved a renderer-only redesign of customer and kitchen receip
 - Authoritative sources: `inventory_ledger` for period movement/COGS and `raw_material_batches` for current residual FIFO value.
 - Quantity totals remain per material; financial summaries aggregate values only to avoid mixing kg/litre/piece quantities.
 - No main merge and no Production migration without Full Verify green + approval.
+
+- Added `daily_closing_range`: open date-range day closing report with one row per business day and payment-method split (cash/card/transfer/credit/legacy/other), sourced from `get_day_closing_report` so monthly/period totals reconcile to day closing.
