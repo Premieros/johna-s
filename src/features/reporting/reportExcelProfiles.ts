@@ -130,8 +130,8 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
     raw_material_current_cost: {
       columns: [
         branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
-        pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'تكلفة الوحدة الحالية FIFO', 'Current FIFO Unit Cost'),
-        pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'), pick(lang, 'آخر تكلفة معتمدة', 'Latest Authoritative Cost'),
+        pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'سعر الخامة المعتمد (مركز التكلفة)', 'Canonical Raw Cost (Costing Center)'),
+        pick(lang, 'متوسط تكلفة المخزون المتبقي FIFO', 'Remaining Inventory FIFO Average Cost'), pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'),
         pick(lang, 'مصدر السعر', 'Price Source'), pick(lang, 'طبقات FIFO المفتوحة', 'Open FIFO Batches'),
       ],
       columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30, [pick(lang, 'مصدر السعر', 'Price Source')]: 20 },
@@ -150,6 +150,23 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30, [pick(lang, 'الوحدة', 'Unit')]: 14 },
       integerColumns: [],
     },
+    sales_component_reconciliation: {
+      columns: [
+        branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'عدد المنتجات', 'Products'),
+        pick(lang, 'الاستهلاك النظري كمية', 'Theoretical Qty'), pick(lang, 'الاستهلاك الفعلي كمية', 'Actual Qty'),
+        pick(lang, 'فرق الكمية', 'Qty Difference'), pick(lang, 'تكلفة الوحدة للمقارنة', 'Comparison Unit Cost'),
+        pick(lang, 'قيمة الاستهلاك النظري', 'Theoretical Value'), pick(lang, 'قيمة الاستهلاك الفعلي', 'Actual Value'),
+        pick(lang, 'فرق القيمة', 'Value Difference'), pick(lang, 'نسبة الفرق %', 'Variance %'),
+        pick(lang, 'مصدر التسعير', 'Price Source'), pick(lang, 'الحالة', 'Status'),
+      ],
+      columnWidths: {
+        [branch]: 24,
+        [pick(lang, 'الخامة', 'Raw Material')]: 30,
+        [pick(lang, 'مصدر التسعير', 'Price Source')]: 24,
+        [pick(lang, 'الحالة', 'Status')]: 34,
+      },
+      integerColumns: [pick(lang, 'عدد المنتجات', 'Products')],
+    },
     financial_reconciliation: {
       columns: [branch, pick(lang, 'التاريخ', 'Date'), pick(lang, 'رقم الفاتورة', 'Invoice'), pick(lang, 'صافي الفاتورة', 'Net Sale'), pick(lang, 'كاش', 'Cash'), pick(lang, 'كارت', 'Card'), pick(lang, 'تحويل', 'Transfer'), pick(lang, 'بنك تاريخي غير مصنف', 'Legacy Bank'), pick(lang, 'آجل — مستحق من العميل', 'Credit — Customer outstanding'), pick(lang, 'حركة الخزنة', 'Cash GL'), pick(lang, 'حركة البنك', 'Bank GL'), pick(lang, 'فرق الخزنة', 'Cash Difference'), pick(lang, 'فرق البنك', 'Bank Difference'), pick(lang, 'المطابقة', 'Reconciliation')],
       columnWidths: { [branch]: 24, [pick(lang, 'التاريخ', 'Date')]: 18, [pick(lang, 'رقم الفاتورة', 'Invoice')]: 20, [pick(lang, 'المطابقة', 'Reconciliation')]: 24 },
@@ -160,6 +177,8 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
   const profile = profiles[reportType];
   const sourceNote = reportType === 'financial_reconciliation'
     ? pick(lang, 'تفاصيل الدفع + قيود الخزنة والبنك، مع إظهار أي فرق دون إخفائه.', 'Payment detail + treasury/bank journal entries; mismatches are shown explicitly.')
+    : reportType === 'sales_component_reconciliation'
+      ? pick(lang, 'الاستهلاك النظري = الكميات المباعة × المكونات الحالية المعتمدة؛ الفعلي = inventory_ledger المرتبط بنفس المبيعات وإرسال المطبخ المسوّى. أي بنود بلا منتج أو بلا مكونات تظهر في ملخص المطابقة ولا تُخفى.', 'Theoretical consumption = sold quantities × current canonical components; actual = inventory_ledger tied to the same sales and settled kitchen sends. Unmatched/componentless items are surfaced in the reconciliation summary.')
     : reportType === 'sales_by_payment'
       ? pick(lang, 'تفاصيل sale_payments، والقيود المحاسبية فقط للحالات التاريخية الناقصة، والآجل يظهر كذمم لا كبنك.', 'sale_payments details, journal fallback only for incomplete legacy splits, and credit shown as receivable rather than bank.')
       : pick(lang, 'نفس مصدر البيانات المستخدم داخل التقرير؛ لا يعاد حساب الإجمالي بطريقة مختلفة أثناء التصدير.', 'Same data source used on-screen; export does not recompute totals differently.');

@@ -60,7 +60,8 @@ const FINANCIAL_REPORTS = [
   { key: 'party_statement', ar: 'كشف حساب عميل / مورد', en: 'Party Statement' },
 ] as const;
 
-const QUICK_OPERATIONAL_REPORTS: ReportType[] = ['sales', 'sales_by_payment', 'financial_reconciliation'];
+const QUICK_OPERATIONAL_REPORTS: ReportType[] = ['sales', 'sales_by_payment', 'sales_component_reconciliation'];
+const LEGACY_HIDDEN_REPORTS = new Set<ReportType>(['component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products']);
 
 function loadFavorites(): string[] {
   try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch { return []; }
@@ -117,7 +118,7 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
   );
 
   const permittedReports = useMemo(
-    () => REPORT_REGISTRY.filter((report) => report.permissions.every((permission) => can(permission as Permission))),
+    () => REPORT_REGISTRY.filter((report) => !LEGACY_HIDDEN_REPORTS.has(report.key) && report.permissions.every((permission) => can(permission as Permission))),
     [can]
   );
 
@@ -227,14 +228,14 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
             <>
               <button
                 type="button"
-                onClick={() => navigate('/financial-reports?view=treasury_statement')}
+                onClick={() => navigate('/reports?section=financial&view=treasury_statement')}
                 className="shrink-0 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5 text-[11px] font-bold text-ui-muted transition hover:border-ui-primary hover:text-ui-primary"
               >
                 {lang === 'ar' ? 'كشف بنك / خزنة' : 'Bank / Treasury'}
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/financial-reports?view=inventory_movement')}
+                onClick={() => navigate('/reports?section=financial&view=inventory_movement')}
                 className="shrink-0 rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5 text-[11px] font-bold text-ui-muted transition hover:border-ui-primary hover:text-ui-primary"
               >
                 {lang === 'ar' ? 'حركة صنف' : 'Item Movement'}
@@ -349,7 +350,7 @@ export function ReportingShell({ activeReport, onSelectReport, children }: Repor
                       <button
                         key={report.key}
                         type="button"
-                        onClick={() => navigate(`/financial-reports?view=${report.key}`)}
+                        onClick={() => navigate(`/reports?section=financial&view=${report.key}`)}
                         className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-3 text-start text-xs font-bold text-ui-text transition hover:border-ui-primary hover:text-ui-primary"
                       >
                         {lang === 'ar' ? report.ar : report.en}
