@@ -18,6 +18,7 @@ import { useActiveOrderCount } from '../features/pos/hooks/useActiveOrderCount';
 import { Logo } from './Logo';
 import { ApprovalInbox } from './ApprovalInbox';
 import { APP_ROUTES } from '@/core/navigation/routes';
+import { prefetchAppRoute } from '@/core/navigation/prefetch';
 import { MENU_GROUPS, MENU_ITEMS, type MenuIcon, type MenuGroup } from '@/core/navigation/menu.config';
 import { CommandPalette, CommandPaletteTrigger } from './CommandPalette';
 import { OfflineStatusIndicator } from './OfflineStatusIndicator';
@@ -257,7 +258,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="hidden sm:flex"><OfflineStatusIndicator /></div>
           <ApprovalInbox ar={ar} />
           {canViewFloorPlan && (
-            <button data-testid="active-orders-button" type="button" onClick={() => navigate(APP_ROUTES.floorPlan)} className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label={ar ? 'الطلبات النشطة' : 'Active orders'}>
+            <button data-testid="active-orders-button" type="button" onPointerEnter={() => prefetchAppRoute(APP_ROUTES.floorPlan)} onFocus={() => prefetchAppRoute(APP_ROUTES.floorPlan)} onTouchStart={() => prefetchAppRoute(APP_ROUTES.floorPlan)} onClick={() => navigate(APP_ROUTES.floorPlan)} className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label={ar ? 'الطلبات النشطة' : 'Active orders'}>
               <Activity className="h-5 w-5" />
               {activeOrderCount > 0 && <span data-testid="active-orders-count" className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ui-danger px-1 text-[9px] font-bold text-ui-primary-fg">{activeOrderCount}</span>}
             </button>
@@ -266,6 +267,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <button
             data-testid="user-menu-button"
             type="button"
+            onPointerEnter={canOpenSettings ? () => prefetchAppRoute(APP_ROUTES.settings) : undefined}
+            onFocus={canOpenSettings ? () => prefetchAppRoute(APP_ROUTES.settings) : undefined}
+            onTouchStart={canOpenSettings ? () => prefetchAppRoute(APP_ROUTES.settings) : undefined}
             onClick={canOpenSettings ? () => navigate(APP_ROUTES.settings) : undefined}
             disabled={!canOpenSettings}
             aria-label={canOpenSettings ? (ar ? 'فتح الإعدادات' : 'Open settings') : (ar ? 'هوية المستخدم' : 'User identity')}
@@ -402,6 +406,9 @@ export function Layout({ children }: { children: ReactNode }) {
                         data-testid={`nav-item-${item.id}`}
                         key={item.id}
                         to={item.route}
+                        onPointerEnter={() => prefetchAppRoute(item.route)}
+                        onFocus={() => prefetchAppRoute(item.route)}
+                        onTouchStart={() => prefetchAppRoute(item.route)}
                         onClick={() => setMobileOpen(false)}
                         className={({ isActive }) => `group flex min-h-[40px] items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-150 ${isActive ? 'bg-ui-primary text-ui-primary-fg shadow-[0_4px_12px_rgba(91,43,216,0.18)]' : 'text-ui-muted hover:bg-ui-primary-soft hover:text-ui-primary'}`}
                       >
@@ -441,6 +448,9 @@ export function Layout({ children }: { children: ReactNode }) {
             key={item.id}
             to={item.route}
             data-testid={`mobile-nav-${item.id}`}
+            onPointerEnter={() => prefetchAppRoute(item.route)}
+            onFocus={() => prefetchAppRoute(item.route)}
+            onTouchStart={() => prefetchAppRoute(item.route)}
             className={({ isActive }) =>
               `flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-bold transition ${
                 isActive
