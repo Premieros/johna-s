@@ -166,7 +166,6 @@ export function RawMaterialBranchStockPanel() {
               {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
             </Select>
           </div>
-          </>
         )}
 
         {branchesLoading || loading ? (
