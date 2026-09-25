@@ -348,3 +348,11 @@ User explicitly approved a renderer-only redesign of customer and kitchen receip
 `Baseline -> Root Cause -> Small Change -> Focused Tests -> Integration/Regression -> Full Verify -> PR -> Merge only when allowed -> Verify main -> Deploy`
 
 لا يُغيّر Business Logic صحيح لإرضاء اختبار خاطئ، ولا يُحذف Legacy إلا بعد إثبات الاستخدام/الاستبدال/التغطية ثم Full Verify.
+
+
+## 2026-09-25 — Raw material reporting rebuild (in progress)
+- Branch: `development/raw-material-financial-reports-20260925`.
+- Added three reports: raw-material movement/consumption, current residual FIFO valuation, and finance summary/detail.
+- Authoritative sources: `inventory_ledger` for period movement/COGS and `raw_material_batches` for current residual FIFO value.
+- Quantity totals remain per material; financial summaries aggregate values only to avoid mixing kg/litre/piece quantities.
+- No main merge and no Production migration without Full Verify green + approval.
