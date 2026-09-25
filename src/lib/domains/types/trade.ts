@@ -17,6 +17,7 @@ export interface Sale {
   bonus_amount: number;
   total: number;
   paid_amount: number;
+  returned_amount?: number | null;
   payment_method: string;
   status: string;
   order_type: string;
