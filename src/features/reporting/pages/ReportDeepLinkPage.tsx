@@ -24,6 +24,7 @@ const REPORT_LABELS = {
   raw_material_consumption: ['حركة واستهلاك الخامات', 'Raw Material Consumption'],
   raw_material_current_cost: ['تكلفة الخامات الحالية', 'Current Raw Material Cost'],
   raw_material_financial: ['التقرير المالي للخامات والمبيعات', 'Raw Material Financial Report'],
+  sales_component_reconciliation: ['مطابقة المبيعات مع استهلاك المكونات', 'Sales vs Component Consumption'],
   daily_closing_range: ['حركة الأيام وطرق الدفع', 'Daily Closing & Payments'],
   financial_reconciliation: ['المطابقة المالية', 'Financial Reconciliation'],
 } as const;
@@ -36,7 +37,7 @@ const GROUPS: { key: string; icon: typeof BarChart3; reports: ReportType[]; ar: 
   { key: 'performance', icon: CreditCard, reports: ['profit', 'cashier_performance'], ar: 'الأداء والربحية', en: 'Performance & Profit' },
   { key: 'treasury', icon: CreditCard, reports: ['financial_reconciliation', 'raw_material_financial', 'daily_closing_range'], ar: 'الخزنة والبنك', en: 'Treasury & Bank' },
   { key: 'inventory', icon: Package, reports: ['inventory', 'low_stock', 'raw_material_consumption', 'raw_material_current_cost'], ar: 'المخزون', en: 'Inventory' },
-  { key: 'manufacturing', icon: Factory, reports: ['component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'production_waste'], ar: 'التصنيع والتكلفة', en: 'Manufacturing & Costing' },
+  { key: 'manufacturing', icon: Factory, reports: ['component_consumption', 'sales_component_reconciliation', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'production_waste'], ar: 'التصنيع والتكلفة', en: 'Manufacturing & Costing' },
 ];
 function isReportType(value: string | null): value is ReportType { return value !== null && Object.prototype.hasOwnProperty.call(REPORT_LABELS, value); }
 function selectReport(report: string) { document.querySelector<HTMLButtonElement>(`button[data-report-type="${report}"]`)?.click(); }

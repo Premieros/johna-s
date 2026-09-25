@@ -28,7 +28,7 @@ describe('navigation contract', () => {
   it('keeps menu permissions explicit for protected navigation items', () => {
     for (const item of MENU_ITEMS) {
       if (item.superAdminOnly) continue;
-      expect(item.permission, `${item.id} is missing a navigation permission`).toBeTruthy();
+      expect(item.permission || (item.permissionsAny && item.permissionsAny.length > 0), `${item.id} is missing an explicit navigation permission contract`).toBeTruthy();
     }
   });
 });
@@ -158,6 +158,7 @@ describe('Phase 4 — command palette', () => {
   it('Command palette respects permissions', () => {
     const source = read('src/components/CommandPalette.tsx');
     expect(source).toContain('can(item.permission)');
+    expect(source).toContain('item.permissionsAny.some((permission) => can(permission))');
   });
 
   it('Command palette trigger is in the header', () => {
@@ -230,7 +231,6 @@ describe('Phase 4 — no duplicate destinations', () => {
       APP_ROUTES.journal,
       APP_ROUTES.treasury,
       APP_ROUTES.reconciliation,
-      APP_ROUTES.financialReports,
       APP_ROUTES.settings,
       APP_ROUTES.auditLog,
     ];

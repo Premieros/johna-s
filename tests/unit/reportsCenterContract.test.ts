@@ -16,10 +16,9 @@ const excelSource = read('src/lib/excel.ts');
 
 const OPERATIONAL_KEYS = [
   'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
-  'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
-  'top_consumed_components', 'top_consumed_products', 'low_stock',
+  'purchases', 'expenses', 'profit', 'inventory', 'low_stock',
   'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption',
-  'raw_material_current_cost', 'raw_material_financial', 'daily_closing_range', 'financial_reconciliation',
+  'raw_material_current_cost', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ];
 
 const FINANCIAL_KEYS = [
@@ -56,9 +55,9 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(deepLinkSource).toContain('ReportsPage');
   });
 
-  it('navigates financial selections to the financial reports page with view + period context', () => {
+  it('preserves financial selections with view + period context through the unified center', () => {
     expect(reportsSource).toContain('const allowed = history.clampRange(from, to)');
-    expect(reportsSource).toContain('navigate(`/financial-reports?view=${value}&from=${allowed.from}&to=${allowed.to}`)');
+    expect(reportsSource).toContain('navigate(`/reports?section=financial&view=${value}&from=${allowed.from}&to=${allowed.to}`)');
     expect(financialSource).toContain('useSearchParams');
     expect(financialSource).toContain("searchParams.get('view')");
     expect(financialSource).toContain("searchParams.get('from')");
@@ -70,9 +69,9 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportingShellSource).toContain('type="search"');
     expect(reportingShellSource).toContain("'كل التقارير'");
     expect(reportingShellSource).toContain('QUICK_OPERATIONAL_REPORTS');
-    expect(reportingShellSource).toContain("'financial_reconciliation'");
-    expect(reportingShellSource).toContain("navigate('/financial-reports?view=treasury_statement')");
-    expect(reportingShellSource).toContain("navigate('/financial-reports?view=inventory_movement')");
+    expect(reportingShellSource).toContain("'sales_component_reconciliation'");
+    expect(reportingShellSource).toContain("navigate('/reports?section=financial&view=treasury_statement')");
+    expect(reportingShellSource).toContain("navigate('/reports?section=financial&view=inventory_movement')");
     expect(reportingShellSource).toContain("can('reports.financial')");
     expect(reportingShellSource).toContain('report.permissions.every');
   });

@@ -168,6 +168,7 @@ describe.skipIf(skip)('costing sales summary kitchen COGS', () => {
     expect(Number(summary.sales_count)).toBe(3);
     expect(Number(summary.net_sales)).toBe(400);
 
+    // Costing uses operational net sales before tax; collection/day-close totals remain gross of tax.
     // 50 legacy + (30 * 1.5/2) kitchen + 40 overlap-kitchen.
     // The overlapping -999 legacy row must not be added.
     expect(Number(summary.cogs)).toBe(112.5);

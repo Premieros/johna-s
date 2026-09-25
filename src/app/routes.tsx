@@ -45,7 +45,6 @@ const ExpensesPage = lazy(() => import('../features/trade/pages/ExpensesPage').t
 const SalesPage = lazy(() => import('../features/trade/pages/SalesPage').then(m => ({ default: m.SalesPage })));
 const ShiftsPage = lazy(() => import('../features/trade/pages/ShiftsPage').then(m => ({ default: m.ShiftsPage })));
 const ReportsCenterPage = lazy(() => import('../features/reporting/pages/ReportsCenterPage').then(m => ({ default: m.ReportsCenterPage })));
-const FinancialReportsPage = lazy(() => import('../features/accounting/pages/FinancialReportsPage').then(m => ({ default: m.FinancialReportsPage })));
 const AccountsPage = lazy(() => import('../features/accounting/pages/AccountsPage').then(m => ({ default: m.AccountsPage })));
 const EmployeeReceivablesPage = lazy(() => import('../features/accounting/pages/EmployeeReceivablesPage').then(m => ({ default: m.EmployeeReceivablesPage })));
 const PaymentsPage = lazy(() => import('../features/accounting/pages/PaymentsPage').then(m => ({ default: m.PaymentsPage })));
@@ -87,7 +86,7 @@ function resolveLandingRoute(can: (permission: Permission) => boolean, role?: st
   return null;
 }
 
-function ProtectedRoute({ children, permission, fullscreen, superAdminOnly = false, ownerOnly = false }: { children: ReactNode; permission?: Permission; fullscreen?: boolean; superAdminOnly?: boolean; ownerOnly?: boolean }) {
+function ProtectedRoute({ children, permission, permissionsAny, fullscreen, superAdminOnly = false, ownerOnly = false }: { children: ReactNode; permission?: Permission; permissionsAny?: Permission[]; fullscreen?: boolean; superAdminOnly?: boolean; ownerOnly?: boolean }) {
   const { session, loading, user } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
@@ -98,6 +97,7 @@ function ProtectedRoute({ children, permission, fullscreen, superAdminOnly = fal
   if (superAdminOnly && user.role !== 'super_admin') return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (ownerOnly && !isAdminRole(user.role)) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (permission && !can(permission)) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
+  if (permissionsAny && !permissionsAny.some((candidate) => can(candidate))) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (fullscreen) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
@@ -176,8 +176,8 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.expenses} element={<ProtectedRoute permission="expenses.view"><ExpensesPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.sales} element={<ProtectedRoute permission="sales.view"><SalesPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.shifts} element={<ProtectedRoute permission="shifts.view"><ShiftsPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.reports} element={<ProtectedRoute permission="reports.view"><ReportsCenterPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.financialReports} element={<ProtectedRoute permission="reports.financial"><FinancialReportsPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.reports} element={<ProtectedRoute permissionsAny={["reports.view", "reports.financial"]}><ReportsCenterPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.financialReports} element={<ProtectedRoute permission="reports.financial"><ReportsCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.accounting} element={<ProtectedRoute permission="reports.financial"><Navigate to={APP_ROUTES.financialReports} replace /></ProtectedRoute>} />
         <Route path={APP_ROUTES.accounts} element={<ProtectedRoute permission="accounts.view"><AccountsPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.employeeReceivables} element={<ProtectedRoute permission="accounts.view"><EmployeeReceivablesPage /></ProtectedRoute>} />
