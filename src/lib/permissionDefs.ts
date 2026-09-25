@@ -34,7 +34,6 @@ export type Permission =
   | 'inventory.transfer.create' | 'inventory.transfer.approve' | 'inventory.ledger.view'
   | 'raw_materials.view' | 'raw_materials.manage'
   | 'recipes.view' | 'recipes.manage'
-  | 'production.view' | 'production.manage' | 'production.waste'
   | 'waste.view' | 'waste.create' | 'waste.approve' | 'waste.report'
   | 'warehouses.view' | 'warehouses.manage'
   | 'customers.view' | 'customers.manage'
@@ -75,7 +74,6 @@ export const ALL_PERMISSIONS: Permission[] = [
   'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view',
   'raw_materials.view', 'raw_materials.manage',
   'recipes.view', 'recipes.manage',
-  'production.view', 'production.manage', 'production.waste',
   'waste.view', 'waste.create', 'waste.approve', 'waste.report',
   'warehouses.view', 'warehouses.manage',
   'customers.view', 'customers.manage', 'customers.print', 'customers.export',
@@ -159,9 +157,6 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'raw_materials.manage': { ar: 'إدارة المواد الخام', en: 'Manage Raw Materials' },
   'recipes.view': { ar: 'عرض الوصفات', en: 'View Recipes' },
   'recipes.manage': { ar: 'إدارة الوصفات', en: 'Manage Recipes' },
-  'production.view': { ar: 'عرض أوامر الإنتاج', en: 'View Production Orders' },
-  'production.manage': { ar: 'إدارة أوامر الإنتاج', en: 'Manage Production Orders' },
-  'production.waste': { ar: 'تسجيل هالك الإنتاج', en: 'Record Production Waste' },
   'waste.view': { ar: 'عرض مركز الهالك', en: 'View Waste Center' },
   'waste.create': { ar: 'تسجيل هالك', en: 'Record Waste' },
   'waste.approve': { ar: 'اعتماد الهالك', en: 'Approve Waste' },
@@ -228,7 +223,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'inventory', ar: 'المخزون', en: 'Inventory', permissions: ['inventory.view', 'inventory.adjust', 'inventory.count.create', 'inventory.count.approve', 'inventory.count.reject', 'inventory.count.apply', 'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view'] },
   { key: 'raw_materials', ar: 'المواد الخام', en: 'Raw Materials', permissions: ['raw_materials.view', 'raw_materials.manage'] },
   { key: 'recipes', ar: 'الوصفات', en: 'Recipes', permissions: ['recipes.view', 'recipes.manage'] },
-  { key: 'production', ar: 'الإنتاج والهالك', en: 'Production & Waste', permissions: ['production.view', 'production.manage', 'production.waste', 'waste.view', 'waste.create', 'waste.approve', 'waste.report'] },
+  { key: 'waste', ar: 'الهالك', en: 'Waste', permissions: ['waste.view', 'waste.create', 'waste.approve', 'waste.report'] },
   { key: 'warehouses', ar: 'المخازن', en: 'Warehouses', permissions: ['warehouses.view', 'warehouses.manage'] },
   { key: 'customers', ar: 'العملاء', en: 'Customers', permissions: ['customers.view', 'customers.manage', 'customers.print', 'customers.export'] },
   { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.print'] },
