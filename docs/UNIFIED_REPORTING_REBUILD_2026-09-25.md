@@ -7,7 +7,7 @@ Current PR: `#373`
 Last updated: 2026-09-25
 
 ## Work status
-State: **READY_FOR_FINAL_VERIFY**
+State: **BLOCKED**
 
 Implementation is in review. Merge and Production application remain blocked until exact-head Full Verify is Green and Production application receives explicit approval.
 
@@ -81,7 +81,7 @@ Implementation is in review. Merge and Production application remain blocked unt
 
 ## Production gate
 - Production migration: **BLOCKED**.
-- Merge: **BLOCKED pending final exact-head Verify after this documentation update**.
+- Merge: **BLOCKED by mandatory gate until explicit merge action; functional verification is Green pending this exact-head documentation recheck**.
 - Required before merge:
   1. exact-head Full Verify Green;
   2. no type/lint/unit/build regressions;
