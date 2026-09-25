@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/reports-compact-list-20260926`
-Current PR: `TBD`
+Current PR: `#374`
 Last updated: 2026-09-26
 
 ## Work status
