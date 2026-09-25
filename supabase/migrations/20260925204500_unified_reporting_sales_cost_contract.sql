@@ -19,6 +19,37 @@ GRANT EXECUTE ON FUNCTION private.report_net_sale_amount(numeric,numeric) TO aut
 COMMENT ON FUNCTION private.report_net_sale_amount(numeric,numeric)
 IS 'Canonical reporting net-sale definition: max(sale total - refunded amount, 0). Tax remains separately reportable and is never silently removed from net sales.';
 
+CREATE OR REPLACE FUNCTION private.report_operational_net_sale_amount(
+  p_total numeric,
+  p_tax_amount numeric,
+  p_refunded_amount numeric
+)
+RETURNS numeric
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO pg_catalog
+AS $function$
+  SELECT round(
+    CASE
+      WHEN COALESCE(p_total,0) <= 0 THEN 0
+      ELSE GREATEST(
+        COALESCE(p_total,0)-COALESCE(p_refunded_amount,0),
+        0
+      ) * GREATEST(
+        COALESCE(p_total,0)-COALESCE(p_tax_amount,0),
+        0
+      ) / NULLIF(COALESCE(p_total,0),0)
+    END,
+    2
+  );
+$function$;
+
+REVOKE ALL ON FUNCTION private.report_operational_net_sale_amount(numeric,numeric,numeric) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.report_operational_net_sale_amount(numeric,numeric,numeric) TO authenticated, service_role;
+
+COMMENT ON FUNCTION private.report_operational_net_sale_amount(numeric,numeric,numeric)
+IS 'Operational net sales for costing/Food Cost: net sale after refunds, excluding tax proportionally. Collection/day-close totals remain gross of tax.';
+
 CREATE OR REPLACE FUNCTION public.get_costing_sales_summary(
   p_branch_id uuid DEFAULT NULL,
   p_from date DEFAULT NULL,
@@ -38,7 +69,7 @@ scoped_sales AS MATERIALIZED (
   SELECT
     s.id,
     s.branch_id,
-    private.report_net_sale_amount(s.total,s.refunded_amount) AS net_sales
+    private.report_operational_net_sale_amount(s.total,s.tax_amount,s.refunded_amount) AS net_sales
   FROM public.sales s
   CROSS JOIN history_bounds hb
   WHERE (p_branch_id IS NULL OR s.branch_id=p_branch_id)
@@ -217,11 +248,11 @@ BEGIN
     s.invoice_number,
     s.branch_id,
     (s.created_at AT TIME ZONE 'Africa/Cairo')::date,
-    private.report_net_sale_amount(s.total,s.refunded_amount),
+    private.report_operational_net_sale_amount(s.total,s.tax_amount,s.refunded_amount),
     COALESCE(s.discount_amount,0),
     COALESCE(jc.cogs,kc.cogs,lc.cogs,0)::numeric(16,2),
     round(
-      private.report_net_sale_amount(s.total,s.refunded_amount)
+      private.report_operational_net_sale_amount(s.total,s.tax_amount,s.refunded_amount)
       - COALESCE(jc.cogs,kc.cogs,lc.cogs,0),
       2
     )::numeric(16,2)
