@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Download, TrendingUp, ShoppingCart, Receipt, Package, BarChart3, CreditCard, Users, FileText, List, Layers, TrendingDown, AlertTriangle, FileDown, Printer, UserCheck, RotateCcw, Trash2 } from 'lucide-react';
 import { supabase, costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
-import { PageHeader, Card } from '@/components/PageHeader';
+import { Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { formatFinancialCurrency, formatDate, todayISO } from '@/lib/format';
 import { reportDateRangeUtc } from '@/lib/businessTime';
@@ -14,11 +14,8 @@ import { useCan } from '@/lib/permissions';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useColumnPreferences } from '../useColumnPreferences';
 import { ColumnPicker } from '../ColumnPicker';
-import { useCustomReports } from '../useCustomReports';
 import { getReportExcelProfile } from '../reportExcelProfiles';
 import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
-import type { SavedReportConfig } from '../useCustomReports';
-import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
@@ -113,7 +110,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const { visibleColumns, toggleColumn, showAllColumns } = useColumnPreferences(reportType);
-  const { savedReports, saveReport, deleteReport } = useCustomReports();
   const reportBranchLabel = effectiveBranchFilter
     ? branchNameById(effectiveBranchFilter)
     : (lang === 'ar' ? 'كل الفروع المتاحة' : 'All accessible branches');
@@ -148,19 +144,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     setReportType(value as ReportType);
     onReportTypeChange?.(value as ReportType);
   }
-
-  const handleSaveCustomReport = () => {
-    const name = prompt(lang === 'ar' ? 'اسم التقرير:' : 'Report name:');
-    if (!name?.trim()) return;
-    saveReport(name.trim(), reportType, visibleColumns, filters);
-  };
-
-  const handleRestoreCustomReport = (config: SavedReportConfig) => {
-    handleReportTypeSelect(config.reportType);
-    setFilters(config.filters || {});
-    setFiltersDirty(false);
-    setQueryVersion((version) => version + 1);
-  };
 
   const runReport = () => {
     setFiltersDirty(false);
@@ -918,10 +901,15 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const rows = results.flatMap(({ branchId, summary: financial, rows: rawRows }) => {
           const summaryRow = withBranch(branchId, {
             [lang === 'ar' ? 'الخامة' : 'Raw Material']: lang === 'ar' ? 'إجمالي الفترة' : 'Period Total',
+            [lang === 'ar' ? 'الوحدة' : 'Unit']: '—',
+            [lang === 'ar' ? 'كمية أول المدة' : 'Opening Qty']: '—',
             [lang === 'ar' ? 'قيمة أول المدة' : 'Opening Value']: Number(financial.opening_inventory_value || 0),
+            [lang === 'ar' ? 'كمية المشتريات' : 'Purchase Qty']: '—',
             [lang === 'ar' ? 'قيمة المشتريات' : 'Purchase Value']: Number(financial.purchases_value || 0),
             [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: Number(financial.net_sales || 0),
+            [lang === 'ar' ? 'كمية استهلاك المبيعات' : 'Sales Consumption Qty']: '—',
             [lang === 'ar' ? 'قيمة استهلاك المبيعات' : 'Sales Consumption Value']: Number(financial.sales_consumption_value || 0),
+            [lang === 'ar' ? 'كمية آخر المدة' : 'Closing Qty']: '—',
             [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(financial.closing_inventory_value || 0),
             [lang === 'ar' ? 'مجمل الربح' : 'Gross Profit']: Number(financial.gross_profit || 0),
             [lang === 'ar' ? 'نسبة تكلفة الخامات %' : 'Food Cost %']: Number(financial.food_cost_pct || 0),
@@ -974,17 +962,21 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const handleExportExcel = () => {
     const excelProfile = getReportExcelProfile(reportType, lang as 'ar' | 'en');
-    const totalRow = reportType === 'financial_reconciliation'
-      ? {
-        [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: summary.total,
-        [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: summary.count,
-      }
-      : {
-        [lang === 'ar' ? 'الإجمالي' : 'Total']: summary.total,
-        [lang === 'ar' ? 'عدد السجلات' : 'Record Count']: summary.count,
-      };
+    const isRawMaterialFinancial = reportType === 'raw_material_financial' && data.length > 0;
+    const exportData = isRawMaterialFinancial ? data.slice(1) : data;
+    const totalRow = isRawMaterialFinancial
+      ? data[0]
+      : reportType === 'financial_reconciliation'
+        ? {
+          [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: summary.total,
+          [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: summary.count,
+        }
+        : {
+          [lang === 'ar' ? 'الإجمالي' : 'Total']: summary.total,
+          [lang === 'ar' ? 'عدد السجلات' : 'Record Count']: summary.count,
+        };
     void exportToExcelAdvanced({
-      data,
+      data: exportData,
       filename: `report_${reportType}_${from}_${to}`,
       sheetName: (reportTypes.find((row) => row.key === reportType)?.label ?? reportType).slice(0, 31),
       title: reportTypes.find((row) => row.key === reportType)?.label ?? reportType,
@@ -1143,33 +1135,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   return (
     <div>
-      <PageHeader title={t('reports')} actions={
-        <div className="flex flex-wrap gap-2">
-          <ColumnPicker
-            columns={data.length > 0 ? Object.keys(data[0]) : []}
-            visibleColumns={visibleColumns}
-            onToggle={toggleColumn}
-            onShowAll={showAllColumns}
-            lang={lang}
-            hiddenCount={hiddenCount}
-          />
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={handleExportExcel}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={handleExportCSV}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
-          {can('reports.print') && <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="w-4 h-4" /> {t('print')}</Button>}
-        </div>
-      } />
-
-      <CustomReportBar
-        savedReports={savedReports}
-        currentReportType={reportType}
-        currentVisibleColumns={visibleColumns}
-        currentFilters={filters}
-        onSelect={handleRestoreCustomReport}
-        onSave={handleSaveCustomReport}
-        onDelete={deleteReport}
-        lang={lang}
-      />
-
       <ReportFilterBar
         reportType={reportType}
         filters={filters}
@@ -1204,6 +1169,21 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         onRunReport={runReport}
         loading={loading}
         pendingChanges={filtersDirty}
+        actions={
+          <>
+            <ColumnPicker
+              columns={data.length > 0 ? Object.keys(data[0]) : []}
+              visibleColumns={visibleColumns}
+              onToggle={toggleColumn}
+              onShowAll={showAllColumns}
+              lang={lang}
+              hiddenCount={hiddenCount}
+            />
+            {can('reports.export') && <Button variant="outline" size="sm" onClick={handleExportExcel}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
+            {can('reports.export') && <Button variant="outline" size="sm" onClick={handleExportCSV}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
+            {can('reports.print') && <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="w-4 h-4" /> {t('print')}</Button>}
+          </>
+        }
       />
 
       <Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
