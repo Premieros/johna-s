@@ -5,7 +5,7 @@ import { supabase, costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
-import { formatFinancialCurrency, formatDate, todayISO } from '@/lib/format';
+import { formatFinancialCurrency, formatDate, formatPercent, todayISO } from '@/lib/format';
 import { reportDateRangeUtc } from '@/lib/businessTime';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
@@ -1008,8 +1008,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
               ? Number(reconciliation.value_difference || 0) / Number(reconciliation.theoretical_value || 0) * 100
               : 0,
             [lang === 'ar' ? 'مصدر التسعير' : 'Price Source']: lang === 'ar'
-              ? `نظري ${Number(reconciliation.theoretical_food_cost_pct || 0).toFixed(2)}% / فعلي ${Number(reconciliation.actual_food_cost_pct || 0).toFixed(2)}%`
-              : `Theo ${Number(reconciliation.theoretical_food_cost_pct || 0).toFixed(2)}% / Actual ${Number(reconciliation.actual_food_cost_pct || 0).toFixed(2)}%`,
+              ? `نظري ${formatPercent(Number(reconciliation.theoretical_food_cost_pct || 0), 2)} / فعلي ${formatPercent(Number(reconciliation.actual_food_cost_pct || 0), 2)}`
+              : `Theo ${formatPercent(Number(reconciliation.theoretical_food_cost_pct || 0), 2)} / Actual ${formatPercent(Number(reconciliation.actual_food_cost_pct || 0), 2)}`,
             [lang === 'ar' ? 'الحالة' : 'Status']: lang === 'ar'
               ? `فروق خامات: ${Number(reconciliation.mismatched_raws || 0)} · بنود غير قابلة للمطابقة: ${Number(reconciliation.unmatched_sale_rows || 0)} · منتجات بلا مكونات: ${Number(reconciliation.componentless_products || 0)}`
               : `Raw mismatches: ${Number(reconciliation.mismatched_raws || 0)} · Unmatched sale rows: ${Number(reconciliation.unmatched_sale_rows || 0)} · Products without components: ${Number(reconciliation.componentless_products || 0)}`,
