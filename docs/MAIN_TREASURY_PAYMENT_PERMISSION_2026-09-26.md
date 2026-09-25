@@ -3,11 +3,11 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/main-treasury-pay-permission-20260926`
-Current PR: pending
+Current PR: `#376`
 Last updated: 2026-09-26
 
 ## Work status
-State: **IN_PROGRESS**
+State: **VERIFYING**
 
 ## Guardrails
 - No direct write to main.
@@ -33,7 +33,7 @@ State: **IN_PROGRESS**
 ## Verification ledger
 - Baseline main: `8ea407b3de1313a4809e409312d9b003e7a3b11e`.
 - PR #375 Production API parity/deploy: Green.
-- Exact-head verification for this change: pending.
+- Draft PR #376 opened. Exact-head verification for this change: pending.
 
 ## Production gate
 - BLOCKED pending exact-head Full Verify Green + explicit approval.
