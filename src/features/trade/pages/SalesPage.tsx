@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
