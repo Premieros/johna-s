@@ -103,6 +103,21 @@ describe('Cleopatra Print Agent V8.1.1 Lite isolation and query budget', () => {
     expect(sql).toContain('AFTER INSERT ON public.cloud_print_jobs');
   });
 
+  it('extends realtime wake only to Smouha and Cleopatra without changing frozen print RPCs', () => {
+    const sql = read('supabase/migrations/20260925163000_cloud_print_v8_cleopatra_realtime_wake.sql');
+    const smouha = '19c3fd23-d784-455b-8840-f4f2ac619651';
+    const cleopatra = '279e6662-e901-40b2-9170-7dda0b471ba7';
+
+    expect(sql).toContain(smouha);
+    expect(sql).toContain(cleopatra);
+    expect(sql).toContain('branch_id IN (');
+    expect(sql).toContain('NEW.branch_id NOT IN (');
+    expect(sql).toContain('WHEN (');
+    expect(sql).not.toMatch(/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.(claim_cloud_print_jobs|start_cloud_print_job|complete_cloud_print_job)/i);
+    expect(sql).not.toMatch(/UPDATE\s+public\.cloud_print_jobs/i);
+    expect(sql).not.toMatch(/DELETE\s+FROM\s+public\.cloud_print_jobs/i);
+  });
+
   it('journals physical submission before remote completion to prevent duplicates', () => {
     const worker = read('print-agent-v8/CloudPrintWorker.cs');
     const mark = worker.indexOf('PrintJournal.Mark(job.Id)');
