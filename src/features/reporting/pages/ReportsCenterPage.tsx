@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Landmark } from 'lucide-react';
 import { ReportingShell } from '../ReportingShell';
@@ -21,6 +21,10 @@ export function ReportsCenterPage() {
   const requestedFinancial = location.pathname.includes('financial-reports') || searchParams.get('section') === 'financial' || Boolean(searchParams.get('view'));
   const initialSection: ReportsSection = requestedFinancial && canFinancial ? 'financial' : (canOperational ? 'operational' : 'financial');
   const [section, setSection] = useState<ReportsSection>(initialSection);
+  useEffect(() => {
+    if (requestedFinancial && canFinancial) setSection('financial');
+    else if (!requestedFinancial && canOperational) setSection('operational');
+  }, [requestedFinancial, canFinancial, canOperational]);
   const [activeReport, setActiveReport] = useState<ReportType>('sales');
   const handleSelect = useCallback((type: ReportType) => setActiveReport(type), []);
 
