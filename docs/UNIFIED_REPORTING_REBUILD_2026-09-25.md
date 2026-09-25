@@ -66,6 +66,8 @@ Implementation is in review. Merge and Production application remain blocked unt
 - Fixed all five assertions without weakening authorization or business-source tests: central percent formatter, financial deep-link identity, explicit any-of permission contract, intentional alias discoverability, and canonical helper regex.
 - Verify #2846: core verify fully Green (lint, typecheck, unit, build). DB integration failed in 3 tests for two root causes: the private canonical net-sale helper lacked authenticated EXECUTE for security-invoker costing RPCs, and returned sales were accidentally included in costing scope.
 - Fixed both without changing the canonical net-sale formula: authenticated/service_role can execute only the immutable private helper, and costing scope again excludes returned/cancelled invoices as before.
+- Verify #2848: core verify fully Green; DB integration reached 850/851 passing with one stale costing assertion still expecting net sales without tax.
+- Updated that integration contract to the unified definition: sale total less refunds, tax reported separately; fixture net sales is 460 and COGS ratio 24.46%.
 - Current exact-head Full Verify: **PENDING**.
 - Added navigation permission contract test after unifying the sidebar destination.
 
