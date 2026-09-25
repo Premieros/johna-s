@@ -1,6 +1,6 @@
-# Smouha Form Print Agent V8.1.1 Lite
+# Cleopatra Form Print Agent V8.1.1 Lite
 
-برنامج بديل مستقل لطباعة فرع سموحة. لا يستبدل V7 تلقائياً ولا يغيّر نظام
+برنامج بديل مستقل لطباعة فرع كليوبترا. لا يستبدل V7 تلقائياً ولا يغيّر نظام
 الطباعة الحالي في Production.
 
 ## ما تغير في V8.1.1
@@ -79,4 +79,4 @@ V8.1.1:
 
 لا تشغّل V7 وV8.1.1 كمستهلكين نشطين لنفس الفرع في نفس الوقت.
 
-Build checkpoint: PR #357 V8.1.1 exact-head verification.
+Build checkpoint: Cleopatra V8.1.1 isolated branch verification.
