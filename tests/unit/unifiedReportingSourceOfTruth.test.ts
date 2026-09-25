@@ -10,16 +10,17 @@ const reportsPage = readFileSync(resolve(root, 'src/features/reporting/pages/Rep
 const routes = readFileSync(resolve(root, 'src/app/routes.tsx'), 'utf8');
 
 describe('unified reporting source-of-truth contract', () => {
-  it('defines net sales once as total less refunds without silently subtracting tax', () => {
+  it('separates collection net sales from pre-tax operational sales', () => {
     expect(migration).toContain('private.report_net_sale_amount');
     expect(migration).toContain('COALESCE(p_total,0)-COALESCE(p_refunded_amount,0)');
-    expect(migration).not.toContain('s.total,0)-COALESCE(s.tax_amount');
+    expect(migration).toContain('private.report_operational_net_sale_amount');
+    expect(migration).toContain('COALESCE(p_total,0)-COALESCE(p_tax_amount,0)');
   });
 
   it('forces costing summary and order margin through the same net-sales contract', () => {
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.get_costing_sales_summary');
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.get_order_margin');
-    expect(migration.match(/private\.report_net_sale_amount/g)?.length || 0).toBeGreaterThanOrEqual(4);
+    expect(migration.match(/private\.report_operational_net_sale_amount/g)?.length || 0).toBeGreaterThanOrEqual(3);
   });
 
   it('keeps COGS resolution journal-first with settled kitchen and legacy sale fallbacks', () => {
