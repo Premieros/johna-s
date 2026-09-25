@@ -108,8 +108,10 @@ describe('Reporting system components (Phase 1-5)', () => {
   // --- ReportsCenterPage.tsx ---
   const centerSource = read('src/features/reporting/pages/ReportsCenterPage.tsx');
 
-  it('ReportsCenterPage wraps ReportsPage in ReportingShell', () => {
-    expect(centerSource).toContain('ReportingShell');
+  it('ReportsCenterPage renders ReportsPage inside the compact unified list', () => {
+    expect(centerSource).not.toContain('ReportingShell');
+    expect(centerSource).toContain('filteredOperational.map');
+    expect(centerSource).toContain('filteredFinancial.map');
     expect(centerSource).toContain('ReportsPage');
     expect(centerSource).toContain('activeReport');
   });

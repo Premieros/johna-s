@@ -23,7 +23,7 @@ import type {
 
 type View = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 
-export function FinancialReportsPage() {
+export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicker?: boolean } = {}) {
   const { t, lang } = useLanguage();
   const branchFilter = useBranchFilter();
   const isAr = lang === 'ar';
@@ -37,6 +37,11 @@ export function FinancialReportsPage() {
   const initialView = validViews.includes(requestedView as View) ? (requestedView as View) : 'trial_balance';
 
   const [view, setView] = useState<View>(initialView);
+  useEffect(() => {
+    if (validViews.includes(requestedView as View) && requestedView !== view) {
+      setView(requestedView as View);
+    }
+  }, [requestedView, view]);
   const [from, setFrom] = useState(() => history.clampRange(searchParams.get('from') || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), searchParams.get('to') || todayISO()).from);
   const [to, setTo] = useState(() => history.clampRange(searchParams.get('from'), searchParams.get('to') || todayISO()).to);
   const [loading, setLoading] = useState(false);
@@ -498,14 +503,16 @@ export function FinancialReportsPage() {
 
       <DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-2">
-            {views.map((v) => (
-              <button key={v.key} data-report-type={v.key} onClick={() => setView(v.key)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === v.key ? 'bg-brand-600 text-white' : 'bg-ui-page-alt text-ui-muted hover:bg-ui-page-alt dark:hover:bg-ui-page-alt'}`}>
-                {v.icon} {v.label}
-              </button>
-            ))}
-          </div>
+          {!hideViewPicker && (
+            <div className="flex flex-wrap gap-2">
+              {views.map((v) => (
+                <button key={v.key} data-report-type={v.key} onClick={() => setView(v.key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === v.key ? 'bg-brand-600 text-white' : 'bg-ui-page-alt text-ui-muted hover:bg-ui-page-alt dark:hover:bg-ui-page-alt'}`}>
+                  {v.icon} {v.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap items-end gap-4">
             {(view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
             <Input label={view === 'income' || view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
