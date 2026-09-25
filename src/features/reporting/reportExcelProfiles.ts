@@ -97,6 +97,24 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       columnWidths: { [branch]: 24, [pick(lang, 'المنتج', 'Product')]: 28, [pick(lang, 'التاريخ', 'Date')]: 18, [pick(lang, 'السبب', 'Reason')]: 32, [pick(lang, 'المستودع', 'Warehouse')]: 22 },
       integerColumns: [],
     },
+    daily_closing_range: {
+      columns: [
+        branch, pick(lang, 'اليوم', 'Business Date'), pick(lang, 'إجمالي المبيعات', 'Gross Sales'),
+        pick(lang, 'الخصومات', 'Discounts'), pick(lang, 'الضرائب', 'Taxes'), pick(lang, 'المرتجعات', 'Returns'),
+        pick(lang, 'صافي المبيعات', 'Net Sales'), pick(lang, 'كاش', 'Cash'), pick(lang, 'كارت', 'Card'),
+        pick(lang, 'تحويل', 'Transfer'), pick(lang, 'آجل', 'Credit'),
+        pick(lang, 'بنك تاريخي غير مصنف', 'Legacy Bank'), pick(lang, 'طرق دفع أخرى', 'Other Payment'),
+        pick(lang, 'المصروفات', 'Expenses'), pick(lang, 'مشتريات كاش', 'Cash Purchases'),
+        pick(lang, 'صافي كاش بعد المنصرف', 'Cash After Outflows'),
+        pick(lang, 'عدد الفواتير', 'Invoices'), pick(lang, 'عدد الشفتات', 'Shifts'),
+        pick(lang, 'حالة اليوم', 'Day Status'),
+      ],
+      columnWidths: {
+        [branch]: 24, [pick(lang, 'اليوم', 'Business Date')]: 16,
+        [pick(lang, 'حالة اليوم', 'Day Status')]: 14,
+      },
+      integerColumns: [pick(lang, 'عدد الفواتير', 'Invoices'), pick(lang, 'عدد الشفتات', 'Shifts')],
+    },
     raw_material_consumption: {
       columns: [
         branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
