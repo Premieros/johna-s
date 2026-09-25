@@ -293,10 +293,10 @@ export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
     ),
   },
   {
-    key: 'production',
-    ar: 'الإنتاج والهالك',
-    en: 'Production & Waste',
-    permissions: PERMISSION_GROUPS.find((group) => group.key === 'production')!.permissions,
+    key: 'waste',
+    ar: 'الهالك',
+    en: 'Waste',
+    permissions: PERMISSION_GROUPS.find((group) => group.key === 'waste')!.permissions,
   },
   {
     key: 'customers',
