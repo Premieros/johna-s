@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/OPENING_FIFO_COST_REPAIR_FOLLOWUP_2026-09-24.md`
-- Current active branch: `development/fifo-opening-repair-final-20260925`
-- Current PR: `#361`
+- Mandatory active work log: `docs/FIFO_ZERO_COST_PRICE_FALLBACK_2026-09-25.md`
+- Current active branch: `development/fifo-zero-cost-price-fallback-20260925`
+- Current PR: `#362`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -23,10 +23,21 @@
 - Printing / Print Agent / routing / KDS / send-to-kitchen remain frozen and untouched.
 - No direct write to main; merge only through PR after exact-head Full Verify Green.
 
+## ACTIVE — FIFO zero-cost historical price fallback — 2026-09-25
+
+- Branch: `development/fifo-zero-cost-price-fallback-20260925`
+- Base: `main@7900e15a0d6bddecb630e3316a446bd3367332fb`.
+- Live log: `docs/FIFO_ZERO_COST_PRICE_FALLBACK_2026-09-25.md`.
+- Scope: repair remaining zero-cost raw consumption only where an authoritative positive price event existed at or before the consumption timestamp.
+- Open FIFO debt must use an estimate-offset contract so future positive-cost receipts replace only the difference, preventing double cost.
+- Rows with no prior authoritative price remain unresolved; no future-price guessing.
+- Printing / Print Agent / routing / KDS / shifts remain untouched.
+- Production apply: BLOCKED until exact-head Full Verify Green + explicit approval.
+
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/fifo-opening-repair-final-20260925`
+- Executable branch: `development/fifo-zero-cost-price-fallback-20260925`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
