@@ -4,7 +4,7 @@ import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useBranches } from '@/hooks/useBranches';
-import { formatNumber, formatRawMaterialQuantity } from '@/lib/format';
+import { formatRawMaterialQuantity } from '@/lib/format';
 import { DesignPanel } from '@/components/design';
 import { Select } from '@/components/Input';
 
