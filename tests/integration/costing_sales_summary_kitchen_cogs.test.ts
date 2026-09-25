@@ -166,12 +166,13 @@ describe.skipIf(skip)('costing sales summary kitchen COGS', () => {
 
     const summary = result.rows[0].summary;
     expect(Number(summary.sales_count)).toBe(3);
-    expect(Number(summary.net_sales)).toBe(400);
+    expect(Number(summary.net_sales)).toBe(460);
 
+    // Net sales uses the canonical reporting contract (sale total less refunds), so tax remains included.
     // 50 legacy + (30 * 1.5/2) kitchen + 40 overlap-kitchen.
     // The overlapping -999 legacy row must not be added.
     expect(Number(summary.cogs)).toBe(112.5);
-    expect(Number(summary.ratio)).toBe(28.13);
+    expect(Number(summary.ratio)).toBe(24.46);
   });
 
   it('keeps the costing summary SECURITY INVOKER', async () => {
