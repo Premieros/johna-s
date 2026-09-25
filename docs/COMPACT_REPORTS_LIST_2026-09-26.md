@@ -36,7 +36,9 @@ State: **BLOCKED**
 - Added unit contract `compactReportsCenter.test.ts` to prevent regression back to cards and narrow sales output.
 
 ## Verification ledger
-- Local/CI verification pending.
+- Verify #2863: lint ✅, typecheck ✅; unit tests failed only in 2 stale assertions that still required the removed `ReportingShell` and old `<FinancialReportsPage />` embedding shape.
+- Updated those two contracts to assert the compact unified list and `hideViewPicker` financial embedding.
+- Exact-head reverify: pending.
 
 ## Production gate
 - Production migration: **NOT REQUIRED / OUT OF SCOPE**.
