@@ -64,6 +64,8 @@ Implementation is in review. Merge and Production application remain blocked unt
 - Verify run 36188959349 started on prior head; mandatory log pointer was still stale from merged performance work and is being corrected by this update.
 - Verify #2841 on head `2a5c27fafe518a5cdb76da5e72c67464897c3843` reached lint/typecheck successfully and failed only in 5 unit assertions tied to the new unified navigation/formatting contracts.
 - Fixed all five assertions without weakening authorization or business-source tests: central percent formatter, financial deep-link identity, explicit any-of permission contract, intentional alias discoverability, and canonical helper regex.
+- Verify #2846: core verify fully Green (lint, typecheck, unit, build). DB integration failed in 3 tests for two root causes: the private canonical net-sale helper lacked authenticated EXECUTE for security-invoker costing RPCs, and returned sales were accidentally included in costing scope.
+- Fixed both without changing the canonical net-sale formula: authenticated/service_role can execute only the immutable private helper, and costing scope again excludes returned/cancelled invoices as before.
 - Current exact-head Full Verify: **PENDING**.
 - Added navigation permission contract test after unifying the sidebar destination.
 
