@@ -576,6 +576,14 @@ export function PurchasesPage() {
         </>
       } />
 
+      {!history.unlimited && (
+        <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
+          {lang === 'ar'
+            ? 'سجل المشتريات التاريخي مقيد حسب صلاحية العرض. المستحق الظاهر لكل فاتورة صحيح للفاتورة المعروضة، أما إجماليات الفترات القديمة فتشمل فقط الفواتير المسموح لك برؤيتها.'
+            : 'Historical purchases are visibility-limited. Outstanding shown per visible invoice is correct for that invoice; older-period totals include only invoices you are allowed to see.'}
+        </div>
+      )}
+
       {warehouses.length === 0 && !loading && (
         <PrerequisiteAlertBanner
           step={PREREQUISITE_STEPS.create_warehouse}
