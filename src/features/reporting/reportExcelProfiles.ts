@@ -130,8 +130,8 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
     raw_material_current_cost: {
       columns: [
         branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
-        pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'تكلفة الوحدة الحالية FIFO', 'Current FIFO Unit Cost'),
-        pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'), pick(lang, 'آخر تكلفة معتمدة', 'Latest Authoritative Cost'),
+        pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'سعر الخامة المعتمد (مركز التكلفة)', 'Canonical Raw Cost (Costing Center)'),
+        pick(lang, 'متوسط تكلفة المخزون المتبقي FIFO', 'Remaining Inventory FIFO Average Cost'), pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'),
         pick(lang, 'مصدر السعر', 'Price Source'), pick(lang, 'طبقات FIFO المفتوحة', 'Open FIFO Batches'),
       ],
       columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30, [pick(lang, 'مصدر السعر', 'Price Source')]: 20 },
