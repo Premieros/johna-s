@@ -467,8 +467,6 @@ export function FinancialReportsPage() {
   const tbTotals = tb.reduce((acc, r) => ({ debit: acc.debit + Number(r.debit), credit: acc.credit + Number(r.credit) }), { debit: 0, credit: 0 });
 
   const partyList = partySide === 'ar' ? customers : suppliers;
-  const selectedLedgerAccount = accounts.find((a) => a.id === accountId);
-  const ledgerIsAsset = selectedLedgerAccount?.account_type === 'asset';
   const movementLabel = (type: string | null | undefined) => {
     const labels: Record<string, [string, string]> = {
       sale: ['مبيعات', 'Sale'],
