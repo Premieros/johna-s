@@ -269,19 +269,30 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
 
       if (reportType === 'sales') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
+        let q = supabase.from('sales').select('id, branch_id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, order_type, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name,email), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
         if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
         q = filterQ(q, filters, applySalesFilters);
         const sales = await fetchRows<Record<string, unknown>>(q);
         const rows = sales.map((sale: Record<string, unknown>) => {
           const net = netSaleAmount(sale);
+          const cashier = sale.cashier as { full_name?: string; email?: string } | null;
+          const warehouse = sale.warehouse as { name?: string } | null;
           return withBranch(sale.branch_id, {
             [lang === 'ar' ? 'الفاتورة' : 'Invoice']: sale.invoice_number,
             [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(sale.created_at as string, lang),
             [lang === 'ar' ? 'العميل' : 'Customer']: (sale.customer as { name?: string })?.name || '',
-            [lang === 'ar' ? 'الإجمالي الأصلي' : 'Original Total']: Number(sale.total || 0),
+            [lang === 'ar' ? 'المستخدم' : 'User']: cashier?.full_name || cashier?.email || '',
+            [lang === 'ar' ? 'المخزن' : 'Warehouse']: warehouse?.name || '',
+            [lang === 'ar' ? 'نوع الطلب' : 'Order Type']: sale.order_type || '',
+            [lang === 'ar' ? 'طريقة الدفع' : 'Payment Method']: sale.payment_method || '',
+            [lang === 'ar' ? 'الحالة' : 'Status']: sale.status || '',
+            [lang === 'ar' ? 'قبل الخصم والضريبة' : 'Subtotal']: Number(sale.subtotal || 0),
+            [lang === 'ar' ? 'الخصم' : 'Discount']: Number(sale.discount_amount || 0),
+            [lang === 'ar' ? 'الضريبة' : 'Tax']: Number(sale.tax_amount || 0),
+            [lang === 'ar' ? 'إجمالي الفاتورة' : 'Invoice Total']: Number(sale.total || 0),
+            [lang === 'ar' ? 'المدفوع' : 'Paid']: Number(sale.paid_amount || 0),
             [lang === 'ar' ? 'المرتجع' : 'Refunded']: Number(sale.refunded_amount || 0),
-            [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: net,
+            [lang === 'ar' ? 'صافي التحصيل' : 'Net Collection']: net,
           });
         });
         setData(rows);
