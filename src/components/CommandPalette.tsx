@@ -56,6 +56,7 @@ export function CommandPalette() {
       if (item.superAdminOnly && user?.role !== 'super_admin') return false;
       if (item.ownerOnly && !admin) return false;
       if (item.permission && !can(item.permission)) return false;
+      if (item.permissionsAny && !item.permissionsAny.some((permission) => can(permission))) return false;
       if (!normalizedQuery) return true;
       return [item.id, item.labelKey, item.group, item.route]
         .some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
