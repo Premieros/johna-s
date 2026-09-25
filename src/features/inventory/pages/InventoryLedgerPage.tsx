@@ -260,7 +260,7 @@ export function InventoryLedgerPage() {
 
   return (
     <DesignSurface testId="inventory-ledger-page">
-      <DesignPageHeader title={t('inventoryLedger')} subtitle={lang === 'ar' ? 'سجل كامل لحركات المخزون (منتجات ومواد خام)' : 'Full movement log for inventory (products and raw materials)'} actions={
+      <DesignPageHeader title={t('inventoryLedger')} subtitle={history.unlimited ? (lang === 'ar' ? 'سجل كامل لحركات المخزون (منتجات ومواد خام)' : 'Full movement log for inventory (products and raw materials)') : (lang === 'ar' ? 'آخر 7 أيام كاملة، وما قبلها حسب صلاحية العرض التاريخي' : 'Last 7 days complete; older movements follow historical visibility permissions')} actions={
         <button onClick={handleExport} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-ui-border hover:bg-ui-page-alt dark:hover:bg-ui-surface text-ui-text transition-all">
           {t('exportExcel')}
         </button>
