@@ -58,14 +58,19 @@ Make common pages feel near-instant while preserving server truth:
 - `fetchAll()` explicitly bypasses display cache and reads all matching server rows in batches.
 - Audited export paths; DataTable now supports an authoritative full-row provider. Customers and suppliers use full server fetch; products/purchases/expenses/inventory/reports/inventory ledger already use full-data server paths.
 - Added regression tests for session reuse, user isolation, and full-server export.
+- Sales page no longer preloads all customers on first paint; branch customers load only when an editable sale is opened.
+- Products page no longer aggregates stock components on first paint; aggregation starts on edit intent in parallel with edit metadata.
+- Reports page now fetches only metadata dimensions required by the active report instead of seven lists on every open.
+- Added source-contract tests to prevent regression to eager first-open loading.
 
 ## Verification ledger
 
-- Pending.
+- Verify #2801 on `f8da4ac71920a1306ee3d62be14f99ba01668c4b`: Full Green (verify/db/browser-smoke).
+- New first-open optimizations added after #2801; exact-head Full Verify pending.
 
 ## Next action
 
-Run exact-head Full Verify on PR #371. If the shared session-SWR/export foundation is green, continue only with measured first-open optimizations for heavy pages without adding browser-persistent operational data cache.
+Run exact-head Full Verify on the current PR #371 head. If Green, review remaining high-cost first-open queries and stop before merge for explicit approval.
 
 ## Production gate
 
