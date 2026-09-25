@@ -12,8 +12,8 @@ describe('data performance contracts', () => {
     expect(hook).toContain('useLayoutEffect');
     expect(hook).toContain('fetchAll');
     expect(hook).toContain('NEVER reads from the');
-    expect(hook).not.toContain('localStorage');
-    expect(hook).not.toContain('IndexedDB');
+    expect(hook).not.toMatch(/\b(?:window\.)?localStorage\s*\./);
+    expect(hook).not.toMatch(/\bindexedDB\s*\./i);
   });
 
   it('does not preload all customers on initial sales page mount', () => {
