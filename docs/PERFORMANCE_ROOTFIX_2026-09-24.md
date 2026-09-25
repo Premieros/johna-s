@@ -1,12 +1,12 @@
 # Performance Root-Fix — 2026-09-24
 
 Repository: `Premieros/johna-s`  
-Branch: `development/performance-rootfix-20260924`  
-Current PR: `#354`  
+Branch: `development/cleopatra-v811-final`  
+Current PR: `#365`  
 Production Supabase: `azzdesuowpdcoflmyezn`  
 Published site: `https://premieros.github.io/johna-s/`  
 Baseline: `main@3c1aa6047893b5f2e47be575c08e0db8dbd581b5`  
-Last updated: 2026-09-24 — CH-10 Dashboard payment egress repair implemented; exact-head verify pending
+Last updated: 2026-09-25 — Cleopatra V8.1.1 exact-head verification
 
 ## Work status
 
@@ -886,3 +886,19 @@ This protocol is compulsory for every future change in this workstream.
 ### CI enforcement
 
 The Verify workflow must contain a dedicated active-worklog contract. A PR that fails the worklog contract is not eligible for merge even if lint/tests/build are otherwise Green.
+
+
+---
+
+## PR #365 checkpoint — Cleopatra Print Agent V8.1.1
+
+- Scope: Cleopatra-only V8.1.1 Lite print agent.
+- Branch identity: `279e6662-e901-40b2-9170-7dda0b471ba7`.
+- AppId: `PremierCleopatraFormPrintAgentV0811`.
+- Assembly: `PremierCleopatraFormPrintAgentV0811`.
+- Version: `8.1.1`.
+- Carries the V8.1.1 Realtime websocket auth/readiness fix.
+- No Production DB migration is applied by this PR.
+- Cleopatra wake trigger is not yet enabled in Production; fallback polling remains the safe runtime path until separate approval.
+- No direct main edit.
+- Exact-head Build + Full Verify are mandatory before artifact handoff.
