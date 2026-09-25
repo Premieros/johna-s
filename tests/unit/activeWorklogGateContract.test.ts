@@ -6,7 +6,7 @@ const pathMatch = plan.match(/Mandatory active work log:\s*`([^`]+)`/i);
 
 describe('mandatory active worklog gate', () => {
   it('declares the mandatory active work log from the unified work plan', () => {
-    expect(pathMatch?.[1]).toMatch(/^docs\/[A-Z0-9_\-]+\.md$/i);
+    expect(pathMatch?.[1]).toMatch(/^docs\/[A-Z0-9_-]+\.md$/i);
   });
 
   it('keeps the mandatory log structurally complete', () => {
