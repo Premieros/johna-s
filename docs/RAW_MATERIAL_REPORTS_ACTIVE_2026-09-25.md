@@ -2,9 +2,9 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/raw-material-financial-reports-20260925`
-Current PR: `#363`
-Last updated: 2026-09-25
+Branch: `development/cleopatra-v811-final`
+Current PR: `#365`
+Last updated: 2026-09-25 — Cleopatra V8.1.1 exact-head verification
 
 ## Work status
 
@@ -80,3 +80,16 @@ Wait for explicit merge approval for PR #363. After merge, verify main again. Pr
 - After each change group, update Change ledger.
 - After each verification, update Verification ledger with exact run/result.
 - Keep Production gate BLOCKED until exact-head Full Verify is green and explicit approval exists.
+
+
+---
+
+## PR #365 checkpoint — Cleopatra Print Agent V8.1.1
+
+- Scope: Cleopatra-only V8.1.1 Lite print agent build.
+- Branch ID: `279e6662-e901-40b2-9170-7dda0b471ba7`.
+- AppId: `PremierCleopatraFormPrintAgentV0811`.
+- Assembly: `PremierCleopatraFormPrintAgentV0811`.
+- No Production migration applied.
+- Production Realtime wake for Cleopatra is not enabled yet; fallback polling remains active until separate approval.
+- Exact-head Build + Full Verify required before artifact handoff.
