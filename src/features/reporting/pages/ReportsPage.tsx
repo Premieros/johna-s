@@ -791,6 +791,52 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setData(reconciliationRows);
         setChartData([]);
         setSummary({ total: totalNetSales, count: mismatchCount });
+      } else if (reportType === 'daily_closing_range') {
+        const targetBranches = effectiveBranchFilter
+          ? branches.filter((branch) => branch.id === effectiveBranchFilter)
+          : branches;
+        const results = await Promise.all(targetBranches.map(async (branch) => {
+          const result = await supabase.rpc('get_day_closing_range_report', {
+            p_branch_id: branch.id,
+            p_from_date: allowed.from,
+            p_to_date: allowed.to,
+          });
+          if (result.error) throw result.error;
+          const payload = (result.data || {}) as Record<string, unknown>;
+          return {
+            branchId: branch.id,
+            rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
+          };
+        }));
+        const rows = results.flatMap(({ branchId, rows: dayRows }) => dayRows.map((row) => withBranch(branchId, {
+          [lang === 'ar' ? 'اليوم' : 'Business Date']: String(row.business_date || ''),
+          [lang === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales']: Number(row.gross_sales || 0),
+          [lang === 'ar' ? 'الخصومات' : 'Discounts']: Number(row.discounts || 0),
+          [lang === 'ar' ? 'الضرائب' : 'Taxes']: Number(row.taxes || 0),
+          [lang === 'ar' ? 'المرتجعات' : 'Returns']: Number(row.returns || 0),
+          [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: Number(row.net_sales || 0),
+          [lang === 'ar' ? 'كاش' : 'Cash']: Number(row.cash || 0),
+          [lang === 'ar' ? 'كارت' : 'Card']: Number(row.card || 0),
+          [lang === 'ar' ? 'تحويل' : 'Transfer']: Number(row.transfer || 0),
+          [lang === 'ar' ? 'آجل' : 'Credit']: Number(row.credit || 0),
+          [lang === 'ar' ? 'بنك تاريخي غير مصنف' : 'Legacy Bank']: Number(row.legacy_bank || 0),
+          [lang === 'ar' ? 'طرق دفع أخرى' : 'Other Payment']: Number(row.other_payment || 0),
+          [lang === 'ar' ? 'المصروفات' : 'Expenses']: Number(row.expenses || 0),
+          [lang === 'ar' ? 'مشتريات كاش' : 'Cash Purchases']: Number(row.cash_purchases || 0),
+          [lang === 'ar' ? 'صافي كاش بعد المنصرف' : 'Cash After Outflows']: Number(row.cash_after_outflows || 0),
+          [lang === 'ar' ? 'عدد الفواتير' : 'Invoices']: Number(row.invoice_count || 0),
+          [lang === 'ar' ? 'عدد الشفتات' : 'Shifts']: Number(row.shift_count || 0),
+          [lang === 'ar' ? 'حالة اليوم' : 'Day Status']:
+            row.daily_close_status === 'closed'
+              ? (lang === 'ar' ? 'مغلق' : 'Closed')
+              : (lang === 'ar' ? 'مفتوح' : 'Open'),
+        })));
+        setData(rows);
+        setChartData([]);
+        setSummary({
+          total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'صافي المبيعات' : 'Net Sales'] || 0), 0),
+          count: rows.length,
+        });
       } else if (reportType === 'raw_material_consumption') {
         const targetBranches = effectiveBranchFilter
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
@@ -986,6 +1032,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       icon: <BarChart3 className="w-4 h-4" />,
     });
     reportTypes.push({
+      key: 'daily_closing_range',
+      label: lang === 'ar' ? 'حركة الأيام وطرق الدفع' : 'Daily Closing & Payments',
+      icon: <CreditCard className="w-4 h-4" />,
+    });
+    reportTypes.push({
       key: 'financial_reconciliation',
       label: lang === 'ar' ? 'المطابقة المالية' : 'Financial Reconciliation',
       icon: <CreditCard className="w-4 h-4" />,
@@ -1018,6 +1069,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value',
     lang === 'ar' ? 'تكلفة الوحدة الحالية FIFO' : 'Current FIFO Unit Cost',
     lang === 'ar' ? 'آخر تكلفة معتمدة' : 'Latest Authoritative Cost',
+    lang === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales',
+    lang === 'ar' ? 'الخصومات' : 'Discounts',
+    lang === 'ar' ? 'الضرائب' : 'Taxes',
+    lang === 'ar' ? 'المرتجعات' : 'Returns',
+    lang === 'ar' ? 'طرق دفع أخرى' : 'Other Payment',
+    lang === 'ar' ? 'مشتريات كاش' : 'Cash Purchases',
+    lang === 'ar' ? 'صافي كاش بعد المنصرف' : 'Cash After Outflows',
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
