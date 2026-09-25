@@ -5,9 +5,15 @@ Base: `main@29f99187574fd700cee5da6b71d9b4b13339022c`
 Branch: `development/system-cleanup-root-fixes-20260925`
 Production Supabase: `azzdesuowpdcoflmyezn`
 
+## Work status
+
+State: **BLOCKED**
+
 ## Execution state
 
-State: **IN PROGRESS**
+Current PR: `#372`
+Current branch: `development/system-cleanup-root-fixes-20260925`
+Exact-head verification: **PENDING**
 
 ## Guardrails
 
@@ -36,7 +42,7 @@ Status: **DONE**
 Commit: `3a5c23cd4d0333c3d0c579f5e48806f587a7e154`
 
 ### P1 — Retire production application surface
-Status: **IN PROGRESS**
+Status: **DONE**
 
 Target:
 - remove `ProductionOrdersPage`;
@@ -75,4 +81,4 @@ Status: **BLOCKED / SEPARATE APPROVAL**
 
 ## Next action
 
-Complete P1 application retirement, run focused source/caller proof, then open a Draft PR and run exact-head verification before any merge.
+Run exact-head Full Verify for PR #372. Fix only regressions caused by this cleanup. Do not merge until Green and explicit approval.
