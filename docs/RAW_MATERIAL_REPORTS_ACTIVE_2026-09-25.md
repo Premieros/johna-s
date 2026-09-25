@@ -8,9 +8,9 @@ Last updated: 2026-09-25
 
 ## Work status
 
-State: **BLOCKED**
+State: **READY_FOR_MERGE_APPROVAL**
 
-Implementation is complete on the development branch. Merge and Production migration remain blocked until exact-head Full Verify is green and explicit approval is given.
+Implementation is complete on the development branch. Exact-head Full Verify is green. Merge still requires explicit approval. Production migration remains blocked until a separate explicit approval after merge.
 
 ## Guardrails
 
@@ -53,23 +53,26 @@ Implementation is complete on the development branch. Merge and Production migra
 
 ## Verification ledger
 
-- PR #363 exact-head verify run `36137790704`: **FAILED at active-worklog gate only**.
-- Failure reason: old mandatory log declared branch `development/fifo-opening-repair-final-20260925`, not this PR branch.
-- Lint, typecheck, unit tests, build, db, browser-smoke did not run because the gate stopped verification.
-- Next verification must run on the new exact HEAD after the gate correction.
+- Previous PR #363 run `36137790704`: failed only at stale active-worklog gate before lint/typecheck/tests.
+- Active-worklog gate corrected on branch.
+- Exact-head Verify main run `36138051390` on `83a0ebdff903944e21e56ce8fcf988d1312bb7ac`: **FULL GREEN**.
+- verify ✅
+- db ✅
+- browser-smoke ✅
 
 ## Production gate
 
 State: **BLOCKED**
 
-- Exact-head Full Verify Green: NO.
+- Exact-head Full Verify Green: YES — run `36138051390`.
+- Explicit merge approval: NO.
 - Explicit Production approval: NO.
 - Production migration: NOT ALLOWED.
-- Merge: NOT ALLOWED until verification is green and approval is given.
+- Merge: READY only after explicit approval.
 
 ## Next action
 
-Run Verify main on the exact new HEAD after the active-worklog gate correction. If any later stage fails, fix only the proven failure and rerun.
+Wait for explicit merge approval for PR #363. After merge, verify main again. Production migration remains a separate gate requiring explicit approval.
 
 ## Mandatory update protocol
 
