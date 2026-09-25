@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/navigation-pos-performance-20260925`
-Current PR: `#0`
+Current PR: `#370`
 Last updated: 2026-09-25
 
 ## Work status
@@ -37,16 +37,16 @@ Performance work only. Merge is blocked until exact-head Full Verify Green and e
 
 ## Change ledger
 
-- Pending: hydrate POS products/categories/customers immediately from branch-scoped cache while online.
-- Pending: refresh POS catalog in background and replace cache only with successful online data.
-- Pending: preserve stale-cache safety and branch isolation.
-- Pending: add safe route prefetch for common navigation targets.
-- Pending: inspect and remove confirmed duplicate reload triggers only.
-- Pending: add regression/performance contract tests.
+- POS now hydrates branch-scoped cached products/categories/customers immediately while online.
+- Online Supabase refresh still runs in the background and replaces cache only after successful data load.
+- Existing branch-scoped cache filtering and offline safety remain intact.
+- Added user-intent route chunk prefetch for common navigation targets on pointer/focus/touch; no eager all-page preload.
+- Reviewed branch/settings shared caches; no speculative duplicate-reload rewrite applied without measurement.
+- Added regression/performance contract tests.
 
 ## Verification ledger
 
-- Pending.
+- Exact-head Verify: pending.
 
 ## Production gate
 
