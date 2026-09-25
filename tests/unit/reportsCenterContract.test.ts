@@ -66,15 +66,14 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(financialSource).toContain('data-report-type={v.key}');
   });
 
-  it('makes report discovery immediate with visible search and common financial shortcuts', () => {
-    expect(reportingShellSource).toContain('type="search"');
-    expect(reportingShellSource).toContain("'كل التقارير'");
-    expect(reportingShellSource).toContain('QUICK_OPERATIONAL_REPORTS');
-    expect(reportingShellSource).toContain("'financial_reconciliation'");
-    expect(reportingShellSource).toContain("navigate('/financial-reports?view=treasury_statement')");
-    expect(reportingShellSource).toContain("navigate('/financial-reports?view=inventory_movement')");
-    expect(reportingShellSource).toContain("can('reports.financial')");
-    expect(reportingShellSource).toContain('report.permissions.every');
+  it('keeps report discovery compact with the visible report dropdown instead of browser cards/search clutter', () => {
+    expect(reportFilterBarSource).toContain('data-testid="reports-primary-row"');
+    expect(reportFilterBarSource).toContain('data-testid="report-type-select"');
+    expect(reportingShellSource).not.toContain('type="search"');
+    expect(reportingShellSource).not.toContain('ReportCard');
+    expect(reportingShellSource).not.toContain('showReportBrowser');
+    expect(reportingShellSource).toContain("searchParams.get('reportType')");
+    expect(reportingShellSource).toContain('REPORT_REGISTRY.some');
   });
 
   it('runs configured filters explicitly instead of re-querying on every filter edit', () => {
@@ -144,19 +143,26 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportsSource).toContain('`${reportBranchLabel} — ${from} - ${to}`');
   });
 
-  it('provides compact grouped navigation and column customization', () => {
-    expect(deepLinkSource).toContain('مركز التقارير');
-    expect(deepLinkSource).toContain('data-report-nav={key}');
-    expect(deepLinkSource).toContain('تخصيص الأعمدة');
-    expect(deepLinkSource).toContain('premier.report.columns.');
+  it('uses exactly two compact control rows and keeps report actions in the first row', () => {
+    expect(reportFilterBarSource).toContain('data-testid="reports-primary-row"');
+    expect(reportFilterBarSource).toContain('data-testid="reports-filter-row"');
+    expect(reportFilterBarSource).toContain('actions?: React.ReactNode');
+    expect(reportsSource).toContain('actions={');
+    expect(reportsSource).toContain('<ColumnPicker');
+    expect(reportFilterBarSource).not.toContain('<Card');
   });
 
-  it('keeps Excel exports spreadsheet-friendly with widths, filters and frozen headers', () => {
+  it('keeps Excel exports professional with a large title, colored headers, filters, frozen headers and totals', () => {
     expect(excelSource).toContain("ws['!cols']");
     expect(excelSource).toContain("ws['!autofilter']");
     expect(excelSource).toContain("ws['!freeze']");
     expect(excelSource).toContain("ws['!margins']");
     expect(excelSource).toContain("'!pageSetup'");
+    expect(excelSource).toContain("sz: 16");
+    expect(excelSource).toContain("sz: 12");
+    expect(excelSource).toContain("fgColor: { rgb: '4472C4' }");
+    expect(excelSource).toContain('totalTableRowIndex');
+    expect(excelSource).toContain('summaryFooterRowIndex');
   });
 
   it('resets contextual filters when switching report type', () => {

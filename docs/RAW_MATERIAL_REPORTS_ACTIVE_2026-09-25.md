@@ -2,15 +2,15 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/raw-material-financial-reports-20260925`
-Current PR: `#363`
+Branch: `development/reports-compact-ui-excel-20260925`
+Current PR: `#366`
 Last updated: 2026-09-25
 
 ## Work status
 
-State: **READY_FOR_MERGE_APPROVAL**
+State: **IN_PROGRESS**
 
-Implementation is complete on the development branch. Exact-head Full Verify is green. Merge still requires explicit approval. Production migration remains blocked until a separate explicit approval after merge.
+User requested a compact two-row Reports Center UI, quantity columns visible in the raw-material financial summary row, and a more professional Excel export with visible title/header styling, filter, and totals. Previous exact-head Full Verify is now superseded by this new UI/export work. Production migration remains blocked.
 
 ## Guardrails
 
@@ -24,8 +24,7 @@ Implementation is complete on the development branch. Exact-head Full Verify is 
 
 ## Baseline
 
-- Base main: `7900e15a0d6bddecb630e3316a446bd3367332fb`.
-- Reporting sources already present:
+- Base main: `6726103b3dbadf82f4b81b18c6648fc148479a9f` (already includes merged PR #363).ng sources already present:
   - `inventory_ledger` for authoritative inventory movements / actual consumption value.
   - `raw_material_batches` for residual FIFO stock valuation.
   - `get_day_closing_report` for authoritative business-day closing and payment-method split.
@@ -50,12 +49,20 @@ Implementation is complete on the development branch. Exact-head Full Verify is 
 - Wired Reports Center, deep links, Excel profiles, filters, and report registry.
 - Added unit contract tests for raw-material reports and day-closing range source-of-truth behavior.
 - Updated mandatory active work-log gate to this report branch.
+- Simplified Reports Center shell by removing search/category/favorite/recent report cards from the active page.
+- Rebuilt report controls as exactly two compact rows: visible report dropdown + actions, then contextual filters/run controls.
+- Moved column picker / Excel / CSV / print actions into the first compact row and removed the extra page header/custom-report bar from the active layout.
+- Fixed raw-material financial quantity visibility: period-total row now declares all quantity columns with `—` instead of hiding them; per-material quantities remain authoritative and no incompatible units are summed.
+- Raw-material financial Excel export now exports detail rows with the period-total row as the styled table total.
+- Reworked Excel layout into one professional sheet with a large colored title, period subtitle, larger colored column headers, Auto Filter, frozen header, controlled widths, and styled totals/source note.
+- Restored central number formatting for the compact summary total and semantic report accent classes; updated stale ReportingShell unit contracts to the intentionally minimal two-row design.
 
 ## Verification ledger
 
 - Previous PR #363 run `36137790704`: failed only at stale active-worklog gate before lint/typecheck/tests.
 - Active-worklog gate corrected on branch.
-- Exact-head Verify main run `36138051390` on `83a0ebdff903944e21e56ce8fcf988d1312bb7ac`: **FULL GREEN**.
+- Exact-head Verify main run `36138051390` on `83a0ebdff903944e21e56ce8fcf988d1312bb7ac`: previous **FULL GREEN**, superseded by new UI/export changes.
+- New compact UI / quantity visibility / Excel verification: Fast Verify run `36143810442` on `852ff7182d9b9937f1099430931d5f881275a3fa` failed only in 4 unit-contract assertions after typecheck + lint passed. Causes: one direct `toLocaleString()` display, two stale ReportingShell browser/favorites expectations, and one semantic accent-class expectation. Fixed on the same branch without restoring browser cards/search.
 - verify ✅
 - db ✅
 - browser-smoke ✅
@@ -68,11 +75,13 @@ State: **BLOCKED**
 - Explicit merge approval: NO.
 - Explicit Production approval: NO.
 - Production migration: NOT ALLOWED.
-- Merge: READY only after explicit approval.
+- Merge: BLOCKED by new UI/export changes until a new exact-head Full Verify is Green.
 
 ## Next action
 
-Wait for explicit merge approval for PR #363. After merge, verify main again. Production migration remains a separate gate requiring explicit approval.
+1. Run exact-head Fast Verify + Full Verify on PR #366 head.
+2. Fix any failure on the same branch only.
+3. Stop before merge and request explicit merge approval.
 
 ## Mandatory update protocol
 

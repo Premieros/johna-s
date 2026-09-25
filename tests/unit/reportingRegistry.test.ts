@@ -45,17 +45,18 @@ describe('Reporting system components (Phase 1-5)', () => {
   // --- ReportingShell.tsx ---
   const shellSource = read('src/features/reporting/ReportingShell.tsx');
 
-  it('ReportingShell renders search bar, categories, favorites, and recent sections', () => {
-    expect(shellSource).toContain('searchQuery');
-    expect(shellSource).toContain('activeCategory');
-    expect(shellSource).toContain('favorites');
-    expect(shellSource).toContain('recent');
+  it('ReportingShell stays minimal and leaves report selection to the compact two-row controls', () => {
+    expect(shellSource).not.toContain('searchQuery');
+    expect(shellSource).not.toContain('activeCategory');
+    expect(shellSource).not.toContain('showReportBrowser');
+    expect(shellSource).not.toContain('ReportCard');
+    expect(shellSource).toContain('ui-accent-top ui-accent-system');
   });
 
-  it('ReportingShell supports localStorage for favorites and recent', () => {
-    expect(shellSource).toContain('localStorage');
-    expect(shellSource).toContain('FAVORITES_KEY');
-    expect(shellSource).toContain('RECENT_KEY');
+  it('ReportingShell no longer persists browser-only favorites/recent state', () => {
+    expect(shellSource).not.toContain('localStorage');
+    expect(shellSource).not.toContain('FAVORITES_KEY');
+    expect(shellSource).not.toContain('RECENT_KEY');
   });
 
   it('ReportingShell handles deep links via searchParams', () => {
