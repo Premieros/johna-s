@@ -62,6 +62,8 @@ Implementation is in review. Merge and Production application remain blocked unt
 - Cleopatra component reconciliation reproduced: theoretical 94,955.78 vs actual 92,928.68.
 - PR #373 marked ready to trigger exact-head Verify.
 - Verify run 36188959349 started on prior head; mandatory log pointer was still stale from merged performance work and is being corrected by this update.
+- Verify #2841 on head `2a5c27fafe518a5cdb76da5e72c67464897c3843` reached lint/typecheck successfully and failed only in 5 unit assertions tied to the new unified navigation/formatting contracts.
+- Fixed all five assertions without weakening authorization or business-source tests: central percent formatter, financial deep-link identity, explicit any-of permission contract, intentional alias discoverability, and canonical helper regex.
 - Current exact-head Full Verify: **PENDING**.
 - Added navigation permission contract test after unifying the sidebar destination.
 
