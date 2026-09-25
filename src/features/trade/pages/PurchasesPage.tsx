@@ -419,7 +419,17 @@ export function PurchasesPage() {
 
   const handleExport = async () => {
     const all = await fetchAllPurchases();
-    exportToExcel(all.map((p) => ({ Invoice: p.invoice_number, Date: formatDate(p.created_at, lang), Supplier: (p as Purchase & { supplier?: Supplier }).supplier?.name || '', Total: p.total, Status: p.status })), 'purchases');
+    exportToExcel(all.map((p) => ({
+      Invoice: p.invoice_number,
+      Date: formatDate(p.created_at, lang),
+      Supplier: (p as Purchase & { supplier?: Supplier }).supplier?.name || '',
+      Payment: purchasePaymentLabel(p.payment_method, lang as 'ar' | 'en'),
+      Total: p.total,
+      Paid: Number(p.paid_amount || 0),
+      Returned: Number(p.returned_amount || 0),
+      SupplierOutstanding: supplierOutstanding(p.total, p.paid_amount, p.returned_amount),
+      Status: purchaseStatusLabel(p.status),
+    })), 'purchases');
   };
 
   const changeOrderStatus = async (p: Purchase, status: string) => {
