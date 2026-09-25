@@ -24,6 +24,7 @@ const REPORT_LABELS = {
   raw_material_consumption: ['حركة واستهلاك الخامات', 'Raw Material Consumption'],
   raw_material_current_cost: ['تكلفة الخامات الحالية', 'Current Raw Material Cost'],
   raw_material_financial: ['التقرير المالي للخامات والمبيعات', 'Raw Material Financial Report'],
+  daily_closing_range: ['حركة الأيام وطرق الدفع', 'Daily Closing & Payments'],
   financial_reconciliation: ['المطابقة المالية', 'Financial Reconciliation'],
 } as const;
 
@@ -33,7 +34,7 @@ const GROUPS: { key: string; icon: typeof BarChart3; reports: ReportType[]; ar: 
   { key: 'sales', icon: BarChart3, reports: ['sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices', 'returns'], ar: 'المبيعات', en: 'Sales' },
   { key: 'trade', icon: ShoppingCart, reports: ['purchases', 'expenses'], ar: 'المشتريات والمصروفات', en: 'Purchases & Expenses' },
   { key: 'performance', icon: CreditCard, reports: ['profit', 'cashier_performance'], ar: 'الأداء والربحية', en: 'Performance & Profit' },
-  { key: 'treasury', icon: CreditCard, reports: ['financial_reconciliation', 'raw_material_financial'], ar: 'الخزنة والبنك', en: 'Treasury & Bank' },
+  { key: 'treasury', icon: CreditCard, reports: ['financial_reconciliation', 'raw_material_financial', 'daily_closing_range'], ar: 'الخزنة والبنك', en: 'Treasury & Bank' },
   { key: 'inventory', icon: Package, reports: ['inventory', 'low_stock', 'raw_material_consumption', 'raw_material_current_cost'], ar: 'المخزون', en: 'Inventory' },
   { key: 'manufacturing', icon: Factory, reports: ['component_consumption', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'production_waste'], ar: 'التصنيع والتكلفة', en: 'Manufacturing & Costing' },
 ];
