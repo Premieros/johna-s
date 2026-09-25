@@ -137,6 +137,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const visibleItems = useMemo(
     () => MENU_ITEMS.filter((item) =>
       (!item.permission || can(item.permission)) &&
+      (!item.permissionsAny || item.permissionsAny.some((permission) => can(permission))) &&
       (!item.superAdminOnly || user?.role === 'super_admin') &&
       (!item.ownerOnly || isAdmin),
     ),
