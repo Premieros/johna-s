@@ -914,9 +914,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
           [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name || '',
           [lang === 'ar' ? 'الكمية الحالية' : 'Current Qty']: Number(row.current_quantity || 0),
-          [lang === 'ar' ? 'تكلفة الوحدة الحالية FIFO' : 'Current FIFO Unit Cost']: Number(row.fifo_current_unit_cost || 0),
+          [lang === 'ar' ? 'سعر الخامة المعتمد (مركز التكلفة)' : 'Canonical Raw Cost (Costing Center)']: Number(row.latest_authoritative_cost || 0),
+          [lang === 'ar' ? 'متوسط تكلفة المخزون المتبقي FIFO' : 'Remaining Inventory FIFO Average Cost']: Number(row.fifo_current_unit_cost || 0),
           [lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value']: Number(row.current_inventory_value || 0),
-          [lang === 'ar' ? 'آخر تكلفة معتمدة' : 'Latest Authoritative Cost']: Number(row.latest_authoritative_cost || 0),
           [lang === 'ar' ? 'مصدر السعر' : 'Price Source']: row.price_source || '',
           [lang === 'ar' ? 'طبقات FIFO المفتوحة' : 'Open FIFO Batches']: Number(row.open_fifo_batches || 0),
         })));
