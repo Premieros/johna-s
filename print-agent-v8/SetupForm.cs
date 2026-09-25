@@ -43,7 +43,7 @@ internal sealed class SetupForm : Form
         _printer = printer;
         _config = config;
 
-        Text = "Smouha Form Print Agent V8.1 Lite — إعداد";
+        Text = "Cleopatra Form Print Agent V8.1.1 Lite — إعداد";
         Width = 760;
         Height = 610;
         StartPosition = FormStartPosition.CenterScreen;
@@ -300,7 +300,7 @@ internal sealed class SetupForm : Form
                 box.SelectedItem.ToString()!,
                 template,
                 80);
-            MessageBox.Show("تم إرسال فورمة V8.1 التجريبية.");
+            MessageBox.Show("تم إرسال فورمة V8.1.1 التجريبية.");
         }
         catch (Exception ex)
         {
