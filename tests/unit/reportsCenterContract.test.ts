@@ -18,7 +18,8 @@ const OPERATIONAL_KEYS = [
   'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
   'top_consumed_components', 'top_consumed_products', 'low_stock',
-  'cashier_performance', 'returns', 'production_waste', 'financial_reconciliation',
+  'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption',
+  'raw_material_current_cost', 'raw_material_financial', 'financial_reconciliation',
 ];
 
 const FINANCIAL_KEYS = [
