@@ -112,8 +112,11 @@ Goal: align the inventory/catalog user surface with the current permanent operat
 
 ## Verification ledger
 
-- Pending first code batch.
-- Required before merge: lint, typecheck, unit, build, fresh DB/schema, integration/security/RLS, Browser Smoke, exact-head Full Verify.
+- Verify Run #2947 / 36241538524: failed only at mandatory worklog structure because the new log lacked the required `## Baseline` heading; no application checks ran.
+- Added the required worklog structure and reran.
+- Verify Run #2948 / 36241797865: mandatory worklog gate ✅ and Supabase identity ✅; stopped at frontend API contract because P1 intentionally replaced frontend `inventory_batches` usage with `raw_material_warehouse_inventory`.
+- Refreshed `supabase/api-contract.json` to match the current P1 frontend source set only; no database schema or Production data changed.
+- Exact-head Full Verify is rerunning on the refreshed contract before P2 writes.
 
 ## Production gate
 
