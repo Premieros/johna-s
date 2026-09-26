@@ -53,6 +53,11 @@ export interface DayClosingReport {
     userId: string; displayName: string; invoiceCount: number; salesTotal: number; discounts: number; returns: number;
     expenses: number; cashPurchases: number;
   }>;
+  rawMaterials: Array<{
+    materialId: string; materialName: string; unit: string; quantity: number;
+    actualQuantity: number; estimatedQuantity: number;
+    actualCost: number; estimatedCost: number; displayedCost: number;
+  }>;
 }
 
 const n = (v: unknown) => Number(v || 0);
@@ -63,6 +68,31 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
   if (error) throw new Error(error.message);
   const raw = data as Record<string, unknown> | null;
   if (!raw?.success) throw new Error(String(raw?.detail || raw?.error || 'Could not load day closing report'));
+
+  const rawMaterials: DayClosingReport['rawMaterials'] = [];
+  const rawWindowStart = s(raw.window_start);
+  const rawWindowEnd = s(raw.window_end);
+  if (rawWindowStart && rawWindowEnd) {
+    const { data: rawCostRows, error: rawCostError } = await supabase.rpc('get_raw_consumption_cost_breakdown', {
+      p_branch_id: branchId,
+      p_from: rawWindowStart,
+      p_to: rawWindowEnd,
+    });
+    if (rawCostError) throw new Error(`DAY_REPORT_RAW_COST_LOAD_FAILED: ${rawCostError.message}`);
+    for (const row of (rawCostRows || []) as Array<Record<string, unknown>>) {
+      rawMaterials.push({
+        materialId: s(row.raw_material_id),
+        materialName: s(row.raw_material_name),
+        unit: s(row.unit_name),
+        quantity: n(row.consumed_quantity),
+        actualQuantity: n(row.actual_quantity),
+        estimatedQuantity: n(row.estimated_quantity),
+        actualCost: n(row.actual_cost),
+        estimatedCost: n(row.estimated_cost),
+        displayedCost: n(row.displayed_cost),
+      });
+    }
+  }
 
   return {
     branchId: s(raw.branch_id),
@@ -137,6 +167,7 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
         discounts: n(r.discounts), returns: n(r.returns), expenses: n(r.expenses), cashPurchases: n(r.cash_purchases),
       };
     }) : [],
+    rawMaterials,
   };
 }
 
@@ -192,6 +223,28 @@ ${report.historicalReconciled ? `<div style="margin-top:10px;padding:10px;border
 <h2>${isAr ? 'كل مستخدم — التفاصيل' : 'Every user — details'}</h2>
 <table><thead><tr><th>${isAr ? 'المستخدم' : 'User'}</th><th class="num">${isAr ? 'الفواتير' : 'Invoices'}</th><th class="num">${isAr ? 'المبيعات' : 'Sales'}</th><th class="num">${isAr ? 'الخصومات' : 'Discounts'}</th><th class="num">${isAr ? 'المرتجعات' : 'Returns'}</th><th class="num">${isAr ? 'المصروفات' : 'Expenses'}</th><th class="num">${isAr ? 'مشتريات كاش' : 'Cash purchases'}</th></tr></thead>
 <tbody>${report.users.map(x=>`<tr><td>${escapeHtml(x.displayName)}</td><td class="num">${x.invoiceCount}</td><td class="num">${money(x.salesTotal)}</td><td class="num">${money(x.discounts)}</td><td class="num">${money(x.returns)}</td><td class="num">${money(x.expenses)}</td><td class="num">${money(x.cashPurchases)}</td></tr>`).join('')}</tbody></table>
+
+${report.rawMaterials.length > 0 ? `
+<h2>${isAr ? 'المواد الخام المستهلكة' : 'Raw materials consumed'}</h2>
+<table><thead><tr>
+<th>${isAr ? 'الخامة' : 'Material'}</th>
+<th class="num">${isAr ? 'الكمية' : 'Quantity'}</th>
+<th class="num">${isAr ? 'التكلفة الفعلية' : 'Actual cost'}</th>
+<th class="num">${isAr ? 'السالب التقديري' : 'Negative estimate'}</th>
+<th class="num">${isAr ? 'الإجمالي المعروض' : 'Displayed total'}</th>
+</tr></thead><tbody>
+${report.rawMaterials.map(x=>`<tr>
+<td>${escapeHtml(x.materialName)}</td>
+<td class="num">${x.quantity} ${escapeHtml(x.unit)}</td>
+<td class="num">${money(x.actualCost)}</td>
+<td class="num">${x.estimatedQuantity > 0 ? money(x.estimatedCost) : '-'}</td>
+<td class="num strong">${money(x.displayedCost)}</td>
+</tr>`).join('')}
+</tbody></table>
+<div style="font-size:10px;color:#6b7280;margin-top:-10px;margin-bottom:16px;">
+${isAr ? 'التكلفة الفعلية لا تشمل الجزء السالب غير المسوّى؛ الجزء السالب يظهر كتقدير مستقل حتى وصول الشراء وتسوية FIFO.' : 'Actual cost excludes unsettled negative stock; negative consumption is shown separately as an estimate until a purchase settles FIFO.'}
+</div>
+` : ''}
 
 <h2>${isAr ? 'المصروفات — بدون إخفاء' : 'Expenses — full detail'}</h2>
 <table><thead><tr><th>${isAr ? 'التصنيف' : 'Category'}</th><th>${isAr ? 'البيان' : 'Description'}</th><th>${isAr ? 'المستخدم' : 'User'}</th><th>${isAr ? 'الدفع' : 'Payment'}</th><th class="num">${isAr ? 'المبلغ' : 'Amount'}</th></tr></thead>
