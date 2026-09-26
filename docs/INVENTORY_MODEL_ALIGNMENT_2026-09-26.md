@@ -91,6 +91,17 @@ Goal: align the inventory/catalog user surface with the current permanent operat
 - No Production database writes performed.
 - No printing/KDS/send-to-kitchen code modified.
 
+### P1 transfer correction — implemented
+
+- `TransfersPage` is now raw-material-only; the finished-product choice and second destination raw selector were removed.
+- Cross-branch destination raw identity is resolved internally by exact normalized name + unit identity and fails closed unless exactly one destination definition exists.
+- Read-only Production audit before implementation: 803 active raw-material definitions; 802 have exactly one cross-branch name+unit match, 1 has no match, 0 are ambiguous. The unmatched definition remains fail-closed instead of being guessed or auto-created.
+- Same-branch raw transfer is now allowed by the UI because the already-applied Stage-B contract is warehouse-aware and patches create/approve transfer to use source/destination warehouse FIFO.
+- Transfer preview cost now reads `raw_material_warehouse_inventory` for the selected source warehouse instead of branch-average raw cost.
+- Application `createTransfer` typing is narrowed to raw-material lines. Historical database product-transfer compatibility is not deleted or rewritten.
+- Regression contract updated to lock raw-only UX, one visible raw selector, deterministic destination resolution, warehouse-aware same-branch behavior, and source-warehouse costing.
+- No Production write/migration; no print/KDS/send-to-kitchen code touched.
+
 ## Verification ledger
 
 - Pending first code batch.
@@ -106,4 +117,4 @@ State: **BLOCKED**
 
 ## Next action
 
-Implement P1 only: correct the transfer screen/API contract on this branch after verifying the latest transfer RPC and warehouse-aware raw-material behavior. Stop before any Production migration or merge.
+Run focused/unit/type verification for P1 on the current exact head. Fix only regressions caused by the transfer correction. Do not begin P2 until P1 is green. Stop before any Production migration or merge.
