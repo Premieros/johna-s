@@ -13,6 +13,8 @@ type CloseResult = {
   open_order_count?: number;
   open_table_count?: number;
   open_orders_preserved?: boolean;
+  next_shift_id?: string | null;
+  next_shift_opening_amount?: number | null;
 };
 
 describe.skipIf(skip)('shift close open-order guard', () => {
@@ -125,7 +127,7 @@ describe.skipIf(skip)('shift close open-order guard', () => {
     expect(state.rows[0].status).toBe('open');
   });
 
-  it('permissioned override closes only the shift and preserves open orders', async () => {
+  it('permissioned override closes the shift, preserves orders, and opens a zero successor shift', async () => {
     await client.query('UPDATE public.shifts SET cashier_id=$1 WHERE id=$2', [overrideUser, shiftA]);
 
     const result = await asUser(
@@ -133,20 +135,47 @@ describe.skipIf(skip)('shift close open-order guard', () => {
       `SELECT public.close_shift_with_open_orders($1,100,'authorized override') AS r`,
       [shiftA],
     );
-    expect(result.rows[0].r).toMatchObject({
+    const close = result.rows[0].r as CloseResult;
+    expect(close).toMatchObject({
       success: true,
       shift_id: shiftA,
       open_orders_preserved: true,
       open_order_count: 1,
       open_table_count: 1,
+      next_shift_opening_amount: 0,
+    });
+    expect(close.next_shift_id).toBeTruthy();
+
+    const order = await client.query<{ status: string; table_id: string | null }>(
+      'SELECT status,table_id FROM public.orders WHERE id=$1',
+      [orderA],
+    );
+    expect(order.rows[0]).toMatchObject({ status: 'open', table_id: tableA });
+
+    const oldShift = await client.query<{ status: string }>('SELECT status FROM public.shifts WHERE id=$1', [shiftA]);
+    expect(oldShift.rows[0].status).toBe('closed');
+
+    const successor = await client.query<{ status: string; opening_amount: string; branch_id: string }>(
+      'SELECT status,opening_amount::text,branch_id FROM public.shifts WHERE id=$1',
+      [close.next_shift_id],
+    );
+    expect(successor.rows[0]).toEqual({
+      status: 'open',
+      opening_amount: '0.00',
+      branch_id: branchA,
     });
 
-    const order = await client.query<{ status: string }>('SELECT status FROM public.orders WHERE id=$1', [orderA]);
-    expect(order.rows[0].status).toBe('open');
+    const successorOpening = await client.query<{ amount: string }>(
+      `SELECT amount::text
+         FROM public.shift_operations
+        WHERE shift_id=$1 AND operation_type='opening'`,
+      [close.next_shift_id],
+    );
+    expect(successorOpening.rows[0].amount).toBe('0.00');
 
-    const shift = await client.query<{ status: string }>('SELECT status FROM public.shifts WHERE id=$1', [shiftA]);
-    expect(shift.rows[0].status).toBe('closed');
-
+    // Restore the fixture for the next independent guard assertion.
+    await client.query('DELETE FROM public.shift_operations WHERE shift_id=$1', [close.next_shift_id]);
+    await client.query('DELETE FROM public.shifts WHERE id=$1', [close.next_shift_id]);
     await client.query(
       `UPDATE public.shifts
        SET status='open',closed_at=NULL,expected_amount=100,actual_amount=NULL,difference=0
