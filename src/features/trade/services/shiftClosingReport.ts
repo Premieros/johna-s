@@ -332,7 +332,11 @@ export async function fetchShiftClosingDetails(shiftId: string, branchId?: strin
       materialName: data.name,
       quantity: parseFloat(data.quantity.toFixed(3)),
       unit: data.unit,
+      actualQuantity: 0,
+      estimatedQuantity: parseFloat(data.quantity.toFixed(3)),
+      actualCost: 0,
       estimatedCost: parseFloat(data.estimatedCost.toFixed(2)),
+      displayedCost: parseFloat(data.estimatedCost.toFixed(2)),
     })),
   };
 }
