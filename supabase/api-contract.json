@@ -647,6 +647,12 @@
       ]
     },
     {
+      "name": "get_raw_material_cost_valuation_overview",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "get_rfq_comparison",
       "params": [
         "rfq_id"
