@@ -32,7 +32,16 @@ State: **IN_PROGRESS**
 - Treasury statement: accounting movements remain authoritative; day-close rows are displayed as reconciliation markers containing cash/card/day-net and cumulative closing balances, without affecting running balance twice.
 
 ## Change ledger
-- Pending.
+- Replaced the old `shifts_nonnegative_amounts` constraint with opening-only nonnegative protection; expected/actual/difference may be negative.
+- `open_shift` now ignores any supplied opening amount and always persists shift opening = 0 plus a zero opening operation.
+- Removed frontend minimum-zero restriction from shift close inputs and clearly labels negative shift net as allowed.
+- Shifts admin no longer asks the operator to enter an opening balance; it explains that branch treasury is separate.
+- Added `get_branch_treasury_day_close_reconciliation(branch, limit)`.
+- Reconciliation rows read `daily_closes` for cash/card/credit day totals and read the actual journal ledger for cash/bank closing balances.
+- Reconciliation rows are read-only markers: no journal/treasury transaction is inserted.
+- Treasury page now shows day-close cash sales, bank/card sales, movement since previous close, cash closing balance, bank closing balance, and total branch treasury after close.
+- Updated API contract and added unit regression coverage.
+- Cleopatra/Smoha historical close correction remains pending until deployment.
 
 ## Verification ledger
 - Pending.
