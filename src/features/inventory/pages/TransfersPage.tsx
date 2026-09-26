@@ -84,7 +84,6 @@ export function TransfersPage() {
   const sourceWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.source_branch_id), [warehouses, form.source_branch_id]);
   const destinationWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.destination_branch_id), [warehouses, form.destination_branch_id]);
   const sourceRawMaterials = useMemo(() => rawMaterials.filter((r) => r.branch_id === form.source_branch_id), [rawMaterials, form.source_branch_id]);
-  const destinationRawMaterials = useMemo(() => rawMaterials.filter((r) => r.branch_id === form.destination_branch_id), [rawMaterials, form.destination_branch_id]);
 
   const transferDestinationBranchId = (tr: TransferRow) => tr.to_branch_id || tr.to_warehouse?.branch_id || tr.branch_id;
   const destinationBranchName = (tr: TransferRow) => branches.find((branch) => branch.id === transferDestinationBranchId(tr))?.name || '-';
