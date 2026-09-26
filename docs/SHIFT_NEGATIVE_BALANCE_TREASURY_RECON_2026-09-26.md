@@ -19,6 +19,13 @@ State: **IN_PROGRESS**
 - No direct write to main.
 - No Production migration before exact-head Full Verify Green + explicit approval.
 
+## Baseline
+- Base `main@da53003f0e6fea4f8d2428f3e850d6d003e1c4cd`.
+- Production Supabase is `azzdesuowpdcoflmyezn`.
+- Current Production still has the legacy nonnegative shift-close constraint until this PR is verified, merged, and migrated.
+- Cleopatra and Smoha manual administrative closes were temporarily reconciled with carried treasury opening balances; those two closed rows require correction back to opening=0 after the model migration is deployed.
+- Branch treasury journal balances and historical accounting entries must remain unchanged by that correction.
+
 ## Root-cause ledger
 - `shifts_nonnegative_amounts` blocks negative expected/actual shift close values.
 - `open_shift` accepts a non-zero opening amount even though the operating model requires every shift drawer to start at zero.
