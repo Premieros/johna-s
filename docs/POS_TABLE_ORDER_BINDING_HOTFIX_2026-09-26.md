@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/pos-table-order-binding-hotfix-20260926`
-Current PR: `#0`
+Current PR: `#384`
 Last updated: 2026-09-26 Africa/Cairo
 
 ## Work status
