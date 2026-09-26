@@ -156,6 +156,19 @@ FOR EACH ROW
 EXECUTE FUNCTION public._raw_inventory_actual_avg_cost_guard();
 
 
+-- Recompute the stored actual average once after the trigger is installed.
+-- This is valuation-only: quantity, ledger cost and accounting journals are untouched.
+UPDATE public.raw_material_inventory rmi
+SET avg_cost = rmi.avg_cost
+WHERE EXISTS (
+  SELECT 1
+  FROM public.raw_material_batches b
+  WHERE b.raw_material_id = rmi.raw_material_id
+    AND b.branch_id = rmi.branch_id
+    AND b.quantity < 0
+);
+
+
 CREATE OR REPLACE FUNCTION public.get_raw_material_cost_valuation_overview(
   p_branch_id uuid DEFAULT NULL
 )
