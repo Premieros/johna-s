@@ -454,6 +454,13 @@
       ]
     },
     {
+      "name": "get_branch_treasury_day_close_reconciliation",
+      "params": [
+        "branch_id",
+        "limit"
+      ]
+    },
+    {
       "name": "get_cash_flow",
       "params": [
         "branch_id",
