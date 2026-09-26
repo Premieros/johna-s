@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
 import { buildThermalZReportHtml, buildA4ZReportHtml, type ShiftClosingSummary } from '@/features/trade/services/shiftClosingReport';
 import { fetchShiftClosingReportServer } from '@/features/trade/services/shiftClosingFinancials';
+import { enqueueAutomaticShiftZReport } from '@/features/trade/services/automaticShiftPrint';
 
 interface ShiftModalProps {
   isOpen: boolean;
@@ -145,6 +146,20 @@ export function ShiftModal({
         show(result?.detail || result?.error || (isAr ? 'فشل الإغلاق الإجباري' : 'Force close failed'), 'error');
         return;
       }
+      const zQueued = await enqueueAutomaticShiftZReport({
+        shiftId: activeShift.id,
+        branchId: branchId || '',
+        currency,
+        lang,
+      });
+      if (!zQueued.accepted) {
+        show(
+          isAr
+            ? `تم إغلاق الوردية ولكن تعذر إنشاء أمر طباعة Z-Report: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`
+            : `Shift closed, but Z-Report print job could not be queued: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`,
+          'error',
+        );
+      }
       show(isAr ? 'تم إغلاق الوردية إجباريًا بنجاح' : 'Shift force-closed successfully', 'success');
       onShiftClosed();
       onClose();
@@ -238,6 +253,20 @@ export function ShiftModal({
       }
 
       setCloseBlock(null);
+      const zQueued = await enqueueAutomaticShiftZReport({
+        shiftId: activeShift.id,
+        branchId: branchId || '',
+        currency,
+        lang,
+      });
+      if (!zQueued.accepted) {
+        show(
+          isAr
+            ? `تم إغلاق الوردية ولكن تعذر إنشاء أمر طباعة Z-Report: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`
+            : `Shift closed, but Z-Report print job could not be queued: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`,
+          'error',
+        );
+      }
       show(isAr ? 'تم إغلاق الوردية بنجاح' : 'Shift closed successfully', 'success');
       onShiftClosed();
       onClose();
@@ -270,6 +299,20 @@ export function ShiftModal({
       }
 
       setCloseBlock(null);
+      const zQueued = await enqueueAutomaticShiftZReport({
+        shiftId: activeShift.id,
+        branchId: branchId || '',
+        currency,
+        lang,
+      });
+      if (!zQueued.accepted) {
+        show(
+          isAr
+            ? `تم إغلاق الوردية ولكن تعذر إنشاء أمر طباعة Z-Report: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`
+            : `Shift closed, but Z-Report print job could not be queued: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`,
+          'error',
+        );
+      }
       show(
         result.next_shift_id
           ? (isAr
