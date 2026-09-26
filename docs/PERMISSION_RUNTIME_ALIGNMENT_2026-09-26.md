@@ -1,5 +1,9 @@
 # Permission Runtime Alignment — 2026-09-26
 
+Branch: `development/permission-runtime-alignment-20260926`
+Current PR: `#383`
+Last updated: 2026-09-26
+
 ## Work status
 **BLOCKED**
 
@@ -40,6 +44,7 @@
 - No backend/RLS/Production role-data changes; print/KDS/kitchen-send paths untouched.
 
 ## Verification ledger
+- Verify #2999 / 36250269870 failed only at the mandatory worklog gate before lint/type/unit/build/DB/browser: the log used bullet-prefixed Branch metadata and omitted exact top-level `Current PR` / `Last updated` fields required by `activeWorklogGateContract`. This is documentation-gate drift only; runtime tests were not reached.
 - Read-only Production permission/RLS audit completed before implementation.
 - No Production writes performed.
 
