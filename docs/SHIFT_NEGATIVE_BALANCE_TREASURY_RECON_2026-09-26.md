@@ -7,7 +7,7 @@ Current PR: `#377`
 Last updated: 2026-09-26
 
 ## Work status
-State: **IN_PROGRESS**
+State: **BLOCKED**
 
 ## Guardrails
 - Shift opening balance is always zero.
