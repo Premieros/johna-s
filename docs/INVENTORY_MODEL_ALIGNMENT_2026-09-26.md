@@ -143,7 +143,18 @@ Progress continuity rule:
 - Stock-count copy now states that counts apply to the selected warehouse and no longer claims raw stock is branch-level.
 - No schema/RLS/Production migration was introduced for these P2 UI changes.
 
+### P2 FIFO batch surface — implemented
+
+- `InventoryBatchesPage` now reads `raw_material_batches` as a read-only FIFO lot/history surface.
+- Removed the finished-product batch creation workflow and `production` source choice from current user-facing operation.
+- Current page shows raw material, warehouse, branch, residual quantity, unit cost, expiry and source.
+- Historical `inventory_batches` and legacy RPCs remain untouched for backward/audit compatibility.
+- No Production migration or historical data mutation.
+
 ## Verification ledger
+
+- Browser Smoke Run #2959 / 36243150093: verify ✅, DB/integration/RLS ✅, browser 115/116 passed; one inventory E2E failed because its mock still served branch-level `raw_material_inventory` and old row test IDs after P2 became warehouse-aware. Classified as stale test fixture, not runtime regression.
+- Updated `tests/e2e/inventory-raw-materials.spec.ts` to provide an explicit warehouse, serve `raw_material_warehouse_inventory`, and assert the warehouse-specific row identity. No runtime code was changed for this failure.
 
 - Verify Run #2947 / 36241538524: failed only at mandatory worklog structure because the new log lacked the required `## Baseline` heading; no application checks ran.
 - Added the required worklog structure and reran.
@@ -161,7 +172,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Run focused contract/type validation for the P2 inventory and stock-count changes. Fix only change-related issues. Then audit and align `InventoryBatchesPage` away from finished-product/production batch concepts toward raw-material FIFO history without deleting historical data. Use Fast Verify at the end of the cohesive P2 group; defer Full Verify to the final package gate.
+Confirm the focused/browser fixture correction, then begin P3 audit of `InventoryUnitsPage`, `ProductSetupWizardPage`, and `PricingPage`. Replace only user-facing manufactured/production terminology and stale filters that conflict with the current component-group model; keep schema identifiers temporarily where changing them would add migration risk. Record each logical group here and use Fast Verify at the P3 group boundary.
 
 ## Mandatory update protocol
 
