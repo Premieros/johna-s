@@ -24,6 +24,7 @@ import { buildThermalZReportText, buildA4ZReportHtml } from '../services/shiftCl
 import { fetchShiftClosingReportServer } from '../services/shiftClosingFinancials';
 import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '../services/dayClosingReport';
 import { enqueueCloudReportPrint } from '../../pos/services/cloudPrint';
+import { enqueueAutomaticShiftZReport } from '../services/automaticShiftPrint';
 
 interface ShiftUserRow { id: string; full_name: string | null; email: string | null; }
 interface ActiveShiftPayload { open?: boolean; shift?: { id?: string; expected?: number }; }
@@ -198,6 +199,22 @@ export function ShiftsPage() {
       next_shift_id: res.next_shift_id ?? null,
       next_shift_opening_amount: res.next_shift_opening_amount ?? null,
     });
+
+    const zQueued = await enqueueAutomaticShiftZReport({
+      shiftId: closeTarget.id,
+      branchId: closeTarget.branch_id,
+      currency,
+      lang,
+    });
+    if (!zQueued.accepted) {
+      show(
+        isAr
+          ? `تم إغلاق الوردية ولكن تعذر إنشاء أمر طباعة Z-Report: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`
+          : `Shift closed, but Z-Report print job could not be queued: ${zQueued.error || 'PRINT_QUEUE_FAILED'}`,
+        'error',
+      );
+    }
+
     show(
       preservedOpenOrders
         ? (res.next_shift_id
