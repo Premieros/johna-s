@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/shift-negative-balance-zero-opening-20260926`
-Current PR: pending
+Current PR: `#377`
 Last updated: 2026-09-26
 
 ## Work status
@@ -39,8 +39,12 @@ State: **IN_PROGRESS**
 - Added `get_branch_treasury_day_close_reconciliation(branch, limit)`.
 - Reconciliation rows read `daily_closes` for cash/card/credit day totals and read the actual journal ledger for cash/bank closing balances.
 - Reconciliation rows are read-only markers: no journal/treasury transaction is inserted.
+- `close_shift_with_open_orders` now closes the current shift and atomically opens a zero-opening successor shift when effective open/held orders remain.
+- Orders/tables/KDS rows are not mutated or reassigned because orders are branch-level, not shift-owned; later payment resolves against the new active shift through the canonical payment path.
 - Treasury page now shows day-close cash sales, bank/card sales, movement since previous close, cash closing balance, bank closing balance, and total branch treasury after close.
 - Updated API contract and added unit regression coverage.
+- Updated open-order close integration coverage to require a zero-opening successor shift while preserving the exact order/table state.
+- Added integration coverage proving a zero-opening shift can close with negative expected/actual values.
 - Cleopatra/Smoha historical close correction remains pending until deployment.
 
 ## Verification ledger
