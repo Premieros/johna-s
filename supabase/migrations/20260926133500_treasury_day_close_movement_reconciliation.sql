@@ -128,7 +128,7 @@ BEGIN
           'total_effect', movement.total_effect
         )
         ORDER BY movement.created_at, movement.journal_entry_id
-      ), '[]'::jsonb) AS details
+      ) FILTER (WHERE movement.journal_entry_id IS NOT NULL), '[]'::jsonb) AS details
     FROM closes c
     LEFT JOIN LATERAL (
       SELECT
