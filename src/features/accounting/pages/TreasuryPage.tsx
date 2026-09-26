@@ -24,6 +24,7 @@ import type { TreasurySource, TreasuryTransaction } from '@/lib/types';
 type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
 
 interface TreasuryDayCloseRow {
+  id?: string;
   daily_close_id: string;
   business_date: string;
   closed_at: string;
