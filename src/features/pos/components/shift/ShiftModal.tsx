@@ -387,11 +387,10 @@ export function ShiftModal({
               {/* Actual Cash Input */}
               <div>
                 <label className="mb-2 block text-xs font-black text-ui-muted">
-                  {isAr ? 'المبلغ الفعلي بالدرج (العد الفعلي) *' : 'Actual Cash in Drawer *'}
+                  {isAr ? 'صافي رصيد الشفت الفعلي (يسمح بالسالب) *' : 'Actual Shift Net (negative allowed) *'}
                 </label>
                 <input
                   type="number"
-                  min={0}
                   step="any"
                   required
                   value={closingCash}
