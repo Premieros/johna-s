@@ -55,6 +55,28 @@ Goal: align the inventory/catalog user surface with the current permanent operat
 5. Legacy production application code still exists on current `main` even though old production routes redirect away from it. PR #372 attempted retirement from an older base and is now stale/non-mergeable.
 6. Reporting and permissions still contain manufacturing-era labels; reporting is sensitive because recent report rebuilds exist and must be reconciled before writes.
 
+## Verification policy — approved 2026-09-26
+
+User-approved policy: **Feature-first, focused-test, Fast-Verify, Full-Verify only at phase/merge gates**.
+
+Rules:
+- Do not wait for Full Verify after every small UI/application commit.
+- After each logical change, run the smallest relevant focused unit/contract check first.
+- Use typecheck/lint only when the touched surface can affect those contracts.
+- Run **Fast Verify** after a cohesive repair group, not after every file/commit.
+- Run DB integration / Fresh DB / RLS / Browser Smoke early only when the change actually touches database schema, migration, RLS/security, or a runtime path that requires those gates.
+- For UI-only/current-API alignment work, defer DB and Browser Smoke to the phase gate.
+- Run **one exact-head Full Verify** after the complete inventory-alignment package is stable and before merge.
+- Any Production migration remains separately gated: Full Verify Green + explicit approval.
+- Verification failures must be classified as either change-related or gate/infrastructure/contract drift before modifying runtime code.
+- Never weaken or delete tests merely to make a gate faster.
+
+Progress continuity rule:
+- This file is the authoritative execution log. Do not rely on chat memory.
+- Before each new logical write, read the latest **Next action**, **Change ledger**, and **Verification ledger** here.
+- After each logical change group, record what changed, exact head/commit when known, what was verified, and the next action.
+- If branch HEAD/main changes unexpectedly, STOP_AND_RECONCILE and update this log before continuing.
+
 ## Execution phases
 
 ### P0 — Safety and contract audit
@@ -128,8 +150,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Run focused/unit/type verification for P1 on the current exact head. Fix only regressions caused by the transfer correction. Do not begin P2 until P1 is green. Stop before any Production migration or merge.
-
+Continue P2 only after a focused P1 contract check / Fast Verify is satisfactory. Do not wait for a new Full Verify between each P2 UI change. Align the primary inventory screen to warehouse-aware raw-material stock, then stock-count/batch surfaces, recording each logical group here. Run one exact-head Full Verify after the complete package is stable and before merge.
 
 ## Mandatory update protocol
 
