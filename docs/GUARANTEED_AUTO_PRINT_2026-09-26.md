@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/guaranteed-auto-print-20260926`
-Current PR: pending
+Current PR: `#378`
 Last updated: 2026-09-26
 
 ## Work status
