@@ -26,10 +26,12 @@ describe('costing latest raw-material price contract', () => {
     expect(page).toContain("type Tab = 'overview' | 'raw_prices' | 'orders' | 'supplier'");
     expect(page).toContain('getRawMaterialCostOverview');
     expect(page).toContain('getRawMaterialCostHistory');
-    expect(page).toContain("isAr ? 'آخر سعر / وحدة المخزون' : 'Latest / stock unit'");
+    expect(page).toContain("isAr ? 'السعر المعروف / وحدة' : 'Known cost / unit'");
+    expect(page).toContain("isAr ? 'القيمة الفعلية' : 'Actual value'");
+    expect(page).toContain("isAr ? 'تكلفة السالب التقديرية' : 'Estimated negative cost'");
     expect(page).toContain("isAr ? 'مصدر السعر' : 'Price source'");
     expect(page).toContain("isAr ? 'تاريخ السعر' : 'Price date'");
-    expect(api).toContain("rpc('get_raw_material_cost_overview', p)");
+    expect(api).toContain("rpc('get_raw_material_cost_valuation_overview', p)");
     expect(api).toContain("rpc('get_raw_material_cost_history', p)");
   });
 });
