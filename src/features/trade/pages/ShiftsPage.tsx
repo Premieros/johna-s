@@ -152,7 +152,7 @@ export function ShiftsPage() {
     }
     const { data, error: openError } = await api.shifts.open({
       p_branch_id: targetBranchId,
-      p_opening_amount: openForm.opening_amount || 0,
+      p_opening_amount: 0,
       p_notes: openForm.notes || null,
     });
     if (openError) { show(openError.message, 'error'); return; }
@@ -162,7 +162,7 @@ export function ShiftsPage() {
       if (res?.error === 'SHIFT_ALREADY_OPEN') { setOpenModal(false); reloadShifts(); }
       return;
     }
-    await logAudit('create', 'shifts', res.shift_id || '', { opening_amount: openForm.opening_amount });
+    await logAudit('create', 'shifts', res.shift_id || '', { opening_amount: 0 });
     show(t('shiftOpened'), 'success');
     setOpenModal(false);
     setOpenForm({ opening_amount: 0, notes: '' });
@@ -447,7 +447,9 @@ export function ShiftsPage() {
       <Modal open={openModal} onClose={() => setOpenModal(false)} title={t('openShift')}>
         <div className="space-y-4">
           <div className="p-4 bg-ui-page-alt rounded-lg text-sm text-ui-muted">{isAr ? `الفرع: ${branches.find((b) => b.id === (branchFilter || user?.branch_id))?.name || '-'}` : `Branch: ${branches.find((b) => b.id === (branchFilter || user?.branch_id))?.name || '-'}`}</div>
-          <Input type="number" min={0} step="0.01" label={t('openingAmount')} value={String(openForm.opening_amount)} onChange={(e) => setOpenForm({ ...openForm, opening_amount: Number(e.target.value) })} />
+          <div className="rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
+            {isAr ? 'رصيد بداية الشفت ثابت = 0. خزنة الفرع المتراكمة مستقلة عن رصيد الشفت.' : 'Shift opening balance is fixed at 0. The cumulative branch treasury is tracked separately.'}
+          </div>
           <Textarea label={t('notes')} value={openForm.notes} onChange={(e) => setOpenForm({ ...openForm, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setOpenModal(false)}>{t('cancel')}</Button><Button onClick={openShift}><Play className="w-4 h-4" /> {t('openShift')}</Button></div>
         </div>
@@ -501,7 +503,7 @@ export function ShiftsPage() {
           </div>}
 
           <div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'thermal')}><Printer className="w-4 h-4" /> {isAr ? 'معاينة إيصال Z-Report' : 'Preview Thermal'}</Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'a4')}><FileText className="w-4 h-4" /> {isAr ? 'معاينة تقرير A4' : 'Preview A4'}</Button></div>
-          <Input type="number" min={0} step="0.01" label={isAr ? 'المبلغ الفعلي بالدرج (العد الفعلي) *' : t('actualAmount')} value={String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: Number(e.target.value) })} />
+          <Input type="number" step="0.01" label={isAr ? 'صافي رصيد الشفت الفعلي (يسمح بالسالب) *' : t('actualAmount')} value={String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: Number(e.target.value) })} />
           <Textarea label={isAr ? 'ملاحظات إغلاق الوردية' : t('notes')} value={closeForm.notes} onChange={(e) => setCloseForm({ ...closeForm, notes: e.target.value })} rows={2} />
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="secondary" disabled={closing} onClick={() => { setCloseTarget(null); setCloseBlock(null); }}>{t('cancel')}</Button>
