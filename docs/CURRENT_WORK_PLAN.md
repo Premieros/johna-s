@@ -4,7 +4,7 @@
 
 - Mandatory active work log: `docs/SHIFT_NEGATIVE_BALANCE_TREASURY_RECON_2026-09-26.md`
 - Current active branch: `development/shift-negative-balance-zero-opening-20260926`
-- Current PR: `pending`
+- Current PR: `#377`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
