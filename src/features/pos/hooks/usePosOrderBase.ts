@@ -8,6 +8,7 @@ import { computePosTotals, computeLineDiscount, type PosPaymentMethod } from '@/
 import { logAudit } from '@/lib/audit';
 import type { CartItem, Customer, DiningTable, Order, OrderItem, OrderType, Product, RpcResult, Settings } from '@/lib/types';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
+import { resolveOrderBindingForSave } from '../utils/orderBinding';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '../utils/cart';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
@@ -587,13 +588,18 @@ export function usePosOrder(input: UsePosOrderInput) {
   const persistCart = useCallback(async (status: 'open' | 'held'): Promise<PersistResult> => {
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
     const itemRows = cartToItems(cart);
-    const targetTable = orderType === 'dine_in' ? tableId : null;
+    const binding = resolveOrderBindingForSave({
+      activeOrderId,
+      orderType,
+      tableId,
+      activeTableId: activeTable?.id ?? null,
+    });
 
     if (activeOrderId) {
       const { data, error } = await api.floorPlan.updateOrder({
         p_order_id: activeOrderId,
-        p_order_type: orderType,
-        p_table_id: targetTable,
+        p_order_type: binding.orderType,
+        p_table_id: binding.tableId,
         p_customer_id: customerId || null,
         p_guest_count: guestCount,
         p_notes: orderNotes || null,
@@ -613,8 +619,8 @@ export function usePosOrder(input: UsePosOrderInput) {
 
     const { data, error } = await api.floorPlan.createOrder({
       p_branch_id: branchId,
-      p_order_type: orderType,
-      p_table_id: targetTable,
+      p_order_type: binding.orderType,
+      p_table_id: binding.tableId,
       p_customer_id: customerId || null,
       p_guest_count: guestCount,
       p_notes: orderNotes || null,
@@ -792,6 +798,12 @@ export function usePosOrder(input: UsePosOrderInput) {
       const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
       const itemsPayload = cartToItems(cart);
       const paidAmountToUse = paymentMethod === 'credit' ? 0 : paidAmount || total;
+      const binding = resolveOrderBindingForSave({
+        activeOrderId,
+        orderType,
+        tableId,
+        activeTableId: activeTable?.id ?? null,
+      });
 
       const { result, error: saleError } = await processSaleForOrder({
         p_invoice_number: invoiceNumber,
@@ -810,8 +822,8 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_payment_method: paymentMethod,
         p_status: 'completed',
         p_items: itemsPayload,
-        p_order_type: orderType,
-        p_table_id: orderType === 'dine_in' ? tableId : null,
+        p_order_type: binding.orderType,
+        p_table_id: binding.tableId,
         p_order_id: activeOrderId,
         p_guest_count: guestCount,
       });
