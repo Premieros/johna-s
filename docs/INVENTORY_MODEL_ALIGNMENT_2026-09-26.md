@@ -159,6 +159,15 @@ Progress continuity rule:
 - Updated smoke/navigation/drift/history tests so they no longer require retired production pages.
 - Production database objects and historical data remain untouched.
 
+### P5 reporting and active UI terminology — in progress
+
+- Renamed the report-center user-facing category from **Manufacturing & Costing / التصنيع والتكلفة** to **Components & Costing / المكونات والتكلفة** while preserving internal report keys for compatibility.
+- Renamed the user-facing `production_waste` report to **Waste Report / تقرير الهالك**; underlying report key/data source remain unchanged.
+- Updated component-consumption descriptions to describe sales/runtime raw-material consumption instead of production.
+- Updated `ProductsPage` composition copy from manufactured-item language to **component groups**, and clarified that raw-material deduction occurs when the order is sent to the kitchen.
+- Updated active i18n labels so the legacy schema value `manufactured` is presented as **With Components / بمكونات**, and `inventoryUnits` is presented as **Component Groups / مجموعات المكونات**.
+- No schema/RLS/Production data change; only current runtime labels and descriptions were changed.
+
 ## Verification ledger
 
 - Verify Run #2975 / 36244316244: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, application/test typecheck ✅. Unit stage failed only on three stale retirement-era tests: one deleted production-domain authority test and two assertions still requiring the old "Manufactured Items / المصنعات" labels. Build/DB/browser did not run after unit failure.
@@ -186,7 +195,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Run/observe the focused verification on the current head after the stale-test reconciliation. If unit/type/lint are green, continue P5 audit of current user-facing reports, permissions, and remaining active UI strings for manufacturing-era language. Do not alter historical database objects; only retire current-runtime references. Use Fast Verify at the end of P5 and reserve one exact-head Full Verify for the final merge gate.
+Observe the latest focused verification after the P5 terminology changes. Then audit permission presentation: preserve legacy permission keys for database/backward compatibility, but remove production-workflow wording from the current operational permission UI where safe. Do not alter RLS or stored role permissions in this phase. After that, run Fast Verify for the complete P3-P5 group.
 
 ## Mandatory update protocol
 
