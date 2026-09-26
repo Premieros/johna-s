@@ -18,16 +18,16 @@ type RawMaterialCatalogRow = {
   id: string;
   branch_id: string;
   name: string;
+  min_stock?: number | null;
   measurement_unit?: MeasurementUnit | null;
 };
 
 type RawBalanceRow = {
-  id: string;
   raw_material_id: string;
   branch_id: string;
+  warehouse_id: string;
   quantity: number;
   avg_cost: number;
-  min_stock: number;
 };
 
 type RawStockRow = {
@@ -37,6 +37,8 @@ type RawStockRow = {
   quantity: number;
   avg_cost: number;
   min_stock: number;
+  warehouse_id: string;
+  warehouse_name: string;
   raw_material: {
     name: string;
     measurement_unit?: MeasurementUnit | null;
@@ -50,6 +52,8 @@ export function RawMaterialBranchStockPanel() {
   const { branches, loading: branchesLoading } = useBranches();
   const [selectedBranchId, setSelectedBranchId] = useState(fixedBranchId || '');
   const [rows, setRows] = useState<RawStockRow[]>([]);
+  const [warehouses, setWarehouses] = useState<{ id: string; branch_id: string; name: string }[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
