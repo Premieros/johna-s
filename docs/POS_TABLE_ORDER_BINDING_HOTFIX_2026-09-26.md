@@ -43,12 +43,12 @@ Goal: prevent active dine-in orders from being silently detached from their tabl
 
 - Isolated branch created from exact latest main.
 - No runtime changes written yet.
-- Planned repair: make ordinary `update_order` preserve/require active table binding unless the explicit detach/transfer path is used; add frontend state-preservation guard and regression tests.
+- Implemented repair group prepared: ordinary `update_order` will reject implicit table detach and table-bound non-dine-in saves; explicit `detach_order` remains supported. Frontend ordinary-save paths now preserve a known active table binding through a shared resolver. Regression coverage added for transient UI drift and server-side detach/type rejection.
 
 ## Verification ledger
 
 - Production incident correlation verified read-only from current DB/logs.
-- No code verification run yet.
+- Code change group written; focused verification pending on the new exact head.
 
 ## Production gate
 
@@ -60,7 +60,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Implement the smallest server-authoritative binding guard in a new forward-only migration, align frontend ordinary-save behavior so resumed table orders preserve their authoritative table/type, and add focused integration/unit regression coverage. Then run focused checks and Fast/Full Verify as appropriate.
+Run focused unit/integration contract checks for the binding resolver and `update_order`, then run Fast Verify. If focused checks are Green, run exact-head Full Verify before any merge or Production migration.
 
 ## Mandatory update protocol
 

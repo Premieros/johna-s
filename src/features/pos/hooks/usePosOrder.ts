@@ -9,6 +9,7 @@ import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../ser
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, openPrintWindow, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
+import { resolveOrderBindingForSave } from '../utils/orderBinding';
 import { usePosPermissions } from './usePosPermissions';
 import {
   usePosOrder as usePosOrderBase,
@@ -112,10 +113,16 @@ export function usePosOrder(input: UsePosOrderInput) {
       return false;
     }
 
+    const binding = resolveOrderBindingForSave({
+      activeOrderId: base.activeOrderId,
+      orderType: base.orderType,
+      tableId: base.tableId,
+      activeTableId: base.activeTable?.id ?? null,
+    });
     const { data, error } = await api.floorPlan.updateOrder({
       p_order_id: base.activeOrderId,
-      p_order_type: base.orderType,
-      p_table_id: base.orderType === 'dine_in' ? base.tableId : null,
+      p_order_type: binding.orderType,
+      p_table_id: binding.tableId,
       p_customer_id: base.customerId || null,
       p_guest_count: base.guestCount,
       p_notes: base.orderNotes || null,
@@ -240,8 +247,8 @@ export function usePosOrder(input: UsePosOrderInput) {
           p_payment_method: base.paymentMethod,
           p_status: 'completed',
           p_items: cartToItems(base.cart),
-          p_order_type: base.orderType,
-          p_table_id: base.orderType === 'dine_in' ? base.tableId : null,
+          p_order_type: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).orderType,
+          p_table_id: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).tableId,
           p_order_id: base.activeOrderId,
           p_guest_count: base.guestCount,
         });
@@ -294,8 +301,8 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_payment_method: base.paymentMethod,
         p_status: 'completed',
         p_items: preview.items,
-        p_order_type: base.orderType,
-        p_table_id: base.orderType === 'dine_in' ? base.tableId : null,
+        p_order_type: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).orderType,
+        p_table_id: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).tableId,
         p_order_id: base.activeOrderId,
         p_guest_count: base.guestCount,
       });

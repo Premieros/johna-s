@@ -63,11 +63,11 @@ describe.skipIf(skip)('update_order + occupancy guards (046 C2/H2/M4)', () => {
     });
   }
 
-  async function updateOrder(orderId: string, opts: { tableId?: string | null; status?: string } = {}) {
+  async function updateOrder(orderId: string, opts: { tableId?: string | null; status?: string; orderType?: string } = {}) {
     return asUser(async () => {
       const res = await client.query<{ r: { success: boolean; error?: string; detail?: string } }>(
-        `SELECT public.update_order($1, 'dine_in', $2, NULL, 3, NULL, $3::jsonb, 200, 0, 'amount', 0, 200, $4) AS r`,
-        [orderId, opts.tableId ?? null, itemJson(2, 100), opts.status ?? 'held'],
+        `SELECT public.update_order($1, $2, $3, NULL, 3, NULL, $4::jsonb, 200, 0, 'amount', 0, 200, $5) AS r`,
+        [orderId, opts.orderType ?? 'dine_in', opts.tableId ?? null, itemJson(2, 100), opts.status ?? 'held'],
       );
       return res.rows[0].r;
     });
@@ -209,17 +209,49 @@ describe.skipIf(skip)('update_order + occupancy guards (046 C2/H2/M4)', () => {
     expect(order.rows[0].table_id).toBe(t2);
   });
 
-  it('detaching an order (table_id NULL) frees the old table', async () => {
+  it('ordinary update_order cannot detach a live table-bound order', async () => {
     const t = await makeTable();
     const created = await createOrder(t);
     expect(created.success).toBe(true);
 
     const detached = await updateOrder(created.order_id!, { tableId: null, status: 'held' });
-    expect(detached.success).toBe(true);
+    expect(detached.success).toBe(false);
+    expect(detached.error).toBe('TABLE_DETACH_REQUIRES_EXPLICIT_ACTION');
+    expect(await tableStatus(t)).toBe('occupied');
+
+    const order = await client.query(`SELECT table_id, status, order_type FROM public.orders WHERE id = $1`, [created.order_id]);
+    expect(order.rows[0].table_id).toBe(t);
+    expect(order.rows[0].status).toBe('open');
+    expect(order.rows[0].order_type).toBe('dine_in');
+  });
+
+  it('ordinary update_order cannot convert a table-bound order to takeaway', async () => {
+    const t = await makeTable();
+    const created = await createOrder(t);
+    expect(created.success).toBe(true);
+
+    const changed = await updateOrder(created.order_id!, { tableId: t, status: 'held', orderType: 'takeaway' });
+    expect(changed.success).toBe(false);
+    expect(changed.error).toBe('TABLE_ORDER_TYPE_MISMATCH');
+    expect(await tableStatus(t)).toBe('occupied');
+  });
+
+  it('explicit detach_order remains the supported way to free a table-bound order', async () => {
+    const t = await makeTable();
+    const created = await createOrder(t);
+    expect(created.success).toBe(true);
+
+    const detached = await asUser(async () =>
+      client.query<{ r: { success: boolean; error?: string } }>(
+        `SELECT public.detach_order($1) AS r`,
+        [created.order_id],
+      ),
+    );
+    expect(detached.rows[0].r.success).toBe(true);
     expect(await tableStatus(t)).toBe('vacant');
 
     const order = await client.query(`SELECT table_id, status FROM public.orders WHERE id = $1`, [created.order_id]);
     expect(order.rows[0].table_id).toBeNull();
-    expect(order.rows[0].status).toBe('held');
+    expect(order.rows[0].status).toBe('open');
   });
 });
