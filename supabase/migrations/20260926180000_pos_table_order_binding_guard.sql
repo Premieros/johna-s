@@ -1,6 +1,6 @@
 -- Prevent ordinary update_order saves from silently detaching a live
 -- table-bound order. Explicit detach_order remains the only detach contract.
--- This is a drift-safe forward patch over the latest canonical function body.
+-- Drift-safe patch anchored on the stable table validation code path.
 
 DO $migration$
 DECLARE
@@ -8,9 +8,17 @@ DECLARE
     'public.update_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,text)'
   );
   v_def text;
-  v_anchor text := E'    -- New table must belong to the order branch and be active.\n';
+  v_anchor text := $anchor$
+    IF p_table_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM public.dining_tables
+      WHERE id = p_table_id AND branch_id = v_branch_id AND is_active
+    ) THEN
+      RETURN jsonb_build_object('success', false, 'error', 'TABLE_NOT_IN_BRANCH', 'table_id', p_table_id);
+    END IF;
+
+$anchor$;
   v_guard text := $guard$
-    -- An ordinary save must never detach a live table-bound order.
+    -- Ordinary saves must never detach a live table-bound order.
     -- Explicit detachment has its own permission-checked RPC.
     IF v_old_table IS NOT NULL AND p_table_id IS NULL THEN
       RETURN jsonb_build_object(
@@ -29,7 +37,7 @@ DECLARE
       );
     END IF;
 
-$guard$ || v_anchor;
+$guard$;
 BEGIN
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'update_order canonical signature not found';
@@ -42,10 +50,10 @@ BEGIN
   END IF;
 
   IF position(v_anchor IN v_def) = 0 THEN
-    RAISE EXCEPTION 'update_order table-validation anchor not found; refusing drifted patch';
+    RAISE EXCEPTION 'update_order stable table-validation anchor not found; refusing drifted patch';
   END IF;
 
-  EXECUTE replace(v_def, v_anchor, v_guard);
+  EXECUTE replace(v_def, v_anchor, v_guard || v_anchor);
 END
 $migration$;
 
