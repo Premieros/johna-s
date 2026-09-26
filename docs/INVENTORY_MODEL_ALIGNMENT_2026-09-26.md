@@ -151,7 +151,18 @@ Progress continuity rule:
 - Historical `inventory_batches` and legacy RPCs remain untouched for backward/audit compatibility.
 - No Production migration or historical data mutation.
 
+### P3/P4 component terminology and runtime retirement — in progress
+
+- User-facing `manufactured` terminology was converted to **Component Groups / مجموعات المكونات** in Inventory Units, Product Setup and Pricing while keeping legacy schema identifiers temporarily.
+- Removed the application export for the retired production workflow and deleted unused runtime pages: Production Orders, Manufacturing Center and Unit Production.
+- Legacy production/manufacturing routes remain safe redirects to the reusable component-definition screen.
+- Updated smoke/navigation/drift/history tests so they no longer require retired production pages.
+- Production database objects and historical data remain untouched.
+
 ## Verification ledger
+
+- Verify Run #2973 / 36243989021: mandatory worklog ✅ and Supabase identity ✅; stopped only at frontend API contract after retiring the production application domain. The stale contract still referenced `create/start/complete/cancel_production_order` and `inventory_unit_productions`; lint/type/unit/build were not executed.
+- Refreshed `supabase/api-contract.json` to remove only those no-longer-referenced application RPC/table entries. No database migration, Production mutation, or historical production data deletion was performed.
 
 - Browser Smoke Run #2959 / 36243150093: verify ✅, DB/integration/RLS ✅, browser 115/116 passed; one inventory E2E failed because its mock still served branch-level `raw_material_inventory` and old row test IDs after P2 became warehouse-aware. Classified as stale test fixture, not runtime regression.
 - Updated `tests/e2e/inventory-raw-materials.spec.ts` to provide an explicit warehouse, serve `raw_material_warehouse_inventory`, and assert the warehouse-specific row identity. No runtime code was changed for this failure.
