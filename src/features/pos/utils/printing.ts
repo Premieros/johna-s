@@ -520,6 +520,29 @@ export function openPrintWindow(html: string, widthMm: number): boolean {
   return true;
 }
 
+export async function enqueueAutomaticReceiptPrint(params: {
+  saleId: string;
+  receipt: ReceiptData;
+  settings: Settings;
+  lang: Language;
+  isAr: boolean;
+}): Promise<{ accepted: boolean; jobId?: string; error?: string }> {
+  const saleId = params.saleId?.trim();
+  if (!saleId) return { accepted: false, error: 'SALE_ID_REQUIRED' };
+
+  return enqueueCloudReceiptPrint({
+    saleId,
+    approvalRequestId: null,
+    payload: {
+      text: buildReceiptThermalText(params.receipt, params.settings, params.lang, params.isAr),
+      template: buildReceiptFixedTemplate(params.receipt, params.settings, params.lang, params.isAr),
+      paperWidthMm: APPROVED_FIXED_THERMAL_WIDTH_MM,
+      copies: 1,
+    },
+    idempotencyKey: `receipt:auto:${saleId}:1`,
+  });
+}
+
 export async function buildReceiptHtml(
   receipt: ReceiptData,
   s: Settings,

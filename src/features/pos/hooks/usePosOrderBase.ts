@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/audit';
 import type { CartItem, Customer, DiningTable, Order, OrderItem, OrderType, Product, RpcResult, Settings } from '@/lib/types';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '../utils/cart';
-import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
@@ -855,8 +855,21 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       if (effSettings?.receipt_auto_print) {
         try {
-          const html = await buildReceiptHtml(receiptPayload, effSettings, lang, isAr);
-          openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+          const queued = await enqueueAutomaticReceiptPrint({
+            saleId,
+            receipt: receiptPayload,
+            settings: effSettings,
+            lang,
+            isAr,
+          });
+          if (!queued.accepted) {
+            show(
+              isAr
+                ? `تم البيع بنجاح ولكن تعذر إنشاء أمر طباعة الإيصال: ${queued.error || 'PRINT_QUEUE_FAILED'}`
+                : `Sale completed, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
+              'error',
+            );
+          }
         } catch (error) {
           showReceiptPrintError(error);
         }
