@@ -24,7 +24,6 @@ interface EditLine {
   reason: string;
 }
 
-type CountItemKind = 'product' | 'raw_material';
 type CreateLine = { item_id: string; counted_quantity: string; reason: string };
 type StockCountItemWithCost = StockCountItem & { unit_cost?: number | string | null };
 
@@ -53,7 +52,7 @@ export function StockCountsPage() {
   const [branchId, setBranchId] = useState(branchFilter || '');
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '', item_kind: 'product' as CountItemKind });
+  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '' });
   const [formItems, setFormItems] = useState<CreateLine[]>([{ item_id: '', counted_quantity: '', reason: '' }]);
 
   const [viewTarget, setViewTarget] = useState<StockCount | null>(null);
@@ -76,7 +75,6 @@ export function StockCountsPage() {
   ];
 
   const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
-  const formProducts = form.branch_id ? products.filter((p) => p.branch_id === form.branch_id) : [];
   const formRawMaterials = form.branch_id ? rawMaterials.filter((r) => r.branch_id === form.branch_id) : [];
   const editProducts = editTarget ? products.filter((p) => p.branch_id === editTarget.branch_id) : [];
 
@@ -122,7 +120,7 @@ export function StockCountsPage() {
   const openCreate = () => {
     const defaultBranchId = branchFilter || (visibleBranches.length === 1 ? visibleBranches[0].id : '');
     const branchWarehouses = warehouses.filter((w) => w.branch_id === defaultBranchId);
-    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'cycle', notes: '', item_kind: 'product' });
+    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'cycle', notes: '' });
     resetCreateLines();
     setCreateOpen(true);
   };
@@ -136,8 +134,8 @@ export function StockCountsPage() {
     const hasActiveForWarehouse = counts.some((c) => c.warehouse_id === form.warehouse_id && (c.status === 'draft' || c.status === 'submitted'));
     if (hasActiveForWarehouse) show(isAr ? 'توجد بالفعل جلسة جرد قيد المعالجة لهذا المستودع.' : 'An active stock count already exists for this warehouse.', 'warning');
     const items = formItems.filter((l) => l.item_id).map((l) => ({
-      product_id: form.item_kind === 'product' ? l.item_id : null,
-      raw_material_id: form.item_kind === 'raw_material' ? l.item_id : null,
+      product_id: null,
+      raw_material_id: l.item_id,
       counted_quantity: l.counted_quantity === '' ? null : parseFloat(l.counted_quantity),
       reason: l.reason || null,
     }));
@@ -236,19 +234,19 @@ export function StockCountsPage() {
     { key: 'reason', header: t('reason'), render: (i) => i.reason || '-' },
   ];
 
-  const createChoices = form.item_kind === 'product' ? formProducts : formRawMaterials;
+  const createChoices = formRawMaterials;
 
   return (
     <DesignSurface testId="stock-counts-page">
-      <DesignPageHeader title={t('stockCounts')} subtitle={isAr ? 'جرد المنتجات والخامات مع اعتماد وتطبيق الأرصدة' : 'Product and raw-material physical counts with approval and stock adjustment'} actions={can('inventory.count.create') ? <Button size="sm" onClick={openCreate}><ClipboardCheck className="w-4 h-4" /> {t('newStockCount')}</Button> : undefined} />
+      <DesignPageHeader title={t('stockCounts')} subtitle={isAr ? 'جرد الخامات بالمخزن مع الاعتماد وتطبيق الرصيد' : 'Raw-material warehouse counts with approval and stock adjustment'} actions={can('inventory.count.create') ? <Button size="sm" onClick={openCreate}><ClipboardCheck className="w-4 h-4" /> {t('newStockCount')}</Button> : undefined} />
       <DesignPanel testId="stock-counts-search-panel"><div className="flex flex-col sm:flex-row gap-3"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="stock-counts-search" /><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-44"><option value="all">{t('all')}</option>{statusOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</Select><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-48"><option value="">{t('allBranches')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select></div></DesignPanel>
       <DesignPanel testId="stock-counts-table-panel"><DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={counts.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('newStockCount')} size="lg"><div className="space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select><Select label={isAr ? 'نوع الجرد' : 'Count items'} value={form.item_kind} onChange={(e) => { setForm({ ...form, item_kind: e.target.value as CountItemKind }); resetCreateLines(); }}><option value="product">{isAr ? 'منتجات' : 'Products'}</option><option value="raw_material">{isAr ? 'خامات' : 'Raw materials'}</option></Select></div>
-        {form.item_kind === 'raw_material' && <p className="text-xs text-ui-subtle">{isAr ? 'رصيد الخامات الحالي محسوب على مستوى الفرع حسب عقد قاعدة البيانات الحالي.' : 'Raw-material stock is currently branch-scoped by the database contract.'}</p>}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select></div>
+        <p className="text-xs text-ui-subtle">{isAr ? 'الجرد يطبق على الخامة داخل المخزن المحدد، وليس على رصيد منتج جاهز.' : 'The count applies to the raw material in the selected warehouse, not to finished-product stock.'}</p>
         <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} />
-        <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (form.item_kind === 'product' ? t('product') : (isAr ? 'الخامة' : 'Raw material')) : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{form.item_kind === 'product' ? t('product') : (isAr ? 'اختر الخامة' : 'Choose raw material')}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
+        <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (isAr ? 'الخامة' : 'Raw material') : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{isAr ? 'اختر الخامة' : 'Choose raw material'}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{t('save')}</Button></div>
       </div></Modal>
 
