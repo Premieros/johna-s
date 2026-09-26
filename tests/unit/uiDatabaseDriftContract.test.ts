@@ -13,12 +13,15 @@ describe('UI and production database drift guards', () => {
     expect(source).toContain('materialCosts[item.raw_material_id]');
   });
 
-  it('does not expose the retired Components page from current navigation surfaces', () => {
+  it('does not expose retired component/production centers from current navigation surfaces', () => {
     const menu = read('src/core/navigation/menu.config.ts');
-    const manufacturingCenter = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
+    const routes = read('src/app/routes.tsx');
 
     expect(menu).not.toContain("id: 'components'");
-    expect(manufacturingCenter).not.toContain("route: APP_ROUTES.components");
+    expect(menu).not.toContain("id: 'production'");
+    expect(menu).not.toContain("id: 'manufacturing-center'");
+    expect(routes).toContain('APP_ROUTES.production} element={<Navigate to={APP_ROUTES.recipes} replace />');
+    expect(routes).toContain('APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.recipes} replace />');
   });
 
   it('fails production parity when the kitchen inventory schema sentinel is absent or false', () => {
