@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast';
 import { cartToItems, type ItemPayload } from '../utils/cart';
 import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
 import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/settlementPreview';
-import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, openPrintWindow, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { usePosPermissions } from './usePosPermissions';
@@ -318,8 +318,22 @@ export function usePosOrder(input: UsePosOrderInput) {
       base.setPaidAmount(0);
 
       if (input.effSettings?.receipt_auto_print) {
-        const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+        const saleId = extended.sale_id || '';
+        const queued = await enqueueAutomaticReceiptPrint({
+          saleId,
+          receipt,
+          settings: input.effSettings,
+          lang,
+          isAr,
+        });
+        if (!queued.accepted) {
+          show(
+            isAr
+              ? `تم تحصيل الطلب ولكن تعذر إنشاء أمر طباعة الإيصال: ${queued.error || 'PRINT_QUEUE_FAILED'}`
+              : `Order settled, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
+            'error',
+          );
+        }
       }
 
       if (extended.order_completed) {
