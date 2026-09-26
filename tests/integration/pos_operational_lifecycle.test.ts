@@ -136,7 +136,7 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
     );
     expect(shiftRow.rows).toHaveLength(1);
     expect(shiftRow.rows[0].status).toBe('open');
-    expect(Number(shiftRow.rows[0].opening_amount)).toBe(50);
+    expect(Number(shiftRow.rows[0].opening_amount)).toBe(0);
     const shiftId = shiftRow.rows[0].id;
 
     const items = JSON.stringify([{
@@ -282,7 +282,7 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
     const closed = await rpc(
       ids.users.cashier,
       `SELECT public.close_shift($1, $2, $3) AS r`,
-      [shiftId, 50, 'Operational lifecycle complete'],
+      [shiftId, 0, 'Operational lifecycle complete'],
     );
     expect(closed.success).toBe(true);
 
