@@ -32,7 +32,12 @@
 4. Production custom roles may be intentionally broad; live role permissions are not changed automatically by this cleanup.
 
 ## Change ledger
-- Pending.
+- `src/components/ApprovalInbox.tsx`: replaced ordinary role-name visibility gate with canonical `can('approvals.review')`; branch-scoped loading and server decision RPCs remain unchanged.
+- `src/features/pos/components/checkout/CashierDiscountApprovalCard.tsx`: removed literal cashier-role detection; the manager-approval card is now shown whenever the user lacks direct `pos.discount`.
+- Discount approval payload now stores the monetary discount in `discount_amount`; for percentage input it additionally stores `requested_value` and preserves `discount_type='percent'`. Approved UI input is capped to 100% or subtotal for amount discounts so settlement and approval match.
+- `tests/unit/permissionRuntimeAlignmentContract.test.ts`: added source contracts preventing regression to ordinary role-name authorization in the approval inbox/discount approval path and locking monetary percent-approval semantics.
+- Remaining reviewed role-name checks in routing/navigation are either Super-Admin-only platform bypass or non-authorizing landing/display logic; no further ordinary-role authorization drift has been proven in the reviewed surfaces.
+- No backend/RLS/Production role-data changes; print/KDS/kitchen-send paths untouched.
 
 ## Verification ledger
 - Read-only Production permission/RLS audit completed before implementation.
@@ -45,11 +50,10 @@
 - Any Production mutation requires separate explicit approval.
 
 ## Next action
-1. Convert Approval Inbox visibility/decision UI to canonical `approvals.review`.
-2. Convert discount approval request card away from literal role gating and make percent requests authorize the exact monetary discount value.
-3. Add regression tests that reject ordinary role-name authorization gates in these permission-sensitive surfaces.
-4. Sweep remaining `src/` role-name checks and classify each as Super Admin/platform-only, display/default-routing, or authorization drift; change only proven authorization drift.
-5. Run focused unit tests, then Fast/Full Verify according to scope; stop before merge.
+1. Run focused unit/type verification for the permission runtime contract and touched components.
+2. If focused verification is Green, run the repository verify workflow on the current head.
+3. Classify any failure before changing runtime; do not expand scope unless a regression proves another authorization drift.
+4. Exact-head Full Verify must be Green before merge; stop before merge for explicit approval.
 
 ## Mandatory update protocol
 - Before each logical write: read this log's `Next action`, `Change ledger`, and `Verification ledger`; re-check branch and main HEADs.
