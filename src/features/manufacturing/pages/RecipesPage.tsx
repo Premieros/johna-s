@@ -317,7 +317,7 @@ export function RecipesPage() {
 
   return (
     <DesignSurface testId="recipes-page">
-      <DesignPageHeader title={t('recipes')} subtitle={isAr ? 'وصفات المنتجات النشطة في الفرع' : 'Recipes for active branch products'} actions={can('recipes.manage') ? <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4" /> {t('addRecipe')}</Button> : undefined} />
+      <DesignPageHeader title={t('recipes')} subtitle={isAr ? 'تعريف الخامات ومجموعات المكونات المرتبطة بكل منتج' : 'Define raw materials and component groups linked to each product'} actions={can('recipes.manage') ? <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4" /> {t('addRecipe')}</Button> : undefined} />
       <DesignPanel><DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} /></DesignPanel>
       <DesignPanel>
         <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} />
@@ -379,7 +379,7 @@ export function RecipesPage() {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-bold text-ui-muted">{isAr ? 'المصنعات داخل الوصفة' : 'Manufactured components'}</p>
+              <p className="text-sm font-bold text-ui-muted">{isAr ? 'مجموعات المكونات داخل الوصفة' : 'Component groups in recipe'}</p>
               <span className="text-xs text-ui-subtle">{manufacturedItems.length}</span>
             </div>
             <div className="space-y-2">
@@ -389,7 +389,7 @@ export function RecipesPage() {
                   <div key={item.unit_id} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_40px] gap-2 items-end rounded-lg border border-ui-border bg-ui-page-alt p-2">
                     <div>
                       <p className="text-sm font-medium text-ui-text">{unit?.name || item.unit_id}</p>
-                      <p className="text-xs text-ui-subtle">{isAr ? 'مصنع مخزني' : 'Manufactured inventory unit'}</p>
+                      <p className="text-xs text-ui-subtle">{isAr ? 'مجموعة مكونات' : 'Component group'}</p>
                     </div>
                     <Input label={t('quantity')} type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={(e) => updateManufacturedQty(index, parseFloat(e.target.value) || 1)} />
                     <button type="button" onClick={() => removeManufacturedLine(index)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft"><Trash2 className="w-4 h-4" /></button>
@@ -398,7 +398,7 @@ export function RecipesPage() {
               })}
             </div>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_auto] gap-2 items-end">
-              <Select label={isAr ? 'إضافة تصنيع' : 'Add manufactured item'} value={manufacturedUnitSel} onChange={(e) => setManufacturedUnitSel(e.target.value)}>
+              <Select label={isAr ? 'إضافة مجموعة مكونات' : 'Add component group'} value={manufacturedUnitSel} onChange={(e) => setManufacturedUnitSel(e.target.value)}>
                 <option value="">--</option>
                 {availableManufacturedUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
               </Select>

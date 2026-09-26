@@ -68,16 +68,6 @@ describe('Phase 4 — center discoverability', () => {
     }
   });
 
-  it('Manufacturing Center exposes raw materials, recipes, and production', () => {
-    const source = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
-    expect(source).toContain('raw_materials.view');
-    expect(source).toContain('recipes.view');
-    expect(source).toContain('production.view');
-    expect(sourceHasRoute(source, 'rawMaterials')).toBe(true);
-    expect(sourceHasRoute(source, 'recipes')).toBe(true);
-    expect(sourceHasRoute(source, 'production')).toBe(true);
-  });
-
   it('Procurement Center exposes requests, RFQs, and receiving', () => {
     const source = read('src/features/trade/pages/ProcurementCenterPage.tsx');
     expect(sourceHasRoute(source, 'purchases')).toBe(true);
@@ -102,32 +92,28 @@ describe('Phase 4 — center discoverability', () => {
   });
 });
 
+describe('Phase 4 — retired manufacturing compatibility', () => {
+  it('legacy manufacturing routes redirect to reusable component definitions', () => {
+    const source = read('src/app/routes.tsx');
+    expect(source).toContain('path={APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.recipes} replace />}');
+    expect(source).toContain('path={APP_ROUTES.production} element={<Navigate to={APP_ROUTES.recipes} replace />}');
+    expect(source).toContain('path={APP_ROUTES.productionUnits} element={<Navigate to={APP_ROUTES.recipes} replace />}');
+    expect(source).not.toContain('ProductionOrdersPage');
+    expect(source).not.toContain('ManufacturingCenterPage');
+    expect(source).not.toContain('UnitProductionPage');
+  });
+});
+
 describe('Phase 4 — feature discoverability', () => {
   function sourceHasRoute(source: string, routeKey: string): boolean {
     return source.includes(`APP_ROUTES.${routeKey}`);
   }
-
-  it('Raw Materials is accessible from Manufacturing Center', () => {
-    const source = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
-    expect(sourceHasRoute(source, 'rawMaterials')).toBe(true);
-    expect(source).toContain('raw_materials.view');
-  });
 
   it('Inventory Units is in the sidebar menu', () => {
     const item = MENU_ITEMS.find((i) => i.id === 'inventory-units');
     expect(item).toBeDefined();
     expect(item!.route).toBe(APP_ROUTES.inventoryUnits);
     expect(item!.permission).toBe('raw_materials.view');
-  });
-
-  it('Recipes are accessible from Manufacturing Center', () => {
-    const source = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
-    expect(sourceHasRoute(source, 'recipes')).toBe(true);
-  });
-
-  it('Production Orders are accessible from Manufacturing Center', () => {
-    const source = read('src/features/manufacturing/pages/ManufacturingCenterPage.tsx');
-    expect(sourceHasRoute(source, 'production')).toBe(true);
   });
 
   it('Warehouses are accessible from Inventory Center', () => {
@@ -201,7 +187,6 @@ describe('Phase 4 — no duplicate destinations', () => {
     const menuRoutes = new Set(MENU_ITEMS.map((i) => i.route));
     const centerFiles = [
       'src/features/inventory/pages/InventoryCenterPage.tsx',
-      'src/features/manufacturing/pages/ManufacturingCenterPage.tsx',
       'src/features/trade/pages/ProcurementCenterPage.tsx',
       'src/features/operations/pages/OperationsCenterPage.tsx',
     ];
@@ -224,7 +209,6 @@ describe('Phase 4 — no duplicate destinations', () => {
       APP_ROUTES.warehouses,
       APP_ROUTES.rawMaterials,
       APP_ROUTES.recipes,
-      APP_ROUTES.production,
       APP_ROUTES.transfers,
       APP_ROUTES.inventoryLedger,
       APP_ROUTES.stockCounts,

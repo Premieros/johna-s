@@ -226,7 +226,7 @@ export function PricingPage() {
       },
     });
     setManufacturedRows((rows) => rows.map((item) => item.id === row.id ? { ...item, cost_price: nextCost, sale_price: nextSale } : item));
-    show(ar ? 'تم حفظ تسعير المصنع' : 'Manufactured-item pricing saved', 'success');
+    show(ar ? 'تم حفظ تسعير مجموعة المكونات' : 'Component-group pricing saved', 'success');
     setSavingId(null);
   }
 
@@ -285,7 +285,7 @@ export function PricingPage() {
 
   const tabMeta: Record<PricingTab, { label: string; icon: React.ReactNode }> = {
     raw: { label: ar ? 'الخامات' : 'Raw materials', icon: <Boxes className="h-4 w-4" /> },
-    manufactured: { label: ar ? 'المصنعات' : 'Manufactured items', icon: <Package className="h-4 w-4" /> },
+    manufactured: { label: ar ? 'مجموعات المكونات' : 'Component groups', icon: <Package className="h-4 w-4" /> },
     products: { label: ar ? 'المنتجات' : 'Products', icon: <BadgeDollarSign className="h-4 w-4" /> },
   };
 
@@ -300,7 +300,7 @@ export function PricingPage() {
       <DesignPageHeader
         title={ar ? 'التسعير' : 'Pricing'}
         subtitle={ar
-          ? `تسعير الخامات والمصنعات والمنتجات داخل ${branchName}. تسعير الخامة يدخل تاريخ مركز التكلفة ويصبح السعر المعتمد حتى حدث أحدث، بدون تغيير متوسط المخزون.`
+          ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. تسعير الخامة يدخل تاريخ مركز التكلفة ويصبح السعر المعتمد حتى حدث أحدث، بدون تغيير متوسط المخزون.`
           : `Manage pricing for ${branchName}. Raw-material pricing enters Costing Center history and stays authoritative until a newer pricing, purchase, or stock-count event, without changing inventory average cost.`}
         actions={(
           <Button size="sm" variant="secondary" onClick={load} disabled={loading}>

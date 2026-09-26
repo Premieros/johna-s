@@ -54,7 +54,6 @@ describe('permission-aware dashboard and system history contract', () => {
       ['src/features/trade/pages/PurchaseRequestsPage.tsx', 'status.in.(draft,submitted,approved)'],
       ['src/features/trade/pages/RfqsPage.tsx', 'status.in.(draft,sent,received)'],
       ['src/features/inventory/pages/StockCountsPage.tsx', 'status.in.(draft,submitted,approved)'],
-      ['src/features/manufacturing/pages/ProductionOrdersPage.tsx', 'status.in.(planned,in_progress)'],
       ['src/features/accounting/pages/ReconciliationPage.tsx', 'status.eq.open'],
     ];
 

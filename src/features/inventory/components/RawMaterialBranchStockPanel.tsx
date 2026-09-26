@@ -18,16 +18,16 @@ type RawMaterialCatalogRow = {
   id: string;
   branch_id: string;
   name: string;
+  min_stock?: number | null;
   measurement_unit?: MeasurementUnit | null;
 };
 
 type RawBalanceRow = {
-  id: string;
   raw_material_id: string;
   branch_id: string;
+  warehouse_id: string;
   quantity: number;
   avg_cost: number;
-  min_stock: number;
 };
 
 type RawStockRow = {
@@ -37,6 +37,8 @@ type RawStockRow = {
   quantity: number;
   avg_cost: number;
   min_stock: number;
+  warehouse_id: string;
+  warehouse_name: string;
   raw_material: {
     name: string;
     measurement_unit?: MeasurementUnit | null;
@@ -50,6 +52,8 @@ export function RawMaterialBranchStockPanel() {
   const { branches, loading: branchesLoading } = useBranches();
   const [selectedBranchId, setSelectedBranchId] = useState(fixedBranchId || '');
   const [rows, setRows] = useState<RawStockRow[]>([]);
+  const [warehouses, setWarehouses] = useState<{ id: string; branch_id: string; name: string }[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -76,65 +80,71 @@ export function RawMaterialBranchStockPanel() {
     setError('');
 
     const load = async () => {
-      const [materialsResult, balancesResult] = await Promise.all([
+      const [materialsResult, warehousesResult, balancesResult] = await Promise.all([
         supabase
           .from('raw_materials')
-          .select('id,branch_id,name,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)')
+          .select('id,branch_id,name,min_stock,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)')
           .eq('is_active', true)
           .in('branch_id', accessibleBranchIds)
           .order('name'),
         supabase
-          .from('raw_material_inventory')
-          .select('id,raw_material_id,branch_id,quantity,avg_cost,min_stock')
+          .from('warehouses')
+          .select('id,branch_id,name')
+          .eq('is_active', true)
+          .in('branch_id', accessibleBranchIds)
+          .order('name'),
+        supabase
+          .from('raw_material_warehouse_inventory')
+          .select('raw_material_id,branch_id,warehouse_id,quantity,avg_cost')
           .in('branch_id', accessibleBranchIds),
       ]);
 
       if (cancelled) return;
-      if (materialsResult.error) {
+      const firstError = materialsResult.error || warehousesResult.error || balancesResult.error;
+      if (firstError) {
         setRows([]);
-        setError(materialsResult.error.message);
-        setLoading(false);
-        return;
-      }
-      if (balancesResult.error) {
-        setRows([]);
-        setError(balancesResult.error.message);
+        setWarehouses([]);
+        setError(firstError.message);
         setLoading(false);
         return;
       }
 
       const balances = (balancesResult.data || []) as RawBalanceRow[];
-      const balanceByMaterial = new Map<string, RawBalanceRow>();
+      const balanceByMaterialWarehouse = new Map<string, RawBalanceRow>();
       for (const balance of balances) {
-        const key = `${balance.branch_id}:${balance.raw_material_id}`;
-        const existing = balanceByMaterial.get(key);
-        if (!existing) {
-          balanceByMaterial.set(key, { ...balance, quantity: Number(balance.quantity) || 0 });
-        } else {
-          balanceByMaterial.set(key, {
-            ...existing,
-            quantity: (Number(existing.quantity) || 0) + (Number(balance.quantity) || 0),
-            min_stock: Math.max(Number(existing.min_stock) || 0, Number(balance.min_stock) || 0),
-          });
-        }
+        balanceByMaterialWarehouse.set(
+          `${balance.branch_id}:${balance.warehouse_id}:${balance.raw_material_id}`,
+          balance,
+        );
       }
 
       const materials = (materialsResult.data || []) as unknown as RawMaterialCatalogRow[];
-      setRows(materials.map((material) => {
-        const balance = balanceByMaterial.get(`${material.branch_id}:${material.id}`);
-        return {
-          id: balance?.id || `raw:${material.branch_id}:${material.id}`,
-          raw_material_id: material.id,
-          branch_id: material.branch_id,
-          quantity: Number(balance?.quantity) || 0,
-          avg_cost: Number(balance?.avg_cost) || 0,
-          min_stock: Number(balance?.min_stock) || 0,
-          raw_material: {
-            name: material.name,
-            measurement_unit: material.measurement_unit || null,
-          },
-        };
-      }));
+      const loadedWarehouses = (warehousesResult.data || []) as { id: string; branch_id: string; name: string }[];
+      setWarehouses(loadedWarehouses);
+
+      const nextRows: RawStockRow[] = [];
+      for (const material of materials) {
+        for (const warehouse of loadedWarehouses.filter((row) => row.branch_id === material.branch_id)) {
+          const balance = balanceByMaterialWarehouse.get(
+            `${material.branch_id}:${warehouse.id}:${material.id}`,
+          );
+          nextRows.push({
+            id: `raw:${material.branch_id}:${warehouse.id}:${material.id}`,
+            raw_material_id: material.id,
+            branch_id: material.branch_id,
+            warehouse_id: warehouse.id,
+            warehouse_name: warehouse.name,
+            quantity: Number(balance?.quantity) || 0,
+            avg_cost: Number(balance?.avg_cost) || 0,
+            min_stock: Number(material.min_stock) || 0,
+            raw_material: {
+              name: material.name,
+              measurement_unit: material.measurement_unit || null,
+            },
+          });
+        }
+      }
+      setRows(nextRows);
       setLoading(false);
     };
 
@@ -145,6 +155,14 @@ export function RawMaterialBranchStockPanel() {
   const selectedBranchName = useMemo(
     () => branches.find((branch) => branch.id === selectedBranchId)?.name || '',
     [branches, selectedBranchId],
+  );
+  const visibleWarehouses = useMemo(
+    () => warehouses.filter((warehouse) => !selectedBranchId || warehouse.branch_id === selectedBranchId),
+    [warehouses, selectedBranchId],
+  );
+  const visibleRows = useMemo(
+    () => rows.filter((row) => !selectedWarehouseId || row.warehouse_id === selectedWarehouseId),
+    [rows, selectedWarehouseId],
   );
   const showBranchColumn = !selectedBranchId && branches.length > 1;
 
@@ -159,7 +177,7 @@ export function RawMaterialBranchStockPanel() {
             <Select
               label={isAr ? 'الفرع' : 'Branch'}
               value={selectedBranchId}
-              onChange={(event) => setSelectedBranchId(event.target.value)}
+              onChange={(event) => { setSelectedBranchId(event.target.value); setSelectedWarehouseId(''); }}
               data-testid="raw-stock-branch-select"
             >
               <option value="">{isAr ? 'كل الفروع المسموح بها' : 'All accessible branches'}</option>
@@ -167,6 +185,12 @@ export function RawMaterialBranchStockPanel() {
             </Select>
           </div>
         )}
+        <div className="max-w-sm">
+          <Select label={isAr ? 'المخزن' : 'Warehouse'} value={selectedWarehouseId} onChange={(event) => setSelectedWarehouseId(event.target.value)} data-testid="raw-stock-warehouse-select">
+            <option value="">{isAr ? 'كل المخازن' : 'All warehouses'}</option>
+            {visibleWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+          </Select>
+        </div>
 
         {branchesLoading || loading ? (
           <div className="py-6 text-center text-sm text-ui-muted">{isAr ? 'جاري تحميل الخامات...' : 'Loading raw materials...'}</div>
@@ -177,7 +201,7 @@ export function RawMaterialBranchStockPanel() {
             <Boxes className="mx-auto mb-2 h-6 w-6 text-ui-subtle" />
             <p className="font-semibold text-ui-text">{isAr ? 'لا توجد فروع متاحة لهذا المستخدم' : 'No accessible branches for this user'}</p>
           </div>
-        ) : rows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <div className="rounded-xl border border-ui-border bg-ui-page-alt p-5 text-center">
             <Boxes className="mx-auto mb-2 h-6 w-6 text-ui-subtle" />
             <p className="font-semibold text-ui-text">{isAr ? 'لا توجد خامات مسجلة ضمن النطاق المحدد' : 'No raw materials in the selected scope'}</p>
@@ -192,6 +216,7 @@ export function RawMaterialBranchStockPanel() {
                 <tr>
                   <th className="px-3 py-2 text-start">{isAr ? 'الخامة' : 'Raw Material'}</th>
                   {showBranchColumn && <th className="px-3 py-2 text-start">{isAr ? 'الفرع' : 'Branch'}</th>}
+                  <th className="px-3 py-2 text-start">{isAr ? 'المخزن' : 'Warehouse'}</th>
                   <th className="px-3 py-2 text-start">{isAr ? 'الوحدة' : 'Unit'}</th>
                   <th className="px-3 py-2 text-end">{isAr ? 'المتاح' : 'Available'}</th>
                   <th className="px-3 py-2 text-end">{isAr ? 'الحد الأدنى' : 'Minimum'}</th>
@@ -199,7 +224,7 @@ export function RawMaterialBranchStockPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-ui-border">
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const quantity = Number(row.quantity || 0);
                   const minimum = Number(row.min_stock || 0);
                   const low = quantity <= minimum;
@@ -207,9 +232,10 @@ export function RawMaterialBranchStockPanel() {
                   const unit = measurementUnit?.symbol || measurementUnit?.code || measurementUnit?.name || '-';
                   const branchName = branches.find((branch) => branch.id === row.branch_id)?.name || row.branch_id;
                   return (
-                    <tr key={`${row.branch_id}:${row.raw_material_id}`} data-testid={`raw-stock-row-${row.raw_material_id}`}>
+                    <tr key={`${row.branch_id}:${row.warehouse_id}:${row.raw_material_id}`} data-testid={`raw-stock-row-${row.raw_material_id}-${row.warehouse_id}`}>
                       <td className="px-3 py-2 font-semibold text-ui-text"><div>{row.raw_material.name || '-'}</div><div className="text-xs font-normal text-ui-subtle">{unit}</div></td>
                       {showBranchColumn && <td className="px-3 py-2 text-ui-muted">{branchName}</td>}
+                      <td className="px-3 py-2 text-ui-muted">{row.warehouse_name}</td>
                       <td className="px-3 py-2 text-ui-muted">{unit}</td>
                       <td className="px-3 py-2 text-end font-bold text-ui-text">{formatRawMaterialQuantity(quantity, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2 text-end text-ui-muted">{formatRawMaterialQuantity(minimum, measurementUnit, { lang })}</td>

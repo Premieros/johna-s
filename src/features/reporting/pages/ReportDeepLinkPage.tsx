@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BarChart3, CreditCard, Factory, FileText, Package, Settings2, ShoppingCart } from 'lucide-react';
+import { BarChart3, CreditCard, FileText, Package, Settings2, ShoppingCart } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
 
@@ -20,7 +20,7 @@ const REPORT_LABELS = {
   recipe_costs: ['تكلفة الوصفات', 'Recipe Costs'],
   top_consumed_components: ['أكثر المكونات استهلاكًا', 'Top Components'],
   top_consumed_products: ['أكثر المنتجات مبيعًا', 'Top Selling Products'],
-  production_waste: ['هالك الإنتاج', 'Production Waste'],
+  production_waste: ['تقرير الهالك', 'Waste Report'],
   raw_material_consumption: ['حركة واستهلاك الخامات', 'Raw Material Consumption'],
   raw_material_current_cost: ['تكلفة الخامات الحالية', 'Current Raw Material Cost'],
   raw_material_financial: ['التقرير المالي للخامات والمبيعات', 'Raw Material Financial Report'],
@@ -37,7 +37,7 @@ const GROUPS: { key: string; icon: typeof BarChart3; reports: ReportType[]; ar: 
   { key: 'performance', icon: CreditCard, reports: ['profit', 'cashier_performance'], ar: 'الأداء والربحية', en: 'Performance & Profit' },
   { key: 'treasury', icon: CreditCard, reports: ['financial_reconciliation', 'raw_material_financial', 'daily_closing_range'], ar: 'الخزنة والبنك', en: 'Treasury & Bank' },
   { key: 'inventory', icon: Package, reports: ['inventory', 'low_stock', 'raw_material_consumption', 'raw_material_current_cost'], ar: 'المخزون', en: 'Inventory' },
-  { key: 'manufacturing', icon: Factory, reports: ['component_consumption', 'sales_component_reconciliation', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'production_waste'], ar: 'التصنيع والتكلفة', en: 'Manufacturing & Costing' },
+  { key: 'components', icon: Package, reports: ['component_consumption', 'sales_component_reconciliation', 'recipe_costs', 'top_consumed_components', 'top_consumed_products', 'production_waste'], ar: 'المكونات والتكلفة', en: 'Components & Costing' },
 ];
 function isReportType(value: string | null): value is ReportType { return value !== null && Object.prototype.hasOwnProperty.call(REPORT_LABELS, value); }
 function selectReport(report: string) { document.querySelector<HTMLButtonElement>(`button[data-report-type="${report}"]`)?.click(); }

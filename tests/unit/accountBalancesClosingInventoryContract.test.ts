@@ -47,16 +47,21 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(modal).toContain("invoice_time: ['عند إنشاء الفاتورة', 'At invoice creation']");
   });
 
-  it('shows every accessible raw material, including zero balances, without widening branch scope', () => {
+  it('uses warehouse-aware raw material stock as the primary inventory surface', () => {
     const panel = read('src/features/inventory/components/RawMaterialBranchStockPanel.tsx');
     const inventoryPage = read('src/features/inventory/pages/InventoryPage.tsx');
     expect(inventoryPage).toContain('<RawMaterialBranchStockPanel />');
+    expect(inventoryPage).not.toContain("table: 'inventory'");
+    expect(inventoryPage).not.toContain("product_type === 'manufactured'");
     expect(panel).toContain(".from('raw_materials')");
-    expect(panel).toContain(".from('raw_material_inventory')");
+    expect(panel).toContain(".from('warehouses')");
+    expect(panel).toContain(".from('raw_material_warehouse_inventory')");
     expect(panel).toContain('branches.map((branch) => branch.id)');
     expect(panel).toContain(".in('branch_id', accessibleBranchIds)");
-    expect(panel).toContain("id: balance?.id || `raw:${material.branch_id}:${material.id}`");
+    expect(panel).toContain('warehouse_id: warehouse.id');
+    expect(panel).toContain('warehouse_name: warehouse.name');
     expect(panel).toContain('quantity: Number(balance?.quantity) || 0');
+    expect(panel).toContain('raw-stock-warehouse-select');
     expect(panel).not.toContain('branches[0]');
     expect(panel).not.toMatch(/selectedBranchId\s*\|\|\s*branches\[0\]/);
     expect(panel).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)');

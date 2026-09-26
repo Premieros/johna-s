@@ -16,7 +16,7 @@ import type { WasteEntry, WasteCategory } from '@/lib/types';
 const WASTE_TYPES = [
   { value: 'raw_material', ar: 'مادة خام', en: 'Raw Material' },
   { value: 'finished_good', ar: 'منتج نهائي', en: 'Finished Good' },
-  { value: 'production', ar: 'إنتاج', en: 'Production' },
+  { value: 'production', ar: 'هالك إنتاج تاريخي', en: 'Legacy Production Waste' },
   { value: 'expired', ar: 'منتهي الصلاحية', en: 'Expired' },
   { value: 'damaged', ar: 'تالف', en: 'Damaged' },
 ] as const;
@@ -216,14 +216,14 @@ export function WasteCenterPage() {
 
   return (
     <DesignSurface testId="waste-center">
-      <DesignPageHeader title={ar ? 'مركز الهالك' : 'Waste Center'} subtitle={ar ? 'تسجيل ومراجعة هالك المنتجات والمواد والإنتاج' : 'Record and review product, material and production waste.'} />
+      <DesignPageHeader title={ar ? 'مركز الهالك' : 'Waste Center'} subtitle={ar ? 'تسجيل ومراجعة الهالك التشغيلي مع إبقاء السجلات التاريخية قابلة للعرض' : 'Record and review operational waste while keeping historical records visible.'} />
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {can('waste.create') && <Button onClick={() => setShowForm(true)}><Plus className="h-4 w-4" /> {ar ? 'تسجيل هالك' : 'Record Waste'}</Button>}
           {can('waste.report') && <Button onClick={() => setShowReport(!showReport)} variant="outline"><BarChart3 className="h-4 w-4" /> {ar ? 'التقرير' : 'Report'}</Button>}
           <Select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-40">
             <option value="">{ar ? 'كل الأنواع' : 'All Types'}</option>
-            {WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
+            {WASTE_TYPES.filter((wt) => wt.value !== 'production').map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
           </Select>
           <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-36">
             <option value="">{ar ? 'كل الحالات' : 'All Statuses'}</option>
