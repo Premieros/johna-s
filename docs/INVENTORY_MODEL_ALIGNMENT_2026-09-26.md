@@ -174,6 +174,8 @@ Progress continuity rule:
 
 ## Verification ledger
 
+- Verify Run #2991 / 36246760374 on exact head `158d73ed5b45092d2683980c0a3be3ee5777d06d`: FULL GREEN — worklog, Supabase identity, API contract, lint, typecheck, unit tests, build, DB/schema, integration + security/RLS, and browser smoke all passed.
+
 - Verify Run #2989 / 36246409813: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, app/test typecheck ✅. Unit suite reached 1127/1128 passed; the only failure was `branchScopedUsersRecipeManufactured.test.ts` still asserting the retired label **Manufactured components / المصنعات داخل الوصفة** after the final Recipes copy cleanup. Build/DB/browser were skipped after the unit failure.
 - Updated only that stale test assertion/title to the current **Component groups / مجموعات المكونات** wording while preserving the operational link-contract assertions. No runtime code changed for this fix.
 
