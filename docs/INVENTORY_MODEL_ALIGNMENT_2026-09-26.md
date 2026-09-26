@@ -174,6 +174,9 @@ Progress continuity rule:
 
 ## Verification ledger
 
+- Verify Run #2989 / 36246409813: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, app/test typecheck ✅. Unit suite reached 1127/1128 passed; the only failure was `branchScopedUsersRecipeManufactured.test.ts` still asserting the retired label **Manufactured components / المصنعات داخل الوصفة** after the final Recipes copy cleanup. Build/DB/browser were skipped after the unit failure.
+- Updated only that stale test assertion/title to the current **Component groups / مجموعات المكونات** wording while preserving the operational link-contract assertions. No runtime code changed for this fix.
+
 - Verify Run #2986 / 36245615896 on `79dfbd286427e5b6a4bc2d13f7f51e9b5392f5c8`: **FULL GREEN** — worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, app/test typecheck ✅, unit ✅, build ✅, canonical DB migrations/schema ✅, integration + security/RLS ✅, browser smoke ✅.
 - After that green baseline, the final active-screen sweep changed only user-facing wording in Recipes and stopped offering **new** `production` waste-type entries while preserving historical `production` rows for display/audit. No schema/RLS/data migration.
 
@@ -208,7 +211,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Wait for the exact-current-head verification after the final active-screen cleanup. If code gates are green, P0-P5 implementation is complete. Do not add more runtime changes. Record the exact final head, then use one final exact-head Full Verify as the merge gate. Merge only after all verify/db/browser jobs are green and no unexpected main movement occurred.
+Observe the exact-current-head verification after the final stale-test correction. No further runtime changes are planned. If verify, DB/integration/RLS, and browser smoke are all green on the final head, record the merge-ready state and stop before merge pending explicit approval.
 
 ## Mandatory update protocol
 
