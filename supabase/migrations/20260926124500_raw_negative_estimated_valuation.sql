@@ -197,6 +197,7 @@ RETURNS TABLE (
   negative_quantity numeric,
   actual_stock_value numeric,
   estimated_negative_value numeric,
+  unpriced_negative_quantity numeric,
   estimated_net_stock_value numeric
 )
 LANGUAGE plpgsql
@@ -230,8 +231,13 @@ BEGIN
       COALESCE(-SUM(b.quantity) FILTER (WHERE b.quantity < 0), 0)::numeric AS negative_quantity,
       COALESCE(SUM(b.quantity * COALESCE(b.unit_cost, 0))
         FILTER (WHERE b.quantity > 0), 0)::numeric AS actual_stock_value,
-      COALESCE(SUM((-b.quantity) * COALESCE(NULLIF(b.unit_cost, 0), pr.latest_cost, 0))
-        FILTER (WHERE b.quantity < 0), 0)::numeric AS estimated_negative_value
+      COALESCE(SUM((-b.quantity) * COALESCE(NULLIF(pr.latest_cost, 0), NULLIF(b.unit_cost, 0), 0))
+        FILTER (WHERE b.quantity < 0), 0)::numeric AS estimated_negative_value,
+      COALESCE(SUM((-b.quantity))
+        FILTER (
+          WHERE b.quantity < 0
+            AND COALESCE(NULLIF(pr.latest_cost, 0), NULLIF(b.unit_cost, 0), 0) <= 0
+        ), 0)::numeric AS unpriced_negative_quantity
     FROM public.raw_material_batches b
     JOIN price_rows pr
       ON pr.raw_material_id = b.raw_material_id
@@ -257,6 +263,7 @@ BEGIN
     COALESCE(bv.negative_quantity, 0)::numeric,
     round(COALESCE(bv.actual_stock_value, 0), 2)::numeric,
     round(COALESCE(bv.estimated_negative_value, 0), 2)::numeric,
+    round(COALESCE(bv.unpriced_negative_quantity, 0), 6)::numeric,
     round(
       COALESCE(bv.actual_stock_value, 0)
       - COALESCE(bv.estimated_negative_value, 0),
@@ -276,7 +283,7 @@ GRANT EXECUTE ON FUNCTION public.get_raw_material_cost_valuation_overview(uuid)
   TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.get_raw_material_cost_valuation_overview(uuid) IS
-  'Raw-material price plus split inventory valuation: actual positive FIFO stock is kept separate from estimated negative-stock exposure.';
+  'Raw-material price plus split inventory valuation: actual positive FIFO stock is separate from current negative-stock exposure. Current negative exposure follows the latest authoritative price so manual repricing updates the estimate without changing actual COGS.';
 
 
 CREATE OR REPLACE FUNCTION public.get_raw_consumption_cost_breakdown(
