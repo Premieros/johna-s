@@ -274,43 +274,28 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     }
   }
 
-  const ingredientsMap = new Map<string, { name: string; quantity: number; unit: string; estimatedCost: number }>();
-  const productIds = Array.from(productMap.keys()).filter((id) => !id.startsWith('unlinked:'));
-  if (productIds.length > 0 && raw.branch_id) {
-    const { data: recipes, error: recipesError } = await supabase
-      .from('recipes')
-      .select('product_id,yield_quantity,recipe_items(raw_material_id,quantity,wastage_percent,raw_material:raw_materials(name,default_cost,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)))')
-      .eq('branch_id', String(raw.branch_id))
-      .in('product_id', productIds);
-    if (recipesError) throw new Error(`SHIFT_REPORT_INGREDIENTS_LOAD_FAILED: ${recipesError.message}`);
+  const ingredientsConsumed: ShiftClosingSummary['ingredientsConsumed'] = [];
+  if (raw.branch_id && raw.opened_at) {
+    const rawEndAt = raw.closed_at ? String(raw.closed_at) : new Date().toISOString();
+    const { data: rawCostRows, error: rawCostError } = await supabase.rpc('get_raw_consumption_cost_breakdown', {
+      p_branch_id: String(raw.branch_id),
+      p_from: String(raw.opened_at),
+      p_to: rawEndAt,
+    });
+    if (rawCostError) throw new Error(`SHIFT_REPORT_RAW_COST_LOAD_FAILED: ${rawCostError.message}`);
 
-    for (const recipe of recipes || []) {
-      const sold = productMap.get(recipe.product_id);
-      if (!sold) continue;
-      const multiplier = sold.quantity / (Number(recipe.yield_quantity) || 1);
-      for (const recipeItem of recipe.recipe_items || []) {
-        const rawMaterial = recipeItem.raw_material as {
-          name?: string;
-          default_cost?: number;
-          measurement_unit?: { name?: string; symbol?: string; code?: string };
-        } | null;
-        const materialId = recipeItem.raw_material_id;
-        const consumed = Number(recipeItem.quantity || 0)
-          * multiplier
-          * (1 + Number(recipeItem.wastage_percent || 0) / 100);
-        const current = ingredientsMap.get(materialId) || {
-          name: rawMaterial?.name || 'مادة خام',
-          quantity: 0,
-          unit: rawMaterial?.measurement_unit?.symbol
-            || rawMaterial?.measurement_unit?.code
-            || rawMaterial?.measurement_unit?.name
-            || '',
-          estimatedCost: 0,
-        };
-        current.quantity += consumed;
-        current.estimatedCost += consumed * Number(rawMaterial?.default_cost || 0);
-        ingredientsMap.set(materialId, current);
-      }
+    for (const row of (rawCostRows || []) as Array<Record<string, unknown>>) {
+      ingredientsConsumed.push({
+        materialId: String(row.raw_material_id || ''),
+        materialName: String(row.raw_material_name || 'مادة خام'),
+        quantity: Number(row.consumed_quantity || 0),
+        unit: String(row.unit_name || ''),
+        actualQuantity: Number(row.actual_quantity || 0),
+        estimatedQuantity: Number(row.estimated_quantity || 0),
+        actualCost: Number(row.actual_cost || 0),
+        estimatedCost: Number(row.estimated_cost || 0),
+        displayedCost: Number(row.displayed_cost || 0),
+      });
     }
   }
 
@@ -352,13 +337,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
       unitName: data.unitName,
       total: data.total,
     })),
-    ingredientsConsumed: Array.from(ingredientsMap, ([materialId, data]) => ({
-      materialId,
-      materialName: data.name,
-      quantity: Number(data.quantity.toFixed(3)),
-      unit: data.unit,
-      estimatedCost: Number(data.estimatedCost.toFixed(2)),
-    })),
+    ingredientsConsumed,
     userReports,
     treasuryBalances,
     expenseDetails,
