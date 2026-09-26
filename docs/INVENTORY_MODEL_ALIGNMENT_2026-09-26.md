@@ -159,7 +159,11 @@ Progress continuity rule:
 - Updated smoke/navigation/drift/history tests so they no longer require retired production pages.
 - Production database objects and historical data remain untouched.
 
-### P5 reporting and active UI terminology — in progress
+### P5 reporting and active UI terminology — implemented
+
+- Final active-screen sweep found no remaining current-user labels that present manufacturing/production as an active workflow across Recipes, Products, Pricing, Component Groups, Product Setup, Reports, and Waste Center.
+- Recipes now says **Component Groups / مجموعات المكونات** instead of manufactured-item wording.
+- Waste Center retains historical production-waste visibility but no longer offers `production` as a type for new waste entries.
 
 - Renamed the report-center user-facing category from **Manufacturing & Costing / التصنيع والتكلفة** to **Components & Costing / المكونات والتكلفة** while preserving internal report keys for compatibility.
 - Renamed the user-facing `production_waste` report to **Waste Report / تقرير الهالك**; underlying report key/data source remain unchanged.
@@ -169,6 +173,9 @@ Progress continuity rule:
 - No schema/RLS/Production data change; only current runtime labels and descriptions were changed.
 
 ## Verification ledger
+
+- Verify Run #2986 / 36245615896 on `79dfbd286427e5b6a4bc2d13f7f51e9b5392f5c8`: **FULL GREEN** — worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, app/test typecheck ✅, unit ✅, build ✅, canonical DB migrations/schema ✅, integration + security/RLS ✅, browser smoke ✅.
+- After that green baseline, the final active-screen sweep changed only user-facing wording in Recipes and stopped offering **new** `production` waste-type entries while preserving historical `production` rows for display/audit. No schema/RLS/data migration.
 
 - Verify Run #2983 / 36244879006: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, application/test typecheck ✅. Unit suite reached 1127/1128 passed; the only failure was one stale text assertion in `catalogTerminologyLockContract.test.ts` expecting an older English sentence that no longer exists after the approved wizard copy cleanup. Build/DB/browser did not run after unit failure.
 - Performed a targeted test sweep for remaining old `Manufactured Items / Production Orders / Manufacturing Center / Production Waste` assertions before changing runtime again. No additional active test assertions were found beyond the known terminology lock.
@@ -201,7 +208,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Observe Verify Run #2985. If focused code gates are green, continue the remaining P5 active-screen sweep with Recipes/Products/report labels only; do not modify schema, RLS, stored role permissions, printing, KDS, or kitchen-send runtime. At the end of the P3-P5 cleanup group, run Fast Verify, then one exact-head Full Verify as the final merge gate.
+Wait for the exact-current-head verification after the final active-screen cleanup. If code gates are green, P0-P5 implementation is complete. Do not add more runtime changes. Record the exact final head, then use one final exact-head Full Verify as the merge gate. Merge only after all verify/db/browser jobs are green and no unexpected main movement occurred.
 
 ## Mandatory update protocol
 
