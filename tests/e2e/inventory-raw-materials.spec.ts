@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const SUPABASE_ORIGIN = process.env.VITE_SUPABASE_URL || 'https://azzdesuowpdcoflmyezn.supabase.co';
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000071';
 const BRANCH_ID = '00000000-0000-0000-0000-000000000072';
+const WAREHOUSE_ID = '00000000-0000-0000-0000-000000000073';
 
 function base64Url(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -74,16 +75,19 @@ async function mockInventoryBackend(page: Page) {
         ]),
       });
     }
-    if (path.endsWith('/raw_material_inventory')) {
+    if (path.endsWith('/warehouses')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: WAREHOUSE_ID, branch_id: BRANCH_ID, name: 'المخزن الرئيسي', is_active: true }]) });
+    }
+    if (path.endsWith('/raw_material_warehouse_inventory')) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([
-          { id: 'balance-1', raw_material_id: 'raw-with-balance', branch_id: BRANCH_ID, quantity: 8, avg_cost: 10, min_stock: 2 },
+          { raw_material_id: 'raw-with-balance', branch_id: BRANCH_ID, warehouse_id: WAREHOUSE_ID, quantity: 8, avg_cost: 10 },
         ]),
       });
     }
-    if (path.endsWith('/inventory') || path.endsWith('/warehouses') || path.endsWith('/product_components') || path.endsWith('/roles')) {
+    if (path.endsWith('/inventory') || path.endsWith('/product_components') || path.endsWith('/roles')) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]', headers: { 'content-range': '0-0/0' } });
     }
     if (path.includes('/rpc/')) {
@@ -108,8 +112,8 @@ test('inventory shows catalog raw materials even when no balance row exists', as
 
   await expect(page.getByTestId('inventory-page')).toBeVisible();
   await expect(page.getByTestId('raw-material-branch-stock-panel')).toBeVisible();
-  await expect(page.getByTestId('raw-stock-row-raw-with-balance')).toContainText('دقيق');
-  await expect(page.getByTestId('raw-stock-row-raw-with-balance')).toContainText('8');
-  await expect(page.getByTestId('raw-stock-row-raw-zero-balance')).toContainText('سكر');
-  await expect(page.getByTestId('raw-stock-row-raw-zero-balance')).toContainText(/رصيد صفر|Zero balance/);
+  await expect(page.getByTestId(`raw-stock-row-raw-with-balance-${WAREHOUSE_ID}`)).toContainText('دقيق');
+  await expect(page.getByTestId(`raw-stock-row-raw-with-balance-${WAREHOUSE_ID}`)).toContainText('8');
+  await expect(page.getByTestId(`raw-stock-row-raw-zero-balance-${WAREHOUSE_ID}`)).toContainText('سكر');
+  await expect(page.getByTestId(`raw-stock-row-raw-zero-balance-${WAREHOUSE_ID}`)).toContainText(/رصيد صفر|Zero balance/);
 });
