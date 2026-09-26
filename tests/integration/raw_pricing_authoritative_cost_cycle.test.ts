@@ -41,6 +41,18 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     });
   }
 
+  async function valuation() {
+    return asUser(managerUser, async () => {
+      const r = await client.query(
+        `SELECT estimated_negative_value::text, unpriced_negative_quantity::text
+           FROM public.get_raw_material_cost_valuation_overview($1)
+          WHERE raw_material_id = $2`,
+        [branchA, rawA],
+      );
+      return r.rows[0] as { estimated_negative_value: string; unpriced_negative_quantity: string };
+    });
+  }
+
   beforeAll(async () => {
     client = openDb(dbUrl!);
     await client.connect();
@@ -162,6 +174,16 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(20);
     expect(current.price_source).toBe('pricing');
     expect(current.reference_number).toMatch(/^PRICE-/);
+
+    await client.query(
+      `INSERT INTO public.raw_material_batches
+         (raw_material_id, branch_id, warehouse_id, batch_number, quantity, unit_cost, source_type)
+       VALUES ($1, $2, $3, $4, -2, 0, 'sale_oversold')`,
+      [rawA, branchA, warehouseA, `OV-PRICE-${randomUUID().slice(0, 8)}`],
+    );
+    const v = await valuation();
+    expect(Number(v.estimated_negative_value)).toBe(40);
+    expect(Number(v.unpriced_negative_quantity)).toBe(0);
   });
 
   it('a newer completed purchase replaces pricing as the latest costing price', async () => {
@@ -185,6 +207,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(30);
     expect(current.price_source).toBe('purchase');
     expect(current.reference_number).toBe(invoice);
+    expect(Number((await valuation()).estimated_negative_value)).toBe(60);
   });
 
   it('a newer applied stock count replaces the purchase price', async () => {
@@ -208,6 +231,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(40);
     expect(current.price_source).toBe('stock_count');
     expect(current.reference_number).toBe(countNumber);
+    expect(Number((await valuation()).estimated_negative_value)).toBe(80);
   });
 
   it('a newer manual pricing event becomes authoritative again and history contains all sources', async () => {
@@ -224,6 +248,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     const current = await latest();
     expect(Number(current.latest_cost)).toBe(50);
     expect(current.price_source).toBe('pricing');
+    expect(Number((await valuation()).estimated_negative_value)).toBe(100);
 
     const history = await asUser(managerUser, async () => {
       const r = await client.query(
