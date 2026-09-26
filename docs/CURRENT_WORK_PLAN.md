@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/INVENTORY_MODEL_ALIGNMENT_2026-09-26.md`
-- Current active branch: `development/inventory-model-alignment-20260926`
-- Current PR: `#382`
+- Mandatory active work log: `docs/PERMISSION_RUNTIME_ALIGNMENT_2026-09-26.md`
+- Current active branch: `development/permission-runtime-alignment-20260926`
+- Current PR: `#383`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -26,7 +26,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/inventory-model-alignment-20260926`
+- Executable branch: `development/permission-runtime-alignment-20260926`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
