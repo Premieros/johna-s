@@ -83,6 +83,8 @@ export const accounting = {
       daily_close_id: string;
       business_date: string;
       closed_at: string;
+      movement_until: string;
+      is_latest: boolean;
       cash_sales: number;
       bank_sales: number;
       credit_sales: number;
@@ -92,12 +94,23 @@ export const accounting = {
       cash_balance_after_close: number;
       bank_balance_after_close: number;
       total_balance_after_close: number;
-      previous_cash_balance: number | null;
-      previous_bank_balance: number | null;
-      previous_total_balance: number | null;
-      cash_movement_since_previous_close: number | null;
-      bank_movement_since_previous_close: number | null;
-      total_movement_since_previous_close: number | null;
+      cash_movement_after_close: number;
+      bank_movement_after_close: number;
+      total_movement_after_close: number;
+      cash_balance_after_movement: number;
+      bank_balance_after_movement: number;
+      total_balance_after_movement: number;
+      movement_details: Array<{
+        journal_entry_id: string;
+        created_at: string;
+        reference_type: string;
+        reference_id: string | null;
+        reference_number: string | null;
+        description: string | null;
+        cash_effect: number;
+        bank_effect: number;
+        total_effect: number;
+      }>;
     }>;
   }> { return rpc('get_branch_treasury_day_close_reconciliation', p); },
   processTransfer(p: { p_branch_id: string | null; p_from_account_id: string; p_to_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_transfer', p); },
