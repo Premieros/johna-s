@@ -27,6 +27,7 @@ export interface BranchSettings {
   tax_enabled: boolean | null;
   currency: string | null;
   low_stock_threshold: number | null;
+  invoice_prefix: string | null;
   business_day_mode: 'fixed_time' | 'shift_span';
   business_day_start: string;
   business_day_end: string;
@@ -55,6 +56,11 @@ export interface Settings {
   pos_barcode_autofocus: boolean;
   pos_line_discount: boolean;
   invoice_prefix: string;
+  /**
+   * Runtime-only branch override merged by SettingsContext.
+   * It is not a column on public.settings; persisted in public.branch_settings.invoice_prefix.
+   */
+  branch_invoice_prefix?: string | null;
   invoice_next_number: number;
   invoice_decimal_places: number;
   receipt_width_mm: number;

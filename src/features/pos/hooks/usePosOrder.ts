@@ -221,7 +221,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       setOfflineCompleting(true);
       try {
-        const invoiceNumber = await nextInvoiceNumber();
+        const invoiceNumber = await nextInvoiceNumber(input.effSettings?.branch_invoice_prefix);
         const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : base.paidAmount || base.total;
         const { result, error } = await processSaleForOrder({
           p_invoice_number: invoiceNumber,
@@ -275,7 +275,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       const preview = settlementPreview || await loadSettlementPreview(false);
       if (!preview) return false;
 
-      const invoiceNumber = await nextInvoiceNumber();
+      const invoiceNumber = await nextInvoiceNumber(input.effSettings?.branch_invoice_prefix);
       const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : (base.paidAmount || preview.total);
       const { result, error } = await processSaleForOrder({
         p_invoice_number: invoiceNumber,
