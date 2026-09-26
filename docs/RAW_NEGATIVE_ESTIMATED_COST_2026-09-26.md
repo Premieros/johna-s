@@ -53,6 +53,8 @@ State: **BLOCKED**
 - Day closing report uses the same authoritative period RPC and shows the same split.
 - Frontend API/types and API/schema contract were updated for the new RPCs.
 - Added regression coverage preventing shift/day reports from returning to recipe `default_cost` costing.
+- Production read-only audit confirmed canonical raw consumption uses `entry_type='kitchen_send'` (10,848 negative rows) plus historical `sale` rows (2,144); an early filter that omitted `kitchen_send` was caught before merge and corrected.
+- The period consumption RPC now follows the same canonical `sale/kitchen_send` contract used by the existing raw-material financial report and respects `private.financial_reference_visible`.
 - Added integration coverage for: known FIFO 1200 -> oversold estimate 1200 with zero actual oversold ledger COGS -> later purchase 1300 -> actual FIFO settlement at 1300.
 - Parallel-work reconciliation: PR #378 (guaranteed receipt/Z command generation) merged into `main@836ddefd7e2d95997ff83e04f595deef16e50b1a`. Its ShiftModal/printing changes were preserved intact by merging that exact main commit into this branch; this costing work does not edit those print-command paths.
 - No Production migration has been applied.
