@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 
-const migration = fs.readFileSync(
+const baseMigration = fs.readFileSync(
   'supabase/migrations/20260926083000_shift_zero_opening_negative_close_treasury_reconciliation.sql',
   'utf8',
 );
+const reconciliationMigration = fs.readFileSync(
+  'supabase/migrations/20260926133500_treasury_day_close_movement_reconciliation.sql',
+  'utf8',
+);
+const migration = `${baseMigration}\n${reconciliationMigration}`;
 const shiftsPage = fs.readFileSync('src/features/trade/pages/ShiftsPage.tsx', 'utf8');
 const shiftModal = fs.readFileSync('src/features/pos/components/shift/ShiftModal.tsx', 'utf8');
 const treasuryPage = fs.readFileSync('src/features/accounting/pages/TreasuryPage.tsx', 'utf8');
@@ -33,17 +38,22 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
     expect(migration).not.toContain('INSERT INTO public.treasury_transactions');
     expect(migration).not.toContain('INSERT INTO public.journal_entries');
     expect(treasuryPage).toContain('مطابقة إغلاقات الأيام مع خزنة الفرع');
-    expect(treasuryPage).toContain('لا تنشئ حركة محاسبية جديدة');
+    expect(treasuryPage).toContain('الحركة بعد الإغلاق');
+    expect(treasuryPage).toContain('الرصيد الحالي للخزنة');
   });
 
-  it('shows cash and bank balances after each day close plus movement since previous close', () => {
+  it('shows close balances, post-close movement, and the reconciled balance after movement', () => {
     for (const field of [
       'cash_balance_after_close',
       'bank_balance_after_close',
       'total_balance_after_close',
-      'cash_movement_since_previous_close',
-      'bank_movement_since_previous_close',
-      'total_movement_since_previous_close',
+      'cash_movement_after_close',
+      'bank_movement_after_close',
+      'total_movement_after_close',
+      'cash_balance_after_movement',
+      'bank_balance_after_movement',
+      'total_balance_after_movement',
+      'movement_details',
     ]) {
       expect(migration).toContain(field);
       expect(treasuryPage).toContain(field);
