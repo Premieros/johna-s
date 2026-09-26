@@ -31,6 +31,8 @@ interface ShiftCloseResult extends RpcResult {
   open_order_count?: number;
   open_table_count?: number;
   open_orders_preserved?: boolean;
+  next_shift_id?: string | null;
+  next_shift_opening_amount?: number | null;
 }
 interface BusinessDayCloseResult extends RpcResult {
   daily_close_id?: string;
@@ -193,10 +195,14 @@ export function ShiftsPage() {
       open_orders_preserved: preservedOpenOrders,
       open_order_count: res.open_order_count ?? 0,
       open_table_count: res.open_table_count ?? 0,
+      next_shift_id: res.next_shift_id ?? null,
+      next_shift_opening_amount: res.next_shift_opening_amount ?? null,
     });
     show(
       preservedOpenOrders
-        ? (isAr ? 'تم إغلاق الوردية مع إبقاء الطلبات والطاولات المفتوحة كما هي' : 'Shift closed; open orders and tables were preserved')
+        ? (res.next_shift_id
+          ? (isAr ? 'تم إغلاق الوردية وفتح وردية جديدة برصيد 0 تلقائيًا؛ الطلبات والطاولات المفتوحة مستمرة كما هي' : 'Shift closed and a new zero-opening shift started automatically; open orders and tables continue unchanged')
+          : (isAr ? 'تم إغلاق الوردية مع إبقاء الطلبات والطاولات المفتوحة كما هي' : 'Shift closed; open orders and tables were preserved'))
         : t('shiftClosed'),
       'success',
     );
