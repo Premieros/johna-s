@@ -140,7 +140,11 @@ BEGIN
 
   NEW.avg_cost := CASE
     WHEN v_positive_qty > 0 THEN round(v_positive_value / v_positive_qty, 2)
-    ELSE 0
+    ELSE COALESCE(
+      NULLIF(NEW.avg_cost, 0),
+      CASE WHEN TG_OP = 'UPDATE' THEN NULLIF(OLD.avg_cost, 0) ELSE NULL END,
+      0
+    )
   END;
 
   RETURN NEW;
@@ -156,7 +160,9 @@ FOR EACH ROW
 EXECUTE FUNCTION public._raw_inventory_actual_avg_cost_guard();
 
 
--- Recompute the stored actual average once after the trigger is installed.
+-- Recompute stored averages once after the trigger is installed.
+-- If no positive batch exists, the guard preserves the last persisted actual average
+-- instead of letting negative stock erase it to zero.
 -- This is valuation-only: quantity, ledger cost and accounting journals are untouched.
 UPDATE public.raw_material_inventory rmi
 SET avg_cost = rmi.avg_cost
