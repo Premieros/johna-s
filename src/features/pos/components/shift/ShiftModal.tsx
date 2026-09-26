@@ -129,7 +129,7 @@ export function ShiftModal({
         p_reason: notes.trim() || null,
       });
       if (error) throw error;
-      const result = data as { success?: boolean; error?: string; detail?: string } | null;
+      const result = data as { success?: boolean; error?: string; detail?: string; next_shift_id?: string | null; next_shift_opening_amount?: number | null } | null;
       if (!result?.success) {
         if (result?.error === 'APPROVAL_REQUIRED') {
           const requested = await requestManagerApproval(
@@ -263,14 +263,21 @@ export function ShiftModal({
         p_notes: notes.trim() || null,
       });
       if (error) throw error;
-      const result = data as { success?: boolean; error?: string; detail?: string } | null;
+      const result = data as { success?: boolean; error?: string; detail?: string; next_shift_id?: string | null; next_shift_opening_amount?: number | null } | null;
       if (!result?.success) {
         show(result?.detail || result?.error || (isAr ? 'تعذر إغلاق الوردية' : 'Could not close shift'), 'error');
         return;
       }
 
       setCloseBlock(null);
-      show(isAr ? 'تم إغلاق الوردية مع إبقاء الطلبات المفتوحة كما هي' : 'Shift closed and open orders were preserved', 'success');
+      show(
+        result.next_shift_id
+          ? (isAr
+            ? 'تم إغلاق الوردية وفتح وردية جديدة برصيد 0 تلقائيًا؛ الطلبات المفتوحة مستمرة كما هي'
+            : 'Shift closed and a new zero-opening shift started automatically; open orders continue unchanged')
+          : (isAr ? 'تم إغلاق الوردية مع إبقاء الطلبات المفتوحة كما هي' : 'Shift closed and open orders were preserved'),
+        'success',
+      );
       onShiftClosed();
       onClose();
     } catch (err: unknown) {
