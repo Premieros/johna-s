@@ -5,11 +5,11 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/inventory-model-alignment-20260926`
 Current PR: #382
 Base: `main@a6abe7a60e7f076f9c05222533038a5a1bc7884f`
-Started: 2026-09-26 Africa/Cairo
+Last updated: 2026-09-26 Africa/Cairo
 
 ## Work status
 
-State: **IN PROGRESS — AUDIT/SAFE ALIGNMENT**
+State: **BLOCKED**
 
 Goal: align the inventory/catalog user surface with the current permanent operating model without interrupting live branch operations.
 
@@ -27,6 +27,14 @@ Goal: align the inventory/catalog user surface with the current permanent operat
 - Historical production data remains auditable.
 - PR #372 is an older isolated manufacturing-retirement draft; do not write to it or merge it implicitly. Reuse only proven concepts after reconciling with latest `main`.
 
+## Baseline
+
+- Base: `main@a6abe7a60e7f076f9c05222533038a5a1bc7884f` (includes merged PR #381).
+- Branch created directly from that exact main head.
+- Current PR: #382 (Draft).
+- Production code path remains unchanged until merge; no Production database write has been performed.
+- Transfer Stage-B warehouse-aware raw-material contract already exists on current main and is being consumed, not redefined, by P1.
+
 ## Permanent operating model
 
 - Sellable product = a named collection of direct raw components and/or reusable named component groups.
@@ -38,7 +46,7 @@ Goal: align the inventory/catalog user surface with the current permanent operat
 - User-facing stock transfer is raw-material transfer, not finished-product transfer.
 - Legacy production history may remain in the database for audit compatibility, but must not drive current UI behavior.
 
-## Confirmed drift / root-cause ledger
+## Root-cause ledger
 
 1. `TransfersPage` still exposes `product | raw_material`, requires a second destination item field, and blocks same-branch raw transfer using obsolete branch-level-stock wording.
 2. `InventoryPage` still presents finished-product `inventory` as the main stock surface, including Ready/Component/Manufactured labels.
@@ -118,3 +126,13 @@ State: **BLOCKED**
 ## Next action
 
 Run focused/unit/type verification for P1 on the current exact head. Fix only regressions caused by the transfer correction. Do not begin P2 until P1 is green. Stop before any Production migration or merge.
+
+
+## Mandatory update protocol
+
+- Before every repository write, verify current branch HEAD and current `main`.
+- Unexpected branch or main movement = STOP_AND_RECONCILE before continuing.
+- Update `Change ledger` after each logical change group.
+- Update `Verification ledger` after every focused or full verification run with the real result and Run ID.
+- Keep `docs/CURRENT_WORK_PLAN.md` pointing to this log while PR #382 is the active scope.
+- Do not merge or apply any Production migration until exact-head Full Verify is Green and explicit approval is recorded.
