@@ -8,15 +8,7 @@ DECLARE
     'public.update_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,text)'
   );
   v_def text;
-  v_anchor text := $anchor$
-    IF p_table_id IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM public.dining_tables
-      WHERE id = p_table_id AND branch_id = v_branch_id AND is_active
-    ) THEN
-      RETURN jsonb_build_object('success', false, 'error', 'TABLE_NOT_IN_BRANCH', 'table_id', p_table_id);
-    END IF;
-
-$anchor$;
+  v_anchor text := E'    IF p_table_id IS NOT NULL AND NOT EXISTS (\n';
   v_guard text := $guard$
     -- TABLE_ORDER_BINDING_PRESERVE_V1
     -- Legacy/ordinary POS saves may omit p_table_id while editing a dine-in
@@ -54,6 +46,8 @@ BEGIN
     RAISE EXCEPTION 'update_order stable table-validation anchor not found; refusing drifted patch';
   END IF;
 
+  -- update_order has exactly one table-validation block. Anchor at its stable
+  -- opening line so the patch tolerates formatting drift inside that block.
   EXECUTE replace(v_def, v_anchor, v_guard || v_anchor);
 END
 $migration$;
