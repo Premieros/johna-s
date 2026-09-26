@@ -40,7 +40,7 @@ describe('catalog terminology and measurement-unit lock contract', () => {
 
     expect(source).toContain(".eq('unit_type', 'manufactured')");
     expect(source).toContain("['2', isAr ? 'مجموعات المكونات' : 'Component groups']");
-    expect(source).toContain('Products do not have measurement units.');
+    expect(source).toContain('Measurement units come from the raw material and remain fixed.');
     expect(source).not.toContain("'وحدات المنتج'");
     expect(source).not.toContain("'Product units'");
   });
