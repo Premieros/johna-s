@@ -78,7 +78,7 @@ describe.skipIf(skip)('Raw negative estimated valuation', () => {
       [raw, branch],
     );
     expect(num(inv.rows[0].quantity)).toBe(-2);
-    expect(num(inv.rows[0].avg_cost)).toBe(0);
+    expect(num(inv.rows[0].avg_cost)).toBe(1200);
   });
 
   it('settles the estimate with the real purchase and keeps actual average based on positive stock only', async () => {
