@@ -156,6 +156,14 @@ export function RawMaterialBranchStockPanel() {
     () => branches.find((branch) => branch.id === selectedBranchId)?.name || '',
     [branches, selectedBranchId],
   );
+  const visibleWarehouses = useMemo(
+    () => warehouses.filter((warehouse) => !selectedBranchId || warehouse.branch_id === selectedBranchId),
+    [warehouses, selectedBranchId],
+  );
+  const visibleRows = useMemo(
+    () => rows.filter((row) => !selectedWarehouseId || row.warehouse_id === selectedWarehouseId),
+    [rows, selectedWarehouseId],
+  );
   const showBranchColumn = !selectedBranchId && branches.length > 1;
 
   return (
@@ -169,7 +177,7 @@ export function RawMaterialBranchStockPanel() {
             <Select
               label={isAr ? 'الفرع' : 'Branch'}
               value={selectedBranchId}
-              onChange={(event) => setSelectedBranchId(event.target.value)}
+              onChange={(event) => { setSelectedBranchId(event.target.value); setSelectedWarehouseId(''); }}
               data-testid="raw-stock-branch-select"
             >
               <option value="">{isAr ? 'كل الفروع المسموح بها' : 'All accessible branches'}</option>
@@ -177,6 +185,12 @@ export function RawMaterialBranchStockPanel() {
             </Select>
           </div>
         )}
+        <div className="max-w-sm">
+          <Select label={isAr ? 'المخزن' : 'Warehouse'} value={selectedWarehouseId} onChange={(event) => setSelectedWarehouseId(event.target.value)} data-testid="raw-stock-warehouse-select">
+            <option value="">{isAr ? 'كل المخازن' : 'All warehouses'}</option>
+            {visibleWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+          </Select>
+        </div>
 
         {branchesLoading || loading ? (
           <div className="py-6 text-center text-sm text-ui-muted">{isAr ? 'جاري تحميل الخامات...' : 'Loading raw materials...'}</div>
@@ -187,7 +201,7 @@ export function RawMaterialBranchStockPanel() {
             <Boxes className="mx-auto mb-2 h-6 w-6 text-ui-subtle" />
             <p className="font-semibold text-ui-text">{isAr ? 'لا توجد فروع متاحة لهذا المستخدم' : 'No accessible branches for this user'}</p>
           </div>
-        ) : rows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <div className="rounded-xl border border-ui-border bg-ui-page-alt p-5 text-center">
             <Boxes className="mx-auto mb-2 h-6 w-6 text-ui-subtle" />
             <p className="font-semibold text-ui-text">{isAr ? 'لا توجد خامات مسجلة ضمن النطاق المحدد' : 'No raw materials in the selected scope'}</p>
@@ -202,6 +216,7 @@ export function RawMaterialBranchStockPanel() {
                 <tr>
                   <th className="px-3 py-2 text-start">{isAr ? 'الخامة' : 'Raw Material'}</th>
                   {showBranchColumn && <th className="px-3 py-2 text-start">{isAr ? 'الفرع' : 'Branch'}</th>}
+                  <th className="px-3 py-2 text-start">{isAr ? 'المخزن' : 'Warehouse'}</th>
                   <th className="px-3 py-2 text-start">{isAr ? 'الوحدة' : 'Unit'}</th>
                   <th className="px-3 py-2 text-end">{isAr ? 'المتاح' : 'Available'}</th>
                   <th className="px-3 py-2 text-end">{isAr ? 'الحد الأدنى' : 'Minimum'}</th>
@@ -209,7 +224,7 @@ export function RawMaterialBranchStockPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-ui-border">
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const quantity = Number(row.quantity || 0);
                   const minimum = Number(row.min_stock || 0);
                   const low = quantity <= minimum;
@@ -217,9 +232,10 @@ export function RawMaterialBranchStockPanel() {
                   const unit = measurementUnit?.symbol || measurementUnit?.code || measurementUnit?.name || '-';
                   const branchName = branches.find((branch) => branch.id === row.branch_id)?.name || row.branch_id;
                   return (
-                    <tr key={`${row.branch_id}:${row.raw_material_id}`} data-testid={`raw-stock-row-${row.raw_material_id}`}>
+                    <tr key={`${row.branch_id}:${row.warehouse_id}:${row.raw_material_id}`} data-testid={`raw-stock-row-${row.raw_material_id}-${row.warehouse_id}`}>
                       <td className="px-3 py-2 font-semibold text-ui-text"><div>{row.raw_material.name || '-'}</div><div className="text-xs font-normal text-ui-subtle">{unit}</div></td>
                       {showBranchColumn && <td className="px-3 py-2 text-ui-muted">{branchName}</td>}
+                      <td className="px-3 py-2 text-ui-muted">{row.warehouse_name}</td>
                       <td className="px-3 py-2 text-ui-muted">{unit}</td>
                       <td className="px-3 py-2 text-end font-bold text-ui-text">{formatRawMaterialQuantity(quantity, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2 text-end text-ui-muted">{formatRawMaterialQuantity(minimum, measurementUnit, { lang })}</td>
