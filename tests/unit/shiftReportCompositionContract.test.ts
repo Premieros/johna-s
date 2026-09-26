@@ -12,7 +12,7 @@ describe('shift report product / ingredient composition contract', () => {
     expect(source).toContain('const netQuantity = Math.max(0, Number(item.quantity || 0) - Number(item.refunded_quantity || 0))');
     expect(source).toContain('const netLineTotal = Math.max(0, grossLineTotal - Number(item.refunded_amount || 0))');
     expect(source).toContain('productsSold: Array.from(productMap');
-    expect(source).toContain("supabase.rpc('get_raw_consumption_cost_breakdown'");
+    expect(source).toContain("costingApi.getRawConsumptionCostBreakdown");
     expect(source).toContain('ingredientsConsumed,');
     expect(source).toContain('orderTypes: Array.from(orderTypeMap');
     expect(source).not.toContain('productsSold: []');
@@ -21,7 +21,7 @@ describe('shift report product / ingredient composition contract', () => {
   });
 
   it('uses FIFO ledger costing for raw consumption without altering shift membership authority', () => {
-    expect(source).toContain("supabase.rpc('get_raw_consumption_cost_breakdown'");
+    expect(source).toContain("costingApi.getRawConsumptionCostBreakdown");
     expect(source).toContain('actualQuantity: Number(row.actual_quantity || 0)');
     expect(source).toContain('estimatedQuantity: Number(row.estimated_quantity || 0)');
     expect(source).toContain('actualCost: Number(row.actual_cost || 0)');
