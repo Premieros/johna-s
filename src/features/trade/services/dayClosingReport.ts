@@ -1,4 +1,4 @@
-import { supabase } from '@/api';
+import { supabase, costing as costingApi } from '@/api';
 import { escapeHtml, formatCurrency, formatDateTime } from '@/lib/format';
 import type { Language } from '@/lib/types';
 
@@ -73,7 +73,7 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
   const rawWindowStart = s(raw.window_start);
   const rawWindowEnd = s(raw.window_end);
   if (rawWindowStart && rawWindowEnd) {
-    const { data: rawCostRows, error: rawCostError } = await supabase.rpc('get_raw_consumption_cost_breakdown', {
+    const { data: rawCostRows, error: rawCostError } = await costingApi.getRawConsumptionCostBreakdown({
       p_branch_id: branchId,
       p_from: rawWindowStart,
       p_to: rawWindowEnd,
