@@ -153,8 +153,7 @@ test('cashier with no active shift gets a real open-shift workflow from POS', as
   await openButton.click();
 
   const openingInput = page.getByRole('spinbutton', { name: /المبلغ الافتتاحي|رصيد الافتتاح|Opening Amount/i });
-  await expect(openingInput).toBeVisible();
-  await openingInput.fill('50');
+  await expect(openingInput).toHaveCount(0);
 
   const modal = page.getByRole('dialog');
   await modal.getByRole('button', { name: /فتح.*(?:وردية|شيفت)|Open Shift/i }).click();
@@ -162,6 +161,6 @@ test('cashier with no active shift gets a real open-shift workflow from POS', as
   await expect.poll(() => openShiftPayload, { timeout: 10000 }).not.toBeNull();
   expect(openShiftPayload).toMatchObject({
     p_branch_id: BRANCH_ID,
-    p_opening_amount: 50,
+    p_opening_amount: 0,
   });
 });
