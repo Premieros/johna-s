@@ -49,7 +49,7 @@ export type Permission =
   | 'approvals.review' | 'approvals.override' | 'approvals.policy.manage'
   | 'work.authorization.approve' | 'work.authorization.manage' | 'work.authorization.bypass'
   | 'procurement.request.create' | 'procurement.order.create' | 'procurement.receive' | 'procurement.payment.create'
-  | 'accounting.journal.post' | 'accounting.treasury.transfer' | 'accounting.reconciliation.manage'
+  | 'accounting.journal.post' | 'accounting.treasury.transfer' | 'accounting.treasury.main_cash.pay' | 'accounting.reconciliation.manage'
   | 'users.create' | 'users.branches.manage' | 'roles.permissions.manage'
   | 'users.view' | 'users.manage'
   | 'audit.view'
@@ -83,7 +83,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'expenses.view', 'expenses.manage', 'expenses.edit', 'expenses.routing.manage', 'expenses.print',
   'sales.view', 'sales.refund.create', 'sales.payment.receive', 'refunds.approve',
   'reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export',
-  'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage',
+  'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.treasury.main_cash.pay', 'accounting.reconciliation.manage',
   'shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close',
   'approvals.review', 'approvals.override', 'approvals.policy.manage',
   'work.authorization.approve', 'work.authorization.manage', 'work.authorization.bypass',
@@ -187,6 +187,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'accounts.manage': { ar: 'إدارة الحسابات', en: 'Manage Accounts' },
   'accounting.journal.post': { ar: 'ترحيل قيود اليومية', en: 'Post Journal Entries' },
   'accounting.treasury.transfer': { ar: 'تحويل بين الخزن', en: 'Transfer Treasury Funds' },
+  'accounting.treasury.main_cash.pay': { ar: 'السداد من الخزنة الرئيسية', en: 'Pay from Main Treasury' },
   'accounting.reconciliation.manage': { ar: 'إدارة التسويات البنكية', en: 'Manage Bank Reconciliation' },
   'shifts.view': { ar: 'عرض الشيفتات', en: 'View Shifts' },
   'shifts.open': { ar: 'فتح شيفت', en: 'Open Shift' },
@@ -236,7 +237,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.print'] },
   { key: 'sales', ar: 'المبيعات', en: 'Sales', permissions: ['sales.view', 'sales.refund.create', 'sales.payment.receive', 'sales.export', 'refunds.approve', 'sales.print'] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', permissions: ['expenses.view', 'expenses.manage', 'expenses.edit', 'expenses.routing.manage', 'expenses.print'] },
-  { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.reconciliation.manage'] },
+  { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.treasury.main_cash.pay', 'accounting.reconciliation.manage'] },
   { key: 'shifts', ar: 'الشيفتات', en: 'Shifts', permissions: ['shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close'] },
   { key: 'approvals', ar: 'الموافقات', en: 'Approvals', permissions: ['approvals.review', 'approvals.override', 'approvals.policy.manage', 'work.authorization.approve', 'work.authorization.manage', 'work.authorization.bypass'] },
   { key: 'reports', ar: 'التقارير', en: 'Reports', permissions: ['reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export'] },

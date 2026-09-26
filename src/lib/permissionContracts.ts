@@ -94,6 +94,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'accounts.manage': ['accounts.view'],
   'accounting.journal.post': ['accounts.view'],
   'accounting.treasury.transfer': ['accounts.view'],
+  'accounting.treasury.main_cash.pay': ['procurement.payment.create'],
   'accounting.reconciliation.manage': ['accounts.view'],
 
   'shifts.open': ['shifts.view'],
@@ -179,6 +180,7 @@ const SENSITIVE = new Set<Permission>([
   'sales.refund.create',
   'accounting.journal.post',
   'accounting.treasury.transfer',
+  'accounting.treasury.main_cash.pay',
   'accounting.reconciliation.manage',
   'shifts.close',
   'approvals.review',
@@ -260,6 +262,12 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     en: 'Configures which users require work authorization inside accessible branches.',
     notesAr: 'يتطلب صلاحية اعتماد بدء العمل ولا يسمح بإدارة مستخدم خارج نطاق الفروع.',
     notesEn: 'Requires work authorization approval capability and cannot manage users outside accessible branches.',
+  },
+  'accounting.treasury.main_cash.pay': {
+    ar: 'يسمح باختيار الخزنة الرئيسية كمصدر لسداد المورد فقط، ولا يمنح التحويل بين الخزن.',
+    en: 'Allows Main Treasury as a supplier-payment source only; it does not grant treasury transfers.',
+    notesAr: 'يتطلب أيضًا صلاحية تسجيل دفعة مورد. الرصيد والمصدر يظهران بوضوح قبل التنفيذ.',
+    notesEn: 'Also requires supplier-payment permission. The source and balance are shown before execution.',
   },
   'work.authorization.bypass': {
     ar: 'يتجاوز شرط اعتماد بدء العمل لحامل الصلاحية نفسه.',

@@ -14,6 +14,7 @@ import { formatCurrency, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
+import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment, TreasurySource } from '@/lib/types';
@@ -25,6 +26,7 @@ export function PaymentsPage() {
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const history = useHistoryAccess();
+  const can = useCan();
   const { effectiveSettings } = useSettings();
   const [tab, setTab] = useState<Tab>('ar');
   const [rows, setRows] = useState<ArAgingRow[]>([]);
@@ -33,6 +35,7 @@ export function PaymentsPage() {
   const [search, setSearch] = useState('');
   const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const canUseMainTreasury = can('accounting.treasury.main_cash.pay') || can('accounting.treasury.transfer');
   const { rows: payments, loading: paymentsLoading, error: paymentsError, total: paymentsTotal, hasMore: paymentsHasMore, loadMore: loadMorePayments, loadingMore: loadingMorePayments, refresh: reloadPayments } = usePaginatedRows<CustomerPayment>({
     table: 'customer_payments',
     select: 'id, amount, payment_method, reference_number, notes, created_at, customer:customers(name)',
@@ -190,7 +193,15 @@ export function PaymentsPage() {
     setSaving(false);
     if (error) { show(error.message, 'error'); return; }
     const r = data as { success: boolean; error?: string; detail?: string; reference_number?: string } | null;
-    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error'); return; }
+    if (!r?.success) {
+      const message = r?.error === 'MAIN_TREASURY_PAYMENT_PERMISSION_REQUIRED'
+        ? (lang === 'ar'
+          ? 'لا تملك صلاحية «السداد من الخزنة الرئيسية». صلاحية تسجيل دفعة المورد وحدها لا تسمح باستخدام الخزنة الرئيسية.'
+          : 'You do not have “Pay from Main Treasury”. Supplier-payment permission alone does not allow Main Treasury funding.')
+        : r?.detail || r?.error || t('error');
+      show(message, 'error');
+      return;
+    }
     show(`${t('paySupplier')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
     await logAudit('create', 'supplier_payments', undefined, { supplier_id: paying.supplier_id, amount });
     setPaying(null);
@@ -236,7 +247,9 @@ export function PaymentsPage() {
     { key: 'supplier', header: t('supplier'), render: (p) => p.supplier?.name || '-' },
     { key: 'reference_number', header: t('entryNumber'), render: (p) => <span className="font-mono text-xs">{p.reference_number}</span> },
     { key: 'payment_method', header: t('paymentMethod'), render: (p) => ({ cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit') })[p.payment_method] || p.payment_method },
-    { key: 'source', header: lang === 'ar' ? 'مصدر السداد' : 'Payment source', render: (p) => p.treasury_account?.account_name || '-' },
+    { key: 'source', header: lang === 'ar' ? 'مصدر السداد' : 'Payment source', render: (p) => p.treasury_account
+      ? `${p.treasury_account.account_name} · ${p.treasury_account.scope === 'organization' ? (lang === 'ar' ? 'نطاق المؤسسة' : 'Organization') : (lang === 'ar' ? 'نطاق الفرع' : 'Branch')} · ${p.treasury_account.kind || '-'}`
+      : (lang === 'ar' ? 'المصدر غير ظاهر/غير مرتبط' : 'Source unavailable/unlinked') },
     { key: 'amount', header: t('amount'), render: (p) => <span className="font-semibold text-ui-success dark:text-ui-success">{formatCurrency(p.amount, currency, lang)}</span> },
   ];
 
@@ -367,12 +380,37 @@ export function PaymentsPage() {
                     {source.kind === 'main_cash'
                       ? (lang === 'ar' ? 'الخزنة الرئيسية' : 'Main Treasury')
                       : `${source.branch_name} - ${source.account_name}`}
-                    {' — '}
+                    {' · '}
+                    {source.kind}
+                    {' · '}
+                    {source.scope === 'organization' ? (lang === 'ar' ? 'مؤسسة' : 'Organization') : (lang === 'ar' ? 'فرع' : 'Branch')}
+                    {' · '}
                     {formatCurrency(source.balance, currency, lang)}
                   </option>
                 ))}
               </Select>
             </div>
+            {!canUseMainTreasury && (
+              <div className="rounded-lg border border-ui-warning/40 bg-ui-warning-soft p-3 text-sm text-ui-text">
+                {lang === 'ar'
+                  ? 'الخزنة الرئيسية غير متاحة لهذا المستخدم لأن صلاحية «السداد من الخزنة الرئيسية» غير ممنوحة. هذا لا يمنع السداد من مصادر أخرى المسموح بها.'
+                  : 'Main Treasury is unavailable because “Pay from Main Treasury” is not granted. Other authorized funding sources remain available.'}
+              </div>
+            )}
+            {apForm.treasury_account_id && (() => {
+              const selected = treasurySources.find((source) => source.id === apForm.treasury_account_id);
+              if (!selected) return null;
+              return (
+                <div className="rounded-lg border border-ui-border bg-ui-page-alt p-3 text-xs text-ui-text grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'الحساب' : 'Account'}:</span> {selected.account_name}</div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'الكود' : 'Code'}:</span> {selected.code || '-'}</div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'النوع' : 'Kind'}:</span> {selected.kind}</div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'النطاق' : 'Scope'}:</span> {selected.scope === 'organization' ? (lang === 'ar' ? 'المؤسسة' : 'Organization') : (lang === 'ar' ? 'الفرع' : 'Branch')}</div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'الفرع المالك للحساب' : 'Owning branch'}:</span> {selected.branch_name || '-'}</div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'الرصيد الحالي' : 'Current balance'}:</span> {formatCurrency(selected.balance, currency, lang)}</div>
+                </div>
+              );
+            })()}
             {openApInvoices.length > 0 && (
               <Select label={t('invoice')} value={apForm.purchase_id} onChange={(e) => setApForm({ ...apForm, purchase_id: e.target.value })}>
                 <option value="">{t('allInvoices')}</option>

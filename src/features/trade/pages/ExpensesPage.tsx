@@ -136,7 +136,18 @@ export function ExpensesPage() {
     return () => { cancelled = true; };
   }, [effectiveBranchId]);
 
-  const filtered = items.filter((e) => !search || e.description?.toLowerCase().includes(search.toLowerCase()) || e.category?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((e) => {
+    if (!search) return true;
+    const term = search.toLowerCase();
+    const account = expenseAccounts.find((item) => item.id === e.account_id);
+    const treasury = treasuryAccounts.find((item) => item.id === e.treasury_account_id);
+    const branch = branches.find((item) => item.id === e.branch_id);
+    return [
+      e.description, e.category, e.payment_method, e.status, e.notes, e.void_reason,
+      e.shift_id, e.created_by, account?.code, account?.name, account?.name_en,
+      treasury?.account_name, branch?.name,
+    ].some((value) => String(value || '').toLowerCase().includes(term));
+  });
 
   const openAdd = () => {
     setEditingExpense(null);
@@ -272,15 +283,62 @@ export function ExpensesPage() {
     const exportRows = term
       ? all.filter((e) => [e.category, e.description, e.payment_method].some((value) => String(value || '').toLowerCase().includes(term)))
       : all;
-    exportToExcel(exportRows.map((e) => ({ Date: e.expense_date, Category: e.category || '', Description: e.description || '', Amount: e.amount, PaymentMethod: e.payment_method })), 'expenses');
+    exportToExcel(exportRows.map((e) => {
+      const account = expenseAccounts.find((item) => item.id === e.account_id);
+      const treasury = treasuryAccounts.find((item) => item.id === e.treasury_account_id);
+      const branch = branches.find((item) => item.id === e.branch_id);
+      return {
+        Date: e.expense_date,
+        CreatedAt: e.created_at,
+        Status: e.status || 'posted',
+        Category: e.category || '',
+        Description: e.description || '',
+        Amount: e.amount,
+        PaymentMethod: e.payment_method,
+        ExpenseAccountCode: account?.code || '',
+        ExpenseAccount: account ? (isAr ? account.name : account.name_en || account.name) : '',
+        PaymentSource: treasury?.account_name || '',
+        Branch: branch?.name || '',
+        ShiftId: e.shift_id || '',
+        CreatedBy: e.created_by || '',
+        Notes: e.notes || '',
+        VoidedAt: e.voided_at || '',
+        VoidedBy: e.voided_by || '',
+        VoidReason: e.void_reason || '',
+        ExpenseId: e.id,
+      };
+    }), 'expenses');
   };
 
   const columns: Column<Expense>[] = [
     { key: 'expense_date', header: t('date'), render: (e) => formatDate(e.expense_date, lang) },
+    { key: 'status', header: isAr ? 'الحالة' : 'Status', render: (e) => (
+      <span className={e.status === 'voided' ? 'font-semibold text-ui-danger' : 'font-semibold text-ui-success'}>
+        {e.status === 'voided' ? (isAr ? 'معكوس/ملغي' : 'Voided/Reversed') : (isAr ? 'مرحل وفعال' : 'Posted/Active')}
+      </span>
+    ) },
     { key: 'category', header: t('expenseCategory'), render: (e) => <span className="capitalize">{e.category || '-'}</span> },
     { key: 'description', header: t('description'), render: (e) => e.description || '-' },
-    { key: 'amount', header: t('amount'), render: (e) => <span className="font-semibold text-ui-danger">{formatCurrency(e.amount, currency, lang)}</span> },
+    { key: 'amount', header: t('amount'), render: (e) => (
+      <span className={`font-semibold ${e.status === 'voided' ? 'line-through text-ui-muted' : 'text-ui-danger'}`}>
+        {formatCurrency(e.amount, currency, lang)}
+      </span>
+    ) },
     { key: 'payment_method', header: t('paymentMethod'), render: (e) => <span className="capitalize">{e.payment_method}</span> },
+    { key: 'account_id', header: isAr ? 'حساب المصروف' : 'Expense account', render: (e) => {
+      const account = expenseAccounts.find((item) => item.id === e.account_id);
+      return account ? `${account.code} - ${isAr ? account.name : account.name_en || account.name}` : (isAr ? 'غير مرتبط/غير ظاهر' : 'Unlinked/unavailable');
+    } },
+    { key: 'treasury_account_id', header: isAr ? 'مصدر الدفع' : 'Payment source', render: (e) => {
+      const source = treasuryAccounts.find((item) => item.id === e.treasury_account_id);
+      return source ? `${source.account_name} · ${source.account_type}` : (isAr ? 'غير مرتبط/غير ظاهر' : 'Unlinked/unavailable');
+    } },
+    { key: 'branch_id', header: isAr ? 'الفرع' : 'Branch', render: (e) => branches.find((item) => item.id === e.branch_id)?.name || e.branch_id || '-' },
+    { key: 'shift_id', header: isAr ? 'الوردية' : 'Shift', render: (e) => <span className="font-mono text-xs">{e.shift_id || '-'}</span> },
+    { key: 'created_by', header: isAr ? 'أنشأ بواسطة' : 'Created by', render: (e) => <span className="font-mono text-xs">{e.created_by || '-'}</span> },
+    { key: 'created_at', header: isAr ? 'وقت الإنشاء' : 'Created at', render: (e) => e.created_at ? formatDate(e.created_at, lang) : '-' },
+    { key: 'notes', header: t('notes'), render: (e) => e.notes || '-' },
+    { key: 'void_reason', header: isAr ? 'سبب العكس/الإلغاء' : 'Void/reversal reason', render: (e) => e.void_reason || '-' },
     { key: 'actions', header: t('actions'), render: (e) => (
       <div className="flex gap-1">
         {can('expenses.edit') && e.status !== 'voided' && e.shift_id === activeShiftId && (
@@ -312,6 +370,11 @@ export function ExpensesPage() {
         <DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="expenses-search" />
       </DesignPanel>
       <DesignPanel testId="expenses-table-panel">
+        <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-text">
+          {isAr
+            ? 'كل سجلات المصروفات ظاهرة هنا، بما فيها السجلات المعكوسة/الملغاة. السجل المعكوس يظهر مشطوبًا وحالته وسبب العكس واضحان؛ التقارير المالية الفعالة تعتمد السجلات المرحلة فقط.'
+            : 'All expense records are shown, including reversed/voided rows. Reversed rows are struck through with status and reason visible; active financial reporting uses posted records only.'}
+        </div>
         <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
