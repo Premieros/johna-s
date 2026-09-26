@@ -18,6 +18,7 @@ DECLARE
 
 $anchor$;
   v_guard text := $guard$
+    -- TABLE_ORDER_BINDING_PRESERVE_V1
     -- Legacy/ordinary POS saves may omit p_table_id while editing a dine-in
     -- order. Treat NULL as "preserve the existing binding", never as detach.
     IF v_old_table IS NOT NULL
