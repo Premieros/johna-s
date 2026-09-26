@@ -20,6 +20,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { TreasurySource, TreasuryTransaction } from '@/lib/types';
+import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '@/features/trade/services/dayClosingReport';
 
 type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
 
@@ -76,9 +77,7 @@ export function TreasuryPage() {
   const [loading, setLoading] = useState(true);
   const [adminBranchFilter, setAdminBranchFilter] = useState('');
   const [dayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
-  const [dayCloseDetail, setDayCloseDetail] = useState<{ row: TreasuryDayCloseRow; report: Record<string, unknown> | null } | null>(null);
   const [movementDetail, setMovementDetail] = useState<TreasuryMovementRow | null>(null);
-  const [dayCloseDetailLoading, setDayCloseDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
@@ -154,20 +153,18 @@ export function TreasuryPage() {
 
   const openDayCloseDetail = async (row: TreasuryDayCloseRow) => {
     if (!effectiveBranchFilter) return;
-    setDayCloseDetail({ row, report: null });
-    setDayCloseDetailLoading(true);
     try {
-      const { data, error } = await api.shifts.getDayClosingReport({
-        p_branch_id: effectiveBranchFilter,
-        p_day: row.business_date,
-      });
-      if (error) {
-        show(error.message, 'error');
+      const report = await fetchDayClosingReportServer(effectiveBranchFilter, row.business_date);
+      const html = buildA4DayClosingReportHtml(report, currency, lang);
+      const w = window.open('', '_blank', 'width=1000,height=850');
+      if (!w) {
+        show(isAr ? 'تعذر فتح تقرير إغلاق اليوم. اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.' : 'Could not open the day-closing report. Allow pop-ups and try again.', 'error');
         return;
       }
-      setDayCloseDetail({ row, report: (data as Record<string, unknown> | null) || null });
-    } finally {
-      setDayCloseDetailLoading(false);
+      w.document.write(html);
+      w.document.close();
+    } catch (err: unknown) {
+      show(err instanceof Error ? err.message : (isAr ? 'تعذر تحميل تقرير إغلاق اليوم' : 'Could not load day-closing report'), 'error');
     }
   };
 
@@ -328,7 +325,7 @@ export function TreasuryPage() {
                     <div className="mt-1 text-xs text-ui-muted">{formatDateTime(row.closed_at, lang)}</div>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
-                    <FileText className="h-4 w-4" /> {isAr ? 'توضيح / تقرير اليوم' : 'Details / Day report'}
+                    <FileText className="h-4 w-4" /> {isAr ? 'تقرير إغلاق اليوم' : 'Day Closing Report'}
                   </Button>
                 </div>
 
@@ -399,42 +396,6 @@ export function TreasuryPage() {
         <DataTable columns={txColumns} data={transactions} loading={txLoading} error={txError} emptyMessage={t('noData')} />
         <DesignPagination loaded={transactions.length} total={txTotal} hasMore={txHasMore} loadingMore={loadingMoreTx} onLoadMore={loadMoreTx} />
       </DesignPanel>
-
-      <Modal open={!!dayCloseDetail} onClose={() => { if (!dayCloseDetailLoading) setDayCloseDetail(null); }} title={isAr ? 'تقرير إغلاق اليوم' : 'Day Closing Report'}>
-        {dayCloseDetail && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <div className="rounded-lg bg-ui-page-alt p-3"><div className="text-xs text-ui-muted">{isAr ? 'اليوم' : 'Date'}</div><div className="font-bold">{dayCloseDetail.row.business_date}</div></div>
-              <div className="rounded-lg bg-ui-page-alt p-3"><div className="text-xs text-ui-muted">{isAr ? 'مبيعات الكاش' : 'Cash sales'}</div><div className="font-bold">{formatCurrency(dayCloseDetail.row.cash_sales, currency, lang)}</div></div>
-              <div className="rounded-lg bg-ui-page-alt p-3"><div className="text-xs text-ui-muted">{isAr ? 'مبيعات البنك' : 'Bank sales'}</div><div className="font-bold">{formatCurrency(dayCloseDetail.row.bank_sales, currency, lang)}</div></div>
-              <div className="rounded-lg bg-ui-page-alt p-3"><div className="text-xs text-ui-muted">{isAr ? 'مبيعات الأجل' : 'Credit sales'}</div><div className="font-bold">{formatCurrency(dayCloseDetail.row.credit_sales, currency, lang)}</div></div>
-              <div className="rounded-lg bg-ui-page-alt p-3"><div className="text-xs text-ui-muted">{isAr ? 'المصروفات' : 'Expenses'}</div><div className="font-bold">{formatCurrency(dayCloseDetail.row.expenses, currency, lang)}</div></div>
-              <div className="rounded-lg bg-ui-page-alt p-3"><div className="text-xs text-ui-muted">{isAr ? 'مشتريات الكاش' : 'Cash purchases'}</div><div className="font-bold">{formatCurrency(dayCloseDetail.row.cash_purchases, currency, lang)}</div></div>
-            </div>
-            <div className="rounded-lg border border-ui-border p-3">
-              <div className="text-xs font-bold text-ui-muted">{isAr ? 'رصيد الخزنة عند الإغلاق' : 'Treasury balance at close'}</div>
-              <div className="mt-1 text-lg font-black">{formatCurrency(dayCloseDetail.row.total_balance_after_close, currency, lang)}</div>
-            </div>
-            {dayCloseDetailLoading ? (
-              <div className="py-6 text-center text-sm text-ui-muted">{t('loading')}</div>
-            ) : dayCloseDetail.report ? (
-              <div className="rounded-lg border border-ui-border bg-ui-page-alt p-3">
-                <div className="mb-2 text-sm font-black text-ui-text">{isAr ? 'بيانات تقرير إغلاق اليوم الأصلية' : 'Original day-closing report data'}</div>
-                <div className="max-h-80 overflow-auto space-y-1">
-                  {Object.entries(dayCloseDetail.report)
-                    .filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value) || value == null)
-                    .map(([key, value]) => (
-                      <div key={key} className="flex items-start justify-between gap-3 border-b border-ui-border/60 py-1 text-xs last:border-b-0">
-                        <span className="font-mono text-ui-muted">{key}</span>
-                        <span className="font-semibold text-ui-text">{String(value ?? '-')}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Modal>
 
       <Modal open={!!movementDetail} onClose={() => setMovementDetail(null)} title={movementDetail ? movementLabel(movementDetail.reference_type) : ''}>
         {movementDetail && (
