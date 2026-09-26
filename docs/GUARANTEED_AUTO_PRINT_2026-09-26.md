@@ -36,7 +36,16 @@ State: **BLOCKED**
 - Manual print/reprint flows remain unchanged and permission-controlled.
 
 ## Change ledger
-- Pending.
+- Added `enqueueAutomaticReceiptPrint` using the existing `enqueue_cloud_receipt_print` path.
+- Automatic receipt command is awaited after successful direct sale and successful order settlement.
+- Automatic receipt idempotency key is deterministic: `receipt:auto:<saleId>:1`.
+- Browser/manual receipt printing remains unchanged.
+- Added `enqueueAutomaticShiftZReport` using the existing report queue path.
+- Standard close, close-with-open-orders, and force-close UI paths now enqueue one Z command after a successful close.
+- Automatic Z idempotency key is deterministic: `zreport:auto:<shiftId>`.
+- Manual Z and A4 buttons remain unchanged.
+- No Print Agent, routing, station, printer-name, KDS, realtime, or database migration changes.
+- Added unit contract coverage for direct awaited queueing and deterministic idempotency.
 
 ## Verification ledger
 - Pending.
