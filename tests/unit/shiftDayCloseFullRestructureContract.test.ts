@@ -43,6 +43,15 @@ describe('full shift and day close restructuring contract', () => {
     expect(migration).toContain("'snapshot',true");
   });
 
+  it('shows FIFO raw consumption with actual and unresolved-negative costs separated', () => {
+    expect(dayReport).toContain("get_raw_consumption_cost_breakdown");
+    expect(dayReport).toContain("actualCost");
+    expect(dayReport).toContain("estimatedCost");
+    expect(dayReport).toContain("displayedCost");
+    expect(dayReport).toContain("المواد الخام المستهلكة");
+    expect(dayReport).toContain("السالب التقديري");
+  });
+
   it('wires full day report and actual day close into the shifts page', () => {
     expect(api).toContain("getDayClosingReport");
     expect(api).toContain("get_day_closing_report");
