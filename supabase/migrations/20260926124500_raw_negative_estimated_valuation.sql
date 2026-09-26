@@ -330,8 +330,15 @@ BEGIN
       AND il.quantity < 0
       AND il.created_at >= p_from
       AND il.created_at <= p_to
-      AND il.entry_type IN ('sale','production')
-      AND COALESCE(il.reference_type, '') IN ('sale','kitchen_send','production')
+      AND il.entry_type IN ('sale','kitchen_send')
+      AND COALESCE(il.reference_type, '') IN ('sale','kitchen_send')
+      AND private.financial_reference_visible(
+        il.reference_type,
+        il.reference_id,
+        (md5(il.id::text))::uuid,
+        il.branch_id,
+        il.created_at
+      )
   ),
   priced AS MATERIALIZED (
     SELECT
