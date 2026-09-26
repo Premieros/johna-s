@@ -80,65 +80,71 @@ export function RawMaterialBranchStockPanel() {
     setError('');
 
     const load = async () => {
-      const [materialsResult, balancesResult] = await Promise.all([
+      const [materialsResult, warehousesResult, balancesResult] = await Promise.all([
         supabase
           .from('raw_materials')
-          .select('id,branch_id,name,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)')
+          .select('id,branch_id,name,min_stock,measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)')
           .eq('is_active', true)
           .in('branch_id', accessibleBranchIds)
           .order('name'),
         supabase
-          .from('raw_material_inventory')
-          .select('id,raw_material_id,branch_id,quantity,avg_cost,min_stock')
+          .from('warehouses')
+          .select('id,branch_id,name')
+          .eq('is_active', true)
+          .in('branch_id', accessibleBranchIds)
+          .order('name'),
+        supabase
+          .from('raw_material_warehouse_inventory')
+          .select('raw_material_id,branch_id,warehouse_id,quantity,avg_cost')
           .in('branch_id', accessibleBranchIds),
       ]);
 
       if (cancelled) return;
-      if (materialsResult.error) {
+      const firstError = materialsResult.error || warehousesResult.error || balancesResult.error;
+      if (firstError) {
         setRows([]);
-        setError(materialsResult.error.message);
-        setLoading(false);
-        return;
-      }
-      if (balancesResult.error) {
-        setRows([]);
-        setError(balancesResult.error.message);
+        setWarehouses([]);
+        setError(firstError.message);
         setLoading(false);
         return;
       }
 
       const balances = (balancesResult.data || []) as RawBalanceRow[];
-      const balanceByMaterial = new Map<string, RawBalanceRow>();
+      const balanceByMaterialWarehouse = new Map<string, RawBalanceRow>();
       for (const balance of balances) {
-        const key = `${balance.branch_id}:${balance.raw_material_id}`;
-        const existing = balanceByMaterial.get(key);
-        if (!existing) {
-          balanceByMaterial.set(key, { ...balance, quantity: Number(balance.quantity) || 0 });
-        } else {
-          balanceByMaterial.set(key, {
-            ...existing,
-            quantity: (Number(existing.quantity) || 0) + (Number(balance.quantity) || 0),
-            min_stock: Math.max(Number(existing.min_stock) || 0, Number(balance.min_stock) || 0),
-          });
-        }
+        balanceByMaterialWarehouse.set(
+          `${balance.branch_id}:${balance.warehouse_id}:${balance.raw_material_id}`,
+          balance,
+        );
       }
 
       const materials = (materialsResult.data || []) as unknown as RawMaterialCatalogRow[];
-      setRows(materials.map((material) => {
-        const balance = balanceByMaterial.get(`${material.branch_id}:${material.id}`);
-        return {
-          id: balance?.id || `raw:${material.branch_id}:${material.id}`,
-          raw_material_id: material.id,
-          branch_id: material.branch_id,
-          quantity: Number(balance?.quantity) || 0,
-          avg_cost: Number(balance?.avg_cost) || 0,
-          min_stock: Number(balance?.min_stock) || 0,
-          raw_material: {
-            name: material.name,
-            measurement_unit: material.measurement_unit || null,
-          },
-        };
-      }));
+      const loadedWarehouses = (warehousesResult.data || []) as { id: string; branch_id: string; name: string }[];
+      setWarehouses(loadedWarehouses);
+
+      const nextRows: RawStockRow[] = [];
+      for (const material of materials) {
+        for (const warehouse of loadedWarehouses.filter((row) => row.branch_id === material.branch_id)) {
+          const balance = balanceByMaterialWarehouse.get(
+            `${material.branch_id}:${warehouse.id}:${material.id}`,
+          );
+          nextRows.push({
+            id: `raw:${material.branch_id}:${warehouse.id}:${material.id}`,
+            raw_material_id: material.id,
+            branch_id: material.branch_id,
+            warehouse_id: warehouse.id,
+            warehouse_name: warehouse.name,
+            quantity: Number(balance?.quantity) || 0,
+            avg_cost: Number(balance?.avg_cost) || 0,
+            min_stock: Number(material.min_stock) || 0,
+            raw_material: {
+              name: material.name,
+              measurement_unit: material.measurement_unit || null,
+            },
+          });
+        }
+      }
+      setRows(nextRows);
       setLoading(false);
     };
 
