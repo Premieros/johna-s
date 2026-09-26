@@ -18,14 +18,14 @@ import { formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
-import type { WarehouseTransfer, Warehouse, Product, Branch, RpcResult } from '@/lib/types';
+import type { WarehouseTransfer, Warehouse, Branch, RpcResult } from '@/lib/types';
 
-type TransferItemType = 'product' | 'raw_material';
-interface RawMaterialChoice { id: string; name: string; branch_id: string; default_cost: number; }
-interface TransferLine { item_type: TransferItemType; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
+interface RawMaterialChoice { id: string; name: string; branch_id: string; unit_id: string | null; default_cost: number; }
+interface TransferLine { item_type: 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
 interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; }
 
-const EMPTY_LINE: TransferLine = { item_type: 'product', item_id: '', destination_item_id: '', quantity: 1, unit_cost: 0 };
+const EMPTY_LINE: TransferLine = { item_type: 'raw_material', item_id: '', destination_item_id: '', quantity: 1, unit_cost: 0 };
+const normalizeRawName = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 
 export function TransfersPage() {
   const { t, lang } = useLanguage();
@@ -48,7 +48,6 @@ export function TransfersPage() {
     pageSize: 100,
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterialChoice[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [search, setSearch] = useState('');
@@ -59,14 +58,12 @@ export function TransfersPage() {
   const [rejectReason, setRejectReason] = useState('');
 
   async function loadMeta() {
-    const [w, pr, rm, br] = await Promise.all([
+    const [w, rm, br] = await Promise.all([
       supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('id,name,branch_id,default_cost').eq('is_active', true).order('name'),
+      supabase.from('raw_materials').select('id,name,branch_id,unit_id,default_cost').eq('is_active', true).order('name'),
       supabase.from('branches').select('*').eq('is_active', true).order('name'),
     ]);
     setWarehouses((w.data as Warehouse[]) || []);
-    setProducts((pr.data as Product[]) || []);
     setRawMaterials((rm.data as RawMaterialChoice[]) || []);
     setBranches((br.data as Branch[]) || []);
   }
@@ -76,16 +73,17 @@ export function TransfersPage() {
     const state = location.state as { restoredDraft?: { form?: typeof form; lines?: TransferLine[] }; fromGuidance?: boolean } | null;
     if (state?.fromGuidance && state?.restoredDraft) {
       if (state.restoredDraft.form) setForm((prev) => ({ ...prev, ...state.restoredDraft?.form }));
-      if (state.restoredDraft.lines) setLines(state.restoredDraft.lines);
+      if (state.restoredDraft.lines) {
+        const restoredRawLines = state.restoredDraft.lines.filter((line) => line.item_type === 'raw_material');
+        setLines(restoredRawLines.length ? restoredRawLines : [{ ...EMPTY_LINE }]);
+      }
       setModalOpen(true);
     }
   }, [location.state]);
 
   const sourceWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.source_branch_id), [warehouses, form.source_branch_id]);
   const destinationWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.destination_branch_id), [warehouses, form.destination_branch_id]);
-  const sourceProducts = useMemo(() => products.filter((p) => p.branch_id === form.source_branch_id), [products, form.source_branch_id]);
   const sourceRawMaterials = useMemo(() => rawMaterials.filter((r) => r.branch_id === form.source_branch_id), [rawMaterials, form.source_branch_id]);
-  const destinationProducts = useMemo(() => products.filter((p) => p.branch_id === form.destination_branch_id), [products, form.destination_branch_id]);
   const destinationRawMaterials = useMemo(() => rawMaterials.filter((r) => r.branch_id === form.destination_branch_id), [rawMaterials, form.destination_branch_id]);
 
   const transferDestinationBranchId = (tr: TransferRow) => tr.to_branch_id || tr.to_warehouse?.branch_id || tr.branch_id;
@@ -120,31 +118,37 @@ export function TransfersPage() {
     setForm((prev) => ({ ...prev, source_branch_id: branchId, from_warehouse_id: firstWarehouse }));
     setLines([{ ...EMPTY_LINE }]);
   };
+  const resolveDestinationRawId = (sourceRawId: string, destinationBranchId: string): string => {
+    if (!sourceRawId || !destinationBranchId) return '';
+    if (destinationBranchId === form.source_branch_id) return sourceRawId;
+    const source = rawMaterials.find((raw) => raw.id === sourceRawId);
+    if (!source) return '';
+    const matches = rawMaterials.filter((raw) => raw.branch_id === destinationBranchId
+      && raw.unit_id === source.unit_id
+      && normalizeRawName(raw.name) === normalizeRawName(source.name));
+    return matches.length === 1 ? matches[0].id : '';
+  };
+
   const setDestinationBranch = (branchId: string) => {
     const firstWarehouse = warehouses.find((w) => w.branch_id === branchId)?.id || '';
     setForm((prev) => ({ ...prev, destination_branch_id: branchId, to_warehouse_id: firstWarehouse }));
-    setLines((current) => current.map((line) => ({ ...line, destination_item_id: branchId === form.source_branch_id && line.item_type === 'product' ? line.item_id : '' })));
+    setLines((current) => current.map((line) => ({ ...line, destination_item_id: resolveDestinationRawId(line.item_id, branchId) })));
   };
 
   const lookupAvgCost = async (line: TransferLine): Promise<number> => {
-    if (!line.item_id) return 0;
-    if (line.item_type === 'raw_material') {
-      const { data } = await supabase.from('raw_material_inventory').select('avg_cost').eq('raw_material_id', line.item_id).eq('branch_id', form.source_branch_id).maybeSingle();
-      return Number((data as { avg_cost?: number } | null)?.avg_cost || 0);
-    }
-    if (!form.from_warehouse_id) return 0;
-    const { data } = await supabase.from('inventory_batches').select('unit_cost, quantity').eq('product_id', line.item_id).eq('warehouse_id', form.from_warehouse_id);
-    const rows = (data as { unit_cost: number; quantity: number }[]) || [];
-    const totalQty = rows.reduce((s, r) => s + Number(r.quantity), 0);
-    if (totalQty <= 0) return 0;
-    return rows.reduce((s, r) => s + Number(r.unit_cost) * Number(r.quantity), 0) / totalQty;
+    if (!line.item_id || !form.from_warehouse_id) return 0;
+    const { data } = await supabase.from('raw_material_warehouse_inventory')
+      .select('avg_cost')
+      .eq('raw_material_id', line.item_id)
+      .eq('branch_id', form.source_branch_id)
+      .eq('warehouse_id', form.from_warehouse_id)
+      .maybeSingle();
+    return Number((data as { avg_cost?: number } | null)?.avg_cost || 0);
   };
-
-  const updateLineType = (idx: number, itemType: TransferItemType) => setLines(lines.map((l, i) => i === idx ? { ...EMPTY_LINE, item_type: itemType } : l));
   const updateLineItem = async (idx: number, itemId: string) => {
     const next = lines.map((l) => ({ ...l }));
     next[idx].item_id = itemId;
-    next[idx].destination_item_id = form.source_branch_id === form.destination_branch_id && next[idx].item_type === 'product' ? itemId : '';
+    next[idx].destination_item_id = resolveDestinationRawId(itemId, form.destination_branch_id);
     next[idx].unit_cost = Number((await lookupAvgCost({ ...next[idx], item_id: itemId })).toFixed(2));
     setLines(next);
   };
@@ -159,12 +163,10 @@ export function TransfersPage() {
     if (!form.from_warehouse_id || !form.to_warehouse_id || form.from_warehouse_id === form.to_warehouse_id) { show(t('required') + ': ' + t('fromWarehouse'), 'error'); return; }
     const validLines = lines.filter((l) => l.item_id && l.quantity > 0);
     if (validLines.length === 0) { show(t('required') + ': ' + t('transferItems'), 'error'); return; }
-    if (form.source_branch_id === form.destination_branch_id && validLines.some((l) => l.item_type === 'raw_material')) {
-      show(lang === 'ar' ? 'نقل الخامات بين مخزنين داخل نفس الفرع غير متاح لأن رصيد الخامات حاليًا على مستوى الفرع. اختر فرع وجهة مختلفًا.' : 'Raw-material stock is branch-level; choose a different destination branch.', 'error');
-      return;
-    }
-    if (form.source_branch_id !== form.destination_branch_id && validLines.some((l) => !l.destination_item_id)) {
-      show(lang === 'ar' ? 'اختر الصنف أو الخامة المقابلة في فرع الوجهة لكل بند. لا تتم المطابقة التلقائية بالاسم.' : 'Select the explicit destination item for every line; name-only auto-matching is disabled.', 'error');
+    if (validLines.some((l) => !l.destination_item_id)) {
+      show(lang === 'ar'
+        ? 'توجد خامة غير معرفة بشكل مطابق في فرع الوجهة. يجب أن توجد خامة واحدة بنفس الاسم والوحدة قبل التحويل.'
+        : 'A raw material has no unique matching definition in the destination branch. Create exactly one raw material with the same name and unit before transferring.', 'error');
       return;
     }
     const { data, error } = await api.inventory.createTransfer({
@@ -183,8 +185,8 @@ export function TransfersPage() {
     const result = data as RpcResult | null;
     if (!result?.success) {
       const messageMap: Record<string, string> = {
-        DESTINATION_ITEM_REQUIRED: 'يجب اختيار الصنف أو الخامة المقابلة في فرع الوجهة.',
-        DESTINATION_ITEM_BRANCH_MISMATCH: 'الصنف المقابل لا ينتمي إلى فرع الوجهة أو نوعه غير صحيح.',
+        DESTINATION_ITEM_REQUIRED: 'تعذر تحديد الخامة المطابقة في فرع الوجهة.',
+        DESTINATION_ITEM_BRANCH_MISMATCH: 'الخامة المطابقة لا تنتمي إلى فرع الوجهة أو تعريفها غير صحيح.',
       };
       const code = String(result?.error || '');
       const handled = interceptDbError(result?.detail || result?.error, 'transfer_create', 'التحويل المخزني', 'Warehouse Transfer', { form, lines });
@@ -250,11 +252,9 @@ export function TransfersPage() {
             <Input label={t('reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
           </div>
           <div>
-            <div className="flex items-center justify-between mb-2"><div><p className="text-sm font-bold text-ui-muted">{t('transferItems')}</p><p className="text-xs text-ui-subtle">{lang === 'ar' ? 'الصنف أو الخامة من فرع المصدر. الخامات يمكن نقلها بين الفروع.' : 'Products or raw materials from the source branch.'}</p></div><Button variant="outline" size="sm" onClick={addLine}><Plus className="w-4 h-4" /> {t('add')}</Button></div>
-            <div className="space-y-2">{lines.map((l, idx) => <div key={idx} className="grid grid-cols-1 sm:grid-cols-[110px_1fr_1fr_100px_100px_36px] gap-2 items-end">
-              <Select value={l.item_type} onChange={(e) => updateLineType(idx, e.target.value as TransferItemType)}><option value="product">{lang === 'ar' ? 'منتج' : 'Product'}</option><option value="raw_material">{lang === 'ar' ? 'خامة' : 'Raw material'}</option></Select>
-              <Select value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{l.item_type === 'product' ? t('selectProduct') : (lang === 'ar' ? 'اختر الخامة' : 'Select raw material')}</option>{(l.item_type === 'product' ? sourceProducts : sourceRawMaterials).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
-              <Select value={l.destination_item_id} onChange={(e) => setLines(lines.map((line, i) => i === idx ? { ...line, destination_item_id: e.target.value } : line))} disabled={form.source_branch_id === form.destination_branch_id}><option value="">{lang === 'ar' ? 'اختر المقابل بفرع الوجهة' : 'Select destination item'}</option>{(l.item_type === 'product' ? destinationProducts : destinationRawMaterials).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
+            <div className="flex items-center justify-between mb-2"><div><p className="text-sm font-bold text-ui-muted">{t('transferItems')}</p><p className="text-xs text-ui-subtle">{lang === 'ar' ? 'اختر الخامة والكمية فقط. عند التحويل بين الفروع يحدد النظام الخامة المطابقة تلقائيًا بالاسم والوحدة.' : 'Choose the raw material and quantity only. Cross-branch transfers resolve the matching raw material automatically by name and unit.'}</p></div><Button variant="outline" size="sm" onClick={addLine}><Plus className="w-4 h-4" /> {t('add')}</Button></div>
+            <div className="space-y-2">{lines.map((l, idx) => <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_130px_130px_36px] gap-2 items-end">
+              <Select value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{lang === 'ar' ? 'اختر الخامة' : 'Select raw material'}</option>{sourceRawMaterials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
               <Input type="number" step="0.0001" value={l.quantity} onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)} placeholder={t('quantity')} />
               <Input type="number" step="0.01" value={l.unit_cost} onChange={(e) => updateLine(idx, 'unit_cost', parseFloat(e.target.value) || 0)} placeholder={t('unitCost')} />
               <button onClick={() => removeLine(idx)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
