@@ -23,6 +23,27 @@ import type { TreasurySource, TreasuryTransaction } from '@/lib/types';
 
 type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
 
+interface TreasuryDayCloseRow {
+  daily_close_id: string;
+  business_date: string;
+  closed_at: string;
+  cash_sales: number;
+  bank_sales: number;
+  credit_sales: number;
+  net_sales: number;
+  expenses: number;
+  cash_purchases: number;
+  cash_balance_after_close: number;
+  bank_balance_after_close: number;
+  total_balance_after_close: number;
+  previous_cash_balance: number | null;
+  previous_bank_balance: number | null;
+  previous_total_balance: number | null;
+  cash_movement_since_previous_close: number | null;
+  bank_movement_since_previous_close: number | null;
+  total_movement_since_previous_close: number | null;
+}
+
 export function TreasuryPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
@@ -38,6 +59,7 @@ export function TreasuryPage() {
   const [accounts, setAccounts] = useState<TreasurySource[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminBranchFilter, setAdminBranchFilter] = useState('');
+  const [dayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
 
   useEffect(() => {
     if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
@@ -76,9 +98,16 @@ export function TreasuryPage() {
         const sourceRows = (data as TreasurySource[]) || [];
         setBalances(sourceRows);
         setAccounts(sourceRows);
+        const { data: closeData } = await api.accounting.getBranchTreasuryDayCloseReconciliation({
+          p_branch_id: effectiveBranchFilter,
+          p_limit: 60,
+        });
+        const closePayload = closeData as { success?: boolean; rows?: TreasuryDayCloseRow[] } | null;
+        setDayCloses(closePayload?.success ? (closePayload.rows || []) : []);
       } else {
         setBalances([]);
         setAccounts([]);
+        setDayCloses([]);
       }
     } finally {
       setLoading(false);
@@ -157,6 +186,19 @@ export function TreasuryPage() {
     { key: 'balance', header: t('balance'), render: (b) => <span className="font-semibold text-ui-success dark:text-ui-success">{formatCurrency(b.balance, currency, lang)}</span> },
   ];
 
+  const dayCloseColumns: Column<TreasuryDayCloseRow>[] = [
+    { key: 'business_date', header: isAr ? 'اليوم' : 'Business date', render: (r) => r.business_date },
+    { key: 'closed_at', header: isAr ? 'وقت الإغلاق' : 'Closed at', render: (r) => formatDateTime(r.closed_at, lang) },
+    { key: 'cash_sales', header: isAr ? 'مبيعات كاش' : 'Cash sales', render: (r) => formatCurrency(r.cash_sales, currency, lang) },
+    { key: 'bank_sales', header: isAr ? 'مبيعات بنك/كارت' : 'Bank/card sales', render: (r) => formatCurrency(r.bank_sales, currency, lang) },
+    { key: 'credit_sales', header: isAr ? 'مبيعات أجل' : 'Credit sales', render: (r) => formatCurrency(r.credit_sales, currency, lang) },
+    { key: 'cash_movement_since_previous_close', header: isAr ? 'حركة الكاش منذ الإغلاق السابق' : 'Cash movement since previous close', render: (r) => r.cash_movement_since_previous_close == null ? '-' : formatCurrency(r.cash_movement_since_previous_close, currency, lang) },
+    { key: 'bank_movement_since_previous_close', header: isAr ? 'حركة البنك منذ الإغلاق السابق' : 'Bank movement since previous close', render: (r) => r.bank_movement_since_previous_close == null ? '-' : formatCurrency(r.bank_movement_since_previous_close, currency, lang) },
+    { key: 'cash_balance_after_close', header: isAr ? 'رصيد الكاش بعد الإغلاق' : 'Cash balance after close', render: (r) => <span className="font-semibold">{formatCurrency(r.cash_balance_after_close, currency, lang)}</span> },
+    { key: 'bank_balance_after_close', header: isAr ? 'رصيد البنك بعد الإغلاق' : 'Bank balance after close', render: (r) => <span className="font-semibold">{formatCurrency(r.bank_balance_after_close, currency, lang)}</span> },
+    { key: 'total_balance_after_close', header: isAr ? 'إجمالي خزنة الفرع بعد الإغلاق' : 'Branch treasury total after close', render: (r) => <span className="font-black text-ui-text">{formatCurrency(r.total_balance_after_close, currency, lang)}</span> },
+  ];
+
   const txColumns: Column<TreasuryTransaction>[] = [
     { key: 'created_at', header: t('date'), render: (tx) => formatDateTime(tx.created_at, lang) },
     { key: 'transaction_type', header: t('referenceType'), render: (tx) => (
@@ -212,6 +254,15 @@ export function TreasuryPage() {
 
       <DesignPanel title={t('treasuryBalances')} testId="treasury-balances-panel">
         <DataTable columns={balanceColumns} data={visibleBalances} loading={loading} error={txError} emptyMessage={t('noData')} />
+      </DesignPanel>
+
+      <DesignPanel title={isAr ? 'مطابقة إغلاقات الأيام مع خزنة الفرع' : 'Day-close reconciliation with branch treasury'} testId="treasury-day-close-reconciliation-panel">
+        <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
+          {isAr
+            ? 'هذه الصفوف لا تنشئ حركة محاسبية جديدة. رصيد الكاش والبنك بعد كل إغلاق محسوب من دفتر الأستاذ الفعلي حتى لحظة الإغلاق، لذلك لا يتم احتساب المبيعات أو المصروفات مرتين.'
+            : 'These rows do not create accounting movements. Cash and bank closing balances come from the actual ledger as of each close, so sales and expenses are never counted twice.'}
+        </div>
+        <DataTable columns={dayCloseColumns} data={dayCloses} loading={loading} error={null} emptyMessage={t('noData')} />
       </DesignPanel>
 
       <DesignPanel title={t('treasuryTransactions')} testId="treasury-transactions-panel">
