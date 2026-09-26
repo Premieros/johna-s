@@ -653,6 +653,14 @@
       ]
     },
     {
+      "name": "get_raw_consumption_cost_breakdown",
+      "params": [
+        "branch_id",
+        "from",
+        "to"
+      ]
+    },
+    {
       "name": "get_rfq_comparison",
       "params": [
         "rfq_id"
