@@ -57,6 +57,13 @@ State: **IN_PROGRESS**
 ## Verification ledger
 - Pending.
 
+## Next action
+1. Run exact-head Full Verify on PR #377.
+2. Fix any failing contract/test on this branch only.
+3. Mark PR ready when Full Verify is Green.
+4. Merge to main using expected-head protection.
+5. Stop before Production migration/data correction pending separate approval.
+
 ## Production gate
 - BLOCKED pending exact-head Full Verify Green + explicit approval.
 
