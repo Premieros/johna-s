@@ -161,6 +161,9 @@ Progress continuity rule:
 
 ## Verification ledger
 
+- Verify Run #2975 / 36244316244: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, application/test typecheck ✅. Unit stage failed only on three stale retirement-era tests: one deleted production-domain authority test and two assertions still requiring the old "Manufactured Items / المصنعات" labels. Build/DB/browser did not run after unit failure.
+- Reconciled the failures to the approved retirement model: removed the obsolete production completion authority test, updated terminology lock assertions to **Component Groups / مجموعات المكونات**, and renamed the sidebar item accordingly. No runtime database or Production changes were made for these test fixes.
+
 - Verify Run #2973 / 36243989021: mandatory worklog ✅ and Supabase identity ✅; stopped only at frontend API contract after retiring the production application domain. The stale contract still referenced `create/start/complete/cancel_production_order` and `inventory_unit_productions`; lint/type/unit/build were not executed.
 - Refreshed `supabase/api-contract.json` to remove only those no-longer-referenced application RPC/table entries. No database migration, Production mutation, or historical production data deletion was performed.
 
@@ -183,7 +186,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Confirm the focused/browser fixture correction, then begin P3 audit of `InventoryUnitsPage`, `ProductSetupWizardPage`, and `PricingPage`. Replace only user-facing manufactured/production terminology and stale filters that conflict with the current component-group model; keep schema identifiers temporarily where changing them would add migration risk. Record each logical group here and use Fast Verify at the P3 group boundary.
+Run/observe the focused verification on the current head after the stale-test reconciliation. If unit/type/lint are green, continue P5 audit of current user-facing reports, permissions, and remaining active UI strings for manufacturing-era language. Do not alter historical database objects; only retire current-runtime references. Use Fast Verify at the end of P5 and reserve one exact-head Full Verify for the final merge gate.
 
 ## Mandatory update protocol
 
