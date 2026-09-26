@@ -30,10 +30,10 @@ describe('raw negative estimated valuation reporting contract', () => {
   });
 
   it('shows actual, estimated-negative and display totals in both closing reports', () => {
-    expect(shift).toContain("get_raw_consumption_cost_breakdown");
+    expect(shift).toContain("getRawConsumptionCostBreakdown");
     expect(shift).toContain('actualCost: Number(row.actual_cost || 0)');
     expect(shift).toContain('estimatedCost: Number(row.estimated_cost || 0)');
-    expect(day).toContain("get_raw_consumption_cost_breakdown");
+    expect(day).toContain("getRawConsumptionCostBreakdown");
     expect(day).toContain('السالب التقديري');
     expect(day).toContain('displayedCost');
   });
