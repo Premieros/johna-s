@@ -9,17 +9,27 @@ DECLARE
   );
   v_def text;
   v_anchor text := E'    -- New table must belong to the order branch and be active.\n';
-  v_guard text := E'    -- An ordinary save must never detach a live table-bound order.\n'
-    || E'    -- Explicit detachment has its own audited/permission-checked RPC.\n'
-    || E'    IF v_old_table IS NOT NULL AND p_table_id IS NULL THEN\n'
-    || E"      RETURN jsonb_build_object('success', false, 'error', 'TABLE_DETACH_REQUIRES_EXPLICIT_ACTION',\n"
-    || E"        'detail', 'Use the explicit detach_order action to free a table-bound order.');\n"
-    || E'    END IF;\n\n'
-    || E"    IF (v_old_table IS NOT NULL OR p_table_id IS NOT NULL) AND COALESCE(p_order_type, 'dine_in') <> 'dine_in' THEN\n"
-    || E"      RETURN jsonb_build_object('success', false, 'error', 'TABLE_ORDER_TYPE_MISMATCH',\n"
-    || E"        'detail', 'A table-bound order must remain dine_in during ordinary saves.');\n"
-    || E'    END IF;\n\n'
-    || v_anchor;
+  v_guard text := $guard$
+    -- An ordinary save must never detach a live table-bound order.
+    -- Explicit detachment has its own permission-checked RPC.
+    IF v_old_table IS NOT NULL AND p_table_id IS NULL THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'TABLE_DETACH_REQUIRES_EXPLICIT_ACTION',
+        'detail', 'Use the explicit detach_order action to free a table-bound order.'
+      );
+    END IF;
+
+    IF (v_old_table IS NOT NULL OR p_table_id IS NOT NULL)
+       AND COALESCE(p_order_type, 'dine_in') <> 'dine_in' THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'TABLE_ORDER_TYPE_MISMATCH',
+        'detail', 'A table-bound order must remain dine_in during ordinary saves.'
+      );
+    END IF;
+
+$guard$ || v_anchor;
 BEGIN
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'update_order canonical signature not found';
