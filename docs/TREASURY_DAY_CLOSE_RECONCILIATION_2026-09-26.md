@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/treasury-daily-close-reconciliation-20260926`
 Current PR: `#380`
-Last updated: 2026-09-26 13:45 Africa/Cairo
+Last updated: 2026-09-26 13:50 Africa/Cairo
 
 ## Work status
 
@@ -75,7 +75,7 @@ Production migration is not applied. Merge and Production migration remain block
 
 ## Next action
 
-Wait for PR #380 exact-head Full Verify result. If any job fails, fix only the treasury/day-close scope on this branch and re-run verification. If Full Verify is Green, report readiness and stop before merge/Production migration for explicit approval.
+Wait for the new exact-head Full Verify run after commit `70d944d187447f03f09e9767167677130a1580e9`. If any job fails, fix only the treasury/day-close scope on this branch and re-run verification. If Full Verify is Green, report readiness and stop before merge/Production migration for explicit approval.
 
 ## Mandatory update protocol
 
