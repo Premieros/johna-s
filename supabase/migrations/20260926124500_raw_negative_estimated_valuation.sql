@@ -272,6 +272,151 @@ GRANT EXECUTE ON FUNCTION public.get_raw_material_cost_valuation_overview(uuid)
 COMMENT ON FUNCTION public.get_raw_material_cost_valuation_overview(uuid) IS
   'Raw-material price plus split inventory valuation: actual positive FIFO stock is kept separate from estimated negative-stock exposure.';
 
+
+CREATE OR REPLACE FUNCTION public.get_raw_consumption_cost_breakdown(
+  p_branch_id uuid,
+  p_from timestamptz,
+  p_to timestamptz
+)
+RETURNS TABLE (
+  raw_material_id uuid,
+  raw_material_name text,
+  raw_material_code text,
+  unit_name text,
+  consumed_quantity numeric,
+  actual_quantity numeric,
+  estimated_quantity numeric,
+  actual_cost numeric,
+  estimated_cost numeric,
+  displayed_cost numeric
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'AUTH_REQUIRED';
+  END IF;
+  IF p_branch_id IS NULL OR NOT public.user_may_access_branch(p_branch_id) THEN
+    RAISE EXCEPTION 'BRANCH_MISMATCH';
+  END IF;
+  IF NOT (
+    public.can_permission('reports.costing')
+    OR public.can_permission('shifts.report.shift')
+    OR public.can_permission('shifts.day_close')
+  ) THEN
+    RAISE EXCEPTION 'NOT_ALLOWED';
+  END IF;
+  IF p_from IS NULL OR p_to IS NULL OR p_to < p_from THEN
+    RAISE EXCEPTION 'INVALID_RANGE';
+  END IF;
+
+  RETURN QUERY
+  WITH movements AS MATERIALIZED (
+    SELECT
+      il.id,
+      il.raw_material_id,
+      il.branch_id,
+      il.warehouse_id,
+      il.created_at,
+      abs(il.quantity)::numeric AS consumed_qty,
+      COALESCE(il.unit_cost, 0)::numeric AS actual_unit_cost,
+      COALESCE(il.total_cost, 0)::numeric AS total_cost
+    FROM public.inventory_ledger il
+    WHERE il.branch_id = p_branch_id
+      AND il.raw_material_id IS NOT NULL
+      AND il.quantity < 0
+      AND il.created_at >= p_from
+      AND il.created_at <= p_to
+      AND il.entry_type IN ('sale','production')
+      AND COALESCE(il.reference_type, '') IN ('sale','kitchen_send','production')
+  ),
+  priced AS MATERIALIZED (
+    SELECT
+      m.*,
+      CASE
+        WHEN m.actual_unit_cost > 0 OR abs(m.total_cost) > 0 THEN 0::numeric
+        ELSE COALESCE((
+          SELECT x.unit_cost
+          FROM (
+            SELECT
+              il2.unit_cost::numeric AS unit_cost,
+              il2.created_at,
+              il2.id::text AS tie,
+              1 AS priority
+            FROM public.inventory_ledger il2
+            WHERE il2.raw_material_id = m.raw_material_id
+              AND il2.branch_id = m.branch_id
+              AND il2.warehouse_id = m.warehouse_id
+              AND il2.created_at <= m.created_at
+              AND il2.quantity < 0
+              AND COALESCE(il2.unit_cost, 0) > 0
+              AND il2.id <> m.id
+
+            UNION ALL
+
+            SELECT
+              b.unit_cost::numeric,
+              b.created_at,
+              b.id::text,
+              2
+            FROM public.raw_material_batches b
+            WHERE b.raw_material_id = m.raw_material_id
+              AND b.branch_id = m.branch_id
+              AND b.warehouse_id = m.warehouse_id
+              AND b.created_at <= m.created_at
+              AND COALESCE(b.unit_cost, 0) > 0
+              AND COALESCE(b.source_type, '') NOT LIKE '%_oversold'
+          ) x
+          ORDER BY x.priority, x.created_at DESC NULLS LAST, x.tie DESC
+          LIMIT 1
+        ), 0)::numeric
+      END AS estimated_unit_cost
+    FROM movements m
+  )
+  SELECT
+    rm.id,
+    rm.name::text,
+    rm.code::text,
+    COALESCE(mu.symbol, mu.code, mu.name, '')::text,
+    round(SUM(p.consumed_qty), 6)::numeric,
+    round(SUM(CASE WHEN p.actual_unit_cost > 0 OR abs(p.total_cost) > 0 THEN p.consumed_qty ELSE 0 END), 6)::numeric,
+    round(SUM(CASE WHEN p.actual_unit_cost <= 0 AND abs(p.total_cost) <= 0 THEN p.consumed_qty ELSE 0 END), 6)::numeric,
+    round(SUM(CASE
+      WHEN p.actual_unit_cost > 0 OR abs(p.total_cost) > 0
+        THEN abs(p.total_cost)
+      ELSE 0
+    END), 2)::numeric,
+    round(SUM(CASE
+      WHEN p.actual_unit_cost <= 0 AND abs(p.total_cost) <= 0
+        THEN p.consumed_qty * p.estimated_unit_cost
+      ELSE 0
+    END), 2)::numeric,
+    round(SUM(
+      CASE
+        WHEN p.actual_unit_cost > 0 OR abs(p.total_cost) > 0
+          THEN abs(p.total_cost)
+        ELSE p.consumed_qty * p.estimated_unit_cost
+      END
+    ), 2)::numeric
+  FROM priced p
+  JOIN public.raw_materials rm ON rm.id = p.raw_material_id
+  LEFT JOIN public.measurement_units mu ON mu.id = rm.unit_id
+  GROUP BY rm.id, rm.name, rm.code, mu.symbol, mu.code, mu.name
+  ORDER BY rm.name;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_raw_consumption_cost_breakdown(uuid,timestamptz,timestamptz)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_raw_consumption_cost_breakdown(uuid,timestamptz,timestamptz)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.get_raw_consumption_cost_breakdown(uuid,timestamptz,timestamptz) IS
+  'Raw consumption for shift/day reporting. Actual FIFO cost remains separate from unresolved negative-stock estimate; displayed_cost is their presentation sum only.';
+
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
