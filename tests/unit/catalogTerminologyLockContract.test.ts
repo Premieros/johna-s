@@ -14,19 +14,19 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(source).toContain('api.catalog.createRawMaterial');
   });
 
-  it('presents only manufactured inventory items and forces type only on create', () => {
+  it('presents legacy manufactured rows as reusable component groups and forces type only on create', () => {
     const source = read('src/features/catalog/pages/InventoryUnitsPage.tsx');
     const menu = read('src/core/navigation/menu.config.ts');
 
     expect(source).toContain("filters: [{ column: 'unit_type', value: 'manufactured' }]");
     expect(source).toContain(".update(payload).eq('id', editing.id)");
     expect(source).toContain("insert({ ...payload, unit_type: 'manufactured' as const })");
-    expect(source).toContain("title={isAr ? 'المصنعات' : 'Manufactured Items'}");
+    expect(source).toContain("title={isAr ? 'مجموعات المكونات' : 'Component Groups'}");
     expect(source).not.toContain('<option value="ready">');
-    expect(menu).toContain("label: { ar: 'المصنعات', en: 'Manufactured Items' }");
+    expect(menu).toContain("label: { ar: 'مجموعات المكونات', en: 'Component Groups' }");
   });
 
-  it('shows immutable raw measurement units when composing manufactured-item recipes', () => {
+  it('shows immutable raw measurement units when composing reusable component groups', () => {
     const source = read('src/features/catalog/pages/InventoryUnitsPage.tsx');
 
     expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
@@ -35,11 +35,11 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(source).toContain("const recipeBranchId = unit.branch_id || branchFilter || ''");
   });
 
-  it('keeps product creation free of product measurement units and links only manufactured inventory items', () => {
+  it('keeps product creation free of product measurement units and links only reusable component groups', () => {
     const source = read('src/features/catalog/pages/ProductSetupWizardPage.tsx');
 
     expect(source).toContain(".eq('unit_type', 'manufactured')");
-    expect(source).toContain("['2', isAr ? 'المصنعات' : 'Manufactured items']");
+    expect(source).toContain("['2', isAr ? 'مجموعات المكونات' : 'Component groups']");
     expect(source).toContain('Products do not have measurement units.');
     expect(source).not.toContain("'وحدات المنتج'");
     expect(source).not.toContain("'Product units'");
