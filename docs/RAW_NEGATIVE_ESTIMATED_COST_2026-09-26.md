@@ -83,3 +83,13 @@ State: **BLOCKED**
 - After every code batch, update **Change ledger**.
 - After every workflow/test result, update **Verification ledger**.
 - Merge and Production migration remain blocked until exact-head Full Verify is Green and explicit approval is recorded.
+
+
+## Final verification
+- Full Verify 2922 GREEN on head dff3ed67421de46a2599577d21f8b791e6b50479.
+- verify: success (worklog, Supabase identity, API contract, lint, typecheck, unit, build).
+- db: success (canonical migrations, schema, integration, security/RLS).
+- browser-smoke: success.
+- main rechecked at 836ddefd7e2d95997ff83e04f595deef16e50b1a; PR #379 remains mergeable and Draft.
+- Production migration not applied.
+- State: READY_FOR_MERGE_APPROVAL.
