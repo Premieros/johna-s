@@ -1,4 +1,4 @@
-import { supabase, shifts as shiftsApi } from '@/api';
+import { supabase, shifts as shiftsApi, costing as costingApi } from '@/api';
 import type { ShiftClosingSummary } from './shiftClosingReport';
 
 type ShiftOperationRow = {
@@ -277,7 +277,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
   const ingredientsConsumed: ShiftClosingSummary['ingredientsConsumed'] = [];
   if (raw.branch_id && raw.opened_at) {
     const rawEndAt = raw.closed_at ? String(raw.closed_at) : new Date().toISOString();
-    const { data: rawCostRows, error: rawCostError } = await supabase.rpc('get_raw_consumption_cost_breakdown', {
+    const { data: rawCostRows, error: rawCostError } = await costingApi.getRawConsumptionCostBreakdown({
       p_branch_id: String(raw.branch_id),
       p_from: String(raw.opened_at),
       p_to: rawEndAt,
@@ -463,7 +463,7 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
   const ingredientsConsumed: ShiftClosingSummary['ingredientsConsumed'] = [];
   if (effectiveBranchId && shift.opened_at) {
     const rawEndAt = shift.closed_at ? String(shift.closed_at) : new Date().toISOString();
-    const { data: rawCostRows, error: rawCostError } = await supabase.rpc('get_raw_consumption_cost_breakdown', {
+    const { data: rawCostRows, error: rawCostError } = await costingApi.getRawConsumptionCostBreakdown({
       p_branch_id: effectiveBranchId,
       p_from: String(shift.opened_at),
       p_to: rawEndAt,
