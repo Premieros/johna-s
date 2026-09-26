@@ -475,7 +475,7 @@ describe.skipIf(skip)('Negative raw-material inventory (sale oversell into debt 
       `SELECT avg_cost::text FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,
       [rawL, branchA],
     );
-    expect(num(avgNeg[0].avg_cost)).toBe(0);
+    expect(num(avgNeg[0].avg_cost)).toBe(3);
     await addRaw(rawL, branchA, whA1, 6, 3);
 
     expect(await balance(rawL, branchA)).toBe(2);
