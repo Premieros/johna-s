@@ -93,3 +93,16 @@ State: **BLOCKED**
 - main rechecked at 836ddefd7e2d95997ff83e04f595deef16e50b1a; PR #379 remains mergeable and Draft.
 - Production migration not applied.
 - State: READY_FOR_MERGE_APPROVAL.
+
+
+## Estimated COGS summary card
+- Approved behavior: Costing Center overview shows Actual COGS and Estimated COGS including current negative raw-stock exposure side by side.
+- Estimated COGS = actual settled COGS + current negative-stock estimated value.
+- The difference is displayed explicitly as the negative-stock gap.
+- If any negative quantity still has no authoritative price, the UI shows an unpriced-negative warning so the estimate is not presented as complete.
+- Current negative exposure follows the latest authoritative raw-material price (purchase, stock count, or manual pricing), so repricing updates the estimate.
+- Historical shift/day consumption remains time-scoped and uses prices known at the movement timestamp; historical reports are not rewritten by later pricing.
+- Actual COGS/accounting journals remain unchanged by manual pricing or the estimate.
+- Added integration coverage proving a -2 quantity estimate moves 40 -> 60 -> 80 -> 100 as authoritative price events move 20 -> 30 -> 40 -> 50.
+- Production migration not applied.
+- State after implementation: VERIFY_PENDING.
