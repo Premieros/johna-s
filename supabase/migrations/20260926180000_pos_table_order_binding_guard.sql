@@ -18,16 +18,16 @@ DECLARE
 
 $anchor$;
   v_guard text := $guard$
-    -- Ordinary saves must never detach a live table-bound order.
-    -- Explicit detachment has its own permission-checked RPC.
-    IF v_old_table IS NOT NULL AND p_table_id IS NULL THEN
-      RETURN jsonb_build_object(
-        'success', false,
-        'error', 'TABLE_DETACH_REQUIRES_EXPLICIT_ACTION',
-        'detail', 'Use the explicit detach_order action to free a table-bound order.'
-      );
+    -- Legacy/ordinary POS saves may omit p_table_id while editing a dine-in
+    -- order. Treat NULL as "preserve the existing binding", never as detach.
+    IF v_old_table IS NOT NULL
+       AND p_table_id IS NULL
+       AND COALESCE(p_order_type, 'dine_in') = 'dine_in' THEN
+      p_table_id := v_old_table;
     END IF;
 
+    -- A table-bound order cannot be converted to another order type by an
+    -- ordinary save. Explicit detach/transfer actions own that boundary.
     IF (v_old_table IS NOT NULL OR p_table_id IS NOT NULL)
        AND COALESCE(p_order_type, 'dine_in') <> 'dine_in' THEN
       RETURN jsonb_build_object(
@@ -45,7 +45,7 @@ BEGIN
 
   SELECT pg_get_functiondef(v_oid) INTO v_def;
 
-  IF position('TABLE_DETACH_REQUIRES_EXPLICIT_ACTION' IN v_def) > 0 THEN
+  IF position('TABLE_ORDER_BINDING_PRESERVE_V1' IN v_def) > 0 THEN
     RETURN;
   END IF;
 

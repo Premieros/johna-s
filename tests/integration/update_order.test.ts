@@ -209,19 +209,18 @@ describe.skipIf(skip)('update_order + occupancy guards (046 C2/H2/M4)', () => {
     expect(order.rows[0].table_id).toBe(t2);
   });
 
-  it('ordinary update_order cannot detach a live table-bound order', async () => {
+  it('ordinary update_order preserves a live table binding when table_id is omitted', async () => {
     const t = await makeTable();
     const created = await createOrder(t);
     expect(created.success).toBe(true);
 
-    const detached = await updateOrder(created.order_id!, { tableId: null, status: 'held' });
-    expect(detached.success).toBe(false);
-    expect(detached.error).toBe('TABLE_DETACH_REQUIRES_EXPLICIT_ACTION');
+    const saved = await updateOrder(created.order_id!, { tableId: null, status: 'held' });
+    expect(saved.success).toBe(true);
     expect(await tableStatus(t)).toBe('occupied');
 
     const order = await client.query(`SELECT table_id, status, order_type FROM public.orders WHERE id = $1`, [created.order_id]);
     expect(order.rows[0].table_id).toBe(t);
-    expect(order.rows[0].status).toBe('open');
+    expect(order.rows[0].status).toBe('held');
     expect(order.rows[0].order_type).toBe('dine_in');
   });
 
