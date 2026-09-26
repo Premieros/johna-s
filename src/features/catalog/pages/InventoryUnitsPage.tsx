@@ -122,7 +122,7 @@ export function InventoryUnitsPage() {
   };
 
   const openRecipe = async (unit: InventoryUnit) => {
-    if (unit.unit_type !== 'manufactured' || !can('production.manage')) return;
+    if (unit.unit_type !== 'manufactured' || !can('raw_materials.manage')) return;
     setRecipeUnit(unit);
     setRecipeModalOpen(true);
     setRecipeLoading(true);
@@ -177,11 +177,11 @@ export function InventoryUnitsPage() {
 
   const columns: Column<InventoryUnit>[] = [
     { key: 'code', header: t('code'), render: (unit) => <span className="font-mono text-sm">{unit.code}</span> },
-    { key: 'name', header: isAr ? 'اسم المصنع' : 'Manufactured item', render: (unit) => <span className="font-medium text-ui-text">{unit.name}</span> },
+    { key: 'name', header: isAr ? 'اسم مجموعة المكونات' : 'Component group', render: (unit) => <span className="font-medium text-ui-text">{unit.name}</span> },
     { key: 'cost_price', header: t('costPrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.cost_price), 1)}</span> },
     { key: 'sale_price', header: t('salePrice'), render: (unit) => <span className="text-sm">{formatNumber(Number(unit.sale_price), 1)}</span> },
     { key: 'actions', header: t('actions'), render: (unit) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-      {unit.unit_type === 'manufactured' && can('production.manage') && <button onClick={() => openRecipe(unit)} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={isAr ? 'وصفة المصنع' : 'Manufactured item recipe'}><Beaker className="w-4 h-4" /></button>}
+      {unit.unit_type === 'manufactured' && can('raw_materials.manage') && <button onClick={() => openRecipe(unit)} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={isAr ? 'مكونات المجموعة' : 'Group components'}><Beaker className="w-4 h-4" /></button>}
       {can('raw_materials.manage') && <button onClick={() => openEdit(unit)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>}
       {can('raw_materials.manage') && <button onClick={() => setDeleteId(unit.id)} className="ui-icon-action ui-icon-action-danger"><Trash2 className="w-4 h-4" /></button>}
     </div> },
@@ -192,19 +192,19 @@ export function InventoryUnitsPage() {
   return (
     <DesignSurface testId="inventory-units-page">
       <DesignPageHeader
-        title={isAr ? 'المصنعات' : 'Manufactured Items'}
-        subtitle={isAr ? 'مكونات يتم تصنيعها من الخامات وتستخدم داخل المنتجات' : 'Components manufactured from raw materials and used inside products'}
-        actions={can('raw_materials.manage') ? <Button size="sm" onClick={openAdd} data-testid="inventory-units-add"><Plus className="w-4 h-4" /> {isAr ? 'إضافة مصنع' : 'Add manufactured item'}</Button> : undefined}
+        title={isAr ? 'مجموعات المكونات' : 'Component Groups'}
+        subtitle={isAr ? 'مجموعات خامات مسماة قابلة لإعادة الاستخدام داخل أكثر من منتج، بدون خطوة تصنيع' : 'Reusable named raw-material groups used by products, with no production step'}
+        actions={can('raw_materials.manage') ? <Button size="sm" onClick={openAdd} data-testid="inventory-units-add"><Plus className="w-4 h-4" /> {isAr ? 'إضافة مجموعة' : 'Add component group'}</Button> : undefined}
       />
       <DesignPanel testId="inventory-units-table-panel">
         <DataTable columns={columns} data={items} loading={loading} emptyMessage={t('noData')} onRowClick={can('raw_materials.manage') ? openEdit : undefined} />
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? (isAr ? 'تعديل مصنع' : 'Edit manufactured item') : (isAr ? 'إضافة مصنع' : 'Add manufactured item')} size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? (isAr ? 'تعديل مجموعة المكونات' : 'Edit component group') : (isAr ? 'إضافة مجموعة مكونات' : 'Add component group')} size="lg">
         <div className="space-y-4">
-          <div className={fieldGrid}><Input label={t('code')} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required /><Input label={isAr ? 'اسم المصنع' : 'Manufactured item name'} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
-          <div className={fieldGrid}><Input label={t('nameEn')} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} /><div><label className="block text-sm font-medium text-ui-muted mb-1">{isAr ? 'النوع' : 'Type'}</label><div className="min-h-11 flex items-center rounded-lg border border-ui-border bg-ui-page-alt px-3 text-sm font-semibold text-ui-text">{isAr ? 'مصنع' : 'Manufactured'}</div></div></div>
+          <div className={fieldGrid}><Input label={t('code')} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required /><Input label={isAr ? 'اسم المجموعة' : 'Component group name'} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+          <div className={fieldGrid}><Input label={t('nameEn')} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} /><div><label className="block text-sm font-medium text-ui-muted mb-1">{isAr ? 'النوع' : 'Type'}</label><div className="min-h-11 flex items-center rounded-lg border border-ui-border bg-ui-page-alt px-3 text-sm font-semibold text-ui-text">{isAr ? 'مجموعة مكونات' : 'Component group'}</div></div></div>
           <div className={fieldGrid}><Input label={t('costPrice')} type="number" min="0" step="0.01" value={form.cost_price} onChange={(e) => setForm({ ...form, cost_price: Number(e.target.value) || 0 })} /><Input label={t('salePrice')} type="number" min="0" step="0.01" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: Number(e.target.value) || 0 })} /></div>
           <div className={fieldGrid}><Input label={t('minStock')} type="number" min="0" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: Number(e.target.value) || 0 })} /><Input label={t('maxStock')} type="number" min="0" value={form.max_stock} onChange={(e) => setForm({ ...form, max_stock: Number(e.target.value) || 0 })} /></div>
           <div className={fieldGrid}><Input label={t('reorderPoint')} type="number" min="0" value={form.reorder_point} onChange={(e) => setForm({ ...form, reorder_point: Number(e.target.value) || 0 })} /><Input label={t('lowStockThreshold')} type="number" min="0" value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: Number(e.target.value) || 0 })} /></div>
@@ -214,9 +214,9 @@ export function InventoryUnitsPage() {
         </div>
       </Modal>
 
-      <Modal open={recipeModalOpen} onClose={() => setRecipeModalOpen(false)} title={recipeUnit ? `${isAr ? 'وصفة المصنع' : 'Manufactured item recipe'} — ${recipeUnit.name}` : (isAr ? 'وصفة المصنع' : 'Manufactured item recipe')} size="lg">
+      <Modal open={recipeModalOpen} onClose={() => setRecipeModalOpen(false)} title={recipeUnit ? `${isAr ? 'مكونات المجموعة' : 'Group components'} — ${recipeUnit.name}` : (isAr ? 'مكونات المجموعة' : 'Group components')} size="lg">
         <div className="space-y-4">
-          <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-sm text-purple-800">{isAr ? 'الخامات هنا تخص تصنيع هذا المصنع فقط. البيع لا يخصم خاماته مباشرة.' : 'These raw materials are consumed only when manufacturing this item. Sales do not deduct them directly.'}</div>
+          <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-sm text-purple-800">{isAr ? 'هذه الخامات تعريف لمجموعة مكونات قابلة لإعادة الاستخدام. عند بيع منتج مرتبط بها، يتم خصم الخامات عند إرسال الطلب للمطبخ.' : 'These raw materials define a reusable component group. For linked products, raw materials are deducted when the order is sent to the kitchen.'}</div>
           {recipeRows.map((row, index) => {
             const selectedMaterial = rawMaterials.find((material) => material.id === row.raw_material_id);
             const selectedUnit = selectedMaterial ? unitLabel(selectedMaterial) : '';
