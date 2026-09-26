@@ -75,6 +75,31 @@ export const accounting = {
   paySupplierFromTreasury(p: { p_supplier_id: string; p_branch_id: string; p_amount: number; p_treasury_account_id: string; p_purchase_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('pay_supplier_from_treasury', p); },
   getTreasuryBalances(p: { p_branch_id: string | null }): ApiResult<TreasuryBalance[]> { return rpc('get_treasury_balances', p); },
   getAccessibleTreasuryAccounts(p: { p_branch_id: string }): ApiResult<TreasurySource[]> { return rpc('get_accessible_treasury_accounts', p); },
+  getBranchTreasuryDayCloseReconciliation(p: { p_branch_id: string; p_limit: number }): ApiResult<{
+    success: boolean;
+    branch_id?: string;
+    error?: string;
+    rows?: Array<{
+      daily_close_id: string;
+      business_date: string;
+      closed_at: string;
+      cash_sales: number;
+      bank_sales: number;
+      credit_sales: number;
+      net_sales: number;
+      expenses: number;
+      cash_purchases: number;
+      cash_balance_after_close: number;
+      bank_balance_after_close: number;
+      total_balance_after_close: number;
+      previous_cash_balance: number | null;
+      previous_bank_balance: number | null;
+      previous_total_balance: number | null;
+      cash_movement_since_previous_close: number | null;
+      bank_movement_since_previous_close: number | null;
+      total_movement_since_previous_close: number | null;
+    }>;
+  }> { return rpc('get_branch_treasury_day_close_reconciliation', p); },
   processTransfer(p: { p_branch_id: string | null; p_from_account_id: string; p_to_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_transfer', p); },
   processTreasuryTransferV2(p: { p_from_account_id: string; p_to_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_treasury_transfer_v2', p); },
   processTreasuryDeposit(p: { p_branch_id: string | null; p_account_id: string; p_amount: number; p_notes: string | null }): ApiResult<RpcResult> { return rpc('process_treasury_deposit', p); },
