@@ -132,6 +132,17 @@ Progress continuity rule:
 - Regression contract updated to lock raw-only UX, one visible raw selector, deterministic destination resolution, warehouse-aware same-branch behavior, and source-warehouse costing.
 - No Production write/migration; no print/KDS/send-to-kitchen code touched.
 
+
+### P2 primary inventory surface — in progress
+
+- Replaced the primary `InventoryPage` finished-product balance table with the current raw-material stock surface; the page no longer presents `inventory` product stock, ready/component filters, or manufactured badges as current operational truth.
+- `RawMaterialBranchStockPanel` now reads `raw_material_warehouse_inventory` and active warehouses, generating one operational row per raw material per warehouse, including zero-balance rows.
+- Added an explicit warehouse filter and warehouse column; branch scoping remains permission/RLS driven through accessible branches.
+- Minimum-stock status now uses `raw_materials.min_stock`; financial value/cost remains delegated to authoritative FIFO reporting.
+- New stock-count creation is now raw-material-only. Historical product-count rows remain readable/editable by legacy code paths for audit compatibility; no historical rows were deleted.
+- Stock-count copy now states that counts apply to the selected warehouse and no longer claims raw stock is branch-level.
+- No schema/RLS/Production migration was introduced for these P2 UI changes.
+
 ## Verification ledger
 
 - Verify Run #2947 / 36241538524: failed only at mandatory worklog structure because the new log lacked the required `## Baseline` heading; no application checks ran.
@@ -150,7 +161,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Continue P2 only after a focused P1 contract check / Fast Verify is satisfactory. Do not wait for a new Full Verify between each P2 UI change. Align the primary inventory screen to warehouse-aware raw-material stock, then stock-count/batch surfaces, recording each logical group here. Run one exact-head Full Verify after the complete package is stable and before merge.
+Run focused contract/type validation for the P2 inventory and stock-count changes. Fix only change-related issues. Then audit and align `InventoryBatchesPage` away from finished-product/production batch concepts toward raw-material FIFO history without deleting historical data. Use Fast Verify at the end of the cohesive P2 group; defer Full Verify to the final package gate.
 
 ## Mandatory update protocol
 
