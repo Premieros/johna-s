@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/api';
+import { useCan } from '@/lib/permissions';
 
 export function CashierDiscountApprovalCard({
   subtotal,
@@ -18,43 +19,11 @@ export function CashierDiscountApprovalCard({
   const [requestId, setRequestId] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected'>('idle');
   const [busy, setBusy] = useState(false);
-  const [isCashier, setIsCashier] = useState(false);
+  const can = useCan();
+  const canDirectDiscount = can('pos.discount');
 
   useEffect(() => setType(currentType), [currentType]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const resolveCashierRole = async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData.session?.user?.id;
-
-        if (!userId) {
-          if (mounted) setIsCashier(false);
-          return;
-        }
-
-        const { data } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (mounted) {
-          setIsCashier(data?.role === 'cashier');
-        }
-      } catch {
-        if (mounted) setIsCashier(false);
-      }
-    };
-
-    void resolveCashierRole();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!requestId) return;
@@ -77,7 +46,7 @@ export function CashierDiscountApprovalCard({
 
           if (next.status === 'approved') {
             setStatus('approved');
-            onApproved(type, amount);
+            onApproved(type, type === 'percent' ? Math.min(amount, 100) : Math.min(amount, Math.max(subtotal, 0)));
           } else if (next.status === 'rejected' || next.status === 'expired') {
             setStatus('rejected');
           }
@@ -88,12 +57,20 @@ export function CashierDiscountApprovalCard({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [requestId, type, amount, onApproved]);
+  }, [requestId, type, amount, subtotal, onApproved]);
 
-  if (!isCashier) return null;
+  if (canDirectDiscount) return null;
 
   const request = async () => {
     if (amount <= 0 || reason.trim().length < 3) return;
+
+    const normalizedInput = type === 'percent'
+      ? Math.min(amount, 100)
+      : Math.min(amount, Math.max(subtotal, 0));
+    const monetaryDiscount = type === 'percent'
+      ? (Math.max(subtotal, 0) * normalizedInput) / 100
+      : normalizedInput;
+    if (monetaryDiscount <= 0) return;
 
     setBusy(true);
 
@@ -103,8 +80,9 @@ export function CashierDiscountApprovalCard({
         p_entity_type: 'sale',
         p_entity_id: null,
         p_payload: {
-          discount_amount: amount,
+          discount_amount: monetaryDiscount,
           discount_type: type,
+          requested_value: normalizedInput,
           subtotal,
         },
         p_reason: reason.trim(),
