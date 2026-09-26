@@ -12,17 +12,22 @@ describe('shift report product / ingredient composition contract', () => {
     expect(source).toContain('const netQuantity = Math.max(0, Number(item.quantity || 0) - Number(item.refunded_quantity || 0))');
     expect(source).toContain('const netLineTotal = Math.max(0, grossLineTotal - Number(item.refunded_amount || 0))');
     expect(source).toContain('productsSold: Array.from(productMap');
-    expect(source).toContain('ingredientsConsumed: Array.from(ingredientsMap');
+    expect(source).toContain("supabase.rpc('get_raw_consumption_cost_breakdown'");
+    expect(source).toContain('ingredientsConsumed,');
     expect(source).toContain('orderTypes: Array.from(orderTypeMap');
     expect(source).not.toContain('productsSold: []');
     expect(source).not.toContain('ingredientsConsumed: []');
     expect(source).not.toContain('orderTypes: []');
   });
 
-  it('keeps recipe expansion branch-scoped and does not alter shift membership authority', () => {
-    expect(source).toContain(".from('recipes')");
-    expect(source).toContain(".eq('branch_id', String(raw.branch_id))");
-    expect(source).toContain("measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)");
+  it('uses FIFO ledger costing for raw consumption without altering shift membership authority', () => {
+    expect(source).toContain("supabase.rpc('get_raw_consumption_cost_breakdown'");
+    expect(source).toContain('actualQuantity: Number(row.actual_quantity || 0)');
+    expect(source).toContain('estimatedQuantity: Number(row.estimated_quantity || 0)');
+    expect(source).toContain('actualCost: Number(row.actual_cost || 0)');
+    expect(source).toContain('estimatedCost: Number(row.estimated_cost || 0)');
+    expect(source).toContain('displayedCost: Number(row.displayed_cost || 0)');
+    expect(source).not.toContain("raw_material:raw_materials(name,default_cost");
     expect(source).toContain("supabase.rpc('get_shift_closing_report', { p_shift_id: shiftId })");
     expect(source).not.toContain("sales.shift_id");
   });
