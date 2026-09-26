@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-26T12:25:00.000Z",
+  "generated_at": "2026-09-26T13:10:00.000Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -107,13 +107,6 @@
       ]
     },
     {
-      "name": "cancel_production_order",
-      "params": [
-        "order_id",
-        "reason"
-      ]
-    },
-    {
       "name": "close_shift",
       "params": [
         "actual_amount",
@@ -133,13 +126,6 @@
       "name": "complete_bank_reconciliation",
       "params": [
         "reconciliation_id"
-      ]
-    },
-    {
-      "name": "complete_production_order",
-      "params": [
-        "order_id",
-        "waste"
       ]
     },
     {
@@ -201,18 +187,6 @@
         "unit_links",
         "units",
         "wholesale_price"
-      ]
-    },
-    {
-      "name": "create_production_order",
-      "params": [
-        "batch_number",
-        "branch_id",
-        "notes",
-        "planned_at",
-        "product_id",
-        "quantity",
-        "warehouse_id"
       ]
     },
     {
@@ -1109,12 +1083,6 @@
       ]
     },
     {
-      "name": "start_production_order",
-      "params": [
-        "order_id"
-      ]
-    },
-    {
       "name": "submit_stock_count",
       "params": [
         "stock_count_id"
@@ -1264,7 +1232,6 @@
     "inventory",
     "inventory_movements",
     "inventory_unit_batches",
-    "inventory_unit_productions",
     "inventory_unit_recipes",
     "inventory_units",
     "kitchen_stations",
