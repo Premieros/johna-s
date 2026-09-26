@@ -4,7 +4,7 @@
 
 - Mandatory active work log: `docs/GUARANTEED_AUTO_PRINT_2026-09-26.md`
 - Current active branch: `development/guaranteed-auto-print-20260926`
-- Current PR: `pending`
+- Current PR: `#378`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
