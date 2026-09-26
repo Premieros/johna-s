@@ -5,7 +5,7 @@ Current PR: `#383`
 Last updated: 2026-09-26
 
 ## Work status
-**BLOCKED**
+State: **BLOCKED**
 
 ## Guardrails
 - Repository: `Premieros/johna-s` only.
