@@ -61,6 +61,7 @@ export interface RawMaterialCostOverviewRow {
   negative_quantity: number;
   actual_stock_value: number;
   estimated_negative_value: number;
+  unpriced_negative_quantity: number;
   estimated_net_stock_value: number;
 }
 
