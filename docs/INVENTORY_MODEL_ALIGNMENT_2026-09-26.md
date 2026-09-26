@@ -170,6 +170,12 @@ Progress continuity rule:
 
 ## Verification ledger
 
+- Verify Run #2983 / 36244879006: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, application/test typecheck ✅. Unit suite reached 1127/1128 passed; the only failure was one stale text assertion in `catalogTerminologyLockContract.test.ts` expecting an older English sentence that no longer exists after the approved wizard copy cleanup. Build/DB/browser did not run after unit failure.
+- Performed a targeted test sweep for remaining old `Manufactured Items / Production Orders / Manufacturing Center / Production Waste` assertions before changing runtime again. No additional active test assertions were found beyond the known terminology lock.
+- Replaced the stale assertion with the current measurement-unit contract and preserved the stronger negative guards against product-unit fields.
+- Permission keys `production.*` remain canonical for DB/backward compatibility, but the current permission UI now labels them explicitly as **legacy compatibility / غير مستخدم حاليًا** and presents the section as **Waste & Legacy Compatibility / الهالك والتوافق القديم**. No RLS or stored role permissions changed.
+- Verify Run #2985 / 36245589710 is queued on exact head `7b4139dc5feacfc7346ad7a1e08b55c98634812c`.
+
 - Verify Run #2975 / 36244316244: worklog ✅, Supabase identity ✅, API contract ✅, lint ✅, application/test typecheck ✅. Unit stage failed only on three stale retirement-era tests: one deleted production-domain authority test and two assertions still requiring the old "Manufactured Items / المصنعات" labels. Build/DB/browser did not run after unit failure.
 - Reconciled the failures to the approved retirement model: removed the obsolete production completion authority test, updated terminology lock assertions to **Component Groups / مجموعات المكونات**, and renamed the sidebar item accordingly. No runtime database or Production changes were made for these test fixes.
 
@@ -195,7 +201,7 @@ State: **BLOCKED**
 
 ## Next action
 
-Observe the latest focused verification after the P5 terminology changes. Then audit permission presentation: preserve legacy permission keys for database/backward compatibility, but remove production-workflow wording from the current operational permission UI where safe. Do not alter RLS or stored role permissions in this phase. After that, run Fast Verify for the complete P3-P5 group.
+Observe Verify Run #2985. If focused code gates are green, continue the remaining P5 active-screen sweep with Recipes/Products/report labels only; do not modify schema, RLS, stored role permissions, printing, KDS, or kitchen-send runtime. At the end of the P3-P5 cleanup group, run Fast Verify, then one exact-head Full Verify as the final merge gate.
 
 ## Mandatory update protocol
 
