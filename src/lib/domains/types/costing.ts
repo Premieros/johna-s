@@ -56,6 +56,12 @@ export interface RawMaterialCostOverviewRow {
   reference_number: string | null;
   source_detail: string | null;
   event_count: number;
+  stock_quantity: number;
+  positive_quantity: number;
+  negative_quantity: number;
+  actual_stock_value: number;
+  estimated_negative_value: number;
+  estimated_net_stock_value: number;
 }
 
 export interface RawMaterialCostHistoryRow {
