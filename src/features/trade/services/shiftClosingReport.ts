@@ -118,7 +118,11 @@ export interface ShiftClosingSummary {
     materialName: string;
     quantity: number;
     unit: string;
+    actualQuantity: number;
+    estimatedQuantity: number;
+    actualCost: number;
     estimatedCost: number;
+    displayedCost: number;
   }[];
 }
 
@@ -328,7 +332,11 @@ export async function fetchShiftClosingDetails(shiftId: string, branchId?: strin
       materialName: data.name,
       quantity: parseFloat(data.quantity.toFixed(3)),
       unit: data.unit,
+      actualQuantity: 0,
+      estimatedQuantity: parseFloat(data.quantity.toFixed(3)),
+      actualCost: 0,
       estimatedCost: parseFloat(data.estimatedCost.toFixed(2)),
+      displayedCost: parseFloat(data.estimatedCost.toFixed(2)),
     })),
   };
 }
@@ -654,7 +662,9 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
         <tr>
           <th style="text-align: ${isAr ? 'right' : 'left'};">${isAr ? 'المادة' : 'Material'}</th>
           <th class="text-center">${isAr ? 'الكمية' : 'Qty'}</th>
-          <th class="text-end">${isAr ? 'التكلفة المقدرة' : 'Est. Cost'}</th>
+          <th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>
+          <th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>
+          <th class="text-end">${isAr ? 'الإجمالي المعروض' : 'Displayed Total'}</th>
         </tr>
       </thead>
       <tbody>
@@ -662,7 +672,9 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
           <tr>
             <td>${escapeHtml(m.materialName)}</td>
             <td class="text-center font-bold">${m.quantity} ${escapeHtml(m.unit)}</td>
-            <td class="text-end">${formatCurrency(m.estimatedCost, currency, lang)}</td>
+            <td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>
+            <td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>
+            <td class="text-end font-bold">${formatCurrency(m.displayedCost, currency, lang)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -952,7 +964,9 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
           <tr>
             <th>${isAr ? 'المادة الخام / المكون' : 'Raw Material'}</th>
             <th class="text-center">${isAr ? 'الكمية المستهلكة' : 'Consumed Qty'}</th>
-            <th class="text-end">${isAr ? 'التكلفة التقديرية' : 'Estimated Cost'}</th>
+            <th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>
+            <th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>
+            <th class="text-end">${isAr ? 'الإجمالي المعروض' : 'Displayed Total'}</th>
           </tr>
         </thead>
         <tbody>
@@ -960,7 +974,9 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
             <tr>
               <td>${escapeHtml(m.materialName)}</td>
               <td class="text-center font-bold">${m.quantity} ${escapeHtml(m.unit)}</td>
-              <td class="text-end font-bold">${formatCurrency(m.estimatedCost, currency, lang)}</td>
+              <td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>
+              <td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>
+              <td class="text-end font-bold">${formatCurrency(m.displayedCost, currency, lang)}</td>
             </tr>
           `).join('')}
         </tbody>

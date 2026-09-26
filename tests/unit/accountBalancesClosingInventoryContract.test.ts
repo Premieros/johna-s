@@ -12,7 +12,10 @@ describe('account balances, closing and inventory safety contracts', () => {
     expect(source).not.toContain(".eq('shift_id', shiftId);\n\n  const salesList");
     expect(source).toContain("customer:customers(employee_user_id)");
     expect(source).toContain("sale.customer?.employee_user_id ? 'employee_credit' : 'credit'");
-    expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey(name,symbol,code)');
+    expect(source).toContain('costingApi.getRawConsumptionCostBreakdown');
+    expect(source).toContain('actualCost: Number(row.actual_cost || 0)');
+    expect(source).toContain('estimatedCost: Number(row.estimated_cost || 0)');
+    expect(source).not.toContain('raw_material:raw_materials(name,default_cost');
     expect(source).not.toContain('unit:units(name,symbol)');
   });
 

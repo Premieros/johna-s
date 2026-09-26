@@ -633,6 +633,14 @@
       ]
     },
     {
+      "name": "get_raw_consumption_cost_breakdown",
+      "params": [
+        "branch_id",
+        "from",
+        "to"
+      ]
+    },
+    {
       "name": "get_raw_material_cost_history",
       "params": [
         "branch_id",
@@ -641,7 +649,7 @@
       ]
     },
     {
-      "name": "get_raw_material_cost_overview",
+      "name": "get_raw_material_cost_valuation_overview",
       "params": [
         "branch_id"
       ]

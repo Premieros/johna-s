@@ -92,9 +92,10 @@ export function CostingCenterPage() {
   const loadOverview = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [res, summaryRes] = await Promise.all([
+    const [res, summaryRes, rawValuationRes] = await Promise.all([
       api.costing.getOverview({ p_branch_id: effBranch }),
       api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: history.minDate || null, p_to: null }),
+      api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
     ]);
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     setOverview(res.data || []);
@@ -108,6 +109,7 @@ export function CostingCenterPage() {
     } else {
       setSalesCostSummary({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
     }
+    if (!rawValuationRes.error) setRawCosts(rawValuationRes.data || []);
     setLoading(false);
   }, [effBranch, show, history.minDate]);
 
@@ -212,6 +214,16 @@ export function CostingCenterPage() {
     return { count, avg, worst };
   }, [filteredOverview]);
 
+  const estimatedCostSummary = useMemo(() => {
+    const estimatedNegativeCost = rawCosts.reduce((sum, row) => sum + Number(row.estimated_negative_value || 0), 0);
+    const unpricedNegativeQuantity = rawCosts.reduce((sum, row) => sum + Number(row.unpriced_negative_quantity || 0), 0);
+    const estimatedCogs = Number(salesCostSummary.cogs || 0) + estimatedNegativeCost;
+    const estimatedRatio = Number(salesCostSummary.net_sales || 0) > 0
+      ? estimatedCogs * 100 / Number(salesCostSummary.net_sales)
+      : 0;
+    return { estimatedNegativeCost, unpricedNegativeQuantity, estimatedCogs, estimatedRatio };
+  }, [rawCosts, salesCostSummary]);
+
   const visibleBranches = branchFilter ? branches.filter((b) => b.id === branchFilter) : branches;
   const money = (v: number | undefined | null) => formatCurrency(Number(v || 0), 'EGP', lang);
   const rawUnitMoney = (v: number | undefined | null) => {
@@ -282,12 +294,13 @@ export function CostingCenterPage() {
 
   const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string }>[] = [
     { key: 'raw', header: t('rawMaterial'), render: (r) => <div><p className="font-semibold text-ui-text">{r.raw_material_name}</p><p className="text-xs text-ui-subtle">{r.raw_material_code || '-'}</p></div> },
-    { key: 'latest', header: isAr ? 'آخر سعر / وحدة المخزون' : 'Latest / stock unit', render: (r) => <div><span className="font-bold text-ui-text">{rawUnitMoney(r.latest_cost)}</span>{rawUnitLabel(r.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(r.raw_material_id)}</p>}</div> },
-    { key: 'previous', header: isAr ? 'السعر السابق' : 'Previous price', render: (r) => r.previous_cost == null ? '-' : rawUnitMoney(r.previous_cost) },
-    { key: 'change', header: isAr ? 'التغير' : 'Change', render: (r) => r.change_pct == null ? '-' : <span className={`font-semibold ${r.change_pct > 0 ? 'text-ui-danger' : r.change_pct < 0 ? 'text-ui-success' : 'text-ui-muted'}`}>{r.change_pct > 0 ? '+' : ''}{formatNumber(r.change_pct, 2)}%</span> },
+    { key: 'stock', header: isAr ? 'الرصيد' : 'Stock', render: (r) => <span className={`font-semibold ${Number(r.stock_quantity) < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(r.stock_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang })}</span> },
+    { key: 'latest', header: isAr ? 'السعر المعروف / وحدة' : 'Known cost / unit', render: (r) => <div><span className="font-bold text-ui-text">{rawUnitMoney(r.latest_cost)}</span>{rawUnitLabel(r.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(r.raw_material_id)}</p>}</div> },
+    { key: 'actualValue', header: isAr ? 'القيمة الفعلية' : 'Actual value', render: (r) => <div><span className="font-bold text-ui-text">{money(r.actual_stock_value)}</span><p className="text-[10px] text-ui-subtle">{isAr ? 'المخزون الموجب فقط' : 'Positive stock only'}</p></div> },
+    { key: 'negativeEstimate', header: isAr ? 'تكلفة السالب التقديرية' : 'Estimated negative cost', render: (r) => Number(r.negative_quantity) <= 0 ? '-' : <div><span className="font-bold text-ui-warning">{money(r.estimated_negative_value)}</span><p className="text-[10px] text-ui-subtle">{formatRawMaterialQuantity(r.negative_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang })}</p></div> },
+    { key: 'netEstimate', header: isAr ? 'القيمة مع احتساب السالب' : 'Value incl. negative', render: (r) => <span className={`font-bold ${Number(r.estimated_net_stock_value) < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{money(r.estimated_net_stock_value)}</span> },
     { key: 'source', header: isAr ? 'مصدر السعر' : 'Price source', render: (r) => rawPriceSourcePill(r.price_source) },
     { key: 'date', header: isAr ? 'تاريخ السعر' : 'Price date', render: (r) => r.priced_at ? formatDateTime(r.priced_at, lang) : '-' },
-    { key: 'reference', header: isAr ? 'المرجع' : 'Reference', render: (r) => <div><p className="text-xs font-medium text-ui-text">{r.reference_number || '-'}</p>{r.source_detail && <p className="text-[11px] text-ui-subtle">{r.source_detail}</p>}</div> },
     { key: 'history', header: isAr ? 'التاريخ' : 'History', render: (r) => <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void openRawHistory(r); }}><History className="w-4 h-4" /> {formatNumber(r.event_count, 0)}</Button> },
   ];
 
@@ -304,7 +317,7 @@ export function CostingCenterPage() {
   const tabBtn = (key: Tab, label: string) => <button onClick={() => setTab(key)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${tab === key ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]' : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'}`}>{label}</button>;
 
   const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, UnitCost: r.unit_cost, TheoreticalCost: r.theoretical_cost, ActualCost: r.actual_cost })), 'costing-overview');
-  const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', LatestCost: r.latest_cost, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-price-history');
+  const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, KnownUnitCost: r.latest_cost, ActualPositiveStockValue: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
   const handleExportOrders = () => exportToExcel(orders.map((r) => ({ Invoice: r.invoice_number, Date: r.sale_date, Total: r.total, Discount: r.discount_amount, COGS: r.cogs, GrossMargin: r.gross_margin })), 'order-margin');
   const handleExportSupplier = () => exportToExcel(supplierImpact.map((r) => ({ Item: r.item_name, Type: r.item_type, FirstCost: r.first_cost, LastCost: r.last_cost, AvgCost: r.avg_cost, ChangePct: r.change_pct, PurchaseCount: r.purchase_count })), 'supplier-price-impact');
 
@@ -321,10 +334,11 @@ export function CostingCenterPage() {
 
       {tab === 'overview' && <>
         <DesignPanel testId="costing-summary-panel">
-          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{t('product')}</p><p className="mt-1 text-2xl font-bold text-ui-primary">{stats.count}</p></div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'متوسط تكلفة المنتجات' : 'Average product cost'}</p><p className="mt-1 text-2xl font-bold text-ui-text">{formatNumber(stats.avg, 1)}%</p></div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'التكلفة الفعلية من المبيعات' : 'Actual COGS / Net Sales'}</p><p className="mt-1 text-2xl font-bold text-ui-text">{formatNumber(salesCostSummary.ratio, 1)}%</p><p className="mt-1 text-[11px] text-ui-subtle">{money(salesCostSummary.cogs)} / {money(salesCostSummary.net_sales)}</p></div>
+            <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'التكلفة التقديرية مع السالب' : 'Estimated COGS incl. negative'}</p><p className="mt-1 text-2xl font-bold text-ui-warning">{formatNumber(estimatedCostSummary.estimatedRatio, 1)}%</p><p className="mt-1 text-[11px] text-ui-subtle">{money(estimatedCostSummary.estimatedCogs)} / {money(salesCostSummary.net_sales)}</p><p className="mt-1 text-[11px] text-ui-warning">{isAr ? 'فرق السالب:' : 'Negative gap:'} {money(estimatedCostSummary.estimatedNegativeCost)}</p>{estimatedCostSummary.unpricedNegativeQuantity > 0 && <p className="mt-1 text-[10px] text-ui-danger">{isAr ? 'يوجد عجز سالب غير مسعّر بالكامل' : 'Some negative stock is still unpriced'}</p>}</div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'أعلى تكلفة نسبة' : 'Highest cost ratio'}</p><p className="mt-1 truncate font-semibold text-ui-text">{stats.worst ? stats.worst.product_name : '-'}</p></div>
           </div>
         </DesignPanel>
@@ -338,8 +352,8 @@ export function CostingCenterPage() {
             <p className="font-semibold text-ui-text">{isAr ? 'قاعدة احتساب تكلفة الخامة' : 'Raw-material costing rule'}</p>
             <p className="mt-1">
               {isAr
-                ? 'يستخدم مركز التكلفة آخر سعر فعلي زمنيًا بين فاتورة شراء مكتملة أو جرد مطبق. سعر الشراء يُحوّل تلقائيًا إلى وحدة تخزين الخامة الأساسية، ولا يتم تغيير منطق تقييم المخزون أو FIFO.'
-                : 'Costing uses the latest dated authoritative price from a completed purchase or applied stock count. Purchase prices are normalized to the raw material base stock unit; inventory valuation/FIFO remains unchanged.'}
+                ? 'التكلفة الفعلية تُحسب من الرصيد الموجب وFIFO الحقيقي فقط ولا تتأثر بالسالب. عند نفاد الخامة يُسعّر الرصيد السالب مؤقتًا بآخر تكلفة FIFO معروفة ويظهر منفصلًا كتقدير حتى تصل المشتريات الفعلية وتتم تسوية FIFO.'
+                : 'Actual cost uses positive stock and settled FIFO only and is never changed by negative stock. When stock is exhausted, the negative balance is temporarily valued at the last known FIFO cost and shown separately as an estimate until a real purchase settles FIFO.'}
             </p>
           </div>
         </DesignPanel>
