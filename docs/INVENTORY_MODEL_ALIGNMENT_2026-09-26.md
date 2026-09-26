@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/inventory-model-alignment-20260926`
-Current PR: PENDING
+Current PR: #382
 Base: `main@a6abe7a60e7f076f9c05222533038a5a1bc7884f`
 Started: 2026-09-26 Africa/Cairo
 
