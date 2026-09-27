@@ -171,3 +171,18 @@ describe('treasury transfer visibility and main bank contract', () => {
     expect(treasuryPage).toContain("to_account_id.in.(");
   });
 });
+
+
+describe('treasury daily journal configurable columns', () => {
+  it('shows carried cash/bank, actual cash/bank and lets the user choose visible columns', () => {
+    expect(treasuryPage).toContain("isAr ? 'يومية الخزينة' : 'Treasury Daily Journal'");
+    expect(treasuryPage).toContain("isAr ? 'نقدي مرحّل' : 'Cash carried'");
+    expect(treasuryPage).toContain("isAr ? 'بنك مرحّل' : 'Bank carried'");
+    expect(treasuryPage).toContain("isAr ? 'بيع نقدي' : 'Cash sales'");
+    expect(treasuryPage).toContain("isAr ? 'بيع بنك/كارت' : 'Bank/Card sales'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد بنك فعلي' : 'Actual bank balance'");
+    expect(treasuryPage).toContain("isAr ? 'تحديد الأعمدة' : 'Choose columns'");
+    expect(treasuryPage).toContain("treasury.dailyJournal.columns.v1");
+  });
+});
