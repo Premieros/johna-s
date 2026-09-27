@@ -96,6 +96,8 @@ export function TreasuryPage() {
 
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const mainTreasury = balances.find((b) => b.scope === 'organization' && b.kind === 'main_cash');
+  const mainTreasuryBalance = Number(mainTreasury?.balance || 0);
   const transactionScope = treasuryView === 'main'
     ? (mainTreasury?.id ? `from_account_id.eq.${mainTreasury.id},to_account_id.eq.${mainTreasury.id}` : undefined)
     : (effectiveBranchFilter
@@ -234,8 +236,6 @@ export function TreasuryPage() {
   const displayedBalances = treasuryView === 'main'
     ? (mainTreasury ? [mainTreasury] : [])
     : localAccounts;
-  const mainTreasury = balances.find((b) => b.scope === 'organization' && b.kind === 'main_cash');
-  const mainTreasuryBalance = Number(mainTreasury?.balance || 0);
   const accountLabel = (a: TreasurySource) => {
     if (a.scope === 'organization') return isAr ? 'الخزنة الرئيسية' : 'Main Treasury';
     return `${a.branch_name || ''} - ${a.account_name}`.replace(/^ - /, '');
