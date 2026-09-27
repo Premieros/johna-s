@@ -213,7 +213,6 @@ export class ExportService {
       }
 
       case 'opening_inventory':
-      case 'production':
       case 'transfers':
       case 'expenses':
       case 'users':
