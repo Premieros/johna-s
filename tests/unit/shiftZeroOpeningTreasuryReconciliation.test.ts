@@ -37,9 +37,10 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
     expect(migration).toContain('FROM public.journal_entry_lines l');
     expect(migration).not.toContain('INSERT INTO public.treasury_transactions');
     expect(migration).not.toContain('INSERT INTO public.journal_entries');
-    expect(treasuryPage).toContain('مطابقة إغلاقات الأيام مع خزنة الفرع');
-    expect(treasuryPage).toContain('الحركة بعد الإغلاق');
-    expect(treasuryPage).toContain('الرصيد الحالي للخزنة');
+    expect(treasuryPage).toContain('ملخص الخزنة اليومي');
+    expect(treasuryPage).toContain("isAr ? 'رصيد أول' : 'Opening'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد آخر' : 'Closing'");
+    expect(treasuryPage).toContain("isAr ? 'تقرير اليوم' : 'Day report'");
   });
 
   it('shows close balances, post-close movement, and the reconciled balance after movement', () => {
@@ -58,5 +59,41 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
       expect(migration).toContain(field);
       expect(treasuryPage).toContain(field);
     }
+  });
+});
+
+
+describe('treasury daily single-row UI contract', () => {
+  it('renders one compact financial row per business day with the approved columns', () => {
+    for (const label of [
+      'رصيد أول',
+      'المبيعات',
+      'الآجل',
+      'المصروفات',
+      'المشتريات',
+      'صافي اليوم',
+      'كاش',
+      'بنك',
+      'رصيد آخر',
+      'تقرير اليوم',
+    ]) {
+      expect(treasuryPage).toContain(label);
+    }
+    expect(treasuryPage).toContain('dayCloses.map((row, index)');
+    expect(treasuryPage).not.toContain('row.movement_details.map((movement)');
+  });
+
+  it('keeps the latest closing balance tied to the live branch treasury balance', () => {
+    expect(treasuryPage).toContain("const closingBalance = row.is_latest");
+    expect(treasuryPage).toContain('totalCash + totalBank');
+    expect(treasuryPage).toContain('closing_balance: closingBalance');
+  });
+
+  it('offers branch and main treasury movement views without changing the day-report action', () => {
+    expect(treasuryPage).toContain("type TreasuryScopeView = 'branch' | 'main'");
+    expect(treasuryPage).toContain('خزنة الفرع');
+    expect(treasuryPage).toContain('الخزنة الرئيسية');
+    expect(treasuryPage).toContain('حركة الخزنة الرئيسية');
+    expect(treasuryPage).toContain('fetchDayClosingReportServer(effectiveBranchFilter, row.business_date)');
   });
 });
