@@ -36,7 +36,7 @@ State: **BLOCKED**
 
 ## Verification ledger
 - Production read-only audit complete.
-- CI pending.
+- Verify #3148 reached typecheck; worklog/API/lint passed. Typecheck found one stale `mainTreasury` reference in the main-view pagination enable flag; fixed to `mainAccountIds.length > 0`. Exact-head rerun pending.
 
 ## Production gate
 State: **BLOCKED**
