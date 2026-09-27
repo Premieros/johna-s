@@ -83,6 +83,7 @@ Write mode: **SEQUENTIAL_ONLY**
   - add-to-cart shift blocking semantics are unchanged.
   - `payment.ts` authoritative `getActiveShift` fallback for missing `p_shift_id` is unchanged.
 - Added `posSingleShiftReadContract.test.ts` to lock the parent-owned shift read, preserve settlement validation, and exclude frozen printing/kitchen paths.
+- Corrected Stage 2 lint regression by removing the obsolete local `branchId` from `ProductBrowser`; no behavior changed.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
@@ -137,7 +138,7 @@ State: **BLOCKED**
    - do not cache or weaken shift validation;
    - preserve payment service shift validation and all shift mutation behavior;
    - add a contract proving `ProductBrowser` cannot issue its own `getActiveShift` call.
-3. Remove the now-unused `branchId` local from `ProductBrowser`, rerun exact-head verification, and only then consider further optimizations.
+3. Rerun exact-head verification for the corrected Stage 2 head; do not start Stage 3 unless Green.
 4. Do not touch printing, Print Agent, routing, KDS, kitchen transport, or Production.
 
 ## Mandatory update protocol
