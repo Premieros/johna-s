@@ -72,6 +72,9 @@ Write mode: **SEQUENTIAL_ONLY**
 - Replaced 2-second approval polling in `TransferOrderModal` with the same event-driven pattern.
 - Added event-only recovery reads on browser `online` and visible-tab return; there is no periodic fallback timer.
 - Preserved the existing authoritative `performOrderAction` retry-after-approval behavior and terminal-state handling.
+- Removed 5-minute `roles` table polling from `RolesContext`.
+- Roles still load at authenticated-session start and refresh after local role create/update/delete; remote-session recovery now occurs only on focus/online/visible-tab events and is throttled to at most once per minute.
+- Backend/RLS/RPC authorization remains authoritative if UI role metadata is temporarily stale.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
