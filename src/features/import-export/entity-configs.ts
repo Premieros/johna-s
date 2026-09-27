@@ -266,7 +266,7 @@ export const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     descriptionAr: 'استيراد وتصدير المواد الخام والمستودعات ووحدات القياس وتكاليف الشراء',
     descriptionEn: 'Import raw materials, ingredients, purchase costs and inventory units',
     icon: 'Layers',
-    requiredPermission: 'products.import',
+    requiredPermission: 'raw_materials.manage',
     primaryKeyColumn: 'sku',
     columns: [
       {
@@ -367,7 +367,7 @@ export const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     descriptionAr: 'استيراد وتحديث الخامات المباشرة المستخدمة في كل منتج بنظام صف لكل خامة',
     descriptionEn: 'Import direct raw-material composition using one row per raw material',
     icon: 'UtensilsCrossed',
-    requiredPermission: 'manufacturing.view',
+    requiredPermission: 'products.import',
     primaryKeyColumn: 'product_sku',
     columns: [
       {
