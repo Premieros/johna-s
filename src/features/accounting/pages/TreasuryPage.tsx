@@ -114,7 +114,7 @@ export function TreasuryPage() {
     or: transactionScope,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
-    enabled: treasuryView === 'main' ? !!mainTreasury?.id : !!effectiveBranchFilter,
+    enabled: treasuryView === 'main' ? mainAccountIds.length > 0 : !!effectiveBranchFilter,
   });
 
   const [modal, setModal] = useState<ModalType>(null);
