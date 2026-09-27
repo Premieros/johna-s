@@ -866,6 +866,8 @@ export function PosWorkspacePage() {
               currency={pos.effCurrency}
               hasBranch={!!effectiveBranch}
               canModifyOrder={canModifyCurrentOrder}
+              shiftChecked={shiftChecked}
+              shiftOpen={!!activeShift}
               onSearch={setSearch}
               onSelectCategory={setSelectedCategory}
               onAddToCart={pos.addToCart}
