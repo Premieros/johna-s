@@ -100,6 +100,12 @@ Write mode: **SEQUENTIAL_ONLY**
 
 ## Verification ledger
 
+- Branch-safety review after the first final Green found one operational freshness risk: `roles` is not in the Supabase Realtime publication, so a permanently focused client could miss remote permission changes indefinitely.
+- Restored a bounded 5-minute role refresh **only while the browser tab is visible**; hidden tabs do not poll. Focus/online/visibility recovery refresh remains throttled, and explicit role mutations still refresh immediately.
+- This intentionally trades a tiny bounded read cost for branch permission freshness and safer live operation.
+- Read-only Production branch check during this review confirmed both active branches had open shifts and live sales/kitchen activity; recent print jobs were reaching `submitted` with zero new failed jobs in the sampled two-hour window.
+
+
 - Stage 4 Full Verify Green on `6d1d9e8dfdad4c65ae473a38eacee122e7e727be`.
 - Workflow run `36328431098` / Verify main #3119: lint, typecheck, unit, build, fresh DB/schema, integration/security/RLS, and browser smoke all passed.
 - Final read-only audit found no additional non-frozen database polling change with a comparable safety/benefit profile; further catalog caching was deliberately deferred because the current cache has no reliable freshness marker.
@@ -177,10 +183,10 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Safe ZERO COST runtime implementation is complete.
-2. Run one final exact-head Full Verify after this documentation closure commit.
-3. Keep PR #391 Draft; do not merge without explicit approval.
-4. Production stays unchanged and printing/KDS remain out of scope.
+1. Branch-safety correction implemented: visible-session role refresh restored at a bounded 5-minute cadence.
+2. Run a new exact-head Full Verify on the corrected head.
+3. Recheck current Production branch health read-only after CI.
+4. Keep PR #391 Draft; no Merge, Production deployment, migration, printing/KDS change, or Production write without explicit approval.
 
 ## Mandatory update protocol
 
