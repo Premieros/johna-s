@@ -38,7 +38,8 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
 
     await client.query(
       `UPDATE public.shifts
-       SET opening_amount = 100,
+       SET opened_at = now()-interval '1 hour',
+           opening_amount = 100,
            expected_amount = 100,
            actual_amount = 0,
            difference = 0,
