@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/SETTLEMENT_MODIFIER_ORDER_NORMALIZATION_2026-09-27.md`
-- Current active branch: `development/settlement-modifier-order-normalization-20260927`
-- Current PR: `#390`
+- Mandatory active work log: `docs/ZERO_COST_DATABASE_RUNTIME_2026-09-27.md`
+- Current active branch: `development/zero-cost-db-runtime-20260927`
+- Current PR: `#391`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -26,7 +26,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/settlement-modifier-order-normalization-20260927`
+- Executable branch: `development/zero-cost-db-runtime-20260927`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
@@ -335,7 +335,7 @@ User explicitly approved a renderer-only redesign of customer and kitchen receip
 
 ## NEXT ACTION
 
-1. أكمل PR #388 لتبسيط مجموعات الإضافات والخيارات على الفرع النشط، ثم exact-head Full Verify قبل أي Merge.
+1. نفّذ Zero-Cost Database Runtime على الفرع النشط: ابدأ بإلغاء idle polling الآمن وrequest dedup/cache دون لمس الطباعة أو KDS، ثم exact-head Full Verify قبل أي Merge.
 2. لا تعديل على الطباعة أو محطات الطباعة أو الوكيل أو أزرار الطباعة أو `send_to_kitchen`/KDS تحت القفل الحالي.
 2. أي إصلاح جديد يبدأ من أحدث `main` على فرع مستقل.
 3. الأولوية غير المرتبطة بالطباعة/الإرسال: إعادة تأسيس PR #198 على أحدث `main` وفحصه فقط؛ Production migration تحتاج موافقة منفصلة بعد Green.

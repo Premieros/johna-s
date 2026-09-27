@@ -10,6 +10,10 @@ describe('lightweight application shell contract', () => {
 
     expect(layout).toContain('useActiveOrderCount');
     expect(layout).not.toContain('useActiveOrders(');
+    expect(layout).toContain('const isPosRoute = location.pathname === APP_ROUTES.pos');
+    expect(layout).toContain("useActiveOrderCount(branchFilter || user?.branch_id || '', !isPosRoute)");
+    expect(countHook).toContain('export function useActiveOrderCount(branchId: string, enabled = true)');
+    expect(countHook).toContain('if (!enabled) return;');
     expect(countHook).toContain(".select('id')");
     expect(countHook).toContain(".select('id,order_id,quantity')");
     expect(countHook).not.toContain('order_kitchen_sends');

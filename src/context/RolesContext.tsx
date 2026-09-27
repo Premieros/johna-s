@@ -96,12 +96,31 @@ export function RolesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!sessionUserId) return;
 
-    const timer = window.setInterval(() => {
+    let lastRefreshAt = Date.now();
+    const refreshNow = () => {
+      lastRefreshAt = Date.now();
       void refresh();
+    };
+    const refreshIfStale = () => {
+      if (Date.now() - lastRefreshAt < 60_000) return;
+      refreshNow();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshIfStale();
+    };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshNow();
     }, ROLE_REFRESH_INTERVAL_MS);
+
+    window.addEventListener('focus', refreshIfStale);
+    window.addEventListener('online', refreshIfStale);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       window.clearInterval(timer);
+      window.removeEventListener('focus', refreshIfStale);
+      window.removeEventListener('online', refreshIfStale);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [sessionUserId, refresh]);
 

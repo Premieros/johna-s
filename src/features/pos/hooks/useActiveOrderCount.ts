@@ -59,7 +59,7 @@ async function fetchActiveOrderCount(branchId: string): Promise<CountSnapshot> {
  * pages and share the branch realtime channel without reacting to other branches'
  * order_items events.
  */
-export function useActiveOrderCount(branchId: string): number {
+export function useActiveOrderCount(branchId: string, enabled = true): number {
   const cached = branchId ? countCache.get(branchId) : undefined;
   const [count, setCount] = useState(cached?.value ?? 0);
   const refreshTimer = useRef<number | null>(null);
@@ -67,6 +67,7 @@ export function useActiveOrderCount(branchId: string): number {
   const visibleItemIdsRef = useRef<Set<string>>(new Set(cached?.visibleItemIds ?? []));
 
   const refresh = useCallback(async (force = false) => {
+    if (!enabled) return;
     if (!branchId) {
       watchedOrderIdsRef.current = new Set();
       visibleItemIdsRef.current = new Set();
@@ -92,7 +93,7 @@ export function useActiveOrderCount(branchId: string): number {
       // Keep the last known badge value. Shell navigation should never be blocked
       // by a non-critical badge refresh.
     }
-  }, [branchId]);
+  }, [branchId, enabled]);
 
   useEffect(() => {
     if (!branchId) {
@@ -105,7 +106,10 @@ export function useActiveOrderCount(branchId: string): number {
     const current = countCache.get(branchId);
     watchedOrderIdsRef.current = new Set(current?.watchedOrderIds ?? []);
     visibleItemIdsRef.current = new Set(current?.visibleItemIds ?? []);
-    if (current) setCount(current.value);
+    setCount(current?.value ?? 0);
+
+    if (!enabled) return;
+
     void refresh(false);
 
     const scheduleRefresh = () => {
@@ -135,7 +139,7 @@ export function useActiveOrderCount(branchId: string): number {
       refreshTimer.current = null;
       unsubscribe();
     };
-  }, [branchId, refresh]);
+  }, [branchId, enabled, refresh]);
 
   return count;
 }

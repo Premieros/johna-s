@@ -147,30 +147,66 @@ export function TransferItemModal({ open, onClose, item, orderId, orderItemId, s
   useEffect(() => {
     if (!open || !pendingRequestId) return;
     let cancelled = false;
-    const check = async () => {
-      const { data } = await supabase
-        .from('approval_requests')
-        .select('status')
-        .eq('id', pendingRequestId)
-        .maybeSingle();
-      if (cancelled || !data) return;
-      const status = (data as { status: string }).status;
+    let terminalHandled = false;
+
+    const applyStatus = async (status: string) => {
+      if (cancelled || terminalHandled) return;
       setPendingStatus(status);
       if (status === 'approved') {
+        terminalHandled = true;
         setPendingRequestId(null);
         await perform();
       } else if (status === 'rejected' || status === 'expired') {
+        terminalHandled = true;
         setPendingRequestId(null);
         setError(status === 'rejected'
           ? (isAr ? 'رفض المدير طلب الفصل.' : 'The manager rejected the split request.')
           : (isAr ? 'انتهت صلاحية طلب الموافقة. أعد المحاولة.' : 'The approval request expired. Try again.'));
       }
     };
-    const id = window.setInterval(() => void check(), 2000);
-    void check();
+
+    const readCurrentStatus = async () => {
+      const { data } = await supabase
+        .from('approval_requests')
+        .select('status')
+        .eq('id', pendingRequestId)
+        .maybeSingle();
+      if (!cancelled && data) {
+        await applyStatus((data as { status: string }).status);
+      }
+    };
+
+    const channel = supabase
+      .channel(`split-item-approval-${pendingRequestId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'approval_requests',
+          filter: `id=eq.${pendingRequestId}`,
+        },
+        (payload) => {
+          const status = (payload.new as { status?: string }).status;
+          if (status) void applyStatus(status);
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void readCurrentStatus();
+      });
+
+    const refreshAfterReconnect = () => void readCurrentStatus();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void readCurrentStatus();
+    };
+    window.addEventListener('online', refreshAfterReconnect);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.removeEventListener('online', refreshAfterReconnect);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      void supabase.removeChannel(channel);
     };
     // perform intentionally reuses the exact payload currently displayed in this modal.
     // eslint-disable-next-line react-hooks/exhaustive-deps

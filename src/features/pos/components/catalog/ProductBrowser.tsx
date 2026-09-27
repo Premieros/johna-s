@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ImagePlus, Loader2, LockKeyhole, Move, Package, Plus, ScanBarcode, Search, ShoppingCart, SlidersHorizontal, Timer, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import * as api from '@/api';
 import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -23,6 +22,8 @@ interface ProductBrowserProps {
   currency: string;
   hasBranch: boolean;
   canModifyOrder: boolean;
+  shiftChecked: boolean;
+  shiftOpen: boolean;
   onSearch: (value: string) => void;
   onSelectCategory: (id: string) => void;
   onAddToCart: (product: Product) => void;
@@ -30,21 +31,18 @@ interface ProductBrowserProps {
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
-export function ProductBrowser({ products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export function ProductBrowser({ products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, shiftChecked, shiftOpen, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
   const navigate = useNavigate();
   const can = useCan();
-  const [shiftChecked, setShiftChecked] = useState(false);
-  const [shiftOpen, setShiftOpen] = useState(false);
   const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
   const [imageOverrides, setImageOverrides] = useState<Record<string, string>>({});
   const [imageViewOverrides, setImageViewOverrides] = useState<Record<string, ProductImageView>>({});
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [savingImageView, setSavingImageView] = useState(false);
 
-  const branchId = useMemo(() => products.find((product) => product.branch_id)?.branch_id || '', [products]);
   const filteredProducts = useMemo(() => products.filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!search || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(search.toLocaleLowerCase())))), [products, search, selectedCategory]);
   const counts = useMemo(() => products.reduce<Record<string, number>>((accumulator, product) => {
     const key = product.category_id || '_none';
@@ -52,28 +50,6 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
     return accumulator;
   }, {}), [products]);
   const categoryById = useMemo(() => Object.fromEntries(categories.map((category) => [category.id, isAr ? category.name : category.name_en || category.name])), [categories, isAr]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!hasBranch || !branchId) {
-      setShiftOpen(false);
-      setShiftChecked(true);
-      return;
-    }
-    setShiftChecked(false);
-    api.pos.getActiveShift({ p_branch_id: branchId }).then(({ data }) => {
-      if (cancelled) return;
-      const result = data as unknown as { open?: boolean } | null;
-      setShiftOpen(result?.open === true);
-      setShiftChecked(true);
-    }).catch(() => {
-      if (!cancelled) {
-        setShiftOpen(false);
-        setShiftChecked(true);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [branchId, hasBranch]);
 
   const canAddToCart = canModifyOrder && hasBranch && shiftChecked && shiftOpen;
   const addBlockReason: 'shift' | 'permission' | null =
