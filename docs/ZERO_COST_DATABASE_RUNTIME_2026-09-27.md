@@ -88,6 +88,21 @@ Write mode: **SEQUENTIAL_ONLY**
 
 ## Verification ledger
 
+- Stage 2 corrected exact-head Full Verify Green on `5eec053a98498ba625f1c3b9f60bd7158efebbfb`.
+- Workflow run `36326981479` / Verify main #3109:
+  - mandatory active work log ✅
+  - project identity ✅
+  - API contract ✅
+  - lint ✅
+  - application + test typecheck ✅
+  - unit tests ✅
+  - build ✅
+  - fresh DB/schema ✅
+  - integration + security/RLS regression ✅
+  - browser smoke ✅
+- Production remained read-only; printing/KDS paths remained untouched.
+
+
 - Stage 2 verification run `36326866171` / Verify main #3106: **FAILED at lint only**.
   - mandatory worklog ✅
   - project identity ✅
@@ -131,15 +146,14 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Stage 1 is verified Green.
-2. Stage 2 — remove the duplicate active-shift read inside `ProductBrowser`:
-   - keep `PosWorkspacePage` as the single authoritative POS workspace shift read;
-   - pass `shiftChecked` and `shiftOpen` into `ProductBrowser`;
-   - do not cache or weaken shift validation;
-   - preserve payment service shift validation and all shift mutation behavior;
-   - add a contract proving `ProductBrowser` cannot issue its own `getActiveShift` call.
-3. Rerun exact-head verification for the corrected Stage 2 head; do not start Stage 3 unless Green.
-4. Do not touch printing, Print Agent, routing, KDS, kitchen transport, or Production.
+1. Stage 2 is exact-head Full Verify Green.
+2. Stage 3 — suppress duplicate shell active-order reads while the user is already inside POS:
+   - keep `useActiveOrderCount` for non-POS routes;
+   - add an explicit enabled flag so the hook performs no query, timer, or Realtime subscription on `/pos` and nested POS routes;
+   - keep the hook mounted unconditionally to preserve React hook ordering;
+   - retain the last cached badge value while disabled instead of issuing a compensating query;
+   - do not modify POS `useActiveOrders`, settlement, stock, printing, KDS, or Production.
+3. Add/adjust regression contracts and run exact-head verification before any further optimization.
 
 ## Mandatory update protocol
 
