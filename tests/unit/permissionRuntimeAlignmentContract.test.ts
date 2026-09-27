@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 
 describe('permission runtime alignment contract', () => {
-  it('gates the approval inbox by approvals.review instead of ordinary role names', () => {
+  it('gates the approval inbox by approvals.review and shows requester context', () => {
     const source = read('src/components/ApprovalInbox.tsx');
 
     expect(source).toContain("const can = useCan()");
@@ -13,6 +13,12 @@ describe('permission runtime alignment contract', () => {
     expect(source).not.toContain("user?.role === 'branch_manager'");
     expect(source).not.toContain("user?.role === 'owner'");
     expect(source).not.toContain("user?.role === 'cashier'");
+    expect(source).toContain(".from('users')");
+    expect(source).toContain(".select('id,full_name,username,email')");
+    expect(source).toContain("requester_name: requesterNames[item.requester_id] || null");
+    expect(source).toContain("{requesterName}");
+    expect(source).toContain("{ar ? 'يطلب: ' : 'Requests: '}{actionLabel}");
+    expect(source).toContain("{ar ? 'السبب: ' : 'Reason: '}{item.reason}");
   });
 
   it('keeps discount approval leaf provider-free and permission-first', () => {
