@@ -41,9 +41,10 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
     expect(migration).toContain('FROM public.journal_entry_lines l');
     expect(migration).not.toContain('INSERT INTO public.treasury_transactions');
     expect(migration).not.toContain('INSERT INTO public.journal_entries');
-    expect(treasuryPage).toContain('ملخص الخزنة اليومي');
-    expect(treasuryPage).toContain("isAr ? 'رصيد أول' : 'Opening'");
-    expect(treasuryPage).toContain("isAr ? 'رصيد آخر' : 'Closing'");
+    expect(treasuryPage).toContain('يومية الخزينة');
+    expect(treasuryPage).toContain("isAr ? 'نقدي مرحّل' : 'Cash carried'");
+    expect(treasuryPage).toContain("isAr ? 'بنك مرحّل' : 'Bank carried'");
+    expect(treasuryPage).toContain("isAr ? 'إجمالي آخر اليوم' : 'Day closing total'");
     expect(treasuryPage).toContain("isAr ? 'تقرير اليوم' : 'Day report'");
   });
 
@@ -70,15 +71,18 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
 describe('treasury daily single-row UI contract', () => {
   it('renders one compact financial row per business day with the approved columns', () => {
     for (const label of [
-      'رصيد أول',
-      'المبيعات',
-      'الآجل',
-      'المصروفات',
-      'المشتريات',
-      'صافي اليوم',
-      'كاش',
-      'بنك',
-      'رصيد آخر',
+      'نقدي مرحّل',
+      'بنك مرحّل',
+      'بيع نقدي',
+      'بيع بنك/كارت',
+      'آجل',
+      'مصروفات',
+      'مشتريات',
+      'تحويل وارد',
+      'تحويل صادر',
+      'رصيد نقدي فعلي',
+      'رصيد بنك فعلي',
+      'إجمالي آخر اليوم',
       'تقرير اليوم',
     ]) {
       expect(treasuryPage).toContain(label);
