@@ -11,7 +11,7 @@ Last updated: 2026-09-27 Africa/Cairo
 
 State: **BLOCKED**
 
-Progress: Root cause confirmed; forward-only repair and regression coverage implemented; verification pending.
+Progress: Root cause confirmed; forward-only repair and regression coverage implemented; exact-head Full Verify Green on implementation head.
 
 ## Guardrails
 
@@ -58,8 +58,8 @@ Progress: Root cause confirmed; forward-only repair and regression coverage impl
 - Production data check: confirmed.
 - Production function-definition check: confirmed.
 - Production migration-history check: confirmed missing normalization migration.
-- Focused tests: committed; CI pending.
-- Full Verify: pending.
+- Fast Verify #985: Green — canonical migrations, schema, and changed integration test all passed.
+- Full Verify #3088 / run `36322863565` on `ce2a7100f0b7008091c9e7cb02e54489ffa3c2eb`: Green — worklog, Supabase identity, API contract, lint, typecheck, unit, build, DB/schema, integration + security/RLS, and browser-smoke all passed.
 
 ## Production gate
 
@@ -69,10 +69,9 @@ No Production migration is authorized yet.
 
 ## Next action
 
-1. Run exact-head Full Verify on the current PR head.
-2. Fix only real regression failures, if any.
-3. Reconfirm latest main and PR mergeability.
-4. Stop before applying the migration to Production and request explicit approval.
+1. Re-run exact-head Verify for this documentation commit.
+2. Reconfirm latest `main` and PR mergeability.
+3. Stop before applying the migration to Production and request explicit approval.
 
 ## Mandatory update protocol
 
