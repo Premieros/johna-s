@@ -50,6 +50,11 @@ interface TreasuryDayCloseRow {
   net_sales: number;
   expenses: number;
   cash_purchases: number;
+  opening_balance: number;
+  cash_opening_balance: number;
+  bank_opening_balance: number;
+  day_net: number;
+  closing_balance: number;
   cash_balance_after_close: number;
   bank_balance_after_close: number;
   total_balance_after_close: number;
@@ -62,11 +67,7 @@ interface TreasuryDayCloseRow {
   movement_details: TreasuryMovementRow[];
 }
 
-interface TreasuryDailyDisplayRow extends TreasuryDayCloseRow {
-  opening_balance: number;
-  day_net: number;
-  closing_balance: number;
-}
+type TreasuryDailyDisplayRow = TreasuryDayCloseRow;
 
 export function TreasuryPage() {
   const { t, lang } = useLanguage();
@@ -214,25 +215,12 @@ export function TreasuryPage() {
   );
   const totalCash = localAccounts.filter((b) => b.account_type === 'cash').reduce((s, b) => s + Number(b.balance), 0);
   const totalBank = localAccounts.filter((b) => b.account_type === 'bank').reduce((s, b) => s + Number(b.balance), 0);
-  const dailyRows = useMemo<TreasuryDailyDisplayRow[]>(() => dayCloses.map((row, index) => {
-    const previousClose = dayCloses[index + 1];
-    const dayNet = Number(row.net_sales || 0)
-      - Number(row.credit_sales || 0)
-      - Number(row.expenses || 0)
-      - Number(row.cash_purchases || 0);
-    const openingBalance = previousClose
-      ? Number(previousClose.total_balance_after_close || 0)
-      : Number(row.total_balance_after_close || 0) - dayNet;
-    const closingBalance = row.is_latest
-      ? totalCash + totalBank
-      : Number(row.total_balance_after_close || 0);
-    return {
-      ...row,
-      opening_balance: openingBalance,
-      day_net: dayNet,
-      closing_balance: closingBalance,
-    };
-  }), [dayCloses, totalCash, totalBank]);
+  const dailyRows = useMemo<TreasuryDailyDisplayRow[]>(() => dayCloses.map((row) => ({
+    ...row,
+    opening_balance: Number(row.opening_balance || 0),
+    day_net: Number(row.day_net || 0),
+    closing_balance: Number(row.closing_balance || 0),
+  })), [dayCloses]);
   const displayedBalances = treasuryView === 'main'
     ? (mainTreasury ? [mainTreasury] : [])
     : localAccounts;
@@ -338,8 +326,8 @@ export function TreasuryPage() {
         <DesignPanel title={isAr ? 'ملخص الخزنة اليومي' : 'Daily treasury summary'} testId="treasury-day-close-reconciliation-panel">
           <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
             {isAr
-              ? 'صف واحد لكل يوم. صافي اليوم = المبيعات - الآجل - المصروفات - المشتريات. رصيد آخر أحدث يوم يطابق الرصيد الحالي الفعلي لخزنة الفرع، وأي إيداع أو سحب أو تحويل يظهر في حركة الخزنة أدناه.'
-              : 'One row per business day. Day net = sales - credit - expenses - purchases. The latest closing balance matches the live branch treasury balance; deposits, withdrawals and transfers remain visible in Treasury Movements below.'}
+              ? 'تسلسل يومي متصل: أول تاريخ يبدأ من رصيد افتتاح الحساب، ورصيد آخر كل يوم يصبح رصيد أول اليوم التالي. الترحيلات التاريخية تُعرض في تاريخها المحاسبي، وآخر رصيد يطابق خزنة الفرع الفعلية.'
+              : 'Continuous daily sequence: the first date starts from the account opening balance, and each day closing becomes the next day opening. Historical imports use their accounting date and the latest closing matches the live branch treasury.'}
           </div>
           <DataTable columns={dailyColumns} data={dailyRows} loading={loading} error={txError} emptyMessage={t('noData')} />
         </DesignPanel>
