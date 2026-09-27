@@ -43,7 +43,6 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [savingImageView, setSavingImageView] = useState(false);
 
-  const branchId = useMemo(() => products.find((product) => product.branch_id)?.branch_id || '', [products]);
   const filteredProducts = useMemo(() => products.filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!search || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(search.toLocaleLowerCase())))), [products, search, selectedCategory]);
   const counts = useMemo(() => products.reduce<Record<string, number>>((accumulator, product) => {
     const key = product.category_id || '_none';
