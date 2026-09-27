@@ -95,9 +95,10 @@ describe('Phase 4 — center discoverability', () => {
 describe('Phase 4 — retired manufacturing compatibility', () => {
   it('legacy manufacturing routes redirect to reusable component definitions', () => {
     const source = read('src/app/routes.tsx');
-    expect(source).toContain('path={APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.recipes} replace />}');
-    expect(source).toContain('path={APP_ROUTES.production} element={<Navigate to={APP_ROUTES.recipes} replace />}');
-    expect(source).toContain('path={APP_ROUTES.productionUnits} element={<Navigate to={APP_ROUTES.recipes} replace />}');
+    expect(source).toContain('path={APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />}');
+    expect(source).toContain('path={APP_ROUTES.production} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />}');
+    expect(source).toContain('path={APP_ROUTES.productionUnits} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />}');
+    expect(source).toContain('path={APP_ROUTES.recipes} element={<Navigate to={APP_ROUTES.products} replace />}');
     expect(source).not.toContain('ProductionOrdersPage');
     expect(source).not.toContain('ManufacturingCenterPage');
     expect(source).not.toContain('UnitProductionPage');
@@ -108,6 +109,10 @@ describe('Phase 4 — feature discoverability', () => {
   function sourceHasRoute(source: string, routeKey: string): boolean {
     return source.includes(`APP_ROUTES.${routeKey}`);
   }
+
+  it('retired recipes are not a live sidebar destination', () => {
+    expect(MENU_ITEMS.find((i) => i.id === 'recipes')).toBeUndefined();
+  });
 
   it('Inventory Units is in the sidebar menu', () => {
     const item = MENU_ITEMS.find((i) => i.id === 'inventory-units');
@@ -208,7 +213,6 @@ describe('Phase 4 — no duplicate destinations', () => {
       APP_ROUTES.inventory,
       APP_ROUTES.warehouses,
       APP_ROUTES.rawMaterials,
-      APP_ROUTES.recipes,
       APP_ROUTES.transfers,
       APP_ROUTES.inventoryLedger,
       APP_ROUTES.stockCounts,
