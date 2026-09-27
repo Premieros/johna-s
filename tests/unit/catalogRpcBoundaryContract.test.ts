@@ -30,7 +30,7 @@ describe('catalog RPC boundary contract (PR3 6D)', () => {
     expect(modifiersSource).toContain('if (groupsResult.error) throw groupsResult.error');
     expect(modifiersSource).toContain('const result = (groupsResult.data || {}) as AdminGroupsResponse');
     expect(modifiersSource).toContain('api.catalog.saveModifierGroup({');
-    expect(modifiersSource).toContain("if (!result.success) throw new Error(result.detail || result.error || 'SAVE_MODIFIER_FAILED')");
+    expect(modifiersSource).toContain('if (!result.success) throw new Error(friendlyModifierError(result.error, result.detail))');
   });
 
   it('routes kitchen assignment calls through catalog API while preserving response validation', () => {
