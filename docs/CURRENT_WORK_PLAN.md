@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/AUTO_BUSINESS_DAY_CLOSE_CI_TIME_FIX_2026-09-28.md`
-- Current active branch: `development/fix-auto-business-day-close-ci-20260928`
-- Current PR: `#397`
+- Mandatory active work log: `docs/SUPPLIER_OPENING_BALANCE_PERMISSION_2026-09-28.md`
+- Current active branch: `development/supplier-opening-balance-permission-20260928`
+- Current PR: `#0`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -26,7 +26,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/fix-auto-business-day-close-ci-20260928`
+- Executable branch: `development/supplier-opening-balance-permission-20260928`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
