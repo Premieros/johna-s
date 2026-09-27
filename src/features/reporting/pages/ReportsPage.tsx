@@ -659,13 +659,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           .filter((row) => !catName || row.category_name === catName)
           .map((row) => withBranch(productBranches.get(row.product_id) || effectiveBranchFilter, {
             [lang === 'ar' ? 'المنتج' : 'Product']: row.product_name,
-            [lang === 'ar' ? 'تكلفة الوصفة' : 'Recipe Cost']: Number(row.actual_cost),
+            [lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost']: Number(row.actual_cost),
             [lang === 'ar' ? 'سعر البيع' : 'Sale Price']: Number(row.sale_price),
             [lang === 'ar' ? 'الهامش' : 'Margin']: Number(row.sale_price) - Number(row.actual_cost),
           }));
         setData(rows);
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'الهامش' : 'Margin']) })));
-        setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'تكلفة الوصفة' : 'Recipe Cost'] || 0), 0), count: rows.length });
+        setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost'] || 0), 0), count: rows.length });
       } else if (reportType === 'low_stock') {
         let rawMasterQuery = supabase.from('raw_materials').select('id,branch_id,name,code,min_stock,is_active').eq('is_active', true);
         let rawBalanceQuery = supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity,min_stock');
@@ -1150,7 +1150,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     lang === 'ar' ? 'مجمل الربح' : 'Gross Profit', lang === 'ar' ? 'المصروفات' : 'Expenses',
     lang === 'ar' ? 'صافي الربح' : 'Net Profit', lang === 'ar' ? 'صافي الفاتورة' : 'Net Total',
     lang === 'ar' ? 'متوسط الفاتورة' : 'Avg Invoice', lang === 'ar' ? 'متوسط الفاتورة' : 'Avg Order',
-    lang === 'ar' ? 'تكلفة الاستهلاك' : 'Consumption Cost', lang === 'ar' ? 'تكلفة الوصفة' : 'Recipe Cost',
+    lang === 'ar' ? 'تكلفة الاستهلاك' : 'Consumption Cost', lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost',
     lang === 'ar' ? 'سعر البيع' : 'Sale Price', lang === 'ar' ? 'الهامش' : 'Margin',
     lang === 'ar' ? 'تكلفة الوحدة' : 'Unit Cost', lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost',
     lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount',
