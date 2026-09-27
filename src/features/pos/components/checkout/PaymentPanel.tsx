@@ -37,6 +37,7 @@ interface PaymentPanelProps {
   completing: boolean;
   canComplete: boolean;
   canEditOrder?: boolean;
+  canDirectDiscount?: boolean;
   onComplete: () => void;
   onBack: () => void;
   currency: string;
@@ -245,6 +246,7 @@ export function PaymentPanel(p: PaymentPanelProps) {
             subtotal={p.subtotal}
             currentType={p.discountType}
             ar={isAr}
+            canDirectDiscount={p.canDirectDiscount === true}
             onApproved={(type, amount) => {
               p.onDiscountTypeChange(type);
               p.onDiscountAmountChange(amount);
