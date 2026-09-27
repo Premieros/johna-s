@@ -91,6 +91,12 @@ Write mode: **SEQUENTIAL_ONLY**
   - POS `useActiveOrders` and its operational realtime snapshot are unchanged.
 - Updated `performanceLightweightShellContract.test.ts` and added `posShellDuplicateReadSuppressionContract.test.ts`.
 - Main-vs-branch changed-file audit contains no print-agent, cloud-print, KDS, kitchen transport, or migration files.
+- Stage 4 simplified the POS product catalog read:
+  - `PosWorkspacePage` product query now selects `products.*` only instead of embedding `category:categories(*)`.
+  - branch scoping, `is_active=true`, ordering, `category_id`, separate categories query, online-to-offline cache writes, and all product fields are preserved.
+  - no cache TTL/freshness behavior was changed.
+- Updated `productsPosCatalogContract.test.ts` to require the lean product query and the separate categories source.
+- Main-vs-branch changed-file audit still contains no print-agent, cloud-print, KDS, kitchen transport, migration, settlement-service, or inventory-write files.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
@@ -168,14 +174,11 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Stage 3 is exact-head Full Verify Green.
-2. Stage 4 — simplify the POS product catalog query without caching/staleness changes:
-   - replace `select('*, category:categories(*)')` with `select('*')` in `PosWorkspacePage` only;
-   - preserve branch scope, `is_active=true`, ordering, `category_id`, separate category loading, offline cache writes, and all Product fields;
-   - do not modify Products administration/export queries that may use nested category data;
-   - do not modify settlement, stock, shift, printing, Print Agent, routing, KDS, kitchen transport, or Production.
-3. Update the existing POS catalog contract and add a regression assertion that the POS query no longer embeds categories.
-4. Run exact-head Full Verify before any further optimization.
+1. Stage 4 implementation complete.
+2. Run exact-head Full Verify for the lean POS catalog query.
+3. If Green, perform a final source/Production read-only audit for remaining avoidable idle consumption before deciding whether another safe stage is justified.
+4. Do not introduce stale-cache shortcuts without a reliable invalidation/freshness marker.
+5. No Merge, Production deployment, Production SQL write, printing/KDS change, or migration without explicit approval.
 
 ## Mandatory update protocol
 
