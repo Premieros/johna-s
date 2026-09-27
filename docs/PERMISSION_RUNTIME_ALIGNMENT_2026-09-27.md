@@ -44,7 +44,8 @@ State: **BLOCKED**
 - Percentage discount requests now authorize the exact monetary amount in `discount_amount`, preserve the entered percentage in `requested_value`, cap percentage input at 100%, and cap amount input at subtotal.
 - `src/features/pos/components/checkout/PaymentPanel.tsx`: accepts/forwards `canDirectDiscount` without adding auth-provider dependencies to isolated component tests.
 - `src/features/pos/pages/PosWorkspacePage.tsx`: passes `perms.canDiscount` from the existing canonical `usePosPermissions()` matrix into checkout.
-- `tests/unit/permissionRuntimeAlignmentContract.test.ts`: locks ApprovalInbox Permission-First behavior, leaf provider independence, workspace permission propagation, and monetary percentage approval semantics.
+- `tests/unit/permissionRuntimeAlignmentContract.test.ts`: locks ApprovalInbox Permission-First behavior, requester/action visibility, leaf provider independence, workspace permission propagation, and monetary percentage approval semantics.
+- Approval cards now resolve requester display name from the branch-visible `users` table (`full_name -> username -> email` fallback) and show `اسم المستخدم`, `يطلب: <العملية>`, then `السبب`, while retaining action-specific details such as discount value.
 - No backend/RLS/Production role-data changes. Printing, Print Agent, routing, KDS, and send-to-kitchen transport remain untouched.
 
 ## Verification ledger
@@ -66,7 +67,7 @@ State: **BLOCKED**
 - Merge itself is explicitly blocked until user approval after all checks.
 
 ## Next action
-1. Observe focused/full verification on the exact current head.
+1. Observe focused/full verification on the exact current head after requester/action visibility update.
 2. Confirm the previous PaymentPanel provider regression is gone and the new Permission-First source contract passes.
 3. Classify any failure before changing runtime; do not weaken tests.
 4. If exact-head verify, DB/integration/RLS, and browser smoke are all Green, record merge-ready status.
