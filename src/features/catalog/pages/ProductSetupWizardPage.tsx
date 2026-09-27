@@ -173,6 +173,10 @@ export function ProductSetupWizardPage() {
   const save = async () => {
     if (!can('products.create') || saving || !branchId) return;
     if (!validateStep()) return;
+    if (rawComponents.length > 0 && !can('recipes.manage')) {
+      show(isAr ? 'لا تملك صلاحية إدارة الخامات المباشرة للمنتج.' : 'You do not have permission to manage direct product raw materials.', 'error');
+      return;
+    }
 
     setSaving(true);
     let createdProductId: string | null = null;
@@ -199,23 +203,16 @@ export function ProductSetupWizardPage() {
       if (!createdProductId) throw new Error(data?.error || 'error');
 
       if (rawComponents.length > 0) {
-        const { data: recipe, error: recipeError } = await supabase.from('recipes').insert({
+        await api.catalog.saveProductDirectRawComponents({
           product_id: createdProductId,
           branch_id: branchId,
-          name: `${form.name.trim()} Recipe`,
-          yield_quantity: 1,
-          is_active: true,
-          version: 1,
-        }).select('id').single();
-        if (recipeError) throw recipeError;
-
-        const { error: itemError } = await supabase.from('recipe_items').insert(rawComponents.map((row) => ({
-          recipe_id: (recipe as { id: string }).id,
-          raw_material_id: row.raw_material_id,
-          quantity: Number(row.quantity),
-          wastage_percent: Number(row.wastage_percent) || 0,
-        })));
-        if (itemError) throw itemError;
+          product_name: form.name.trim(),
+          items: rawComponents.map((row) => ({
+            raw_material_id: row.raw_material_id,
+            quantity: Number(row.quantity),
+            wastage_percent: Number(row.wastage_percent) || 0,
+          })),
+        });
       }
 
       await invalidatePosCatalogCache();
