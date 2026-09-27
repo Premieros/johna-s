@@ -7,6 +7,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import type { InventoryUnit } from '@/lib/types';
+import { formatNumber } from '@/lib/format';
 
 type InventoryEffect = {
   target_type: 'raw_material' | 'inventory_unit';
@@ -114,12 +115,12 @@ export function ProductModifierOptionsPage() {
           </div>
           {visible.map((unit) => {
             const info = usage[unit.id];
-            const prices = Array.from(new Set((info?.prices || []).map((price) => Number(price.toFixed(2)))));
+            const prices = Array.from(new Set(info?.prices || []));
             return (
               <div key={unit.id} className="grid gap-1 border-b border-ui-border px-4 py-3 last:border-b-0 md:grid-cols-[2fr_1fr_1fr] md:items-center md:gap-3">
                 <div className="min-w-0"><p className="truncate font-black text-ui-text">{isAr ? unit.name : unit.name_en || unit.name}</p><p className="text-xs text-ui-muted">{unit.code}</p></div>
                 <p className="text-sm text-ui-muted">{info?.count || 0} {isAr ? 'مجموعة' : 'groups'}</p>
-                <p className="text-sm font-bold text-ui-text">{prices.length ? prices.map((price) => price > 0 ? `+${price}` : String(price)).join(' / ') : '—'}</p>
+                <p className="text-sm font-bold text-ui-text">{prices.length ? prices.map((price) => price > 0 ? `+${formatNumber(price, 2)}` : formatNumber(price, 2)).join(' / ') : '—'}</p>
               </div>
             );
           })}
