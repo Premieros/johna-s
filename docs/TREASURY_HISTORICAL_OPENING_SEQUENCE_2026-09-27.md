@@ -29,12 +29,18 @@ Last updated: 2026-09-27 Africa/Cairo
   - Cleopatra cash 194,928.11; bank 231,801.92; total 426,730.03.
 
 ## Next action
-Implement a forward-only RPC migration plus UI contract so the server returns canonical opening/day/closing balances per accounting day. Add regression tests. Do not apply Production migration or merge until exact-head Full Verify is Green and explicit approval is recorded.
+Open a Draft PR and run exact-head verification. Do not apply the Production migration or merge until Full Verify is Green and explicit approval is recorded.
 
 ## Change ledger
 - Branch created from exact current main.
+- Added forward-only migration `20260927215500_treasury_historical_opening_sequence.sql`.
+- Historical sale journal timing is resolved from the source sale date in Africa/Cairo; purchase/expense source dates are also respected.
+- Any treasury activity before the historical import anchor is folded into the first displayed accounting day.
+- RPC now returns canonical `opening_balance`, `day_net`, and `closing_balance` plus cash/bank components.
+- Treasury UI renders the server sequence directly; browser-side prior-row reconstruction was removed.
+- Regression coverage added to the existing treasury contract suite.
 - No Production writes.
-- No printing/runtime operational paths touched yet.
+- Printing / Print Agent / routing / KDS / send-to-kitchen untouched.
 
 ## Verification ledger
 - Production inspection: read-only.
