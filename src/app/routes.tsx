@@ -18,6 +18,7 @@ const ProductsPage = lazy(() => import('../features/catalog/pages/ProductsPage')
 const PricingPage = lazy(() => import('../features/catalog/pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const ProductSetupWizardPage = lazy(() => import('../features/catalog/pages/ProductSetupWizardPage').then(m => ({ default: m.ProductSetupWizardPage })));
 const ProductModifiersPage = lazy(() => import('../features/catalog/pages/ProductModifiersPage').then(m => ({ default: m.ProductModifiersPage })));
+const ProductModifierOptionsPage = lazy(() => import('../features/catalog/pages/ProductModifierOptionsPage').then(m => ({ default: m.ProductModifierOptionsPage })));
 const CategoriesPage = lazy(() => import('../features/catalog/pages/CategoriesPage').then(m => ({ default: m.CategoriesPage })));
 const InventoryPage = lazy(() => import('../features/inventory/pages/InventoryPage').then(m => ({ default: m.InventoryPage })));
 const WarehousesPage = lazy(() => import('../features/inventory/pages/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
@@ -147,6 +148,7 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.pricing} element={<ProtectedRoute permission="products.view"><PricingPage /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.products}/setup`} element={<ProtectedRoute permission="products.create"><ProductSetupWizardPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.productModifiers} element={<ProtectedRoute permission="products.modifiers.manage"><ProductModifiersPage /></ProtectedRoute>} />
+        <Route path={APP_ROUTES.productModifierOptions} element={<ProtectedRoute permission="products.modifiers.manage"><ProductModifierOptionsPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.categories} element={<ProtectedRoute permission="categories.view"><CategoriesPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.components} element={<Navigate to={APP_ROUTES.products} replace />} />
         <Route path={APP_ROUTES.inventoryUnits} element={<ProtectedRoute permission="raw_materials.view"><InventoryUnitsPage /></ProtectedRoute>} />
