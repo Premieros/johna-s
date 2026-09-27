@@ -87,7 +87,19 @@ Write mode: **SEQUENTIAL_ONLY**
 - Existing performance branches reconciled as stale/fully-behind current main.
 - Production statistics/read-only SQL audit completed.
 - Performance advisor audit completed read-only; no advisor-driven DDL is authorized in this stage.
-- Focused source-contract coverage committed; execution result pending.
+- Stage 1 exact-head Full Verify Green on `7981d9f73696a051f806025d3b52fa8c1b7df232`.
+- Workflow run `36326127272` / Verify main #3101:
+  - mandatory active work log ✅
+  - project identity ✅
+  - API contract ✅
+  - lint ✅
+  - application + test typecheck ✅
+  - unit tests ✅
+  - build ✅
+  - fresh DB/schema ✅
+  - integration + security/RLS regression ✅
+  - browser smoke ✅
+- Production remained read-only; no schema/data/runtime deployment was performed.
 - Full Verify: pending.
 - Production runtime before/after measurement: pending implementation.
 
@@ -103,13 +115,15 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Point `docs/CURRENT_WORK_PLAN.md` mandatory execution gate to this branch/log.
-2. Implement the first low-risk stage:
-   - remove 2-second approval polling using narrowly-scoped event-driven updates or an existing approval-state channel;
-   - remove idle role polling while preserving explicit refresh after role mutations and safe authorization behavior;
-   - add regression contracts proving no print/KDS files or semantics changed.
-4. Run focused unit/type verification.
-5. Only after Stage 1 is green, inspect and reduce POS whole-snapshot refetch amplification without touching `order_kitchen_sends` semantics.
+1. Stage 1 is verified Green.
+2. Stage 2 — remove the duplicate active-shift read inside `ProductBrowser`:
+   - keep `PosWorkspacePage` as the single authoritative POS workspace shift read;
+   - pass `shiftChecked` and `shiftOpen` into `ProductBrowser`;
+   - do not cache or weaken shift validation;
+   - preserve payment service shift validation and all shift mutation behavior;
+   - add a contract proving `ProductBrowser` cannot issue its own `getActiveShift` call.
+3. Run exact-head verification before considering catalog/session-cache work.
+4. Do not touch printing, Print Agent, routing, KDS, kitchen transport, or Production.
 
 ## Mandatory update protocol
 
