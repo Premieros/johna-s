@@ -29,4 +29,18 @@ describe('catalog model alignment contract', () => {
     expect(center).not.toContain("window.location.hash = '/recipes'");
     expect(center).toContain("selectedEntity === 'recipes') window.location.hash = '/products'");
   });
+  it('centralizes direct raw composition behind catalog API', () => {
+    const catalog = read('src/api/domains/catalog.ts');
+    const wizard = read('src/features/catalog/pages/ProductSetupWizardPage.tsx');
+    const products = read('src/features/catalog/pages/ProductsPage.tsx');
+
+    expect(catalog).toContain('getProductDirectRawComponents');
+    expect(catalog).toContain('saveProductDirectRawComponents');
+    expect(wizard).toContain('api.catalog.saveProductDirectRawComponents');
+    expect(wizard).not.toContain("supabase.from('recipes').insert");
+    expect(wizard).not.toContain("supabase.from('recipe_items').insert");
+    expect(products).toContain('api.catalog.getProductDirectRawComponents');
+    expect(products).toContain('api.catalog.saveProductDirectRawComponents');
+    expect(products).toContain("can('recipes.manage')");
+  });
 });
