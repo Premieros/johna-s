@@ -19,7 +19,7 @@ const SECTIONS = [
   ['sales', 'المبيعات والفواتير', 'Sales & invoices'],
   ['orders', 'الطلبات والمطبخ', 'Orders & kitchen'],
   ['purchasing', 'المشتريات', 'Purchasing'],
-  ['manufacturing', 'التصنيع والوصفات والمواد الخام', 'Manufacturing, recipes & raw materials'],
+  ['manufacturing', 'المكونات والمواد الخام', 'Components & raw materials'],
   ['accounting', 'المحاسبة والخزينة', 'Accounting & treasury'],
   ['shifts', 'الورديات', 'Shifts'],
   ['tables', 'الطاولات وخريطة الصالة', 'Tables & floor plan'],
@@ -90,7 +90,7 @@ export function AdminDataManagementPanel() {
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           <button disabled={!branchId || !!busy} onClick={seedAll} className="rounded-2xl border-2 border-brand-200 bg-brand-50 p-4 text-start transition hover:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-900/50 dark:bg-brand-950/20">
-            <div className="flex items-center gap-3"><FlaskConical className="h-5 w-5 text-brand-600" /><div><div className="font-bold">{ar ? 'إضافة بيانات تجريبية لكل الأقسام' : 'Seed demo data for all modules'}</div><div className="mt-1 text-xs text-ui-subtle">{ar ? 'منتجات، عملاء، موردون، مشتريات، مبيعات، طلبات، تصنيع، مصروفات، ورديات وخزينة.' : 'Products, customers, suppliers, purchasing, sales, orders, manufacturing, expenses, shifts and treasury.'}</div></div></div>
+            <div className="flex items-center gap-3"><FlaskConical className="h-5 w-5 text-brand-600" /><div><div className="font-bold">{ar ? 'إضافة بيانات تجريبية لكل الأقسام' : 'Seed demo data for all modules'}</div><div className="mt-1 text-xs text-ui-subtle">{ar ? 'منتجات، عملاء، موردون، مشتريات، مبيعات، طلبات، مكونات وخامات، مصروفات، ورديات وخزينة.' : 'Products, customers, suppliers, purchasing, sales, orders, components and raw materials, expenses, shifts and treasury.'}</div></div></div>
           </button>
           <button disabled={!branchId || !!busy} onClick={() => setConfirm({ type: 'all' })} className="rounded-2xl border-2 border-ui-danger/20 bg-ui-danger-soft p-4 text-start transition hover:border-ui-danger/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-ui-danger/20/50 dark:bg-ui-danger-soft/20">
             <div className="flex items-center gap-3"><Trash2 className="h-5 w-5 text-ui-danger" /><div><div className="font-bold text-ui-danger dark:text-ui-danger">{ar ? 'حذف جميع بيانات التشغيل للفرع' : 'Delete all operational data for branch'}</div><div className="mt-1 text-xs text-ui-subtle">{ar ? 'لا يحذف الفرع أو المستخدمين أو الصلاحيات أو الحسابات النظامية.' : 'Does not delete the branch, users, permissions or system accounts.'}</div></div></div>
