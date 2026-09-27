@@ -2,7 +2,7 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/CATALOG_MODEL_ALIGNMENT_2026-09-27.md`
+- Mandatory active work log: `docs/CATALOG_MODEL_ALIGNMENT_ACTIVE_2026-09-27.md`
 - Current active branch: `development/catalog-model-alignment-20260927`
 - Current PR: `#389`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
