@@ -3,14 +3,14 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/settlement-modifier-order-normalization-20260927`
-Current PR: pending
+Current PR: `#390`
 Base: `main@27b89bad891187b4447e7a8ec214c25439c5dc01`
 
 ## Work status
 
 State: **BLOCKED**
 
-Progress: Root cause confirmed; implementation starting.
+Progress: Root cause confirmed; forward-only repair and regression coverage implemented; verification pending.
 
 ## Guardrails
 
@@ -47,14 +47,17 @@ Progress: Root cause confirmed; implementation starting.
 - Development branch created from current main.
 - Production diagnosis was read-only.
 - No Production write.
-- No application code change yet.
+- Added forward-only migration `20260927133500_reassert_settlement_modifier_order_normalization.sql`.
+- Added integration regression coverage proving preview and payload canonicalize modifier IDs identically.
+- Regression locks normal and split payment to the same settlement-preparation boundary.
+- No application code change; no Production write.
 
 ## Verification ledger
 
 - Production data check: confirmed.
 - Production function-definition check: confirmed.
 - Production migration-history check: confirmed missing normalization migration.
-- Focused tests: pending.
+- Focused tests: committed; CI pending.
 - Full Verify: pending.
 
 ## Production gate
