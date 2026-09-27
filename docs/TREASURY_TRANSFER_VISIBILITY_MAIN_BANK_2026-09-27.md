@@ -33,6 +33,9 @@ State: **BLOCKED**
 - Treasury day RPC now returns explicit `transfer_in` and `transfer_out` totals.
 - Treasury UI now shows incoming/outgoing transfer columns and displays all organization treasury accounts in the main treasury view.
 - Added regression coverage.
+- Converted the section into a configurable **Treasury Daily Journal / يومية الخزينة**.
+- Daily journal now exposes carried cash, carried bank, cash sales, bank/card sales, actual cash closing, actual bank closing, and total closing.
+- Added per-user column visibility preferences stored in browser local storage.
 
 ## Verification ledger
 - Production read-only audit complete.
@@ -42,7 +45,7 @@ State: **BLOCKED**
 State: **BLOCKED**
 
 ## Next action
-Open PR, run exact-head verification, then apply to Production only if Green.
+Run exact-head verification on the expanded daily-journal UI, then apply to Production only if Green.
 
 ## Mandatory update protocol
 - Re-read branch HEAD and this log before each repository write.
