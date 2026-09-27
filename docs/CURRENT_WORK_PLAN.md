@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/SPLIT_PAYMENT_STATUS_REPAIR_2026-09-27.md`
-- Current active branch: `development/fix-split-payment-status-20260927`
-- Current PR: `#392`
+- Mandatory active work log: `docs/SHIFT_EXPECTED_CASH_REPAIR_2026-09-27.md`
+- Current active branch: `development/fix-shift-expected-cash-20260927`
+- Current PR: `#393`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -26,7 +26,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/fix-split-payment-status-20260927`
+- Executable branch: `development/fix-shift-expected-cash-20260927`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
