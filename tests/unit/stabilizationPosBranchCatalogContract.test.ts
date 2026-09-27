@@ -32,8 +32,9 @@ describe('stabilization contracts', () => {
     expect(routes).not.toContain("import('../features/catalog/pages/ComponentsPage')");
     expect(routes).toContain('<Route path={APP_ROUTES.components} element={<Navigate to={APP_ROUTES.products} replace />} />');
     expect(menu).not.toContain("id: 'components'");
-    expect(menu).toContain("ar: 'مجموعات الموديفاير'");
+    expect(menu).toContain("ar: 'مجموعات الإضافات'");
     expect(menu).toContain("en: 'Modifier Groups'");
+    expect(menu).toContain("ar: 'الخيارات'");
   });
 
   it('keeps mobile checkout visible through the explicit phone order sheet and safe area', () => {
