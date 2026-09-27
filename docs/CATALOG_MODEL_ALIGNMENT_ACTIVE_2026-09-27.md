@@ -10,7 +10,7 @@ Last updated: 2026-09-27 Africa/Cairo
 
 State: **BLOCKED**
 
-Progress: Phase 0 audit complete; Phase 1 implementation in progress.
+Progress: Phase 0 audit complete; Phase 1-5 alignment implementation in progress.
 
 Detailed audit and findings:
 `docs/CATALOG_MODEL_ALIGNMENT_2026-09-27.md`
@@ -61,6 +61,13 @@ Detailed audit and findings:
 - Renamed visible Recipes import surface to Direct Product Raw Materials.
 - Changed related import permission metadata away from `manufacturing.view`.
 - Added `catalogModelAlignmentContract.test.ts`.
+- Added one Catalog API boundary for direct product raw-material read/write.
+- ProductSetupWizard now uses the Catalog API boundary instead of direct recipe writes.
+- ProductsPage is now the direct-raw editor as well as the component-group editor.
+- Removed dead guided-workflow actions for retired production/recipe creation.
+- Reworded user-facing recipe/manufacturing terminology in permissions, admin data management, component groups, and cost reports.
+- Removed `production` from import/export entity types and runtime executor/export paths.
+- Direct-raw import now requires existing products/raw materials and writes through Catalog API; it no longer auto-creates production-style data.
 - No DB migration.
 - No Production write.
 - No printing/KDS changes.
@@ -71,7 +78,8 @@ Detailed audit and findings:
 - Canonical component authority proof complete.
 - Shift consumption authority proof complete.
 - Verify run #3059 / run `36314730728`: failed only at mandatory active-worklog structure before lint/typecheck/unit/build.
-- Runtime/code verification on current implementation head: pending.
+- Verify #3066 / run `36319679754`: lint ✅, typecheck ✅, test-suite typecheck ✅, 1147 unit tests ✅, build ✅, canonical migrations/schema ✅, integration + security/RLS ✅; browser-smoke was still running when later code changes continued.
+- Current implementation head after further guard/import/terminology cleanup: verification pending.
 
 ## Production gate
 
@@ -81,10 +89,10 @@ No Production mutation is allowed in this phase.
 
 ## Next action
 
-1. Point `docs/CURRENT_WORK_PLAN.md` to this active execution log.
-2. Re-run Verify to expose actual code/test failures.
-3. Before permanently removing the old Recipes editor, add a safe direct-raw editing path in the canonical product surface.
-4. Continue import/export and terminology alignment only after focused tests pass.
+1. Run exact-head Verify for the current branch.
+2. Fix only real contract/runtime regressions.
+3. Audit remaining visible recipe/manufacturing text and dead compatibility code after tests.
+4. Confirm no printing/KDS/DB migration changes entered the diff.
 5. Stop before merge until exact-head Full Verify Green and explicit approval.
 
 ## Mandatory update protocol
