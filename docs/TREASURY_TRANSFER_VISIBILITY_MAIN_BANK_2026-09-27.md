@@ -36,10 +36,13 @@ State: **BLOCKED**
 - Converted the section into a configurable **Treasury Daily Journal / يومية الخزينة**.
 - Daily journal now exposes carried cash, carried bank, cash sales, bank/card sales, actual cash closing, actual bank closing, and total closing.
 - Added per-user column visibility preferences stored in browser local storage.
+- Added period totals under the journal for sales, purchases, expenses, and transfers.
+- Added inline day details (balances, sales/collection, outflows/transfers) without extra accounting writes.
 
 ## Verification ledger
 - Production read-only audit complete.
-- Verify #3148 reached typecheck; worklog/API/lint passed. Typecheck found one stale `mainTreasury` reference in the main-view pagination enable flag; fixed to `mainAccountIds.length > 0`. Exact-head rerun pending.
+- Verify #3148 reached typecheck; worklog/API/lint passed. Typecheck found one stale `mainTreasury` reference and it was fixed.
+- Verify #3153 passed worklog, identity, API contract, lint, application typecheck and test-suite typecheck; unit tests failed only on stale old treasury-label expectations. Those expectations are now aligned with the approved Treasury Daily Journal labels.
 
 ## Production gate
 State: **BLOCKED**
