@@ -9,7 +9,11 @@ const reconciliationMigration = fs.readFileSync(
   'supabase/migrations/20260926133500_treasury_day_close_movement_reconciliation.sql',
   'utf8',
 );
-const migration = `${baseMigration}\n${reconciliationMigration}`;
+const historicalSequenceMigration = fs.readFileSync(
+  'supabase/migrations/20260927215500_treasury_historical_opening_sequence.sql',
+  'utf8',
+);
+const migration = `${baseMigration}\n${reconciliationMigration}\n${historicalSequenceMigration}`;
 const shiftsPage = fs.readFileSync('src/features/trade/pages/ShiftsPage.tsx', 'utf8');
 const shiftModal = fs.readFileSync('src/features/pos/components/shift/ShiftModal.tsx', 'utf8');
 const treasuryPage = fs.readFileSync('src/features/accounting/pages/TreasuryPage.tsx', 'utf8');
@@ -83,10 +87,12 @@ describe('treasury daily single-row UI contract', () => {
     expect(treasuryPage).not.toContain('row.movement_details.map((movement)');
   });
 
-  it('keeps the latest closing balance tied to the live branch treasury balance', () => {
-    expect(treasuryPage).toContain("const closingBalance = row.is_latest");
-    expect(treasuryPage).toContain('totalCash + totalBank');
-    expect(treasuryPage).toContain('closing_balance: closingBalance');
+  it('uses the canonical server opening/day/closing sequence instead of browser reconstruction', () => {
+    expect(treasuryPage).toContain('opening_balance: Number(row.opening_balance || 0)');
+    expect(treasuryPage).toContain('day_net: Number(row.day_net || 0)');
+    expect(treasuryPage).toContain('closing_balance: Number(row.closing_balance || 0)');
+    expect(treasuryPage).not.toContain('const previousClose = dayCloses[index + 1]');
+    expect(treasuryPage).not.toContain('const closingBalance = row.is_latest');
   });
 
   it('offers branch and main treasury movement views without changing the day-report action', () => {
@@ -95,5 +101,32 @@ describe('treasury daily single-row UI contract', () => {
     expect(treasuryPage).toContain('الخزنة الرئيسية');
     expect(treasuryPage).toContain('حركة الخزنة الرئيسية');
     expect(treasuryPage).toContain('fetchDayClosingReportServer(effectiveBranchFilter, row.business_date)');
+  });
+});
+
+
+describe('treasury historical opening sequence contract', () => {
+  it('anchors historical imports by source sale date and folds pre-anchor treasury activity into the first row', () => {
+    expect(historicalSequenceMigration).toContain("AT TIME ZONE 'Africa/Cairo'");
+    expect(historicalSequenceMigration).toContain("s.invoice_number LIKE 'HIST-%'");
+    expect(historicalSequenceMigration).toContain("s.invoice_number LIKE 'IMP-%HIST%'");
+    expect(historicalSequenceMigration).toContain('GREATEST(ab.resolved_date, v_start_date)');
+  });
+
+  it('builds a continuous daily carry-forward from opening to closing balance', () => {
+    expect(historicalSequenceMigration).toContain('cash_opening_balance');
+    expect(historicalSequenceMigration).toContain('bank_opening_balance');
+    expect(historicalSequenceMigration).toContain('ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING');
+    expect(historicalSequenceMigration).toContain('ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW');
+    expect(historicalSequenceMigration).toContain("'opening_balance'");
+    expect(historicalSequenceMigration).toContain("'closing_balance'");
+  });
+
+  it('is read-only and preserves the existing permission boundary', () => {
+    expect(historicalSequenceMigration).toContain("public.can_permission('accounts.view')");
+    expect(historicalSequenceMigration).toContain("public.can_permission('reports.view')");
+    expect(historicalSequenceMigration).not.toContain('INSERT INTO ');
+    expect(historicalSequenceMigration).not.toContain('UPDATE public.');
+    expect(historicalSequenceMigration).not.toContain('DELETE FROM ');
   });
 });
