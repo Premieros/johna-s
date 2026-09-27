@@ -225,6 +225,21 @@ describe.skipIf(skip)('POS split payment atomicity', () => {
     );
     expect(result.success, JSON.stringify(result)).toBe(true);
     expect(await rawQty()).toBe(afterSend);
+
+    const order = await client.query<{
+      status: string;
+      payment_status: string;
+      payment_at: string | null;
+    }>(
+      `SELECT status, payment_status, payment_at::text
+         FROM public.orders
+        WHERE id = $1::uuid`,
+      [orderId],
+    );
+    expect(order.rows).toHaveLength(1);
+    expect(order.rows[0].status).toBe('completed');
+    expect(order.rows[0].payment_status).toBe('paid');
+    expect(order.rows[0].payment_at).not.toBeNull();
   });
 
   it('rejects a tender total mismatch without creating a sale or deducting stock', async (ctx) => {

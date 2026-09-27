@@ -2,9 +2,9 @@
 
 ## MANDATORY EXECUTION GATE — لا عمل بدون المرور بالسجل
 
-- Mandatory active work log: `docs/ZERO_COST_DATABASE_RUNTIME_2026-09-27.md`
-- Current active branch: `development/zero-cost-db-runtime-20260927`
-- Current PR: `#391`
+- Mandatory active work log: `docs/SPLIT_PAYMENT_STATUS_REPAIR_2026-09-27.md`
+- Current active branch: `development/fix-split-payment-status-20260927`
+- Current PR: `#392`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
@@ -26,7 +26,7 @@
 ## SINGLE-WRITER EXECUTION FENCE
 
 - Fence document: `docs/SINGLE_WRITER_EXECUTION_FENCE.md`
-- Executable branch: `development/zero-cost-db-runtime-20260927`
+- Executable branch: `development/fix-split-payment-status-20260927`
 - Execution mode: **SINGLE_WRITER**
 - Parallel execution: **FORBIDDEN**
 - Unexpected HEAD policy: **STOP_AND_RECONCILE**
@@ -359,3 +359,15 @@ User explicitly approved a renderer-only redesign of customer and kitchen receip
 - No main merge and no Production migration without Full Verify green + approval.
 
 - Added `daily_closing_range`: open date-range day closing report with one row per business day and payment-method split (cash/card/transfer/credit/legacy/other), sourced from `get_day_closing_report` so monthly/period totals reconcile to day closing.
+
+
+## 2026-09-27 — Split payment order-status repair
+
+- Branch: `development/fix-split-payment-status-20260927`.
+- Production read-only audit proved fully paid split sales can leave the linked order at `payment_status='unpaid'`.
+- Root cause: `process_sale_split` finalizes split tender accounting but omits the linked-order payment-state reconciliation performed by normal `process_sale`.
+- Repair is isolated to split settlement plus deterministic historical split-state reconciliation.
+- Regression coverage asserts linked split payment ends `completed + paid` without a second inventory deduction.
+- Printing / Print Agent / routing / KDS / `send_to_kitchen` remain frozen and untouched.
+- No Production migration/data write before exact-head Full Verify Green + explicit approval.
+- Detailed log: `docs/SPLIT_PAYMENT_STATUS_REPAIR_2026-09-27.md`.
