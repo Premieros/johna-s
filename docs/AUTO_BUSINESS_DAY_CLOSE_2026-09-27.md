@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/auto-business-day-close-20260927`
-Current PR: `#0`
+Current PR: `#386`
 Last updated: 2026-09-27 Africa/Cairo
 
 ## Work status
