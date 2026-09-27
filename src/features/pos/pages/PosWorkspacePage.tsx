@@ -639,6 +639,7 @@ export function PosWorkspacePage() {
       completing={pos.completing}
       canComplete={perms.canPay && !!effectiveBranch}
       canEditOrder={perms.canEditOrder}
+      canDirectDiscount={perms.canDiscount}
       onComplete={() => { if (perms.canPay) void pos.completeSale(); }}
       onBack={() => { pos.setCheckoutOpen(false); setMobileOrderOpen(true); }}
       currency={pos.effCurrency}

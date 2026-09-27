@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Bell, Check, CheckCircle2, Printer, X } from 'lucide-react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
+import { useCan } from '@/lib/permissions';
 
 type ApprovalRequest = {
   id: string;
@@ -13,6 +14,14 @@ type ApprovalRequest = {
   status: string;
   created_at: string;
   requester_id: string;
+  requester_name?: string | null;
+};
+
+type RequesterDisplayRow = {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  email: string | null;
 };
 
 type PrintAlert = {
@@ -129,6 +138,7 @@ function writeStoredAlertState(storageKey: string, state: StoredAlertState) {
 
 export function ApprovalInbox({ ar }: { ar: boolean }) {
   const { user } = useAuth();
+  const can = useCan();
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [items, setItems] = useState<ApprovalRequest[]>([]);
@@ -136,10 +146,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
   const [hiddenAlertKeys, setHiddenAlertKeys] = useState<string[]>([]);
   const [readAlertKeys, setReadAlertKeys] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const allowed =
-    user?.role === 'branch_manager' ||
-    user?.role === 'owner' ||
-    user?.role === 'super_admin';
+  const allowed = can('approvals.review');
   const alertStorageKey = user?.id && user?.branch_id
     ? `${ALERT_STATE_PREFIX}:${user.id}:${user.branch_id}`
     : null;
@@ -178,7 +185,25 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
         .limit(40),
     ]);
 
-    setItems((approvalsResult.data ?? []) as ApprovalRequest[]);
+    const approvalRows = (approvalsResult.data ?? []) as ApprovalRequest[];
+    const requesterIds = Array.from(new Set(approvalRows.map((item) => item.requester_id).filter(Boolean)));
+    let requesterNames: Record<string, string> = {};
+    if (requesterIds.length > 0) {
+      const { data: requesterRows } = await supabase
+        .from('users')
+        .select('id,full_name,username,email')
+        .in('id', requesterIds);
+      requesterNames = Object.fromEntries(
+        (requesterRows ?? [] as RequesterDisplayRow[]).map((row) => [
+          String(row.id),
+          String(row.full_name || row.username || row.email || '').trim(),
+        ]),
+      );
+    }
+    setItems(approvalRows.map((item) => ({
+      ...item,
+      requester_name: requesterNames[item.requester_id] || null,
+    })));
     const recent = ((printResult.data ?? []) as PrintAlert[])
       .filter((item) => item.status === 'failed' || (item.status === 'submitted' && item.attempts > 1))
       .slice(0, 20);
@@ -274,12 +299,19 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
                 <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p>
               ) : items.map((item) => {
                 const label = labels[item.action_type];
+                const actionLabel = label ? (ar ? label.ar : label.en) : item.action_type;
+                const requesterName = item.requester_name || (ar ? 'مستخدم غير معروف' : 'Unknown user');
                 return (
                   <div key={item.id} className="mb-2 rounded-xl border border-ui-border bg-ui-page-alt p-3 last:mb-0">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-ui-text">{label ? (ar ? label.ar : label.en) : item.action_type}</p>
-                        <p className="mt-1 text-sm text-ui-muted">{item.reason}</p>
+                        <p className="font-semibold text-ui-text">{requesterName}</p>
+                        <p className="mt-0.5 text-sm font-medium text-ui-text">
+                          {ar ? 'يطلب: ' : 'Requests: '}{actionLabel}
+                        </p>
+                        <p className="mt-1 text-sm text-ui-muted">
+                          {ar ? 'السبب: ' : 'Reason: '}{item.reason}
+                        </p>
                         {item.action_type === 'discount' && (
                           <p className="mt-1 text-xs text-ui-subtle">
                             {ar ? 'قيمة الخصم: ' : 'Discount: '}
