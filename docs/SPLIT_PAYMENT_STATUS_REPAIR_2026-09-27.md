@@ -1,71 +1,96 @@
 # Split Payment Order Status Repair — 2026-09-27
 
-## Scope
+## Work status
 
-Project: `Premieros/johna-s`
-
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/fix-split-payment-status-20260927`
+Current PR: `#392`
+Last updated: 2026-09-27
+State: **BLOCKED**
 
-Production project: `azzdesuowpdcoflmyezn`
+Blocked means: implementation exists on the development branch, but merge and Production migration remain blocked until exact-head Full Verify is Green and the user explicitly approves the next protected step.
 
-This repair is isolated to linked-order split-tender settlement state. Printing, Print Agent, printer routing, KDS, `send_to_kitchen`, inventory deduction semantics, permissions and RLS are frozen and not modified.
+## Guardrails
 
-## Production evidence (read-only)
+- Single writer; sequential GitHub writes only.
+- Before every write, branch HEAD must equal the expected prior HEAD; unexpected HEAD => STOP_AND_RECONCILE.
+- No direct writes to `main`.
+- No force push.
+- Permission-First and RLS must not be weakened.
+- Printing, Print Agent, `cloud_print_jobs`, printer routing and thermal payloads are frozen.
+- KDS, `send_to_kitchen` and Kitchen transport semantics are frozen.
+- Inventory deduction authority remains unchanged.
+- No Production migration or Production data write before exact-head Full Verify Green + explicit approval.
 
-A post-merge audit found completed split-tender sales whose linked orders remained `payment_status='unpaid'`.
+## Baseline
 
-Last-24h sample at diagnosis:
+Base main: `8268820185bcee05cf25535a570b5fd6a8ee18f3`.
 
-- cash: 87 linked completed sales, all `orders.payment_status='paid'`;
-- card: 41 linked completed sales, all `orders.payment_status='paid'`;
-- credit: 3 linked completed sales, intentionally `unpaid` with zero paid amount;
-- split: 5 linked completed sales totaling 10,749.00, all fully paid but their linked orders remained `unpaid`.
+Production read-only diagnosis found:
 
-The affected split sales had correct `sale_payments`, correct paid amounts, and correctly linked `order_kitchen_inventory_events.settled_sale_id`. The fault was therefore isolated to order payment-state reconciliation, not sale creation, tender accounting, Kitchen settlement, or inventory consumption.
+- cash: 87 linked completed sales in the last-24h sample, all linked orders `paid`;
+- card: 41 linked completed sales, all linked orders `paid`;
+- credit: 3 sales with zero paid amount, linked orders correctly `unpaid`;
+- split: 5 fully paid linked sales totaling 10,749.00, all linked orders incorrectly remained `unpaid`.
 
-## Root cause
+Affected split sales had correct `sale_payments`, correct `paid_amount = total`, and correctly linked `order_kitchen_inventory_events.settled_sale_id`.
 
-Normal `process_sale` performs a post-settlement reconciliation of linked-order `payment_status` after Kitchen inventory events are finalized.
+## Root-cause ledger
 
-`process_sale_split` intentionally delegates the physical sale/inventory write to `_process_sale_core`, finalizes Kitchen settlement, writes split tender metadata, and rewrites collection accounting. It did not perform the normal linked-order payment-state reconciliation afterward.
+1. Normal `process_sale` performs linked-order payment-state reconciliation after Kitchen settlement finalization.
+2. `process_sale_split` delegates the physical sale/inventory write to `_process_sale_core`, finalizes Kitchen settlement, writes split tender metadata, and rewrites collection accounting.
+3. The split wrapper omitted the final linked-order `payment_status` reconciliation.
+4. Therefore sale/tender/accounting truth was correct while `orders.payment_status` retained its pre-payment `unpaid` value.
+5. Existing split atomicity coverage verified tender rows and inventory exactly-once behavior, but did not assert the linked order's final `payment_status`.
 
-As a result, the sale and tender accounting were correct while `orders.payment_status` retained its pre-payment value.
+## Change ledger
 
-## Repair
+- Added `supabase/migrations/20260927203000_fix_split_order_payment_status.sql`.
+  - Dynamically patches only the current `process_sale_split` body using a drift-guarded marker replacement.
+  - Recomputes linked-order paid/total from authoritative settled sale IDs after the split sale has its final paid amount.
+  - Sets `paid` only when the order is completed and settled totals are covered.
+  - Sets `partial` when payment exists but the linked order remains operationally incomplete.
+  - Leaves no-payment state as `unpaid`.
+  - Adds deterministic historical reconciliation for split-linked orders using de-duplicated settled sale IDs.
+- Updated `tests/integration/split_payment_atomicity.test.ts`.
+  - The Kitchen-sent linked split-payment case must end `status='completed'`, `payment_status='paid'`, with non-null `payment_at`.
+  - Existing assertion that settlement does not deduct inventory twice remains.
+- Updated `docs/CURRENT_WORK_PLAN.md`.
+- Added this mandatory work log.
+- No print/KDS/send-to-kitchen/inventory-authority/RLS changes.
 
-Migration:
+## Verification ledger
 
-`supabase/migrations/20260927203000_fix_split_order_payment_status.sql`
+- Production diagnosis: read-only, completed.
+- Branch scope compare: 4 changed files before active-log correction; no frozen print/KDS files changed.
+- PR: `#392` Draft.
+- Verify run `#3126` / run `36339115294`:
+  - failed at mandatory active work-log gate before lint/typecheck/tests;
+  - exact reason: active gate still pointed to the previously completed zero-cost branch;
+  - code/migration tests did not run in that attempt.
+- Active work-log gate correction is documentation-only; a fresh exact-head verify is required after this update.
 
-The migration patches only `process_sale_split` after its final split sale amount is written:
+## Production gate
 
-- recomputes paid/total from authoritative settled sale IDs;
-- sets `paid` only when the linked order is completed and settled amounts cover settled totals;
-- sets `partial` when payment exists but the order remains operationally incomplete;
-- preserves `unpaid` when no settled payment exists;
-- updates `payment_at` only when paid amount exists.
+- Exact-head Full Verify Green: **NO — pending rerun after work-log correction**.
+- Explicit Production migration approval: **NO**.
+- Production migration applied: **NO**.
+- Production data repair applied: **NO**.
+- Merge authorization: **NO**.
+- State remains **BLOCKED**.
 
-The migration also includes a deterministic historical repair for orders that have at least one completed split sale, using de-duplicated settled sale IDs as the payment source of truth.
+## Next action
 
-## Regression coverage
+1. Point the unified mandatory execution gate to this branch/log/PR.
+2. Run a fresh exact-head Full Verify.
+3. If Green, re-check branch HEAD and `main` drift.
+4. Stop before merge/Production migration and report readiness for explicit approval.
 
-`tests/integration/split_payment_atomicity.test.ts` now asserts that a Kitchen-sent linked order paid through split tender:
+## Mandatory update protocol
 
-- succeeds;
-- does not deduct inventory a second time;
-- finishes with `orders.status='completed'`;
-- finishes with `orders.payment_status='paid'`;
-- has a non-null `payment_at`.
-
-## Production guard
-
-No Production migration or data write is authorized by this branch alone.
-
-Required sequence:
-
-1. focused/fresh DB verification;
-2. exact-head Full Verify Green;
-3. explicit user approval;
-4. only then Production migration;
-5. post-migration read-only reconciliation of split orders and branch health.
-
+- Update this log after every code/data-shape change, workflow result, or protected-step decision.
+- Keep `State: **BLOCKED**` until every Production gate requirement is satisfied.
+- Record exact branch HEAD and workflow run before any merge decision.
+- Any unexpected HEAD or unrelated write stops execution for reconciliation.
+- Production is not a test environment; no trial migrations or direct data fixes.
