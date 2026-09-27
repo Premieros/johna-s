@@ -80,9 +80,14 @@ Separate observation:
 - Production diagnosis: read-only and complete.
 - PR #393: Draft.
 - Exact-head Full Verify: pending.
-- Fresh DB migration application: pending CI.
-- Integration regression: pending CI.
-- Unit counted-cash contract: pending CI.
+- Fast Verify run #1036 / `36340558277`:
+  - canonical migrations applied successfully on Fresh DB;
+  - schema verification succeeded;
+  - first changed-integration attempt failed only because the test purchase timestamp was two minutes before the fixture shift opening timestamp, so the canonical helper correctly excluded it;
+  - no migration/application failure occurred.
+- Test-fixture correction commit sets the test shift `opened_at` one hour earlier so the cash purchase is unambiguously inside the shift window.
+- Fresh exact-head Fast/Full Verify after the fixture correction: pending.
+- Unit counted-cash contract: pending final run.
 - Production change from this branch: none.
 
 ## Production gate
