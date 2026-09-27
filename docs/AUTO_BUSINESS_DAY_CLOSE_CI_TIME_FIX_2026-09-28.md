@@ -2,7 +2,7 @@
 
 Repository: `Premieros/johna-s`
 Branch: `development/fix-auto-business-day-close-ci-20260928`
-Current PR: `#0`
+Current PR: `#397`
 
 ## Scope
 Fix only the flaky integration test for automatic fixed-time business-day close.
