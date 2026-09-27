@@ -101,7 +101,8 @@ export function Layout({ children }: { children: ReactNode }) {
   });
   const ar = lang === 'ar';
   const branchFilter = useBranchFilter();
-  const activeOrderCount = useActiveOrderCount(branchFilter || user?.branch_id || '');
+  const isPosRoute = location.pathname === APP_ROUTES.pos || location.pathname.startsWith(`${APP_ROUTES.pos}/`);
+  const activeOrderCount = useActiveOrderCount(branchFilter || user?.branch_id || '', !isPosRoute);
 
   const isAdmin = isAdminRole(user?.role);
   const canViewFloorPlan = can('floor_plan.view');
