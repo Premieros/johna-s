@@ -46,12 +46,20 @@ Goal: execute business-day close automatically at each branch's configured fixed
 
 - Created isolated branch from exact latest main.
 - Read-only Production inspection completed.
-- Implementation pending.
+- Added `20260927095000_auto_business_day_close.sql`.
+- Added private `business_day_fixed_cutoff(branch,date)` using branch-configured start/end in Africa/Cairo.
+- Added private idempotent `run_due_business_day_closes()` worker.
+- Worker catches up the earliest due unclosed date after the latest close.
+- For the currently active day, state advances at the exact configured cutoff before snapshot creation, preserving the open shift while keeping post-cutoff activity out of the prior snapshot.
+- System closes use `closed_by = NULL`.
+- Scheduler installation enables `pg_cron` when available and schedules the worker every minute as `auto-business-day-close`.
+- Normal app roles cannot execute the private worker.
+- Added unit contract and DB integration coverage for exact cutoff, preserved open shift, idempotency, and privilege isolation.
 
 ## Verification ledger
 
 - Production baseline inspection: complete, read-only.
-- Focused tests: pending.
+- Focused tests: committed; CI pending.
 - Full Verify: pending.
 
 ## Production gate
@@ -62,7 +70,7 @@ Production migration is not yet applied. Exact-head Full Verify and explicit Pro
 
 ## Next action
 
-Add a private idempotent fixed-time auto-close worker, minute scheduler installation guarded by pg_cron availability, regression tests, and a backfill-safe rule for the earliest due unclosed day.
+Open Draft PR, bind the mandatory log to its PR number, and run exact-head Full Verify. No Production apply before Green.
 
 ## Mandatory update protocol
 
