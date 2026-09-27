@@ -75,6 +75,8 @@ Write mode: **SEQUENTIAL_ONLY**
 - Removed 5-minute `roles` table polling from `RolesContext`.
 - Roles still load at authenticated-session start and refresh after local role create/update/delete; remote-session recovery now occurs only on focus/online/visible-tab events and is throttled to at most once per minute.
 - Backend/RLS/RPC authorization remains authoritative if UI role metadata is temporarily stale.
+- Updated `rolesRefreshStabilityContract.test.ts` to require event-driven zero-idle role refresh.
+- Added `zeroCostIdlePollingContract.test.ts` covering both approval flows, recovery events, absence of timers, and frozen print/kitchen exclusions.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
@@ -85,7 +87,7 @@ Write mode: **SEQUENTIAL_ONLY**
 - Existing performance branches reconciled as stale/fully-behind current main.
 - Production statistics/read-only SQL audit completed.
 - Performance advisor audit completed read-only; no advisor-driven DDL is authorized in this stage.
-- Focused tests: pending after Stage 1 source-contract coverage.
+- Focused source-contract coverage committed; execution result pending.
 - Full Verify: pending.
 - Production runtime before/after measurement: pending implementation.
 
