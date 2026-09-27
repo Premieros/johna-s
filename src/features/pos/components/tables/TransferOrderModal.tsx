@@ -185,30 +185,66 @@ export function TransferOrderModal({
   useEffect(() => {
     if (!open || !pendingRequestId) return;
     let cancelled = false;
-    const check = async () => {
-      const { data } = await supabase
-        .from('approval_requests')
-        .select('status')
-        .eq('id', pendingRequestId)
-        .maybeSingle();
-      if (cancelled || !data) return;
-      const status = (data as { status: string }).status;
+    let terminalHandled = false;
+
+    const applyStatus = async (status: string) => {
+      if (cancelled || terminalHandled) return;
       setPendingStatus(status);
       if (status === 'approved') {
+        terminalHandled = true;
         setPendingRequestId(null);
         await perform();
       } else if (status === 'rejected' || status === 'expired') {
+        terminalHandled = true;
         setPendingRequestId(null);
         setErrorMsg(status === 'rejected'
           ? (isAr ? 'رفض المدير العملية.' : 'The manager rejected the action.')
           : (isAr ? 'انتهت صلاحية طلب الموافقة. أعد المحاولة.' : 'The approval request expired. Try again.'));
       }
     };
-    const id = window.setInterval(() => void check(), 2000);
-    void check();
+
+    const readCurrentStatus = async () => {
+      const { data } = await supabase
+        .from('approval_requests')
+        .select('status')
+        .eq('id', pendingRequestId)
+        .maybeSingle();
+      if (!cancelled && data) {
+        await applyStatus((data as { status: string }).status);
+      }
+    };
+
+    const channel = supabase
+      .channel(`transfer-order-approval-${pendingRequestId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'approval_requests',
+          filter: `id=eq.${pendingRequestId}`,
+        },
+        (payload) => {
+          const status = (payload.new as { status?: string }).status;
+          if (status) void applyStatus(status);
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void readCurrentStatus();
+      });
+
+    const refreshAfterReconnect = () => void readCurrentStatus();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void readCurrentStatus();
+    };
+    window.addEventListener('online', refreshAfterReconnect);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.removeEventListener('online', refreshAfterReconnect);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pendingRequestId]);
