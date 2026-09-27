@@ -4,20 +4,47 @@ Repository: `Premieros/johna-s`
 Branch: `development/fix-auto-business-day-close-ci-20260928`
 Current PR: `#397`
 
-## Scope
-Fix only the flaky integration test for automatic fixed-time business-day close.
 
-## Root cause
-The test used Cairo `current_date - 1` as the due business date. For an overnight business window (08:00 -> 02:30), a run between 00:00 and 02:30 Cairo means that date has not reached its configured cutoff yet, so the worker correctly returns zero closes.
+Production Supabase: `azzdesuowpdcoflmyezn`
+Last updated: 2026-09-28 00:10 Cairo
 
-## Fix
-Select the most recent business date whose configured cutoff is already <= now() while the following date's cutoff is still > now(). This makes the fixture time-independent without changing Production business-day logic.
+## Work status
+State: **BLOCKED**
 
-## Safety
-- No Production schema/function change.
-- No treasury/day-journal change.
+Implementation is complete. Merge is blocked until exact-head Verify is Green.
+
+## Guardrails
+- Test-only scope.
+- No Production schema or function changes.
+- No treasury/day-journal changes.
 - No printing / Print Agent / routing / KDS changes.
-- No sales/shifts behavior change.
+- No sales, POS, or shift runtime behavior changes.
 
-## Verification
-Pending exact-head Verify.
+## Baseline
+- Base: latest `main` after PR #396.
+- Runtime auto-close logic remains unchanged and is driven by branch `business_day_start`, `business_day_end`, and `business_day_mode='fixed_time'`.
+
+## Root-cause ledger
+- The test used Cairo `current_date - 1` as due date.
+- For an overnight 08:00 -> 02:30 window, runs between 00:00 and 02:30 Cairo see that date as not due yet.
+
+## Change ledger
+- Integration fixture now selects the latest business date whose configured cutoff is already reached.
+- No runtime migration or application logic change.
+
+## Verification ledger
+- Verify #3160 failed only at the mandatory active worklog gate because required headings were missing.
+- Exact-head rerun pending.
+
+## Production gate
+- No Production migration exists for this PR.
+- No Production write is required.
+- Merge only after exact-head Verify is Green.
+
+## Next action
+Run exact-head Verify for PR #397 and merge only if Green.
+
+## Mandatory update protocol
+- Re-read branch HEAD before repository writes.
+- Update this log whenever scope, root cause, verification, or next action changes.
+- Treat unexpected HEAD drift as STOP_AND_RECONCILE.
