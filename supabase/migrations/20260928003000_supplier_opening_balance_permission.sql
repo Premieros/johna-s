@@ -825,4 +825,54 @@ GRANT EXECUTE ON FUNCTION public.set_supplier_opening_balance(uuid,uuid,numeric,
 REVOKE ALL ON FUNCTION public.pay_supplier_from_treasury(uuid,uuid,numeric,uuid,uuid,text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.pay_supplier_from_treasury(uuid,uuid,numeric,uuid,uuid,text) TO authenticated, service_role;
 
+CREATE OR REPLACE FUNCTION public.get_balance_sheet(p_branch_id uuid, p_as_of date DEFAULT CURRENT_DATE)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SET search_path TO public, pg_temp
+AS $function$
+WITH bal AS (
+  SELECT
+    a.account_type,
+    a.code,
+    COALESCE(SUM(l.debit),0) AS debit,
+    COALESCE(SUM(l.credit),0) AS credit
+  FROM public.chart_of_accounts a
+  LEFT JOIN (
+    SELECT l.account_id,l.debit,l.credit
+    FROM public.journal_entry_lines l
+    JOIN public.journal_entries j ON j.id=l.journal_entry_id
+    WHERE j.branch_id=p_branch_id
+      AND j.entry_date<=public.history_clamp_as_of(p_as_of)
+  ) l ON l.account_id=a.id
+  WHERE a.branch_id=p_branch_id
+    AND a.is_active
+  GROUP BY a.account_type,a.code
+), summary AS (
+  SELECT
+    round(COALESCE(SUM(CASE WHEN account_type='asset' THEN debit-credit ELSE 0 END),0),2) AS assets,
+    round(COALESCE(SUM(CASE WHEN account_type='liability' THEN credit-debit ELSE 0 END),0),2) AS liabilities,
+    round(COALESCE(SUM(CASE WHEN code='3000' THEN credit-debit ELSE 0 END),0),2) AS capital,
+    round(COALESCE(SUM(CASE WHEN code='3100' THEN credit-debit ELSE 0 END),0),2) AS retained,
+    round(COALESCE(SUM(CASE WHEN code='3200' THEN credit-debit ELSE 0 END),0),2) AS opening_equity,
+    round(
+      COALESCE(SUM(CASE WHEN account_type='income' THEN credit-debit ELSE 0 END),0)
+      - COALESCE(SUM(CASE WHEN account_type='expense' THEN debit-credit ELSE 0 END),0),
+      2
+    ) AS net_income
+  FROM bal
+)
+SELECT jsonb_build_object(
+  'assets',assets,
+  'liabilities',liabilities,
+  'capital',capital,
+  'retained',retained,
+  'opening_equity',opening_equity,
+  'net_income',net_income,
+  'equity',round(capital+retained+opening_equity+net_income,2),
+  'balanced',round(assets-(liabilities+capital+retained+opening_equity+net_income),2)=0
+)
+FROM summary;
+$function$;
+
 NOTIFY pgrst, 'reload schema';
