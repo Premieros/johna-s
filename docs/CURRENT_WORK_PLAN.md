@@ -4,7 +4,7 @@
 
 - Mandatory active work log: `docs/AUTO_BUSINESS_DAY_CLOSE_CI_TIME_FIX_2026-09-28.md`
 - Current active branch: `development/fix-auto-business-day-close-ci-20260928`
-- Current PR: `#0`
+- Current PR: `#397`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
