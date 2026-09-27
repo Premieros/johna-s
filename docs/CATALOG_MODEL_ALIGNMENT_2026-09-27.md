@@ -286,7 +286,12 @@ P2 — cleanup only after usage proof:
 
 - Created branch `development/catalog-model-alignment-20260927` from exact `main@a2bd92798a3993d5022b188a47e0f9dfb4c0a96c`.
 - Comprehensive read-only audit completed.
-- No runtime code changes yet.
+- Phase 1A navigation retirement implemented:
+  - Recipes removed from live sidebar menu.
+  - `/recipes` now compatibility-redirects to Products.
+  - manufacturing/production legacy routes redirect to Component Groups.
+  - landing route no longer sends users to Recipes.
+  - navigation contract test updated to prevent Recipes returning as a live menu destination.
 - No DB migration.
 - No Production write.
 - No printing/KDS changes.
@@ -297,7 +302,7 @@ P2 — cleanup only after usage proof:
 - Canonical component authority proof: complete.
 - Live shift-consumption authority proof: complete — ledger/kitchen-send based.
 - Import/export permission audit: complete — per-entity requiredPermission is currently not enforced; legacy manufacturing.view metadata is stale.
-- Focused tests: not started.
+- Focused tests: navigation contract committed; CI pending.
 - Full Verify: not started.
 
 ## Production gate
