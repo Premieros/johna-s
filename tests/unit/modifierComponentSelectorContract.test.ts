@@ -4,19 +4,22 @@ import fs from 'node:fs';
 const source = fs.readFileSync('src/features/catalog/pages/ProductModifiersPage.tsx', 'utf8');
 
 describe('modifier component selector contract', () => {
-  it('loads raw materials and manufactured inventory units for the active branch', () => {
-    expect(source).toContain("supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', branchFilter)");
-    expect(source).toContain("api.catalog.listInventoryUnits({ branch_id: branchFilter, is_active: true })");
+  it('loads reusable component groups for the active branch', () => {
+    expect(source).toContain("api.catalog.listInventoryUnits({ branch_id: branchFilter, unit_type: 'manufactured', is_active: true })");
+    expect(source).toContain('setComponentGroups((units || []) as InventoryUnit[])');
   });
 
-  it('renders raw/manufactured selectors and persists inventory effects', () => {
-    expect(source).toContain('<option value="raw_material">{isAr ? \'خامة\' : \'Raw material\'}</option>');
-    expect(source).toContain('<option value="inventory_unit">{isAr ? \'مصنع\' : \'Manufactured item\'}</option>');
-    expect(source).toContain('inventory_effects: row.inventory_effects');
-    expect(source).toContain('addInventoryEffect(index)');
+  it('uses component-group choices without exposing technical inventory selectors', () => {
+    expect(source).toContain("target_type: 'inventory_unit'");
+    expect(source).toContain('source_unit_id: unit.id');
+    expect(source).toContain('name: unit.name');
+    expect(source).not.toContain('<option value="raw_material">');
+    expect(source).not.toContain("isAr ? 'مصنع' : 'Manufactured item'");
   });
 
-  it('rejects incomplete inventory effects before save', () => {
-    expect(source).toContain("!effect.target_id || !Number.isFinite(effect.quantity_delta) || effect.quantity_delta === 0");
+  it('keeps inventory effects valid and non-zero before save', () => {
+    expect(source).toContain('if (option.inventory_effects.length === 0)');
+    expect(source).toContain("inventory_effects: option.inventory_effects");
+    expect(source).toContain('quantity_delta: 1');
   });
 });
