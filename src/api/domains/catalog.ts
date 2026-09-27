@@ -39,6 +39,12 @@ export type CreateProductInput = {
 };
 
 export type CreateProductResult = { success?: boolean; error?: string; product_id?: string; branch_id?: string | null };
+export type DirectRawComponentInput = { raw_material_id: string; quantity: number; wastage_percent?: number };
+export type ProductDirectRawComposition = {
+  recipe_id: string | null;
+  yield_quantity: number;
+  items: DirectRawComponentInput[];
+};
 export type KitchenOrderContextRow = { order_id: string; table_name: string | null; operator_name: string | null };
 
 export const catalog = {
@@ -74,6 +80,115 @@ export const catalog = {
     const { data, error } = await q;
     if (error) throw error;
     return data;
+  },
+
+  async getProductDirectRawComponents(product_id: string, branch_id: string): Promise<ProductDirectRawComposition> {
+    const { data: recipe, error: recipeError } = await supabase
+      .from('recipes')
+      .select('id,yield_quantity')
+      .eq('product_id', product_id)
+      .eq('branch_id', branch_id)
+      .eq('is_active', true)
+      .order('version', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recipeError) throw recipeError;
+    if (!recipe?.id) return { recipe_id: null, yield_quantity: 1, items: [] };
+
+    const { data: items, error: itemsError } = await supabase
+      .from('recipe_items')
+      .select('raw_material_id,quantity,wastage_percent')
+      .eq('recipe_id', recipe.id)
+      .order('created_at');
+    if (itemsError) throw itemsError;
+    return {
+      recipe_id: recipe.id,
+      yield_quantity: Number(recipe.yield_quantity) || 1,
+      items: ((items || []) as DirectRawComponentInput[]).map((row) => ({
+        raw_material_id: row.raw_material_id,
+        quantity: Number(row.quantity) || 0,
+        wastage_percent: Number(row.wastage_percent) || 0,
+      })),
+    };
+  },
+
+  async saveProductDirectRawComponents(p: {
+    product_id: string;
+    branch_id: string;
+    product_name: string;
+    items: DirectRawComponentInput[];
+  }) {
+    const normalized = p.items.map((row) => ({
+      raw_material_id: row.raw_material_id,
+      quantity: Number(row.quantity),
+      wastage_percent: Number(row.wastage_percent || 0),
+    }));
+    if (normalized.some((row) => !row.raw_material_id || !Number.isFinite(row.quantity) || row.quantity <= 0 || row.wastage_percent < 0)) {
+      throw new Error('INVALID_DIRECT_RAW_COMPONENT');
+    }
+    if (new Set(normalized.map((row) => row.raw_material_id)).size !== normalized.length) {
+      throw new Error('DUPLICATE_RAW_MATERIAL');
+    }
+
+    const { data: recipe, error: recipeError } = await supabase
+      .from('recipes')
+      .select('id,name,yield_quantity,notes,is_active')
+      .eq('product_id', p.product_id)
+      .eq('branch_id', p.branch_id)
+      .eq('is_active', true)
+      .order('version', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recipeError) throw recipeError;
+
+    if (normalized.length === 0) {
+      if (!recipe?.id) return { success: true, recipe_id: null, items_count: 0 };
+      const { data, error } = await supabase.rpc('delete_recipe_controlled', { p_recipe_id: recipe.id });
+      if (error) throw error;
+      const result = (data || {}) as { success?: boolean; error?: string; detail?: string };
+      if (!result.success) throw new Error(result.detail || result.error || 'DIRECT_RAW_DELETE_FAILED');
+      return { success: true, recipe_id: null, items_count: 0 };
+    }
+
+    if (recipe?.id) {
+      const { data, error } = await supabase.rpc('update_recipe_with_items', {
+        p_recipe_id: recipe.id,
+        p_name: recipe.name || p.product_name,
+        p_yield_quantity: Number(recipe.yield_quantity) || 1,
+        p_notes: recipe.notes || '',
+        p_is_active: recipe.is_active !== false,
+        p_items: normalized,
+      });
+      if (error) throw error;
+      const result = (data || {}) as { success?: boolean; error?: string; detail?: string; recipe_id?: string; items_count?: number };
+      if (!result.success) throw new Error(result.detail || result.error || 'DIRECT_RAW_SAVE_FAILED');
+      return result;
+    }
+
+    const { data: created, error: createError } = await supabase
+      .from('recipes')
+      .insert({
+        product_id: p.product_id,
+        branch_id: p.branch_id,
+        name: `${p.product_name} Components`,
+        yield_quantity: 1,
+        notes: null,
+        is_active: true,
+      })
+      .select('id')
+      .single();
+    if (createError || !created?.id) throw createError || new Error('DIRECT_RAW_CREATE_FAILED');
+
+    const { error: itemsError } = await supabase.from('recipe_items').insert(
+      normalized.map((row) => ({ ...row, recipe_id: created.id })),
+    );
+    if (itemsError) {
+      await supabase.rpc('delete_recipe_controlled', { p_recipe_id: created.id });
+      throw itemsError;
+    }
+    return { success: true, recipe_id: created.id, items_count: normalized.length };
   },
 
   async setProductUnitLinks(product_id: string, links: { unit_id: string; quantity: number }[]) {
