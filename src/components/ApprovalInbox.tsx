@@ -17,6 +17,13 @@ type ApprovalRequest = {
   requester_name?: string | null;
 };
 
+type RequesterDisplayRow = {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  email: string | null;
+};
+
 type PrintAlert = {
   id: string;
   kind: 'kitchen' | 'receipt' | 'test';
@@ -187,7 +194,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
         .select('id,full_name,username,email')
         .in('id', requesterIds);
       requesterNames = Object.fromEntries(
-        (requesterRows ?? []).map((row: any) => [
+        (requesterRows ?? [] as RequesterDisplayRow[]).map((row) => [
           String(row.id),
           String(row.full_name || row.username || row.email || '').trim(),
         ]),
