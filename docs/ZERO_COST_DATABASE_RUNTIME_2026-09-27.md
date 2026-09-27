@@ -87,6 +87,15 @@ Write mode: **SEQUENTIAL_ONLY**
 
 ## Verification ledger
 
+- Stage 2 verification run `36326866171` / Verify main #3106: **FAILED at lint only**.
+  - mandatory worklog ✅
+  - project identity ✅
+  - API contract ✅
+  - lint ❌: `ProductBrowser.tsx` line 46 retained an unused `branchId` local after moving shift ownership to the parent.
+  - typecheck/unit/build/DB/browser were skipped by workflow dependency after lint failure.
+  - Existing 17 lint warnings are pre-existing/out of this scope; the one new error is isolated to the Stage 2 refactor.
+
+
 - Repository identity confirmed: `Premieros/johna-s`.
 - Production project confirmed: `azzdesuowpdcoflmyezn`.
 - Current `main` confirmed at `ff796cac04a3c11416eaf8aa97d9cb71f536ffa6` before branch creation.
@@ -128,7 +137,7 @@ State: **BLOCKED**
    - do not cache or weaken shift validation;
    - preserve payment service shift validation and all shift mutation behavior;
    - add a contract proving `ProductBrowser` cannot issue its own `getActiveShift` call.
-3. Run exact-head verification for Stage 2 before considering catalog/session-cache work.
+3. Remove the now-unused `branchId` local from `ProductBrowser`, rerun exact-head verification, and only then consider further optimizations.
 4. Do not touch printing, Print Agent, routing, KDS, kitchen transport, or Production.
 
 ## Mandatory update protocol
