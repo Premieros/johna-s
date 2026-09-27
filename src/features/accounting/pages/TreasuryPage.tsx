@@ -50,6 +50,8 @@ interface TreasuryDayCloseRow {
   net_sales: number;
   expenses: number;
   cash_purchases: number;
+  transfer_in: number;
+  transfer_out: number;
   opening_balance: number;
   cash_opening_balance: number;
   bank_opening_balance: number;
@@ -97,10 +99,13 @@ export function TreasuryPage() {
 
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
-  const mainTreasury = balances.find((b) => b.scope === 'organization' && b.kind === 'main_cash');
-  const mainTreasuryBalance = Number(mainTreasury?.balance || 0);
+  const mainTreasuryAccounts = balances.filter((b) => b.scope === 'organization');
+  const mainTreasury = mainTreasuryAccounts.find((b) => b.kind === 'main_cash');
+  const mainBank = mainTreasuryAccounts.find((b) => b.account_type === 'bank');
+  const mainTreasuryBalance = mainTreasuryAccounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  const mainAccountIds = mainTreasuryAccounts.map((account) => account.id);
   const transactionScope = treasuryView === 'main'
-    ? (mainTreasury?.id ? `from_account_id.eq.${mainTreasury.id},to_account_id.eq.${mainTreasury.id}` : undefined)
+    ? (mainAccountIds.length > 0 ? `from_account_id.in.(${mainAccountIds.join(',')}),to_account_id.in.(${mainAccountIds.join(',')})` : undefined)
     : (effectiveBranchFilter
       ? `branch_id.eq.${effectiveBranchFilter},from_branch_id.eq.${effectiveBranchFilter},to_branch_id.eq.${effectiveBranchFilter}`
       : undefined);
@@ -222,7 +227,7 @@ export function TreasuryPage() {
     closing_balance: Number(row.closing_balance || 0),
   })), [dayCloses]);
   const displayedBalances = treasuryView === 'main'
-    ? (mainTreasury ? [mainTreasury] : [])
+    ? mainTreasuryAccounts
     : localAccounts;
   const accountLabel = (a: TreasurySource) => {
     if (a.scope === 'organization') return isAr ? 'الخزنة الرئيسية' : 'Main Treasury';
@@ -256,6 +261,8 @@ export function TreasuryPage() {
     { key: 'credit_sales', header: isAr ? 'الآجل' : 'Credit', render: (row) => formatCurrency(row.credit_sales, currency, lang) },
     { key: 'expenses', header: isAr ? 'المصروفات' : 'Expenses', render: (row) => formatCurrency(row.expenses, currency, lang) },
     { key: 'cash_purchases', header: isAr ? 'المشتريات' : 'Purchases', render: (row) => formatCurrency(row.cash_purchases, currency, lang) },
+    { key: 'transfer_in', header: isAr ? 'تحويل وارد' : 'Transfer in', render: (row) => formatCurrency(row.transfer_in, currency, lang) },
+    { key: 'transfer_out', header: isAr ? 'تحويل صادر' : 'Transfer out', render: (row) => formatCurrency(row.transfer_out, currency, lang) },
     { key: 'day_net', header: isAr ? 'صافي اليوم' : 'Day net', render: (row) => <span className="font-black text-ui-text">{formatCurrency(row.day_net, currency, lang)}</span> },
     { key: 'cash_sales', header: isAr ? 'كاش' : 'Cash', render: (row) => formatCurrency(row.cash_sales, currency, lang) },
     { key: 'bank_sales', header: isAr ? 'بنك' : 'Bank', render: (row) => formatCurrency(row.bank_sales, currency, lang) },
@@ -326,7 +333,7 @@ export function TreasuryPage() {
         <DesignPanel title={isAr ? 'ملخص الخزنة اليومي' : 'Daily treasury summary'} testId="treasury-day-close-reconciliation-panel">
           <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
             {isAr
-              ? 'تسلسل يومي متصل: أول تاريخ يبدأ من رصيد افتتاح الحساب، ورصيد آخر كل يوم يصبح رصيد أول اليوم التالي. الترحيلات التاريخية تُعرض في تاريخها المحاسبي، وآخر رصيد يطابق خزنة الفرع الفعلية.'
+              ? 'تسلسل يومي متصل: أول تاريخ يبدأ من رصيد افتتاح الحساب، ورصيد آخر كل يوم يصبح رصيد أول اليوم التالي. التحويل الوارد والصادر يظهران صراحة داخل اليوم، وآخر رصيد يطابق خزنة الفرع الفعلية.'
               : 'Continuous daily sequence: the first date starts from the account opening balance, and each day closing becomes the next day opening. Historical imports use their accounting date and the latest closing matches the live branch treasury.'}
           </div>
           <DataTable columns={dailyColumns} data={dailyRows} loading={loading} error={txError} emptyMessage={t('noData')} />
