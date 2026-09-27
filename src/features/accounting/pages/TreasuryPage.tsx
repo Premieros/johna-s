@@ -100,8 +100,6 @@ export function TreasuryPage() {
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const mainTreasuryAccounts = balances.filter((b) => b.scope === 'organization');
-  const mainTreasury = mainTreasuryAccounts.find((b) => b.kind === 'main_cash');
-  const mainBank = mainTreasuryAccounts.find((b) => b.account_type === 'bank');
   const mainTreasuryBalance = mainTreasuryAccounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
   const mainAccountIds = mainTreasuryAccounts.map((account) => account.id);
   const transactionScope = treasuryView === 'main'
