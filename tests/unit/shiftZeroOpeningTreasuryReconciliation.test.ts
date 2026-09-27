@@ -143,3 +143,31 @@ describe('treasury UUID aggregate regression', () => {
     expect(uuidFixMigration).not.toContain('min(a.reference_id) AS reference_id');
   });
 });
+
+
+describe('treasury transfer visibility and main bank contract', () => {
+  const transferMigration = fs.readFileSync(
+    'supabase/migrations/20260927233000_treasury_transfer_visibility_main_bank.sql',
+    'utf8',
+  );
+
+  it('creates an organization-scoped main bank without touching branch bank accounts', () => {
+    expect(transferMigration).toContain("'1030', 'البنك الرئيسي', 'Main Bank'");
+    expect(transferMigration).toContain("'bank', 'البنك الرئيسي', 'organization', 'bank'");
+    expect(transferMigration).toContain('uq_treasury_main_bank_org');
+  });
+
+  it('exposes incoming and outgoing treasury transfers per business day', () => {
+    expect(transferMigration).toContain("'transfer_in'");
+    expect(transferMigration).toContain("'transfer_out'");
+    expect(treasuryPage).toContain("isAr ? 'تحويل وارد' : 'Transfer in'");
+    expect(treasuryPage).toContain("isAr ? 'تحويل صادر' : 'Transfer out'");
+  });
+
+  it('shows all organization treasury accounts in the main treasury view', () => {
+    expect(treasuryPage).toContain("balances.filter((b) => b.scope === 'organization')");
+    expect(treasuryPage).toContain('mainTreasuryAccounts');
+    expect(treasuryPage).toContain("from_account_id.in.(");
+    expect(treasuryPage).toContain("to_account_id.in.(");
+  });
+});
