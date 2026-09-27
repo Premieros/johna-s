@@ -311,8 +311,8 @@ export function PosWorkspacePage() {
         let catq = supabase.from('categories').select('*');
         let areaq = supabase.from('dining_areas').select('*');
         const productQuery = fixedBranch
-          ? supabase.from('products').select('*, category:categories(*)').eq('branch_id', fixedBranch).eq('is_active', true)
-          : supabase.from('products').select('*, category:categories(*)').eq('is_active', true).order('name');
+          ? supabase.from('products').select('*').eq('branch_id', fixedBranch).eq('is_active', true)
+          : supabase.from('products').select('*').eq('is_active', true).order('name');
         if (fixedBranch) {
           cusq = cusq.eq('branch_id', fixedBranch);
           catq = catq.eq('branch_id', fixedBranch);
