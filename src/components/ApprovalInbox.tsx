@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Bell, Check, CheckCircle2, Printer, X } from 'lucide-react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
+import { useCan } from '@/lib/permissions';
 
 type ApprovalRequest = {
   id: string;
@@ -129,6 +130,7 @@ function writeStoredAlertState(storageKey: string, state: StoredAlertState) {
 
 export function ApprovalInbox({ ar }: { ar: boolean }) {
   const { user } = useAuth();
+  const can = useCan();
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [items, setItems] = useState<ApprovalRequest[]>([]);
@@ -136,10 +138,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
   const [hiddenAlertKeys, setHiddenAlertKeys] = useState<string[]>([]);
   const [readAlertKeys, setReadAlertKeys] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const allowed =
-    user?.role === 'branch_manager' ||
-    user?.role === 'owner' ||
-    user?.role === 'super_admin';
+  const allowed = can('approvals.review');
   const alertStorageKey = user?.id && user?.branch_id
     ? `${ALERT_STATE_PREFIX}:${user.id}:${user.branch_id}`
     : null;
