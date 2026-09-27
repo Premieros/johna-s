@@ -7,6 +7,25 @@ Base: `main@102dea0d2ebd0f7567217bfbad3c79ba6cdada81`
 Current PR: `#394`
 Last updated: 2026-09-27 Africa/Cairo
 
+## Work status
+State: **BLOCKED**
+
+## Guardrails
+- No direct writes to `main`.
+- No Production migration before exact-head Full Verify Green and explicit approval.
+- No historical sales/purchases/expenses/journals mutation.
+- Printing / Print Agent / routing / KDS / send-to-kitchen remain frozen and untouched.
+
+## Baseline
+- Base: `main@102dea0d2ebd0f7567217bfbad3c79ba6cdada81`.
+- Current live treasury account opening balances are zero for both branches.
+- Current branch totals are the reconciliation target.
+
+## Root-cause ledger
+- The existing treasury daily summary begins from `daily_closes`, so historical imported sales before the first close are omitted from the displayed sequence.
+- Historical journal `created_at` can lag the accounting period represented by the imported sale.
+- Browser-side opening reconstruction can therefore disagree with the canonical treasury ledger.
+
 ## Scope
 - Fix branch treasury daily sequence only.
 - First historical treasury row starts from the account opening balance (currently zero for both live branches).
@@ -49,3 +68,10 @@ Open a Draft PR and run exact-head verification. Do not apply the Production mig
 
 ## Production gate
 BLOCKED — implementation and exact-head Full Verify are pending. Explicit approval is required before Production migration/merge.
+
+
+## Mandatory update protocol
+- Before every repository write, re-read the branch HEAD and this work log.
+- Record every code or migration change in the Change ledger.
+- Record every CI/test result in the Verification ledger.
+- Keep State **BLOCKED** until exact-head Full Verify is Green and explicit Production/merge approval is recorded.
