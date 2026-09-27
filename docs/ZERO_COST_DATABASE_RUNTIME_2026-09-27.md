@@ -67,7 +67,6 @@ Write mode: **SEQUENTIAL_ONLY**
 - Created isolated branch `development/zero-cost-db-runtime-20260927` from exact current `main`.
 - No Production write performed.
 - Draft PR #391 opened from the isolated branch.
-- No application/runtime change committed yet.
 - Replaced 2-second approval polling in `TransferItemModal` with an ID-filtered `approval_requests` Realtime UPDATE subscription plus one post-subscribe status read.
 - Replaced 2-second approval polling in `TransferOrderModal` with the same event-driven pattern.
 - Added event-only recovery reads on browser `online` and visible-tab return; there is no periodic fallback timer.
@@ -100,6 +99,12 @@ Write mode: **SEQUENTIAL_ONLY**
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
+
+- Stage 4 Full Verify Green on `6d1d9e8dfdad4c65ae473a38eacee122e7e727be`.
+- Workflow run `36328431098` / Verify main #3119: lint, typecheck, unit, build, fresh DB/schema, integration/security/RLS, and browser smoke all passed.
+- Final read-only audit found no additional non-frozen database polling change with a comparable safety/benefit profile; further catalog caching was deliberately deferred because the current cache has no reliable freshness marker.
+- Production remained unchanged throughout this workstream.
+
 
 - Stage 3 exact-head Full Verify Green on `2bac970c0a87e39e051668c2a8f6190770bd8cae`.
 - Workflow run `36327695426` / Verify main #3115:
@@ -159,8 +164,6 @@ Write mode: **SEQUENTIAL_ONLY**
   - integration + security/RLS regression ✅
   - browser smoke ✅
 - Production remained read-only; no schema/data/runtime deployment was performed.
-- Full Verify: pending.
-- Production runtime before/after measurement: pending implementation.
 
 ## Production gate
 
@@ -174,11 +177,10 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Stage 4 implementation complete.
-2. Run exact-head Full Verify for the lean POS catalog query.
-3. If Green, perform a final source/Production read-only audit for remaining avoidable idle consumption before deciding whether another safe stage is justified.
-4. Do not introduce stale-cache shortcuts without a reliable invalidation/freshness marker.
-5. No Merge, Production deployment, Production SQL write, printing/KDS change, or migration without explicit approval.
+1. Safe ZERO COST runtime implementation is complete.
+2. Run one final exact-head Full Verify after this documentation closure commit.
+3. Keep PR #391 Draft; do not merge without explicit approval.
+4. Production stays unchanged and printing/KDS remain out of scope.
 
 ## Mandatory update protocol
 
