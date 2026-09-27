@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/treasury-historical-opening-sequence-20260927`
 Base: `main@102dea0d2ebd0f7567217bfbad3c79ba6cdada81`
-Current PR: pending
+Current PR: `#394`
 Last updated: 2026-09-27 Africa/Cairo
 
 ## Scope
