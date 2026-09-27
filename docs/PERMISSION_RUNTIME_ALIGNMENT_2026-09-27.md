@@ -39,7 +39,13 @@ State: **BLOCKED**
 5. Role-name checks elsewhere must be classified before change; Super-Admin-only platform checks are legitimate and must remain.
 
 ## Change ledger
-- Pending on latest-main rebuild.
+- `src/components/ApprovalInbox.tsx`: approval inbox visibility and realtime loading now use canonical `can('approvals.review')`; ordinary role-name authorization was removed. Branch scoping and server decision RPC remain unchanged.
+- `src/features/pos/components/checkout/CashierDiscountApprovalCard.tsx`: removed cashier-role lookup. The leaf receives explicit `canDirectDiscount`, remains provider-independent, and only shows manager approval when direct `pos.discount` is absent.
+- Percentage discount requests now authorize the exact monetary amount in `discount_amount`, preserve the entered percentage in `requested_value`, cap percentage input at 100%, and cap amount input at subtotal.
+- `src/features/pos/components/checkout/PaymentPanel.tsx`: accepts/forwards `canDirectDiscount` without adding auth-provider dependencies to isolated component tests.
+- `src/features/pos/pages/PosWorkspacePage.tsx`: passes `perms.canDiscount` from the existing canonical `usePosPermissions()` matrix into checkout.
+- `tests/unit/permissionRuntimeAlignmentContract.test.ts`: locks ApprovalInbox Permission-First behavior, leaf provider independence, workspace permission propagation, and monetary percentage approval semantics.
+- No backend/RLS/Production role-data changes. Printing, Print Agent, routing, KDS, and send-to-kitchen transport remain untouched.
 
 ## Verification ledger
 - Previous stale PR #383:
@@ -60,12 +66,11 @@ State: **BLOCKED**
 - Merge itself is explicitly blocked until user approval after all checks.
 
 ## Next action
-1. Rebuild ApprovalInbox on latest main with `approvals.review`.
-2. Rebuild discount approval so capability is passed from POS workspace / permission state, not resolved in the leaf component.
-3. Store monetary discount in approval payload while preserving entered percent metadata.
-4. Add regression contract for Permission-First approval runtime and the leaf-component provider boundary.
-5. Run focused tests, then full repository verification.
-6. Stop before merge.
+1. Observe focused/full verification on the exact current head.
+2. Confirm the previous PaymentPanel provider regression is gone and the new Permission-First source contract passes.
+3. Classify any failure before changing runtime; do not weaken tests.
+4. If exact-head verify, DB/integration/RLS, and browser smoke are all Green, record merge-ready status.
+5. STOP before merge and wait for explicit user approval.
 
 ## Mandatory update protocol
 - Before each logical write: read `Next action`, `Change ledger`, and `Verification ledger`; re-check branch and main HEADs.
