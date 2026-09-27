@@ -1,7 +1,7 @@
 # Permission Runtime Alignment — 2026-09-27
 
 Branch: `development/permission-runtime-alignment-20260927`
-Current PR: `#TBD`
+Current PR: `#387`
 Last updated: 2026-09-27
 
 ## Work status
