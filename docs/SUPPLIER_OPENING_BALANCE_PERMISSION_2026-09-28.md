@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/supplier-opening-balance-permission-20260928`
-Current PR: `#0`
+Current PR: `#398`
 Last updated: 2026-09-28 00:30 Cairo
 
 ## Work status
