@@ -20,8 +20,9 @@ describe('UI and production database drift guards', () => {
     expect(menu).not.toContain("id: 'components'");
     expect(menu).not.toContain("id: 'production'");
     expect(menu).not.toContain("id: 'manufacturing-center'");
-    expect(routes).toContain('APP_ROUTES.production} element={<Navigate to={APP_ROUTES.recipes} replace />');
-    expect(routes).toContain('APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.recipes} replace />');
+    expect(routes).toContain('APP_ROUTES.production} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />');
+    expect(routes).toContain('APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />');
+    expect(routes).toContain('APP_ROUTES.recipes} element={<Navigate to={APP_ROUTES.products} replace />');
   });
 
   it('fails production parity when the kitchen inventory schema sentinel is absent or false', () => {
