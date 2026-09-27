@@ -51,6 +51,11 @@ export function SuppliersPage() {
   const { branches } = useBranches();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [form, setForm] = useState({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: '' });
+  const [openingAmount, setOpeningAmount] = useState('');
+  const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [openingNotes, setOpeningNotes] = useState('');
+  const [existingOpening, setExistingOpening] = useState<{ amount: number; remaining_amount: number; opening_date: string; notes?: string | null } | null>(null);
+  const canManageOpening = can('suppliers.opening_balance.manage');
 
   useEffect(() => {
     let cancelled = false;
@@ -75,21 +80,75 @@ export function SuppliersPage() {
 
   const balanceFor = (supplier: Supplier) => Number(openBalances[supplier.id] || 0);
   const filtered = items.filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.phone?.includes(search));
-  const openAdd = () => { setEditing(null); setForm({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: branchFilter || '' }); setModalOpen(true); };
-  const openEdit = (s: Supplier) => { setEditing(s); setForm({ name: s.name, name_en: s.name_en || '', phone: s.phone || '', email: s.email || '', address: s.address || '', tax_number: s.tax_number || '', balance: s.balance, notes: s.notes || '', branch_id: s.branch_id || branchFilter || '' }); setModalOpen(true); };
+  const openAdd = () => {
+    setEditing(null);
+    setExistingOpening(null);
+    setOpeningAmount('');
+    setOpeningDate(new Date().toISOString().slice(0, 10));
+    setOpeningNotes('');
+    setForm({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: branchFilter || '' });
+    setModalOpen(true);
+  };
+  const openEdit = (s: Supplier) => {
+    setEditing(s);
+    setExistingOpening(null);
+    setOpeningAmount('');
+    setOpeningDate(new Date().toISOString().slice(0, 10));
+    setOpeningNotes('');
+    setForm({ name: s.name, name_en: s.name_en || '', phone: s.phone || '', email: s.email || '', address: s.address || '', tax_number: s.tax_number || '', balance: s.balance, notes: s.notes || '', branch_id: s.branch_id || branchFilter || '' });
+    setModalOpen(true);
+    if (canManageOpening && s.branch_id) {
+      void api.accounting.getSupplierOpeningBalance({ p_supplier_id: s.id, p_branch_id: s.branch_id }).then(({ data }) => {
+        if (data?.success && data.exists && data.opening_date) {
+          setExistingOpening({
+            amount: Number(data.amount || 0),
+            remaining_amount: Number(data.remaining_amount || 0),
+            opening_date: data.opening_date,
+            notes: data.notes || null,
+          });
+        }
+      });
+    }
+  };
 
   const save = async () => {
     if (!form.name) { show(t('required'), 'error'); return; }
-    const payload = { ...form, branch_id: branchFilter || form.branch_id || null };
+    const targetBranchId = branchFilter || form.branch_id || null;
+    if (canManageOpening && Number(openingAmount) > 0 && !targetBranchId) {
+      show(lang === 'ar' ? 'اختر الفرع قبل تسجيل الرصيد الافتتاحي' : 'Select a branch before setting the opening balance', 'error');
+      return;
+    }
+    const payload = { ...form, branch_id: targetBranchId };
+    let supplierId = editing?.id || '';
     if (editing) {
       const { error } = await supabase.from('suppliers').update(payload).eq('id', editing.id);
       if (error) { show(error.message, 'error'); return; }
       await logAudit('update', 'suppliers', editing.id);
     } else {
-      const { error } = await supabase.from('suppliers').insert(payload);
+      const { data, error } = await supabase.from('suppliers').insert(payload).select('id').single();
       if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'suppliers');
+      supplierId = data?.id || '';
+      await logAudit('create', 'suppliers', supplierId || undefined);
     }
+
+    if (canManageOpening && !existingOpening && Number(openingAmount) > 0 && supplierId && targetBranchId) {
+      const { data, error } = await api.accounting.setSupplierOpeningBalance({
+        p_supplier_id: supplierId,
+        p_branch_id: targetBranchId,
+        p_amount: Number(openingAmount),
+        p_opening_date: openingDate,
+        p_notes: openingNotes || null,
+      });
+      if (error || !data?.success) {
+        show(
+          error?.message || data?.detail || data?.error || (lang === 'ar' ? 'تم حفظ المورد ولكن تعذر تسجيل الرصيد الافتتاحي' : 'Supplier saved, but opening balance could not be posted'),
+          'error',
+        );
+        reloadSuppliers();
+        return;
+      }
+    }
+
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadSuppliers();
@@ -220,6 +279,50 @@ export function SuppliersPage() {
               <option value="">--</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
+          )}
+          {canManageOpening && (
+            <div className="rounded-xl border border-ui-border bg-ui-surface-soft p-4 space-y-3" data-testid="supplier-opening-balance-section">
+              <div>
+                <div className="font-semibold text-ui-text">{lang === 'ar' ? 'الرصيد الافتتاحي للمورد' : 'Supplier opening balance'}</div>
+                <div className="text-xs text-ui-muted">
+                  {lang === 'ar'
+                    ? 'صلاحية مستقلة. يُنشئ قيدًا محاسبيًا فعليًا ويظهر في كشف المورد وتقادم الدائنين.'
+                    : 'Separate permission. Posts a real journal entry and appears in the supplier statement and AP aging.'}
+                </div>
+              </div>
+              {existingOpening ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 text-sm">
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'الرصيد المسجل' : 'Recorded'}:</span> <b>{formatCurrency(existingOpening.amount, currency, lang)}</b></div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'المتبقي' : 'Remaining'}:</span> <b>{formatCurrency(existingOpening.remaining_amount, currency, lang)}</b></div>
+                  <div><span className="text-ui-muted">{lang === 'ar' ? 'التاريخ' : 'Date'}:</span> <b>{existingOpening.opening_date}</b></div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Input
+                      label={lang === 'ar' ? 'قيمة الرصيد الافتتاحي' : 'Opening balance amount'}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={openingAmount}
+                      onChange={(e) => setOpeningAmount(e.target.value)}
+                    />
+                    <Input
+                      label={lang === 'ar' ? 'تاريخ الرصيد الافتتاحي' : 'Opening balance date'}
+                      type="date"
+                      value={openingDate}
+                      onChange={(e) => setOpeningDate(e.target.value)}
+                    />
+                  </div>
+                  <Textarea
+                    label={lang === 'ar' ? 'ملاحظة الرصيد الافتتاحي' : 'Opening balance note'}
+                    value={openingNotes}
+                    onChange={(e) => setOpeningNotes(e.target.value)}
+                    rows={2}
+                  />
+                </>
+              )}
+            </div>
           )}
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2">
