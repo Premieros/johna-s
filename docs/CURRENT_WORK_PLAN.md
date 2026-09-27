@@ -359,3 +359,15 @@ User explicitly approved a renderer-only redesign of customer and kitchen receip
 - No main merge and no Production migration without Full Verify green + approval.
 
 - Added `daily_closing_range`: open date-range day closing report with one row per business day and payment-method split (cash/card/transfer/credit/legacy/other), sourced from `get_day_closing_report` so monthly/period totals reconcile to day closing.
+
+
+## 2026-09-27 — Split payment order-status repair
+
+- Branch: `development/fix-split-payment-status-20260927`.
+- Production read-only audit proved fully paid split sales can leave the linked order at `payment_status='unpaid'`.
+- Root cause: `process_sale_split` finalizes split tender accounting but omits the linked-order payment-state reconciliation performed by normal `process_sale`.
+- Repair is isolated to split settlement plus deterministic historical split-state reconciliation.
+- Regression coverage asserts linked split payment ends `completed + paid` without a second inventory deduction.
+- Printing / Print Agent / routing / KDS / `send_to_kitchen` remain frozen and untouched.
+- No Production migration/data write before exact-head Full Verify Green + explicit approval.
+- Detailed log: `docs/SPLIT_PAYMENT_STATUS_REPAIR_2026-09-27.md`.
