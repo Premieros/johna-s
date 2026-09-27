@@ -41,10 +41,12 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
     expect(migration).toContain('FROM public.journal_entry_lines l');
     expect(migration).not.toContain('INSERT INTO public.treasury_transactions');
     expect(migration).not.toContain('INSERT INTO public.journal_entries');
-    expect(treasuryPage).toContain('ملخص الخزنة اليومي');
-    expect(treasuryPage).toContain("isAr ? 'رصيد أول' : 'Opening'");
-    expect(treasuryPage).toContain("isAr ? 'رصيد آخر' : 'Closing'");
-    expect(treasuryPage).toContain("isAr ? 'تقرير اليوم' : 'Day report'");
+    expect(treasuryPage).toContain('يومية الخزينة');
+    expect(treasuryPage).toContain("isAr ? 'نقدي مرحّل' : 'Cash carried'");
+    expect(treasuryPage).toContain("isAr ? 'بنك مرحّل' : 'Bank carried'");
+    expect(treasuryPage).toContain("isAr ? 'إجمالي آخر اليوم' : 'Day closing total'");
+    expect(treasuryPage).toContain("isAr ? 'تفاصيل' : 'Details'");
+    expect(treasuryPage).toContain("isAr ? 'تقرير' : 'Report'");
   });
 
   it('shows close balances, post-close movement, and the reconciled balance after movement', () => {
@@ -70,16 +72,20 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
 describe('treasury daily single-row UI contract', () => {
   it('renders one compact financial row per business day with the approved columns', () => {
     for (const label of [
-      'رصيد أول',
-      'المبيعات',
-      'الآجل',
-      'المصروفات',
-      'المشتريات',
-      'صافي اليوم',
-      'كاش',
-      'بنك',
-      'رصيد آخر',
-      'تقرير اليوم',
+      'نقدي مرحّل',
+      'بنك مرحّل',
+      'بيع نقدي',
+      'بيع بنك/كارت',
+      'آجل',
+      'مصروفات',
+      'مشتريات',
+      'تحويل وارد',
+      'تحويل صادر',
+      'رصيد نقدي فعلي',
+      'رصيد بنك فعلي',
+      'إجمالي آخر اليوم',
+      'تفاصيل',
+      'تقرير',
     ]) {
       expect(treasuryPage).toContain(label);
     }
@@ -141,5 +147,59 @@ describe('treasury UUID aggregate regression', () => {
   it('never applies min directly to UUID reference ids', () => {
     expect(uuidFixMigration).toContain('min(a.reference_id::text)::uuid AS reference_id');
     expect(uuidFixMigration).not.toContain('min(a.reference_id) AS reference_id');
+  });
+});
+
+
+describe('treasury transfer visibility and main bank contract', () => {
+  const transferMigration = fs.readFileSync(
+    'supabase/migrations/20260927233000_treasury_transfer_visibility_main_bank.sql',
+    'utf8',
+  );
+
+  it('creates an organization-scoped main bank without touching branch bank accounts', () => {
+    expect(transferMigration).toContain("'1030', 'البنك الرئيسي', 'Main Bank'");
+    expect(transferMigration).toContain("'bank', 'البنك الرئيسي', 'organization', 'bank'");
+    expect(transferMigration).toContain('uq_treasury_main_bank_org');
+  });
+
+  it('exposes incoming and outgoing treasury transfers per business day', () => {
+    expect(transferMigration).toContain("'transfer_in'");
+    expect(transferMigration).toContain("'transfer_out'");
+    expect(treasuryPage).toContain("isAr ? 'تحويل وارد' : 'Transfer in'");
+    expect(treasuryPage).toContain("isAr ? 'تحويل صادر' : 'Transfer out'");
+  });
+
+  it('shows all organization treasury accounts in the main treasury view', () => {
+    expect(treasuryPage).toContain("balances.filter((b) => b.scope === 'organization')");
+    expect(treasuryPage).toContain('mainTreasuryAccounts');
+    expect(treasuryPage).toContain("from_account_id.in.(");
+    expect(treasuryPage).toContain("to_account_id.in.(");
+  });
+});
+
+
+describe('treasury daily journal configurable columns', () => {
+  it('shows carried cash/bank, actual cash/bank and lets the user choose visible columns', () => {
+    expect(treasuryPage).toContain("isAr ? 'يومية الخزينة' : 'Treasury Daily Journal'");
+    expect(treasuryPage).toContain("isAr ? 'نقدي مرحّل' : 'Cash carried'");
+    expect(treasuryPage).toContain("isAr ? 'بنك مرحّل' : 'Bank carried'");
+    expect(treasuryPage).toContain("isAr ? 'بيع نقدي' : 'Cash sales'");
+    expect(treasuryPage).toContain("isAr ? 'بيع بنك/كارت' : 'Bank/Card sales'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد بنك فعلي' : 'Actual bank balance'");
+    expect(treasuryPage).toContain("isAr ? 'تحديد الأعمدة' : 'Choose columns'");
+    expect(treasuryPage).toContain("treasury.dailyJournal.columns.v1");
+  });
+});
+
+
+describe('treasury journal totals and inline day detail', () => {
+  it('shows period totals and inline day breakdown without extra accounting writes', () => {
+    expect(treasuryPage).toContain("isAr ? 'إجمالي بيع نقدي' : 'Cash sales total'");
+    expect(treasuryPage).toContain("isAr ? 'إجمالي بيع بنك/كارت' : 'Bank/Card sales total'");
+    expect(treasuryPage).toContain("isAr ? 'تفاصيل يوم' : 'Day details'");
+    expect(treasuryPage).toContain("isAr ? 'البيع والتحصيل' : 'Sales & collection'");
+    expect(treasuryPage).toContain("isAr ? 'المنصرف والتحويلات' : 'Outflows & transfers'");
   });
 });

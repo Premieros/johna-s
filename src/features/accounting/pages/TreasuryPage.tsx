@@ -50,6 +50,8 @@ interface TreasuryDayCloseRow {
   net_sales: number;
   expenses: number;
   cash_purchases: number;
+  transfer_in: number;
+  transfer_out: number;
   opening_balance: number;
   cash_opening_balance: number;
   bank_opening_balance: number;
@@ -86,6 +88,21 @@ export function TreasuryPage() {
   const [adminBranchFilter, setAdminBranchFilter] = useState('');
   const [dayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
   const [treasuryView, setTreasuryView] = useState<TreasuryScopeView>('branch');
+  const dailyColumnOptions = [
+    'business_date','cash_opening_balance','bank_opening_balance','cash_sales','bank_sales','credit_sales','cash_purchases','expenses','transfer_in','transfer_out','cash_balance_after_close','bank_balance_after_close','closing_balance','report',
+  ] as const;
+  type DailyColumnKey = typeof dailyColumnOptions[number];
+  const dailyColumnStorageKey = 'treasury.dailyJournal.columns.v1';
+  const [visibleDailyColumns, setVisibleDailyColumns] = useState<DailyColumnKey[]>(() => {
+    try {
+      const raw = window.localStorage.getItem(dailyColumnStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed.filter((key): key is DailyColumnKey => dailyColumnOptions.includes(key)) : [...dailyColumnOptions];
+    } catch {
+      return [...dailyColumnOptions];
+    }
+  });
+  const [selectedDay, setSelectedDay] = useState<TreasuryDailyDisplayRow | null>(null);
 
   useEffect(() => {
     if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
@@ -95,12 +112,17 @@ export function TreasuryPage() {
     setAdminBranchFilter(preferred);
   }, [user?.role, user?.branch_id, branches, adminBranchFilter]);
 
+  useEffect(() => {
+    window.localStorage.setItem(dailyColumnStorageKey, JSON.stringify(visibleDailyColumns));
+  }, [visibleDailyColumns]);
+
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
-  const mainTreasury = balances.find((b) => b.scope === 'organization' && b.kind === 'main_cash');
-  const mainTreasuryBalance = Number(mainTreasury?.balance || 0);
+  const mainTreasuryAccounts = balances.filter((b) => b.scope === 'organization');
+  const mainTreasuryBalance = mainTreasuryAccounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  const mainAccountIds = mainTreasuryAccounts.map((account) => account.id);
   const transactionScope = treasuryView === 'main'
-    ? (mainTreasury?.id ? `from_account_id.eq.${mainTreasury.id},to_account_id.eq.${mainTreasury.id}` : undefined)
+    ? (mainAccountIds.length > 0 ? `from_account_id.in.(${mainAccountIds.join(',')}),to_account_id.in.(${mainAccountIds.join(',')})` : undefined)
     : (effectiveBranchFilter
       ? `branch_id.eq.${effectiveBranchFilter},from_branch_id.eq.${effectiveBranchFilter},to_branch_id.eq.${effectiveBranchFilter}`
       : undefined);
@@ -111,7 +133,7 @@ export function TreasuryPage() {
     or: transactionScope,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
-    enabled: treasuryView === 'main' ? !!mainTreasury?.id : !!effectiveBranchFilter,
+    enabled: treasuryView === 'main' ? mainAccountIds.length > 0 : !!effectiveBranchFilter,
   });
 
   const [modal, setModal] = useState<ModalType>(null);
@@ -221,8 +243,24 @@ export function TreasuryPage() {
     day_net: Number(row.day_net || 0),
     closing_balance: Number(row.closing_balance || 0),
   })), [dayCloses]);
+  const periodTotals = useMemo(() => {
+    const sum = (key: keyof TreasuryDailyDisplayRow) => dailyRows.reduce((total, row) => total + Number(row[key] || 0), 0);
+    return {
+      cash_sales: sum('cash_sales'),
+      bank_sales: sum('bank_sales'),
+      credit_sales: sum('credit_sales'),
+      expenses: sum('expenses'),
+      cash_purchases: sum('cash_purchases'),
+      transfer_in: sum('transfer_in'),
+      transfer_out: sum('transfer_out'),
+      latest_cash: dailyRows[0]?.cash_balance_after_close || 0,
+      latest_bank: dailyRows[0]?.bank_balance_after_close || 0,
+      latest_total: dailyRows[0]?.closing_balance || 0,
+    };
+  }, [dailyRows]);
+
   const displayedBalances = treasuryView === 'main'
-    ? (mainTreasury ? [mainTreasury] : [])
+    ? mainTreasuryAccounts
     : localAccounts;
   const accountLabel = (a: TreasurySource) => {
     if (a.scope === 'organization') return isAr ? 'الخزنة الرئيسية' : 'Main Treasury';
@@ -249,23 +287,42 @@ export function TreasuryPage() {
     { key: 'to', header: t('toAccount'), render: (tx) => tx.to_account?.account_name || '-' },
     { key: 'amount', header: t('amount'), render: (tx) => <span className="font-semibold text-ui-text">{formatCurrency(tx.amount, currency, lang)}</span> },
   ];
-  const dailyColumns: Column<TreasuryDailyDisplayRow>[] = [
-    { key: 'business_date', header: isAr ? 'التاريخ' : 'Date', render: (row) => <span className="font-bold text-ui-text">{row.business_date}</span> },
-    { key: 'opening_balance', header: isAr ? 'رصيد أول' : 'Opening', render: (row) => formatCurrency(row.opening_balance, currency, lang) },
-    { key: 'net_sales', header: isAr ? 'المبيعات' : 'Sales', render: (row) => formatCurrency(row.net_sales, currency, lang) },
-    { key: 'credit_sales', header: isAr ? 'الآجل' : 'Credit', render: (row) => formatCurrency(row.credit_sales, currency, lang) },
-    { key: 'expenses', header: isAr ? 'المصروفات' : 'Expenses', render: (row) => formatCurrency(row.expenses, currency, lang) },
-    { key: 'cash_purchases', header: isAr ? 'المشتريات' : 'Purchases', render: (row) => formatCurrency(row.cash_purchases, currency, lang) },
-    { key: 'day_net', header: isAr ? 'صافي اليوم' : 'Day net', render: (row) => <span className="font-black text-ui-text">{formatCurrency(row.day_net, currency, lang)}</span> },
-    { key: 'cash_sales', header: isAr ? 'كاش' : 'Cash', render: (row) => formatCurrency(row.cash_sales, currency, lang) },
-    { key: 'bank_sales', header: isAr ? 'بنك' : 'Bank', render: (row) => formatCurrency(row.bank_sales, currency, lang) },
-    { key: 'closing_balance', header: isAr ? 'رصيد آخر' : 'Closing', render: (row) => <span className={`font-black ${row.is_latest ? 'text-ui-primary' : 'text-ui-text'}`}>{formatCurrency(row.closing_balance, currency, lang)}</span> },
-    { key: 'report', header: isAr ? 'تقرير اليوم' : 'Day report', render: (row) => (
-      <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
-        <FileText className="h-4 w-4" /> {isAr ? 'تقرير اليوم' : 'Day report'}
-      </Button>
+  const allDailyColumns: Record<DailyColumnKey, Column<TreasuryDailyDisplayRow>> = {
+    business_date: { key: 'business_date', header: isAr ? 'التاريخ' : 'Date', render: (row) => <span className="font-bold text-ui-text">{row.business_date}</span> },
+    cash_opening_balance: { key: 'cash_opening_balance', header: isAr ? 'نقدي مرحّل' : 'Cash carried', render: (row) => formatCurrency(row.cash_opening_balance, currency, lang) },
+    bank_opening_balance: { key: 'bank_opening_balance', header: isAr ? 'بنك مرحّل' : 'Bank carried', render: (row) => formatCurrency(row.bank_opening_balance, currency, lang) },
+    cash_sales: { key: 'cash_sales', header: isAr ? 'بيع نقدي' : 'Cash sales', render: (row) => formatCurrency(row.cash_sales, currency, lang) },
+    bank_sales: { key: 'bank_sales', header: isAr ? 'بيع بنك/كارت' : 'Bank/Card sales', render: (row) => formatCurrency(row.bank_sales, currency, lang) },
+    credit_sales: { key: 'credit_sales', header: isAr ? 'آجل' : 'Credit', render: (row) => formatCurrency(row.credit_sales, currency, lang) },
+    cash_purchases: { key: 'cash_purchases', header: isAr ? 'مشتريات' : 'Purchases', render: (row) => formatCurrency(row.cash_purchases, currency, lang) },
+    expenses: { key: 'expenses', header: isAr ? 'مصروفات' : 'Expenses', render: (row) => formatCurrency(row.expenses, currency, lang) },
+    transfer_in: { key: 'transfer_in', header: isAr ? 'تحويل وارد' : 'Transfer in', render: (row) => formatCurrency(row.transfer_in, currency, lang) },
+    transfer_out: { key: 'transfer_out', header: isAr ? 'تحويل صادر' : 'Transfer out', render: (row) => formatCurrency(row.transfer_out, currency, lang) },
+    cash_balance_after_close: { key: 'cash_balance_after_close', header: isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.cash_balance_after_close, currency, lang)}</span> },
+    bank_balance_after_close: { key: 'bank_balance_after_close', header: isAr ? 'رصيد بنك فعلي' : 'Actual bank balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.bank_balance_after_close, currency, lang)}</span> },
+    closing_balance: { key: 'closing_balance', header: isAr ? 'إجمالي آخر اليوم' : 'Day closing total', render: (row) => <span className={`font-black ${row.is_latest ? 'text-ui-primary' : 'text-ui-text'}`}>{formatCurrency(row.closing_balance, currency, lang)}</span> },
+    report: { key: 'report', header: isAr ? 'اليوم' : 'Day', render: (row) => (
+      <div className="flex flex-wrap gap-1">
+        <Button size="sm" variant="outline" onClick={() => setSelectedDay(row)}>
+          {isAr ? 'تفاصيل' : 'Details'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
+          <FileText className="h-4 w-4" /> {isAr ? 'تقرير' : 'Report'}
+        </Button>
+      </div>
     ) },
-  ];
+  };
+  const dailyColumns = visibleDailyColumns.map((key) => allDailyColumns[key]);
+
+  const toggleDailyColumn = (key: DailyColumnKey) => {
+    setVisibleDailyColumns((current) => {
+      if (current.includes(key)) {
+        if (key === 'business_date') return current;
+        return current.filter((item) => item !== key);
+      }
+      return dailyColumnOptions.filter((item) => item === key || current.includes(item));
+    });
+  };
 
   return (
     <DesignSurface testId="treasury-page">
@@ -323,13 +380,80 @@ export function TreasuryPage() {
       </DesignPanel>
 
       {treasuryView === 'branch' && (
-        <DesignPanel title={isAr ? 'ملخص الخزنة اليومي' : 'Daily treasury summary'} testId="treasury-day-close-reconciliation-panel">
+        <DesignPanel title={isAr ? 'يومية الخزينة' : 'Treasury Daily Journal'} testId="treasury-day-close-reconciliation-panel">
           <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
             {isAr
-              ? 'تسلسل يومي متصل: أول تاريخ يبدأ من رصيد افتتاح الحساب، ورصيد آخر كل يوم يصبح رصيد أول اليوم التالي. الترحيلات التاريخية تُعرض في تاريخها المحاسبي، وآخر رصيد يطابق خزنة الفرع الفعلية.'
-              : 'Continuous daily sequence: the first date starts from the account opening balance, and each day closing becomes the next day opening. Historical imports use their accounting date and the latest closing matches the live branch treasury.'}
+              ? 'يومية خزينة متصلة: النقدي والبنك المرحّل يساويان رصيد آخر اليوم السابق، وتظهر المبيعات والمصروفات والمشتريات والتحويلات حتى الوصول لرصيد نقدي وبنك فعلي آخر اليوم.'
+              : 'Continuous treasury journal: carried cash and bank equal the prior day closing balances, with sales, expenses, purchases, and transfers explaining the actual cash and bank closing balances.'}
           </div>
+          <details className="mb-3 rounded-lg border border-ui-border bg-ui-surface p-3">
+            <summary className="cursor-pointer font-semibold text-ui-text">{isAr ? 'تحديد الأعمدة' : 'Choose columns'}</summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {dailyColumnOptions.map((key) => (
+                <label key={key} className="inline-flex items-center gap-2 rounded-md border border-ui-border px-2 py-1 text-xs text-ui-text">
+                  <input
+                    type="checkbox"
+                    checked={visibleDailyColumns.includes(key)}
+                    disabled={key === 'business_date'}
+                    onChange={() => toggleDailyColumn(key)}
+                  />
+                  <span>{String(allDailyColumns[key].header)}</span>
+                </label>
+              ))}
+            </div>
+          </details>
           <DataTable columns={dailyColumns} data={dailyRows} loading={loading} error={txError} emptyMessage={t('noData')} />
+
+          {dailyRows.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي بيع نقدي' : 'Cash sales total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.cash_sales, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي بيع بنك/كارت' : 'Bank/Card sales total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.bank_sales, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي المصروفات' : 'Expenses total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.expenses, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي المشتريات' : 'Purchases total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.cash_purchases, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'تحويلات واردة' : 'Transfers in'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.transfer_in, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'تحويلات صادرة' : 'Transfers out'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.transfer_out, currency, lang)}</div></div>
+            </div>
+          )}
+
+          {selectedDay && (
+            <div className="mt-4 rounded-xl border border-ui-border bg-ui-page-alt p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs text-ui-muted">{isAr ? 'تفاصيل يوم' : 'Day details'}</div>
+                  <div className="text-lg font-black text-ui-text">{selectedDay.business_date}</div>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => setSelectedDay(null)}>{isAr ? 'إغلاق التفاصيل' : 'Close details'}</Button>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
+                  <div className="mb-2 font-bold text-ui-text">{isAr ? 'الأرصدة' : 'Balances'}</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'نقدي مرحّل' : 'Cash carried'}</span><b>{formatCurrency(selectedDay.cash_opening_balance, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'بنك مرحّل' : 'Bank carried'}</span><b>{formatCurrency(selectedDay.bank_opening_balance, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد نقدي فعلي' : 'Actual cash'}</span><b>{formatCurrency(selectedDay.cash_balance_after_close, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد بنك فعلي' : 'Actual bank'}</span><b>{formatCurrency(selectedDay.bank_balance_after_close, currency, lang)}</b></div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
+                  <div className="mb-2 font-bold text-ui-text">{isAr ? 'البيع والتحصيل' : 'Sales & collection'}</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'بيع نقدي' : 'Cash sales'}</span><b>{formatCurrency(selectedDay.cash_sales, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'بيع بنك/كارت' : 'Bank/Card sales'}</span><b>{formatCurrency(selectedDay.bank_sales, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'آجل' : 'Credit'}</span><b>{formatCurrency(selectedDay.credit_sales, currency, lang)}</b></div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
+                  <div className="mb-2 font-bold text-ui-text">{isAr ? 'المنصرف والتحويلات' : 'Outflows & transfers'}</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'مصروفات' : 'Expenses'}</span><b>{formatCurrency(selectedDay.expenses, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'مشتريات' : 'Purchases'}</span><b>{formatCurrency(selectedDay.cash_purchases, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'تحويل وارد' : 'Transfer in'}</span><b>{formatCurrency(selectedDay.transfer_in, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'تحويل صادر' : 'Transfer out'}</span><b>{formatCurrency(selectedDay.transfer_out, currency, lang)}</b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </DesignPanel>
       )}
 
