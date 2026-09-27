@@ -49,6 +49,8 @@ State: **BLOCKED**
 - No backend/RLS/Production role-data changes. Printing, Print Agent, routing, KDS, and send-to-kitchen transport remain untouched.
 
 ## Verification ledger
+- Verify #3033 / 36304129860 on `90a867b3bd5d76e01691d9ee8718f901e6a45641`: mandatory worklog ✅, Supabase identity ✅, API contract ✅; lint failed on one new `no-explicit-any` in requester-name mapping. Typecheck/unit/build/DB/browser were skipped after lint failure. The runtime behavior was not implicated.
+- Fixed only that lint issue by introducing a typed `RequesterDisplayRow`; no behavior change.
 - Previous stale PR #383:
   - worklog gate repaired.
   - lint/typecheck/app+test typecheck passed.
