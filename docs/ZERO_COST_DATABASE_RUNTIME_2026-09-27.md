@@ -68,6 +68,10 @@ Write mode: **SEQUENTIAL_ONLY**
 - No Production write performed.
 - Draft PR #391 opened from the isolated branch.
 - No application/runtime change committed yet.
+- Replaced 2-second approval polling in `TransferItemModal` with an ID-filtered `approval_requests` Realtime UPDATE subscription plus one post-subscribe status read.
+- Replaced 2-second approval polling in `TransferOrderModal` with the same event-driven pattern.
+- Added event-only recovery reads on browser `online` and visible-tab return; there is no periodic fallback timer.
+- Preserved the existing authoritative `performOrderAction` retry-after-approval behavior and terminal-state handling.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
@@ -78,7 +82,7 @@ Write mode: **SEQUENTIAL_ONLY**
 - Existing performance branches reconciled as stale/fully-behind current main.
 - Production statistics/read-only SQL audit completed.
 - Performance advisor audit completed read-only; no advisor-driven DDL is authorized in this stage.
-- Focused tests: pending.
+- Focused tests: pending after Stage 1 source-contract coverage.
 - Full Verify: pending.
 - Production runtime before/after measurement: pending implementation.
 
