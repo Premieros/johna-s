@@ -77,6 +77,12 @@ Write mode: **SEQUENTIAL_ONLY**
 - Backend/RLS/RPC authorization remains authoritative if UI role metadata is temporarily stale.
 - Updated `rolesRefreshStabilityContract.test.ts` to require event-driven zero-idle role refresh.
 - Added `zeroCostIdlePollingContract.test.ts` covering both approval flows, recovery events, absence of timers, and frozen print/kitchen exclusions.
+- Stage 2 implemented a single active-shift read for the POS workspace:
+  - `PosWorkspacePage` remains the authoritative workspace `getActiveShift` caller.
+  - `ProductBrowser` now receives `shiftChecked` and `shiftOpen` from the parent instead of issuing a second RPC.
+  - add-to-cart shift blocking semantics are unchanged.
+  - `payment.ts` authoritative `getActiveShift` fallback for missing `p_shift_id` is unchanged.
+- Added `posSingleShiftReadContract.test.ts` to lock the parent-owned shift read, preserve settlement validation, and exclude frozen printing/kitchen paths.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
@@ -122,7 +128,7 @@ State: **BLOCKED**
    - do not cache or weaken shift validation;
    - preserve payment service shift validation and all shift mutation behavior;
    - add a contract proving `ProductBrowser` cannot issue its own `getActiveShift` call.
-3. Run exact-head verification before considering catalog/session-cache work.
+3. Run exact-head verification for Stage 2 before considering catalog/session-cache work.
 4. Do not touch printing, Print Agent, routing, KDS, kitchen transport, or Production.
 
 ## Mandatory update protocol
