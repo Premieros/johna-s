@@ -19,6 +19,7 @@ export const APP_ROUTES = {
   products: '/products',
   pricing: '/pricing',
   productModifiers: '/product-modifiers',
+  productModifierOptions: '/product-modifier-options',
   categories: '/categories',
   components: '/components',
   inventory: '/inventory',
