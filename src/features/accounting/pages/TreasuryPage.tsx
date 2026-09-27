@@ -207,9 +207,6 @@ export function TreasuryPage() {
     reloadTx();
   };
 
-  const visibleBalances = balances.filter(
-    (b) => b.scope === 'organization' || b.branch_id === effectiveBranchFilter,
-  );
   const localAccounts = accounts.filter(
     (a) => a.scope === 'branch' && a.branch_id === effectiveBranchFilter,
   );
