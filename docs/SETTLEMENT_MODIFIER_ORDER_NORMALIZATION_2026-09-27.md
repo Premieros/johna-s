@@ -5,6 +5,7 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/settlement-modifier-order-normalization-20260927`
 Current PR: `#390`
 Base: `main@27b89bad891187b4447e7a8ec214c25439c5dc01`
+Last updated: 2026-09-27 Africa/Cairo
 
 ## Work status
 
@@ -68,9 +69,9 @@ No Production migration is authorized yet.
 
 ## Next action
 
-1. Add a new forward-only migration that reasserts the corrected canonical modifier ordering.
-2. Add regression coverage proving preview and payload normalize modifier IDs identically and that both normal/split settlement retain the shared boundary.
-3. Run focused verification then exact-head Full Verify.
+1. Run exact-head Full Verify on the current PR head.
+2. Fix only real regression failures, if any.
+3. Reconfirm latest main and PR mergeability.
 4. Stop before applying the migration to Production and request explicit approval.
 
 ## Mandatory update protocol
