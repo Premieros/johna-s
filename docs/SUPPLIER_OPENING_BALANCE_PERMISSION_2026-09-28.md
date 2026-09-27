@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/supplier-opening-balance-permission-20260928`
 Current PR: `#0`
-Last updated: 2026-09-28 00:20 Cairo
+Last updated: 2026-09-28 00:30 Cairo
 
 ## Work status
 State: **BLOCKED**
@@ -32,16 +32,21 @@ Implementation is in progress. Merge and Production are blocked until exact-head
 - A dedicated opening-balance record and posting path are required.
 
 ## Change ledger
-Pending:
-- new permission `suppliers.opening_balance.manage`;
-- dedicated supplier opening-balance table/RPC with branch + permission enforcement;
-- real AP journal posting;
-- AP Aging + supplier statement inclusion;
-- supplier payment allocation support for opening debt;
-- supplier form field visible only with the new permission.
+Implemented:
+- new standalone permission `suppliers.opening_balance.manage`, dependent on `suppliers.view` and classified sensitive;
+- dedicated `supplier_opening_balances` table with read RLS and write-only controlled RPC;
+- `set_supplier_opening_balance` validates auth, branch access, permission, Work Authorization, positive amount, and non-future opening date;
+- opening balance posts a real balanced journal: AP credit vs Opening Balance Equity (3200) debit;
+- balance sheet includes opening-equity so the new journal does not make it appear unbalanced;
+- AP Aging + Aging Summary include outstanding supplier opening debt;
+- supplier statement includes opening amount and an explicit opening-balance event;
+- generic supplier payment from treasury settles opening debt first, then oldest purchases;
+- supplier form exposes amount/date/note only when the user has the new permission; an existing opening balance becomes read-only;
+- frontend API and schema/API contracts updated;
+- unit contract added.
 
 ## Verification ledger
-Pending.
+- Implementation complete; exact-head Full Verify pending.
 
 ## Production gate
 State: **BLOCKED**
@@ -49,7 +54,7 @@ State: **BLOCKED**
 - Production apply requires explicit user approval after verification.
 
 ## Next action
-Implement the permission, canonical accounting path, reports, supplier UI, and regression tests on this branch.
+Open the PR, bind it to the work plan, and run exact-head Full Verify. Fix only failures attributable to this branch.
 
 ## Mandatory update protocol
 - Re-read branch HEAD before repository writes.
