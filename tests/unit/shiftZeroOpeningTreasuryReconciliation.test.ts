@@ -83,7 +83,7 @@ describe('treasury daily single-row UI contract', () => {
     ]) {
       expect(treasuryPage).toContain(label);
     }
-    expect(treasuryPage).toContain('dayCloses.map((row, index)');
+    expect(treasuryPage).toContain('dayCloses.map((row)');
     expect(treasuryPage).not.toContain('row.movement_details.map((movement)');
   });
 
