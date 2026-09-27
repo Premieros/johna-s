@@ -9,7 +9,7 @@ Last updated: 2026-09-27 Africa/Cairo
 
 ## Work status
 
-State: **AUDIT COMPLETE / IMPLEMENTATION NOT STARTED**
+State: **PHASE 0 COMPLETE / PHASE 1 READY**
 
 Goal: align all current user-facing catalog/component flows with the post-PR #388 model so there is one coherent operational concept:
 - Products
@@ -88,6 +88,8 @@ Internal compatibility names such as `manufactured`, `recipes`, and legacy RPCs 
 7. `src/features/import-export/types.ts` / `validation-engine.ts`
    - Still model `recipes` and `production` as active import entities.
    - Validation messages auto-create "manufactured" products.
+   - `requiredPermission` in entity configs is not enforced by `ImportExportCenterPage`; the page route is only guarded by `settings.manage`.
+   - config uses nonexistent `manufacturing.view`, proving this permission metadata is stale and not an active authorization boundary.
 
 ### C — High: navigation / permissions / guided workflows
 
@@ -145,9 +147,10 @@ Internal compatibility names such as `manufactured`, `recipes`, and legacy RPCs 
     - Requires verification against current canonical cost RPC before changing; could be a valid compatibility read rather than a conflict.
 
 19. `src/features/trade/services/shiftClosingReport.ts`
-    - calculates raw-material consumption directly from `recipes/recipe_items`.
-    - This is a major correctness risk because current kitchen consumption authority is snapshot/ledger-based.
-    - Must be reconciled with the current canonical shift/day close logic before any UI-only cleanup.
+    - contains exported legacy `fetchShiftClosingDetails()` that reconstructs raw consumption from `recipes/recipe_items`.
+    - current live shift flows DO NOT consume this helper; `ShiftModal`, `ShiftsPage`, and automatic Z-print use `fetchShiftClosingReportServer()` from `shiftClosingFinancials.ts`.
+    - the live adapter gets ingredients from `getRawConsumptionCostBreakdown`, which is ledger/kitchen-send based.
+    - therefore this is dead legacy cleanup, not an active shift-report correctness defect.
 
 ### E — Medium: terminology and admin/demo surfaces
 
@@ -201,12 +204,12 @@ These are the likely source-of-truth contracts for the final aligned runtime and
 ## Risk ranking
 
 P0 — must resolve before calling the model aligned:
-- ProductSetupWizard direct recipe writes
-- ProductsPage multiple component sources
-- RecipesPage live independent CRUD
-- Import recipes direct writes
-- Import production orders
-- ShiftClosingReport recipe-based consumption calculation
+- RecipesPage live independent CRUD/workflow
+- ProductSetupWizard scattered direct recipe writes (retain direct-raw storage but centralize the mutation boundary)
+- ProductsPage must become the single product composition editor even if internal storage remains split by type
+- Import recipes direct writes must be aligned to product raw-component semantics
+- Production import must be retired/blocked
+- Import/export entity permissions must use current real permissions
 
 P1 — must align in same workstream:
 - routes/menu/landing behavior
@@ -223,6 +226,21 @@ P2 — cleanup only after usage proof:
 - legacy permission keys
 - demo seeder
 - unused guardProduction code
+
+## Phase 0 proof
+
+- Canonical product raw resolver: `resolve_product_raw_components(product,branch)`.
+- It intentionally combines:
+  - latest active `recipes/recipe_items` = direct product raw materials;
+  - `product_unit_links` + inventory-unit recipes = reusable component groups.
+- Resolver is read-only and does not manufacture/mutate inventory.
+- Kitchen send uses `resolve_kitchen_item_raw_components`, then snapshots and deducts flattened raw materials directly.
+- Modifier inventory-unit effects are flattened through `resolve_inventory_unit_raw_components`.
+- Therefore `recipes/recipe_items` is still a compatibility storage format for DIRECT product raws; it must not be deleted in this workstream.
+- The conflict is duplicate user-facing authoring/workflows and direct scattered writes, not the mere existence of the tables.
+- Live shift consumption is ledger/kitchen based through `getRawConsumptionCostBreakdown`; the recipe-based helper is unused legacy.
+- `sales_component_reconciliation` already compares current canonical components against authoritative ledger consumption and is aligned.
+- `create_product` is the canonical product-row + component-group-link creation RPC, but explicitly leaves direct raw recipe wiring outside its transaction. This is the remaining mutation-boundary gap to handle carefully.
 
 ## Implementation plan
 
@@ -276,6 +294,9 @@ P2 — cleanup only after usage proof:
 ## Verification ledger
 
 - Baseline audit: complete.
+- Canonical component authority proof: complete.
+- Live shift-consumption authority proof: complete — ledger/kitchen-send based.
+- Import/export permission audit: complete — per-entity requiredPermission is currently not enforced; legacy manufacturing.view metadata is stale.
 - Focused tests: not started.
 - Full Verify: not started.
 
