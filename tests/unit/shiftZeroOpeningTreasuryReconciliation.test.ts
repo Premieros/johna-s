@@ -45,7 +45,8 @@ describe('shift zero-opening and treasury reconciliation contract', () => {
     expect(treasuryPage).toContain("isAr ? 'نقدي مرحّل' : 'Cash carried'");
     expect(treasuryPage).toContain("isAr ? 'بنك مرحّل' : 'Bank carried'");
     expect(treasuryPage).toContain("isAr ? 'إجمالي آخر اليوم' : 'Day closing total'");
-    expect(treasuryPage).toContain("isAr ? 'تقرير اليوم' : 'Day report'");
+    expect(treasuryPage).toContain("isAr ? 'تفاصيل' : 'Details'");
+    expect(treasuryPage).toContain("isAr ? 'تقرير' : 'Report'");
   });
 
   it('shows close balances, post-close movement, and the reconciled balance after movement', () => {
@@ -83,7 +84,8 @@ describe('treasury daily single-row UI contract', () => {
       'رصيد نقدي فعلي',
       'رصيد بنك فعلي',
       'إجمالي آخر اليوم',
-      'تقرير اليوم',
+      'تفاصيل',
+      'تقرير',
     ]) {
       expect(treasuryPage).toContain(label);
     }
@@ -188,5 +190,16 @@ describe('treasury daily journal configurable columns', () => {
     expect(treasuryPage).toContain("isAr ? 'رصيد بنك فعلي' : 'Actual bank balance'");
     expect(treasuryPage).toContain("isAr ? 'تحديد الأعمدة' : 'Choose columns'");
     expect(treasuryPage).toContain("treasury.dailyJournal.columns.v1");
+  });
+});
+
+
+describe('treasury journal totals and inline day detail', () => {
+  it('shows period totals and inline day breakdown without extra accounting writes', () => {
+    expect(treasuryPage).toContain("isAr ? 'إجمالي بيع نقدي' : 'Cash sales total'");
+    expect(treasuryPage).toContain("isAr ? 'إجمالي بيع بنك/كارت' : 'Bank/Card sales total'");
+    expect(treasuryPage).toContain("isAr ? 'تفاصيل يوم' : 'Day details'");
+    expect(treasuryPage).toContain("isAr ? 'البيع والتحصيل' : 'Sales & collection'");
+    expect(treasuryPage).toContain("isAr ? 'المنصرف والتحويلات' : 'Outflows & transfers'");
   });
 });
