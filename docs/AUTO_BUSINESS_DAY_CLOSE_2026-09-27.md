@@ -60,17 +60,21 @@ Goal: execute business-day close automatically at each branch's configured fixed
 
 - Production baseline inspection: complete, read-only.
 - Focused tests: committed; CI pending.
-- Full Verify: pending.
+- Full Verify #3019 / run 36301459072 on head `ca6f60611092db3ad16f4a7f238f48bef7c5b67e`: FULL GREEN — worklog ✅ API contract ✅ lint ✅ typecheck ✅ unit ✅ build ✅ DB migrations/schema ✅ integration + security/RLS ✅ Browser Smoke ✅.
 
 ## Production gate
 
-State: **BLOCKED**
+State: **APPLIED_TO_PRODUCTION**
 
-Production migration is not yet applied. Exact-head Full Verify and explicit Production approval are required.
+Production migration `auto_business_day_close` applied successfully to `azzdesuowpdcoflmyezn` after Full Verify Green and explicit user approval.
+- `pg_cron` installed: 1.6.4.
+- Cron job `auto-business-day-close` is active on `* * * * *`.
+- Manual Production worker verification returned `success=true`, `closed_count=0`, `errors=[]`, proving the current 2026-09-27 day was not closed early.
+- Cleopatra overdue closes 2026-09-23, 2026-09-24, 2026-09-26 were backfilled separately before enabling the scheduler; current business day remains 2026-09-27.
 
 ## Next action
 
-Open Draft PR, bind the mandatory log to its PR number, and run exact-head Full Verify. No Production apply before Green.
+Run exact-head Verify after this documentation checkpoint, verify the first scheduled cron execution succeeds, then merge PR #386.
 
 ## Mandatory update protocol
 
