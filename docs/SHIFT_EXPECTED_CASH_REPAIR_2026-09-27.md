@@ -86,7 +86,10 @@ Separate observation:
   - first changed-integration attempt failed only because the test purchase timestamp was two minutes before the fixture shift opening timestamp, so the canonical helper correctly excluded it;
   - no migration/application failure occurred.
 - Test-fixture correction commit sets the test shift `opened_at` one hour earlier so the cash purchase is unambiguously inside the shift window.
-- Fresh exact-head Fast/Full Verify after the fixture correction: pending.
+- Fresh exact-head Fast Verify #1038 / run `36340716432`: DB path reached Green after the fixture correction (Fresh DB migrations/schema + changed integration test success); app path was still running at the time of the next checkpoint.
+- Full Verify #3134 / run `36340719193`: backend/lint/type/typecheck passed; unit suite failed only because an existing UI contract expected the legacy Arabic label substring `صافي رصيد الشفت الفعلي (يسمح بالسالب)`.
+- Compatibility correction commit preserves that exact protected substring and appends `- بعد العد`; no business logic, migration, print, KDS, inventory, permission or RLS behavior changed.
+- Fresh exact-head Fast/Full Verify after the label-contract correction: pending.
 - Unit counted-cash contract: pending final run.
 - Production change from this branch: none.
 
