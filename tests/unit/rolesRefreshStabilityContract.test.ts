@@ -17,11 +17,14 @@ describe('roles refresh stability contract', () => {
     expect(source).toContain('deleteRole');
   });
 
-  it('uses a bounded low-frequency refresh instead of unavailable roles realtime', () => {
-    expect(source).toContain('const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;');
-    expect(source).toContain('window.setInterval(() => {');
-    expect(source).toContain('}, ROLE_REFRESH_INTERVAL_MS);');
-    expect(source).toContain('window.clearInterval(timer);');
+  it('keeps roles zero-idle and refreshes only on meaningful recovery events', () => {
+    expect(source).not.toContain('ROLE_REFRESH_INTERVAL_MS');
+    expect(source).not.toContain('window.setInterval(');
+    expect(source).not.toContain('window.clearInterval(');
+    expect(source).toContain("window.addEventListener('focus', refreshIfStale)");
+    expect(source).toContain("window.addEventListener('online', refreshIfStale)");
+    expect(source).toContain("document.addEventListener('visibilitychange', refreshWhenVisible)");
+    expect(source).toContain('if (now - lastRefreshAt < 60_000) return;');
     expect(source).not.toContain("table: 'roles'");
     expect(source).not.toContain('supabase.removeChannel(channel)');
   });
