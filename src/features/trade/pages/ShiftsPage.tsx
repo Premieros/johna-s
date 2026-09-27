@@ -536,7 +536,7 @@ export function ShiftsPage() {
           </div>}
 
           <div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'thermal')}><Printer className="w-4 h-4" /> {isAr ? 'معاينة إيصال Z-Report' : 'Preview Thermal'}</Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'a4')}><FileText className="w-4 h-4" /> {isAr ? 'معاينة تقرير A4' : 'Preview A4'}</Button></div>
-          <Input type="number" step="0.01" label={isAr ? 'صافي رصيد الشفت الفعلي بعد العد (يسمح بالسالب) *' : t('actualAmount')} value={closeForm.actual_amount === '' ? '' : String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: e.target.value === '' ? '' : Number(e.target.value) })} />
+          <Input type="number" step="0.01" label={isAr ? 'صافي رصيد الشفت الفعلي (يسمح بالسالب) - بعد العد *' : t('actualAmount')} value={closeForm.actual_amount === '' ? '' : String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: e.target.value === '' ? '' : Number(e.target.value) })} />
           <Textarea label={isAr ? 'ملاحظات إغلاق الوردية' : t('notes')} value={closeForm.notes} onChange={(e) => setCloseForm({ ...closeForm, notes: e.target.value })} rows={2} />
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="secondary" disabled={closing} onClick={() => { setCloseTarget(null); setCloseBlock(null); }}>{t('cancel')}</Button>
