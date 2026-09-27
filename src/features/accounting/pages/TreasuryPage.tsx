@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Landmark, ArrowLeftRight, PiggyBank, HandCoins, Wallet, FileText, Eye } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Landmark, ArrowLeftRight, PiggyBank, HandCoins, Wallet, FileText } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -23,6 +23,7 @@ import type { TreasurySource, TreasuryTransaction } from '@/lib/types';
 import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '@/features/trade/services/dayClosingReport';
 
 type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
+type TreasuryScopeView = 'branch' | 'main';
 
 interface TreasuryMovementRow {
   journal_entry_id: string;
@@ -61,6 +62,12 @@ interface TreasuryDayCloseRow {
   movement_details: TreasuryMovementRow[];
 }
 
+interface TreasuryDailyDisplayRow extends TreasuryDayCloseRow {
+  opening_balance: number;
+  day_net: number;
+  closing_balance: number;
+}
+
 export function TreasuryPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
@@ -77,7 +84,7 @@ export function TreasuryPage() {
   const [loading, setLoading] = useState(true);
   const [adminBranchFilter, setAdminBranchFilter] = useState('');
   const [dayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
-  const [movementDetail, setMovementDetail] = useState<TreasuryMovementRow | null>(null);
+  const [treasuryView, setTreasuryView] = useState<TreasuryScopeView>('branch');
 
   useEffect(() => {
     if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
@@ -89,17 +96,19 @@ export function TreasuryPage() {
 
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
-  const transactionBranchScope = effectiveBranchFilter
-    ? `branch_id.eq.${effectiveBranchFilter},from_branch_id.eq.${effectiveBranchFilter},to_branch_id.eq.${effectiveBranchFilter}`
-    : undefined;
+  const transactionScope = treasuryView === 'main'
+    ? (mainTreasury?.id ? `from_account_id.eq.${mainTreasury.id},to_account_id.eq.${mainTreasury.id}` : undefined)
+    : (effectiveBranchFilter
+      ? `branch_id.eq.${effectiveBranchFilter},from_branch_id.eq.${effectiveBranchFilter},to_branch_id.eq.${effectiveBranchFilter}`
+      : undefined);
   const { rows: transactions, loading: txLoading, error: txError, total: txTotal, hasMore: txHasMore, loadMore: loadMoreTx, loadingMore: loadingMoreTx, refresh: reloadTx } = usePaginatedRows<TreasuryTransaction>({
     table: 'treasury_transactions',
     select: '*, from_account:treasury_accounts!from_account_id(account_name,branch_id,scope,kind), to_account:treasury_accounts!to_account_id(account_name,branch_id,scope,kind)',
     order: { column: 'created_at', ascending: false },
-    or: transactionBranchScope,
+    or: transactionScope,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
-    enabled: !!effectiveBranchFilter,
+    enabled: treasuryView === 'main' ? !!mainTreasury?.id : !!effectiveBranchFilter,
   });
 
   const [modal, setModal] = useState<ModalType>(null);
@@ -134,23 +143,6 @@ export function TreasuryPage() {
 
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
-  const movementLabel = (referenceType: string) => {
-    const labels: Record<string, { ar: string; en: string }> = {
-      sale: { ar: 'مبيعات', en: 'Sale' },
-      expense: { ar: 'مصروف', en: 'Expense' },
-      expense_reversal: { ar: 'عكس مصروف', en: 'Expense reversal' },
-      purchase: { ar: 'شراء', en: 'Purchase' },
-      purchase_return: { ar: 'مرتجع شراء', en: 'Purchase return' },
-      purchase_payment_reconciliation: { ar: 'تسوية شراء', en: 'Purchase reconciliation' },
-      refund: { ar: 'مرتجع مبيعات', en: 'Refund' },
-      treasury_transfer: { ar: 'تحويل خزنة', en: 'Treasury transfer' },
-      treasury_deposit: { ar: 'إيداع خزنة', en: 'Treasury deposit' },
-      treasury_withdrawal: { ar: 'سحب خزنة', en: 'Treasury withdrawal' },
-    };
-    const item = labels[referenceType];
-    return item ? (isAr ? item.ar : item.en) : referenceType;
-  };
-
   const openDayCloseDetail = async (row: TreasuryDayCloseRow) => {
     if (!effectiveBranchFilter) return;
     try {
@@ -166,12 +158,6 @@ export function TreasuryPage() {
     } catch (err: unknown) {
       show(err instanceof Error ? err.message : (isAr ? 'تعذر تحميل تقرير إغلاق اليوم' : 'Could not load day-closing report'), 'error');
     }
-  };
-
-  const signedCurrency = (value: number) => {
-    const numeric = Number(value || 0);
-    const sign = numeric > 0 ? '+' : '';
-    return `${sign}${formatCurrency(numeric, currency, lang)}`;
   };
 
   const openModal = (m: Exclude<ModalType, null>) => {
@@ -229,6 +215,28 @@ export function TreasuryPage() {
   );
   const totalCash = localAccounts.filter((b) => b.account_type === 'cash').reduce((s, b) => s + Number(b.balance), 0);
   const totalBank = localAccounts.filter((b) => b.account_type === 'bank').reduce((s, b) => s + Number(b.balance), 0);
+  const dailyRows = useMemo<TreasuryDailyDisplayRow[]>(() => dayCloses.map((row, index) => {
+    const previousClose = dayCloses[index + 1];
+    const dayNet = Number(row.net_sales || 0)
+      - Number(row.credit_sales || 0)
+      - Number(row.expenses || 0)
+      - Number(row.cash_purchases || 0);
+    const openingBalance = previousClose
+      ? Number(previousClose.total_balance_after_close || 0)
+      : Number(row.total_balance_after_close || 0) - dayNet;
+    const closingBalance = row.is_latest
+      ? totalCash + totalBank
+      : Number(row.total_balance_after_close || 0);
+    return {
+      ...row,
+      opening_balance: openingBalance,
+      day_net: dayNet,
+      closing_balance: closingBalance,
+    };
+  }), [dayCloses, totalCash, totalBank]);
+  const displayedBalances = treasuryView === 'main'
+    ? (mainTreasury ? [mainTreasury] : [])
+    : localAccounts;
   const mainTreasury = balances.find((b) => b.scope === 'organization' && b.kind === 'main_cash');
   const mainTreasuryBalance = Number(mainTreasury?.balance || 0);
   const accountLabel = (a: TreasurySource) => {
@@ -255,6 +263,23 @@ export function TreasuryPage() {
     { key: 'from', header: t('fromAccount'), render: (tx) => tx.from_account?.account_name || '-' },
     { key: 'to', header: t('toAccount'), render: (tx) => tx.to_account?.account_name || '-' },
     { key: 'amount', header: t('amount'), render: (tx) => <span className="font-semibold text-ui-text">{formatCurrency(tx.amount, currency, lang)}</span> },
+  ];
+  const dailyColumns: Column<TreasuryDailyDisplayRow>[] = [
+    { key: 'business_date', header: isAr ? 'التاريخ' : 'Date', render: (row) => <span className="font-bold text-ui-text">{row.business_date}</span> },
+    { key: 'opening_balance', header: isAr ? 'رصيد أول' : 'Opening', render: (row) => formatCurrency(row.opening_balance, currency, lang) },
+    { key: 'net_sales', header: isAr ? 'المبيعات' : 'Sales', render: (row) => formatCurrency(row.net_sales, currency, lang) },
+    { key: 'credit_sales', header: isAr ? 'الآجل' : 'Credit', render: (row) => formatCurrency(row.credit_sales, currency, lang) },
+    { key: 'expenses', header: isAr ? 'المصروفات' : 'Expenses', render: (row) => formatCurrency(row.expenses, currency, lang) },
+    { key: 'cash_purchases', header: isAr ? 'المشتريات' : 'Purchases', render: (row) => formatCurrency(row.cash_purchases, currency, lang) },
+    { key: 'day_net', header: isAr ? 'صافي اليوم' : 'Day net', render: (row) => <span className="font-black text-ui-text">{formatCurrency(row.day_net, currency, lang)}</span> },
+    { key: 'cash_sales', header: isAr ? 'كاش' : 'Cash', render: (row) => formatCurrency(row.cash_sales, currency, lang) },
+    { key: 'bank_sales', header: isAr ? 'بنك' : 'Bank', render: (row) => formatCurrency(row.bank_sales, currency, lang) },
+    { key: 'closing_balance', header: isAr ? 'رصيد آخر' : 'Closing', render: (row) => <span className={`font-black ${row.is_latest ? 'text-ui-primary' : 'text-ui-text'}`}>{formatCurrency(row.closing_balance, currency, lang)}</span> },
+    { key: 'report', header: isAr ? 'تقرير اليوم' : 'Day report', render: (row) => (
+      <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
+        <FileText className="h-4 w-4" /> {isAr ? 'تقرير اليوم' : 'Day report'}
+      </Button>
+    ) },
   ];
 
   return (
@@ -297,120 +322,36 @@ export function TreasuryPage() {
         </DesignPanel>
       )}
 
-      <DesignPanel title={t('treasuryBalances')} testId="treasury-balances-panel">
-        <DataTable columns={balanceColumns} data={visibleBalances} loading={loading} error={txError} emptyMessage={t('noData')} />
-      </DesignPanel>
-
-      <DesignPanel title={isAr ? 'مطابقة إغلاقات الأيام مع خزنة الفرع' : 'Day-close reconciliation with branch treasury'} testId="treasury-day-close-reconciliation-panel">
-        <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
-          {isAr
-            ? 'كل يوم يعرض رصيد لحظة الإغلاق، ثم الحركات التي أثرت على الخزنة بعده حتى الإغلاق التالي. آخر يوم ينتهي عند الرصيد الحالي الفعلي للخزنة.'
-            : 'Each day shows the balance at close, then every treasury-impacting movement until the next close. The latest day ends at the actual current treasury balance.'}
+      <DesignPanel testId="treasury-scope-switch-panel" className="ui-accent-finance">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={treasuryView === 'branch' ? 'primary' : 'outline'} onClick={() => setTreasuryView('branch')}>
+            <Wallet className="h-4 w-4" /> {isAr ? 'خزنة الفرع' : 'Branch Treasury'}
+          </Button>
+          <Button size="sm" variant={treasuryView === 'main' ? 'primary' : 'outline'} onClick={() => setTreasuryView('main')}>
+            <PiggyBank className="h-4 w-4" /> {isAr ? 'الخزنة الرئيسية' : 'Main Treasury'}
+          </Button>
         </div>
-
-        {loading ? (
-          <div className="py-8 text-center text-sm text-ui-muted">{t('loading')}</div>
-        ) : dayCloses.length === 0 ? (
-          <div className="py-8 text-center text-sm text-ui-muted">{t('noData')}</div>
-        ) : (
-          <div className="space-y-4">
-            {dayCloses.map((row) => (
-              <div key={row.daily_close_id} className="overflow-hidden rounded-xl border border-ui-border bg-ui-surface">
-                <div className="flex flex-col gap-3 border-b border-ui-border bg-ui-page-alt p-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-black text-ui-text">{isAr ? 'إغلاق يوم' : 'Day close'} {row.business_date}</span>
-                      {row.is_latest && <span className="rounded-full bg-ui-primary-soft px-2 py-0.5 text-xs font-bold text-ui-primary">{isAr ? 'آخر إغلاق' : 'Latest close'}</span>}
-                    </div>
-                    <div className="mt-1 text-xs text-ui-muted">{formatDateTime(row.closed_at, lang)}</div>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
-                    <FileText className="h-4 w-4" /> {isAr ? 'تقرير إغلاق اليوم' : 'Day Closing Report'}
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-px bg-ui-border sm:grid-cols-3 lg:grid-cols-6">
-                  {[
-                    [isAr ? 'مبيعات الكاش' : 'Cash sales', row.cash_sales],
-                    [isAr ? 'مبيعات البنك/الكارت' : 'Bank/card sales', row.bank_sales],
-                    [isAr ? 'مبيعات الأجل' : 'Credit sales', row.credit_sales],
-                    [isAr ? 'المصروفات' : 'Expenses', -Math.abs(row.expenses)],
-                    [isAr ? 'مشتريات الكاش' : 'Cash purchases', -Math.abs(row.cash_purchases)],
-                    [isAr ? 'إجمالي الخزنة عند الإغلاق' : 'Treasury at close', row.total_balance_after_close],
-                  ].map(([label, value]) => (
-                    <div key={String(label)} className="bg-ui-surface p-3">
-                      <div className="text-[11px] font-semibold text-ui-muted">{label}</div>
-                      <div className="mt-1 text-sm font-black text-ui-text">{formatCurrency(Number(value), currency, lang)}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-ui-border">
-                  <div className="flex flex-col gap-2 bg-ui-page-alt px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm font-black text-ui-text">{isAr ? 'الحركة بعد الإغلاق' : 'Movement after close'}</div>
-                    <div className="flex flex-wrap gap-3 text-xs font-semibold">
-                      <span>{isAr ? 'كاش:' : 'Cash:'} {signedCurrency(row.cash_movement_after_close)}</span>
-                      <span>{isAr ? 'بنك:' : 'Bank:'} {signedCurrency(row.bank_movement_after_close)}</span>
-                      <span>{isAr ? 'الإجمالي:' : 'Total:'} {signedCurrency(row.total_movement_after_close)}</span>
-                    </div>
-                  </div>
-
-                  {row.movement_details.length === 0 ? (
-                    <div className="px-3 py-4 text-sm text-ui-muted">{isAr ? 'لا توجد حركة أثرت على الرصيد بعد هذا الإغلاق.' : 'No balance-impacting movement after this close.'}</div>
-                  ) : (
-                    <div className="divide-y divide-ui-border">
-                      {row.movement_details.map((movement) => (
-                        <div key={movement.journal_entry_id} className="grid gap-2 px-3 py-2 text-sm lg:grid-cols-[150px_minmax(180px,1fr)_120px_120px_120px_auto] lg:items-center">
-                          <div>
-                            <div className="font-bold text-ui-text">{movementLabel(movement.reference_type)}</div>
-                            <div className="text-[11px] text-ui-muted">{formatDateTime(movement.created_at, lang)}</div>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="truncate font-mono text-xs text-ui-text">{movement.reference_number || movement.reference_id || '-'}</div>
-                            <div className="truncate text-xs text-ui-muted">{movement.description || '-'}</div>
-                          </div>
-                          <div><span className="text-xs text-ui-muted">{isAr ? 'كاش' : 'Cash'} </span><strong>{signedCurrency(movement.cash_effect)}</strong></div>
-                          <div><span className="text-xs text-ui-muted">{isAr ? 'بنك' : 'Bank'} </span><strong>{signedCurrency(movement.bank_effect)}</strong></div>
-                          <div><span className="text-xs text-ui-muted">{isAr ? 'الصافي' : 'Net'} </span><strong>{signedCurrency(movement.total_effect)}</strong></div>
-                          <Button size="sm" variant="ghost" onClick={() => setMovementDetail(movement)}>
-                            <Eye className="h-4 w-4" /> {isAr ? 'توضيح' : 'Details'}
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 gap-px border-t border-ui-border bg-ui-border sm:grid-cols-3">
-                  <div className="bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'رصيد الكاش بعد الحركة' : 'Cash after movement'}</div><div className="mt-1 font-black">{formatCurrency(row.cash_balance_after_movement, currency, lang)}</div></div>
-                  <div className="bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'رصيد البنك بعد الحركة' : 'Bank after movement'}</div><div className="mt-1 font-black">{formatCurrency(row.bank_balance_after_movement, currency, lang)}</div></div>
-                  <div className="bg-ui-surface p-3"><div className="text-xs font-bold text-ui-muted">{row.is_latest ? (isAr ? 'الرصيد الحالي للخزنة' : 'Current treasury balance') : (isAr ? 'الرصيد قبل الإغلاق التالي' : 'Balance before next close')}</div><div className="mt-1 text-base font-black text-ui-primary">{formatCurrency(row.total_balance_after_movement, currency, lang)}</div></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </DesignPanel>
 
-      <DesignPanel title={t('treasuryTransactions')} testId="treasury-transactions-panel">
+      <DesignPanel title={treasuryView === 'main' ? (isAr ? 'رصيد الخزنة الرئيسية' : 'Main treasury balance') : t('treasuryBalances')} testId="treasury-balances-panel">
+        <DataTable columns={balanceColumns} data={displayedBalances} loading={loading} error={txError} emptyMessage={t('noData')} />
+      </DesignPanel>
+
+      {treasuryView === 'branch' && (
+        <DesignPanel title={isAr ? 'ملخص الخزنة اليومي' : 'Daily treasury summary'} testId="treasury-day-close-reconciliation-panel">
+          <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
+            {isAr
+              ? 'صف واحد لكل يوم. صافي اليوم = المبيعات - الآجل - المصروفات - المشتريات. رصيد آخر أحدث يوم يطابق الرصيد الحالي الفعلي لخزنة الفرع، وأي إيداع أو سحب أو تحويل يظهر في حركة الخزنة أدناه.'
+              : 'One row per business day. Day net = sales - credit - expenses - purchases. The latest closing balance matches the live branch treasury balance; deposits, withdrawals and transfers remain visible in Treasury Movements below.'}
+          </div>
+          <DataTable columns={dailyColumns} data={dailyRows} loading={loading} error={txError} emptyMessage={t('noData')} />
+        </DesignPanel>
+      )}
+
+      <DesignPanel title={treasuryView === 'main' ? (isAr ? 'حركة الخزنة الرئيسية' : 'Main Treasury Movements') : (isAr ? 'حركة خزنة الفرع' : 'Branch Treasury Movements')} testId="treasury-transactions-panel">
         <DataTable columns={txColumns} data={transactions} loading={txLoading} error={txError} emptyMessage={t('noData')} />
         <DesignPagination loaded={transactions.length} total={txTotal} hasMore={txHasMore} loadingMore={loadingMoreTx} onLoadMore={loadMoreTx} />
       </DesignPanel>
-
-      <Modal open={!!movementDetail} onClose={() => setMovementDetail(null)} title={movementDetail ? movementLabel(movementDetail.reference_type) : ''}>
-        {movementDetail && (
-          <div className="space-y-3 text-sm">
-            <div className="rounded-lg bg-ui-page-alt p-3"><span className="text-ui-muted">{isAr ? 'الوقت:' : 'Time:'}</span> <strong>{formatDateTime(movementDetail.created_at, lang)}</strong></div>
-            <div className="rounded-lg bg-ui-page-alt p-3"><span className="text-ui-muted">{isAr ? 'المرجع:' : 'Reference:'}</span> <strong className="font-mono">{movementDetail.reference_number || movementDetail.reference_id || '-'}</strong></div>
-            <div className="rounded-lg bg-ui-page-alt p-3"><span className="text-ui-muted">{isAr ? 'الوصف:' : 'Description:'}</span> <strong>{movementDetail.description || '-'}</strong></div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg border border-ui-border p-3"><div className="text-xs text-ui-muted">{isAr ? 'أثر الكاش' : 'Cash effect'}</div><div className="mt-1 font-black">{signedCurrency(movementDetail.cash_effect)}</div></div>
-              <div className="rounded-lg border border-ui-border p-3"><div className="text-xs text-ui-muted">{isAr ? 'أثر البنك' : 'Bank effect'}</div><div className="mt-1 font-black">{signedCurrency(movementDetail.bank_effect)}</div></div>
-              <div className="rounded-lg border border-ui-border p-3"><div className="text-xs text-ui-muted">{isAr ? 'الأثر الصافي' : 'Net effect'}</div><div className="mt-1 font-black">{signedCurrency(movementDetail.total_effect)}</div></div>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Modal open={modal === 'transfer'} onClose={() => setModal(null)} title={t('transfer')}>
         <div className="space-y-4">
