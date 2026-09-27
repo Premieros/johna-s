@@ -41,6 +41,7 @@ interface RolesContextValue {
 }
 
 const RolesContext = createContext<RolesContextValue | undefined>(undefined);
+const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 export function RolesProvider({ children }: { children: ReactNode }) {
   const [rolesList, setRolesList] = useState<RoleDefRow[]>([]);
@@ -96,21 +97,27 @@ export function RolesProvider({ children }: { children: ReactNode }) {
     if (!sessionUserId) return;
 
     let lastRefreshAt = Date.now();
-    const refreshIfStale = () => {
-      const now = Date.now();
-      if (now - lastRefreshAt < 60_000) return;
-      lastRefreshAt = now;
+    const refreshNow = () => {
+      lastRefreshAt = Date.now();
       void refresh();
+    };
+    const refreshIfStale = () => {
+      if (Date.now() - lastRefreshAt < 60_000) return;
+      refreshNow();
     };
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') refreshIfStale();
     };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshNow();
+    }, ROLE_REFRESH_INTERVAL_MS);
 
     window.addEventListener('focus', refreshIfStale);
     window.addEventListener('online', refreshIfStale);
     document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener('focus', refreshIfStale);
       window.removeEventListener('online', refreshIfStale);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
