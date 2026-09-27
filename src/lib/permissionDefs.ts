@@ -38,7 +38,7 @@ export type Permission =
   | 'waste.view' | 'waste.create' | 'waste.approve' | 'waste.report'
   | 'warehouses.view' | 'warehouses.manage'
   | 'customers.view' | 'customers.manage'
-  | 'suppliers.view' | 'suppliers.manage'
+  | 'suppliers.view' | 'suppliers.manage' | 'suppliers.opening_balance.manage'
   | 'expenses.view' | 'expenses.manage' | 'expenses.edit' | 'expenses.routing.manage'
   | 'sales.view' | 'sales.refund.create' | 'sales.payment.receive'
   | 'refunds.approve'
@@ -79,7 +79,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'waste.view', 'waste.create', 'waste.approve', 'waste.report',
   'warehouses.view', 'warehouses.manage',
   'customers.view', 'customers.manage', 'customers.print', 'customers.export',
-  'suppliers.view', 'suppliers.manage', 'suppliers.print',
+  'suppliers.view', 'suppliers.manage', 'suppliers.opening_balance.manage', 'suppliers.print',
   'expenses.view', 'expenses.manage', 'expenses.edit', 'expenses.routing.manage', 'expenses.print',
   'sales.view', 'sales.refund.create', 'sales.payment.receive', 'refunds.approve',
   'reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export',
@@ -122,6 +122,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'customers.print': { ar: 'طباعة العملاء', en: 'Print Customers' },
   'customers.export': { ar: 'تصدير العملاء', en: 'Export Customers' },
   'suppliers.print': { ar: 'طباعة الموردين', en: 'Print Suppliers' },
+  'suppliers.opening_balance.manage': { ar: 'إضافة رصيد افتتاحي للمورد', en: 'Add Supplier Opening Balance' },
   'expenses.print': { ar: 'طباعة المصروفات', en: 'Print Expenses' },
   'reports.print': { ar: 'طباعة التقارير', en: 'Print Reports' },
   'reports.export': { ar: 'تصدير التقارير', en: 'Export Reports' },
