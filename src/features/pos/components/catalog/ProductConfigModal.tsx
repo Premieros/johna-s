@@ -180,15 +180,21 @@ export function ProductConfigModal({
             return (
               <div key={group.id} data-testid={`modifier-group-${group.id}`} className="rounded-xl border border-ui-border/70 p-2.5">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <label className="text-[11px] font-black text-ui-muted sm:text-xs">{isAr ? group.name : group.name_en || group.name}</label>
-                  <span className="text-[9px] font-bold text-ui-subtle sm:text-[10px]">{group.min_selections > 0 ? (isAr ? 'مطلوب' : 'Required') : (isAr ? 'اختياري' : 'Optional')} · {selectedCount}/{group.max_selections}</span>
+                  <span className="text-[11px] font-black text-ui-muted sm:text-xs">
+                    {group.min_selections > 0
+                      ? (group.min_selections === group.max_selections
+                        ? (isAr ? `اختر ${group.min_selections}` : `Choose ${group.min_selections}`)
+                        : (isAr ? `اختر من ${group.min_selections} إلى ${group.max_selections}` : `Choose ${group.min_selections}–${group.max_selections}`))
+                      : (isAr ? `اختياري — حتى ${group.max_selections}` : `Optional — up to ${group.max_selections}`)}
+                  </span>
+                  <span className="text-[9px] font-bold text-ui-subtle sm:text-[10px]">{selectedCount}/{group.max_selections}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   {group.options.map((option) => {
                     const active = selectedIds.includes(option.id);
                     const delta = Number(option.price_delta || 0);
                     return (
-                      <button key={option.id} type="button" data-testid={`modifier-option-${option.id}`} aria-pressed={active} onClick={() => toggleOption(group, option.id)} className={`flex min-h-10 min-w-0 items-center justify-between gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-bold transition sm:text-xs ${active ? 'border-ui-primary bg-ui-primary-soft text-ui-accent' : 'border-ui-border bg-ui-page-alt text-ui-muted hover:bg-ui-surface'}`}>
+                      <button key={option.id} type="button" data-testid={`modifier-option-${option.id}`} aria-pressed={active} onClick={() => toggleOption(group, option.id)} className={`flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-sm font-black transition ${active ? 'border-ui-primary bg-ui-primary-soft text-ui-accent' : 'border-ui-border bg-ui-page-alt text-ui-muted hover:bg-ui-surface'}`}>
                         <span className="flex min-w-0 items-center gap-1 text-start leading-tight">{active && <Check className="h-3 w-3 shrink-0 text-ui-accent" />}<span className="break-words">{isAr ? option.name : option.name_en || option.name}</span></span>
                         {delta !== 0 && <span className="shrink-0 text-[9px] font-black opacity-80 sm:text-[10px]">{delta > 0 ? '+' : ''}{formatCurrency(delta, currency, lang)}</span>}
                       </button>
