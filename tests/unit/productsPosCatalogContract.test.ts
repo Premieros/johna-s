@@ -20,9 +20,11 @@ describe('Products/POS catalog contract (P4)', () => {
     expect(paginatedRows).toContain('return q.range(from, to)');
   });
 
-  it('keeps POS catalog branch-scoped and active-only', () => {
-    expect(posWorkspace).toContain("supabase.from('products').select('*, category:categories(*)').eq('branch_id', fixedBranch).eq('is_active', true)");
-    expect(posWorkspace).toContain("supabase.from('products').select('*, category:categories(*)').eq('is_active', true).order('name')");
+  it('keeps POS catalog branch-scoped and active-only without a redundant category embed', () => {
+    expect(posWorkspace).toContain("supabase.from('products').select('*').eq('branch_id', fixedBranch).eq('is_active', true)");
+    expect(posWorkspace).toContain("supabase.from('products').select('*').eq('is_active', true).order('name')");
+    expect(posWorkspace).not.toContain("category:categories(*)");
+    expect(posWorkspace).toContain("supabase.from('categories').select('*')");
   });
 
   it('keeps the online POS catalog as the source saved for offline use', () => {
