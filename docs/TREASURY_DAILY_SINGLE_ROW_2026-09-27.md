@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/treasury-daily-single-row-20260927`
-Current PR: `pending`
+Current PR: `#385`
 Last updated: 2026-09-27 Africa/Cairo
 
 ## Work status
@@ -54,12 +54,20 @@ Main treasury:
 
 - Created isolated branch from exact latest main.
 - Production inspection completed read-only.
-- Runtime code not changed yet.
+- Implemented one compact DataTable row per business day in `TreasuryPage`.
+- Approved columns are rendered directly from the canonical day-close reconciliation payload.
+- Day net is calculated as Sales - Credit - Expenses - Purchases.
+- Latest closing balance is bound to the live branch treasury cash+bank balance.
+- Existing Day Closing Report action remains on `fetchDayClosingReportServer` unchanged.
+- Added Branch Treasury / Main Treasury scope switch.
+- Main Treasury movement history filters transactions by the organization-level main treasury account.
+- Removed expanded per-day movement rows from the day summary; treasury deposits/withdrawals/transfers remain visible in the treasury movement table.
+- Added unit contract coverage preventing regression to multi-row per-day rendering.
 
 ## Verification ledger
 
 - Baseline DB inspection: read-only, no duplicate branch/business_date closes found.
-- Focused/unit verification: pending.
+- Focused/unit verification: pending on PR #385 exact head.
 - Full Verify: pending.
 
 ## Production gate
@@ -70,4 +78,4 @@ No Production SQL write is authorized or required by the approved UI-only scope.
 
 ## Next action
 
-Update the mandatory active-worklog pointer, then implement the single-row day table and treasury-view switch without changing the existing Day Closing Report path.
+Run exact-head verification for PR #385. Fix only proven failures; do not merge until Full Verify is Green.
