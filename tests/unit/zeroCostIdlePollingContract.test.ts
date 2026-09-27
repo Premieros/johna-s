@@ -34,8 +34,9 @@ describe('zero-cost idle polling contract', () => {
     }
   });
 
-  it('keeps role metadata zero-idle while preserving explicit mutation refreshes', () => {
-    expect(roles).not.toContain('setInterval(');
+  it('keeps role polling bounded to visible sessions while preserving explicit mutation refreshes', () => {
+    expect(roles).toContain('const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;');
+    expect(roles).toContain("if (document.visibilityState === 'visible') refreshNow();");
     expect(roles).toContain("window.addEventListener('focus', refreshIfStale)");
     expect(roles).toContain('await refresh();');
   });
