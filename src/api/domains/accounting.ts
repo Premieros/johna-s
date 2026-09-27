@@ -91,6 +91,8 @@ export const accounting = {
       net_sales: number;
       expenses: number;
       cash_purchases: number;
+      transfer_in: number;
+      transfer_out: number;
       opening_balance: number;
       cash_opening_balance: number;
       bank_opening_balance: number;
