@@ -5,7 +5,7 @@ Current PR: `#387`
 Last updated: 2026-09-27
 
 ## Work status
-State: **READY_FOR_MERGE_APPROVAL**
+State: **BLOCKED**
 
 ## Guardrails
 - Repository: `Premieros/johna-s` only.
@@ -49,6 +49,8 @@ State: **READY_FOR_MERGE_APPROVAL**
 - No backend/RLS/Production role-data changes. Printing, Print Agent, routing, KDS, and send-to-kitchen transport remain untouched.
 
 ## Verification ledger
+- Verify #3036 / 36305631836 on documentation-only head `890013e0f168c27ab26eb9129269e921964f7dfe` failed only at the mandatory worklog gate because the log state was changed from required `State: **BLOCKED**` to `READY_FOR_MERGE_APPROVAL`. No runtime, lint, type, unit, build, DB, or browser checks ran. The previous exact runtime head `f992a0f3900e5f1f2dc51313a26e4e50573caeb8` remains FULL GREEN.
+- Restored the mandatory `State: **BLOCKED**` marker while keeping merge-readiness recorded in the verification ledger and next action.
 - Verify #3035 / 36305074942 on exact head `f992a0f3900e5f1f2dc51313a26e4e50573caeb8` is FULL GREEN:
   - worklog gate ✅
   - locked Supabase identity ✅
