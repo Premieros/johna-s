@@ -102,6 +102,7 @@ export function TreasuryPage() {
       return [...dailyColumnOptions];
     }
   });
+  const [selectedDay, setSelectedDay] = useState<TreasuryDailyDisplayRow | null>(null);
 
   useEffect(() => {
     if (!isAdminRole(user?.role) || adminBranchFilter || branches.length === 0) return;
@@ -242,6 +243,22 @@ export function TreasuryPage() {
     day_net: Number(row.day_net || 0),
     closing_balance: Number(row.closing_balance || 0),
   })), [dayCloses]);
+  const periodTotals = useMemo(() => {
+    const sum = (key: keyof TreasuryDailyDisplayRow) => dailyRows.reduce((total, row) => total + Number(row[key] || 0), 0);
+    return {
+      cash_sales: sum('cash_sales'),
+      bank_sales: sum('bank_sales'),
+      credit_sales: sum('credit_sales'),
+      expenses: sum('expenses'),
+      cash_purchases: sum('cash_purchases'),
+      transfer_in: sum('transfer_in'),
+      transfer_out: sum('transfer_out'),
+      latest_cash: dailyRows[0]?.cash_balance_after_close || 0,
+      latest_bank: dailyRows[0]?.bank_balance_after_close || 0,
+      latest_total: dailyRows[0]?.closing_balance || 0,
+    };
+  }, [dailyRows]);
+
   const displayedBalances = treasuryView === 'main'
     ? mainTreasuryAccounts
     : localAccounts;
@@ -284,10 +301,15 @@ export function TreasuryPage() {
     cash_balance_after_close: { key: 'cash_balance_after_close', header: isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.cash_balance_after_close, currency, lang)}</span> },
     bank_balance_after_close: { key: 'bank_balance_after_close', header: isAr ? 'رصيد بنك فعلي' : 'Actual bank balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.bank_balance_after_close, currency, lang)}</span> },
     closing_balance: { key: 'closing_balance', header: isAr ? 'إجمالي آخر اليوم' : 'Day closing total', render: (row) => <span className={`font-black ${row.is_latest ? 'text-ui-primary' : 'text-ui-text'}`}>{formatCurrency(row.closing_balance, currency, lang)}</span> },
-    report: { key: 'report', header: isAr ? 'تقرير اليوم' : 'Day report', render: (row) => (
-      <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
-        <FileText className="h-4 w-4" /> {isAr ? 'تقرير اليوم' : 'Day report'}
-      </Button>
+    report: { key: 'report', header: isAr ? 'اليوم' : 'Day', render: (row) => (
+      <div className="flex flex-wrap gap-1">
+        <Button size="sm" variant="outline" onClick={() => setSelectedDay(row)}>
+          {isAr ? 'تفاصيل' : 'Details'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => { void openDayCloseDetail(row); }}>
+          <FileText className="h-4 w-4" /> {isAr ? 'تقرير' : 'Report'}
+        </Button>
+      </div>
     ) },
   };
   const dailyColumns = visibleDailyColumns.map((key) => allDailyColumns[key]);
@@ -381,6 +403,57 @@ export function TreasuryPage() {
             </div>
           </details>
           <DataTable columns={dailyColumns} data={dailyRows} loading={loading} error={txError} emptyMessage={t('noData')} />
+
+          {dailyRows.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي بيع نقدي' : 'Cash sales total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.cash_sales, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي بيع بنك/كارت' : 'Bank/Card sales total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.bank_sales, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي المصروفات' : 'Expenses total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.expenses, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'إجمالي المشتريات' : 'Purchases total'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.cash_purchases, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'تحويلات واردة' : 'Transfers in'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.transfer_in, currency, lang)}</div></div>
+              <div className="rounded-lg border border-ui-border bg-ui-surface p-3"><div className="text-xs text-ui-muted">{isAr ? 'تحويلات صادرة' : 'Transfers out'}</div><div className="font-bold text-ui-text">{formatCurrency(periodTotals.transfer_out, currency, lang)}</div></div>
+            </div>
+          )}
+
+          {selectedDay && (
+            <div className="mt-4 rounded-xl border border-ui-border bg-ui-page-alt p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs text-ui-muted">{isAr ? 'تفاصيل يوم' : 'Day details'}</div>
+                  <div className="text-lg font-black text-ui-text">{selectedDay.business_date}</div>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => setSelectedDay(null)}>{isAr ? 'إغلاق التفاصيل' : 'Close details'}</Button>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
+                  <div className="mb-2 font-bold text-ui-text">{isAr ? 'الأرصدة' : 'Balances'}</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'نقدي مرحّل' : 'Cash carried'}</span><b>{formatCurrency(selectedDay.cash_opening_balance, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'بنك مرحّل' : 'Bank carried'}</span><b>{formatCurrency(selectedDay.bank_opening_balance, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد نقدي فعلي' : 'Actual cash'}</span><b>{formatCurrency(selectedDay.cash_balance_after_close, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد بنك فعلي' : 'Actual bank'}</span><b>{formatCurrency(selectedDay.bank_balance_after_close, currency, lang)}</b></div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
+                  <div className="mb-2 font-bold text-ui-text">{isAr ? 'البيع والتحصيل' : 'Sales & collection'}</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'بيع نقدي' : 'Cash sales'}</span><b>{formatCurrency(selectedDay.cash_sales, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'بيع بنك/كارت' : 'Bank/Card sales'}</span><b>{formatCurrency(selectedDay.bank_sales, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'آجل' : 'Credit'}</span><b>{formatCurrency(selectedDay.credit_sales, currency, lang)}</b></div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
+                  <div className="mb-2 font-bold text-ui-text">{isAr ? 'المنصرف والتحويلات' : 'Outflows & transfers'}</div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'مصروفات' : 'Expenses'}</span><b>{formatCurrency(selectedDay.expenses, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'مشتريات' : 'Purchases'}</span><b>{formatCurrency(selectedDay.cash_purchases, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'تحويل وارد' : 'Transfer in'}</span><b>{formatCurrency(selectedDay.transfer_in, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'تحويل صادر' : 'Transfer out'}</span><b>{formatCurrency(selectedDay.transfer_out, currency, lang)}</b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </DesignPanel>
       )}
 
