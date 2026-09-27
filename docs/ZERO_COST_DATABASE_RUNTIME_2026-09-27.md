@@ -84,6 +84,13 @@ Write mode: **SEQUENTIAL_ONLY**
   - `payment.ts` authoritative `getActiveShift` fallback for missing `p_shift_id` is unchanged.
 - Added `posSingleShiftReadContract.test.ts` to lock the parent-owned shift read, preserve settlement validation, and exclude frozen printing/kitchen paths.
 - Corrected Stage 2 lint regression by removing the obsolete local `branchId` from `ProductBrowser`; no behavior changed.
+- Stage 3 implemented POS-route shell read suppression:
+  - `Layout` detects `/pos` and nested POS routes and passes `enabled=false` to `useActiveOrderCount`.
+  - `useActiveOrderCount` remains mounted unconditionally, retains cached badge data locally, but performs no initial refresh, debounce timer, or Realtime subscription while disabled.
+  - Non-POS routes retain the existing lightweight `orders + order_items` badge behavior.
+  - POS `useActiveOrders` and its operational realtime snapshot are unchanged.
+- Updated `performanceLightweightShellContract.test.ts` and added `posShellDuplicateReadSuppressionContract.test.ts`.
+- Main-vs-branch changed-file audit contains no print-agent, cloud-print, KDS, kitchen transport, or migration files.
 - Frozen print/KDS paths remain untouched.
 
 ## Verification ledger
@@ -146,14 +153,13 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Stage 2 is exact-head Full Verify Green.
-2. Stage 3 — suppress duplicate shell active-order reads while the user is already inside POS:
-   - keep `useActiveOrderCount` for non-POS routes;
-   - add an explicit enabled flag so the hook performs no query, timer, or Realtime subscription on `/pos` and nested POS routes;
-   - keep the hook mounted unconditionally to preserve React hook ordering;
-   - retain the last cached badge value while disabled instead of issuing a compensating query;
-   - do not modify POS `useActiveOrders`, settlement, stock, printing, KDS, or Production.
-3. Add/adjust regression contracts and run exact-head verification before any further optimization.
+1. Stage 3 implementation complete on the isolated branch.
+2. Run exact-head Full Verify for Stage 3.
+3. If Green, inspect the next safe database-consumption target before writing:
+   - prefer read dedup/cache in POS bootstrap/catalog;
+   - do not weaken freshness for operational orders, settlement, shift validation, or inventory writes;
+   - continue absolute freeze on printing, Print Agent, routing, KDS, kitchen transport, and Production.
+4. No Merge or Production deployment without explicit approval.
 
 ## Mandatory update protocol
 
