@@ -28,7 +28,11 @@ State: **BLOCKED**
 - Branch banks exist, but there is no organization-scoped bank destination for central bank collection.
 
 ## Change ledger
-- Pending.
+- Added forward-only migration `20260927233000_treasury_transfer_visibility_main_bank.sql`.
+- Added organization-scoped main bank account using chart code `1030`; branch bank accounts are unchanged.
+- Treasury day RPC now returns explicit `transfer_in` and `transfer_out` totals.
+- Treasury UI now shows incoming/outgoing transfer columns and displays all organization treasury accounts in the main treasury view.
+- Added regression coverage.
 
 ## Verification ledger
 - Production read-only audit complete.
@@ -38,7 +42,7 @@ State: **BLOCKED**
 State: **BLOCKED**
 
 ## Next action
-Add a forward-only main-bank seed + transfer totals to the treasury RPC, update the treasury UI, add regression tests, then run exact-head verification.
+Open PR, run exact-head verification, then apply to Production only if Green.
 
 ## Mandatory update protocol
 - Re-read branch HEAD and this log before each repository write.
