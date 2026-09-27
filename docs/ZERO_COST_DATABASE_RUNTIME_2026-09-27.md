@@ -95,6 +95,21 @@ Write mode: **SEQUENTIAL_ONLY**
 
 ## Verification ledger
 
+- Stage 3 exact-head Full Verify Green on `2bac970c0a87e39e051668c2a8f6190770bd8cae`.
+- Workflow run `36327695426` / Verify main #3115:
+  - mandatory active work log ✅
+  - project identity ✅
+  - API contract ✅
+  - lint ✅
+  - application + test typecheck ✅
+  - unit tests ✅
+  - build ✅
+  - fresh DB/schema ✅
+  - integration + security/RLS regression ✅
+  - browser smoke ✅
+- Read-only Production query audit identified the branch-scoped POS product catalog relation query (`products.*, category:categories(*)`) as a material historical cost source; POS code audit found no use of the nested `product.category` object, while `categories` is already loaded separately and product filtering uses `category_id`.
+
+
 - Stage 2 corrected exact-head Full Verify Green on `5eec053a98498ba625f1c3b9f60bd7158efebbfb`.
 - Workflow run `36326981479` / Verify main #3109:
   - mandatory active work log ✅
@@ -153,13 +168,14 @@ State: **BLOCKED**
 
 ## Next action
 
-1. Stage 3 implementation complete on the isolated branch.
-2. Run exact-head Full Verify for Stage 3.
-3. If Green, inspect the next safe database-consumption target before writing:
-   - prefer read dedup/cache in POS bootstrap/catalog;
-   - do not weaken freshness for operational orders, settlement, shift validation, or inventory writes;
-   - continue absolute freeze on printing, Print Agent, routing, KDS, kitchen transport, and Production.
-4. No Merge or Production deployment without explicit approval.
+1. Stage 3 is exact-head Full Verify Green.
+2. Stage 4 — simplify the POS product catalog query without caching/staleness changes:
+   - replace `select('*, category:categories(*)')` with `select('*')` in `PosWorkspacePage` only;
+   - preserve branch scope, `is_active=true`, ordering, `category_id`, separate category loading, offline cache writes, and all Product fields;
+   - do not modify Products administration/export queries that may use nested category data;
+   - do not modify settlement, stock, shift, printing, Print Agent, routing, KDS, kitchen transport, or Production.
+3. Update the existing POS catalog contract and add a regression assertion that the POS query no longer embeds categories.
+4. Run exact-head Full Verify before any further optimization.
 
 ## Mandatory update protocol
 
