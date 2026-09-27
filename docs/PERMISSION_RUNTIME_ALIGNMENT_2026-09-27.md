@@ -5,7 +5,7 @@ Current PR: `#387`
 Last updated: 2026-09-27
 
 ## Work status
-State: **BLOCKED**
+State: **READY_FOR_MERGE_APPROVAL**
 
 ## Guardrails
 - Repository: `Premieros/johna-s` only.
@@ -49,6 +49,18 @@ State: **BLOCKED**
 - No backend/RLS/Production role-data changes. Printing, Print Agent, routing, KDS, and send-to-kitchen transport remain untouched.
 
 ## Verification ledger
+- Verify #3035 / 36305074942 on exact head `f992a0f3900e5f1f2dc51313a26e4e50573caeb8` is FULL GREEN:
+  - worklog gate ✅
+  - locked Supabase identity ✅
+  - frontend API contract ✅
+  - lint ✅
+  - application typecheck ✅
+  - application + test typecheck ✅
+  - unit tests ✅
+  - build ✅
+  - canonical migrations + schema verify ✅
+  - integration + security/RLS regression ✅
+  - Playwright browser smoke ✅
 - Verify #3033 / 36304129860 on `90a867b3bd5d76e01691d9ee8718f901e6a45641`: mandatory worklog ✅, Supabase identity ✅, API contract ✅; lint failed on one new `no-explicit-any` in requester-name mapping. Typecheck/unit/build/DB/browser were skipped after lint failure. The runtime behavior was not implicated.
 - Fixed only that lint issue by introducing a typed `RequesterDisplayRow`; no behavior change.
 - Previous stale PR #383:
@@ -69,11 +81,10 @@ State: **BLOCKED**
 - Merge itself is explicitly blocked until user approval after all checks.
 
 ## Next action
-1. Observe focused/full verification on the exact current head after requester/action visibility update.
-2. Confirm the previous PaymentPanel provider regression is gone and the new Permission-First source contract passes.
-3. Classify any failure before changing runtime; do not weaken tests.
-4. If exact-head verify, DB/integration/RLS, and browser smoke are all Green, record merge-ready status.
-5. STOP before merge and wait for explicit user approval.
+1. STOP before merge.
+2. Wait for explicit user approval to merge PR #387.
+3. Before any merge, re-check PR head, branch head, and latest main; unexpected movement => STOP_AND_RECONCILE.
+4. No Production migration or live permission-data write is required for this package.
 
 ## Mandatory update protocol
 - Before each logical write: read `Next action`, `Change ledger`, and `Verification ledger`; re-check branch and main HEADs.
