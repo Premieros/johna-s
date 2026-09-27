@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/zero-cost-db-runtime-20260927`
-Current PR: `#0`
+Current PR: `#391`
 Base: `main@ff796cac04a3c11416eaf8aa97d9cb71f536ffa6`
 Last updated: 2026-09-27 Africa/Cairo
 
@@ -66,6 +66,7 @@ Write mode: **SEQUENTIAL_ONLY**
 
 - Created isolated branch `development/zero-cost-db-runtime-20260927` from exact current `main`.
 - No Production write performed.
+- Draft PR #391 opened from the isolated branch.
 - No application/runtime change committed yet.
 - Frozen print/KDS paths remain untouched.
 
@@ -94,8 +95,7 @@ State: **BLOCKED**
 ## Next action
 
 1. Point `docs/CURRENT_WORK_PLAN.md` mandatory execution gate to this branch/log.
-2. Create a Draft PR and replace `Current PR: #0` with the real PR number.
-3. Implement the first low-risk stage:
+2. Implement the first low-risk stage:
    - remove 2-second approval polling using narrowly-scoped event-driven updates or an existing approval-state channel;
    - remove idle role polling while preserving explicit refresh after role mutations and safe authorization behavior;
    - add regression contracts proving no print/KDS files or semantics changed.
