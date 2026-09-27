@@ -220,6 +220,20 @@ export function ProductModifiersPage() {
     });
   }, [products, productSearch, categoryFilter]);
 
+  const friendlyModifierError = (error?: string, detail?: string) => {
+    if (error === 'MODIFIER_GROUP_HAS_OPEN_ORDERS') {
+      return isAr
+        ? 'لا يمكن تعديل أو إيقاف هذه المجموعة الآن لأن أحد منتجاتها موجود في طلب مفتوح.'
+        : 'This group cannot be edited or archived while one of its products is in an open order.';
+    }
+    if (error === 'REQUIRED_MODIFIER_HAS_OPEN_ORDERS') {
+      return isAr
+        ? 'لا يمكن جعل هذه المجموعة مطلوبة الآن لأن أحد المنتجات المرتبطة بها موجود في طلب مفتوح.'
+        : 'This group cannot be made required while an assigned product is in an open order.';
+    }
+    return detail || error || (isAr ? 'تعذر حفظ مجموعة الإضافات.' : 'Could not save modifier group.');
+  };
+
   const saveGroup = async (groupIndex: number) => {
     if (!branchFilter || !canManage) return;
     const group = groups[groupIndex];
@@ -283,7 +297,7 @@ export function ProductModifiersPage() {
       if (error) throw error;
 
       const result = (data || {}) as { success?: boolean; error?: string; detail?: string; group_id?: string };
-      if (!result.success) throw new Error(result.detail || result.error || 'SAVE_MODIFIER_GROUP_FAILED');
+      if (!result.success) throw new Error(friendlyModifierError(result.error, result.detail));
 
       show(isAr ? 'تم حفظ المجموعة والمنتجات والاختيارات' : 'Group, products and options saved', 'success');
       await load();
@@ -302,7 +316,7 @@ export function ProductModifiersPage() {
       const { data, error } = await api.catalog.archiveModifierGroup(group.id);
       if (error) throw error;
       const result = (data || {}) as { success?: boolean; error?: string; detail?: string };
-      if (!result.success) throw new Error(result.detail || result.error || 'ARCHIVE_MODIFIER_GROUP_FAILED');
+      if (!result.success) throw new Error(friendlyModifierError(result.error, result.detail));
       show(isAr ? 'تم إيقاف المجموعة' : 'Group archived', 'success');
       await load();
     } catch (err) {
