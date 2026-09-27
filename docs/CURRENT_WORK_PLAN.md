@@ -4,7 +4,7 @@
 
 - Mandatory active work log: `docs/TREASURY_SEQUENCE_UUID_AGGREGATE_HOTFIX_2026-09-27.md`
 - Current active branch: `development/fix-treasury-sequence-uuid-min-20260927`
-- Current PR: `#0`
+- Current PR: `#395`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
