@@ -64,7 +64,7 @@ Open a Draft PR and run exact-head verification. Do not apply the Production mig
 ## Verification ledger
 - Production inspection: read-only.
 - Ledger simulation: exact match to current branch cash/bank balances.
-- CI: pending.
+- CI #3139: failed only on a stale unit-test string expectation after all gates/lint/typechecks passed; expectation updated to the new server-sequence map signature. Exact-head rerun pending.
 
 ## Production gate
 BLOCKED — implementation and exact-head Full Verify are pending. Explicit approval is required before Production migration/merge.
