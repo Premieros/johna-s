@@ -130,3 +130,16 @@ describe('treasury historical opening sequence contract', () => {
     expect(historicalSequenceMigration).not.toContain('DELETE FROM ');
   });
 });
+
+
+describe('treasury UUID aggregate regression', () => {
+  const uuidFixMigration = fs.readFileSync(
+    'supabase/migrations/20260927224500_fix_treasury_sequence_uuid_aggregate.sql',
+    'utf8',
+  );
+
+  it('never applies min directly to UUID reference ids', () => {
+    expect(uuidFixMigration).toContain('min(a.reference_id::text)::uuid AS reference_id');
+    expect(uuidFixMigration).not.toContain('min(a.reference_id) AS reference_id');
+  });
+});
