@@ -8,7 +8,7 @@ Last updated: 2026-09-27 Africa/Cairo
 
 ## Work status
 
-State: **IN_PROGRESS**
+State: **BLOCKED**
 
 Goal: simplify Treasury so each business day is exactly one row, while keeping the existing Day Closing Report action unchanged and preserving authoritative treasury balances.
 
@@ -27,6 +27,13 @@ Goal: simplify Treasury so each business day is exactly one row, while keeping t
 - The current day-close reconciliation RPC already returns sales by cash/bank/credit, expenses, cash purchases, close balances, post-close treasury movements, and current balance.
 - Smouha 2026-09-26 snapshot example: sales 22,803; credit 275; expenses 1,395; cash purchases 4,345.99; cash sales 14,196; bank/card 8,332.
 - Day Closing Report button currently calls the canonical `fetchDayClosingReportServer` and must remain unchanged.
+
+## Root-cause ledger
+
+1. Production has one closed `daily_closes` record per branch/business_date; duplicate-looking rows are a presentation problem, not duplicate day-close data.
+2. `TreasuryPage` renders each day as a card and then renders every `movement_details` entry beneath it, producing many visible rows for one business day.
+3. The canonical reconciliation payload already contains the approved financial columns and authoritative treasury balances, so no DB rewrite is required.
+4. The latest day must use the live branch cash+bank balance for its displayed closing value; non-day treasury movements remain traceable in treasury transaction history.
 
 ## Approved row contract
 
@@ -79,3 +86,14 @@ No Production SQL write is authorized or required by the approved UI-only scope.
 ## Next action
 
 Run exact-head verification for PR #385. Fix only proven failures; do not merge until Full Verify is Green.
+
+
+## Mandatory update protocol
+
+- Before every repository write, fetch the active branch HEAD and require it to match the expected checkpoint.
+- Unexpected HEAD movement = STOP_AND_RECONCILE.
+- Update Change ledger after each logical implementation group.
+- Update Verification ledger after every CI/verification run with the real result and Run ID.
+- Keep docs/CURRENT_WORK_PLAN.md pointing to this log while PR #385 is active.
+- Do not merge until exact-head Full Verify is Green.
+- This scope is UI-only; do not introduce a Production migration unless a proven data-contract gap requires it and the user explicitly approves.
