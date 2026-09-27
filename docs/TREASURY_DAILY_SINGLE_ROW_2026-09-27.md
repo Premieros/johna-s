@@ -74,8 +74,8 @@ Main treasury:
 ## Verification ledger
 
 - Baseline DB inspection: read-only, no duplicate branch/business_date closes found.
-- Focused/unit verification: pending on PR #385 exact head.
-- Full Verify: pending.
+- Focused/unit verification: Green in Verify main #3015.
+- Full Verify #3015 / run 36298594568 on head `88adec7fe17d0c387c159ed3b6c874413c590349`: FULL GREEN — worklog ✅ API contract ✅ lint ✅ typecheck ✅ unit ✅ build ✅ DB migrations/schema ✅ integration + security/RLS ✅ Browser Smoke ✅.
 
 ## Production gate
 
@@ -85,7 +85,7 @@ No Production SQL write is authorized or required by the approved UI-only scope.
 
 ## Next action
 
-Run exact-head verification for PR #385. Fix only proven failures; do not merge until Full Verify is Green.
+Re-run exact-head verification after this documentation checkpoint, then stop before merge pending explicit user approval.
 
 
 ## Mandatory update protocol
