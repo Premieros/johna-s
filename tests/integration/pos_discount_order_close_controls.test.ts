@@ -52,6 +52,19 @@ describe.skipIf(skip)('POS discount and order close controls', () => {
     expect(split).toContain('SPLIT_PAYMENT_TOTAL_MISMATCH');
   });
 
+  it('normalizes modifier option ordering in the shared settlement boundary for normal and split payment', async () => {
+    const prepare = await def('_prepare_kitchen_sale_settlement');
+    const normal = await def('process_sale');
+    const split = await def('process_sale_split');
+
+    const canonicalSortMatches = prepare.match(/ORDER BY j2\.id::uuid/g) || [];
+    expect(canonicalSortMatches).toHaveLength(2);
+    expect(prepare).toContain("jsonb_array_elements(COALESCE(v_preview->'items', '[]'::jsonb))");
+    expect(prepare).toContain("jsonb_array_elements(COALESCE(p_items, '[]'::jsonb))");
+    expect(normal).toContain('_prepare_kitchen_sale_settlement');
+    expect(split).toContain('_prepare_kitchen_sale_settlement');
+  });
+
   it('does not allow direct completion and uses canonical status permissions', async () => {
     const status = await def('set_order_status');
     expect(status).toContain('user_may_access_branch(v_order.branch_id)');
