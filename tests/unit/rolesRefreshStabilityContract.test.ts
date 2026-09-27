@@ -17,14 +17,16 @@ describe('roles refresh stability contract', () => {
     expect(source).toContain('deleteRole');
   });
 
-  it('keeps roles zero-idle and refreshes only on meaningful recovery events', () => {
-    expect(source).not.toContain('ROLE_REFRESH_INTERVAL_MS');
-    expect(source).not.toContain('window.setInterval(');
-    expect(source).not.toContain('window.clearInterval(');
+  it('keeps role refresh bounded and suppresses polling while the tab is hidden', () => {
+    expect(source).toContain('const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;');
+    expect(source).toContain('window.setInterval(() => {');
+    expect(source).toContain("if (document.visibilityState === 'visible') refreshNow();");
+    expect(source).toContain('}, ROLE_REFRESH_INTERVAL_MS);');
+    expect(source).toContain('window.clearInterval(timer);');
     expect(source).toContain("window.addEventListener('focus', refreshIfStale)");
     expect(source).toContain("window.addEventListener('online', refreshIfStale)");
     expect(source).toContain("document.addEventListener('visibilitychange', refreshWhenVisible)");
-    expect(source).toContain('if (now - lastRefreshAt < 60_000) return;');
+    expect(source).toContain('if (Date.now() - lastRefreshAt < 60_000) return;');
     expect(source).not.toContain("table: 'roles'");
     expect(source).not.toContain('supabase.removeChannel(channel)');
   });
