@@ -157,8 +157,8 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'inventory.ledger.view': { ar: 'عرض دفتر المخزون', en: 'View Inventory Ledger' },
   'raw_materials.view': { ar: 'عرض المواد الخام', en: 'View Raw Materials' },
   'raw_materials.manage': { ar: 'إدارة المواد الخام', en: 'Manage Raw Materials' },
-  'recipes.view': { ar: 'عرض الوصفات', en: 'View Recipes' },
-  'recipes.manage': { ar: 'إدارة الوصفات', en: 'Manage Recipes' },
+  'recipes.view': { ar: 'عرض الخامات المباشرة للمنتجات', en: 'View Direct Product Raw Materials' },
+  'recipes.manage': { ar: 'إدارة الخامات المباشرة للمنتجات', en: 'Manage Direct Product Raw Materials' },
   'production.view': { ar: 'توافق قديم: عرض الإنتاج (غير مستخدم حاليًا)', en: 'Legacy compatibility: View production (not currently used)' },
   'production.manage': { ar: 'توافق قديم: إدارة الإنتاج (غير مستخدم حاليًا)', en: 'Legacy compatibility: Manage production (not currently used)' },
   'production.waste': { ar: 'توافق قديم: هالك الإنتاج (غير مستخدم حاليًا)', en: 'Legacy compatibility: Production waste (not currently used)' },
@@ -230,7 +230,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'purchases', ar: 'المشتريات', en: 'Purchases', permissions: ['purchases.view', 'purchases.manage', 'purchases.print', 'purchases.delete', 'purchases.requests', 'purchases.rfq', 'purchases.receiving', 'purchases.evaluation', 'procurement.request.create', 'procurement.order.create', 'procurement.receive', 'procurement.payment.create'] },
   { key: 'inventory', ar: 'المخزون', en: 'Inventory', permissions: ['inventory.view', 'inventory.adjust', 'inventory.count.create', 'inventory.count.approve', 'inventory.count.reject', 'inventory.count.apply', 'inventory.transfer.create', 'inventory.transfer.approve', 'inventory.ledger.view'] },
   { key: 'raw_materials', ar: 'المواد الخام', en: 'Raw Materials', permissions: ['raw_materials.view', 'raw_materials.manage'] },
-  { key: 'recipes', ar: 'الوصفات', en: 'Recipes', permissions: ['recipes.view', 'recipes.manage'] },
+  { key: 'recipes', ar: 'الخامات المباشرة للمنتجات', en: 'Direct Product Raw Materials', permissions: ['recipes.view', 'recipes.manage'] },
   { key: 'production', ar: 'الهالك والتوافق القديم', en: 'Waste & Legacy Compatibility', permissions: ['production.view', 'production.manage', 'production.waste', 'waste.view', 'waste.create', 'waste.approve', 'waste.report'] },
   { key: 'warehouses', ar: 'المخازن', en: 'Warehouses', permissions: ['warehouses.view', 'warehouses.manage'] },
   { key: 'customers', ar: 'العملاء', en: 'Customers', permissions: ['customers.view', 'customers.manage', 'customers.print', 'customers.export'] },
@@ -294,8 +294,8 @@ export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
   },
   {
     key: 'raw_recipes',
-    ar: 'المواد الخام والوصفات',
-    en: 'Raw Materials & Recipes',
+    ar: 'المواد الخام ومكونات المنتجات',
+    en: 'Raw Materials & Product Components',
     permissions: ['raw_materials', 'recipes'].flatMap(
       (key) => PERMISSION_GROUPS.find((group) => group.key === key)!.permissions,
     ),
@@ -404,7 +404,7 @@ export const ROLE_META: Record<Role, { ar: string; en: string }> = {
   cashier: { ar: 'أمين صندوق', en: 'Cashier' },
   warehouse_manager: { ar: 'مدير مخازن', en: 'Warehouse Manager' },
   accountant: { ar: 'محاسب', en: 'Accountant' },
-  production_manager: { ar: 'مدير إنتاج', en: 'Production Manager' },
+  production_manager: { ar: 'مدير المكونات والمخزون', en: 'Components & Inventory Manager' },
 };
 
 /** Super Admin is the only platform-wide implicit role. */

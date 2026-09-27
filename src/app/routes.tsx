@@ -23,7 +23,6 @@ const CategoriesPage = lazy(() => import('../features/catalog/pages/CategoriesPa
 const InventoryPage = lazy(() => import('../features/inventory/pages/InventoryPage').then(m => ({ default: m.InventoryPage })));
 const WarehousesPage = lazy(() => import('../features/inventory/pages/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
 const RawMaterialsPage = lazy(() => import('../features/manufacturing/pages/RawMaterialsPage').then(m => ({ default: m.RawMaterialsPage })));
-const RecipesPage = lazy(() => import('../features/manufacturing/pages/RecipesPage').then(m => ({ default: m.RecipesPage })));
 const TransfersPage = lazy(() => import('../features/inventory/pages/TransfersPage').then(m => ({ default: m.TransfersPage })));
 const InventoryLedgerPage = lazy(() => import('../features/inventory/pages/InventoryLedgerPage').then(m => ({ default: m.InventoryLedgerPage })));
 const StockCountsPage = lazy(() => import('../features/inventory/pages/StockCountsPage').then(m => ({ default: m.StockCountsPage })));
@@ -76,7 +75,7 @@ function resolveLandingRoute(can: (permission: Permission) => boolean, role?: st
     ['pos.view', APP_ROUTES.pos], ['pos.kds_view', APP_ROUTES.kitchenDisplay], ['floor_plan.view', APP_ROUTES.floorPlan],
     ['approvals.review', APP_ROUTES.approvals], ['waste.view', APP_ROUTES.wasteCenter],
     ['products.view', APP_ROUTES.products], ['categories.view', APP_ROUTES.categories],
-    ['raw_materials.view', APP_ROUTES.rawMaterials], ['recipes.view', APP_ROUTES.recipes], ['inventory.view', APP_ROUTES.inventory],
+    ['raw_materials.view', APP_ROUTES.rawMaterials], ['inventory.view', APP_ROUTES.inventory],
     ['warehouses.view', APP_ROUTES.warehouses], ['inventory.ledger.view', APP_ROUTES.inventoryLedger],
     ['purchases.view', APP_ROUTES.purchases], ['customers.view', APP_ROUTES.customers], ['suppliers.view', APP_ROUTES.suppliers],
     ['expenses.view', APP_ROUTES.expenses], ['sales.view', APP_ROUTES.sales], ['shifts.view', APP_ROUTES.shifts],
@@ -136,7 +135,7 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.operationsCenter} element={<ProtectedRoute permission="dashboard.view"><OperationsCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.inventoryCenter} element={<ProtectedRoute permission="inventory.view"><InventoryCenterPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.procurementCenter} element={<ProtectedRoute permission="purchases.view"><ProcurementCenterPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.recipes} replace />} />
+        <Route path={APP_ROUTES.manufacturingCenter} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />} />
         <Route path={APP_ROUTES.pos} element={<ProtectedRoute permission="pos.view" fullscreen><PosWorkspacePage /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.pos}/:orderId`} element={<ProtectedRoute permission="pos.view" fullscreen><PosWorkspacePage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.delivery} element={<ProtectedRoute permission="pos.view" fullscreen><Navigate to={APP_ROUTES.pos} replace state={{ startStep: 'delivery' }} /></ProtectedRoute>} />
@@ -158,9 +157,9 @@ export function AppRoutes() {
         <Route path={APP_ROUTES.inventory} element={<ProtectedRoute permission="inventory.view"><InventoryPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.warehouses} element={<ProtectedRoute permission="warehouses.view"><WarehousesPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.rawMaterials} element={<ProtectedRoute permission="raw_materials.view"><RawMaterialsPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.recipes} element={<ProtectedRoute permission="recipes.view"><RecipesPage /></ProtectedRoute>} />
-        <Route path={APP_ROUTES.production} element={<Navigate to={APP_ROUTES.recipes} replace />} />
-        <Route path={APP_ROUTES.productionUnits} element={<Navigate to={APP_ROUTES.recipes} replace />} />
+        <Route path={APP_ROUTES.recipes} element={<Navigate to={APP_ROUTES.products} replace />} />
+        <Route path={APP_ROUTES.production} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />} />
+        <Route path={APP_ROUTES.productionUnits} element={<Navigate to={APP_ROUTES.inventoryUnits} replace />} />
         <Route path={APP_ROUTES.transfers} element={<ProtectedRoute permission="inventory.view"><TransfersPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.inventoryLedger} element={<ProtectedRoute permission="inventory.ledger.view"><InventoryLedgerPage /></ProtectedRoute>} />
         <Route path={APP_ROUTES.stockCounts} element={<ProtectedRoute permission="inventory.view"><StockCountsPage /></ProtectedRoute>} />

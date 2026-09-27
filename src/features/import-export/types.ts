@@ -8,7 +8,6 @@ export type ImportExportEntity =
   | 'purchases'
   | 'opening_inventory'
   | 'recipes'
-  | 'production'
   | 'transfers'
   | 'expenses'
   | 'users';

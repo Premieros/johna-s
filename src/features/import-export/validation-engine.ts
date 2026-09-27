@@ -259,7 +259,7 @@ export class ValidationEngine {
               value: '',
               message: `كود المنتج التام (Product SKU) فارغ.`,
               messageEn: `Product SKU is missing.`,
-              remedy: `أدخل رمز المنتج المراد ربط الوصفة به في الصف ${rowNumber}.`,
+              remedy: `أدخل رمز المنتج المراد ربط الخامات به في الصف ${rowNumber}.`,
               remedyEn: `Enter Product SKU at row ${rowNumber}.`,
               severity: 'error',
             });
@@ -269,15 +269,15 @@ export class ValidationEngine {
               (p) => p.sku?.toLowerCase() === prodSku.toLowerCase() || p.id === prodSku
             );
             if (!productExists) {
-              warnings.push({
+              errors.push({
                 rowNumber,
-                column: 'كود المنتج التام',
+                column: 'كود المنتج',
                 value: prodSku,
-                message: `المنتج التام "${prodSku}" غير مسجل مسبقاً، سيتم إنشاؤه تلقائياً كمنتج تصنيعي.`,
-                messageEn: `Finished Product "${prodSku}" not found. Will be auto-created as a manufactured item.`,
-                remedy: `لا يتطلب إجراء، سيقوم النظام بتسجيله أثناء الاستيراد.`,
-                remedyEn: `No action required, auto-registration will proceed.`,
-                severity: 'warning',
+                message: `المنتج "${prodSku}" غير موجود. أنشئ المنتج أولاً ثم أعد الاستيراد.`,
+                messageEn: `Product "${prodSku}" does not exist. Create it first, then retry the import.`,
+                remedy: `أنشئ المنتج من شاشة المنتجات بنفس الكود قبل الاستيراد.`,
+                remedyEn: `Create the product with the same SKU before importing its raw materials.`,
+                severity: 'error',
               });
             }
           }
@@ -296,19 +296,19 @@ export class ValidationEngine {
           } else {
             // Check if component exists in system
             const compExists = context.existingComponents.some(
-              (c) => c.sku?.toLowerCase() === compSku.toLowerCase() || c.id === compSku
-            ) || context.existingProducts.some((p) => p.sku?.toLowerCase() === compSku.toLowerCase());
+              (row) => row.sku?.toLowerCase() === compSku.toLowerCase() || row.id === compSku
+            );
 
             if (!compExists) {
-              warnings.push({
+              errors.push({
                 rowNumber,
-                column: 'كود المكون',
+                column: 'كود الخامة',
                 value: compSku,
-                message: `المادة الخام "${compSku}" غير مسجلة مسبقاً، سيتم إنشاؤها تلقائياً في دليل المواد الخام.`,
-                messageEn: `Raw material "${compSku}" not found. Will be auto-created in raw materials master.`,
-                remedy: `لا يتطلب إجراء، سيقوم النظام بإنشائها أثناء الاستيراد.`,
-                remedyEn: `No action needed, will be auto-created.`,
-                severity: 'warning',
+                message: `الخامة "${compSku}" غير موجودة. أنشئ الخامة أولاً ثم أعد الاستيراد.`,
+                messageEn: `Raw material "${compSku}" does not exist. Create it first, then retry the import.`,
+                remedy: `أنشئ الخامة من شاشة المواد الخام بنفس الكود قبل الاستيراد.`,
+                remedyEn: `Create the raw material with the same SKU before importing product composition.`,
+                severity: 'error',
               });
             }
           }

@@ -518,7 +518,7 @@ export function ImportExportCenterPage() {
           description={
             isAr
               ? 'المنظومة المركزية الشاملة لجميع عمليات إكسل: استيراد وتصدير الأصناف والمواد الخام والوصفات والمشتريات مع التحقق الصارم من العلاقات والصلاحيات'
-              : 'Enterprise Excel engine: Import & export catalog, BOM recipes, purchases, and stock with strict relational integrity'
+              : 'Enterprise Excel engine: Import & export catalog, product raw materials, purchases, and stock with strict relational integrity'
           }
           actions={
             <div className="flex items-center gap-3">
@@ -880,7 +880,7 @@ export function ImportExportCenterPage() {
                           {selectedEntity === 'recipes'
                             ? isAr
                               ? `معاينة تجميع الوصفات (${validationSummary.groupedSummary.length} منتجات مجمعة بنموذج One Row Per Component)`
-                              : `Grouped Recipes Preview (${validationSummary.groupedSummary.length} BOM Recipes)`
+                              : `Grouped Product Raw Materials Preview (${validationSummary.groupedSummary.length} BOM Recipes)`
                             : isAr
                             ? `معاينة الفواتير المجمعة (${validationSummary.groupedSummary.length} فواتير شراء)`
                             : `Grouped Purchase Orders (${validationSummary.groupedSummary.length} POs)`}
@@ -1251,7 +1251,7 @@ export function ImportExportCenterPage() {
                   <Button
                     onClick={() => {
                       if (selectedEntity === 'products') window.location.hash = '/products';
-                      else if (selectedEntity === 'recipes') window.location.hash = '/recipes';
+                      else if (selectedEntity === 'recipes') window.location.hash = '/products';
                       else if (selectedEntity === 'purchases') window.location.hash = '/purchases';
                       else setActiveTab('logs');
                     }}

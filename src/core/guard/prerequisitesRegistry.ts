@@ -94,8 +94,8 @@ export const PREREQUISITE_STEPS: Record<PrerequisiteStepKey, PrerequisiteStep> =
     key: 'create_unit',
     titleAr: 'تعريف وحدات القياس',
     titleEn: 'Define Units of Measure',
-    descriptionAr: 'يلزم أولاً تعريف وحدات القياس (كيلو، جرام، لتر، قطعة) قبل ربط الخامات والمنتجات والوصفات.',
-    descriptionEn: 'Units of measure (kg, g, l, piece) must be defined before configuring items and recipes.',
+    descriptionAr: 'يلزم أولاً تعريف وحدات القياس (كيلو، جرام، لتر، قطعة) قبل ربط الخامات والمنتجات والمكونات.',
+    descriptionEn: 'Units of measure (kg, g, l, piece) must be defined before configuring items and components.',
     targetRoute: APP_ROUTES.inventoryUnits,
     actionLabelAr: 'الانتقال إلى الوحدات',
     actionLabelEn: 'Go to Units',
@@ -130,25 +130,13 @@ export const PREREQUISITE_STEPS: Record<PrerequisiteStepKey, PrerequisiteStep> =
     key: 'create_raw_material',
     titleAr: 'إضافة خامات ومواد أولية',
     titleEn: 'Add Raw Materials',
-    descriptionAr: 'يتطلب التصنيع والوصفات تسجيل المواد الأولية والخامات الداخلة في إعداد الأصناف.',
-    descriptionEn: 'Manufacturing and recipes require adding raw materials and inventory ingredients first.',
+    descriptionAr: 'يتطلب إعداد مكونات المنتجات تسجيل المواد الأولية والخامات المستخدمة.',
+    descriptionEn: 'Product composition requires adding raw materials and inventory ingredients first.',
     targetRoute: APP_ROUTES.rawMaterials,
     actionLabelAr: 'الانتقال إلى الخامات',
     actionLabelEn: 'Go to Raw Materials',
     requiredPermission: 'raw_materials.manage',
     iconName: 'flask',
-  },
-  create_recipe: {
-    key: 'create_recipe',
-    titleAr: 'بناء وصفة تصنيع (BOM)',
-    titleEn: 'Create Manufacturing Recipe',
-    descriptionAr: 'المنتج المصنع يتطلب تعريف وصفة مكونات (BOM) تحدد كميات الخامات المستهلكة ونسب الهدر.',
-    descriptionEn: 'Manufactured products require defining a recipe (Bill of Materials) for raw material consumption.',
-    targetRoute: APP_ROUTES.recipes,
-    actionLabelAr: 'الانتقال إلى الوصفات',
-    actionLabelEn: 'Go to Recipes',
-    requiredPermission: 'recipes.manage',
-    iconName: 'chefHat',
   },
   open_shift: {
     key: 'open_shift',
@@ -294,33 +282,6 @@ export function validateActionPrerequisites(
       break;
     }
 
-    case 'production_create': {
-      if (!ctx.branchId && !isSuper) {
-        return {
-          allowed: false,
-          missingStep: PREREQUISITE_STEPS.select_branch,
-          reasonAr: 'يلزم تحديد الفرع لتنفيذ أوامر الإنتاج والتصنيع.',
-          reasonEn: 'Select branch to execute manufacturing orders.',
-        };
-      }
-      if (typeof ctx.warehousesCount === 'number' && ctx.warehousesCount === 0) {
-        return {
-          allowed: false,
-          missingStep: PREREQUISITE_STEPS.create_warehouse,
-          reasonAr: 'يلزم وجود مخزن معتمد لصرف الخامات واستلام المنتجات المصنعة.',
-          reasonEn: 'A warehouse is required to issue raw materials and receive manufactured goods.',
-        };
-      }
-      if (typeof ctx.recipesCount === 'number' && ctx.recipesCount === 0) {
-        return {
-          allowed: false,
-          missingStep: PREREQUISITE_STEPS.create_recipe,
-          reasonAr: 'لا توجد وصفات تصنيع (BOM) مسجلة لتنفيذ عملية الإنتاج.',
-          reasonEn: 'No manufacturing recipes found. Please create a recipe first.',
-        };
-      }
-      break;
-    }
 
     case 'transfer_create': {
       if (typeof ctx.warehousesCount === 'number' && ctx.warehousesCount < 2) {
@@ -334,17 +295,6 @@ export function validateActionPrerequisites(
       break;
     }
 
-    case 'recipe_create': {
-      if (typeof ctx.rawMaterialsCount === 'number' && ctx.rawMaterialsCount === 0) {
-        return {
-          allowed: false,
-          missingStep: PREREQUISITE_STEPS.create_raw_material,
-          reasonAr: 'يلزم أولاً تسجيل الخامات والمكونات الأولية لإضافتها في الوصفة.',
-          reasonEn: 'Please create raw materials and ingredients before assembling recipes.',
-        };
-      }
-      break;
-    }
 
     case 'kds_view': {
       if (typeof ctx.kitchenStationsCount === 'number' && ctx.kitchenStationsCount === 0) {

@@ -32,7 +32,7 @@ describe('catalog terminology and measurement-unit lock contract', () => {
     expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
     expect(source).toContain('materialLabel(material)');
     expect(source).toContain("'لا يمكن استخدام خامة بدون وحدة قياس. حدد وحدة الخامة أولًا.'");
-    expect(source).toContain("const recipeBranchId = unit.branch_id || branchFilter || ''");
+    expect(source).toContain("const componentBranchId = unit.branch_id || branchFilter || ''");
   });
 
   it('keeps product creation free of product measurement units and links only reusable component groups', () => {

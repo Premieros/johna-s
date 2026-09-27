@@ -22,7 +22,7 @@ export interface MenuItemConfig {
 }
 
 export const MENU_GROUPS: Record<MenuGroup, { ar: string; en: string }> = {
-  main: { ar: 'الرئيسية', en: 'Main' }, catalog: { ar: 'الكتالوج والوصفات', en: 'Catalog & Recipes' }, operations: { ar: 'العمليات', en: 'Operations' }, centers: { ar: 'مراكز الإدارة', en: 'Management Centers' }, people: { ar: 'الأطراف', en: 'People' }, finance: { ar: 'المالية', en: 'Finance' }, admin: { ar: 'الإدارة', en: 'Admin' },
+  main: { ar: 'الرئيسية', en: 'Main' }, catalog: { ar: 'الكتالوج والمكونات', en: 'Catalog & Components' }, operations: { ar: 'العمليات', en: 'Operations' }, centers: { ar: 'مراكز الإدارة', en: 'Management Centers' }, people: { ar: 'الأطراف', en: 'People' }, finance: { ar: 'المالية', en: 'Finance' }, admin: { ar: 'الإدارة', en: 'Admin' },
 };
 
 export const MENU_ITEMS: MenuItemConfig[] = [
@@ -37,7 +37,6 @@ export const MENU_ITEMS: MenuItemConfig[] = [
   { id: 'pricing', route: APP_ROUTES.pricing, icon: 'pricing', labelKey: 'products', label: { ar: 'التسعير', en: 'Pricing' }, permission: 'products.view', group: 'catalog' },
   { id: 'product-modifiers', route: APP_ROUTES.productModifiers, icon: 'productModifiers', labelKey: 'products', label: { ar: 'مجموعات الإضافات', en: 'Modifier Groups' }, permission: 'products.modifiers.manage', group: 'catalog' },
   { id: 'product-modifier-options', route: APP_ROUTES.productModifierOptions, icon: 'productModifiers', labelKey: 'products', label: { ar: 'الخيارات', en: 'Modifier Options' }, permission: 'products.modifiers.manage', group: 'catalog' },
-  { id: 'recipes', route: APP_ROUTES.recipes, icon: 'recipes', labelKey: 'recipes', permission: 'recipes.view', group: 'catalog' },
   { id: 'raw-materials', route: APP_ROUTES.rawMaterials, icon: 'rawMaterials', labelKey: 'rawMaterials', permission: 'raw_materials.view', group: 'catalog' },
   { id: 'categories', route: APP_ROUTES.categories, icon: 'categories', labelKey: 'categories', permission: 'categories.view', group: 'catalog' },
   { id: 'inventory-units', route: APP_ROUTES.inventoryUnits, icon: 'inventoryUnits', labelKey: 'inventoryUnits', label: { ar: 'مجموعات المكونات', en: 'Component Groups' }, permission: 'raw_materials.view', group: 'catalog' },
