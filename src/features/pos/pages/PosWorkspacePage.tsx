@@ -823,7 +823,7 @@ export function PosWorkspacePage() {
             orderType={pos.orderType}
             itemsCount={pos.cart.reduce((s, it) => s + it.quantity, 0)}
             canPrintReceipt={pos.cart.length > 0
-              ? (!pos.openCheckPrintLocked || perms.canReprint)
+              ? (perms.canReprint || (pos.openCheckPrintStateReady && !pos.openCheckPrintLocked))
               : !!pos.lastReceipt}
             canModifyOrder={canModifyCurrentOrder}
             total={pos.total}
