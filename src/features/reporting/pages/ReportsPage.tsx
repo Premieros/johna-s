@@ -27,8 +27,6 @@ import { useSettings } from '@/context/SettingsContext';
 import {
   applySalesFilters,
   applySaleItemFilters,
-  applyPurchaseFilters,
-  applyExpenseFilters,
   applyProductScopedFilters,
   REPORT_FILTER_DIMS,
   DATE_DRIVEN_REPORTS,
