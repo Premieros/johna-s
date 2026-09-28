@@ -207,9 +207,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
 
     void (async () => {
-      if (openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint) return;
-
-    const preview = await loadSettlementPreview(false);
+      const preview = await loadSettlementPreview(false);
       if (!preview) return;
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
@@ -382,6 +380,8 @@ export function usePosOrder(input: UsePosOrderInput) {
       await base.printReceipt();
       return;
     }
+
+    if (openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint) return;
 
     const preview = await loadSettlementPreview(false);
     if (!preview) {
