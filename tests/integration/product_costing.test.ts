@@ -286,7 +286,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(history[1].reference_number).toBe('RAW-COST-PO');
 
     const detail = await asUser(managerId, async () =>
-      rows<{ r: { actual_cost: number; recipe_items: Array<{ unit_cost: number; line_cost: number; cost_source: string; cost_reference: string }> } }>(
+      rows<{ r: { actual_cost: number; recipe_items: Array<{ unit_cost: number; line_cost: number; cost_source: string; cost_reference: string; component_group_id?: string | null }> } }>(
         `SELECT public.get_product_costing_detail($1, $2) AS r`,
         [prodId, branchA],
       ),
