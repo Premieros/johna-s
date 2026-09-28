@@ -11,8 +11,8 @@
     "pos.active_orders_snapshot": {
       "warning_ms": 750,
       "critical_ms": 1500,
-      "max_client_round_trips": 5,
-      "basis": "Current snapshot fans out to orders, tables, operator labels, order_items and kitchen_sends; cumulative pg_stat_statements shows this is the highest repeated POS read family."
+      "max_client_round_trips": 3,
+      "basis": "Active snapshot now embeds order_items and order_kitchen_sends into the orders read; remaining client requests are dining tables, orders snapshot, and operator labels. Historical pg_stat_statements identified the removed item/send reads as the dominant repeated POS read family."
     },
     "pos.cart_availability": {
       "warning_ms": 750,
