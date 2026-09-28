@@ -436,9 +436,8 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCheckoutOpen,
     lastReceipt: settlementReceipt || base.lastReceipt,
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
-    openCheckPrintLocked: base.activeOrderId
-      ? openCheckPrintLockedOrderId === base.activeOrderId
-      : base.openCheckPrintLocked,
+    openCheckPrintLocked: base.openCheckPrintLocked
+      || (base.activeOrderId ? openCheckPrintLockedOrderId === base.activeOrderId : false),
     closeReceipt: () => {
       setSettlementReceiptSaleId(null);
       base.closeReceipt();
