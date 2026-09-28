@@ -11,13 +11,13 @@ type ReportFilterOptionFlags = {
 };
 
 type ReportFilterOptions = {
-  warehouses: unknown[];
-  cashiers: unknown[];
-  customers: unknown[];
-  suppliers: unknown[];
-  products: unknown[];
-  categories: unknown[];
-  tables: unknown[];
+  warehouses: { id: string; name: string }[];
+  cashiers: { id: string; full_name: string | null; email: string | null }[];
+  customers: { id: string; name: string; name_en: string | null }[];
+  suppliers: { id: string; name: string; name_en: string | null }[];
+  products: { id: string; name: string; name_en: string | null }[];
+  categories: { id: string; name: string; name_en: string | null }[];
+  tables: { id: string; name: string }[];
 };
 
 export async function loadReportFilterOptions(branchId: string, flags: ReportFilterOptionFlags): Promise<ReportFilterOptions> {
@@ -46,13 +46,13 @@ export async function loadReportFilterOptions(branchId: string, flags: ReportFil
   ]);
 
   return {
-    warehouses: warehouses.data || [],
-    cashiers: cashiers.data || [],
-    customers: customers.data || [],
-    suppliers: suppliers.data || [],
-    products: products.data || [],
-    categories: categories.data || [],
-    tables: tables.data || [],
+    warehouses: (warehouses.data || []) as ReportFilterOptions['warehouses'],
+    cashiers: (cashiers.data || []) as ReportFilterOptions['cashiers'],
+    customers: (customers.data || []) as ReportFilterOptions['customers'],
+    suppliers: (suppliers.data || []) as ReportFilterOptions['suppliers'],
+    products: (products.data || []) as ReportFilterOptions['products'],
+    categories: (categories.data || []) as ReportFilterOptions['categories'],
+    tables: (tables.data || []) as ReportFilterOptions['tables'],
   };
 }
 
