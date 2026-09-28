@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-import { supabase, branches as branchesApi } from '@/api';
+import { branches as branchesApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -17,6 +17,7 @@ import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { notifyBranchesChanged } from '@/hooks/useBranches';
 import { getActiveBranchId, setActiveBranchId } from '@/lib/activeBranch';
 import type { Branch } from '@/lib/types';
+import { fetchBranchOrganizationId } from '../services/branchOrganization';
 
 export function BranchesPage() {
   const { t, lang } = useLanguage();
@@ -40,8 +41,7 @@ export function BranchesPage() {
 
   const resolveOrgId = async (): Promise<string | null> => {
     if (!user?.branch_id) return null;
-    const { data } = await supabase.from('branches').select('organization_id').eq('id', user.branch_id).maybeSingle();
-    return (data as { organization_id: string | null } | null)?.organization_id ?? null;
+    return fetchBranchOrganizationId(user.branch_id);
   };
 
   const save = async () => {
