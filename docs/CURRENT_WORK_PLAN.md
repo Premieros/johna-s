@@ -25,13 +25,15 @@ Only the two latest Print Agent PRs are intentionally retained outside the curre
 Older PRs/branches are historical and must not be used as execution baselines.
 
 ## Safety fence
+- السجل هو المرجع الإجباري للعمل.
+- CI يجب أن يفشل إذا السجل الإلزامي مفقود أو ناقص أو لا يطابق فرع الـPR.
+- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Single writer on the active development branch.
 - No direct write to `main`.
 - No force push.
 - Unexpected HEAD => **STOP_AND_RECONCILE**.
 - No weakening Permission-First, branch isolation, RLS, tests, or Super Admin implicit-bypass rules.
 - Printing / Print Agent / routing / KDS / kitchen dispatch are frozen unless a separately proven regression requires a reviewed fix.
-- No Production migration before exact-head Full Verify Green + explicit approval.
 - No Production data rewrite/reset/reseed to make tests pass.
 - Runtime changes must remain safe for currently operating branches.
 
