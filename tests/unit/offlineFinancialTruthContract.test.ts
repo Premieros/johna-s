@@ -35,7 +35,7 @@ describe('offline financial truth contract', () => {
     expect(sync).toContain('const reconciled = await this.reconcileCommittedSale(item)');
     expect(sync).toContain('confirmed = Boolean(reconciled?.success && reconciled.sale_id)');
     expect(sync).toContain("throw new Error(message)");
-    expect(sync).toContain("await updateOfflineSaleStatus(item.id, 'failed', errorMsg)");
+    expect(sync).toContain('await scheduleOfflineSaleRetry(item.id, errorMsg)');
 
     const confirmGuard = sync.indexOf('if (!confirmed)');
     const remove = sync.indexOf('await removeOfflineSale(item.id)');
