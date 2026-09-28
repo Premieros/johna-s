@@ -97,7 +97,7 @@ export function ShiftsPage() {
   const [openModal, setOpenModal] = useState(false);
   const [openForm, setOpenForm] = useState({ opening_amount: 0, notes: '' });
   const [closeTarget, setCloseTarget] = useState<Shift | null>(null);
-  const [closeForm, setCloseForm] = useState({ actual_amount: 0, notes: '' });
+  const [closeForm, setCloseForm] = useState<{ actual_amount: number | ''; notes: string }>({ actual_amount: '', notes: '' });
   const [closeBlock, setCloseBlock] = useState<CloseBlock | null>(null);
   const [closing, setClosing] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
@@ -184,7 +184,7 @@ export function ShiftsPage() {
     }
     setCloseTarget(shift);
     setCloseBlock(null);
-    setCloseForm({ actual_amount: expected, notes: '' });
+    setCloseForm({ actual_amount: '', notes: '' });
   };
 
   const finishClose = async (res: ShiftCloseResult, preservedOpenOrders: boolean) => {
@@ -225,17 +225,22 @@ export function ShiftsPage() {
     );
     setCloseTarget(null);
     setCloseBlock(null);
-    setCloseForm({ actual_amount: 0, notes: '' });
+    setCloseForm({ actual_amount: '', notes: '' });
     reloadShifts();
   };
 
   const closeShift = async () => {
     if (!closeTarget || closing) return;
+    if (closeForm.actual_amount === '' || !Number.isFinite(closeForm.actual_amount)) {
+      show(isAr ? 'أدخل الرصيد الفعلي بعد عد النقدية أولاً.' : 'Enter the physically counted cash amount first.', 'error');
+      return;
+    }
+    const actualAmount = closeForm.actual_amount;
     setClosing(true);
     try {
       const { data, error: closeError } = await api.shifts.close({
         p_shift_id: closeTarget.id,
-        p_actual_amount: closeForm.actual_amount,
+        p_actual_amount: actualAmount,
         p_notes: closeForm.notes || null,
       });
       if (closeError) { show(closeError.message, 'error'); return; }
@@ -266,11 +271,16 @@ export function ShiftsPage() {
 
   const closeShiftWithOpenOrders = async () => {
     if (!closeTarget || closing || !can('shifts.close') || !can('shifts.close_with_open_orders')) return;
+    if (closeForm.actual_amount === '' || !Number.isFinite(closeForm.actual_amount)) {
+      show(isAr ? 'أدخل الرصيد الفعلي بعد عد النقدية أولاً.' : 'Enter the physically counted cash amount first.', 'error');
+      return;
+    }
+    const actualAmount = closeForm.actual_amount;
     setClosing(true);
     try {
       const { data, error: closeError } = await api.shifts.closeWithOpenOrders({
         p_shift_id: closeTarget.id,
-        p_actual_amount: closeForm.actual_amount,
+        p_actual_amount: actualAmount,
         p_notes: closeForm.notes || null,
       });
       if (closeError) { show(closeError.message, 'error'); return; }
@@ -526,16 +536,16 @@ export function ShiftsPage() {
           </div>}
 
           <div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'thermal')}><Printer className="w-4 h-4" /> {isAr ? 'معاينة إيصال Z-Report' : 'Preview Thermal'}</Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => handlePrintZReport(closeTarget, 'a4')}><FileText className="w-4 h-4" /> {isAr ? 'معاينة تقرير A4' : 'Preview A4'}</Button></div>
-          <Input type="number" step="0.01" label={isAr ? 'صافي رصيد الشفت الفعلي (يسمح بالسالب) *' : t('actualAmount')} value={String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: Number(e.target.value) })} />
+          <Input type="number" step="0.01" label={isAr ? 'صافي رصيد الشفت الفعلي (يسمح بالسالب) - بعد العد *' : t('actualAmount')} value={closeForm.actual_amount === '' ? '' : String(closeForm.actual_amount)} onChange={(e) => setCloseForm({ ...closeForm, actual_amount: e.target.value === '' ? '' : Number(e.target.value) })} />
           <Textarea label={isAr ? 'ملاحظات إغلاق الوردية' : t('notes')} value={closeForm.notes} onChange={(e) => setCloseForm({ ...closeForm, notes: e.target.value })} rows={2} />
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="secondary" disabled={closing} onClick={() => { setCloseTarget(null); setCloseBlock(null); }}>{t('cancel')}</Button>
             {closeBlock && can('shifts.close') && can('shifts.close_with_open_orders') && (
-              <Button variant="outline" disabled={closing} onClick={closeShiftWithOpenOrders}>
+              <Button variant="outline" disabled={closing || closeForm.actual_amount === ''} onClick={closeShiftWithOpenOrders}>
                 <Square className="w-4 h-4" /> {isAr ? 'إغلاق الوردية مع إبقاء الطلبات المفتوحة' : 'Close Shift & Keep Open Orders'}
               </Button>
             )}
-            <Button variant="danger" disabled={closing} onClick={closeShift}><Square className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق الوردية' : t('closeShift')}</Button>
+            <Button variant="danger" disabled={closing || closeForm.actual_amount === ''} onClick={closeShift}><Square className="w-4 h-4" /> {isAr ? 'تأكيد إغلاق الوردية' : t('closeShift')}</Button>
           </div>
         </div>}
       </Modal>

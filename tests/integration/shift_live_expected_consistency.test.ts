@@ -38,7 +38,8 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
 
     await client.query(
       `UPDATE public.shifts
-       SET opening_amount = 100,
+       SET opened_at = now()-interval '1 hour',
+           opening_amount = 100,
            expected_amount = 100,
            actual_amount = 0,
            difference = 0,
@@ -59,6 +60,13 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
         ($1,'expense',20,'cash','expense',$2),
         ($1,'cash_out',5,'cash','manual',$2)`,
       [shiftId, userId],
+    );
+
+    await client.query(
+      `INSERT INTO public.purchases(
+         invoice_number,branch_id,buyer_id,subtotal,total,paid_amount,payment_method,status,returned_amount,created_at
+       ) VALUES ($1,$2,$3,40,40,40,'cash','completed',5,now()-interval '2 minutes')`,
+      [`QA-LIVE-${shiftId}`, branchId, userId],
     );
 
     const active = await runAsPersist(
@@ -83,7 +91,8 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
 
     expect(activeResult).toMatchObject({ success: true, open: true });
     expect(activeResult.shift?.id).toBe(shiftId);
-    expect(Number(activeResult.shift?.expected)).toBe(215);
+    // 100 opening + 120 cash sale + 30 cash-in - 35 shift cash outflows - 35 net cash purchase = 180.
+    expect(Number(activeResult.shift?.expected)).toBe(180);
     expect(Number(activeResult.shift?.cash_sales)).toBe(120);
     expect(Number(activeResult.shift?.cash_in)).toBe(30);
     expect(Number(activeResult.shift?.cash_out)).toBe(35);
@@ -98,7 +107,7 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
     const closed = await runAsPersist(
       client,
       userId,
-      `SELECT public.close_shift($1,215,'numeric consistency') AS r`,
+      `SELECT public.close_shift($1,180,'numeric consistency') AS r`,
       [shiftId],
     );
     if (closed.error) throw new Error(closed.error);
@@ -111,8 +120,8 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
     };
 
     expect(closedResult).toMatchObject({ success: true });
-    expect(Number(closedResult.expected)).toBe(215);
-    expect(Number(closedResult.actual)).toBe(215);
+    expect(Number(closedResult.expected)).toBe(180);
+    expect(Number(closedResult.actual)).toBe(180);
     expect(Number(closedResult.difference)).toBe(0);
 
     const stored = await client.query<{ expected_amount: number; actual_amount: number; difference: number; status: string }>(
@@ -120,8 +129,8 @@ describe.skipIf(!dbUrl)('shift live expected cash consistency', () => {
       [shiftId],
     );
     expect(stored.rows[0].status).toBe('closed');
-    expect(Number(stored.rows[0].expected_amount)).toBe(215);
-    expect(Number(stored.rows[0].actual_amount)).toBe(215);
+    expect(Number(stored.rows[0].expected_amount)).toBe(180);
+    expect(Number(stored.rows[0].actual_amount)).toBe(180);
     expect(Number(stored.rows[0].difference)).toBe(0);
   });
 });
