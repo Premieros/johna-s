@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, TrendingUp, ShoppingCart, Receipt, Package, BarChart3, CreditCard, Users, List, Layers, AlertTriangle, FileDown, Printer, UserCheck, RotateCcw, Trash2 } from 'lucide-react';
-import { supabase, costing, reporting } from '@/api';
+import { costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
@@ -16,18 +16,16 @@ import { useColumnPreferences } from '../useColumnPreferences';
 import { ColumnPicker } from '../ColumnPicker';
 import { useCustomReports } from '../useCustomReports';
 import { getReportExcelProfile } from '../reportExcelProfiles';
-import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
 import type { SavedReportConfig } from '../useCustomReports';
 import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { loadExpenseCategoryOptions, loadReportFilterOptions } from '../services/reportFilterOptions';
 import { loadExpenseReportRows, loadPurchaseReportRows, loadSalesReportRows } from '../services/reportCoreLoaders';
 import { loadCashierPerformanceRows, loadDetailedInvoiceRows, loadReturnRows, loadSalesByEmployeeRows } from '../services/reportSalesLoaders';
+import { loadComponentConsumptionRows, loadLowStockSources, loadProductBranchRows, loadSalesByProductItems, loadTopConsumedComponentRows, loadTopConsumedProductItems, loadWasteRows } from '../services/reportInventoryLoaders';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
-  applySaleItemFilters,
-  applyProductScopedFilters,
   REPORT_FILTER_DIMS,
   DATE_DRIVEN_REPORTS,
   ORDER_TYPE_OPTIONS,
@@ -36,7 +34,6 @@ import {
   type ReportFilters,
   type ReportFilterKey,
   type ReportType,
-  type EqBuilder,
 } from '../reportFilters';
 import {
   allocateSaleNetRevenue,
@@ -117,10 +114,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const reportBranchLabel = effectiveBranchFilter
     ? branchNameById(effectiveBranchFilter)
     : (lang === 'ar' ? 'كل الفروع المتاحة' : 'All accessible branches');
-
-  const filterQ = <T,>(q: T, f: ReportFilters, applier: (b: EqBuilder, x: ReportFilters) => EqBuilder): T =>
-    applier(q as unknown as EqBuilder, f) as unknown as T;
-  const fetchRows = <T,>(query: unknown): Promise<T[]> => fetchAllReportRows(query as RangePageQuery<T>);
 
   const financialTypes: { key: FinancialReportType; label: string }[] = [
     { key: 'trial_balance', label: t('trialBalance') },
@@ -496,10 +489,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
         setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
       } else if (reportType === 'sales_by_product') {
-        let itemsQuery = supabase.from('sale_items').select('sale_id, quantity, refunded_quantity, total, refunded_amount, product:products(name), sale:sales(id, created_at, branch_id, status, order_type, warehouse_id, cashier_id, customer_id, payment_method, total, refunded_amount)');
-        if (effectiveBranchFilter) itemsQuery = itemsQuery.eq('sale.branch_id', effectiveBranchFilter);
-        itemsQuery = filterQ(itemsQuery, filters, applySaleItemFilters);
-        const items = await fetchRows<Record<string, unknown>>(itemsQuery);
+        const items = await loadSalesByProductItems({
+          branchId: effectiveBranchFilter || null,
+          filters,
+        });
         const filtered = items.filter((item: Record<string, unknown>) => {
           const sale = item.sale as { created_at: string } | null;
           return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
@@ -560,10 +553,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData([]);
         setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: rows.length });
       } else if (reportType === 'component_consumption') {
-        let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, unit_cost, created_at, product:products(name), warehouse:warehouses(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applyProductScopedFilters);
-        const tx = await fetchRows<Record<string, unknown>>(q);
+        const tx = await loadComponentConsumptionRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+          filters,
+        });
         const map = new Map<string, { branchId: string; name: string; qty: number; cost: number; count: number }>();
         tx.forEach((row: Record<string, unknown>) => {
           const product = row.product as { name?: string } | null;
@@ -587,10 +582,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المكوّن' : 'Component']), value: Number(row[lang === 'ar' ? 'الكمية المستهلكة' : 'Consumed Qty']) })));
         setSummary({ total: Array.from(map.values()).reduce((sum, row) => sum + row.cost, 0), count: rows.length });
       } else if (reportType === 'top_consumed_components') {
-        let q = supabase.from('stock_transactions').select('branch_id, product_id, quantity, product:products(name)').eq('component_flow', true).eq('transaction_type', 'sale').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applyProductScopedFilters);
-        const tx = await fetchRows<Record<string, unknown>>(q);
+        const tx = await loadTopConsumedComponentRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+          filters,
+        });
         const map = new Map<string, { branchId: string; name: string; qty: number }>();
         tx.forEach((row: Record<string, unknown>) => {
           const product = row.product as { name?: string } | null;
@@ -609,10 +606,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المكوّن' : 'Component']), value: Number(row[lang === 'ar' ? 'الكمية المستهلكة' : 'Consumed Qty']) })));
         setSummary({ total: rows.length, count: rows.length });
       } else if (reportType === 'top_consumed_products') {
-        let itemsQuery = supabase.from('sale_items').select('quantity, refunded_quantity, product:products(name), sale:sales(created_at, branch_id, order_type, warehouse_id, cashier_id, customer_id)');
-        if (effectiveBranchFilter) itemsQuery = itemsQuery.eq('sale.branch_id', effectiveBranchFilter);
-        itemsQuery = filterQ(itemsQuery, filters, applySaleItemFilters);
-        const items = await fetchRows<Record<string, unknown>>(itemsQuery);
+        const items = await loadTopConsumedProductItems({
+          branchId: effectiveBranchFilter || null,
+          filters,
+        });
         const filtered = items.filter((item: Record<string, unknown>) => {
           const sale = item.sale as { created_at: string } | null;
           return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
@@ -640,10 +637,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         if (result.error) { setData([]); setChartData([]); setSummary({ total: 0, count: 0 }); return; }
         const catName = filters.category ? options.categories.find((category) => category.id === filters.category)?.name ?? filters.category : '';
         const productIds = (result.data || []).map((row) => row.product_id);
-        const productBranchResult = productIds.length > 0
-          ? await supabase.from('products').select('id, branch_id').in('id', productIds)
-          : { data: [] as { id: string; branch_id: string }[] };
-        const productBranches = new Map((productBranchResult.data || []).map((product) => [product.id, product.branch_id]));
+        const productBranchRows = await loadProductBranchRows(productIds);
+        const productBranches = new Map(productBranchRows.map((product) => [product.id, product.branch_id]));
         const rows = (result.data || [])
           .filter((row) => row.recipe_item_count > 0)
           .filter((row) => !filters.product || row.product_id === filters.product)
@@ -658,22 +653,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'الهامش' : 'Margin']) })));
         setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost'] || 0), 0), count: rows.length });
       } else if (reportType === 'low_stock') {
-        let rawMasterQuery = supabase.from('raw_materials').select('id,branch_id,name,code,min_stock,is_active').eq('is_active', true);
-        let rawBalanceQuery = supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity,min_stock');
-        let unitMasterQuery = supabase.from('inventory_units').select('id,branch_id,name,barcode,min_stock,low_stock_threshold,is_active').eq('is_active', true);
-        let unitBatchQuery = supabase.from('inventory_unit_batches').select('unit_id,branch_id,quantity');
-        if (effectiveBranchFilter) {
-          rawMasterQuery = rawMasterQuery.eq('branch_id', effectiveBranchFilter);
-          rawBalanceQuery = rawBalanceQuery.eq('branch_id', effectiveBranchFilter);
-          unitMasterQuery = unitMasterQuery.eq('branch_id', effectiveBranchFilter);
-          unitBatchQuery = unitBatchQuery.eq('branch_id', effectiveBranchFilter);
-        }
-        const [rawMasters, rawBalances, unitMasters, unitBatches] = await Promise.all([
-          fetchRows<Record<string, unknown>>(rawMasterQuery),
-          fetchRows<Record<string, unknown>>(rawBalanceQuery),
-          fetchRows<Record<string, unknown>>(unitMasterQuery),
-          fetchRows<Record<string, unknown>>(unitBatchQuery),
-        ]);
+        const { rawMasters, rawBalances, unitMasters, unitBatches } = await loadLowStockSources(
+          effectiveBranchFilter || null,
+        );
         const rawQty = new Map<string, number>();
         rawBalances.forEach((row: Record<string, unknown>) => {
           const key = `${String(row.branch_id || '')}:${String(row.raw_material_id || '')}`;
@@ -1043,9 +1025,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           count: results.reduce((sum, result) => sum + Number(result.summary.mismatched_raws || 0), 0),
         });
       } else if (reportType === 'production_waste') {
-        let q = supabase.from('waste_entries').select('id, branch_id, created_at, quantity, unit_cost, total_cost, reason, product:products(name), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        const waste = await fetchRows<Record<string, unknown>>(q);
+        const waste = await loadWasteRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+        });
         const rows = waste.map((row: Record<string, unknown>) => {
           const product = row.product as { name?: string } | null;
           const warehouse = row.warehouse as { name?: string } | null;
