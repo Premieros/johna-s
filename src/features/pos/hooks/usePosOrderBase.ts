@@ -84,7 +84,6 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [kitchenDispatch, setKitchenDispatch] = useState<KitchenStationDispatchSummary | null>(null);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
-  const [receiptPrintLocked, setReceiptPrintLocked] = useState(false);
   const [openCheckPrintLocked, setOpenCheckPrintLocked] = useState(false);
 
   const effCurrency = effSettings?.currency || 'EGP';
@@ -855,7 +854,6 @@ export function usePosOrder(input: UsePosOrderInput) {
       };
       setLastReceipt(receiptPayload);
       setReceiptSaleId(saleId);
-      setReceiptPrintLocked(false);
       setCheckoutOpen(false);
       setCart(EMPTY_CART);
       setDiscountAmount(0);
@@ -885,8 +883,6 @@ export function usePosOrder(input: UsePosOrderInput) {
                 : `Sale completed, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
               'error',
             );
-          } else {
-            setReceiptPrintLocked(true);
           }
         } catch (error) {
           showReceiptPrintError(error);
@@ -959,8 +955,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       if (!lastReceipt) return;
       const html = await buildReceiptHtml(lastReceipt, effSettings, lang, isAr);
-      const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
-      if (accepted) setReceiptPrintLocked(true);
+      openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
     } catch (error) {
       showReceiptPrintError(error);
     }
@@ -1000,7 +995,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     activeOrderId, activeOrderNumber, activeTable,
     checkoutOpen, setCheckoutOpen,
     completing, orderLoading, kitchenSending, kitchenSentItems, kitchenDispatch,
-    lastReceipt, receiptSaleId, receiptPrintLocked, openCheckPrintLocked, closeReceipt,
+    lastReceipt, receiptSaleId, openCheckPrintLocked, closeReceipt,
     subtotal, discountValue, taxAmount, total, change,
     effCurrency,
     addToCart, updateQty, setQty, removeFromCart, clearCart, setItemDiscount, replaceCartLine,
