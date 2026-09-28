@@ -63,8 +63,17 @@ BEGIN
   WHERE wa.user_id = v_user_id
     AND wa.branch_id = p_branch_id
   ORDER BY
-    CASE wa.status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
-    wa.updated_at DESC
+    CASE
+      WHEN wa.status = 'approved' THEN 0
+      WHEN wa.status = 'pending' AND wa.requested_at > now() - interval '1 minute' THEN 1
+      ELSE 2
+    END,
+    GREATEST(
+      wa.updated_at,
+      wa.requested_at,
+      COALESCE(wa.decided_at, '-infinity'::timestamptz),
+      COALESCE(wa.revoked_at, '-infinity'::timestamptz)
+    ) DESC
   LIMIT 1;
 
   IF v_row.id IS NULL THEN
