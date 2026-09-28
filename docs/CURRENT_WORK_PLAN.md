@@ -7,7 +7,7 @@
 - Production branch: `main`
 - Production baseline at start: `c22dfd69120201111944c04314b930ca3ad69889`
 - Active development branch: `development/stability-foundation-20260928`
-- Mandatory active log: `docs/STABILITY_FOUNDATION_2026-09-28.md`
+Mandatory active work log: `docs/STABILITY_FOUNDATION_2026-09-28.md`
 
 ## Repository branch policy
 Only these long-lived branches are intentionally preserved:
