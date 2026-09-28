@@ -237,7 +237,7 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
       [
         orderId,
         JSON.stringify({ text: 'ACTION PRINT CONTRACT', paperWidthMm: 80, copies: 1 }),
-        `action-print-${randomUUID()}`,
+        `open-check:${orderId}:${randomUUID()}`,
       ],
     );
     expect(queued.success, JSON.stringify(queued)).toBe(true);
@@ -264,6 +264,30 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
       [orderId],
     );
     expect(owner.rows[0].cashier_id).toBe(ids.users.cashier);
+
+    const blockedRepeat = await rpc(
+      ids.users.branch_manager,
+      `SELECT public.enqueue_cloud_open_order_print($1,$2::jsonb,$3) AS r`,
+      [
+        orderId,
+        JSON.stringify({ text: 'ACTION PRINT CONTRACT 2', paperWidthMm: 80, copies: 1 }),
+        `open-check:${orderId}:${randomUUID()}`,
+      ],
+    );
+    expect(blockedRepeat).toMatchObject({ success: false, error: 'OPEN_CHECK_ALREADY_PRINTED' });
+
+    await setActorPermissions(['pos.receipt.print', 'pos.reprint']);
+    const managerReprint = await rpc(
+      ids.users.branch_manager,
+      `SELECT public.enqueue_cloud_open_order_print($1,$2::jsonb,$3) AS r`,
+      [
+        orderId,
+        JSON.stringify({ text: 'ACTION PRINT MANAGER REPRINT', paperWidthMm: 80, copies: 1 }),
+        `open-check:${orderId}:${randomUUID()}`,
+      ],
+    );
+    expect(managerReprint.success, JSON.stringify(managerReprint)).toBe(true);
+    expect(managerReprint.station_code).toBe('cashier');
   });
 
   it('lets send-kitchen permission send another operator delta while preserving owner and deducting once', async (ctx) => {
