@@ -24,16 +24,17 @@ Current PR: `#400`
 - Work authorization gate subscribed indefinitely while a request remained pending; stale server rows also remained actionable.
 - Manager snapshot had no one-minute cutoff and decision RPC could approve an old pending row.
 - Receipt enqueue respected `pos.reprint` during authorization, but frozen completion truth requires an approval row for every print after the first.
-- Completed-receipt UI did not reflect first-print consumption for users without `pos.reprint`.
+- The pre-payment Open Check button allowed repeated queue submissions, which made staff doubt whether printing worked.
 
 ## Change ledger
 - Added 60-second work-authorization request TTL.
 - Added sleeping gate state; after timeout there is no polling and no Realtime subscription until the user explicitly requests again.
 - Added server rejection for approvals older than one minute and manager snapshot hiding of stale requests.
 - Added direct-reprint internal approved token at enqueue time for users who own `pos.reprint`; frozen agent completion RPC is untouched.
-- Added print-once UI lock for users without `pos.reprint`.
-- Added regression coverage for timeout, direct reprint token, completed receipt lock, and Open Check lock.
-- Review caught and corrected a transient placement error where the Open Check lock had entered checkout opening; final code scopes it to `printReceipt` only, so payment/settlement remains unaffected.
+- Added print-once guard only for the pre-payment Open Check; paid-sale receipt printing remains unchanged and still runs with every payment operation.
+- Added a server-side Open Check guard so a refresh cannot create a second ordinary print; `pos.reprint` bypasses that guard.
+- Added regression coverage for timeout, direct reprint token, Open Check print-once, manager reprint, and checkout/payment independence.
+- Review caught and corrected a transient placement error where the Open Check lock had entered checkout opening; final code scopes it to pre-payment printing only. Automatic paid receipt printing is explicitly unchanged.
 
 ## Verification ledger
 - Fast Verify #1151: **FAILED** on first pass.
