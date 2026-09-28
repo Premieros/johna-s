@@ -85,6 +85,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
   const [receiptPrintLocked, setReceiptPrintLocked] = useState(false);
+  const [openCheckPrintLocked, setOpenCheckPrintLocked] = useState(false);
 
   const effCurrency = effSettings?.currency || 'EGP';
 
@@ -112,6 +113,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   useEffect(() => {
     setActiveOrderId(orderId);
+    setOpenCheckPrintLocked(false);
     if (!orderId) {
       setActiveOrderNumber(null);
       setTableId(null);
@@ -951,6 +953,7 @@ export function usePosOrder(input: UsePosOrderInput) {
           );
           return;
         }
+        setOpenCheckPrintLocked(true);
         show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
         return;
       }
@@ -980,6 +983,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCheckoutOpen(false);
     setKitchenSentItems([]);
     setKitchenDispatch(null);
+    setOpenCheckPrintLocked(false);
   }, []);
 
   return {
@@ -996,7 +1000,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     activeOrderId, activeOrderNumber, activeTable,
     checkoutOpen, setCheckoutOpen,
     completing, orderLoading, kitchenSending, kitchenSentItems, kitchenDispatch,
-    lastReceipt, receiptSaleId, receiptPrintLocked, closeReceipt,
+    lastReceipt, receiptSaleId, receiptPrintLocked, openCheckPrintLocked, closeReceipt,
     subtotal, discountValue, taxAmount, total, change,
     effCurrency,
     addToCart, updateQty, setQty, removeFromCart, clearCart, setItemDiscount, replaceCartLine,
