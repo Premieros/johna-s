@@ -7,9 +7,10 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 describe('shift and user sales reporting contract', () => {
   it('groups user sales from the authoritative sale cashier identity using net sales', () => {
     const reports = read('src/features/reporting/pages/ReportsPage.tsx');
+    const loaders = read('src/features/reporting/services/reportSalesLoaders.ts');
 
     expect(reports).toContain("reportType === 'sales_by_employee'");
-    expect(reports).toContain("select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)')");
+    expect(loaders).toContain("select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)')");
     expect(reports).toContain('String(sale.cashier_id || name)');
     expect(reports).toContain('existing.total += netSaleAmount(sale)');
   });
