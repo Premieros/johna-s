@@ -42,6 +42,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
+  const [settlementReceiptPrintLocked, setSettlementReceiptPrintLocked] = useState(false);
 
   const findCartSource = useCallback((item: ItemPayload) => {
     const wanted = [...(item.modifier_option_ids || [])].sort().join(',');
@@ -320,6 +321,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       const receipt = buildSettlementReceipt(preview, invoiceNumber, paidAmountToUse, extended.payments || []);
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
+      setSettlementReceiptPrintLocked(false);
       setSettlementPreview(null);
       base.setCheckoutOpen(false);
       base.setPaidAmount(0);
@@ -340,6 +342,8 @@ export function usePosOrder(input: UsePosOrderInput) {
               : `Order settled, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
             'error',
           );
+        } else {
+          setSettlementReceiptPrintLocked(true);
         }
       }
 
@@ -365,19 +369,23 @@ export function usePosOrder(input: UsePosOrderInput) {
 
     if (!base.activeOrderId) {
       if (settlementReceipt) {
+        if (settlementReceiptPrintLocked && !perms.canReprint) return;
         const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+        const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+        if (accepted) setSettlementReceiptPrintLocked(true);
         return;
       }
+      if (base.receiptPrintLocked && !perms.canReprint) return;
       await base.printReceipt();
       return;
     }
 
     const preview = await loadSettlementPreview(false);
     if (!preview) {
-      if (settlementReceipt) {
+      if (settlementReceipt && (!settlementReceiptPrintLocked || perms.canReprint)) {
         const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+        const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+        if (accepted) setSettlementReceiptPrintLocked(true);
       }
       return;
     }
@@ -406,7 +414,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       return;
     }
     show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
-  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, settlementReceipt]);
+  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, perms.canReprint, settlementReceipt, settlementReceiptPrintLocked]);
 
   const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
     ? {
@@ -432,6 +440,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCheckoutOpen,
     lastReceipt: settlementReceipt || base.lastReceipt,
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
+    receiptPrintLocked: settlementReceipt ? settlementReceiptPrintLocked : base.receiptPrintLocked,
     closeReceipt: () => {
       setSettlementReceiptSaleId(null);
       base.closeReceipt();
