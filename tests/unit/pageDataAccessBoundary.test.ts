@@ -43,7 +43,6 @@ const legacyAllowlist = new Set([
   "src/features/parties/pages/SuppliersPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
-  "src/features/trade/pages/ExpensesPage.tsx",
   "src/features/trade/pages/PurchaseRequestsPage.tsx",
   "src/features/trade/pages/PurchasesPage.tsx",
   "src/features/trade/pages/RfqsPage.tsx",
