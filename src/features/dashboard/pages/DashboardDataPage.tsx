@@ -20,6 +20,7 @@ import {
   type PaymentMethodAggregate,
 } from '@/features/reporting/numericIntegrity';
 import { loadDashboardPaymentAggregates } from '../services/dashboardPayments';
+import { loadDashboardSalesSnapshot, type DashboardSalesSnapshot } from '../services/dashboardSnapshot';
 import { DashboardStandbyBar } from '../components/DashboardStandbyBar';
 
 type Range = 'today' | 'week' | 'month' | 'year';
@@ -212,6 +213,7 @@ export function DashboardDataPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<DashboardSalesSnapshot | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [previousSales, setPreviousSales] = useState<Sale[]>([]);
   const [paymentAggregates, setPaymentAggregates] = useState<PaymentMethodAggregate[]>([]);
@@ -231,6 +233,7 @@ export function DashboardDataPage() {
     setRefreshing(true);
     setError(null);
     if (!canViewSales) {
+      setSnapshot(null);
       setSales([]);
       setPreviousSales([]);
       setPaymentAggregates([]);
@@ -242,6 +245,29 @@ export function DashboardDataPage() {
     }
     const effectiveRange: Range = range;
     const window = periodWindow(effectiveRange);
+    const boundedSnapshot = await loadDashboardSalesSnapshot({
+      branchId: branchFilter || null,
+      currentFrom: window.start.toISOString(),
+      currentTo: window.end.toISOString(),
+      previousFrom: window.previousStart.toISOString(),
+      previousTo: window.previousEnd.toISOString(),
+      granularity: effectiveRange === 'today' ? 'hour' : effectiveRange === 'year' ? 'month' : 'day',
+      timezone: 'Africa/Cairo',
+    }).catch(() => null);
+
+    if (boundedSnapshot) {
+      setSnapshot(boundedSnapshot);
+      setSales([]);
+      setPreviousSales([]);
+      setItems([]);
+      setPaymentAggregates(boundedSnapshot.paymentMethods);
+      setPreviousPaymentAggregates(boundedSnapshot.previousPaymentMethods);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    setSnapshot(null);
     const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
     const previousFields = 'id,total,paid_amount,payment_method,branch_id,created_at,refunded_amount,discount_amount';
     let currentQuery = supabase.from('sales').select(fields).gte('created_at', window.start.toISOString()).lte('created_at', window.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
@@ -390,6 +416,7 @@ export function DashboardDataPage() {
   ]);
 
   const current = useMemo(() => {
+    if (snapshot) return snapshot.current;
     const methods = paymentAggregates;
     return {
       orders: sales.length,
@@ -398,8 +425,9 @@ export function DashboardDataPage() {
       returns: sales.reduce((sum, sale) => sum + Number(sale.refunded_amount || 0), 0),
       discounts: sales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0),
     };
-  }, [sales, paymentAggregates]);
+  }, [sales, paymentAggregates, snapshot]);
   const previous = useMemo(() => {
+    if (snapshot) return snapshot.previous;
     const methods = previousPaymentAggregates;
     return {
       orders: previousSales.length,
@@ -408,14 +436,16 @@ export function DashboardDataPage() {
       returns: previousSales.reduce((sum, sale) => sum + Number(sale.refunded_amount || 0), 0),
       discounts: previousSales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0),
     };
-  }, [previousSales, previousPaymentAggregates]);
+  }, [previousSales, previousPaymentAggregates, snapshot]);
   const paymentRows = useMemo(() => paymentAggregates.slice(0, 5), [paymentAggregates]);
   const orderRows = useMemo(() => {
+    if (snapshot) return snapshot.orderTypes.map((row) => [row.key, row.count] as [string, number]);
     const map = new Map<string, number>();
     sales.forEach((sale) => map.set(sale.order_type || 'other', (map.get(sale.order_type || 'other') || 0) + 1));
     return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [sales]);
+  }, [sales, snapshot]);
   const productRows = useMemo(() => {
+    if (snapshot) return snapshot.topProducts.map((row) => [row.name, row.quantity] as [string, number]);
     const map = new Map<string, number>();
     items.forEach((item) => {
       const product = relation(item.product);
@@ -423,8 +453,15 @@ export function DashboardDataPage() {
       map.set(name, (map.get(name) || 0) + netSaleItemQuantity(item));
     });
     return [...map.entries()].filter(([, qty]) => qty > 0).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [ar, items]);
+  }, [ar, items, snapshot]);
   const branchRows = useMemo(() => {
+    if (snapshot) {
+      return snapshot.branches.map((row) => {
+        const branch = branches.find((item) => item.id === row.branchId);
+        const name = ar ? branch?.name || 'غير محدد' : branch?.name_en || branch?.name || 'Unknown';
+        return [name, { orders: row.orders, sales: row.sales }] as [string, { orders: number; sales: number }];
+      });
+    }
     const map = new Map<string, { orders: number; sales: number }>();
     sales.forEach((sale) => {
       const branch = relation(sale.branch);
@@ -433,7 +470,7 @@ export function DashboardDataPage() {
       row.orders += 1; row.sales += netSaleAmount(sale); map.set(name, row);
     });
     return [...map.entries()].sort((a, b) => b[1].sales - a[1].sales).slice(0, 5);
-  }, [ar, sales]);
+  }, [ar, branches, sales, snapshot]);
   const lowStock = useMemo(() => stockAlerts.slice(0, 5), [stockAlerts]);
 
   const chart = useMemo<Point[]>(() => {
@@ -442,8 +479,18 @@ export function DashboardDataPage() {
     const currentMap = new Map<string, number>();
     const previousMap = new Map<string, number>();
     const key = (date: Date) => effectiveRange === 'today' ? String(date.getHours()) : effectiveRange === 'year' ? String(date.getMonth()) : date.toISOString().slice(0, 10);
-    sales.forEach((sale) => currentMap.set(key(new Date(sale.created_at)), (currentMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
-    previousSales.forEach((sale) => previousMap.set(key(new Date(sale.created_at)), (previousMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
+    if (snapshot) {
+      const snapshotKey = (bucket: string) => effectiveRange === 'today'
+        ? String(Number(bucket.slice(11, 13)))
+        : effectiveRange === 'year'
+        ? String(Math.max(0, Number(bucket.slice(5, 7)) - 1))
+        : bucket.slice(0, 10);
+      snapshot.currentSeries.forEach((row) => currentMap.set(snapshotKey(row.bucket), row.sales));
+      snapshot.previousSeries.forEach((row) => previousMap.set(snapshotKey(row.bucket), row.sales));
+    } else {
+      sales.forEach((sale) => currentMap.set(key(new Date(sale.created_at)), (currentMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
+      previousSales.forEach((sale) => previousMap.set(key(new Date(sale.created_at)), (previousMap.get(key(new Date(sale.created_at))) || 0) + netSaleAmount(sale)));
+    }
     if (effectiveRange === 'today') return Array.from({ length: 24 }, (_, hour) => ({ label: `${String(hour).padStart(2, '0')}:00`, sales: currentMap.get(String(hour)) || 0, previous: previousMap.get(String(hour)) || 0 }));
     if (effectiveRange === 'year') return Array.from({ length: 12 }, (_, month) => ({ label: new Date(window.start.getFullYear(), month, 1).toLocaleDateString(ar ? 'ar-EG' : 'en-US', { month: 'short' }), sales: currentMap.get(String(month)) || 0, previous: previousMap.get(String(month)) || 0 }));
     const dayCount = effectiveRange === 'month' ? new Date(window.start.getFullYear(), window.start.getMonth() + 1, 0).getDate() : 7;
@@ -453,10 +500,10 @@ export function DashboardDataPage() {
       const prevDate = new Date(window.previousStart); prevDate.setDate(prevDate.getDate() + index);
       return { label: date.toLocaleDateString(ar ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }), sales: currentMap.get(dateKey) || 0, previous: previousMap.get(prevDate.toISOString().slice(0, 10)) || 0 };
     });
-  }, [ar, previousSales, range, sales]);
+  }, [ar, previousSales, range, sales, snapshot]);
 
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
-  const recent = sales.slice(0, 5);
+  const recent = snapshot ? snapshot.recentSales : sales.slice(0, 5);
 
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] w-full min-w-0 bg-ui-page py-3 sm:py-4" data-testid="dashboard-surface"><div className="w-full min-w-0 space-y-5">
     <DashboardStandbyBar canCreateSale={canCreateSale} />
@@ -483,7 +530,7 @@ export function DashboardDataPage() {
         {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={money(ops.expenses)} previous={0} href="/expenses" ar={ar} />}
       </section>
 
-      {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{sales.length ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
+      {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{current.orders > 0 ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
       <div className="grid gap-5"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
       <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>}
 
