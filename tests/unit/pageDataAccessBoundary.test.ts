@@ -39,7 +39,6 @@ const legacyAllowlist = new Set([
   "src/features/parties/pages/SuppliersPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
-  "src/features/reporting/pages/ReportsPage.tsx",
   "src/features/trade/pages/ExpensesPage.tsx",
   "src/features/trade/pages/PurchaseRequestsPage.tsx",
   "src/features/trade/pages/PurchasesPage.tsx",
@@ -70,6 +69,12 @@ describe('page data-access architecture boundary', () => {
 
     expect(unexpected, 'Move new page data access behind src/api/domains or a feature service').toEqual([]);
     expect(directPages.length).toBeLessThanOrEqual(legacyAllowlist.size);
+  });
+
+  it('keeps ReportsPage behind feature services/domain boundaries', () => {
+    const reports = readFileSync(join(repoRoot, 'src/features/reporting/pages/ReportsPage.tsx'), 'utf8');
+    expect(reports).not.toContain('supabase.from(');
+    expect(reports).not.toContain('supabase.rpc(');
   });
 
   it('keeps System Health behind the admin domain boundary', () => {
