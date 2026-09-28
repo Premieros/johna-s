@@ -123,6 +123,53 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(count.rows[0].count).toBe('1');
   });
 
+  it('expires a pending request after one minute and requires a fresh request', async () => {
+    const pending = await client.query<{ id: string }>(
+      `SELECT id FROM public.work_authorizations
+       WHERE user_id=$1 AND branch_id=$2 AND status='pending'`,
+      [worker, branchA],
+    );
+    const originalId = pending.rows[0].id;
+
+    await client.query(
+      `UPDATE public.work_authorizations
+       SET requested_at = now() - interval '61 seconds', updated_at = now() - interval '61 seconds'
+       WHERE id=$1`,
+      [originalId],
+    );
+
+    const state = await rpcJson(worker, `public.get_my_work_authorization_state($1)`, [branchA]);
+    expect(state.status).toBe('expired');
+    expect(state.requestId ?? null).toBeNull();
+
+    const lateApproval = await rpcJson(
+      approverA,
+      `public.decide_work_authorization($1,true,NULL)`,
+      [originalId],
+    );
+    expect(lateApproval.success).toBe(false);
+    expect(lateApproval.error).toBe('REQUEST_EXPIRED');
+
+    const expired = await client.query<{ status: string }>(
+      `SELECT status FROM public.work_authorizations WHERE id=$1`,
+      [originalId],
+    );
+    expect(expired.rows[0].status).toBe('expired');
+
+    const fresh = await rpcJson(worker, `public.request_work_authorization($1)`, [branchA]);
+    expect(fresh.status).toBe('pending');
+    expect(fresh.requestId).toBeTruthy();
+    expect(fresh.requestId).not.toBe(originalId);
+
+    const event = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM public.work_authorization_events
+       WHERE authorization_id=$1 AND event_type='expired'`,
+      [originalId],
+    );
+    expect(event.rows[0].count).toBe('1');
+  });
+
   it('denies self approval even when the requester temporarily owns the approval permission', async () => {
     await client.query(
       `UPDATE public.roles
