@@ -31,6 +31,7 @@ Current PR: `#400`
 - Added 60-second work-authorization request TTL.
 - Added sleeping gate state; after timeout there is no polling and no Realtime subscription until the user explicitly requests again.
 - Added server rejection for approvals older than one minute and manager snapshot hiding of stale requests.
+- Updated `get_my_work_authorization_state` so stale pending requests are also ignored by the old deployed gate during the deployment window; both old and new UIs therefore recover from one-minute expiry without a stale Pending trap.
 - Added direct-reprint internal approved token at enqueue time for users who own `pos.reprint`; frozen agent completion RPC is untouched.
 - Added print-once guard only for the pre-payment Open Check; paid-sale receipt printing remains unchanged and still runs with every payment operation.
 - Added a server-side Open Check guard so a refresh cannot create a second ordinary print; `pos.reprint` bypasses that guard.
@@ -47,7 +48,8 @@ Current PR: `#400`
 - Fast Verify #1174 / Full Verify #3201 on head `201f8af5`: **DB GREEN**, App failed only because an existing component contract still expected the old combined print-button expression. The production code behavior was correct; the contract was updated to distinguish pre-payment Open Check from paid receipt.
 - Fast Verify #1176 / `36402408963` on functional head `2e41ebad34c643a577ae73d4fed913e9bad84d93`: **GREEN** (scope + app + DB + summary).
 - Full Verify #3203 / `36402421222` on the same functional head: **GREEN** (verify + Fresh DB/integration/security/RLS + browser-smoke).
-- Merge-impact refresh fix head `6147f659b8f895e445c359c46b379ea335db3347`: verification pending.
+- Refresh-state fix head `6147f659b8f895e445c359c46b379ea335db3347`: superseded by deployment-compatibility hardening.
+- Deployment-compatible head `476ec6b3f19ef25b4b2dbbf2265fa7f953769e93`: verification pending.
 - Production migration: **NOT APPLIED**.
 - Runtime/Production data: unchanged by this branch.
 
@@ -61,7 +63,7 @@ Current PR: `#400`
 
 ## Next action
 - Run exact-head Fast Verify and Full Verify for the refresh-state fix.
-- Recheck PR diff, Production parity ordering, active orders, pending authorizations, and print queue.
+- Recheck PR diff, old/new gate compatibility, Production parity ordering, active orders, pending authorizations, and print queue.
 - If Green, report the verified merge impact and remain BLOCKED pending explicit Merge + Production approval.
 
 ## Mandatory update protocol
