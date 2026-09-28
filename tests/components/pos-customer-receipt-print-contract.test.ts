@@ -19,7 +19,7 @@ describe('POS customer receipt print contract', () => {
     expect(header).toContain('{perms.canPrint && canPrintSentReceipt && (');
     expect(header).not.toContain('disabled={!canPrintSentReceipt}');
     expect(workspace).toContain('canPrintReceipt={pos.cart.length > 0');
-    expect(workspace).toContain('? (!pos.openCheckPrintLocked || perms.canReprint)');
+    expect(workspace).toContain('? (perms.canReprint || (pos.openCheckPrintStateReady && !pos.openCheckPrintLocked))');
     expect(workspace).toContain(': !!pos.lastReceipt}');
     expect(header).not.toContain('perms.canPrintKitchen && itemsCount > 0');
     expect(workspace).toContain('data-testid="pos-receipt-print"');
