@@ -10,7 +10,7 @@ describe('POS hardening: permission-first sent actions', () => {
     expect(header).toContain('const hasSent = kitchenSends.length > 0;');
     expect(header).toContain('const canPrintSentReceipt = hasSent && canPrintReceipt;');
     expect(header).toContain('{perms.canPay && hasSent && itemsCount > 0 && (');
-    expect(header).toContain('{perms.canPrint && canPrintSentReceipt && (');
+    expect(header).toContain('{(perms.canPrint || perms.canReprint) && canPrintSentReceipt && (');
     expect(header).not.toContain('disabled={!canPrintSentReceipt}');
   });
 
