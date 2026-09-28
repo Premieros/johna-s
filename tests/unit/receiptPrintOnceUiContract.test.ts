@@ -13,6 +13,9 @@ describe('receipt print-once UI guard', () => {
     expect(wrapper).toContain('base.receiptPrintLocked && !perms.canReprint');
     expect(workspace).toContain('disabled={pos.receiptPrintLocked && !perms.canReprint}');
     expect(workspace).toContain("isAr ? 'تمت الطباعة' : 'Printed'");
+    expect(base).toContain('openCheckPrintLocked');
+    expect(wrapper).toContain('openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint');
+    expect(workspace).toContain('!pos.openCheckPrintLocked || perms.canReprint');
   });
 
   it('keeps direct reprint permission-first', () => {
