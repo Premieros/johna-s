@@ -1,7 +1,7 @@
 # Work Authorization Timeout + Receipt Reprint Guard — 2026-09-28
 
 ## Work status
-State: **BLOCKED**
+State: **READY_TO_MERGE_PENDING_DOCS_VERIFY**
 Last updated: 2026-09-28
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
@@ -42,19 +42,22 @@ Current PR: `#400`
   - DB failures: test fixture isolation + invalid empty thermal payload in the new regression test.
 - Full Verify #3180: **FAILED** early because mandatory worklog gate failed.
 - Fast Verify #1174 / Full Verify #3201 on head `201f8af5`: **DB GREEN**, App failed only because an existing component contract still expected the old combined print-button expression. The production code behavior was correct; the contract was updated to distinguish pre-payment Open Check from paid receipt.
+- Fast Verify #1176 / `36402408963` on functional head `2e41ebad34c643a577ae73d4fed913e9bad84d93`: **GREEN** (scope + app + DB + summary).
+- Full Verify #3203 / `36402421222` on the same functional head: **GREEN** (verify + Fresh DB/integration/security/RLS + browser-smoke).
 - Production migration: **NOT APPLIED**.
 - Runtime/Production data: unchanged by this branch.
 
 ## Production gate
-- State remains **BLOCKED**.
-- No Merge.
-- No Production migration.
-- Must obtain exact-head Fast Verify Green and Full Verify Green before requesting merge approval.
+- Functional implementation verification: **GREEN**.
+- PR #400 remains Draft and mergeable.
+- No Merge yet.
+- No Production migration yet.
+- User approval is still required for Merge + Production migration after this final scope correction.
+- This documentation-only commit must verify Green before state becomes final **READY_TO_MERGE**.
 
 ## Next action
-- Run exact-head Fast Verify and Full Verify on the final code head.
-- Confirm checkout/payment remains independent of print locks and frozen Print Agent paths remain untouched.
-- If Green, report readiness and stop before Merge/Production migration.
+- Let the documentation-only exact-head Fast/Full Verify complete.
+- If Green, report **READY_TO_MERGE** and stop before Merge/Production migration.
 
 ## Mandatory update protocol
 - Update this log after every material code/test change or verification result.
