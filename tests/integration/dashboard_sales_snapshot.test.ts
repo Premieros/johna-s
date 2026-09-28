@@ -46,6 +46,7 @@ describe.skipIf(skip)('dashboard bounded aggregate snapshot', () => {
     );
     await client.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
 
+    await client.query(`ALTER TABLE public.sales DISABLE TRIGGER trg_sales_discount_guard`);
     await client.query(
       `INSERT INTO public.sales
          (id, invoice_number, branch_id, cashier_id, total, paid_amount, payment_method, refunded_amount, discount_amount, created_at)
@@ -55,6 +56,7 @@ describe.skipIf(skip)('dashboard bounded aggregate snapshot', () => {
          ($3,'DASH-PREVIOUS',$4,$5,80,80,'cash',5,2,'2026-09-27T10:00:00Z')`,
       [saleA, saleB, previousSale, branch, user],
     );
+    await client.query(`ALTER TABLE public.sales ENABLE TRIGGER trg_sales_discount_guard`);
 
     await client.query(
       `INSERT INTO public.sale_payments (sale_id, branch_id, payment_method, amount, refunded_amount)
