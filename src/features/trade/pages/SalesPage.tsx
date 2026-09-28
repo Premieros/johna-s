@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -83,7 +83,6 @@ export function SalesPage() {
   const [receiptPreviewTitle, setReceiptPreviewTitle] = useState('');
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
   const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
-  const [printedSaleIds, setPrintedSaleIds] = useState<Set<string>>(new Set());
   const isAr = lang === 'ar';
   const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
@@ -93,9 +92,7 @@ export function SalesPage() {
   const canEditSale = canEditSaleMetadata || canEditPaymentMethod;
   const canArchiveReturnedSale = can('refunds.approve');
   const canPreviewReceipt = can('sales.view');
-  const canFirstPrintReceipt = can('pos.receipt.print');
-  const canDirectReprint = can('pos.reprint');
-  const canPrintReceipt = canFirstPrintReceipt || canDirectReprint;
+  const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint');
 
   async function loadCustomersForBranch(branchId: string) {
     if (!canEditSaleMetadata || !branchId || customersBranchId === branchId) return;
@@ -111,29 +108,6 @@ export function SalesPage() {
     setCustomers((customersRes as Customer[]) || []);
     setCustomersBranchId(branchId);
   }
-
-  useEffect(() => {
-    if (!canFirstPrintReceipt || canDirectReprint || items.length === 0) {
-      setPrintedSaleIds(new Set());
-      return;
-    }
-    let cancelled = false;
-    void supabase
-      .from('sale_print_events')
-      .select('sale_id')
-      .in('sale_id', items.map((sale) => sale.id))
-      .then(({ data, error: printStateError }) => {
-        if (cancelled) return;
-        if (printStateError) {
-          console.warn('[sales] failed to load receipt print state', printStateError.message);
-          return;
-        }
-        setPrintedSaleIds(new Set((data || []).map((row) => String(row.sale_id))));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canDirectReprint, canFirstPrintReceipt, items]);
 
   const filtered = items.filter((i) => {
     if (!search) return true;
@@ -272,7 +246,6 @@ export function SalesPage() {
         show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open the receipt print path', 'error');
         return;
       }
-      if (!canDirectReprint) setPrintedSaleIds((current) => new Set(current).add(sale.id));
       show(isAr ? 'تم إرسال الشيك إلى مسار طباعة الكاشير.' : 'Receipt sent to the cashier print path.', 'success');
     } catch (err) {
       if (err instanceof ReceiptPrintApprovalError && err.code === 'REPRINT_APPROVAL_PENDING') {
@@ -620,12 +593,8 @@ export function SalesPage() {
           <button
             onClick={() => void printSaleReceipt(r)}
             className="ui-icon-action ui-icon-action-info"
-            title={!canDirectReprint && printedSaleIds.has(r.id)
-              ? (isAr ? 'تمت طباعة الشيك مرة واحدة' : 'Receipt already printed once')
-              : canDirectReprint
-                ? (isAr ? 'إعادة طباعة الشيك' : 'Reprint receipt')
-                : (isAr ? 'طباعة الشيك' : 'Print receipt')}
-            disabled={receiptBusyId === r.id || (!canDirectReprint && printedSaleIds.has(r.id))}
+            title={isAr ? 'إعادة طباعة الشيك' : 'Reprint receipt'}
+            disabled={receiptBusyId === r.id}
           >
             <Printer className="w-4 h-4" />
           </button>
