@@ -231,7 +231,12 @@ export function PosWorkspacePage() {
     },
     onProceedToPay: handlePay,
     onPrintReceipt: () => {
-      if (perms.canPrint && pos.lastReceipt && pos.cart.length === 0) void pos.printReceipt();
+      if (
+        (perms.canPrint || perms.canReprint)
+        && pos.lastReceipt
+        && pos.cart.length === 0
+        && (!pos.receiptPrintLocked || perms.canReprint)
+      ) void pos.printReceipt();
     },
     onEscape: () => {
       if (configProduct) setConfigProduct(null);
@@ -822,7 +827,10 @@ export function PosWorkspacePage() {
             activeTable={pos.activeTable}
             orderType={pos.orderType}
             itemsCount={pos.cart.reduce((s, it) => s + it.quantity, 0)}
-            canPrintReceipt={pos.cart.length > 0 || !!pos.lastReceipt}
+            canPrintReceipt={
+              (pos.cart.length > 0 && (!pos.openCheckPrintLocked || perms.canReprint))
+              || (!!pos.lastReceipt && (!pos.receiptPrintLocked || perms.canReprint))
+            }
             canModifyOrder={canModifyCurrentOrder}
             total={pos.total}
             currency={pos.effCurrency}
@@ -1190,13 +1198,23 @@ export function PosWorkspacePage() {
               <p className="text-base font-semibold text-ui-text">{t('saleCompleted')}</p>
               <p className="text-sm text-ui-muted mt-1">{pos.lastReceipt.invoice}</p>
             </div>
-            {perms.canPrint && (
+            {(perms.canPrint || perms.canReprint) && (
               <button
                 data-testid="pos-receipt-print"
                 onClick={() => void pos.printReceipt()}
-                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
+                disabled={pos.receiptPrintLocked && !perms.canReprint}
+                title={
+                  pos.receiptPrintLocked && !perms.canReprint
+                    ? (isAr ? 'تمت الطباعة — إعادة الطباعة غير مسموحة' : 'Already printed — reprint not allowed')
+                    : undefined
+                }
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Printer className="w-5 h-5" /> {t('printReceipt')}
+                <Printer className="w-5 h-5" /> {
+                  pos.receiptPrintLocked && !perms.canReprint
+                    ? (isAr ? 'تمت الطباعة' : 'Printed')
+                    : t('printReceipt')
+                }
               </button>
             )}
           </div>
