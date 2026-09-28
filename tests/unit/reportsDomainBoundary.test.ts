@@ -5,6 +5,7 @@ const page = readFileSync('src/features/reporting/pages/ReportsPage.tsx', 'utf8'
 const domain = readFileSync('src/api/domains/reporting.ts', 'utf8');
 const filters = readFileSync('src/features/reporting/services/reportFilterOptions.ts', 'utf8');
 const coreLoaders = readFileSync('src/features/reporting/services/reportCoreLoaders.ts', 'utf8');
+const salesLoaders = readFileSync('src/features/reporting/services/reportSalesLoaders.ts', 'utf8');
 
 const rpcNames = [
   'get_day_closing_range_report',
@@ -55,6 +56,20 @@ describe('reports domain boundary', () => {
     expect(coreLoaders).toContain(".from('sales')");
     expect(coreLoaders).toContain(".from('purchases')");
     expect(coreLoaders).toContain(".from('expenses')");
+  });
+
+  it('keeps secondary sales report query construction out of the page', () => {
+    expect(page).toContain('loadSalesByEmployeeRows');
+    expect(page).toContain('loadDetailedInvoiceRows');
+    expect(page).toContain('loadCashierPerformanceRows');
+    expect(page).toContain('loadReturnRows');
+
+    expect(page).not.toContain("select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)')");
+    expect(page).not.toContain("select('id, branch_id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, created_at");
+    expect(page).not.toContain("status.in.(returned,refunded,cancelled)");
+
+    expect(salesLoaders).toContain(".from('sales')");
+    expect(salesLoaders).toContain("'branch_id, cashier_id, warehouse_id, total, refunded_amount");
   });
 
   it('keeps the existing report page calling typed domain methods', () => {
