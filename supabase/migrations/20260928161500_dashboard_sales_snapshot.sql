@@ -68,7 +68,6 @@ previous_summary AS (
   SELECT
     count(*)::bigint AS orders,
     COALESCE(sum(net_total), 0)::numeric AS sales,
-    COALESCE(sum(GREATEST(COALESCE(paid_amount, 0) - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS payments,
     COALESCE(sum(COALESCE(refunded_amount, 0)), 0)::numeric AS returns,
     COALESCE(sum(COALESCE(discount_amount, 0)), 0)::numeric AS discounts
   FROM previous_sales
@@ -109,6 +108,9 @@ previous_payment_rows AS (
 ),
 current_payment_summary AS (
   SELECT COALESCE(sum(amount), 0)::numeric AS payments FROM current_payment_rows
+),
+previous_payment_summary AS (
+  SELECT COALESCE(sum(amount), 0)::numeric AS payments FROM previous_payment_rows
 ),
 order_types AS (
   SELECT COALESCE(order_type, 'other') AS key, count(*)::bigint AS count
@@ -191,7 +193,7 @@ SELECT jsonb_build_object(
   'previous', jsonb_build_object(
     'orders', ps.orders,
     'sales', ps.sales,
-    'payments', ps.payments,
+    'payments', pps.payments,
     'returns', ps.returns,
     'discounts', ps.discounts
   ),
@@ -206,7 +208,8 @@ SELECT jsonb_build_object(
 )
 FROM current_summary cs
 CROSS JOIN previous_summary ps
-CROSS JOIN current_payment_summary cps;
+CROSS JOIN current_payment_summary cps
+CROSS JOIN previous_payment_summary pps;
 $function$;
 
 REVOKE ALL ON FUNCTION public.get_dashboard_sales_snapshot(uuid,timestamptz,timestamptz,timestamptz,timestamptz,text,text) FROM PUBLIC, anon;
