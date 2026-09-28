@@ -10,6 +10,11 @@ describe('dashboard bounded snapshot preference', () => {
     expect(page).toContain('if (boundedSnapshot) {');
     expect(page).toContain('setSnapshot(boundedSnapshot)');
     expect(page).toContain("supabase.from('sales')");
+    expect(page).toContain("sale:sales!inner(created_at,branch_id)");
+    expect(page).toContain(".gte('sale.created_at', window.start.toISOString())");
+    expect(page).toContain(".lte('sale.created_at', window.end.toISOString())");
+    expect(page).toContain(".limit(5000)");
+    expect(page).not.toContain(".in('sale_id', currentRows.map((sale) => sale.id))");
 
     const snapshotCall = page.indexOf('await loadDashboardSalesSnapshot({');
     const rawSalesFallback = page.indexOf("supabase.from('sales')");
