@@ -73,7 +73,13 @@ BEGIN
       wa.requested_at,
       COALESCE(wa.decided_at, '-infinity'::timestamptz),
       COALESCE(wa.revoked_at, '-infinity'::timestamptz)
-    ) DESC
+    ) DESC,
+    CASE wa.status
+      WHEN 'revoked' THEN 0
+      WHEN 'rejected' THEN 1
+      WHEN 'expired' THEN 2
+      ELSE 3
+    END
   LIMIT 1;
 
   IF v_row.id IS NULL THEN
