@@ -22,7 +22,7 @@ import { ReportFilterBar } from '../ReportFilterBar';
 import { loadExpenseCategoryOptions, loadReportFilterOptions } from '../services/reportFilterOptions';
 import { loadExpenseReportRows, loadPurchaseReportRows, loadSalesReportRows } from '../services/reportCoreLoaders';
 import { loadCashierPerformanceRows, loadDetailedInvoiceRows, loadReturnRows, loadSalesByEmployeeRows } from '../services/reportSalesLoaders';
-import { loadComponentConsumptionRows, loadLowStockSources, loadProductBranchRows, loadSalesByProductItems, loadTopConsumedComponentRows, loadTopConsumedProductItems, loadWasteRows } from '../services/reportInventoryLoaders';
+import { loadComponentConsumptionRows, loadInventoryBatchRows, loadLowStockSources, loadProductBranchRows, loadSalesByProductItems, loadTopConsumedComponentRows, loadTopConsumedProductItems, loadWasteRows } from '../services/reportInventoryLoaders';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -331,24 +331,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.map((row) => ({ name: String(row[branchColumn]), value: Number(row[lang === 'ar' ? 'صافي الربح' : 'Net Profit'] || 0) })));
         setSummary({ total: netProfit, count: rows.length });
       } else if (reportType === 'inventory') {
-        let rawQuery = supabase
-          .from('raw_material_batches')
-          .select('branch_id,warehouse_id,quantity,raw_material:raw_materials(id,name,code,min_stock),warehouse:warehouses(name)');
-        let unitQuery = supabase
-          .from('inventory_unit_batches')
-          .select('branch_id,warehouse_id,quantity,unit:inventory_units(id,name,barcode,min_stock,low_stock_threshold),warehouse:warehouses(name)');
-        if (effectiveBranchFilter) {
-          rawQuery = rawQuery.eq('branch_id', effectiveBranchFilter);
-          unitQuery = unitQuery.eq('branch_id', effectiveBranchFilter);
-        }
-        if (filters.warehouse) {
-          rawQuery = rawQuery.eq('warehouse_id', filters.warehouse);
-          unitQuery = unitQuery.eq('warehouse_id', filters.warehouse);
-        }
-        const [rawRows, unitRows] = await Promise.all([
-          fetchRows<Record<string, unknown>>(rawQuery),
-          fetchRows<Record<string, unknown>>(unitQuery),
-        ]);
+        const { rawRows, unitRows } = await loadInventoryBatchRows({
+          branchId: effectiveBranchFilter || null,
+          warehouseId: filters.warehouse,
+        });
         const stockMap = new Map<string, { branchId: string; warehouse: string; item: string; code: string; type: string; quantity: number }>();
         rawRows.forEach((row: Record<string, unknown>) => {
           const material = row.raw_material as { id?: string; name?: string; code?: string } | null;
