@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/costing-theoretical-source-20260928`
 Current PR: `#404`
-Last updated: 2026-09-28 23:01 Africa/Cairo
+Last updated: 2026-09-28 23:03 Africa/Cairo
 
 ## Work status
 State: **BLOCKED**
@@ -36,11 +36,12 @@ Blocked only on exact-head verification. The code change is complete and intenti
 - `get_costing_overview` now emits canonical recipe cost as `theoretical_cost`; linked manufactured groups are therefore included.
 - Removed the dead BOM-cost aggregation from the overview query while keeping the component count contract.
 - Added regression assertions in `tests/integration/product_costing.test.ts` so linked group cost changes both `actual_cost` and `theoretical_cost` in the current model.
+- Corrected a test-only escaped newline that caused the first Full Verify attempt to stop at ESLint parsing; no production logic changed.
 
 ## Verification ledger
 - Production read-only root-cause query: old theoretical aggregate 0.00; linked-group aggregate 1442.10; canonical recipe aggregate 24501.10; 95 active products use linked groups.
 - PR #404 created from exact main baseline.
-- Exact-head Full Verify: pending after worklog synchronization.
+- First Full Verify attempt stopped at test-file lint parsing only; corrected. Exact-head rerun pending.
 - Production parity: pending.
 - Production migration: not applied yet.
 
