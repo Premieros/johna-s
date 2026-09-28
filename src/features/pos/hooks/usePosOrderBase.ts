@@ -3,6 +3,7 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
+import { useCan } from '@/lib/permissions';
 import { useToast } from '@/components/Toast';
 import { computePosTotals, computeLineDiscount, type PosPaymentMethod } from '@/lib/posMath';
 import { logAudit } from '@/lib/audit';
@@ -53,6 +54,8 @@ export function usePosOrder(input: UsePosOrderInput) {
   const isAr = lang === 'ar';
   const { user } = useAuth();
   const { show } = useToast();
+  const can = useCan();
+  const canReprintReceipt = can('pos.reprint');
 
   const [cart, setCart] = useState<CartItem[]>(EMPTY_CART);
   const [customerId, setCustomerId] = useState('');
@@ -84,6 +87,8 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [kitchenDispatch, setKitchenDispatch] = useState<KitchenStationDispatchSummary | null>(null);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+  const [receiptPrintLocked, setReceiptPrintLocked] = useState(false);
+  const [openCheckPrintedOrderId, setOpenCheckPrintedOrderId] = useState<string | null>(null);
 
   const effCurrency = effSettings?.currency || 'EGP';
 
@@ -852,6 +857,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       };
       setLastReceipt(receiptPayload);
       setReceiptSaleId(saleId);
+      setReceiptPrintLocked(false);
       setCheckoutOpen(false);
       setCart(EMPTY_CART);
       setDiscountAmount(0);
@@ -881,6 +887,8 @@ export function usePosOrder(input: UsePosOrderInput) {
                 : `Sale completed, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
               'error',
             );
+          } else if (!canReprintReceipt) {
+            setReceiptPrintLocked(true);
           }
         } catch (error) {
           showReceiptPrintError(error);
@@ -890,7 +898,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setCompleting(false);
     }
-  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
+  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user, canReprintReceipt]);
 
   const printReceipt = useCallback(async () => {
     if (!effSettings) return;
@@ -928,6 +936,15 @@ export function usePosOrder(input: UsePosOrderInput) {
         };
         const text = buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr);
         const template = buildReceiptFixedTemplate(openOrderReceipt, effSettings, lang, isAr);
+        if (openCheckPrintedOrderId === persisted.orderId && !canReprintReceipt) {
+          show(
+            isAr
+              ? 'تم إرسال الحساب للطباعة بالفعل. إعادة الطباعة تحتاج صلاحية إعادة الطباعة.'
+              : 'This open check was already sent to print. Reprinting requires the reprint permission.',
+            'error',
+          );
+          return;
+        }
         const queued = await enqueueCloudOpenOrderPrint({
           orderId: persisted.orderId,
           payload: {
@@ -936,7 +953,9 @@ export function usePosOrder(input: UsePosOrderInput) {
             paperWidthMm: APPROVED_FIXED_THERMAL_WIDTH_MM,
             copies: 1,
           },
-          idempotencyKey: `open-check:${persisted.orderId}:${Date.now()}`,
+          idempotencyKey: canReprintReceipt
+            ? `open-check:${persisted.orderId}:${Date.now()}`
+            : `open-check:${persisted.orderId}:one-time`,
         });
         if (!queued.accepted) {
           show(
@@ -947,16 +966,27 @@ export function usePosOrder(input: UsePosOrderInput) {
           );
           return;
         }
+        if (!canReprintReceipt) setOpenCheckPrintedOrderId(persisted.orderId);
         show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
         return;
       }
       if (!lastReceipt) return;
+      if (receiptPrintLocked && !canReprintReceipt) {
+        show(
+          isAr
+            ? 'تم إرسال هذا الإيصال للطباعة بالفعل. إعادة الطباعة تحتاج صلاحية إعادة الطباعة.'
+            : 'This receipt was already sent to print. Reprinting requires the reprint permission.',
+          'error',
+        );
+        return;
+      }
       const html = await buildReceiptHtml(lastReceipt, effSettings, lang, isAr);
-      openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+      const accepted = openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
+      if (accepted && !canReprintReceipt) setReceiptPrintLocked(true);
     } catch (error) {
       showReceiptPrintError(error);
     }
-  }, [cart, lastReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError, persistCart, show]);
+  }, [cart, lastReceipt, receiptPrintLocked, openCheckPrintedOrderId, canReprintReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError, persistCart, show]);
 
   const closeReceipt = useCallback(() => setReceiptSaleId(null), []);
 
@@ -991,7 +1021,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     activeOrderId, activeOrderNumber, activeTable,
     checkoutOpen, setCheckoutOpen,
     completing, orderLoading, kitchenSending, kitchenSentItems, kitchenDispatch,
-    lastReceipt, receiptSaleId, closeReceipt,
+    lastReceipt, receiptSaleId, receiptPrintLocked, closeReceipt,
     subtotal, discountValue, taxAmount, total, change,
     effCurrency,
     addToCart, updateQty, setQty, removeFromCart, clearCart, setItemDiscount, replaceCartLine,
