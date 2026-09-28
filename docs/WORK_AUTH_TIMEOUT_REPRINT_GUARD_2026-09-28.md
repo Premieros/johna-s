@@ -25,6 +25,7 @@ Current PR: `#400`
 - Manager snapshot had no one-minute cutoff and decision RPC could approve an old pending row.
 - Receipt enqueue respected `pos.reprint` during authorization, but frozen completion truth requires an approval row for every print after the first.
 - The pre-payment Open Check button allowed repeated queue submissions, which made staff doubt whether printing worked.
+- Merge-impact review found a refresh-only UX gap: the server blocked the second Open Check, but the refreshed UI did not know that state and could show an enabled button until the rejected click.
 
 ## Change ledger
 - Added 60-second work-authorization request TTL.
@@ -33,6 +34,8 @@ Current PR: `#400`
 - Added direct-reprint internal approved token at enqueue time for users who own `pos.reprint`; frozen agent completion RPC is untouched.
 - Added print-once guard only for the pre-payment Open Check; paid-sale receipt printing remains unchanged and still runs with every payment operation.
 - Added a server-side Open Check guard so a refresh cannot create a second ordinary print; `pos.reprint` bypasses that guard.
+- Added `get_open_order_print_state` and a single resume-time read. Existing-order Open Check stays disabled until the server state is known; no polling or Realtime was added for this state.
+- Registered the new RPC in the frontend API contract, so GitHub Pages Production Parity blocks publication if Production migration has not been applied first.
 - Added regression coverage for timeout, direct reprint token, Open Check print-once, manager reprint, and checkout/payment independence.
 - Review caught and corrected a transient placement error where the Open Check lock had entered checkout opening; final code scopes it to pre-payment printing only. Automatic paid receipt printing is explicitly unchanged.
 
@@ -44,6 +47,7 @@ Current PR: `#400`
 - Fast Verify #1174 / Full Verify #3201 on head `201f8af5`: **DB GREEN**, App failed only because an existing component contract still expected the old combined print-button expression. The production code behavior was correct; the contract was updated to distinguish pre-payment Open Check from paid receipt.
 - Fast Verify #1176 / `36402408963` on functional head `2e41ebad34c643a577ae73d4fed913e9bad84d93`: **GREEN** (scope + app + DB + summary).
 - Full Verify #3203 / `36402421222` on the same functional head: **GREEN** (verify + Fresh DB/integration/security/RLS + browser-smoke).
+- Merge-impact refresh fix head `6147f659b8f895e445c359c46b379ea335db3347`: verification pending.
 - Production migration: **NOT APPLIED**.
 - Runtime/Production data: unchanged by this branch.
 
@@ -56,8 +60,9 @@ Current PR: `#400`
 - Functional code is ready for merge approval, but the mandatory worklog remains **BLOCKED** until the user explicitly approves Merge + Production migration.
 
 ## Next action
-- Let the documentation-only exact-head Fast/Full Verify complete.
-- If Green, report that the functional implementation is ready for explicit Merge + Production approval while the mandatory gate remains BLOCKED.
+- Run exact-head Fast Verify and Full Verify for the refresh-state fix.
+- Recheck PR diff, Production parity ordering, active orders, pending authorizations, and print queue.
+- If Green, report the verified merge impact and remain BLOCKED pending explicit Merge + Production approval.
 
 ## Mandatory update protocol
 - Update this log after every material code/test change or verification result.
