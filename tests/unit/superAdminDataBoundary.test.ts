@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const read = (path: string) => readFileSync(path, 'utf8').replace(/
-/g, '
-');
+const read = (path: string) =>
+  readFileSync(path, 'utf8').split(String.fromCharCode(13, 10)).join('\n');
 
 describe('super admin data-access containment', () => {
   it('keeps heavy read orchestration out of SuperAdminConsolePage', () => {
