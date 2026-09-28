@@ -12,6 +12,7 @@ const deepLinkSource = read('src/features/reporting/pages/ReportDeepLinkPage.tsx
 const financialSource = read('src/features/accounting/pages/FinancialReportsPage.tsx');
 const reportFiltersSource = read('src/features/reporting/reportFilters.ts');
 const reportCoreLoadersSource = read('src/features/reporting/services/reportCoreLoaders.ts');
+const reportSalesLoadersSource = read('src/features/reporting/services/reportSalesLoaders.ts');
 const reportExportSource = read('src/lib/reportExport.ts');
 const excelSource = read('src/lib/excel.ts');
 
@@ -114,8 +115,8 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportFiltersSource).toContain('applyPurchaseFilters');
     expect(reportFiltersSource).toContain('applyExpenseFilters');
     expect(reportFiltersSource).toContain('applyProductScopedFilters');
-    expect(reportsSource).toContain('filterQ(q, filters, applySalesFilters)');
     expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applySalesFilters)');
+    expect(reportSalesLoadersSource).toContain('filterQ(q, args.filters, applySalesFilters)');
     expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applyPurchaseFilters)');
     expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applyExpenseFilters)');
   });
