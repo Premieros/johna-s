@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const page = readFileSync('src/features/reporting/pages/ReportsPage.tsx', 'utf8');
 const domain = readFileSync('src/api/domains/reporting.ts', 'utf8');
 const filters = readFileSync('src/features/reporting/services/reportFilterOptions.ts', 'utf8');
+const coreLoaders = readFileSync('src/features/reporting/services/reportCoreLoaders.ts', 'utf8');
 
 const rpcNames = [
   'get_day_closing_range_report',
@@ -28,6 +29,18 @@ describe('reports domain boundary', () => {
     }
     expect(page).toContain('loadReportFilterOptions');
     expect(page).toContain('loadExpenseCategoryOptions');
+  });
+
+  it('keeps core sales, purchase and expense query construction out of the page', () => {
+    expect(page).toContain('loadSalesReportRows');
+    expect(page).toContain('loadPurchaseReportRows');
+    expect(page).toContain('loadExpenseReportRows');
+    expect(page).not.toContain("select('id, branch_id, invoice_number, subtotal, discount_amount, tax_amount");
+    expect(page).not.toContain("supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount");
+    expect(page).not.toContain("supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date')");
+    expect(coreLoaders).toContain("supabase.from('sales')");
+    expect(coreLoaders).toContain("supabase.from('purchases')");
+    expect(coreLoaders).toContain("supabase.from('expenses')");
   });
 
   it('keeps the existing report page calling typed domain methods', () => {
