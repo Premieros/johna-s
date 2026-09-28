@@ -34,6 +34,15 @@ describe('performance repair contracts', () => {
     expect(standby).not.toContain('setInterval(() => void loadActivity()');
   });
 
+  it('keeps active-order snapshot nested so items and kitchen sends do not fan out into separate reads', () => {
+    const service = read('src/features/pos/services/posOrders.ts');
+
+    expect(service).toContain("order_items!order_items_order_id_fkey(*)");
+    expect(service).toContain("order_kitchen_sends!order_kitchen_sends_order_id_fkey(*)");
+    expect(service).not.toContain("supabase.from('order_items').select('*').in('order_id', ids)");
+    expect(service).not.toContain("supabase.from('order_kitchen_sends').select('*').in('order_id', ids)");
+  });
+
   it('coalesces realtime POS snapshot bursts and keeps a trailing refresh', () => {
     const realtime = read('src/features/pos/hooks/usePosRealtime.ts');
 
