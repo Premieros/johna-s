@@ -21,6 +21,7 @@ import type { SavedReportConfig } from '../useCustomReports';
 import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { loadExpenseCategoryOptions, loadReportFilterOptions } from '../services/reportFilterOptions';
+import { loadExpenseReportRows, loadPurchaseReportRows, loadSalesReportRows } from '../services/reportCoreLoaders';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -251,10 +252,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
 
       if (reportType === 'sales') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, order_type, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name,email), warehouse:warehouses(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applySalesFilters);
-        const sales = await fetchRows<Record<string, unknown>>(q);
+        const sales = await loadSalesReportRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+          filters,
+        });
         const rows = sales.map((sale: Record<string, unknown>) => {
           const net = netSaleAmount(sale);
           const cashier = sale.cashier as { full_name?: string; email?: string } | null;
@@ -281,10 +284,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(sales.slice(0, 10).map((sale: Record<string, unknown>) => ({ name: String(sale.invoice_number), value: netSaleAmount(sale) })));
         setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
       } else if (reportType === 'purchases') {
-        let q = supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount, status, created_at, supplier:suppliers(name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applyPurchaseFilters);
-        const purchases = await fetchRows<Record<string, unknown>>(q);
+        const purchases = await loadPurchaseReportRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+          filters,
+        });
         const rows = purchases.map((purchase: Record<string, unknown>) => withBranch(purchase.branch_id, {
           [lang === 'ar' ? 'الفاتورة' : 'Invoice']: purchase.invoice_number,
           [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(purchase.created_at as string, lang),
@@ -297,10 +302,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(purchases.slice(0, 10).map((purchase: Record<string, unknown>) => ({ name: String(purchase.invoice_number), value: netPurchaseAmount(purchase) })));
         setSummary({ total: purchases.reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: purchases.length });
       } else if (reportType === 'expenses') {
-        let q = supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date').eq('status', 'posted').gte('expense_date', from).lte('expense_date', to).order('expense_date', { ascending: false });
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applyExpenseFilters);
-        const expenses = await fetchRows<Record<string, unknown>>(q);
+        const expenses = await loadExpenseReportRows({
+          branchId: effectiveBranchFilter || null,
+          from,
+          to,
+          filters,
+        });
         const rows = expenses.map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
           [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(expense.expense_date as string, lang),
           [lang === 'ar' ? 'الفئة' : 'Category']: expense.category || '',
