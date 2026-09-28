@@ -67,6 +67,25 @@ export const accounting = {
   getArAging(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<ArAgingRow[]> { return rpc('get_ar_aging', p); },
   getApAging(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<ApAgingRow[]> { return rpc('get_ap_aging', p); },
   getSupplierStatement(p: { p_supplier_id: string; p_branch_id: string }): ApiResult<unknown> { return rpc('get_supplier_statement', p); },
+  getSupplierOpeningBalance(p: { p_supplier_id: string; p_branch_id: string }): ApiResult<{
+    success: boolean;
+    exists?: boolean;
+    id?: string;
+    opening_date?: string;
+    amount?: number;
+    settled_amount?: number;
+    remaining_amount?: number;
+    notes?: string | null;
+    journal_entry_id?: string | null;
+    error?: string;
+  }> { return rpc('get_supplier_opening_balance', p); },
+  setSupplierOpeningBalance(p: {
+    p_supplier_id: string;
+    p_branch_id: string;
+    p_amount: number;
+    p_opening_date: string;
+    p_notes: string | null;
+  }): ApiResult<RpcResult & { id?: string; journal_entry_id?: string }> { return rpc('set_supplier_opening_balance', p); },
   linkEmployeeCreditAccount(p: { p_customer_id: string; p_employee_id: string; p_branch_id: string }): ApiResult<RpcResult> { return rpc('link_employee_credit_account', p); },
   getEmployeeCreditBalances(p: { p_branch_id: string }): ApiResult<unknown> { return rpc('get_employee_credit_balances', p); },
   receivePayment(p: { p_customer_id: string; p_branch_id: string | null; p_amount: number; p_payment_method: string; p_sale_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('receive_payment', p); },

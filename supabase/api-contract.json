@@ -686,9 +686,26 @@
       ]
     },
     {
+      "name": "get_supplier_opening_balance",
+      "params": [
+        "branch_id",
+        "supplier_id"
+      ]
+    },
+    {
       "name": "get_supplier_statement",
       "params": [
         "branch_id",
+        "supplier_id"
+      ]
+    },
+    {
+      "name": "set_supplier_opening_balance",
+      "params": [
+        "amount",
+        "branch_id",
+        "notes",
+        "opening_date",
         "supplier_id"
       ]
     },
