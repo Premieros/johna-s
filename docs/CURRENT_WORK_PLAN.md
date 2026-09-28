@@ -1,63 +1,79 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Stability Foundation / no feature development**
+- Track: **Stability Closure / Architecture Containment / no feature development**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Production baseline at start: `c22dfd69120201111944c04314b930ca3ad69889`
-- Active development branch: `development/stability-foundation-20260928`
-Mandatory active work log: `docs/STABILITY_FOUNDATION_2026-09-28.md`
+- Current production/main baseline: `69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
+- Active development branch: `development/stability-closure-architecture-containment-20260928`
+- Mandatory active work log: `docs/STABILITY_CLOSURE_ARCHITECTURE_CONTAINMENT_2026-09-28.md`
+
+## Closed predecessor
+The previous track **Stability Foundation** is complete, merged, deployed, and closed for execution:
+- Old branch: `development/stability-foundation-20260928`
+- Merged PR: #401
+- Merge commit: `69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
+- Post-merge Verify main #3296: Green
+- Deploy #859: Green
+- Old log: `docs/STABILITY_FOUNDATION_2026-09-28.md` is historical evidence only and MUST NOT be used as the active execution plan.
 
 ## Repository branch policy
-Only these long-lived branches are intentionally preserved:
+Long-lived branches intentionally preserved:
 1. `main`
 2. `development/cleopatra-v811-final`
 3. `development/smouha-v811-realtime-final`
 
-All normal development branches are temporary and should be deleted after verified merge/closure.
+Current temporary active development branch:
+4. `development/stability-closure-architecture-containment-20260928`
+
+All other normal development branches are temporary and should be deleted after verified merge/closure.
 
 ## Active PR policy
-Only the two latest Print Agent PRs are intentionally retained outside the current stability PR:
+The two latest Print Agent PRs remain intentionally retained outside this track:
 - #365 — Cleopatra V8.1.1 final
 - #357 — Smouha V8.1.1 final
 
-Older PRs/branches are historical and must not be used as execution baselines.
+The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
 
 ## Safety fence
-- السجل هو المرجع الإجباري للعمل.
-- CI يجب أن يفشل إذا السجل الإلزامي مفقود أو ناقص أو لا يطابق فرع الـPR.
+- هذا الملف + السجل النشط هما المرجع الإجباري للعمل.
+- CI يجب أن يفشل إذا السجل الإلزامي مفقود أو لا يطابق المسار النشط.
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Single writer on the active development branch.
 - No direct write to `main`.
 - No force push.
 - Unexpected HEAD => **STOP_AND_RECONCILE**.
 - No weakening Permission-First, branch isolation, RLS, tests, or Super Admin implicit-bypass rules.
-- Printing / Print Agent / routing / KDS / kitchen dispatch are frozen unless a separately proven regression requires a reviewed fix.
+- Printing / Print Agent / routing / KDS / `send_to_kitchen` behavior are frozen unless a separately proven regression requires a reviewed fix.
 - No Production data rewrite/reset/reseed to make tests pass.
-- Runtime changes must remain safe for currently operating branches.
+- Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Do not add product features. Consolidate the existing system into a stable, maintainable operating baseline:
-1. repository/source-of-truth hygiene;
-2. internal RPC/security surface hardening;
-3. Realtime health diagnosis;
-4. current performance baseline and measured fixes;
-5. DB-backed Golden Path operational test;
-6. containment of oversized/heavy pages behind domain services;
-7. offline lifecycle and operational health hardening;
-8. CI/runtime environment consistency.
+Do not add product features. Close the remaining structural and operational stability debt after Stability Foundation:
+1. source-of-truth and branch hygiene;
+2. formal latency/call budgets for critical paths;
+3. measured repair of remaining performance hotspots;
+4. containment of oversized/heavy pages behind domain/feature services;
+5. monotonic reduction of the legacy direct-Supabase page allowlist;
+6. centralized runtime state and System Health severity semantics;
+7. minimal device/workstation operational identity foundation;
+8. restore/recovery and rollback readiness.
 
-Detailed phase gates, findings, and change ledger are maintained only in:
-`docs/STABILITY_FOUNDATION_2026-09-28.md`
+Detailed phase gates, findings, budgets, and change ledger are maintained only in:
+`docs/STABILITY_CLOSURE_ARCHITECTURE_CONTAINMENT_2026-09-28.md`
 
 ## Definition of done
-The stability track is complete only when:
-- Full Verify is Green on the exact final head;
+This track is complete only when:
+- exact-head Fast Verify and Full Verify are Green;
 - Production API parity is Green;
-- Golden Path proves POS → kitchen inventory → payment → accounting → shift/day close → treasury/report reconciliation on a fresh DB;
-- critical page/RPC latency is bounded by documented budgets;
+- critical page/RPC latency and call budgets are documented and verified;
+- priority heavy pages have bounded data orchestration behind service/domain boundaries;
+- the legacy direct-Supabase page allowlist is materially reduced and cannot grow;
+- runtime state is centralized/testable and System Health has explicit severity thresholds;
+- restore/recovery has been rehearsed on non-Production;
 - no stale active work references remain;
+- Smouha and Cleopatra remain operational;
 - no unexpected printing/KDS/agent behavior changed.
 
-> All older work-plan sections and historical logs remain archival evidence only. They are not active execution instructions.
+> Older work plans/logs are archival evidence only unless this file explicitly names them as active.
