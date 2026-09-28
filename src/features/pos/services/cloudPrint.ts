@@ -123,6 +123,17 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
   return { accepted: queuedStations.length === entries.length, queuedStations, failedStations };
 }
 
+export async function getCloudOpenOrderPrintState(orderId: string): Promise<{ known: boolean; locked: boolean }> {
+  if (!safeText(orderId) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    return { known: false, locked: true };
+  }
+  const { data, error } = await apiPos.getOpenOrderPrintState({ p_order_id: orderId });
+  if (error) return { known: false, locked: true };
+  const result = (data ?? {}) as RpcResult & { locked?: boolean };
+  if (!result.success) return { known: false, locked: true };
+  return { known: true, locked: Boolean(result.locked) };
+}
+
 export async function enqueueCloudOpenOrderPrint(params: { orderId: string; payload: CloudPrintPayload; idempotencyKey: string }) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return { accepted: false, error: 'OFFLINE' };
   const { data, error } = await apiPos.enqueueOpenOrderPrint({
