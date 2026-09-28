@@ -37,7 +37,7 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
 
 ## Safety fence
-- هذا الملف + السجل النشط هما المرجع الإجباري للعمل.
+- السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
 - CI يجب أن يفشل إذا السجل الإلزامي مفقود أو لا يطابق المسار النشط.
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Single writer on the active development branch.
