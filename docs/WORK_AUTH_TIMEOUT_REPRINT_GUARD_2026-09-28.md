@@ -32,7 +32,8 @@ Current PR: `#400`
 - Added server rejection for approvals older than one minute and manager snapshot hiding of stale requests.
 - Added direct-reprint internal approved token at enqueue time for users who own `pos.reprint`; frozen agent completion RPC is untouched.
 - Added print-once UI lock for users without `pos.reprint`.
-- Added regression coverage for timeout, direct reprint token, and UI lock.
+- Added regression coverage for timeout, direct reprint token, completed receipt lock, and Open Check lock.
+- Review caught and corrected a transient placement error where the Open Check lock had entered checkout opening; final code scopes it to `printReceipt` only, so payment/settlement remains unaffected.
 
 ## Verification ledger
 - Fast Verify #1151: **FAILED** on first pass.
@@ -49,8 +50,8 @@ Current PR: `#400`
 - Must obtain exact-head Fast Verify Green and Full Verify Green before requesting merge approval.
 
 ## Next action
-- Correct the worklog contract and test fixtures only.
-- Re-run exact-head Fast Verify and Full Verify.
+- Run exact-head Fast Verify and Full Verify on the final code head.
+- Confirm checkout/payment remains independent of print locks and frozen Print Agent paths remain untouched.
 - If Green, report readiness and stop before Merge/Production migration.
 
 ## Mandatory update protocol
