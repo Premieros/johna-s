@@ -18,6 +18,20 @@ describe('receipt print-once UI guard', () => {
     expect(workspace).toContain('!pos.openCheckPrintLocked || perms.canReprint');
   });
 
+  it('keeps checkout independent from the open-check print lock', () => {
+    const checkoutStart = wrapper.indexOf('const setCheckoutOpen = useCallback');
+    const completeStart = wrapper.indexOf('const completeSale = useCallback');
+    const printStart = wrapper.indexOf('const printReceipt = useCallback');
+    const checkoutSegment = wrapper.slice(checkoutStart, completeStart);
+    const printSegment = wrapper.slice(printStart);
+
+    expect(checkoutStart).toBeGreaterThanOrEqual(0);
+    expect(completeStart).toBeGreaterThan(checkoutStart);
+    expect(printStart).toBeGreaterThan(completeStart);
+    expect(checkoutSegment).not.toContain('openCheckPrintLockedOrderId');
+    expect(printSegment).toContain('openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint');
+  });
+
   it('keeps direct reprint permission-first', () => {
     expect(perms).toContain("canReprint: can('pos.reprint')");
     expect(workspace).not.toContain('branch_manager');
