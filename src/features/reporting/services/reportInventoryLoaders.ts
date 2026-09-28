@@ -123,3 +123,34 @@ export async function loadWasteRows(args: {
   if (args.branchId) q = q.eq('branch_id', args.branchId);
   return fetchRows<Record<string, unknown>>(q);
 }
+
+
+export async function loadInventoryBatchRows(args: {
+  branchId: string | null;
+  warehouseId?: string;
+}): Promise<{
+  rawRows: Record<string, unknown>[];
+  unitRows: Record<string, unknown>[];
+}> {
+  let rawQuery = supabase
+    .from('raw_material_batches')
+    .select('branch_id,warehouse_id,quantity,raw_material:raw_materials(id,name,code,min_stock),warehouse:warehouses(name)');
+  let unitQuery = supabase
+    .from('inventory_unit_batches')
+    .select('branch_id,warehouse_id,quantity,unit:inventory_units(id,name,barcode,min_stock,low_stock_threshold),warehouse:warehouses(name)');
+
+  if (args.branchId) {
+    rawQuery = rawQuery.eq('branch_id', args.branchId);
+    unitQuery = unitQuery.eq('branch_id', args.branchId);
+  }
+  if (args.warehouseId) {
+    rawQuery = rawQuery.eq('warehouse_id', args.warehouseId);
+    unitQuery = unitQuery.eq('warehouse_id', args.warehouseId);
+  }
+
+  const [rawRows, unitRows] = await Promise.all([
+    fetchRows<Record<string, unknown>>(rawQuery),
+    fetchRows<Record<string, unknown>>(unitQuery),
+  ]);
+  return { rawRows, unitRows };
+}
