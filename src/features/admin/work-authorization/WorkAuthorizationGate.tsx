@@ -8,6 +8,7 @@ import type {
 } from './workAuthorizationContract';
 
 type GateStatus = 'loading' | 'ready' | 'blocked' | 'error';
+const WORK_AUTHORIZATION_REQUEST_WINDOW_MS = 60_000;
 
 export function WorkAuthorizationGate({
   client,
@@ -29,12 +30,18 @@ export function WorkAuthorizationGate({
   const [state, setState] = useState<MyWorkAuthorizationState | null>(null);
   const [status, setStatus] = useState<GateStatus>('loading');
   const [requesting, setRequesting] = useState(false);
+  const [pendingExpired, setPendingExpired] = useState(false);
 
   const load = useCallback(async () => {
     setStatus('loading');
     try {
       const next = await client.getMyState(branchId);
       setState(next);
+      setPendingExpired(next.status === 'expired' || (
+        next.status === 'pending'
+        && !!next.requestedAt
+        && Date.now() >= new Date(next.requestedAt).getTime() + WORK_AUTHORIZATION_REQUEST_WINDOW_MS
+      ));
       setStatus(next.canWork ? 'ready' : 'blocked');
     } catch {
       setStatus('error');
@@ -43,9 +50,20 @@ export function WorkAuthorizationGate({
 
   useEffect(() => {
     void load();
+  }, [load]);
 
+  useEffect(() => {
+    if (state?.status !== 'pending' || pendingExpired || !state.requestedAt) return;
+
+    const expiresAt = new Date(state.requestedAt).getTime() + WORK_AUTHORIZATION_REQUEST_WINDOW_MS;
+    const remaining = Math.max(0, expiresAt - Date.now());
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
+
+    const expiryTimer = window.setTimeout(() => {
+      if (!disposed) setPendingExpired(true);
+    }, remaining);
+
     void client.subscribeToMyChanges(branchId, () => {
       if (!disposed) void load();
     }).then((cleanup) => {
@@ -55,15 +73,17 @@ export function WorkAuthorizationGate({
 
     return () => {
       disposed = true;
+      window.clearTimeout(expiryTimer);
       unsubscribe?.();
     };
-  }, [branchId, client, load]);
+  }, [branchId, client, load, pendingExpired, state?.requestedAt, state?.status]);
 
   const request = async () => {
     setRequesting(true);
     try {
       const next = await client.requestAuthorization(branchId);
       setState(next);
+      setPendingExpired(false);
       setStatus(next.canWork ? 'ready' : 'blocked');
     } finally {
       setRequesting(false);
@@ -73,7 +93,8 @@ export function WorkAuthorizationGate({
   if (status === 'ready') return <>{children}</>;
 
   const displayBranch = state?.branchName || branchName || 'الفرع الحالي';
-  const isPending = state?.status === 'pending';
+  const isPending = state?.status === 'pending' && !pendingExpired;
+  const isDormant = pendingExpired || state?.status === 'expired';
 
   return (
     <main
@@ -95,7 +116,9 @@ export function WorkAuthorizationGate({
                 ? 'تعذر التحقق من تصريح العمل'
                 : isPending
                   ? 'في انتظار تصريح بدء العمل'
-                  : 'يلزم تصريح لبدء العمل'}
+                  : isDormant
+                    ? 'انتهت مهلة طلب التصريح'
+                    : 'يلزم تصريح لبدء العمل'}
           </h1>
           <p className="mt-2 text-sm text-ui-muted">{displayBranch}</p>
         </div>
@@ -105,8 +128,10 @@ export function WorkAuthorizationGate({
             <Clock3 className="mx-auto h-5 w-5 text-ui-muted" />
             <p className="mt-2 text-sm text-ui-text">
               {isPending
-                ? 'تم إرسال طلبك للمسؤول. ستفتح مساحة العمل تلقائيًا بعد الموافقة.'
-                : 'أرسل طلب تصريح بدء العمل للمسؤول.'}
+                ? 'تم إرسال طلبك للمسؤول. الطلب صالح لمدة دقيقة واحدة وستفتح مساحة العمل تلقائيًا إذا تمت الموافقة خلالها.'
+                : isDormant
+                  ? 'انتهت الدقيقة بدون موافقة. تم إيقاف المتابعة تلقائيًا لتقليل الاستهلاك؛ أرسل طلبًا جديدًا عندما تكون جاهزًا.'
+                  : 'أرسل طلب تصريح بدء العمل للمسؤول.'}
             </p>
           </div>
         )}
@@ -121,11 +146,11 @@ export function WorkAuthorizationGate({
           {status === 'blocked' && !isPending && (
             <Button className="sm:col-span-2" disabled={requesting} onClick={() => void request()}>
               <ShieldCheck className="h-4 w-4" />
-              {requesting ? 'جاري الإرسال...' : 'طلب تصريح بدء العمل'}
+              {requesting ? 'جاري الإرسال...' : isDormant ? 'طلب تصريح جديد' : 'طلب تصريح بدء العمل'}
             </Button>
           )}
 
-          {(status === 'error' || isPending) && (
+          {status === 'error' && (
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
               تحديث الحالة
@@ -151,7 +176,7 @@ export function WorkAuthorizationGate({
         </div>
 
         <p className="mt-4 text-center text-xs text-ui-muted">
-          يتم التحقق عند الدخول أو تغيير الفرع، وتصل تغييرات التصريح فورًا. لا يوجد فحص دوري مستمر.
+          أثناء الدقيقة الأولى ننتظر عبر Realtime فقط بدون polling. بعد انتهاء الدقيقة يتوقف الاشتراك تمامًا حتى ترسل طلبًا جديدًا.
         </p>
       </section>
     </main>
