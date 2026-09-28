@@ -26,7 +26,6 @@ import { loadCashierPerformanceRows, loadDetailedInvoiceRows, loadReturnRows, lo
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
-  applySalesFilters,
   applySaleItemFilters,
   applyProductScopedFilters,
   REPORT_FILTER_DIMS,
