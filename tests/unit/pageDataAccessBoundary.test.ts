@@ -60,7 +60,7 @@ describe('page data-access architecture boundary', () => {
     const directPages = walk(pagesRoot)
       .filter((path) => {
         const source = readFileSync(path, 'utf8');
-        return source.includes('supabase.from(') || source.includes('supabase.rpc(');
+        return /supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source);
       })
       .map((path) => relative(repoRoot, path).replace(/\\/g, '/'))
       .sort();
@@ -73,14 +73,12 @@ describe('page data-access architecture boundary', () => {
 
   it('keeps ReportsPage behind feature services/domain boundaries', () => {
     const reports = readFileSync(join(repoRoot, 'src/features/reporting/pages/ReportsPage.tsx'), 'utf8');
-    expect(reports).not.toContain('supabase.from(');
-    expect(reports).not.toContain('supabase.rpc(');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(reports)).toBe(false);
   });
 
   it('keeps System Health behind the admin domain boundary', () => {
     const health = readFileSync(join(repoRoot, 'src/features/admin/pages/SystemHealthPage.tsx'), 'utf8');
     expect(health).toContain('admin.getSystemHealthSnapshot');
-    expect(health).not.toContain('supabase.from(');
-    expect(health).not.toContain('supabase.rpc(');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(health)).toBe(false);
   });
 });
