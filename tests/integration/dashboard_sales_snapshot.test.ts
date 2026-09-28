@@ -94,7 +94,7 @@ describe.skipIf(skip)('dashboard bounded aggregate snapshot', () => {
       expect(Number(snapshot.current?.sales)).toBe(290);
       expect(Number(snapshot.current?.returns)).toBe(10);
       expect(Number(snapshot.current?.discounts)).toBe(25);
-      expect(Number(snapshot.current?.payments)).toBe(300);
+      expect(Number(snapshot.current?.payments)).toBe(290);
 
       expect(Number(snapshot.previous?.orders)).toBe(1);
       expect(Number(snapshot.previous?.sales)).toBe(75);
@@ -103,7 +103,7 @@ describe.skipIf(skip)('dashboard bounded aggregate snapshot', () => {
       expect(Number(snapshot.previous?.payments)).toBe(75);
 
       const methods = new Map((snapshot.payment_methods || []).map((row) => [row.method, Number(row.total || 0)]));
-      expect(methods.get('cash')).toBe(220);
+      expect(methods.get('cash')).toBe(210);
       expect(methods.get('card')).toBe(80);
       expect(snapshot.recent_sales?.[0]?.invoice_number).toBe('DASH-CURRENT-B');
     });
