@@ -174,7 +174,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     );
     expect(detail[0].r.success).toBe(true);
     expect(detail[0].r.product_name).toBe('Cost Product');
-    expect(Number(detail[0].r.theoretical_cost)).toBe(42);\n    expect(Number(detail[0].r.actual_cost)).toBe(42);
+    expect(Number(detail[0].r.theoretical_cost)).toBe(42);
+    expect(Number(detail[0].r.actual_cost)).toBe(42);
     expect(detail[0].r.recipe_items.length).toBe(2);
     const directLine = detail[0].r.recipe_items.find((line) => !line.component_group_id);
     const groupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId);
