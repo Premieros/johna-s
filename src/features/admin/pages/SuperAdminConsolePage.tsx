@@ -33,8 +33,16 @@ import { Input, Textarea, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { RolesTab } from './RolesTab';
 import { formatDate, formatDateTime } from '@/lib/format';
+import {
+  fetchTenantStats,
+  fetchUserCreationControl,
+  fetchUsersAndAudit,
+  type SuperAdminAuditLogRow as AuditLogRow,
+  type SuperAdminTenantStats as TenantStats,
+  type SuperAdminTenantUser as TenantUser,
+} from '../services/superAdminConsoleData';
 
-interface TenantStats {
+/*
   organization_id: string;
   organization_name: string;
   organization_slug: string;
@@ -60,14 +68,7 @@ interface TenantUser {
   created_at: string;
 }
 
-interface AuditLogRow {
-  id: string;
-  action: string;
-  entity: string;
-  user_email: string | null;
-  created_at: string;
-  details: unknown;
-}
+*/
 
 type SuperTab =
   | 'tenants'
@@ -133,27 +134,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   // ─────────────────────────────────────────────────────────────
   const loadSystemControls = useCallback(async () => {
     try {
-      const { data } = await admin.canCreateNewUser();
-      if (data && typeof data.allowed === 'boolean') {
-        setAllowNewUserCreation(data.allowed);
-      } else {
-        const { data: sData } = await supabase.from('system_settings').select('config').eq('id', 1).maybeSingle();
-        if (sData?.config?.security && typeof sData.config.security.allow_new_user_creation === 'boolean') {
-          setAllowNewUserCreation(sData.config.security.allow_new_user_creation);
-        }
-      }
-
-      // Fetch audit logs for user creation toggle
-      const { data: aData } = await supabase
-        .from('audit_log')
-        .select('*')
-        .eq('action', 'TOGGLE_ALLOW_NEW_USER_CREATION')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (aData) {
-        setUserCreationAudit(aData as AuditLogRow[]);
-      }
+      const snapshot = await fetchUserCreationControl();
+      if (typeof snapshot.allowed === 'boolean') setAllowNewUserCreation(snapshot.allowed);
+      setUserCreationAudit(snapshot.audit);
     } catch (err) {
       console.warn('Failed to load system controls:', err);
     }
@@ -188,34 +171,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const loadTenants = useCallback(async () => {
     setLoadingTenants(true);
     try {
-      const [orgsRes, brRes, memRes] = await Promise.all([
-        supabase.from('organizations').select('*').order('created_at', { ascending: false }),
-        supabase.from('branches').select('id, name, is_active, organization_id'),
-        supabase.from('organization_members').select('organization_id, user_id, is_active'),
-      ]);
-
-      const orgs = orgsRes.data || [];
-      const brs = brRes.data || [];
-      const mems = memRes.data || [];
-
-      const stats: TenantStats[] = orgs.map((o) => {
-        const orgBranches = brs.filter((b) => b.organization_id === o.id);
-        const orgMembers = mems.filter((m) => m.organization_id === o.id && m.is_active);
-
-        return {
-          organization_id: o.id,
-          organization_name: o.name,
-          organization_slug: o.slug,
-          is_active: o.is_active ?? true,
-          created_at: o.created_at,
-          branch_count: orgBranches.length,
-          user_count: orgMembers.length,
-          total_branches: orgBranches.length,
-          active_branches: orgBranches.filter((b) => b.is_active).length,
-        };
-      });
-
-      setTenants(stats);
+      setTenants(await fetchTenantStats());
     } catch {
       // Ignored
     } finally {
@@ -229,39 +185,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const loadUsersAndAudit = useCallback(async () => {
     setLoadingUsersAudit(true);
     try {
-      const [uRes, aRes, bRes, oRes, mRes] = await Promise.all([
-        supabase.from('users').select('id, email, username, full_name, role, is_active, branch_id, created_at').order('created_at', { ascending: false }),
-        supabase.from('audit_log').select('id, action, entity, user_email, created_at, details').order('created_at', { ascending: false }).limit(100),
-        supabase.from('branches').select('id, name, organization_id'),
-        supabase.from('organizations').select('id, name'),
-        supabase.from('organization_members').select('user_id, organization_id').eq('is_active', true),
-      ]);
-
-      const branchMap = new Map((bRes.data || []).map((b) => [b.id, b]));
-      const orgMap = new Map((oRes.data || []).map((o) => [o.id, o]));
-      const memberMap = new Map((mRes.data || []).map((m) => [m.user_id, m.organization_id]));
-
-      const computedUsers: TenantUser[] = (uRes.data || []).map((u) => {
-        const branch = u.branch_id ? branchMap.get(u.branch_id) : undefined;
-        const orgId = memberMap.get(u.id) || branch?.organization_id || null;
-        const org = orgId ? orgMap.get(orgId) : undefined;
-        return {
-          user_id: u.id,
-          email: u.email || '',
-          username: u.username || '',
-          full_name: u.full_name || '',
-          role: u.role || 'cashier',
-          is_active: u.is_active ?? true,
-          branch_id: u.branch_id || null,
-          branch_name: branch?.name || null,
-          org_id: orgId,
-          org_name: org?.name || null,
-          created_at: u.created_at || new Date().toISOString(),
-        };
-      });
-
-      setAllUsers(computedUsers);
-      setAuditLogs((aRes.data || []) as AuditLogRow[]);
+      const snapshot = await fetchUsersAndAudit();
+      setAllUsers(snapshot.users);
+      setAuditLogs(snapshot.audit);
     } catch {
       // Ignored
     } finally {
