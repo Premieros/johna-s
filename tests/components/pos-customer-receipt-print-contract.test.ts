@@ -11,17 +11,20 @@ describe('POS customer receipt print contract', () => {
   it('routes sale-screen print actions to the customer receipt, not the kitchen ticket', () => {
     expect(workspace).not.toContain('onPrint={pos.printKitchenTicket}');
     expect(workspace).toContain('onPrint={() => void pos.printReceipt()}');
-    expect(workspace).toContain('perms.canPrint && pos.lastReceipt && pos.cart.length === 0');
+    expect(workspace).toContain('(perms.canPrint || perms.canReprint)');
+    expect(workspace).toContain('!pos.receiptPrintLocked || perms.canReprint');
   });
 
   it('gates the visible print action with pos.receipt.print and first kitchen send', () => {
     expect(header).toContain('const canPrintSentReceipt = hasSent && canPrintReceipt;');
-    expect(header).toContain('{perms.canPrint && canPrintSentReceipt && (');
+    expect(header).toContain('{(perms.canPrint || perms.canReprint) && canPrintSentReceipt && (');
     expect(header).not.toContain('disabled={!canPrintSentReceipt}');
-    expect(workspace).toContain('canPrintReceipt={pos.cart.length > 0 || !!pos.lastReceipt}');
+    expect(workspace).toContain('pos.openCheckPrintLocked');
+    expect(workspace).toContain('pos.receiptPrintLocked');
     expect(header).not.toContain('perms.canPrintKitchen && itemsCount > 0');
     expect(workspace).toContain('data-testid="pos-receipt-print"');
-    expect(workspace).toContain('{perms.canPrint && (');
+    expect(workspace).toContain('{(perms.canPrint || perms.canReprint) && (');
+    expect(workspace).toContain('disabled={pos.receiptPrintLocked && !perms.canReprint}');
   });
 
   it('exposes an explicit permission checkbox label for the sale receipt print button', () => {
@@ -38,6 +41,8 @@ describe('POS customer receipt print contract', () => {
     expect(hook).toContain('buildReceiptThermalText(openOrderReceipt, effSettings, lang, isAr)');
     expect(hook).toContain('payload: {');
     expect(hook).toContain('text,');
+    expect(hook).toContain('`open-check:${persisted.orderId}:one-time`');
+    expect(hook).toContain('openCheckPrintedOrderId === persisted.orderId');
     expect(hook).not.toContain('payload: {\n            html,');
     expect(printing).toContain('options?: { authorize?: boolean }');
     expect(printing).toContain("isAr ? 'حساب مبدئي' : 'OPEN CHECK'");
