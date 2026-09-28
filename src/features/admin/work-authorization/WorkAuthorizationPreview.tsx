@@ -48,6 +48,7 @@ function statusLabel(kind: WorkAuthorizationHistoryEntry['kind'], ar: boolean) {
     approved: ar ? 'تمت الموافقة' : 'Approved',
     rejected: ar ? 'تم الرفض' : 'Rejected',
     revoked: ar ? 'تم سحب الاعتماد' : 'Revoked',
+    expired: ar ? 'انتهت مهلة الطلب' : 'Request expired',
   };
   return labels[kind];
 }
