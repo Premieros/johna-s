@@ -296,9 +296,17 @@ export function DashboardDataPage() {
         to: window.previousEnd.toISOString(),
       }),
     ]);
-    const itemPromise = currentRows.length
-      ? supabase.from('sale_items').select('quantity,refunded_quantity,product:products(name)').in('sale_id', currentRows.map((sale) => sale.id)).limit(20000)
-      : Promise.resolve({ data: [], error: null });
+    let itemPromise: PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }> = Promise.resolve({ data: [], error: null });
+    if (currentRows.length) {
+      let itemQuery = supabase
+        .from('sale_items')
+        .select('quantity,refunded_quantity,product:products(name),sale:sales!inner(created_at,branch_id)')
+        .gte('sale.created_at', window.start.toISOString())
+        .lte('sale.created_at', window.end.toISOString())
+        .limit(5000);
+      if (branchFilter) itemQuery = itemQuery.eq('sale.branch_id', branchFilter);
+      itemPromise = itemQuery;
+    }
 
     const [paymentResults, itemResult] = await Promise.all([paymentPromise, itemPromise]);
     const currentPaymentResult = paymentResults[0];
