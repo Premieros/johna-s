@@ -15,7 +15,7 @@ describe('POS empty-cart visual contract', () => {
 
   it('does not surface Print before a printable sent receipt exists', () => {
     const header = source('src/features/pos/components/order/PosOrderHeaderBar.tsx');
-    expect(header).toContain('perms.canPrint && canPrintSentReceipt');
+    expect(header).toContain('(perms.canPrint || perms.canReprint) && canPrintSentReceipt');
     expect(header).not.toContain('disabled={!canPrintSentReceipt}');
   });
 });
