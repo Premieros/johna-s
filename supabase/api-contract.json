@@ -470,6 +470,12 @@
       ]
     },
     {
+      "name": "get_current_raw_material_valuation",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "get_dashboard_sales_snapshot",
       "params": [
         "branch_id",
@@ -479,6 +485,14 @@
         "previous_from",
         "previous_to",
         "timezone"
+      ]
+    },
+    {
+      "name": "get_day_closing_range_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "to_date"
       ]
     },
     {
@@ -633,6 +647,14 @@
       ]
     },
     {
+      "name": "get_raw_material_consumption_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "to_date"
+      ]
+    },
+    {
       "name": "get_raw_material_cost_history",
       "params": [
         "branch_id",
@@ -644,6 +666,14 @@
       "name": "get_raw_material_cost_valuation_overview",
       "params": [
         "branch_id"
+      ]
+    },
+    {
+      "name": "get_raw_material_financial_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "to_date"
       ]
     },
     {
@@ -663,6 +693,14 @@
         "status",
         "to",
         "warehouse_id"
+      ]
+    },
+    {
+      "name": "get_sales_component_reconciliation_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "to_date"
       ]
     },
     {
