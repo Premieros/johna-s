@@ -123,6 +123,53 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     expect(count.rows[0].count).toBe('1');
   });
 
+  it('expires pending requests after one minute and requires a fresh request', async () => {
+    const pending = await client.query<{ id: string }>(
+      `SELECT id FROM public.work_authorizations
+       WHERE user_id=$1 AND branch_id=$2 AND status='pending'
+       ORDER BY requested_at DESC LIMIT 1`,
+      [worker, branchA],
+    );
+    const firstId = pending.rows[0].id;
+    await client.query(
+      `UPDATE public.work_authorizations
+       SET requested_at=now()-interval '61 seconds',updated_at=now()-interval '61 seconds'
+       WHERE id=$1`, [firstId],
+    );
+
+    const snapshot = await asUser<{ value: { pending?: Array<{ id: string }> } }>(
+      approverA, `SELECT public.get_work_authorization_snapshot($1) AS value`, [branchA],
+    );
+    expect(snapshot.rows[0].value.pending?.some((row) => row.id === firstId)).toBe(false);
+
+    const expired = await rpcJson(
+      approverA, `public.decide_work_authorization($1,true,NULL)`, [firstId],
+    );
+    expect(expired.success).toBe(false);
+    expect(expired.error).toBe('REQUEST_EXPIRED');
+
+    const second = await rpcJson(worker, `public.request_work_authorization($1)`, [branchA]);
+    expect(second.status).toBe('pending');
+    expect(second.requestId).toBeTruthy();
+    expect(second.requestId).not.toBe(firstId);
+
+    await client.query(
+      `UPDATE public.work_authorizations
+       SET requested_at=now()-interval '61 seconds',updated_at=now()-interval '61 seconds'
+       WHERE id=$1`, [second.requestId],
+    );
+    const third = await rpcJson(worker, `public.request_work_authorization($1)`, [branchA]);
+    expect(third.status).toBe('pending');
+    expect(third.requestId).toBeTruthy();
+    expect(third.requestId).not.toBe(second.requestId);
+
+    const count = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM public.work_authorizations
+       WHERE user_id=$1 AND branch_id=$2 AND status='pending'`, [worker, branchA],
+    );
+    expect(count.rows[0].count).toBe('1');
+  });
+
   it('denies self approval even when the requester temporarily owns the approval permission', async () => {
     await client.query(
       `UPDATE public.roles
