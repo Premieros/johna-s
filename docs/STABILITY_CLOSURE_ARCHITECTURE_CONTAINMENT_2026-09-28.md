@@ -289,7 +289,7 @@ This track is complete only when:
 - Smouha and Cleopatra remain operational;
 - printing/KDS/Print Agent behavior remains unchanged unless an explicitly approved regression fix was required.
 
-# Mandatory update protocol
+## Mandatory update protocol
 - Read this file before every write.
 - Verify active branch HEAD before every write.
 - Record every coherent change set and verification result.
