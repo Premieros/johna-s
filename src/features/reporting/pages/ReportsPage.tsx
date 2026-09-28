@@ -836,7 +836,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
           : branches;
         const results = await Promise.all(targetBranches.map(async (branch) => {
-          const result = await supabase.rpc('get_day_closing_range_report', {
+          const result = await reporting.getDayClosingRangeReport({
             p_branch_id: branch.id,
             p_from_date: allowed.from,
             p_to_date: allowed.to,
@@ -882,7 +882,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
           : branches;
         const results = await Promise.all(targetBranches.map(async (branch) => {
-          const result = await supabase.rpc('get_raw_material_consumption_report', {
+          const result = await reporting.getRawMaterialConsumptionReport({
             p_branch_id: branch.id,
             p_from_date: allowed.from,
             p_to_date: allowed.to,
@@ -916,7 +916,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
           : branches;
         const results = await Promise.all(targetBranches.map(async (branch) => {
-          const result = await supabase.rpc('get_current_raw_material_valuation', { p_branch_id: branch.id });
+          const result = await reporting.getCurrentRawMaterialValuation({ p_branch_id: branch.id });
           if (result.error) throw result.error;
           return { branchId: branch.id, rows: Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [] };
         }));
@@ -942,7 +942,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
           : branches;
         const results = await Promise.all(targetBranches.map(async (branch) => {
-          const result = await supabase.rpc('get_raw_material_financial_report', {
+          const result = await reporting.getRawMaterialFinancialReport({
             p_branch_id: branch.id,
             p_from_date: allowed.from,
             p_to_date: allowed.to,
@@ -991,7 +991,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           ? branches.filter((branch) => branch.id === effectiveBranchFilter)
           : branches;
         const results = await Promise.all(targetBranches.map(async (branch) => {
-          const result = await supabase.rpc('get_sales_component_reconciliation_report', {
+          const result = await reporting.getSalesComponentReconciliationReport({
             p_branch_id: branch.id,
             p_from_date: allowed.from,
             p_to_date: allowed.to,
