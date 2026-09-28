@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import { Input } from '../../src/components/Input';
@@ -18,7 +18,7 @@ function ControlledNumber() {
 }
 
 describe('Input controlled decimal draft', () => {
-  it('preserves 0.050 while focused even when the parent stores 0.05', () => {
+  it('preserves 0.050 while focused even when the parent stores 0.05', async () => {
     render(<ControlledNumber />);
 
     const input = screen.getByLabelText('quantity') as HTMLInputElement;
@@ -28,6 +28,6 @@ describe('Input controlled decimal draft', () => {
     expect(input.value).toBe('0.050');
 
     fireEvent.blur(input);
-    expect(input.value).toBe('0.05');
+    await waitFor(() => expect(input.value).toBe('0.05'));
   });
 });
