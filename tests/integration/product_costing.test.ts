@@ -168,7 +168,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
 
   it('get_product_costing_detail: recipe lines, batch-cost fallback and error on missing product', async () => {
     const detail = await asUser(managerId, async () =>
-      rows<{ r: { success: boolean; product_name: string; actual_cost: number; recipe_items: Array<{ line_cost: number; unit_cost: number }>; history: unknown[] } }>(
+      rows<{ r: { success: boolean; product_name: string; actual_cost: number; recipe_items: Array<{ line_cost: number; unit_cost: number; component_group_id?: string | null; component_group_name?: string | null; component_group_quantity?: number | null }>; history: unknown[] } }>(
         `SELECT public.get_product_costing_detail($1, NULL) AS r`, [prodId],
       ),
     );
@@ -176,8 +176,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(detail[0].r.product_name).toBe('Cost Product');
     expect(Number(detail[0].r.actual_cost)).toBe(42);
     expect(detail[0].r.recipe_items.length).toBe(2);
-    const directLine = detail[0].r.recipe_items.find((line: any) => !line.component_group_id);
-    const groupLine = detail[0].r.recipe_items.find((line: any) => line.component_group_id === componentUnitId);
+    const directLine = detail[0].r.recipe_items.find((line) => !line.component_group_id);
+    const groupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId);
     expect(directLine).toBeTruthy();
     expect(groupLine).toBeTruthy();
     expect(Number(directLine!.unit_cost)).toBe(20);
