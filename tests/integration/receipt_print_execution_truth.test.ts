@@ -154,7 +154,7 @@ describe.skipIf(skip)('receipt print execution truth', () => {
       expect(first.print_number).toBe(1);
 
       const queued = await client.query<{ value: { success?: boolean; job_id?: string; print_number?: number } }>(
-        `SELECT public.enqueue_cloud_receipt_print($1,NULL,'{}'::jsonb,$2) AS value`,
+        `SELECT public.enqueue_cloud_receipt_print($1,NULL,jsonb_build_object('text','TEST RECEIPT','paperWidthMm',80),$2) AS value`,
         [saleC, `direct-reprint-${randomUUID()}`],
       );
       expect(queued.rows[0].value.success).toBe(true);
