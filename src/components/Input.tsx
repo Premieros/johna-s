@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type ReactNode } from 'react';
+import { useId, useState, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type ReactNode } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -8,6 +8,8 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 export function Input({ label, error, className = '', id, ...props }: InputProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
+  const isControlledNumber = props.type === 'number' && props.value !== undefined;
+  const [numberDraft, setNumberDraft] = useState<string | null>(null);
   const numericClass = props.type === 'number'
     ? '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
     : '';
@@ -17,8 +19,21 @@ export function Input({ label, error, className = '', id, ...props }: InputProps
       {label && <label htmlFor={inputId} className="text-sm font-medium text-ui-text">{label}</label>}
       <input
         id={inputId}
-        className={`min-h-11 lg:min-h-0 min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text placeholder-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${numericClass} ${error ? 'border-ui-danger focus-visible:ring-ui-danger' : ''} ${className}`}
         {...props}
+        value={isControlledNumber && numberDraft !== null ? numberDraft : props.value}
+        onFocus={(event) => {
+          if (isControlledNumber) setNumberDraft(String(props.value ?? ''));
+          props.onFocus?.(event);
+        }}
+        onChange={(event) => {
+          if (isControlledNumber) setNumberDraft(event.target.value);
+          props.onChange?.(event);
+        }}
+        onBlur={(event) => {
+          props.onBlur?.(event);
+          setNumberDraft(null);
+        }}
+        className={`min-h-11 lg:min-h-0 min-w-0 rounded-ui border border-ui-border bg-ui-surface-raised px-3.5 py-2.5 text-sm text-ui-text placeholder-ui-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring focus-visible:border-ui-border-strong transition-all ${numericClass} ${error ? 'border-ui-danger focus-visible:ring-ui-danger' : ''} ${className}`}
       />
       {error && <span className="text-xs text-ui-danger font-medium">{error}</span>}
     </div>
