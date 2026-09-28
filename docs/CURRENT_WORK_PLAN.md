@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Stability Foundation / no feature development**
+- Track: **Decimal recipe quantities + linked component-group costing defect fix**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Production baseline at start: `c22dfd69120201111944c04314b930ca3ad69889`
-- Active development branch: `development/stability-foundation-20260928`
-Mandatory active work log: `docs/STABILITY_FOUNDATION_2026-09-28.md`
+- Production baseline at start: `69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
+- Active development branch: `development/decimal-costing-composite-20260928`
+Mandatory active work log: `docs/DECIMAL_COSTING_COMPOSITE_2026-09-28.md`
 
 ## Repository branch policy
 Only these long-lived branches are intentionally preserved:
@@ -38,26 +38,22 @@ Older PRs/branches are historical and must not be used as execution baselines.
 - Runtime changes must remain safe for currently operating branches.
 
 ## Current objective
-Do not add product features. Consolidate the existing system into a stable, maintainable operating baseline:
-1. repository/source-of-truth hygiene;
-2. internal RPC/security surface hardening;
-3. Realtime health diagnosis;
-4. current performance baseline and measured fixes;
-5. DB-backed Golden Path operational test;
-6. containment of oversized/heavy pages behind domain services;
-7. offline lifecycle and operational health hardening;
-8. CI/runtime environment consistency.
+Fix two bounded defects without changing POS operational flows:
+1. allow controlled numeric fields to accept decimal drafts such as `0.050` without collapsing mid-entry;
+2. include reusable manufactured component-group raw materials in Costing Center product detail and actual recipe cost.
 
-Detailed phase gates, findings, and change ledger are maintained only in:
-`docs/STABILITY_FOUNDATION_2026-09-28.md`
+Operational stock deduction, send-to-kitchen, printing, Print Agent, routing, KDS, shifts, and production data remain frozen.
+
+Detailed findings, change ledger, verification, and production gate are maintained only in:
+`docs/DECIMAL_COSTING_COMPOSITE_2026-09-28.md`
 
 ## Definition of done
-The stability track is complete only when:
+This defect-fix track is complete only when:
+- decimal quantity entry is covered by focused UI/unit verification;
+- linked component-group costing is covered by DB/integration verification;
 - Full Verify is Green on the exact final head;
-- Production API parity is Green;
-- Golden Path proves POS → kitchen inventory → payment → accounting → shift/day close → treasury/report reconciliation on a fresh DB;
-- critical page/RPC latency is bounded by documented budgets;
-- no stale active work references remain;
-- no unexpected printing/KDS/agent behavior changed.
+- Production API parity remains Green;
+- no POS deduction, send-to-kitchen, printing/KDS/agent behavior changed;
+- Production migration is not applied before explicit approval.
 
 > All older work-plan sections and historical logs remain archival evidence only. They are not active execution instructions.
