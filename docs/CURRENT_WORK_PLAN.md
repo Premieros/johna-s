@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Decimal recipe quantities + linked component-group costing defect fix**
+- Track: **Hotfix — canonical theoretical costing source**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Production baseline at start: `69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
-- Active development branch: `development/decimal-costing-composite-20260928`
-Mandatory active work log: `docs/DECIMAL_COSTING_COMPOSITE_2026-09-28.md`
+- Production baseline at start: `a1b8e77d5e1b0466d78f4d72170a9a1c9f22ebbf`
+- Active development branch: `hotfix/costing-theoretical-source-20260928`
+Mandatory active work log: `docs/COSTING_THEORETICAL_HOTFIX_2026-09-28.md`
 
 ## Repository branch policy
 Only these long-lived branches are intentionally preserved:
@@ -38,14 +38,12 @@ Older PRs/branches are historical and must not be used as execution baselines.
 - Runtime changes must remain safe for currently operating branches.
 
 ## Current objective
-Fix two bounded defects without changing POS operational flows:
-1. allow controlled numeric fields to accept decimal drafts such as `0.050` without collapsing mid-entry;
-2. include reusable manufactured component-group raw materials in Costing Center product detail and actual recipe cost.
+Correct the Costing Center theoretical-cost source so it no longer reads the retired/unused `product_components` BOM. Theoretical product cost must use the canonical current recipe/raw-material model, including linked manufactured component groups. Historical COGS remains unchanged.
 
-Operational stock deduction, send-to-kitchen, printing, Print Agent, routing, KDS, shifts, and production data remain frozen.
+Operational stock deduction, send-to-kitchen, printing, Print Agent, routing, KDS, shifts, payments, and production data remain frozen.
 
 Detailed findings, change ledger, verification, and production gate are maintained only in:
-`docs/DECIMAL_COSTING_COMPOSITE_2026-09-28.md`
+`docs/COSTING_THEORETICAL_HOTFIX_2026-09-28.md`
 
 ## Definition of done
 This defect-fix track is complete only when:
