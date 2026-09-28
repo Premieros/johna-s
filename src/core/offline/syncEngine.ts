@@ -8,6 +8,8 @@ import { pos as posApi, supabase } from '@/api';
 import {
   getAllOfflineSales,
   updateOfflineSaleStatus,
+  scheduleOfflineSaleRetry,
+  blockOfflineSale,
   removeOfflineSale,
   getPendingSalesCount,
   subscribeToQueueChanges,
@@ -111,7 +113,7 @@ class OfflineSyncEngine {
     this.isOnline = online;
     this.emit();
     if (online) {
-      void this.syncAll();
+      void this.syncAll({ force: true });
     }
   }
 
@@ -185,15 +187,24 @@ class OfflineSyncEngine {
     }
   }
 
-  public async syncAll(): Promise<{ successCount: number; failedCount: number }> {
+  public async syncAll(options: { force?: boolean } = {}): Promise<{ successCount: number; failedCount: number }> {
     if (!this.isOnline || this.isSyncing) {
       return { successCount: 0, failedCount: 0 };
     }
 
     const items = await getAllOfflineSales();
-    // A row can remain persisted as `syncing` if the tab/process dies after the
-    // server commit. It must be retried/reconciled on the next startup.
-    const pendingItems = items.filter((i) => i.status !== 'synced');
+    const now = Date.now();
+    // Automatic sync respects bounded backoff and leaves blocked/dead-letter
+    // rows quiet. A manual/reconnect force pass may retry them after the operator
+    // has corrected the underlying condition.
+    const pendingItems = items.filter((item) => {
+      if (item.status === 'synced') return false;
+      if (options.force) return true;
+      if (item.status === 'blocked' || item.status === 'dead_letter') return false;
+      if (!item.next_retry_at) return true;
+      const nextRetryAt = Date.parse(item.next_retry_at);
+      return !Number.isFinite(nextRetryAt) || nextRetryAt <= now;
+    });
 
     if (pendingItems.length === 0) {
       this.pendingCount = 0;
@@ -233,7 +244,7 @@ class OfflineSyncEngine {
         const ownerError = originatingUserId ? 'OFFLINE_SALE_OWNER_MISMATCH' : 'OFFLINE_SALE_OWNER_MISSING';
         failedCount++;
         this.lastError = ownerError;
-        await updateOfflineSaleStatus(item.id, 'failed', ownerError);
+        await blockOfflineSale(item.id, ownerError);
         continue;
       }
 
@@ -279,7 +290,7 @@ class OfflineSyncEngine {
         console.warn('[OfflineSyncEngine] Failed syncing item:', item.id, err);
         failedCount++;
         this.lastError = errorMsg;
-        await updateOfflineSaleStatus(item.id, 'failed', errorMsg);
+        await scheduleOfflineSaleRetry(item.id, errorMsg);
       }
     }
 

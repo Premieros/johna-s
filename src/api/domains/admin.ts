@@ -18,4 +18,5 @@ export const admin = {
   getFinancialVisibilitySettings(): ApiResult<{ success: boolean; recent_days?: number; historical_percent?: number; error?: string }> { return rpc('get_financial_visibility_settings', {}); },
   updateFinancialVisibilitySettings(p: { p_recent_days: number; p_historical_percent: number }): ApiResult<{ success: boolean; recent_days?: number; historical_percent?: number; error?: string }> { return rpc('update_financial_visibility_settings', p); },
   bootstrapInitialSuperAdmin(p: { p_email: string; p_password: string; p_full_name?: string; p_username?: string }): ApiResult<{ success: boolean; user_id?: string; email?: string; error?: string; message?: string }> { return rpc('bootstrap_initial_super_admin', p); },
+  getSystemHealthSnapshot(p: { p_branch_id: string | null }): ApiResult<Record<string, unknown>> { return rpc('get_system_health_snapshot', p); },
 };

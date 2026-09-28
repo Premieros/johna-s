@@ -93,7 +93,7 @@ function extractTables() {
   const tables = new Set();
   for (const file of walk(join(ROOT, 'src'))) {
     const text = readFileSync(file, 'utf8');
-    for (const m of text.matchAll(/supabase\.from\('([\w]+)'\)/g)) tables.add(m[1]);
+    for (const m of text.matchAll(/supabase\s*\.\s*from\('([\w]+)'\)/g)) tables.add(m[1]);
   }
   return [...tables].sort();
 }

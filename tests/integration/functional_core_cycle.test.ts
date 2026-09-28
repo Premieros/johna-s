@@ -16,6 +16,8 @@ type RpcResult = {
   sale_id?: string;
   items_sent_count?: number;
   shift_id?: string;
+  requestId?: string;
+  status?: string;
 };
 
 describe.skipIf(skip)('functional core cycle: shift → order → hold/resume → kitchen → payment → inventory', () => {
@@ -106,6 +108,43 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
 
   it('runs one complete cashier cycle and preserves stock/payment attribution', async (ctx) => {
     if (!impersonationAvailable) return ctx.skip();
+
+    const requirement = await rpc(
+      ids.users.super_admin,
+      `SELECT public.set_work_authorization_requirement($1,$2,true) AS r`,
+      [ids.users.cashier, ids.branchA],
+    );
+    expect(requirement.success).toBe(true);
+
+    const blockedBeforeAuthorization = await asUser(
+      ids.users.cashier,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [ids.branchA],
+    );
+    expect(blockedBeforeAuthorization[0].allowed).toBe(false);
+
+    const requested = await rpc(
+      ids.users.cashier,
+      `SELECT public.request_work_authorization($1) AS r`,
+      [ids.branchA],
+    );
+    expect(requested.status).toBe('pending');
+    expect(requested.requestId).toBeTruthy();
+
+    const approved = await rpc(
+      ids.users.super_admin,
+      `SELECT public.decide_work_authorization($1,true,$2) AS r`,
+      [requested.requestId, 'Golden path authorization'],
+    );
+    expect(approved.success).toBe(true);
+    expect(approved.status).toBe('approved');
+
+    const allowedAfterAuthorization = await asUser(
+      ids.users.cashier,
+      `SELECT public.can_user_work($1) AS allowed`,
+      [ids.branchA],
+    );
+    expect(allowedAfterAuthorization[0].allowed).toBe(true);
 
     const activeShift = await rpc(ids.users.cashier, `SELECT public.get_active_shift($1) AS r`, [ids.branchA]);
     expect(activeShift.success).not.toBe(false);
@@ -248,6 +287,14 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
       [ids.branchA],
     );
 
+    const businessDay = await asUser(
+      ids.users.super_admin,
+      `SELECT public.get_current_business_day($1) AS r`,
+      [ids.branchA],
+    );
+    const businessDate = String((businessDay[0].r as { business_date?: string })?.business_date || '');
+    expect(businessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
     const close = await rpc(
       ids.users.cashier,
       `SELECT public.close_shift($1, 20, 'functional cycle close') AS r`,
@@ -258,6 +305,61 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
 
     const shift = await client.query<{ status: string }>(`SELECT status FROM public.shifts WHERE id = $1`, [ids.shiftA]);
     expect(shift.rows[0].status).toBe('closed');
+
+    const dayCloseRows = await asUser(
+      ids.users.super_admin,
+      `SELECT public.day_close($1,$2::date) AS r`,
+      [ids.branchA, businessDate],
+    );
+    const dayClose = dayCloseRows[0].r as { success?: boolean; already_closed?: boolean };
+    expect(dayClose.success).toBe(true);
+
+    const dayReportRows = await asUser(
+      ids.users.super_admin,
+      `SELECT public.get_day_closing_report($1,$2::date) AS r`,
+      [ids.branchA, businessDate],
+    );
+    const dayReport = dayReportRows[0].r as {
+      success?: boolean;
+      net_sales?: number;
+      cash_sales?: number;
+      invoice_count?: number;
+    };
+    expect(dayReport.success).toBe(true);
+    expect(Number(dayReport.net_sales)).toBe(20);
+    expect(Number(dayReport.cash_sales)).toBe(20);
+    expect(Number(dayReport.invoice_count)).toBeGreaterThanOrEqual(1);
+
+    const from = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const to = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const reconciliationRows = await asUser(
+      ids.users.super_admin,
+      `SELECT public.get_financial_reconciliation_report($1,$2,$3) AS r`,
+      [ids.branchA, from, to],
+    );
+    const reconciliation = reconciliationRows[0].r as {
+      success?: boolean;
+      summary?: { cash_difference?: number; bank_difference?: number; mismatch_count?: number };
+    };
+    expect(reconciliation.success).toBe(true);
+    expect(Number(reconciliation.summary?.cash_difference || 0)).toBe(0);
+    expect(Number(reconciliation.summary?.bank_difference || 0)).toBe(0);
+    expect(Number(reconciliation.summary?.mismatch_count || 0)).toBe(0);
+
+    const treasuryRows = await asUser(
+      ids.users.super_admin,
+      `SELECT public.get_branch_treasury_day_close_reconciliation($1,10) AS r`,
+      [ids.branchA],
+    );
+    const treasury = treasuryRows[0].r as {
+      success?: boolean;
+      rows?: Array<{ business_date?: string; cash_sales?: number; net_sales?: number }>;
+    };
+    expect(treasury.success).toBe(true);
+    const treasuryDay = (treasury.rows || []).find((row) => row.business_date === businessDate);
+    expect(treasuryDay).toBeTruthy();
+    expect(Number(treasuryDay?.cash_sales || 0)).toBe(20);
+    expect(Number(treasuryDay?.net_sales || 0)).toBe(20);
   });
 
   it('fails closed when the same cashier tries to create an order in another branch', async (ctx) => {

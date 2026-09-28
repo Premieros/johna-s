@@ -40,9 +40,12 @@ describe('performance repair contracts', () => {
     expect(realtime).toContain('const inFlightRef = useRef(false);');
     expect(realtime).toContain('const trailingRefreshRef = useRef(false);');
     expect(realtime).toContain('const loadCyclePromiseRef = useRef<Promise<void> | null>(null);');
+    expect(realtime).toContain('const eventRefreshTimerRef = useRef<number | null>(null);');
     expect(realtime).toContain('if (inFlightRef.current && loadCyclePromiseRef.current)');
     expect(realtime).toContain('return loadCyclePromiseRef.current;');
     expect(realtime).toContain('setData(EMPTY_POS_REALTIME);');
+    expect(realtime).toContain('eventRefreshTimerRef.current = window.setTimeout');
+    expect(realtime).toContain('}, 150);');
     expect(realtime).toContain('while (targetBranch)');
   });
 });

@@ -17,5 +17,12 @@ export const reporting = {
   getInventoryItemStatement(p: { p_branch_id: string; p_item_type: 'product' | 'raw_material'; p_item_id: string; p_warehouse_id: string | null; p_from_date: string | null; p_to_date: string | null }): ApiResult<InventoryItemStatementResult> { return rpc('get_inventory_item_statement', p); },
   getSalesByPaymentReport(p: { p_branch_id: string; p_from: string; p_to: string; p_payment_method: string | null; p_order_type: string | null; p_warehouse_id: string | null; p_cashier_id: string | null; p_status: string | null }): ApiResult<Record<string, unknown>> { return rpc('get_sales_by_payment_report', p); },
   getFinancialReconciliationReport(p: { p_branch_id: string; p_from: string; p_to: string }): ApiResult<Record<string, unknown>> { return rpc('get_financial_reconciliation_report', p); },
+  getDashboardSalesSnapshot(p: { p_branch_id: string | null; p_current_from: string; p_current_to: string; p_previous_from: string; p_previous_to: string; p_granularity: 'hour' | 'day' | 'month'; p_timezone: string }): ApiResult<Record<string, unknown>> { return rpc('get_dashboard_sales_snapshot', p); },
+
+  getDayClosingRangeReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_day_closing_range_report', p); },
+  getRawMaterialConsumptionReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>[]> { return rpc('get_raw_material_consumption_report', p); },
+  getCurrentRawMaterialValuation(p: { p_branch_id: string }): ApiResult<Record<string, unknown>[]> { return rpc('get_current_raw_material_valuation', p); },
+  getRawMaterialFinancialReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_raw_material_financial_report', p); },
+  getSalesComponentReconciliationReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_sales_component_reconciliation_report', p); },
 
 };

@@ -190,8 +190,10 @@ export function OfflineSyncCenterModal({ open, onClose }: OfflineSyncCenterModal
                               ? 'bg-ui-success-soft text-ui-success'
                               : item.status === 'syncing'
                               ? 'bg-ui-info-soft text-ui-info animate-pulse'
-                              : item.status === 'failed'
+                              : item.status === 'failed' || item.status === 'dead_letter'
                               ? 'bg-ui-danger-soft text-ui-danger'
+                              : item.status === 'blocked'
+                              ? 'bg-ui-warning-soft text-ui-warning'
                               : 'bg-ui-warning-soft text-ui-warning'
                           }`}
                         >
@@ -199,13 +201,23 @@ export function OfflineSyncCenterModal({ open, onClose }: OfflineSyncCenterModal
                             ? (isAr ? 'تمت المزامنة' : 'Synced')
                             : item.status === 'syncing'
                             ? (isAr ? 'جاري الإرسال' : 'Syncing')
+                            : item.status === 'dead_letter'
+                            ? (isAr ? 'يحتاج تدخل' : 'Needs review')
+                            : item.status === 'blocked'
+                            ? (isAr ? 'متوقف مؤقتًا' : 'Blocked')
                             : item.status === 'failed'
-                            ? (isAr ? 'فشل' : 'Failed')
+                            ? (isAr ? 'سيعاد تلقائيًا' : 'Retry scheduled')
                             : (isAr ? 'في الانتظار' : 'Pending')}
                         </span>
                         {item.error && (
                           <p className="text-[10px] text-ui-danger mt-0.5 truncate max-w-[150px]" title={item.error}>
                             {item.error}
+                          </p>
+                        )}
+                        {item.retry_count > 0 && (
+                          <p className="mt-0.5 text-[10px] text-ui-subtle">
+                            {isAr ? `المحاولات: ${item.retry_count}` : `Attempts: ${item.retry_count}`}
+                            {item.next_retry_at ? ` · ${new Date(item.next_retry_at).toLocaleTimeString(isAr ? 'ar-EG' : 'en-US')}` : ''}
                           </p>
                         )}
                       </td>

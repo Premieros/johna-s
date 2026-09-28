@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockSupabaseRealtime } from './mock-supabase-realtime';
 
 const SUPABASE_ORIGIN = process.env.VITE_SUPABASE_URL || 'https://azzdesuowpdcoflmyezn.supabase.co';
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000071';
@@ -42,6 +43,7 @@ const branch = {
 };
 
 async function mockInventoryBackend(page: Page) {
+  await mockSupabaseRealtime(page);
   await page.route(`${SUPABASE_ORIGIN}/auth/v1/**`, async (route) => {
     const url = route.request().url();
     if (url.includes('/auth/v1/user')) {

@@ -11,6 +11,9 @@ const reportingShellSource = read('src/features/reporting/ReportingShell.tsx');
 const deepLinkSource = read('src/features/reporting/pages/ReportDeepLinkPage.tsx');
 const financialSource = read('src/features/accounting/pages/FinancialReportsPage.tsx');
 const reportFiltersSource = read('src/features/reporting/reportFilters.ts');
+const reportCoreLoadersSource = read('src/features/reporting/services/reportCoreLoaders.ts');
+const reportSalesLoadersSource = read('src/features/reporting/services/reportSalesLoaders.ts');
+const reportInventoryLoadersSource = read('src/features/reporting/services/reportInventoryLoaders.ts');
 const reportExportSource = read('src/lib/reportExport.ts');
 const excelSource = read('src/lib/excel.ts');
 
@@ -113,9 +116,12 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportFiltersSource).toContain('applyPurchaseFilters');
     expect(reportFiltersSource).toContain('applyExpenseFilters');
     expect(reportFiltersSource).toContain('applyProductScopedFilters');
-    expect(reportsSource).toContain('filterQ(q, filters, applySalesFilters)');
-    expect(reportsSource).toContain('filterQ(q, filters, applyPurchaseFilters)');
-    expect(reportsSource).toContain('filterQ(q, filters, applyExpenseFilters)');
+    expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applySalesFilters)');
+    expect(reportSalesLoadersSource).toContain('filterQ(q, args.filters, applySalesFilters)');
+    expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applyPurchaseFilters)');
+    expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applyExpenseFilters)');
+    expect(reportInventoryLoadersSource).toContain('filterQ(q, args.filters, applySaleItemFilters)');
+    expect(reportInventoryLoadersSource).toContain('filterQ(q, args.filters, applyProductScopedFilters)');
   });
 
   it('offers Excel, CSV and print/PDF output from the report page', () => {
@@ -133,10 +139,11 @@ describe('Reports Center contract (6H-P4)', () => {
   it('keeps every operational report row branch-identifiable, including all-branch aggregates', () => {
     expect(reportsSource).toContain("const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch'");
     expect(reportsSource).toContain('const withBranch =');
-    expect(reportsSource).toContain("select('id, branch_id, invoice_number, total, refunded_amount, status, created_at");
+    expect(reportSalesLoadersSource).toContain("select('id, branch_id, invoice_number, total, refunded_amount, status, created_at");
     expect(reportsSource).toContain('reporting.getSalesByPaymentReport');
     expect(reportsSource).toContain('reporting.getFinancialReconciliationReport');
-    expect(reportsSource).toContain('fetchAllReportRows');
+    expect(reportCoreLoadersSource).toContain('fetchAllReportRows');
+    expect(reportInventoryLoadersSource).toContain('fetchAllReportRows');
     expect(reportsSource).toContain('withBranch(row.branchId, {');
     expect(reportsSource).toContain('productBranches.get(row.product_id)');
     expect(reportsSource).toContain('subtitle: `${reportBranchLabel} — ${from} — ${to}`');

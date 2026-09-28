@@ -10,9 +10,12 @@ export interface OfflineSaleQueueItem {
   invoice_number: string;
   created_at: string;
   payload: Record<string, unknown>;
-  status: 'pending' | 'syncing' | 'synced' | 'failed';
+  status: 'pending' | 'syncing' | 'synced' | 'failed' | 'blocked' | 'dead_letter';
   error?: string;
   retry_count: number;
+  next_retry_at?: string;
+  last_attempt_at?: string;
+  dead_lettered_at?: string;
 }
 
 export interface OfflineHoldOrderQueueItem {
@@ -21,6 +24,15 @@ export interface OfflineHoldOrderQueueItem {
   payload: Record<string, unknown>;
   status: 'pending' | 'syncing' | 'synced' | 'failed';
   error?: string;
+}
+
+export const OFFLINE_RETRY_MAX_ATTEMPTS = 6;
+export const OFFLINE_RETRY_BASE_MS = 30_000;
+export const OFFLINE_RETRY_MAX_MS = 15 * 60_000;
+
+export function offlineRetryDelayMs(retryCount: number): number {
+  const attempt = Math.max(1, Math.floor(retryCount));
+  return Math.min(OFFLINE_RETRY_MAX_MS, OFFLINE_RETRY_BASE_MS * (2 ** (attempt - 1)));
 }
 
 const DB_NAME = 'premier_pos_offline_db';
@@ -271,9 +283,13 @@ export async function updateOfflineSaleStatus(
       const item = req.result as OfflineSaleQueueItem | undefined;
       if (item) {
         item.status = status;
+        item.last_attempt_at = new Date().toISOString();
         if (error) item.error = error;
-        else if (status !== 'failed') delete item.error;
-        if (status === 'failed') item.retry_count = (item.retry_count || 0) + 1;
+        else if (!['failed', 'blocked', 'dead_letter'].includes(status)) delete item.error;
+        if (status === 'syncing' || status === 'pending') {
+          delete item.next_retry_at;
+          delete item.dead_lettered_at;
+        }
         store.put(item);
       }
     };
@@ -282,6 +298,81 @@ export async function updateOfflineSaleStatus(
     };
   } catch (e) {
     console.warn('[OfflineDB] update sale error', e);
+  }
+}
+
+export async function scheduleOfflineSaleRetry(
+  id: string,
+  error: string,
+  nowMs = Date.now(),
+): Promise<'failed' | 'dead_letter'> {
+  try {
+    const db = await openOfflineDb();
+    const tx = db.transaction('sales_queue', 'readwrite');
+    const store = tx.objectStore('sales_queue');
+
+    const outcome = await new Promise<'failed' | 'dead_letter'>((resolve, reject) => {
+      const req = store.get(id);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const item = req.result as OfflineSaleQueueItem | undefined;
+        if (!item) {
+          resolve('failed');
+          return;
+        }
+
+        item.retry_count = (item.retry_count || 0) + 1;
+        item.error = error;
+        item.last_attempt_at = new Date(nowMs).toISOString();
+
+        if (item.retry_count >= OFFLINE_RETRY_MAX_ATTEMPTS) {
+          item.status = 'dead_letter';
+          item.dead_lettered_at = new Date(nowMs).toISOString();
+          delete item.next_retry_at;
+          store.put(item);
+          resolve('dead_letter');
+          return;
+        }
+
+        item.status = 'failed';
+        item.next_retry_at = new Date(nowMs + offlineRetryDelayMs(item.retry_count)).toISOString();
+        delete item.dead_lettered_at;
+        store.put(item);
+        resolve('failed');
+      };
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    notifyQueueListeners();
+    return outcome;
+  } catch (e) {
+    console.warn('[OfflineDB] schedule retry error', e);
+    return 'failed';
+  }
+}
+
+export async function blockOfflineSale(id: string, error: string): Promise<void> {
+  try {
+    const db = await openOfflineDb();
+    const tx = db.transaction('sales_queue', 'readwrite');
+    const store = tx.objectStore('sales_queue');
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const item = req.result as OfflineSaleQueueItem | undefined;
+      if (!item) return;
+      item.status = 'blocked';
+      item.error = error;
+      item.last_attempt_at = new Date().toISOString();
+      delete item.next_retry_at;
+      store.put(item);
+    };
+    tx.oncomplete = () => notifyQueueListeners();
+  } catch (e) {
+    console.warn('[OfflineDB] block sale error', e);
   }
 }
 

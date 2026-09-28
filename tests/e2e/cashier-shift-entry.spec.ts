@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockSupabaseRealtime } from './mock-supabase-realtime';
 
 const SUPABASE_ORIGIN = process.env.VITE_SUPABASE_URL || 'https://azzdesuowpdcoflmyezn.supabase.co';
 const USER_ID = '00000000-0000-0000-0000-000000000101';
@@ -38,6 +39,7 @@ function makeSession() {
 }
 
 async function mockCashierBackend(page: Page) {
+  await mockSupabaseRealtime(page);
   openShiftPayload = null;
   const session = makeSession();
 

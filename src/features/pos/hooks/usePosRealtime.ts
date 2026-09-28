@@ -19,6 +19,7 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
   const loadCyclePromiseRef = useRef<Promise<void> | null>(null);
   const watchedOrderIdsRef = useRef<Set<string>>(new Set());
   const visibleItemIdsRef = useRef<Set<string>>(new Set());
+  const eventRefreshTimerRef = useRef<number | null>(null);
 
   const load = useCallback((requestedBranch: string): Promise<void> => {
     if (!requestedBranch) return Promise.resolve();
@@ -83,9 +84,16 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
     setError('');
     setLoading(true);
     load(branchId).finally(() => { if (!cancelled) setLoading(false); });
+    const scheduleRefresh = () => {
+      if (eventRefreshTimerRef.current !== null) return;
+      eventRefreshTimerRef.current = window.setTimeout(() => {
+        eventRefreshTimerRef.current = null;
+        void load(branchId);
+      }, 150);
+    };
     const unsubscribe = subscribePosRealtime({
       branchId,
-      onEvent: () => { void load(branchId); },
+      onEvent: scheduleRefresh,
       shouldRefresh: (event) =>
         posRealtimeEventMatchesWatchedOrders(
           event,
@@ -95,6 +103,10 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
     });
     return () => {
       cancelled = true;
+      if (eventRefreshTimerRef.current !== null) {
+        window.clearTimeout(eventRefreshTimerRef.current);
+        eventRefreshTimerRef.current = null;
+      }
       unsubscribe();
     };
   }, [branchId, load]);
