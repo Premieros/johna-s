@@ -145,7 +145,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
 
       // Fetch audit logs for user creation toggle
       const { data: aData } = await supabase
-        .from('audit_logs')
+        .from('audit_log')
         .select('*')
         .eq('action', 'TOGGLE_ALLOW_NEW_USER_CREATION')
         .order('created_at', { ascending: false })
