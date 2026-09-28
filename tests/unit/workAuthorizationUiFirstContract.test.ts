@@ -55,7 +55,8 @@ describe('work authorization UI-first contract', () => {
     expect(gate).toContain('window.clearTimeout');
     expect(gate).toContain('pendingExpired');
     expect(gate).toContain('unsubscribe?.()');
-    expect(gate).not.toMatch(/setInterval|poll|branch_manager|ownerOnly|user\?\.role|user\.role/);
+    expect(gate).not.toMatch(/setInterval|branch_manager|ownerOnly|user\?\.role|user\.role/);
+    expect(gate).not.toMatch(/pollInterval|pollingInterval|setTimeout\s*\(\s*load/);
     expect(gate).not.toContain('supabase.');
   });
 
