@@ -1,34 +1,60 @@
 # Work Authorization Timeout + Receipt Reprint Guard — 2026-09-28
 
-State: **IN_PROGRESS**
+## Work status
+State: **BLOCKED**
+Last updated: 2026-09-28
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `development/work-auth-timeout-reprint-guard-20260928`
+Current PR: `#400`
 
-## Scope
-- Work authorization request stays actionable for 60 seconds only.
-- During the minute the employee gate uses Realtime; no polling.
-- After timeout the gate enters sleeping state, removes Realtime, and needs a new explicit request.
-- Stale requests are hidden from the manager queue and cannot be approved.
-- Users with `pos.reprint` keep direct receipt reprint without manager approval.
-- Users without `pos.reprint` get one completed-receipt print; the button becomes disabled after the first accepted print/queue.
-- Print Agent executable, printer routing, KDS, kitchen printing and the frozen completion RPC remain untouched.
+## Guardrails
+- No direct write to `main`.
+- No Production migration before exact-head Full Verify Green and explicit approval.
+- Permission-First; Super Admin remains implicit bypass only.
+- Print Agent executable, printer routing, KDS, kitchen printing, and frozen claim/start/complete RPCs are unchanged.
+- No RLS weakening and no test weakening.
 
-## Base
-- main: `36fe875a3b14be17f908bb2d3015378922d0e50e`
-- branch: `development/work-auth-timeout-reprint-guard-20260928`
-- PR: `#400`
+## Baseline
+- Base main: `36fe875a3b14be17f908bb2d3015378922d0e50e`.
+- Existing Production behavior: work-authorization pending rows can outlive one minute; direct `pos.reprint` can enqueue without an approval id and later fail in agent completion.
+- Print Agent startup delay after Windows boot is treated as operational startup behavior and is outside this code change.
 
-## Evidence
-- Production showed work-authorization waits beyond one minute.
-- Direct reprint jobs reached the queue with no approval id and later failed `INVALID_APPROVAL`.
-- Print Agent startup delay is treated as startup behavior and is outside this code change.
+## Root-cause ledger
+- Work authorization gate subscribed indefinitely while a request remained pending; stale server rows also remained actionable.
+- Manager snapshot had no one-minute cutoff and decision RPC could approve an old pending row.
+- Receipt enqueue respected `pos.reprint` during authorization, but frozen completion truth requires an approval row for every print after the first.
+- Completed-receipt UI did not reflect first-print consumption for users without `pos.reprint`.
 
 ## Change ledger
-- Added one-minute request TTL and server-side stale-request rejection.
-- Added sleeping gate state that removes Realtime after timeout.
-- Added direct `pos.reprint` queue token without changing frozen agent completion RPC.
-- Added completed-receipt print-once UI locks for non-reprinters.
+- Added 60-second work-authorization request TTL.
+- Added sleeping gate state; after timeout there is no polling and no Realtime subscription until the user explicitly requests again.
+- Added server rejection for approvals older than one minute and manager snapshot hiding of stale requests.
+- Added direct-reprint internal approved token at enqueue time for users who own `pos.reprint`; frozen agent completion RPC is untouched.
+- Added print-once UI lock for users without `pos.reprint`.
+- Added regression coverage for timeout, direct reprint token, and UI lock.
 
-## Verification
-- Fast Verify: pending.
-- Full Verify: pending.
-- Production migration: not applied.
-- Merge: blocked pending exact-head Green and final approval.
+## Verification ledger
+- Fast Verify #1151: **FAILED** on first pass.
+  - App failure: mandatory worklog structure only.
+  - DB failures: test fixture isolation + invalid empty thermal payload in the new regression test.
+- Full Verify #3180: **FAILED** early because mandatory worklog gate failed.
+- Production migration: **NOT APPLIED**.
+- Runtime/Production data: unchanged by this branch.
+
+## Production gate
+- State remains **BLOCKED**.
+- No Merge.
+- No Production migration.
+- Must obtain exact-head Fast Verify Green and Full Verify Green before requesting merge approval.
+
+## Next action
+- Correct the worklog contract and test fixtures only.
+- Re-run exact-head Fast Verify and Full Verify.
+- If Green, report readiness and stop before Merge/Production migration.
+
+## Mandatory update protocol
+- Update this log after every material code/test change or verification result.
+- Record exact branch HEAD and workflow run numbers.
+- Any unexpected `main` or branch HEAD movement requires STOP_AND_RECONCILE.
+- Do not claim readiness until exact-head verification is Green.
