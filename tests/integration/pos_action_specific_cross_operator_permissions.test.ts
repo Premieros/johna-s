@@ -17,6 +17,7 @@ type Rpc = {
   job_id?: string;
   station_code?: string;
   cashier_id?: string;
+  locked?: boolean;
 };
 
 describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownership', () => {
@@ -231,6 +232,13 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
     const orderId = await createOwnedOrder(tableId);
     await setActorPermissions(['pos.receipt.print']);
 
+    const initialState = await rpc(
+      ids.users.branch_manager,
+      `SELECT public.get_open_order_print_state($1) AS r`,
+      [orderId],
+    );
+    expect(initialState).toMatchObject({ success: true, locked: false });
+
     const queued = await rpc(
       ids.users.branch_manager,
       `SELECT public.enqueue_cloud_open_order_print($1,$2::jsonb,$3) AS r`,
@@ -264,6 +272,13 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
       [orderId],
     );
     expect(owner.rows[0].cashier_id).toBe(ids.users.cashier);
+
+    const refreshedState = await rpc(
+      ids.users.branch_manager,
+      `SELECT public.get_open_order_print_state($1) AS r`,
+      [orderId],
+    );
+    expect(refreshedState).toMatchObject({ success: true, locked: true });
 
     const blockedRepeat = await rpc(
       ids.users.branch_manager,
