@@ -63,14 +63,19 @@ Current System Health verifies table/session reachability, not the full operatio
 - 2026-09-28: created Draft PR #401.
 - 2026-09-28: created this mandatory execution log.
 - 2026-09-28: replaced stale active-work sections in `CURRENT_WORK_PLAN.md` with the stability track.
+- 2026-09-28: removed obsolete automatic branch-cleanup workflow.
+- 2026-09-28: added branch-only trigger execute-boundary migration and regression coverage; no Production migration applied.
+- 2026-09-28: isolated Playwright Realtime WebSockets from Production; follow-up Production logs showed zero `JwtSignerError` in the verification window.
+- 2026-09-28: hardened offline outbox with bounded retry/backoff plus blocked/dead-letter states and manual recovery.
+- 2026-09-28: exact-head Fast Verify + Full Verify Green on `3d8b9bf076a929f889d65115ec96898733b1db6b`.
 
 ## Verification ledger
 - Branch baseline identity: verified against documented main SHA before branch creation.
 - Production status inspection: read-only only.
 - Security advisor: read-only inspection complete; no grants changed.
 - Performance stats: read-only inspection complete; no DB config/query changes applied.
-- Fast Verify: pending after Phase 0 docs/CI cleanup.
-- Full Verify: pending.
+- Fast Verify: **GREEN** on `3d8b9bf076a929f889d65115ec96898733b1db6b` — run `36424534608`.
+- Full Verify: **GREEN** on `3d8b9bf076a929f889d65115ec96898733b1db6b` — run `36424539517`; verify/db/browser-smoke all Green.
 - Production API parity: pending on final candidate head.
 - Production migration: not applied.
 
@@ -91,18 +96,18 @@ Unblock conditions:
 - [x] Close dead/open PRs whose branches were removed.
 - [x] Create one stability branch and one mandatory log.
 - [x] Replace stale CURRENT_WORK_PLAN.
-- [ ] Remove obsolete automatic branch-cleanup workflow.
-- [ ] Run Fast Verify.
+- [x] Remove obsolete automatic branch-cleanup workflow.
+- [x] Run Fast Verify.
 
 ### Phase 1 — Security surface, no intended behavior change
-- [ ] Add forward-only migration revoking client EXECUTE on the 3 internal trigger functions.
-- [ ] Add regression coverage proving trigger execution still works and direct client invocation is denied.
+- [x] Add forward-only migration revoking client EXECUTE on the 3 internal trigger functions (branch only; not applied to Production).
+- [x] Add regression coverage proving trigger attachment stays enabled and direct client invocation is denied.
 - [ ] Classify SECURITY DEFINER functions into public RPC / internal helper / trigger.
 - [ ] Do not narrow any other grants until the function has explicit permission/RLS coverage.
 
 ### Phase 2 — Realtime diagnosis
-- [ ] Diagnose `JwtSignerError` as platform/config/app.
-- [ ] Verify POS/work-authorization/KDS Realtime channel health read-only.
+- [x] Diagnose `JwtSignerError`: E2E Playwright fake JWTs were reaching Production Realtime.
+- [x] Isolate E2E Realtime WebSockets; Production read-only log check from 12:33Z–13:10Z showed **0 JwtSignerError**.
 - [ ] Do not modify Print Agent/routing.
 
 ### Phase 3 — Current performance baseline
@@ -124,13 +129,13 @@ Unblock conditions:
 
 ### Phase 6 — Offline + health + CI hardening
 - [ ] Formalize online/degraded/offline/syncing/blocked states.
-- [ ] Add bounded retry/backoff and failed/dead-letter lifecycle.
+- [x] Add bounded exponential retry/backoff plus blocked/dead-letter lifecycle; manual retry remains available.
 - [ ] Resolve unsupported/unused order outbox contract.
 - [ ] Expand System Health to operational invariants.
 - [ ] Align Verify/Deploy Node runtime.
 
 ## Next action
-Complete Phase 0 by removing the now-obsolete branch cleanup workflow, update the verification ledger, then run Fast Verify before implementing the security migration.
+Phase 0 is complete. Continue Phase 3 with a fresh production read-only latency/call baseline, then implement only measured performance reductions. Phase 1 grant migration remains branch-only until the final Production gate.
 
 ## Mandatory update protocol
 - Read this file before every write.
