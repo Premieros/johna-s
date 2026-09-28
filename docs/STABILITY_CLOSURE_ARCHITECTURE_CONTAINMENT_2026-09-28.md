@@ -1,5 +1,53 @@
 # STABILITY CLOSURE / ARCHITECTURE CONTAINMENT — 2026-09-28
 
+## Work status
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `development/stability-closure-architecture-containment-20260928`
+Current PR: `#402`
+Last updated: 2026-09-28
+State: **BLOCKED** — active development may proceed only after the mandatory worklog gate is Green; Production writes remain separately gated.
+
+## Guardrails
+- Single writer only.
+- No direct writes to `main`.
+- No force push.
+- Unexpected HEAD => STOP_AND_RECONCILE.
+- No weakening Permission-First, RLS, branch isolation, or tests.
+- Printing / Print Agent / routing / KDS / `send_to_kitchen` behavior remain frozen unless a separately proven regression requires review.
+- No Production migration before exact-head Full Verify Green + explicit user approval.
+
+## Baseline
+- `main@69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
+- PR #401 merged and deployed successfully.
+- Post-merge Verify main #3296 Green.
+- Deploy #859 Green.
+- Production API parity Green.
+- Smouha and Cleopatra remained operational after deployment.
+
+## Root-cause ledger
+- Full Verify #3297 failed only at the mandatory active-worklog contract.
+- Root cause: the new log omitted legacy structural headings/markers required by `activeWorklogGateContract.test.ts`; no runtime, DB, RLS, print, KDS, or application regression was involved.
+
+## Change ledger
+- 2026-09-28: created this Stability Closure / Architecture Containment track.
+- 2026-09-28: switched `CURRENT_WORK_PLAN.md` to this branch and marked Stability Foundation as merged/closed.
+- 2026-09-28: opened Draft PR #402.
+- 2026-09-28: added compatibility markers required by the mandatory worklog CI gate.
+
+## Verification ledger
+- Fast Verify #1280 on `895831dc68952e2f2610e95f06bb517fa7269d46`: Green.
+- Full Verify #3297 on the same head: failed only at `activeWorklogGateContract.test.ts` before app/DB/browser jobs ran.
+- Next verification: exact-head Fast Verify + Full Verify after this worklog compatibility repair.
+
+## Production gate
+Production writes: **BLOCKED**.
+No Production schema/data change is authorized by this track unless exact-head Full Verify is Green and the user gives explicit approval.
+
+## Next action
+Repair the mandatory worklog contract, obtain Green verification, then begin Phase 1 read-only performance measurement before any runtime optimization.
+
+
 ## Scope
 This track is stability/build/organization only. No product feature development.
 
