@@ -718,6 +718,12 @@
       ]
     },
     {
+      "name": "get_system_health_snapshot",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "get_treasury_account_statement",
       "params": [
         "branch_id",
