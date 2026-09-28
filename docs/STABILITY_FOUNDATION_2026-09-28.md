@@ -137,6 +137,15 @@ Unblock conditions:
 ## Next action
 Phase 0 is complete. Continue Phase 3 with a fresh production read-only latency/call baseline, then implement only measured performance reductions. Phase 1 grant migration remains branch-only until the final Production gate.
 
+
+## 2026-09-28 Phase 3 checkpoint
+- Fast Verify #1271 Green on `bc9f15b00c4d1786f3d97e25fc79a8a0753f870b` after the frontend API contract repair.
+- Read-only Production edge-log window 12:00Z–18:30Z measured: `sale_items` p95 ~2686 ms / 70 calls; `send_to_kitchen` p95 ~1870 ms / 157 calls; `sales` p95 ~1387 ms / 145 calls; `orders` p95 ~455 ms / 1161 calls.
+- POS snapshot bursts reached 19 `orders` reads/minute with 16 `order_items` and 13 operator-label reads in the same minute.
+- Added a 150 ms Realtime event debounce before the existing in-flight/trailing POS snapshot coalescer. Initial loading remains immediate. Printing, KDS, and `send_to_kitchen` code were not changed.
+- Phase 3 baseline is now current and read-only; next gate is exact-head Fast Verify for the burst reduction, then explicit latency/call budgets.
+
+
 ## Mandatory update protocol
 - Read this file before every write.
 - Verify active branch HEAD before every write and compare it with the prior successful checkpoint.
