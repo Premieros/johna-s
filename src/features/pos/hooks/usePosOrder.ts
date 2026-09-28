@@ -374,6 +374,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       return;
     }
 
+    if (!base.openCheckPrintStateReady && !perms.canReprint) return;
     if (openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint) return;
 
     const preview = await loadSettlementPreview(false);
@@ -438,6 +439,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
     openCheckPrintLocked: base.openCheckPrintLocked
       || (base.activeOrderId ? openCheckPrintLockedOrderId === base.activeOrderId : false),
+    openCheckPrintStateReady: base.openCheckPrintStateReady,
     closeReceipt: () => {
       setSettlementReceiptSaleId(null);
       base.closeReceipt();
