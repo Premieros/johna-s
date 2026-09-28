@@ -62,7 +62,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncNow = useCallback(async () => {
-    return await offlineSyncEngine.syncAll();
+    return await offlineSyncEngine.syncAll({ force: true });
   }, []);
 
   const cachePosData = useCallback(
