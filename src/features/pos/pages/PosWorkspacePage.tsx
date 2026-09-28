@@ -231,9 +231,7 @@ export function PosWorkspacePage() {
     },
     onProceedToPay: handlePay,
     onPrintReceipt: () => {
-      if (perms.canPrint && pos.lastReceipt && pos.cart.length === 0 && (!pos.receiptPrintLocked || perms.canReprint)) {
-        void pos.printReceipt();
-      }
+      if (perms.canPrint && pos.lastReceipt && pos.cart.length === 0) void pos.printReceipt();
     },
     onEscape: () => {
       if (configProduct) setConfigProduct(null);
@@ -826,7 +824,7 @@ export function PosWorkspacePage() {
             itemsCount={pos.cart.reduce((s, it) => s + it.quantity, 0)}
             canPrintReceipt={pos.cart.length > 0
               ? (!pos.openCheckPrintLocked || perms.canReprint)
-              : (!!pos.lastReceipt && (!pos.receiptPrintLocked || perms.canReprint))}
+              : !!pos.lastReceipt}
             canModifyOrder={canModifyCurrentOrder}
             total={pos.total}
             currency={pos.effCurrency}
@@ -1198,13 +1196,9 @@ export function PosWorkspacePage() {
               <button
                 data-testid="pos-receipt-print"
                 onClick={() => void pos.printReceipt()}
-                disabled={pos.receiptPrintLocked && !perms.canReprint}
-                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
               >
-                <Printer className="w-5 h-5" />
-                {pos.receiptPrintLocked && !perms.canReprint
-                  ? (isAr ? 'تمت الطباعة' : 'Printed')
-                  : t('printReceipt')}
+                <Printer className="w-5 h-5" /> {t('printReceipt')}
               </button>
             )}
           </div>
