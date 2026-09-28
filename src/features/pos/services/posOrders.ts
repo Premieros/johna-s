@@ -63,7 +63,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
       .map((item) => item.order_id),
   );
 
-  let orders = snapshotRows
+  const orders = snapshotRows
     .filter((order) => effectiveOrderIds.has(order.id))
     .map((order) => {
       const { order_items: _orderItems, order_kitchen_sends: _kitchenSends, ...baseOrder } = order;
