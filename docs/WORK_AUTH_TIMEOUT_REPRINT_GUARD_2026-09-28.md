@@ -1,7 +1,7 @@
 # Work Authorization Timeout + Receipt Reprint Guard — 2026-09-28
 
 ## Work status
-State: **READY_TO_MERGE_PENDING_DOCS_VERIFY**
+State: **BLOCKED**
 Last updated: 2026-09-28
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
@@ -53,11 +53,11 @@ Current PR: `#400`
 - No Merge yet.
 - No Production migration yet.
 - User approval is still required for Merge + Production migration after this final scope correction.
-- This documentation-only commit must verify Green before state becomes final **READY_TO_MERGE**.
+- Functional code is ready for merge approval, but the mandatory worklog remains **BLOCKED** until the user explicitly approves Merge + Production migration.
 
 ## Next action
 - Let the documentation-only exact-head Fast/Full Verify complete.
-- If Green, report **READY_TO_MERGE** and stop before Merge/Production migration.
+- If Green, report that the functional implementation is ready for explicit Merge + Production approval while the mandatory gate remains BLOCKED.
 
 ## Mandatory update protocol
 - Update this log after every material code/test change or verification result.
