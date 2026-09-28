@@ -81,10 +81,12 @@ describe('reports domain boundary', () => {
     expect(page).toContain('loadComponentConsumptionRows');
     expect(page).toContain('loadTopConsumedComponentRows');
     expect(page).toContain('loadLowStockSources');
+    expect(page).toContain('loadInventoryBatchRows');
     expect(page).toContain('loadWasteRows');
     expect(inventoryLoaders).toContain(".from('sale_items')");
     expect(inventoryLoaders).toContain(".from('stock_transactions')");
     expect(inventoryLoaders).toContain(".from('raw_material_inventory')");
+    expect(inventoryLoaders).toContain(".from('raw_material_batches')");
     expect(inventoryLoaders).toContain(".from('waste_entries')");
   });
 
