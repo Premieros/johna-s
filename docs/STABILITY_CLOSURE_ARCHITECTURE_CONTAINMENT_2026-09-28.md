@@ -30,12 +30,22 @@ State: **BLOCKED** — active development may proceed only after the mandatory w
 - Root cause: the new log omitted legacy structural headings/markers required by `activeWorklogGateContract.test.ts`; no runtime, DB, RLS, print, KDS, or application regression was involved.
 
 ## Change ledger
+- 2026-09-28: Phase 1 baseline registry added at `scripts/performance/critical-path-budgets.json`.
+- 2026-09-28: repeatable Production read-only baseline query added at `scripts/performance/production-readonly-baseline.sql`.
+- 2026-09-28: budget contract added at `tests/unit/performanceBudgetsContract.test.ts`.
+- 2026-09-28: direct DB checks showed Dashboard snapshot currently healthy (~14-98ms for 7-day branch windows; ~81ms all-branch year-to-date), so Dashboard was removed from first-fix priority.
+- 2026-09-28: cumulative `pg_stat_statements` identified POS active-order snapshot fan-out as the dominant repeated POS read family: ~36k order-item reads, ~36k kitchen-send reads, ~36k order reads and ~36k operator-label calls.
+- 2026-09-28: active-order snapshot now embeds `order_items` and `order_kitchen_sends` into the existing orders read through verified foreign-key relationships, reducing the client snapshot from ~5 DB round trips to 3 without DB migration or write-path changes.
+- 2026-09-28: POS active-order snapshot round-trip budget tightened from 5 to 3 and regression contracts added.
 - 2026-09-28: created this Stability Closure / Architecture Containment track.
 - 2026-09-28: switched `CURRENT_WORK_PLAN.md` to this branch and marked Stability Foundation as merged/closed.
 - 2026-09-28: opened Draft PR #402.
 - 2026-09-28: added compatibility markers required by the mandatory worklog CI gate.
 
 ## Verification ledger
+- Fast Verify #1286 on `26ccdad564092cb0f40953529ba9be0434d3c883`: Green.
+- Full Verify #3303 on the same head: Green.
+- The active-order snapshot optimization is currently unmerged and awaiting exact-head verification after its final documentation checkpoint.
 - Fast Verify #1280 on `895831dc68952e2f2610e95f06bb517fa7269d46`: Green.
 - Full Verify #3297 on the same head: failed only at `activeWorklogGateContract.test.ts` before app/DB/browser jobs ran.
 - Next verification: exact-head Fast Verify + Full Verify after this worklog compatibility repair.
@@ -45,7 +55,7 @@ Production writes: **BLOCKED**.
 No Production schema/data change is authorized by this track unless exact-head Full Verify is Green and the user gives explicit approval.
 
 ## Next action
-Repair the mandatory worklog contract, obtain Green verification, then begin Phase 1 read-only performance measurement before any runtime optimization.
+Verify the active-order snapshot fan-out reduction on the exact current head. If Green, measure and contain the next POS hotspot (`cart availability`) while avoiding all product-area files until the user's parallel product repair is merged. Before this PR can merge, update/rebase from the latest `main` and rerun full verification.
 
 
 ## Scope
