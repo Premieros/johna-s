@@ -6,7 +6,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/fix-shift-expected-cash-20260927`
 Current PR: `#393`
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 State: **BLOCKED**
 
 Implementation exists on the development branch. Merge and Production migration remain blocked until exact-head Full Verify is Green and the protected-step requirements are satisfied.
@@ -26,7 +26,7 @@ Implementation exists on the development branch. Merge and Production migration 
 
 ## Baseline
 
-Base main: `102dea0d2ebd0f7567217bfbad3c79ba6cdada81`.
+Base main: `c988652aa7899b50cd3b541fd8b152a8f93c2c60` (latest main after PR #398).
 
 Production Smouha incident at 2026-09-27 18:41 Cairo:
 
@@ -116,3 +116,13 @@ Separate observation:
 - Record exact branch HEAD and workflow run before any merge decision.
 - Any unexpected HEAD or unrelated write stops execution for reconciliation.
 - Production is not a test environment.
+
+
+## Latest-main reconciliation — 2026-09-28
+- Reconciled PR #393 onto main@c988652aa7899b50cd3b541fd8b152a8f93c2c60 without force-push.
+- The merge tree starts from latest main, preserving treasury, supplier opening-balance and auto-day-close changes.
+- Reapplied only canonical live expected cash, mandatory counted-cash entry, and their regression tests.
+- Production was inspected read-only: get_active_shift still uses the legacy shift_operations-only expected formula.
+- No Production write/migration was performed.
+- Printing / Print Agent / routing / KDS / send-to-kitchen are unchanged.
+- Exact-head Fast/Full Verify must run again on the reconciled head before any merge or Production migration.

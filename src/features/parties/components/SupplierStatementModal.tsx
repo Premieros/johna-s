@@ -7,6 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 type SupplierStatementSummary = {
   supplier_id: string;
   supplier_name: string;
+  opening_balance?: number;
   total_purchases: number;
   total_returns: number;
   total_paid: number;
@@ -60,6 +61,7 @@ const paymentLabel = (method: string | null, ar: boolean) => {
 };
 
 const entryLabel = (entryType: string, ar: boolean) => {
+  if (entryType === 'opening_balance') return ar ? 'رصيد افتتاحي' : 'Opening balance';
   if (entryType === 'purchase') return ar ? 'فاتورة شراء' : 'Purchase';
   if (entryType === 'invoice_time_payment') return ar ? 'مدفوع عند إنشاء الفاتورة (تجميعي)' : 'Invoice-time payment (aggregate)';
   return ar ? 'دفعة' : 'Payment';
@@ -98,6 +100,7 @@ export function SupplierStatementModal({ open, supplierId, branchId, currency, o
 
   const s = data?.summary;
   const cards = s ? [
+    [ar ? 'الرصيد الافتتاحي' : 'Opening balance', s.opening_balance || 0],
     [ar ? 'إجمالي المشتريات' : 'Purchases', s.total_purchases],
     [ar ? 'المرتجعات' : 'Returns', s.total_returns],
     [ar ? 'إجمالي المدفوع' : 'Total paid', s.total_paid],
@@ -116,7 +119,7 @@ export function SupplierStatementModal({ open, supplierId, branchId, currency, o
             <p className="text-xs text-ui-subtle">{ar ? 'المورد' : 'Supplier'}</p>
             <p className="text-lg font-black text-ui-text">{s.supplier_name}</p>
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             {cards.map(([label, value]) => (
               <div key={label} className="rounded-2xl border border-ui-border bg-ui-page-alt p-3">
                 <p className="text-xs font-bold text-ui-muted">{label}</p>

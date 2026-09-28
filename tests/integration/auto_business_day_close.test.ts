@@ -16,11 +16,6 @@ describe.skipIf(!dbUrl)('automatic fixed-time business-day close', () => {
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
 
-    const dateRow = await client.query<{ d: string }>(
-      `SELECT (((now() AT TIME ZONE 'Africa/Cairo')::date - 1))::text AS d`,
-    );
-    dueDate = dateRow.rows[0].d;
-
     await client.query(
       `UPDATE public.branch_settings
        SET business_day_mode='fixed_time',
@@ -29,6 +24,26 @@ describe.skipIf(!dbUrl)('automatic fixed-time business-day close', () => {
        WHERE branch_id=$1`,
       [ids.branchA],
     );
+
+    const dateRow = await client.query<{ d: string }>(
+      `WITH candidates AS (
+         SELECT gs::date AS d
+         FROM generate_series(
+           ((now() AT TIME ZONE 'Africa/Cairo')::date - 3),
+           (now() AT TIME ZONE 'Africa/Cairo')::date,
+           interval '1 day'
+         ) gs
+       )
+       SELECT c.d::text AS d
+       FROM candidates c
+       WHERE private.business_day_fixed_cutoff($1,c.d) <= now()
+         AND private.business_day_fixed_cutoff($1,c.d + 1) > now()
+       ORDER BY c.d DESC
+       LIMIT 1`,
+      [ids.branchA],
+    );
+    if (!dateRow.rows[0]?.d) throw new Error('No due business date found for auto-close fixture');
+    dueDate = dateRow.rows[0].d;
 
     await client.query(`DELETE FROM public.daily_closes WHERE branch_id=$1`, [ids.branchA]);
     await client.query(`DELETE FROM public.business_day_state WHERE branch_id=$1`, [ids.branchA]);
