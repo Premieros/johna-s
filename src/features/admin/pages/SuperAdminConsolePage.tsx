@@ -42,34 +42,6 @@ import {
   type SuperAdminTenantUser as TenantUser,
 } from '../services/superAdminConsoleData';
 
-/*
-  organization_id: string;
-  organization_name: string;
-  organization_slug: string;
-  is_active: boolean;
-  created_at: string;
-  branch_count: number;
-  user_count: number;
-  total_branches: number;
-  active_branches: number;
-}
-
-interface TenantUser {
-  user_id: string;
-  email: string;
-  username: string;
-  full_name: string;
-  role: string;
-  is_active: boolean;
-  branch_id: string | null;
-  branch_name: string | null;
-  org_id: string | null;
-  org_name: string | null;
-  created_at: string;
-}
-
-*/
-
 type SuperTab =
   | 'tenants'
   | 'system_controls'
