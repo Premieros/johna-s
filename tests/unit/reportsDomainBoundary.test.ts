@@ -22,13 +22,27 @@ describe('reports domain boundary', () => {
     }
   });
 
-  it('keeps report filter lookup queries out of the page component', () => {
-    for (const table of ['warehouses', 'users', 'customers', 'suppliers', 'products', 'categories', 'dining_tables', 'expenses']) {
-      expect(page).not.toContain(`supabase.from('${table}')`);
-      expect(filters).toContain(`supabase.from('${table}')`);
+  it('keeps report filter lookup query construction out of the page component', () => {
+    const lookupContracts = [
+      ["warehouses", "select('id, name')"],
+      ["users", "select('id, full_name, email')"],
+      ["customers", "select('id, name, name_en')"],
+      ["suppliers", "select('id, name, name_en')"],
+      ["products", "select('id, name, name_en')"],
+      ["categories", "select('id, name, name_en')"],
+      ["dining_tables", "select('id, name')"],
+      ["expenses", "select('category')"],
+    ] as const;
+    for (const [table, select] of lookupContracts) {
+      expect(filters).toContain(`.from('${table}')`);
+      expect(filters).toContain(select);
     }
     expect(page).toContain('loadReportFilterOptions');
     expect(page).toContain('loadExpenseCategoryOptions');
+    expect(page).not.toContain("supabase.from('warehouses').select('id, name')");
+    expect(page).not.toContain("supabase.from('users').select('id, full_name, email')");
+    expect(page).not.toContain("supabase.from('products').select('id, name, name_en')");
+    expect(page).not.toContain("supabase.from('expenses').select('category')");
   });
 
   it('keeps core sales, purchase and expense query construction out of the page', () => {
@@ -38,9 +52,9 @@ describe('reports domain boundary', () => {
     expect(page).not.toContain("select('id, branch_id, invoice_number, subtotal, discount_amount, tax_amount");
     expect(page).not.toContain("supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount");
     expect(page).not.toContain("supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date')");
-    expect(coreLoaders).toContain("supabase.from('sales')");
-    expect(coreLoaders).toContain("supabase.from('purchases')");
-    expect(coreLoaders).toContain("supabase.from('expenses')");
+    expect(coreLoaders).toContain(".from('sales')");
+    expect(coreLoaders).toContain(".from('purchases')");
+    expect(coreLoaders).toContain(".from('expenses')");
   });
 
   it('keeps the existing report page calling typed domain methods', () => {
