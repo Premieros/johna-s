@@ -98,7 +98,11 @@ describe.skipIf(!dbUrl)('direct receipt reprint cloud completion', () => {
          branch_id,requested_by,kind,station_code,payload,sale_id,
          expected_print_number,idempotency_key,status,claimed_agent_id,claimed_by_user,claimed_at
        )
-       VALUES($1,$2,'receipt','cashier','{}'::jsonb,$3,2,$4,'claimed',$5,$6,now())
+       VALUES(
+         $1,$2,'receipt','cashier',
+         jsonb_build_object('text','DIRECT REPRINT TEST','paperWidthMm',80,'copies',1),
+         $3,2,$4,'claimed',$5,$6,now()
+       )
        RETURNING id`,
       [branchId, requesterId, saleId, `direct-reprint-${randomUUID()}`, agentId, agentUser],
     );
