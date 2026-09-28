@@ -1,6 +1,89 @@
 -- One-minute work authorization requests + direct reprint queue token.
 -- Does NOT modify frozen Print Agent claim/start/complete RPCs.
 
+CREATE OR REPLACE FUNCTION public.get_my_work_authorization_state(
+  p_branch_id uuid
+) RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_branch_name text;
+  v_required boolean;
+  v_can_work boolean;
+  v_row public.work_authorizations%ROWTYPE;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+  END IF;
+
+  IF p_branch_id IS NULL OR NOT public.user_may_access_branch(p_branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_ACCESS_DENIED');
+  END IF;
+
+  SELECT b.name INTO v_branch_name
+  FROM public.branches b
+  WHERE b.id = p_branch_id;
+
+  IF v_branch_name IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_NOT_FOUND');
+  END IF;
+
+  v_required := public.requires_work_authorization(v_user_id, p_branch_id);
+  v_can_work := public.can_user_work(p_branch_id);
+
+  IF NOT v_required THEN
+    RETURN jsonb_build_object(
+      'branchId', p_branch_id,
+      'branchName', v_branch_name,
+      'requiresAuthorization', false,
+      'canWork', true,
+      'status', 'not_required'
+    );
+  END IF;
+
+  SELECT wa.*
+  INTO v_row
+  FROM public.work_authorizations wa
+  WHERE wa.user_id = v_user_id
+    AND wa.branch_id = p_branch_id
+    AND NOT (
+      wa.status = 'pending'
+      AND wa.requested_at <= now() - interval '1 minute'
+    )
+  ORDER BY
+    CASE wa.status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
+    wa.updated_at DESC
+  LIMIT 1;
+
+  IF v_row.id IS NULL THEN
+    RETURN jsonb_build_object(
+      'branchId', p_branch_id,
+      'branchName', v_branch_name,
+      'requiresAuthorization', true,
+      'canWork', false,
+      'status', 'not_requested'
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'branchId', p_branch_id,
+    'branchName', v_branch_name,
+    'requiresAuthorization', true,
+    'canWork', v_can_work,
+    'status', v_row.status,
+    'requestId', CASE WHEN v_row.status = 'pending' THEN v_row.id ELSE NULL END,
+    'authorizationId', CASE WHEN v_row.status = 'approved' THEN v_row.id ELSE NULL END,
+    'requestedAt', v_row.requested_at,
+    'decidedAt', v_row.decided_at,
+    'decisionReason', COALESCE(v_row.decision_reason, v_row.revocation_reason)
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.request_work_authorization(
   p_branch_id uuid
 ) RETURNS jsonb
@@ -555,6 +638,8 @@ BEGIN
 END;
 $function$;
 
+REVOKE ALL ON FUNCTION public.get_my_work_authorization_state(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_work_authorization_state(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.request_work_authorization(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.request_work_authorization(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.get_work_authorization_snapshot(uuid) FROM PUBLIC, anon;
