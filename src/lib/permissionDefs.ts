@@ -235,7 +235,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'production', ar: 'الهالك والتوافق القديم', en: 'Waste & Legacy Compatibility', permissions: ['production.view', 'production.manage', 'production.waste', 'waste.view', 'waste.create', 'waste.approve', 'waste.report'] },
   { key: 'warehouses', ar: 'المخازن', en: 'Warehouses', permissions: ['warehouses.view', 'warehouses.manage'] },
   { key: 'customers', ar: 'العملاء', en: 'Customers', permissions: ['customers.view', 'customers.manage', 'customers.print', 'customers.export'] },
-  { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.print'] },
+  { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.opening_balance.manage', 'suppliers.print'] },
   { key: 'sales', ar: 'المبيعات', en: 'Sales', permissions: ['sales.view', 'sales.refund.create', 'sales.payment.receive', 'sales.export', 'refunds.approve', 'sales.print'] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', permissions: ['expenses.view', 'expenses.manage', 'expenses.edit', 'expenses.routing.manage', 'expenses.print'] },
   { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.treasury.main_cash.pay', 'accounting.reconciliation.manage'] },
