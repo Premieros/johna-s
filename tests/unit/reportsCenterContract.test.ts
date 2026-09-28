@@ -136,7 +136,7 @@ describe('Reports Center contract (6H-P4)', () => {
   it('keeps every operational report row branch-identifiable, including all-branch aggregates', () => {
     expect(reportsSource).toContain("const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch'");
     expect(reportsSource).toContain('const withBranch =');
-    expect(reportsSource).toContain("select('id, branch_id, invoice_number, total, refunded_amount, status, created_at");
+    expect(reportSalesLoadersSource).toContain("select('id, branch_id, invoice_number, total, refunded_amount, status, created_at");
     expect(reportsSource).toContain('reporting.getSalesByPaymentReport');
     expect(reportsSource).toContain('reporting.getFinancialReconciliationReport');
     expect(reportsSource).toContain('fetchAllReportRows');
