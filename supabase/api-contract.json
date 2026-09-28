@@ -470,6 +470,18 @@
       ]
     },
     {
+      "name": "get_dashboard_sales_snapshot",
+      "params": [
+        "branch_id",
+        "current_from",
+        "current_to",
+        "granularity",
+        "previous_from",
+        "previous_to",
+        "timezone"
+      ]
+    },
+    {
       "name": "get_day_closing_report",
       "params": [
         "branch_id",
