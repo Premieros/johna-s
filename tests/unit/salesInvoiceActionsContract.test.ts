@@ -13,6 +13,9 @@ describe('sales invoice refund / preview / reprint contract', () => {
     expect(salesPage).toContain("err.code === 'REPRINT_APPROVAL_PENDING'");
     expect(salesPage).toContain("can('pos.receipt.print')");
     expect(salesPage).toContain("can('pos.reprint')");
+    expect(salesPage).toContain("from('sale_print_events')");
+    expect(salesPage).toContain('printedSaleIds.has(r.id)');
+    expect(salesPage).toContain('!canDirectReprint && printedSaleIds.has(r.id)');
   });
 
   it('recovers branch receipt settings read-only when the shared cache is temporarily empty', () => {
