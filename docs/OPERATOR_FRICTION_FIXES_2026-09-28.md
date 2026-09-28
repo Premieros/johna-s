@@ -4,7 +4,7 @@ State: **IN_PROGRESS**
 
 Base main: `36fe875a3b14be17f908bb2d3015378922d0e50e`
 Branch: `development/operator-friction-fixes-20260928`
-PR: pending
+PR: `#399`
 
 ## User-approved scope
 1. Work-authorization request waits at most **60 seconds**.
@@ -43,7 +43,12 @@ PR: pending
 - POS receipt modal locally locks the one-time print action after the first accepted queue attempt; users with `pos.reprint` remain able to reprint.
 
 ## Change ledger
-- Pending.
+- Added `20260928080500_operator_friction_fixes.sql` for 60-second authorization expiry and requester-aware `pos.reprint` completion.
+- WorkAuthorization gate: one local 60-second timeout, Realtime only while pending, unsubscribe + dormant state after expiry, explicit new-request action.
+- Sales invoice print action: authoritative `sale_print_events` guard plus local immediate lock for one-time-print users.
+- POS print action: separate `canReprint`, local one-time receipt lock, stable one-time open-check idempotency key; manager/direct-reprint users remain unrestricted.
+- Print Agent binaries/protocol/startup/routing/KDS/kitchen payloads untouched.
+- Regression tests added for expiry, direct manager reprint completion, and UI duplicate-print prevention.
 
 ## Verification ledger
 - Pending.
