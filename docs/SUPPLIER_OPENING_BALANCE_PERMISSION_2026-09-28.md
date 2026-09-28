@@ -4,12 +4,12 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/supplier-opening-balance-permission-20260928`
 Current PR: `#398`
-Last updated: 2026-09-28 08:42 Cairo
+Last updated: 2026-09-28 08:43 Cairo
 
 ## Work status
-State: **BLOCKED**
+State: **READY_TO_MERGE**
 
-Implementation is in progress. Merge and Production are blocked until exact-head Full Verify is Green and the user explicitly approves Production.
+Implementation is complete and exact-head Full Verify is Green. Production remains blocked until explicit user approval.
 
 ## Guardrails
 - Permission-First.
@@ -49,7 +49,7 @@ Implemented:
 - Verify #3164 passed worklog, project identity, frontend API contract, lint, application typecheck, and test-suite typecheck.
 - Unit suite reached 1172/1174 passing. The two failures were permission-registry completeness only: the new `suppliers.opening_balance.manage` capability was missing from the visible supplier permission group.
 - Added the new permission to the Suppliers permission group; the operational permission workspace derives from that group automatically.
-- Exact-head Full Verify rerun pending.
+- Verify #3166 on exact HEAD `763e93eaed8ca3c85bb01e514dca99995850f9a9`: **Green**.
 
 ## Production gate
 State: **BLOCKED**
@@ -57,7 +57,7 @@ State: **BLOCKED**
 - Production apply requires explicit user approval after verification.
 
 ## Next action
-Run exact-head Full Verify after the permission-group completeness fix. Merge/Production remain blocked until Green.
+Merge PR #398 to `main`. Keep Production migration blocked pending explicit approval.
 
 ## Mandatory update protocol
 - Re-read branch HEAD before repository writes.
