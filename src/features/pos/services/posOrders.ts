@@ -67,6 +67,8 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
     .filter((order) => effectiveOrderIds.has(order.id))
     .map((order) => {
       const { order_items: _orderItems, order_kitchen_sends: _kitchenSends, ...baseOrder } = order;
+      void _orderItems;
+      void _kitchenSends;
       const label = operatorByOrder.get(order.id);
       if (!label?.cashier_id) return baseOrder as Order;
       return {
