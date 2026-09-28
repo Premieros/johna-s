@@ -146,6 +146,20 @@ Phase 0 is complete. Continue Phase 3 with a fresh production read-only latency/
 - Phase 3 baseline is now current and read-only; next gate is exact-head Fast Verify for the burst reduction, then explicit latency/call budgets.
 
 
+
+## 2026-09-28 Final production gate checkpoint
+- Final application candidate before documentation-only checkpoint: `3d267ee0f717ca0a65eb04103c115e51be51f04c`.
+- Fast Verify #1276 Green on that exact head.
+- Full Verify #3294 Green on that exact head: frontend verify, Fresh DB/migrations/schema, integration + security/RLS, and Browser Smoke all succeeded.
+- Final read-only security sweep found only the same three anon-executable SECURITY DEFINER trigger helpers already covered by the branch migration; no new anon-executable function was found.
+- User explicitly approved the Production migrations in chat.
+- Applied to Production `azzdesuowpdcoflmyezn`: `internal_trigger_execute_boundary`, `dashboard_sales_snapshot`, and `system_health_snapshot`; all three succeeded and are recorded in migration history.
+- Post-migration verification: trigger helpers now deny `anon` and `authenticated` EXECUTE and retain `service_role`; dashboard/system-health RPCs exist with the intended grants.
+- Production API contract parity checked against `supabase/api-contract.json`: 152 RPC contracts + 54 tables, missing RPCs = 0, missing tables = 0, schema sentinel = true.
+- Final diff review shows no changes to Print Agent, cloud-print execution, KDS/KitchenDisplay, routing, or the `send_to_kitchen` implementation.
+- This documentation-only checkpoint must receive exact-head Fast Verify + Full Verify before merge readiness is declared.
+
+
 ## Mandatory update protocol
 - Read this file before every write.
 - Verify active branch HEAD before every write and compare it with the prior successful checkpoint.
