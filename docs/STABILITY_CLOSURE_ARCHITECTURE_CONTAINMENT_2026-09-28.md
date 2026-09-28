@@ -1,0 +1,249 @@
+# STABILITY CLOSURE / ARCHITECTURE CONTAINMENT — 2026-09-28
+
+## Scope
+This track is stability/build/organization only. No product feature development.
+
+Repository: `Premieros/johna-s`
+Base: `main@69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
+Branch: `development/stability-closure-architecture-containment-20260928`
+Production Supabase: `azzdesuowpdcoflmyezn`
+
+## Hard safety fences
+- Single writer only.
+- No direct writes to `main`.
+- No force push.
+- Before every write, verify the expected branch HEAD. Unexpected HEAD => STOP_AND_RECONCILE.
+- No weakening Permission-First, RLS, branch isolation, or tests.
+- Super Admin remains implicit bypass only.
+- Printing / Print Agent / routing / KDS / `send_to_kitchen` behavior remain frozen unless a separately proven regression requires a reviewed fix.
+- No Production migration before exact-head Full Verify Green + explicit user approval.
+- No data rewrite/reset/reseed to make tests pass.
+- Runtime changes must remain backward-compatible with live Smouha and Cleopatra operations.
+
+## Why this track exists
+The Stability Foundation is merged and deployed successfully. Core operation is now stable and tested. Remaining risk is primarily structural:
+1. oversized pages that still combine UI, orchestration, and data access;
+2. a wide legacy page direct-Supabase allowlist;
+3. heavy RPC/page latency without formal budgets;
+4. runtime state and device/workstation identity are not centrally modeled;
+5. source-of-truth and merged-branch cleanup;
+6. recovery/restore readiness is not yet an explicit operational gate.
+
+## Current verified baseline
+- PR #401 merged to `main`.
+- Post-merge Verify main #3296 Green.
+- Deploy #859 Green.
+- Production API parity Green.
+- Production branches Smouha and Cleopatra continued operating after deployment.
+- No stale print jobs were observed in the final checks.
+- Core Golden Path and kitchen idempotency/concurrency tests are present.
+- ReportsPage and SystemHealth are already behind service/domain boundaries.
+- A page architecture guard prevents new direct Supabase page access outside the legacy allowlist.
+
+## Measured structural hotspots
+Approximate current page sizes / direct data access:
+- `ImportExportCenterPage.tsx`: ~1633 lines, 8 direct Supabase calls.
+- `ReportsPage.tsx`: ~1360 lines, 0 direct Supabase calls.
+- `PosWorkspacePage.tsx`: ~1210 lines, 5 direct Supabase calls.
+- `SuperAdminConsolePage.tsx`: ~1180 lines, 12 direct Supabase calls.
+- `FinancialReportsPage.tsx`: ~950 lines, 2 direct Supabase calls.
+- `SalesPage.tsx`: ~870 lines, mixed direct `from/rpc`.
+- `PurchasesPage.tsx`: ~809 lines, 7 direct Supabase calls.
+- `ProductsPage.tsx`: ~429 lines, 13 direct Supabase calls.
+
+The legacy page allowlist currently contains roughly forty pages. The goal is monotonic reduction, not a rewrite.
+
+## Measured performance hotspots
+Current `pg_stat_statements` indicates notable cost in:
+- `get_costing_sales_summary`
+- `get_raw_material_cost_overview`
+- `get_dashboard_sales_snapshot`
+- inventory-ledger related reads
+- historically high-volume `send_to_kitchen`
+
+These statistics are cumulative and include diagnostic/admin traffic, so they are hotspot signals, not final SLAs.
+
+## Operating principles for this track
+1. Measure first.
+2. Contain before refactor.
+3. Prefer call-shape/query-shape fixes before indexes or schema changes.
+4. Move orchestration behind feature services/domain APIs without changing UI behavior.
+5. Reduce the direct-Supabase allowlist monotonically.
+6. Do not split a page merely because it is large; split only where responsibilities or load behavior justify it.
+7. Every performance change must have a contract/test that prevents regression.
+8. Every operational change must preserve printing, KDS, live shifts, and branch isolation.
+
+# Phase 0 — Source of truth and branch closure
+- [ ] Replace stale Stability Foundation active references.
+- [ ] Mark `development/stability-foundation-20260928` as merged/closed in the active plan.
+- [ ] Preserve only `main`, latest Cleopatra Print Agent branch, latest Smouha Print Agent branch, and this active development branch.
+- [ ] Create one mandatory execution log for this track.
+- [ ] Run Fast Verify after documentation bootstrap.
+
+Exit gate:
+- active plan points only to this branch;
+- no stale branch is treated as an execution baseline.
+
+# Phase 1 — Performance budgets and repeatable measurement
+## 1A. Critical-path budgets
+Define and enforce initial budgets for:
+- POS active orders / resume;
+- POS availability/cart availability;
+- `send_to_kitchen`;
+- payment settlement path;
+- active shift read;
+- dashboard snapshot;
+- inventory ledger page;
+- costing summary;
+- raw-material cost overview;
+- day/shift close reads.
+
+Initial targets should be conservative and based on Production measurements, not arbitrary aspirational values.
+
+## 1B. Measurement harness
+- [ ] Add a repeatable read-only benchmark harness for critical RPC/query paths.
+- [ ] Record branch/date/payload shape with each benchmark.
+- [ ] Separate user/runtime traffic from diagnostic/admin SQL where possible.
+- [ ] Add regression thresholds where CI can reasonably enforce them.
+- [ ] For Production-only measurements, record them in this log without making CI depend on Production.
+
+## 1C. Immediate hotspots
+Prioritize:
+1. dashboard snapshot execution plan;
+2. costing summary;
+3. raw-material cost overview;
+4. inventory ledger;
+5. POS resume/availability read amplification.
+
+Exit gate:
+- documented budgets exist;
+- each critical hotspot has a measured baseline;
+- no optimization is accepted without before/after evidence.
+
+# Phase 2 — Heavy-page containment
+Goal: reduce page responsibility and direct database coupling without redesigning the UI.
+
+Priority order:
+1. `PosWorkspacePage.tsx`
+2. `SuperAdminConsolePage.tsx`
+3. `ImportExportCenterPage.tsx`
+4. `ProductsPage.tsx`
+5. `PurchasesPage.tsx`
+6. `SalesPage.tsx`
+7. remaining legacy allowlist pages only when measured or touched.
+
+For each page:
+- [ ] identify data-load orchestration;
+- [ ] extract to feature service or `src/api/domains`;
+- [ ] keep mutation authorization semantics unchanged;
+- [ ] keep UI behavior unchanged;
+- [ ] keep branch scoping unchanged;
+- [ ] remove page from legacy allowlist once direct Supabase access is zero;
+- [ ] add a focused architecture contract.
+
+Rules:
+- No full rewrite.
+- No framework/state-management migration.
+- No broad visual redesign.
+- No unrelated cleanup bundled with containment.
+
+Exit gate:
+- legacy allowlist count decreases monotonically;
+- no new direct page-level Supabase access;
+- priority pages no longer mix heavy data orchestration with rendering where practical.
+
+# Phase 3 — Unified runtime control
+This is an operational foundation, not a user-facing feature initiative.
+
+## 3A. Runtime state model
+Unify the currently scattered runtime signals into a small canonical state model:
+- `online`
+- `degraded`
+- `offline`
+- `syncing`
+- `blocked`
+
+Inputs may include:
+- network reachability;
+- Supabase reachability;
+- Realtime health;
+- offline queue state;
+- blocked/dead-letter state;
+- Print Agent/KDS health observations only, without taking control of them.
+
+Requirements:
+- no polling storm;
+- no duplicate sources of truth;
+- state transitions must be testable;
+- UI consumes the state instead of reinventing it per page.
+
+## 3B. Operational thresholds
+Promote System Health observations into explicit severity rules:
+- duplicate open shift => critical;
+- accounting imbalance => critical;
+- kitchen/inventory mismatch => critical;
+- stale print queue => warning/critical by age;
+- stale empty order/table mismatch => warning;
+- branch connectivity degradation => warning.
+
+No auto-repair in this phase unless separately reviewed.
+
+## 3C. Device/workstation identity foundation
+Establish a minimal internal identity model for operational observability:
+- branch;
+- logical device/workstation identity;
+- role/type such as POS/KDS/Print Agent where applicable;
+- app/agent version;
+- last-seen/heartbeat metadata where already available or safely addable.
+
+This is not a feature expansion. It is intended to make operational state attributable and debuggable.
+
+Exit gate:
+- runtime state is centralized;
+- System Health has deterministic severity semantics;
+- operational events can be attributed to branch/device where appropriate.
+
+# Phase 4 — Recovery and release resilience
+## 4A. Restore rehearsal
+- [ ] document a restore rehearsal procedure;
+- [ ] restore a representative backup/snapshot into a non-Production environment;
+- [ ] apply current migrations;
+- [ ] run schema verification;
+- [ ] run Golden Path;
+- [ ] verify branch isolation and core financial reconciliation.
+
+## 4B. Release rollback readiness
+- [ ] document application rollback procedure;
+- [ ] document forward-only migration recovery policy;
+- [ ] verify that deployment rollback does not silently require schema downgrade;
+- [ ] verify Print Agent branches remain independently recoverable.
+
+## 4C. Final hygiene
+- [ ] no stale active work references;
+- [ ] merged temporary branches removed where tooling permits;
+- [ ] final exact-head Fast Verify Green;
+- [ ] final exact-head Full Verify Green;
+- [ ] Production API parity Green;
+- [ ] live branch read-only safety check;
+- [ ] stop before merge and require explicit user approval.
+
+# Definition of done
+This track is complete only when:
+- critical operational paths have documented latency/call budgets;
+- the heavy-page direct-Supabase allowlist is materially reduced;
+- no new direct page-level Supabase access exists;
+- priority heavy pages are behind stable service/domain boundaries;
+- runtime state is centralized and testable;
+- System Health has severity thresholds;
+- device/workstation operational identity is defined at least minimally;
+- restore/recovery has been rehearsed on a non-Production environment;
+- exact-head Full Verify and Production parity are Green;
+- Smouha and Cleopatra remain operational;
+- printing/KDS/Print Agent behavior remains unchanged unless an explicitly approved regression fix was required.
+
+# Mandatory update protocol
+- Read this file before every write.
+- Verify active branch HEAD before every write.
+- Record every coherent change set and verification result.
+- Unexpected HEAD => STOP_AND_RECONCILE.
+- No Production write without an explicit documented gate and user approval.
