@@ -20,6 +20,7 @@ import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
 import type { SavedReportConfig } from '../useCustomReports';
 import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
+import { loadExpenseCategoryOptions, loadReportFilterOptions } from '../services/reportFilterOptions';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -209,36 +210,18 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const needsCategory = dims.has('category') && reportType !== 'expenses';
       const needsTable = dims.has('table');
 
-      const [warehouses, cashiers, customers, suppliers, products, categories, tables] = await Promise.all([
-        needsWarehouse
-          ? supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-        needsCashier
-          ? supabase.from('users').select('id, full_name, email').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-        needsCustomer
-          ? supabase.from('customers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-        needsSupplier
-          ? supabase.from('suppliers').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-        needsProduct
-          ? supabase.from('products').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-        needsCategory
-          ? supabase.from('categories').select('id, name, name_en').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-        needsTable
-          ? supabase.from('dining_tables').select('id, name').eq('branch_id', effectiveBranchFilter)
-          : Promise.resolve({ data: [] }),
-      ]);
+      const options = await loadReportFilterOptions(effectiveBranchFilter, {
+        warehouse: needsWarehouse,
+        cashier: needsCashier,
+        customer: needsCustomer,
+        supplier: needsSupplier,
+        product: needsProduct,
+        category: needsCategory,
+        table: needsTable,
+      });
 
       if (cancelled) return;
-      setOptions({
-        warehouses: warehouses.data || [], cashiers: cashiers.data || [], customers: customers.data || [],
-        suppliers: suppliers.data || [], products: products.data || [], categories: categories.data || [],
-        tables: tables.data || [], expenseCategories: [],
-      });
+      setOptions({ ...options, expenseCategories: [] });
     })();
 
     return () => { cancelled = true; };
@@ -247,8 +230,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   useEffect(() => {
     if (reportType !== 'expenses' || !effectiveBranchFilter) return;
     (async () => {
-      const { data: categories } = await supabase.from('expenses').select('category').eq('branch_id', effectiveBranchFilter);
-      const unique = Array.from(new Set((categories || []).map((r) => String((r as Record<string, unknown>).category || '')).filter(Boolean)));
+      const unique = await loadExpenseCategoryOptions(effectiveBranchFilter);
       setOptions((prev) => ({ ...prev, expenseCategories: unique }));
     })();
   }, [reportType, effectiveBranchFilter]);
