@@ -22,6 +22,7 @@ import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
 import { loadExpenseCategoryOptions, loadReportFilterOptions } from '../services/reportFilterOptions';
 import { loadExpenseReportRows, loadPurchaseReportRows, loadSalesReportRows } from '../services/reportCoreLoaders';
+import { loadCashierPerformanceRows, loadDetailedInvoiceRows, loadReturnRows, loadSalesByEmployeeRows } from '../services/reportSalesLoaders';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -469,10 +470,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           count: paymentInvoiceCount,
         });
       } else if (reportType === 'sales_by_employee') {
-        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applySalesFilters);
-        const sales = await fetchRows<Record<string, unknown>>(q);
+        const sales = await loadSalesByEmployeeRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+          filters,
+        });
         const empMap = new Map<string, { branchId: string; name: string; total: number; count: number }>();
         sales.forEach((sale: Record<string, unknown>) => {
           const cashier = sale.users as { full_name?: string; email?: string } | null;
@@ -532,10 +535,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(prodMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((product) => ({ name: product.name, value: product.total })));
         setSummary({ total: Array.from(prodMap.values()).reduce((sum, product) => sum + product.total, 0), count: rows.length });
       } else if (reportType === 'detailed_invoices') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, paid_amount, refunded_amount, payment_method, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).order('created_at', { ascending: false });
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        q = filterQ(q, filters, applySalesFilters);
-        const sales = await fetchRows<Record<string, unknown>>(q);
+        const sales = await loadDetailedInvoiceRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+          filters,
+        });
         const rows = sales.map((sale: Record<string, unknown>) => {
           const customer = sale.customer as { name?: string } | null;
           const cashier = sale.cashier as { full_name?: string } | null;
@@ -719,9 +724,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'الصنف' : 'Item']), value: Number(row[lang === 'ar' ? 'الكمية' : 'Quantity']) })));
         setSummary({ total: 0, count: rows.length });
       } else if (reportType === 'cashier_performance') {
-        let q = supabase.from('sales').select('branch_id, cashier_id, total, refunded_amount, payment_method, status, created_at, users:users!fk_sales_cashier(full_name, email)').gte('created_at', fromTs).lt('created_at', toExclusiveTs);
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        const sales = await fetchRows<Record<string, unknown>>(q);
+        const sales = await loadCashierPerformanceRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+        });
         const empMap = new Map<string, { branchId: string; name: string; total: number; count: number; refundCount: number }>();
         sales.forEach((sale: Record<string, unknown>) => {
           if (filters.cashier && sale.cashier_id !== filters.cashier) return;
@@ -748,9 +755,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
         setSummary({ total: Array.from(empMap.values()).reduce((sum, employee) => sum + employee.total, 0), count: Array.from(empMap.values()).reduce((sum, employee) => sum + employee.count, 0) });
       } else if (reportType === 'returns') {
-        let q = supabase.from('sales').select('id, branch_id, invoice_number, total, refunded_amount, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name)').gte('created_at', fromTs).lt('created_at', toExclusiveTs).or('refunded_amount.gt.0,status.in.(returned,refunded,cancelled)');
-        if (effectiveBranchFilter) q = q.eq('branch_id', effectiveBranchFilter);
-        const returns = await fetchRows<Record<string, unknown>>(q);
+        const returns = await loadReturnRows({
+          branchId: effectiveBranchFilter || null,
+          fromTs,
+          toExclusiveTs,
+        });
         const statusLabels: Record<string, string> = {
           returned: lang === 'ar' ? 'مرتجع' : 'Returned', refunded: t('refunded'), cancelled: t('statusCancelled'),
         };
