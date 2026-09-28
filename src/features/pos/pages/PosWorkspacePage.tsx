@@ -824,7 +824,9 @@ export function PosWorkspacePage() {
             activeTable={pos.activeTable}
             orderType={pos.orderType}
             itemsCount={pos.cart.reduce((s, it) => s + it.quantity, 0)}
-            canPrintReceipt={pos.cart.length > 0 || !!pos.lastReceipt}
+            canPrintReceipt={pos.cart.length > 0
+              ? (!pos.openCheckPrintLocked || perms.canReprint)
+              : (!!pos.lastReceipt && (!pos.receiptPrintLocked || perms.canReprint))}
             canModifyOrder={canModifyCurrentOrder}
             total={pos.total}
             currency={pos.effCurrency}
