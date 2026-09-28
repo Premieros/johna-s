@@ -144,6 +144,10 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
     );
     expect(snapshot.rows[0].value.pending?.some((row) => row.id === firstId)).toBe(false);
 
+    const workerState = await rpcJson(worker, `public.get_my_work_authorization_state($1)`, [branchA]);
+    expect(workerState.status).not.toBe('pending');
+    expect(workerState.requestId ?? null).toBeNull();
+
     const expired = await rpcJson(
       approverA, `public.decide_work_authorization($1,true,NULL)`, [firstId],
     );
