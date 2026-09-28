@@ -41,6 +41,7 @@ Current PR: `#400`
   - App failure: mandatory worklog structure only.
   - DB failures: test fixture isolation + invalid empty thermal payload in the new regression test.
 - Full Verify #3180: **FAILED** early because mandatory worklog gate failed.
+- Fast Verify #1174 / Full Verify #3201 on head `201f8af5`: **DB GREEN**, App failed only because an existing component contract still expected the old combined print-button expression. The production code behavior was correct; the contract was updated to distinguish pre-payment Open Check from paid receipt.
 - Production migration: **NOT APPLIED**.
 - Runtime/Production data: unchanged by this branch.
 
