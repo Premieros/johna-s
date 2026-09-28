@@ -9,8 +9,11 @@ const perms = readFileSync('src/features/pos/hooks/usePosPermissions.ts', 'utf8'
 describe('open-check print-once UI guard', () => {
   it('locks only the pre-payment Open Check for non-reprinters', () => {
     expect(base).toContain('openCheckPrintLocked');
+    expect(base).toContain('openCheckPrintStateReady');
+    expect(base).toContain('getCloudOpenOrderPrintState(orderId)');
+    expect(wrapper).toContain('!base.openCheckPrintStateReady && !perms.canReprint');
     expect(wrapper).toContain('openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint');
-    expect(workspace).toContain('!pos.openCheckPrintLocked || perms.canReprint');
+    expect(workspace).toContain('pos.openCheckPrintStateReady && !pos.openCheckPrintLocked');
     expect(base).not.toContain('receiptPrintLocked');
     expect(wrapper).not.toContain('settlementReceiptPrintLocked');
     expect(workspace).not.toContain('pos.receiptPrintLocked');
@@ -26,6 +29,7 @@ describe('open-check print-once UI guard', () => {
     expect(checkoutSegment).not.toContain('openCheckPrintLockedOrderId');
     expect(completeSegment).toContain('enqueueAutomaticReceiptPrint');
     expect(completeSegment).not.toContain('openCheckPrintLockedOrderId');
+    expect(completeSegment).not.toContain('openCheckPrintStateReady');
   });
 
   it('keeps direct reprint permission-first', () => {
