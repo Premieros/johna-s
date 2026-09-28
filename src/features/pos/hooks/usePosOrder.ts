@@ -43,6 +43,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
   const [settlementReceiptPrintLocked, setSettlementReceiptPrintLocked] = useState(false);
+  const [openCheckPrintLockedOrderId, setOpenCheckPrintLockedOrderId] = useState<string | null>(null);
 
   const findCartSource = useCallback((item: ItemPayload) => {
     const wanted = [...(item.modifier_option_ids || [])].sort().join(',');
@@ -206,7 +207,9 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
 
     void (async () => {
-      const preview = await loadSettlementPreview(false);
+      if (openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint) return;
+
+    const preview = await loadSettlementPreview(false);
       if (!preview) return;
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
@@ -413,8 +416,9 @@ export function usePosOrder(input: UsePosOrderInput) {
       );
       return;
     }
+    setOpenCheckPrintLockedOrderId(base.activeOrderId);
     show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
-  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, perms.canReprint, settlementReceipt, settlementReceiptPrintLocked]);
+  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, openCheckPrintLockedOrderId, perms.canReprint, settlementReceipt, settlementReceiptPrintLocked]);
 
   const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
     ? {
@@ -441,6 +445,9 @@ export function usePosOrder(input: UsePosOrderInput) {
     lastReceipt: settlementReceipt || base.lastReceipt,
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
     receiptPrintLocked: settlementReceipt ? settlementReceiptPrintLocked : base.receiptPrintLocked,
+    openCheckPrintLocked: base.activeOrderId
+      ? openCheckPrintLockedOrderId === base.activeOrderId
+      : base.openCheckPrintLocked,
     closeReceipt: () => {
       setSettlementReceiptSaleId(null);
       base.closeReceipt();
