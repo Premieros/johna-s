@@ -124,6 +124,8 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
   });
 
   it('expires pending requests after one minute and requires a fresh request', async () => {
+    await client.query('SAVEPOINT wa_expiry_isolation');
+    try {
     const pending = await client.query<{ id: string }>(
       `SELECT id FROM public.work_authorizations
        WHERE user_id=$1 AND branch_id=$2 AND status='pending'
@@ -168,6 +170,10 @@ describe.skipIf(!dbUrl)('work authorization backend contract', () => {
        WHERE user_id=$1 AND branch_id=$2 AND status='pending'`, [worker, branchA],
     );
     expect(count.rows[0].count).toBe('1');
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT wa_expiry_isolation');
+      await client.query('RELEASE SAVEPOINT wa_expiry_isolation');
+    }
   });
 
   it('denies self approval even when the requester temporarily owns the approval permission', async () => {
