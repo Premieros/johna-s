@@ -46,11 +46,15 @@ describe('work authorization UI-first contract', () => {
     expect(approvalCenter).toContain("supabase.rpc('decide_operational_approval'");
   });
 
-  it('keeps the employee gate centralized and free of polling or role-name checks', () => {
+  it('keeps the employee gate centralized with one-minute realtime waiting and no polling', () => {
     expect(gate).toContain('data-testid="work-authorization-gate"');
     expect(gate).toContain('client.getMyState(branchId)');
     expect(gate).toContain('client.requestAuthorization(branchId)');
-    expect(gate).not.toMatch(/setInterval|setTimeout|poll|branch_manager|ownerOnly|user\?\.role|user\.role/);
+    expect(gate).toContain('WORK_AUTHORIZATION_REQUEST_TTL_MS = 60_000');
+    expect(gate).toContain("status === 'sleeping'");
+    expect(gate).toContain("status === 'sleeping' ? 'إعادة طلب التصريح'");
+    expect(gate).toContain("status === 'loading' || status === 'sleeping'");
+    expect(gate).not.toMatch(/setInterval|poll|branch_manager|ownerOnly|user\?\.role|user\.role/);
     expect(gate).not.toContain('supabase.');
   });
 
