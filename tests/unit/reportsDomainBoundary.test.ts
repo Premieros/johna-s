@@ -6,6 +6,7 @@ const domain = readFileSync('src/api/domains/reporting.ts', 'utf8');
 const filters = readFileSync('src/features/reporting/services/reportFilterOptions.ts', 'utf8');
 const coreLoaders = readFileSync('src/features/reporting/services/reportCoreLoaders.ts', 'utf8');
 const salesLoaders = readFileSync('src/features/reporting/services/reportSalesLoaders.ts', 'utf8');
+const inventoryLoaders = readFileSync('src/features/reporting/services/reportInventoryLoaders.ts', 'utf8');
 
 const rpcNames = [
   'get_day_closing_range_report',
@@ -70,6 +71,21 @@ describe('reports domain boundary', () => {
 
     expect(salesLoaders).toContain(".from('sales')");
     expect(salesLoaders).toContain("'branch_id, cashier_id, warehouse_id, total, refunded_amount");
+  });
+
+  it('keeps inventory, item, low-stock and waste query construction out of the page', () => {
+    expect(page).not.toContain('supabase.from(');
+    expect(page).not.toContain('fetchAllReportRows');
+    expect(page).toContain('loadSalesByProductItems');
+    expect(page).toContain('loadTopConsumedProductItems');
+    expect(page).toContain('loadComponentConsumptionRows');
+    expect(page).toContain('loadTopConsumedComponentRows');
+    expect(page).toContain('loadLowStockSources');
+    expect(page).toContain('loadWasteRows');
+    expect(inventoryLoaders).toContain(".from('sale_items')");
+    expect(inventoryLoaders).toContain(".from('stock_transactions')");
+    expect(inventoryLoaders).toContain(".from('raw_material_inventory')");
+    expect(inventoryLoaders).toContain(".from('waste_entries')");
   });
 
   it('keeps the existing report page calling typed domain methods', () => {
