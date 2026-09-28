@@ -16,20 +16,7 @@ describe('receipt reprint approval guard', () => {
   it('keeps first-print permission for cashier but not direct reprint bypass', () => {
     expect(DEFAULT_ROLE_PERMISSIONS.cashier).toContain('pos.receipt.print');
     expect(DEFAULT_ROLE_PERMISSIONS.cashier).not.toContain('pos.reprint');
-    it('honors pos.reprint at cloud completion instead of demanding a manager approval row', () => {
-    expect(operatorFix).toContain('v_requester_can_reprint');
-    expect(operatorFix).toContain("? 'pos.reprint'");
-    expect(operatorFix).toContain('v_print_count > 0 AND NOT v_requester_can_reprint');
-    expect(operatorFix).toContain('direct_reprint_permission');
   });
-
-  it('locks one-time invoice print actions after an authoritative print event', () => {
-    expect(salesPage).toContain('sale_print_events(id)');
-    expect(salesPage).toContain('receiptAlreadyPrinted');
-    expect(salesPage).toContain('receiptAlreadyPrinted(r) && !canReprintReceipt');
-    expect(salesPage).toContain("can('pos.reprint')");
-  });
-});
 
   it('preserves direct reprint for approval-capable management defaults', () => {
     expect(DEFAULT_ROLE_PERMISSIONS.branch_manager).toContain('approvals.review');
@@ -44,5 +31,19 @@ describe('receipt reprint approval guard', () => {
     expect(migration).not.toContain('cloud_print_jobs');
     expect(migration).not.toContain('printer_stations');
     expect(migration).not.toContain('print-agent-lite');
+  });
+
+  it('honors pos.reprint at cloud completion instead of demanding a manager approval row', () => {
+    expect(operatorFix).toContain('v_requester_can_reprint');
+    expect(operatorFix).toContain("? 'pos.reprint'");
+    expect(operatorFix).toContain('v_print_count > 0 AND NOT v_requester_can_reprint');
+    expect(operatorFix).toContain('direct_reprint_permission');
+  });
+
+  it('locks one-time invoice print actions after an authoritative print event', () => {
+    expect(salesPage).toContain('sale_print_events(id)');
+    expect(salesPage).toContain('receiptAlreadyPrinted');
+    expect(salesPage).toContain('receiptAlreadyPrinted(r) && !canReprintReceipt');
+    expect(salesPage).toContain("can('pos.reprint')");
   });
 });
