@@ -7,9 +7,9 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/fix-shift-expected-cash-20260927`
 Current PR: `#393`
 Last updated: 2026-09-28
-State: **BLOCKED**
+State: **READY_TO_MERGE**
 
-Implementation exists on the development branch. Merge and Production migration remain blocked until exact-head Full Verify is Green and the protected-step requirements are satisfied.
+Implementation is complete on the development branch. Functional exact-head Fast Verify #1107 and Full Verify #3169 are Green; explicit merge + Production migration approval was given by the user on 2026-09-28. This documentation-only gate update must itself verify Green before merge.
 
 ## Guardrails
 
@@ -78,8 +78,10 @@ Separate observation:
 ## Verification ledger
 
 - Production diagnosis: read-only and complete.
-- PR #393: Draft.
-- Exact-head Full Verify: pending.
+- PR #393: Draft pending Ready-for-review transition.
+- Reconciled functional head `cde91cdccfccdd654ccd76b6619f35b7db03cc56`:
+  - Fast Verify #1107 / `36388421698`: **GREEN** (scope + app + DB + summary).
+  - Full Verify #3169 / `36388425874`: **GREEN** (verify + Fresh DB/integration/security/RLS + browser-smoke).
 - Fast Verify run #1036 / `36340558277`:
   - canonical migrations applied successfully on Fresh DB;
   - schema verification succeeded;
@@ -89,25 +91,26 @@ Separate observation:
 - Fresh exact-head Fast Verify #1038 / run `36340716432`: DB path reached Green after the fixture correction (Fresh DB migrations/schema + changed integration test success); app path was still running at the time of the next checkpoint.
 - Full Verify #3134 / run `36340719193`: backend/lint/type/typecheck passed; unit suite failed only because an existing UI contract expected the legacy Arabic label substring `صافي رصيد الشفت الفعلي (يسمح بالسالب)`.
 - Compatibility correction commit preserves that exact protected substring and appends `- بعد العد`; no business logic, migration, print, KDS, inventory, permission or RLS behavior changed.
-- Fresh exact-head Fast/Full Verify after the label-contract correction: pending.
-- Unit counted-cash contract: pending final run.
+- Unit counted-cash contract: **GREEN** as part of Fast Verify #1107 and Full Verify #3169.
+- Current documentation-only approval commit: exact-head verification will run automatically and must remain Green before merge.
 - Production change from this branch: none.
 
 ## Production gate
 
-- Exact-head Full Verify Green: **NO — pending**.
-- Explicit Production migration approval for this branch: **NO**.
-- Production migration applied: **NO**.
-- Merge authorization: **NO**.
-- State remains **BLOCKED**.
+- Functional implementation Full Verify Green: **YES — #3169 / 36388425874**.
+- Explicit Production migration approval for this branch: **YES — user approved on 2026-09-28**.
+- Production migration applied: **NO — pending merge**.
+- Merge authorization: **YES — user approved on 2026-09-28**.
+- Final docs-only exact-head verification: **PENDING**.
+- State: **READY_TO_MERGE after docs-only exact-head Green**.
 
 ## Next action
 
-1. Point the unified mandatory execution gate to this branch/log/PR.
-2. Run exact-head Fast/Full Verify.
-3. Confirm migration passes Fresh DB and the updated live-vs-close integration regression.
-4. Re-check changed-file scope for frozen paths.
-5. Stop before merge/Production migration and report readiness.
+1. Let the docs-only approval commit complete exact-head verification.
+2. Mark PR #393 ready for review and merge using the expected head SHA.
+3. Apply only `20260927212500_get_active_shift_canonical_expected_cash.sql` to Production `azzdesuowpdcoflmyezn`.
+4. Verify Production `get_active_shift` now delegates expected cash to `_compute_shift_expected_cash`.
+5. Verify post-merge `main` workflows are Green and no frozen print/KDS paths changed.
 
 ## Mandatory update protocol
 
@@ -126,3 +129,9 @@ Separate observation:
 - No Production write/migration was performed.
 - Printing / Print Agent / routing / KDS / send-to-kitchen are unchanged.
 - Exact-head Fast/Full Verify must run again on the reconciled head before any merge or Production migration.
+
+
+## Approval checkpoint — 2026-09-28
+- User explicitly approved proceeding with merge and Production migration after the Green verification report.
+- No additional scope was authorized.
+- Printing, Print Agent, routing, KDS and send-to-kitchen remain frozen.
