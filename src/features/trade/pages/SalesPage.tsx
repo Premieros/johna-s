@@ -49,6 +49,7 @@ interface SaleRow {
   customer?: { name: string } | null;
   source_order?: { order_number: string } | null;
   sale_items?: { id: string; product_id: string | null; unit_name: string; quantity: number; unit_price: number; discount_amount: number; refunded_quantity: number; refunded_amount: number; total: number; product?: { name: string } | null }[];
+  sale_print_events?: { id: string }[];
 }
 
 export function SalesPage() {
@@ -58,7 +59,7 @@ export function SalesPage() {
   const can = useCan();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, source_order_id, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, source_order_id, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name)), sale_print_events(id)',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     filters: [{ column: 'is_archived', value: false }],
@@ -83,6 +84,7 @@ export function SalesPage() {
   const [receiptPreviewTitle, setReceiptPreviewTitle] = useState('');
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
   const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
+  const [locallyPrintedSaleIds, setLocallyPrintedSaleIds] = useState<Set<string>>(new Set());
   const isAr = lang === 'ar';
   const canRequestRefundApproval = can('sales.refund.create') && !can('refunds.approve');
   const canOpenRefund = can('sales.refund.create') || can('refunds.approve');
@@ -92,7 +94,11 @@ export function SalesPage() {
   const canEditSale = canEditSaleMetadata || canEditPaymentMethod;
   const canArchiveReturnedSale = can('refunds.approve');
   const canPreviewReceipt = can('sales.view');
-  const canPrintReceipt = can('pos.receipt.print') || can('pos.reprint');
+  const canFirstPrintReceipt = can('pos.receipt.print');
+  const canReprintReceipt = can('pos.reprint');
+  const canPrintReceipt = canFirstPrintReceipt || canReprintReceipt;
+  const receiptAlreadyPrinted = (sale: SaleRow) =>
+    locallyPrintedSaleIds.has(sale.id) || (sale.sale_print_events?.length || 0) > 0;
 
   async function loadCustomersForBranch(branchId: string) {
     if (!canEditSaleMetadata || !branchId || customersBranchId === branchId) return;
@@ -232,6 +238,15 @@ export function SalesPage() {
 
   const printSaleReceipt = async (sale: SaleRow) => {
     if (!canPrintReceipt || receiptBusyId) return;
+    if (receiptAlreadyPrinted(sale) && !canReprintReceipt) {
+      show(
+        isAr
+          ? 'تمت طباعة هذا الشيك بالفعل. إعادة الطباعة تحتاج صلاحية إعادة الطباعة.'
+          : 'This receipt was already printed. Reprinting requires the reprint permission.',
+        'error',
+      );
+      return;
+    }
     setReceiptBusyId(sale.id);
     try {
       const receiptSettings = await resolveReceiptSettings(sale.branch_id);
@@ -246,7 +261,17 @@ export function SalesPage() {
         show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open the receipt print path', 'error');
         return;
       }
-      show(isAr ? 'تم إرسال الشيك إلى مسار طباعة الكاشير.' : 'Receipt sent to the cashier print path.', 'success');
+      setLocallyPrintedSaleIds((current) => {
+        const next = new Set(current);
+        next.add(sale.id);
+        return next;
+      });
+      show(
+        canReprintReceipt
+          ? (isAr ? 'تم إرسال الشيك إلى مسار طباعة الكاشير.' : 'Receipt sent to the cashier print path.')
+          : (isAr ? 'تم إرسال الشيك للطباعة. تم تعطيل زر الطباعة لهذه الفاتورة لمنع التكرار.' : 'Receipt sent to print. The print button is now locked to prevent duplicates.'),
+        'success',
+      );
     } catch (err) {
       if (err instanceof ReceiptPrintApprovalError && err.code === 'REPRINT_APPROVAL_PENDING') {
         show(
@@ -592,9 +617,15 @@ export function SalesPage() {
         {canPrintReceipt && (
           <button
             onClick={() => void printSaleReceipt(r)}
-            className="ui-icon-action ui-icon-action-info"
-            title={isAr ? 'إعادة طباعة الشيك' : 'Reprint receipt'}
-            disabled={receiptBusyId === r.id}
+            className="ui-icon-action ui-icon-action-info disabled:cursor-not-allowed disabled:opacity-40"
+            title={
+              receiptAlreadyPrinted(r) && !canReprintReceipt
+                ? (isAr ? 'تمت الطباعة — إعادة الطباعة غير مسموحة' : 'Already printed — reprint not allowed')
+                : receiptAlreadyPrinted(r)
+                  ? (isAr ? 'إعادة طباعة الشيك' : 'Reprint receipt')
+                  : (isAr ? 'طباعة الشيك' : 'Print receipt')
+            }
+            disabled={receiptBusyId === r.id || (receiptAlreadyPrinted(r) && !canReprintReceipt)}
           >
             <Printer className="w-4 h-4" />
           </button>
