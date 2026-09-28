@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockSupabaseRealtime } from './mock-supabase-realtime';
 
 const SUPABASE_ORIGIN = process.env.VITE_SUPABASE_URL || 'https://azzdesuowpdcoflmyezn.supabase.co';
 
@@ -12,6 +13,7 @@ const protectedRoutes = [
 ];
 
 async function mockUnauthenticatedBackend(page: Page) {
+  await mockSupabaseRealtime(page);
   // Public smoke tests must never depend on the real Supabase project. The
   // authenticated POS/dashboard suites already provide their own backend mocks.
   // Keep this suite deterministic and focused on routing/login UI behavior.
