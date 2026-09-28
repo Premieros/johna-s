@@ -2,13 +2,15 @@ export type WorkAuthorizationStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
-  | 'revoked';
+  | 'revoked'
+  | 'expired';
 
 export type WorkAuthorizationHistoryKind =
   | 'requested'
   | 'approved'
   | 'rejected'
-  | 'revoked';
+  | 'revoked'
+  | 'expired';
 
 export interface WorkAuthorizationPerson {
   userId: string;
