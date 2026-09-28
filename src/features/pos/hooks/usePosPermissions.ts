@@ -21,6 +21,7 @@ export interface PosPermissions {
   canOpenShift: boolean;
   canCloseShift: boolean;
   canPrint: boolean;
+  canReprint: boolean;
   canChangeBranch: boolean;
   canManageCustomer: boolean;
 }
@@ -54,6 +55,7 @@ export function usePosPermissions(): PosPermissions {
     canOpenShift: can('shifts.open'),
     canCloseShift: can('shifts.close'),
     canPrint: can('pos.receipt.print'),
+    canReprint: can('pos.reprint'),
     canChangeBranch: can('pos.change_branch'),
     canManageCustomer: can('customers.manage'),
   }), [can]);
