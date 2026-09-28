@@ -4,7 +4,7 @@
 
 - Mandatory active work log: `docs/WORK_AUTH_TIMEOUT_REPRINT_GUARD_2026-09-28.md`
 - Current active branch: `development/work-auth-timeout-reprint-guard-20260928`
-- Current PR: `pending`
+- Current PR: `#400`
 - أي تعديل جديد في هذا المسار يجب أن يبدأ بقراءة السجل النشط وتحديث `Next action` قبل التنفيذ.
 - بعد كل مجموعة تغييرات يجب تحديث `Change ledger` بحالة الملفات/المنطق الذي تغير.
 - بعد أي قياس أو اختبار يجب تحديث `Verification ledger` بالنتيجة الفعلية ورقم Run إن وجد.
