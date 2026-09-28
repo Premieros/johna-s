@@ -20,8 +20,11 @@ describe.skipIf(skip)('receipt print execution truth', () => {
   const branchA = randomUUID();
   const branchB = randomUUID();
   const printerUser = randomUUID();
+  const directReprinter = randomUUID();
   const saleA = randomUUID();
   const saleB = randomUUID();
+  const saleC = randomUUID();
+  const directReprintRole = `receipt_reprinter_${randomUUID().slice(0, 8)}`;
 
   async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
     await client.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
@@ -55,9 +58,16 @@ describe.skipIf(skip)('receipt print execution truth', () => {
     );
 
     await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
+       VALUES($1,'Direct Reprinter','Direct Reprinter','["pos.receipt.print","pos.reprint"]'::jsonb,'global',true)`,
+      [directReprintRole],
+    );
+
+    await client.query(
       `INSERT INTO public.users (id, email, full_name, role, branch_id, is_active)
-       VALUES ($1, $2, 'Receipt Truth Cashier', 'cashier', $3, true)`,
-      [printerUser, `${randomUUID()}@test.local`, branchA],
+       VALUES ($1, $2, 'Receipt Truth Cashier', 'cashier', $3, true),
+              ($4, $5, 'Receipt Direct Reprinter', $6, $3, true)`,
+      [printerUser, `${randomUUID()}@test.local`, branchA, directReprinter, `${randomUUID()}@test.local`, directReprintRole],
     );
 
     // The fixture is permission-first: explicitly grant first-print permission
@@ -76,8 +86,9 @@ describe.skipIf(skip)('receipt print execution truth', () => {
     await client.query(
       `INSERT INTO public.sales (id, invoice_number, branch_id, cashier_id, total, paid_amount, payment_method)
        VALUES ($1, $2, $3, $4, 100, 100, 'cash'),
-              ($5, $6, $7, $4, 50, 50, 'cash')`,
-      [saleA, `PRINT-${randomUUID()}`, branchA, printerUser, saleB, `PRINT-${randomUUID()}`, branchB],
+              ($5, $6, $7, $4, 50, 50, 'cash'),
+              ($8, $9, $3, $10, 75, 75, 'cash')`,
+      [saleA, `PRINT-${randomUUID()}`, branchA, printerUser, saleB, `PRINT-${randomUUID()}`, branchB, saleC, `PRINT-${randomUUID()}`, directReprinter],
     );
   });
 
@@ -133,6 +144,39 @@ describe.skipIf(skip)('receipt print execution truth', () => {
         [saleA],
       );
       expect(Number(count.rows[0]?.count || 0)).toBe(1);
+    });
+  });
+
+  it('queues direct reprint with an internal approved token for pos.reprint', async () => {
+    await asUser(directReprinter, async () => {
+      const first = await callPrintFunction('record_sale_print', saleC);
+      expect(first.success).toBe(true);
+      expect(first.print_number).toBe(1);
+
+      const queued = await client.query<{ value: { success?: boolean; job_id?: string; print_number?: number } }>(
+        `SELECT public.enqueue_cloud_receipt_print($1,NULL,jsonb_build_object('text','TEST RECEIPT','paperWidthMm',80),$2) AS value`,
+        [saleC, `direct-reprint-${randomUUID()}`],
+      );
+      expect(queued.rows[0].value.success).toBe(true);
+      expect(queued.rows[0].value.print_number).toBe(2);
+
+      const job = await client.query<{ approval_request_id: string | null }>(
+        `SELECT approval_request_id FROM public.cloud_print_jobs WHERE id=$1`,
+        [queued.rows[0].value.job_id],
+      );
+      expect(job.rows[0].approval_request_id).toBeTruthy();
+
+      const approval = await client.query<{ status: string; requester_id: string; action_type: string; source: string | null }>(
+        `SELECT status,requester_id,action_type,payload->>'source' AS source
+         FROM public.approval_requests WHERE id=$1`,
+        [job.rows[0].approval_request_id],
+      );
+      expect(approval.rows[0]).toMatchObject({
+        status: 'approved',
+        requester_id: directReprinter,
+        action_type: 'reprint',
+        source: 'direct_reprint_permission',
+      });
     });
   });
 

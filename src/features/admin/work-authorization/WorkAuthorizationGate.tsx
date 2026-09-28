@@ -7,7 +7,9 @@ import type {
   WorkAuthorizationClient,
 } from './workAuthorizationContract';
 
-type GateStatus = 'loading' | 'ready' | 'blocked' | 'error';
+type GateStatus = 'loading' | 'ready' | 'blocked' | 'sleeping' | 'error';
+
+const WORK_AUTHORIZATION_REQUEST_TTL_MS = 60_000;
 
 export function WorkAuthorizationGate({
   client,
@@ -43,6 +45,10 @@ export function WorkAuthorizationGate({
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!state || status === 'loading' || status === 'sleeping') return;
 
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
@@ -57,7 +63,16 @@ export function WorkAuthorizationGate({
       disposed = true;
       unsubscribe?.();
     };
-  }, [branchId, client, load]);
+  }, [branchId, client, load, state, status]);
+
+  useEffect(() => {
+    if (status !== 'blocked' || state?.status !== 'pending' || !state.requestedAt) return;
+    const requestedAt = Date.parse(state.requestedAt);
+    const elapsed = Number.isFinite(requestedAt) ? Date.now() - requestedAt : WORK_AUTHORIZATION_REQUEST_TTL_MS;
+    const remaining = Math.max(0, WORK_AUTHORIZATION_REQUEST_TTL_MS - elapsed);
+    const timer = window.setTimeout(() => setStatus('sleeping'), remaining);
+    return () => window.clearTimeout(timer);
+  }, [state?.requestedAt, state?.status, status]);
 
   const request = async () => {
     setRequesting(true);
@@ -93,20 +108,24 @@ export function WorkAuthorizationGate({
               ? 'جاري التحقق من تصريح الدخول...'
               : status === 'error'
                 ? 'تعذر التحقق من تصريح العمل'
-                : isPending
-                  ? 'في انتظار تصريح بدء العمل'
-                  : 'يلزم تصريح لبدء العمل'}
+                : status === 'sleeping'
+                  ? 'انتهت مهلة طلب التصريح'
+                  : isPending
+                    ? 'في انتظار تصريح بدء العمل'
+                    : 'يلزم تصريح لبدء العمل'}
           </h1>
           <p className="mt-2 text-sm text-ui-muted">{displayBranch}</p>
         </div>
 
-        {status === 'blocked' && (
+        {(status === 'blocked' || status === 'sleeping') && (
           <div className="mt-5 rounded-xl border border-ui-border bg-ui-page-alt p-4 text-center">
             <Clock3 className="mx-auto h-5 w-5 text-ui-muted" />
             <p className="mt-2 text-sm text-ui-text">
-              {isPending
-                ? 'تم إرسال طلبك للمسؤول. ستفتح مساحة العمل تلقائيًا بعد الموافقة.'
-                : 'أرسل طلب تصريح بدء العمل للمسؤول.'}
+              {status === 'sleeping'
+                ? 'انتهت دقيقة الانتظار. النظام الآن في وضع سكون بدون استعلامات أو اشتراك Realtime. اطلب تصريحًا جديدًا عند الحاجة.'
+                : isPending
+                  ? 'تم إرسال طلبك للمسؤول. المهلة دقيقة واحدة وتصل الموافقة تلقائيًا.'
+                  : 'أرسل طلب تصريح بدء العمل للمسؤول.'}
             </p>
           </div>
         )}
@@ -118,17 +137,17 @@ export function WorkAuthorizationGate({
         )}
 
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          {status === 'blocked' && !isPending && (
+          {((status === 'blocked' && !isPending) || status === 'sleeping') && (
             <Button className="sm:col-span-2" disabled={requesting} onClick={() => void request()}>
               <ShieldCheck className="h-4 w-4" />
-              {requesting ? 'جاري الإرسال...' : 'طلب تصريح بدء العمل'}
+              {requesting ? 'جاري الإرسال...' : status === 'sleeping' ? 'إعادة طلب التصريح' : 'طلب تصريح بدء العمل'}
             </Button>
           )}
 
-          {(status === 'error' || isPending) && (
+          {status === 'error' && (
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
-              تحديث الحالة
+              إعادة المحاولة
             </Button>
           )}
 
@@ -151,7 +170,7 @@ export function WorkAuthorizationGate({
         </div>
 
         <p className="mt-4 text-center text-xs text-ui-muted">
-          يتم التحقق عند الدخول أو تغيير الفرع، وتصل تغييرات التصريح فورًا. لا يوجد فحص دوري مستمر.
+          أثناء انتظار التصريح يعمل Realtime لمدة دقيقة فقط. بعد انتهاء المهلة يدخل النظام وضع سكون حتى طلب تصريح جديد.
         </p>
       </section>
     </main>

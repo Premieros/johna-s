@@ -13,7 +13,7 @@ import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '..
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
-import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
+import { enqueueCloudOpenOrderPrint, getCloudOpenOrderPrintState } from '../services/cloudPrint';
 import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
 import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
 
@@ -84,6 +84,8 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [kitchenDispatch, setKitchenDispatch] = useState<KitchenStationDispatchSummary | null>(null);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+  const [openCheckPrintLocked, setOpenCheckPrintLocked] = useState(false);
+  const [openCheckPrintStateReady, setOpenCheckPrintStateReady] = useState(orderId === null);
 
   const effCurrency = effSettings?.currency || 'EGP';
 
@@ -111,6 +113,8 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   useEffect(() => {
     setActiveOrderId(orderId);
+    setOpenCheckPrintLocked(false);
+    setOpenCheckPrintStateReady(!orderId);
     if (!orderId) {
       setActiveOrderNumber(null);
       setTableId(null);
@@ -122,6 +126,13 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
     let cancelled = false;
     setOrderLoading(true);
+
+    void getCloudOpenOrderPrintState(orderId).then((printState) => {
+      if (cancelled) return;
+      setOpenCheckPrintLocked(printState.locked);
+      setOpenCheckPrintStateReady(printState.known);
+    });
+
     fetchOrderForWorkspace(orderId)
       .then(({ order, items, products: orderProducts }) => {
         if (cancelled) return;
@@ -947,6 +958,7 @@ export function usePosOrder(input: UsePosOrderInput) {
           );
           return;
         }
+        setOpenCheckPrintLocked(true);
         show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
         return;
       }
@@ -956,7 +968,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } catch (error) {
       showReceiptPrintError(error);
     }
-  }, [cart, lastReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError, persistCart, show]);
+  }, [cart, lastReceipt, effSettings, activeOrderNumber, branchName, subtotal, discountValue, taxAmount, total, customers, customerId, activeTable, orderType, guestCount, user, t, lang, isAr, showReceiptPrintError, persistCart, show, openCheckPrintStateReady]);
 
   const closeReceipt = useCallback(() => setReceiptSaleId(null), []);
 
@@ -975,6 +987,8 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCheckoutOpen(false);
     setKitchenSentItems([]);
     setKitchenDispatch(null);
+    setOpenCheckPrintLocked(false);
+    setOpenCheckPrintStateReady(true);
   }, []);
 
   return {
@@ -991,7 +1005,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     activeOrderId, activeOrderNumber, activeTable,
     checkoutOpen, setCheckoutOpen,
     completing, orderLoading, kitchenSending, kitchenSentItems, kitchenDispatch,
-    lastReceipt, receiptSaleId, closeReceipt,
+    lastReceipt, receiptSaleId, openCheckPrintLocked, openCheckPrintStateReady, closeReceipt,
     subtotal, discountValue, taxAmount, total, change,
     effCurrency,
     addToCart, updateQty, setQty, removeFromCart, clearCart, setItemDiscount, replaceCartLine,

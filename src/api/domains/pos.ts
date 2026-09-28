@@ -78,6 +78,9 @@ export const pos = {
   enqueueOpenOrderPrint(p: { p_order_id: string; p_payload: Record<string, unknown>; p_idempotency_key: string }): ApiResult<RpcResult & { job_id?: string; status?: string; station_code?: string }> {
     return rpc('enqueue_cloud_open_order_print', p);
   },
+  getOpenOrderPrintState(p: { p_order_id: string }): ApiResult<RpcResult & { locked?: boolean }> {
+    return rpc('get_open_order_print_state', p);
+  },
 
   async processSale(p: {
     p_invoice_number: string;

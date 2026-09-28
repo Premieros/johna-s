@@ -42,6 +42,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
+  const [openCheckPrintLockedOrderId, setOpenCheckPrintLockedOrderId] = useState<string | null>(null);
 
   const findCartSource = useCallback((item: ItemPayload) => {
     const wanted = [...(item.modifier_option_ids || [])].sort().join(',');
@@ -373,6 +374,9 @@ export function usePosOrder(input: UsePosOrderInput) {
       return;
     }
 
+    if (!base.openCheckPrintStateReady && !perms.canReprint) return;
+    if (openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint) return;
+
     const preview = await loadSettlementPreview(false);
     if (!preview) {
       if (settlementReceipt) {
@@ -405,8 +409,9 @@ export function usePosOrder(input: UsePosOrderInput) {
       );
       return;
     }
+    setOpenCheckPrintLockedOrderId(base.activeOrderId);
     show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
-  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, settlementReceipt]);
+  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, openCheckPrintLockedOrderId, perms.canReprint, settlementReceipt]);
 
   const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
     ? {
@@ -432,6 +437,9 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCheckoutOpen,
     lastReceipt: settlementReceipt || base.lastReceipt,
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
+    openCheckPrintLocked: base.openCheckPrintLocked
+      || (base.activeOrderId ? openCheckPrintLockedOrderId === base.activeOrderId : false),
+    openCheckPrintStateReady: base.openCheckPrintStateReady,
     closeReceipt: () => {
       setSettlementReceiptSaleId(null);
       base.closeReceipt();
