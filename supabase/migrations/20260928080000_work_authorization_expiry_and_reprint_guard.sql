@@ -444,6 +444,72 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.enqueue_cloud_open_order_print(
+  p_order_id uuid,
+  p_payload jsonb,
+  p_idempotency_key text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_uid uuid:=auth.uid();
+  v_order public.orders%ROWTYPE;
+  v_job public.cloud_print_jobs%ROWTYPE;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
+  END IF;
+  IF NOT public.can_permission('pos.receipt.print') THEN
+    RETURN jsonb_build_object('success',false,'error','PERMISSION_DENIED','permission','pos.receipt.print');
+  END IF;
+
+  SELECT * INTO v_order FROM public.orders o WHERE o.id=p_order_id;
+  IF v_order.id IS NULL THEN RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND'); END IF;
+  IF v_order.status NOT IN ('open','held') THEN RETURN jsonb_build_object('success',false,'error','ORDER_NOT_EDITABLE'); END IF;
+  IF NOT public.user_may_access_branch(v_order.branch_id) THEN
+    RETURN jsonb_build_object('success',false,'error','BRANCH_MISMATCH');
+  END IF;
+  IF p_payload IS NULL OR jsonb_typeof(p_payload)<>'object' THEN
+    RETURN jsonb_build_object('success',false,'error','INVALID_PAYLOAD');
+  END IF;
+  IF COALESCE(btrim(p_idempotency_key),'')='' THEN
+    RETURN jsonb_build_object('success',false,'error','IDEMPOTENCY_KEY_REQUIRED');
+  END IF;
+
+  IF NOT public.can_permission('pos.reprint') AND EXISTS (
+    SELECT 1
+    FROM public.cloud_print_jobs cp
+    WHERE cp.branch_id=v_order.branch_id
+      AND cp.kind='receipt'
+      AND cp.idempotency_key LIKE 'open-check:' || p_order_id::text || ':%'
+  ) THEN
+    RETURN jsonb_build_object(
+      'success',false,'error','OPEN_CHECK_ALREADY_PRINTED','permission','pos.reprint'
+    );
+  END IF;
+
+  INSERT INTO public.cloud_print_jobs(
+    branch_id,requested_by,kind,station_code,payload,idempotency_key
+  ) VALUES (
+    v_order.branch_id,v_uid,'receipt','cashier',
+    p_payload,btrim(p_idempotency_key)
+  )
+  ON CONFLICT (branch_id,idempotency_key) DO UPDATE
+  SET updated_at=public.cloud_print_jobs.updated_at
+  RETURNING * INTO v_job;
+
+  RETURN jsonb_build_object(
+    'success',true,
+    'job_id',v_job.id,
+    'status',v_job.status,
+    'station_code','cashier'
+  );
+END;
+$function$;
+
 REVOKE ALL ON FUNCTION public.request_work_authorization(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.request_work_authorization(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.get_work_authorization_snapshot(uuid) FROM PUBLIC, anon;
@@ -452,5 +518,7 @@ REVOKE ALL ON FUNCTION public.decide_work_authorization(uuid, boolean, text) FRO
 GRANT EXECUTE ON FUNCTION public.decide_work_authorization(uuid, boolean, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.enqueue_cloud_receipt_print(uuid, uuid, jsonb, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.enqueue_cloud_receipt_print(uuid, uuid, jsonb, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.enqueue_cloud_open_order_print(uuid, jsonb, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.enqueue_cloud_open_order_print(uuid, jsonb, text) TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';
