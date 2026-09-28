@@ -152,7 +152,7 @@ export function PosOrderHeaderBar({
           </button>
         )}
 
-        {perms.canPrint && canPrintSentReceipt && (
+        {(perms.canPrint || perms.canReprint) && canPrintSentReceipt && (
           <button
             data-testid="pos-action-print"
             type="button"
