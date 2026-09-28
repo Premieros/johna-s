@@ -32,6 +32,9 @@ export interface CostingRecipeLine {
   cost_priced_at?: string | null;
   cost_reference?: string | null;
   cost_detail?: string | null;
+  component_group_id?: string | null;
+  component_group_name?: string | null;
+  component_group_quantity?: number | null;
 }
 
 export type RawMaterialPriceSource =
