@@ -570,6 +570,12 @@
       ]
     },
     {
+      "name": "get_open_order_print_state",
+      "params": [
+        "order_id"
+      ]
+    },
+    {
       "name": "get_order_margin",
       "params": [
         "branch_id",
@@ -680,12 +686,6 @@
       ]
     },
     {
-      "name": "get_supplier_price_impact",
-      "params": [
-        "supplier_id"
-      ]
-    },
-    {
       "name": "get_supplier_opening_balance",
       "params": [
         "branch_id",
@@ -693,19 +693,15 @@
       ]
     },
     {
-      "name": "get_supplier_statement",
+      "name": "get_supplier_price_impact",
       "params": [
-        "branch_id",
         "supplier_id"
       ]
     },
     {
-      "name": "set_supplier_opening_balance",
+      "name": "get_supplier_statement",
       "params": [
-        "amount",
         "branch_id",
-        "notes",
-        "opening_date",
         "supplier_id"
       ]
     },
@@ -1090,6 +1086,16 @@
         "note",
         "raw_material_id",
         "unit_cost"
+      ]
+    },
+    {
+      "name": "set_supplier_opening_balance",
+      "params": [
+        "amount",
+        "branch_id",
+        "notes",
+        "opening_date",
+        "supplier_id"
       ]
     },
     {
