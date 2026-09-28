@@ -444,6 +444,51 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.get_open_order_print_state(
+  p_order_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_order public.orders%ROWTYPE;
+  v_locked boolean := false;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
+  END IF;
+
+  SELECT * INTO v_order
+  FROM public.orders
+  WHERE id = p_order_id;
+
+  IF v_order.id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ORDER_NOT_FOUND');
+  END IF;
+
+  IF NOT public.user_may_access_branch(v_order.branch_id) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.cloud_print_jobs cp
+    WHERE cp.branch_id = v_order.branch_id
+      AND cp.kind = 'receipt'
+      AND cp.idempotency_key LIKE 'open-check:' || p_order_id::text || ':%'
+  ) INTO v_locked;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'locked', v_locked
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.enqueue_cloud_open_order_print(
   p_order_id uuid,
   p_payload jsonb,
@@ -518,6 +563,8 @@ REVOKE ALL ON FUNCTION public.decide_work_authorization(uuid, boolean, text) FRO
 GRANT EXECUTE ON FUNCTION public.decide_work_authorization(uuid, boolean, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.enqueue_cloud_receipt_print(uuid, uuid, jsonb, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.enqueue_cloud_receipt_print(uuid, uuid, jsonb, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.get_open_order_print_state(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_open_order_print_state(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.enqueue_cloud_open_order_print(uuid, jsonb, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.enqueue_cloud_open_order_print(uuid, jsonb, text) TO authenticated, service_role;
 
