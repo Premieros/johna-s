@@ -6,6 +6,7 @@
 - Apply repository migrations forward to the current head.
 - Run schema verification with `node scripts/db/verify-schema.js`.
 - Run `npm run verify:full`.
+- CI Full Verify uses an isolated PostgreSQL 16 service with `SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres`; this is the canonical Fresh DB verification path, not Production.
 - Run `tests/integration/functional_core_cycle.test.ts`.
 - Verify branch isolation, financial balance, and stock/kitchen consistency.
 - Never use Production as the rehearsal target.
