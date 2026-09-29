@@ -431,3 +431,5 @@ This track is complete only when:
 - Record every coherent change set and verification result.
 - Unexpected HEAD => STOP_AND_RECONCILE.
 - No Production write without an explicit documented gate and user approval.
+
+- 2026-09-29: `SuperAdminConsolePage` remaining organization/user/health access moved behind `superAdminConsoleData`; page direct Supabase reduced to 0; legacy allowlist reduced to 8.
