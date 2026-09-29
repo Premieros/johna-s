@@ -9,8 +9,11 @@ export type ExpenseAccountOption = {
 
 export type TreasuryOption = {
   id: string;
+  branch_id?: string;
   account_name: string;
   account_type: string;
+  scope?: 'branch' | 'organization';
+  kind?: 'branch_cash' | 'main_cash' | 'bank';
 };
 
 export async function fetchExpensePostingOptions(branchId: string): Promise<{
@@ -25,16 +28,13 @@ export async function fetchExpensePostingOptions(branchId: string): Promise<{
       .eq('account_type', 'expense')
       .eq('is_active', true)
       .order('code'),
-    supabase
-      .from('treasury_accounts')
-      .select('id,account_name,account_type')
-      .eq('branch_id', branchId)
-      .eq('is_active', true)
-      .order('account_type'),
+    supabase.rpc('get_accessible_treasury_accounts', { p_branch_id: branchId }),
   ]);
 
   return {
     expenseAccounts: (accountsRes.data as ExpenseAccountOption[] | null) || [],
-    treasuryAccounts: (treasuryRes.data as TreasuryOption[] | null) || [],
+    treasuryAccounts: ((treasuryRes.data as TreasuryOption[] | null) || []).filter(
+      (account) => account.scope === 'organization' || account.branch_id === branchId,
+    ),
   };
 }
