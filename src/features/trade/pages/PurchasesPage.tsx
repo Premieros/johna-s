@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Plus, Trash2, Eye, Download, Send, Check, X, PackageOpen, RotateCcw, Edit2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +23,13 @@ import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { purchasePaymentLabel, supplierOutstanding } from '@/lib/businessMetrics';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { Purchase, Supplier, Product, Warehouse, RpcResult, RawMaterial } from '@/lib/types';
+import {
+  createPurchaseRawMaterial,
+  fetchEditablePurchaseItems,
+  fetchPurchaseMeta,
+  fetchPurchaseViewItems,
+  type PurchaseRawUnit,
+} from '../services/purchasePageData';
 
 interface PurchaseFormItem {
   line_type: 'product' | 'raw';
@@ -33,8 +39,6 @@ interface PurchaseFormItem {
   quantity: number;
   unit_cost: number;
 }
-
-type InlineRawUnit = { id: string; name: string; symbol?: string | null };
 
 const EMPTY_LINE: PurchaseFormItem = { line_type: 'product', product_id: '', raw_material_id: '', unit_name: 'piece', quantity: 1, unit_cost: 0 };
 
@@ -67,7 +71,7 @@ export function PurchasesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [rawUnits, setRawUnits] = useState<InlineRawUnit[]>([]);
+  const [rawUnits, setRawUnits] = useState<PurchaseRawUnit[]>([]);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
@@ -87,28 +91,12 @@ export function PurchasesPage() {
   const [lineItems, setLineItems] = useState<PurchaseFormItem[]>([{ ...EMPTY_LINE }]);
 
   async function loadMeta() {
-    let supplierQuery = supabase.from('suppliers').select('*').order('name');
-    let productQuery = supabase.from('products').select('*').eq('is_active', true).order('name');
-    let rawMaterialQuery = supabase.from('raw_materials').select('*, unit:units(*)').eq('is_active', true).order('name');
-    let warehouseQuery = supabase.from('warehouses').select('*').order('name');
-    if (branchFilter) {
-      supplierQuery = supplierQuery.eq('branch_id', branchFilter);
-      productQuery = productQuery.eq('branch_id', branchFilter);
-      rawMaterialQuery = rawMaterialQuery.eq('branch_id', branchFilter);
-      warehouseQuery = warehouseQuery.eq('branch_id', branchFilter);
-    }
-    const [s, pr, rm, w, u] = await Promise.all([
-      supplierQuery,
-      productQuery,
-      rawMaterialQuery,
-      warehouseQuery,
-      supabase.from('measurement_units').select('id,name,symbol').eq('is_active', true).order('name'),
-    ]);
-    setSuppliers((s.data as Supplier[]) || []);
-    setProducts((pr.data as Product[]) || []);
-    setRawMaterials((rm.data as RawMaterial[]) || []);
-    setWarehouses((w.data as Warehouse[]) || []);
-    setRawUnits((u.data as InlineRawUnit[]) || []);
+    const meta = await fetchPurchaseMeta(branchFilter);
+    setSuppliers(meta.suppliers);
+    setProducts(meta.products);
+    setRawMaterials(meta.rawMaterials);
+    setWarehouses(meta.warehouses);
+    setRawUnits(meta.rawUnits);
   }
   useEffect(() => { void loadMeta(); }, [branchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -162,11 +150,7 @@ export function PurchasesPage() {
 
   const openEdit = async (purchase: Purchase) => {
     if (!can('purchases.manage') || purchase.status !== 'completed') return;
-    const { data, error: itemsError } = await supabase
-      .from('purchase_items')
-      .select('product_id,raw_material_id,unit_name,quantity,unit_cost')
-      .eq('purchase_id', purchase.id)
-      .order('created_at');
+    const { data, error: itemsError } = await fetchEditablePurchaseItems(purchase.id);
     if (itemsError) { show(itemsError.message, 'error'); return; }
 
     const editableLines = ((data || []) as Array<Record<string, unknown>>).map((row) => ({
@@ -279,7 +263,7 @@ export function PurchasesPage() {
       branch_id: form.branch_id,
       is_active: true,
     };
-    const { data, error: rawError } = await supabase.from('raw_materials').insert(payload).select('*').single();
+    const { data, error: rawError } = await createPurchaseRawMaterial(payload);
     if (rawError) { show(rawError.message, 'error'); return; }
 
     const created = data as RawMaterial;
@@ -407,7 +391,7 @@ export function PurchasesPage() {
 
   const viewPurchase = async (p: Purchase) => {
     setViewModal(p);
-    const { data } = await supabase.from('purchase_items').select('*, product:products(name), raw_material:raw_materials(name)').eq('purchase_id', p.id);
+    const { data } = await fetchPurchaseViewItems(p.id);
     setViewItems((data || []).map((i: Record<string, unknown>) => ({
       name: (i.product as { name: string })?.name || (i.raw_material as { name: string })?.name || '-',
       quantity: Number(i.quantity),
