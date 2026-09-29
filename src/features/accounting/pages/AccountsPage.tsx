@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Coins, Landmark } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -18,6 +17,7 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ChartOfAccount, AccountType, TrialBalanceRow } from '@/lib/types';
+import { deleteAccount, saveAccount } from '../services/accountCrud';
 
 const ACCOUNT_TYPES: { value: AccountType; labelKey: 'typeAsset' | 'typeLiability' | 'typeEquity' | 'typeIncome' | 'typeExpense' }[] = [
   { value: 'asset', labelKey: 'typeAsset' },
@@ -83,15 +83,14 @@ export function AccountsPage() {
       account_type: form.account_type,
       is_active: form.is_active,
     };
-    if (editing) {
-      const { error } = await supabase.from('chart_of_accounts').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'chart_of_accounts', editing.id);
-    } else {
-      const { error } = await supabase.from('chart_of_accounts').insert({ ...payload, branch_id: effectiveBranchFilter });
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'chart_of_accounts');
+    try {
+      await saveAccount({ id: editing?.id, branchId: effectiveBranchFilter, payload });
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
     }
+    if (editing) await logAudit('update', 'chart_of_accounts', editing.id);
+    else await logAudit('create', 'chart_of_accounts');
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadAccounts();
@@ -99,9 +98,13 @@ export function AccountsPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('chart_of_accounts').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'chart_of_accounts', deleteId); }
+    try {
+      await deleteAccount(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'chart_of_accounts', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadAccounts();
   };
