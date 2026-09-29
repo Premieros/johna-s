@@ -6,13 +6,11 @@ const repoRoot = process.cwd();
 const pagesRoot = join(repoRoot, 'src', 'features');
 
 const legacyAllowlist = new Set([
-  "src/features/accounting/pages/AccountsPage.tsx",
   "src/features/accounting/pages/EmployeeReceivablesPage.tsx",
   "src/features/admin/pages/ApprovalCenterPage.tsx",
   "src/features/admin/pages/SuperAdminConsolePage.tsx",
   "src/features/admin/pages/UsersPage.tsx",
   "src/features/catalog/pages/InventoryUnitsPage.tsx",
-  "src/features/catalog/pages/ProductSetupWizardPage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
@@ -67,6 +65,20 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps AccountsPage behind its feature service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/accounting/pages/AccountsPage.tsx'), 'utf8');
+    expect(source).toContain('saveAccount');
+    expect(source).toContain('deleteAccount');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
+  });
+
+  it('keeps ProductSetupWizardPage behind its data service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/catalog/pages/ProductSetupWizardPage.tsx'), 'utf8');
+    expect(source).toContain('loadProductSetupChoices');
+    expect(source).toContain('deleteProductSetupRollback');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps simple master-data pages behind feature services', () => {
