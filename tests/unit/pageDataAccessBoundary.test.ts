@@ -13,11 +13,9 @@ const legacyAllowlist = new Set([
   "src/features/admin/pages/UsersPage.tsx",
   "src/features/catalog/pages/CategoriesPage.tsx",
   "src/features/catalog/pages/InventoryUnitsPage.tsx",
-  "src/features/catalog/pages/ProductModifiersPage.tsx",
   "src/features/catalog/pages/ProductSetupWizardPage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/catalog/pages/PricingPage.tsx",
-  "src/features/costing/pages/CostingCenterPage.tsx",
   "src/features/dashboard/pages/DashboardDataPage.tsx",
   "src/features/dashboard/pages/VisualDashboardPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
@@ -76,6 +74,20 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps ProductModifiersPage behind selector services', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/catalog/pages/ProductModifiersPage.tsx'), 'utf8');
+    expect(source).toContain('loadProductModifierSelectors');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
+  });
+
+  it('keeps CostingCenterPage behind selector services', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/costing/pages/CostingCenterPage.tsx'), 'utf8');
+    expect(source).toContain('loadCostingBranches');
+    expect(source).toContain('loadCostingSuppliers');
+    expect(source).toContain('loadRawMaterialUnitDisplayMap');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps PurchaseRequestsPage behind its data service', () => {
