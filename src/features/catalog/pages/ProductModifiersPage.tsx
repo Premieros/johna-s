@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronUp, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { useLanguage } from '@/context/LanguageContext';
@@ -134,22 +133,19 @@ export function ProductModifiersPage() {
 
     setLoading(true);
     try {
-      const [productResult, categoryResult, groupsResult, units] = await Promise.all([
-        supabase.from('products').select('*').eq('branch_id', branchFilter).eq('is_active', true).order('name'),
-        supabase.from('categories').select('*').eq('branch_id', branchFilter).order('name'),
+      const [selectors, groupsResult, units] = await Promise.all([
+        loadProductModifierSelectors(branchFilter),
         api.catalog.listModifierGroupsAdmin(branchFilter),
         api.catalog.listInventoryUnits({ branch_id: branchFilter, unit_type: 'manufactured', is_active: true }),
       ]);
 
-      if (productResult.error) throw productResult.error;
-      if (categoryResult.error) throw categoryResult.error;
       if (groupsResult.error) throw groupsResult.error;
 
       const result = (groupsResult.data || {}) as AdminGroupsResponse;
       if (!result.success) throw new Error(result.detail || result.error || 'LOAD_MODIFIER_GROUPS_FAILED');
 
-      setProducts((productResult.data || []) as Product[]);
-      setCategories((categoryResult.data || []) as Category[]);
+      setProducts(selectors.products);
+      setCategories(selectors.categories);
       setComponentGroups((units || []) as InventoryUnit[]);
       setGroups(normalize(result.groups || []));
     } catch (err) {
