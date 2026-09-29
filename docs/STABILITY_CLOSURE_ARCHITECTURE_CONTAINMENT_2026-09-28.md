@@ -5,8 +5,73 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/stability-closure-architecture-containment-20260928`
 Current PR: `#402`
-Last updated: 2026-09-28
-State: **BLOCKED** — active development may proceed only after the mandatory worklog gate is Green; Production writes remain separately gated.
+Last updated: 2026-09-29
+State: **IN PROGRESS** — development work is active on PR #402. Production writes remain **BLOCKED**. Latest runtime-boundary Fast Verify is currently running.
+
+## Plan status
+Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ intentionally deferred/frozen
+
+### Phase 0 — Source of truth / branch closure
+- ✅ New active branch created from verified `main`.
+- ✅ `CURRENT_WORK_PLAN.md` now points to this track as the active Source of Truth.
+- ✅ Previous Stability Foundation track marked merged/closed.
+- ✅ Mandatory execution log created and enforced by CI.
+- ✅ Documentation bootstrap Fast/Full Verify restored to Green after worklog compatibility fixes.
+- 🟡 Old merged Stability Foundation branch is logically closed but still physically present because the available GitHub connector does not expose branch deletion.
+
+### Phase 1 — Performance budgets / measurement
+- ✅ Critical-path performance budget registry created.
+- ✅ Repeatable Production read-only `pg_stat_statements` baseline harness created.
+- ✅ CI contract added so critical budgets cannot disappear silently.
+- ✅ Dashboard snapshot measured directly and found healthy in current DB conditions (~14–98ms for 7-day branch windows; ~81ms all-branch YTD), so it was removed from first-fix priority.
+- ✅ POS active-order snapshot fan-out identified as the first proven hotspot.
+- ✅ POS active-order snapshot reduced from ~5 client DB round trips to 3 by embedding `order_items` and `order_kitchen_sends` in the orders read.
+- ✅ Regression contract added and round-trip budget tightened from 5 to 3.
+- ✅ Inventory Ledger page direct branch lookup removed from the page; ledger RPC behavior itself remains unchanged.
+- 🟡 Costing summary / raw-material overview still have cumulative hotspot evidence, but current direct authenticated latency baselines are not yet complete.
+- ⛔ Cart-availability optimization is deferred until the user's parallel product repair is merged because that RPC scans product/catalog data.
+- ⛔ Dashboard raw inventory/product fallback restructuring is deferred for the same product-work conflict.
+
+### Phase 2 — Heavy-page / direct-data containment
+- ✅ Architecture guard prevents any new direct page-level Supabase access outside the legacy allowlist.
+- ✅ Legacy allowlist reduced from about 43 pages to **35 pages**.
+- ✅ `ExpensesPage` removed from direct Supabase and from the allowlist.
+- ✅ `JournalPage` removed from direct Supabase and from the allowlist.
+- ✅ `BranchesPage` removed from direct Supabase and from the allowlist.
+- ✅ `ReconciliationPage` removed from direct Supabase and from the allowlist.
+- ✅ `PaymentsPage` removed from direct Supabase and from the allowlist.
+- ✅ `EmployeeReceivableDetailPage` removed from direct Supabase and from the allowlist.
+- ✅ `InventoryLedgerPage` removed from direct Supabase and from the allowlist.
+- 🟡 `SuperAdminConsolePage` heavy read orchestration moved behind a read-only service; direct Supabase calls reduced from 12 to 3, but the remaining calls include sensitive mutations/health checks so the page remains allowlisted.
+- 🟡 POS active-order data access is contained and cheaper, but `PosWorkspacePage` still has legacy direct data orchestration and remains allowlisted.
+- ⛔ Product/catalog pages are intentionally untouched while parallel product work is active.
+- ⛔ `ShiftsPage`, Print/KDS/Print Agent paths remain frozen because they are operationally sensitive.
+- ⏳ `ImportExportCenterPage`, `SalesPage`, and the remaining allowlisted pages still need risk-ranked containment after conflict-sensitive areas are cleared.
+
+### Phase 3 — Unified runtime control / health semantics
+- ✅ Existing canonical `OfflineContext` + `syncEngine` baseline verified.
+- 🟡 Runtime connectivity boundary contract added to stop new direct `navigator.onLine` usage outside the known legacy list; Fast Verify for this exact head is currently running.
+- ⏳ Existing direct connectivity checks in POS/payment/cloud-print/cart/topbar still need gradual migration to the canonical runtime state.
+- 🟡 System Health already has practical warning/error semantics inline, but they still need extraction into a deterministic tested helper.
+- ⏳ Canonical runtime states `online / degraded / offline / syncing / blocked` are not yet fully centralized for all consumers.
+- ⏳ Device/workstation identity foundation has not started.
+
+### Phase 4 — Recovery / release resilience
+- ⏳ Restore rehearsal procedure.
+- ⏳ Non-Production restore + migrations + schema verification.
+- ⏳ Golden Path on restored environment.
+- ⏳ Branch-isolation / financial-reconciliation checks after restore.
+- ⏳ Application rollback procedure.
+- ⏳ Forward-only migration recovery policy.
+- ⏳ Print Agent independent recovery verification.
+
+### Final merge gate
+- 🟡 `main` has advanced because of parallel product work. Before merge, this branch **must be updated from the latest `main`**, conflicts reconciled, and all product-side changes absorbed safely.
+- ⏳ Final exact-head Fast Verify Green after latest-main reconciliation.
+- ⏳ Final exact-head Full Verify Green.
+- ⏳ Production API parity Green.
+- ⏳ Live Smouha/Cleopatra read-only safety check.
+- ⏳ Explicit user approval before merge.
 
 ## Guardrails
 - Single writer only.
