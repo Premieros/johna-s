@@ -219,6 +219,12 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
     );
     expect(Number(repeatedClose.rows[0].c)).toBe(0);
 
+    const beforeNextDayPurchase = await client.query<{ r: Record<string, unknown> }>(
+      `SELECT public._build_day_closing_report($1,$2::date) AS r`,
+      [ids.branchA, next.rows[0].d],
+    );
+    const beforeCashPurchases = Number(beforeNextDayPurchase.rows[0].r.cash_purchases);
+
     const newInvoice = `NEXT-${randomUUID()}`;
     await client.query(
       `INSERT INTO public.purchases
@@ -233,7 +239,7 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
     );
     const details = live.rows[0].r.cash_purchase_details as Array<{ invoice_number: string }>;
     expect(details.some((x) => x.invoice_number === newInvoice)).toBe(true);
-    expect(Number(live.rows[0].r.cash_purchases)).toBe(55);
+    expect(Number(live.rows[0].r.cash_purchases) - beforeCashPurchases).toBe(55);
 
     const snapshot = await client.query<{ snap: Record<string, unknown> }>(
       `SELECT report_snapshot AS snap FROM public.daily_closes
