@@ -17,7 +17,11 @@ const handoverMigration = fs.readFileSync(
   'supabase/migrations/20260929233500_cash_handover_single_source_reconciliation.sql',
   'utf8',
 );
-const migration = `${baseMigration}\n${reconciliationMigration}\n${historicalSequenceMigration}\n${handoverMigration}`;
+const businessDayChainMigration = fs.readFileSync(
+  'supabase/migrations/20260930001000_treasury_business_day_chain_reconciliation.sql',
+  'utf8',
+);
+const migration = `${baseMigration}\n${reconciliationMigration}\n${historicalSequenceMigration}\n${handoverMigration}\n${businessDayChainMigration}`;
 const shiftsPage = fs.readFileSync('src/features/trade/pages/ShiftsPage.tsx', 'utf8');
 const shiftModal = fs.readFileSync('src/features/pos/components/shift/ShiftModal.tsx', 'utf8');
 const treasuryPage = fs.readFileSync('src/features/accounting/pages/TreasuryPage.tsx', 'utf8');
@@ -86,7 +90,6 @@ describe('treasury daily single-row UI contract', () => {
       'تحويل وارد',
       'تحويل صادر',
       'صافي نقدي الشفتات',
-      'حركات نقدية خارج الشفتات',
       'صافي نقدي اليوم',
       'رصيد نقدي فعلي',
       'رصيد بنك فعلي',
@@ -198,7 +201,6 @@ describe('treasury daily journal configurable columns', () => {
     expect(treasuryPage).toContain("isAr ? 'تحديد الأعمدة' : 'Choose columns'");
     expect(treasuryPage).toContain("treasury.dailyJournal.columns.v2");
     expect(treasuryPage).toContain("isAr ? 'صافي نقدي الشفتات' : 'Shift cash net'");
-    expect(treasuryPage).toContain("isAr ? 'حركات نقدية خارج الشفتات' : 'Cash outside shifts'");
     expect(treasuryPage).toContain("isAr ? 'صافي نقدي اليوم' : 'Daily cash net'");
   });
 });
@@ -223,7 +225,6 @@ describe('cash handover single-source reconciliation', () => {
 
   it('makes daily cash net the exact treasury cash movement and exposes outside-shift differences', () => {
     expect(handoverMigration).toContain("'cash_day_net', round(l.cash_effect, 2)");
-    expect(handoverMigration).toContain("'cash_outside_shifts', round(l.cash_effect - l.shift_cash_net, 2)");
     expect(handoverMigration).toContain('cash_closing_balance');
     expect(treasuryPage).toContain('cash_day_net: Number(row.cash_day_net || 0)');
   });
@@ -232,5 +233,26 @@ describe('cash handover single-source reconciliation', () => {
     expect(handoverMigration).not.toContain('INSERT INTO public.journal_entries');
     expect(handoverMigration).not.toContain('UPDATE public.shifts');
     expect(handoverMigration).not.toContain('DELETE FROM ');
+  });
+});
+
+
+describe('treasury business-day carry-forward chain', () => {
+  it('uses the configured business-day start for sales, purchases and shifts', () => {
+    expect(businessDayChainMigration).toContain("business_day_start");
+    expect(businessDayChainMigration).toContain("v_start_time");
+    expect(businessDayChainMigration).toContain("opened_at AT TIME ZONE 'Africa/Cairo'");
+    expect(businessDayChainMigration).toContain("created_at AT TIME ZONE 'Africa/Cairo'");
+  });
+
+  it('keeps treasury closing as cumulative opening plus business-day cash movement', () => {
+    expect(businessDayChainMigration).toContain('cash_opening_balance');
+    expect(businessDayChainMigration).toContain('cash_closing_balance');
+    expect(businessDayChainMigration).toContain("'cash_day_net', round(l.cash_effect, 2)");
+  });
+
+  it('does not expose the misleading outside-shift cash column', () => {
+    expect(treasuryPage).not.toContain("header: isAr ? 'حركات نقدية خارج الشفتات'");
+    expect(treasuryPage).not.toContain("'cash_outside_shifts','cash_day_net'");
   });
 });
