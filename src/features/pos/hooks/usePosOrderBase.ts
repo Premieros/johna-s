@@ -447,7 +447,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
 
       const matches = ((orderRows || []) as Pick<OrderItem, 'id' | 'product_id' | 'modifier_option_ids' | 'notes'>[])
-        .filter((row) => orderItemLineKey(row) === lineKey);
+        .filter((row) => item.order_item_id ? row.id === item.order_item_id : orderItemLineKey(row) === lineKey);
       if (matches.length !== 1) {
         show(
           isAr
@@ -514,7 +514,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         return false;
       }
       const matchingOrderItems = ((orderRows || []) as Pick<OrderItem, 'id' | 'product_id' | 'modifier_option_ids' | 'notes'>[])
-        .filter((orderItem) => orderItemLineKey(orderItem) === lineKey);
+        .filter((orderItem) => item.order_item_id ? orderItem.id === item.order_item_id : orderItemLineKey(orderItem) === lineKey);
       if (matchingOrderItems.length !== 1) {
         show(
           isAr
