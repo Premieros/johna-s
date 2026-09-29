@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Hotfix — canonical theoretical costing source**
+- Track: **Emergency Hotfix — POS duplicate persisted line identity**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Production baseline at start: `a1b8e77d5e1b0466d78f4d72170a9a1c9f22ebbf`
-- Active development branch: `hotfix/costing-theoretical-source-20260928`
-Mandatory active work log: `docs/COSTING_THEORETICAL_HOTFIX_2026-09-28.md`
+- Production baseline at start: `62daffd608b7e0dba4052157a8b3bd6b4e9022bc`
+- Active development branch: `hotfix/pos-duplicate-line-identity-20260929`
+Mandatory active work log: `docs/POS_DUPLICATE_LINE_IDENTITY_HOTFIX_2026-09-29.md`
 
 ## Repository branch policy
 Only these long-lived branches are intentionally preserved:
@@ -38,20 +38,20 @@ Older PRs/branches are historical and must not be used as execution baselines.
 - Runtime changes must remain safe for currently operating branches.
 
 ## Current objective
-Correct the Costing Center theoretical-cost source so it no longer reads the retired/unused `product_components` BOM. Theoretical product cost must use the canonical current recipe/raw-material model, including linked manufactured component groups. Historical COGS remains unchanged.
+Repair the live POS ambiguity that occurs when table-item transfer creates or exposes two persisted `order_items` rows with the same product/modifier/note configuration. Each resumed/server-backed cart row must remain independently addressable by its exact `order_items.id` so transfer, re-transfer, split and sent-item Void target the intended row.
 
-Operational stock deduction, send-to-kitchen, printing, Print Agent, routing, KDS, shifts, payments, and production data remain frozen.
+No database migration or Production data rewrite is part of this hotfix. Inventory deduction, send-to-kitchen, printing, Print Agent, KDS routing, payments and shifts remain frozen.
 
 Detailed findings, change ledger, verification, and production gate are maintained only in:
-`docs/COSTING_THEORETICAL_HOTFIX_2026-09-28.md`
+`docs/POS_DUPLICATE_LINE_IDENTITY_HOTFIX_2026-09-29.md`
 
 ## Definition of done
-This defect-fix track is complete only when:
-- decimal quantity entry is covered by focused UI/unit verification;
-- linked component-group costing is covered by DB/integration verification;
+This hotfix is complete only when:
+- duplicate persisted POS lines remain independently addressable after resume/transfer;
+- exact-line transfer and sent-item Void use the persisted `order_item_id` when available;
+- focused regression coverage reproduces identical persisted Water rows;
 - Full Verify is Green on the exact final head;
-- Production API parity remains Green;
-- no POS deduction, send-to-kitchen, printing/KDS/agent behavior changed;
-- Production migration is not applied before explicit approval.
+- changed-file audit contains no migration, printing, KDS, inventory mutation, payment or shift changes;
+- no merge occurs before explicit approval.
 
 > All older work-plan sections and historical logs remain archival evidence only. They are not active execution instructions.
