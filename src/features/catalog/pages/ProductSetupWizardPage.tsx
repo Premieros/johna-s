@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, PackagePlus, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -15,19 +14,12 @@ import { generateBarcode } from '@/lib/format';
 import { useGuidedWorkflow } from '@/core/guard';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
 import type { Category, InventoryUnit } from '@/lib/types';
+import { deleteProductSetupRollback, loadProductSetupChoices, type ProductSetupRawMaterial } from '../services/productSetupData';
 
 type ManufacturedComponent = { unit_id: string; quantity: number };
 type RawComponent = { raw_material_id: string; quantity: number; wastage_percent: number };
 type MeasurementUnit = { id: string; name: string; symbol?: string | null; code?: string | null };
-type RawMaterial = {
-  id: string;
-  name: string;
-  branch_id: string | null;
-  is_active: boolean;
-  default_cost?: number;
-  unit_id: string | null;
-  measurement_unit?: MeasurementUnit | null;
-};
+type RawMaterial = ProductSetupRawMaterial;
 
 export function ProductSetupWizardPage() {
   const navigate = useNavigate();
@@ -91,22 +83,12 @@ export function ProductSetupWizardPage() {
 
     void (async () => {
       setLoadingComponents(true);
-      const [cats, manufactured, raws] = await Promise.all([
-        supabase.from('categories').select('*').eq('branch_id', branchId).order('name'),
-        supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
-        supabase.from('raw_materials')
-          .select('id,name,branch_id,is_active,default_cost,unit_id,measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)')
-          .eq('branch_id', branchId)
-          .eq('is_active', true)
-          .order('name'),
-      ]);
+      const choices = await loadProductSetupChoices(branchId);
       if (cancelled) return;
-      if (cats.error) show(cats.error.message, 'error');
-      if (manufactured.error) show(manufactured.error.message, 'error');
-      if (raws.error) show(raws.error.message, 'error');
-      setCategories((cats.data as Category[]) || []);
-      setManufacturedItems((manufactured.data as InventoryUnit[]) || []);
-      setRawMaterials((raws.data as unknown as RawMaterial[]) || []);
+      choices.errors.forEach((message) => show(message, 'error'));
+      setCategories(choices.categories);
+      setManufacturedItems(choices.manufacturedItems);
+      setRawMaterials(choices.rawMaterials);
       setLoadingComponents(false);
     })().catch((error) => {
       if (!cancelled) {
@@ -224,7 +206,7 @@ export function ProductSetupWizardPage() {
       }
     } catch (error) {
       if (createdProductId) {
-        await supabase.from('products').delete().eq('id', createdProductId);
+        await deleteProductSetupRollback(createdProductId);
       }
       show(error instanceof Error ? error.message : String(error), 'error');
     } finally {
