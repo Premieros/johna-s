@@ -31,10 +31,8 @@ export async function loadImportExportValidationContext(
 
   const isSuperAdmin = scope.role === 'super_admin';
   const userBranchId = scope.branchId || null;
-  const branches = (((brsRes as { data: Array<{ id: string; code?: string; name: string }> })?.data || [])
-    as Array<{ id: string; code?: string; name: string }>);
-  const warehouses = (((whsRes as { data: Array<{ id: string; code?: string; name: string; branch_id?: string }> })?.data || [])
-    as Array<{ id: string; code?: string; name: string; branch_id?: string }>);
+  const branches = ((brsRes as { data: Array<{ id: string; code?: string; name: string }> })?.data || []) as Array<{ id: string; code?: string; name: string }>;
+  const warehouses = ((whsRes as { data: Array<{ id: string; code?: string; name: string; branch_id?: string }> })?.data || []) as Array<{ id: string; code?: string; name: string; branch_id?: string }>;
 
   const allowedBranchIds = isSuperAdmin
     ? branches.map((branch) => branch.id)
