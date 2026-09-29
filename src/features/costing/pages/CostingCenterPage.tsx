@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, History } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -19,6 +18,7 @@ import type {
   CostingOverviewRow, OrderMarginRow, SupplierPriceImpactRow, ProductCostingDetail,
   RawMaterialCostOverviewRow, RawMaterialCostHistoryRow, RawMaterialPriceSource,
 } from '@/lib/types';
+import { loadCostingBranches, loadCostingSuppliers, loadRawMaterialUnitDisplayMap } from '../services/costingSelectors';
 
 type Tab = 'overview' | 'raw_prices' | 'orders' | 'supplier';
 type SalesCostSummary = { sales_count: number; net_sales: number; cogs: number; ratio: number };
@@ -53,38 +53,27 @@ export function CostingCenterPage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const loadBranches = useCallback(async () => {
-    const br = await supabase.from('branches').select('id, name').eq('is_active', true).order('name');
-    if (br.error) { show(br.error.message, 'error'); return; }
-    const b = (br.data as { id: string; name: string }[] | null) || [];
-    setBranches(b);
-    if (!branchId && b.length === 1) setBranchId(b[0].id);
-  }, [branchId, show]);
+    try {
+      const b = await loadCostingBranches();
+      setBranches(b);
+      if (!branchId && b.length === 1) setBranchId(b[0].id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t('error'), 'error');
+    }
+  }, [branchId, show, t]);
 
   const loadSuppliers = useCallback(async () => {
-    const sp = await supabase.from('suppliers').select('id, name').order('name');
-    if (sp.error) { show(sp.error.message, 'error'); return; }
-    const s = (sp.data as { id: string; name: string }[] | null) || [];
-    setSuppliers(s);
-    if (s.length > 0) setSupplierId(s[0].id);
-  }, [show]);
+    try {
+      const s = await loadCostingSuppliers();
+      setSuppliers(s);
+      if (s.length > 0) setSupplierId(s[0].id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t('error'), 'error');
+    }
+  }, [show, t]);
 
   const loadRawMaterialUnits = useCallback(async () => {
-    const [materialsRes, unitsRes] = await Promise.all([
-      supabase.from('raw_materials').select('id, unit_id'),
-      supabase.from('measurement_units').select('id, code, name, symbol'),
-    ]);
-    if (materialsRes.error || unitsRes.error) return;
-    const unitsById = new Map<string, MeasurementUnitDisplay>();
-    for (const unit of (unitsRes.data || []) as Array<{ id: string; code: string; name: string; symbol: string | null }>) {
-      unitsById.set(unit.id, unit);
-    }
-    const next: Record<string, MeasurementUnitDisplay> = {};
-    for (const material of (materialsRes.data || []) as Array<{ id: string; unit_id: string | null }>) {
-      if (!material.unit_id) continue;
-      const unit = unitsById.get(material.unit_id);
-      if (unit) next[material.id] = unit;
-    }
-    setRawMaterialUnits(next);
+    setRawMaterialUnits(await loadRawMaterialUnitDisplayMap());
   }, []);
 
   const effBranch = useMemo(() => branchId || null, [branchId]);
