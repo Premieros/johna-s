@@ -18,10 +18,14 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
 
-    const dateRow = await client.query<{ d: string }>(
-      `SELECT ((now() AT TIME ZONE 'Africa/Cairo')::date)::text AS d`,
+    const dateRow = await client.query<{ current_d: string; old_d: string }>(
+      `SELECT
+         private.current_fixed_business_date($1,now())::text AS current_d,
+         (private.current_fixed_business_date($1,now())-1)::text AS old_d`,
+      [ids.branchA],
     );
-    oldBusinessDate = dateRow.rows[0].d;
+    activeBusinessDate = dateRow.rows[0].current_d;
+    oldBusinessDate = dateRow.rows[0].old_d;
 
     await client.query(
       `UPDATE public.shifts
@@ -42,7 +46,7 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
       `SELECT (public._ensure_business_day_state($1)->>'business_date')::text AS d`,
       [ids.branchA],
     );
-    activeBusinessDate = state.rows[0].d;
+    expect(state.rows[0].d).toBe(activeBusinessDate);
   });
 
   afterAll(async () => {
@@ -131,18 +135,45 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
     expect(audit.rows[0].created_by).toBe(ids.users.super_admin);
   });
 
-  it('closes the business day without closing the shift, then starts a clean next day', async () => {
-    const before = await client.query<{ d: string }>(
-      `SELECT business_date::text AS d FROM public.business_day_state WHERE branch_id=$1`,
+  it('closes only a due business day, advances one day, and blocks an immediate second rollover', async () => {
+    const due = await client.query<{ d: string }>(
+      `WITH candidates AS (
+         SELECT gs::date AS d
+         FROM generate_series(
+           (private.current_fixed_business_date($1,now()) - 3),
+           private.current_fixed_business_date($1,now()),
+           interval '1 day'
+         ) gs
+       )
+       SELECT c.d::text AS d
+       FROM candidates c
+       WHERE private.business_day_fixed_cutoff($1,c.d) <= now()
+       ORDER BY c.d DESC
+       LIMIT 1`,
       [ids.branchA],
     );
-    const closedDate = before.rows[0].d;
+    expect(due.rows[0]?.d).toBeTruthy();
+    const closedDate = due.rows[0].d;
+
+    await client.query(
+      `DELETE FROM public.daily_closes
+       WHERE branch_id=$1 AND business_date=$2::date`,
+      [ids.branchA, closedDate],
+    );
+    await client.query(
+      `UPDATE public.business_day_state
+       SET business_date=$2::date,
+           started_at=(SELECT opened_at FROM public.shifts WHERE id=$3),
+           updated_at=now()
+       WHERE branch_id=$1`,
+      [ids.branchA, closedDate, ids.shiftA],
+    );
 
     const result = await runAsPersist(
       client,
       ids.users.super_admin,
       `SELECT public.day_close($1,$2::date) AS r`,
-      [ids.branchA, oldBusinessDate],
+      [ids.branchA, closedDate],
     );
     expect(result.error).toBeUndefined();
 
@@ -163,7 +194,30 @@ describe.skipIf(!dbUrl)('business day rollover + owner-attributed shift reportin
        FROM public.business_day_state WHERE branch_id=$1`,
       [ids.branchA],
     );
-    expect(next.rows[0].d).not.toBe(closedDate);
+    const expectedNext = await client.query<{ d: string }>(
+      `SELECT ($1::date + 1)::text AS d`,
+      [closedDate],
+    );
+    expect(next.rows[0].d).toBe(expectedNext.rows[0].d);
+
+    const repeated = await runAsPersist(
+      client,
+      ids.users.super_admin,
+      `SELECT public.day_close($1,$2::date) AS r`,
+      [ids.branchA, next.rows[0].d],
+    );
+    expect(repeated.error).toBeUndefined();
+    const repeatedPayload = repeated.rows[0].r as Record<string, unknown>;
+    expect(repeatedPayload.success).toBe(false);
+    expect(repeatedPayload.error).toBe('BUSINESS_DAY_NOT_FINISHED');
+
+    const repeatedClose = await client.query<{ c: string }>(
+      `SELECT count(*)::text AS c
+       FROM public.daily_closes
+       WHERE branch_id=$1 AND business_date=$2::date`,
+      [ids.branchA, next.rows[0].d],
+    );
+    expect(Number(repeatedClose.rows[0].c)).toBe(0);
 
     const newInvoice = `NEXT-${randomUUID()}`;
     await client.query(
