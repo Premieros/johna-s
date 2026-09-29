@@ -30,6 +30,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
   const prodNoRecipe = randomUUID();
   const rmId = randomUUID();
   const recipeId = randomUUID();
+  const componentUnitId = randomUUID();
   const adminId = randomUUID();
   const managerId = randomUUID();
   const managerBId = randomUUID();
@@ -67,6 +68,9 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await client.query(`INSERT INTO public.recipes (id, product_id, branch_id, name, yield_quantity, is_active) VALUES ($1, $2, $3, 'Recipe', 2, true)`, [recipeId, prodId, branchA]);
     await client.query(`INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 1, 10)`, [recipeId, rmId]);
     await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, quantity, unit_cost, source_type) VALUES ($1, $2, 10, 20, 'purchase')`, [rmId, branchA]);
+    await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, is_active) VALUES ($1, $2, 'Cost Component Group', 'manufactured', $3, true)`, [componentUnitId, `CG-${componentUnitId.slice(0, 8)}`, branchA]);
+    await client.query(`INSERT INTO public.inventory_unit_recipes (unit_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 0.5, 0)`, [componentUnitId, rmId]);
+    await client.query(`INSERT INTO public.product_unit_links (id, product_id, unit_id, quantity) VALUES ($1, $2, $3, 2)`, [randomUUID(), prodId, componentUnitId]);
 
     const mkUser = async (id: string, role: string, branch: string | null) => {
       const uname = `costu-${randomUUID().slice(0, 8)}`;
@@ -109,10 +113,10 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       ),
     );
     expect(overview.length).toBe(1);
-    expect(Number(overview[0].actual_cost)).toBe(22); // 1 x 1.1 x 20 (batch avg cost), no yield division
-    expect(Number(overview[0].theoretical_cost)).toBe(0); // no product_components BOM
+    expect(Number(overview[0].actual_cost)).toBe(42); // direct 22 + linked group: 2 x 0.5 x 20
+    expect(Number(overview[0].theoretical_cost)).toBe(42); // canonical recipe model: direct 22 + linked group 20
     expect(Number(overview[0].sale_price)).toBe(100);
-    expect(Number(overview[0].recipe_item_count)).toBe(1);
+    expect(Number(overview[0].recipe_item_count)).toBe(2);
 
     // Product without a recipe has zero recipe cost and a 0 item count.
     const noRecipe = await asUser(adminId, async () =>
@@ -164,16 +168,25 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
 
   it('get_product_costing_detail: recipe lines, batch-cost fallback and error on missing product', async () => {
     const detail = await asUser(managerId, async () =>
-      rows<{ r: { success: boolean; product_name: string; actual_cost: number; recipe_items: Array<{ line_cost: number; unit_cost: number }>; history: unknown[] } }>(
+      rows<{ r: { success: boolean; product_name: string; theoretical_cost: number; actual_cost: number; recipe_items: Array<{ line_cost: number; unit_cost: number; component_group_id?: string | null; component_group_name?: string | null; component_group_quantity?: number | null }>; history: unknown[] } }>(
         `SELECT public.get_product_costing_detail($1, NULL) AS r`, [prodId],
       ),
     );
     expect(detail[0].r.success).toBe(true);
     expect(detail[0].r.product_name).toBe('Cost Product');
-    expect(Number(detail[0].r.actual_cost)).toBe(22);
-    expect(detail[0].r.recipe_items.length).toBe(1);
-    expect(Number(detail[0].r.recipe_items[0].unit_cost)).toBe(20);
-    expect(Number(detail[0].r.recipe_items[0].line_cost)).toBe(22);
+    expect(Number(detail[0].r.theoretical_cost)).toBe(42);
+    expect(Number(detail[0].r.actual_cost)).toBe(42);
+    expect(detail[0].r.recipe_items.length).toBe(2);
+    const directLine = detail[0].r.recipe_items.find((line) => !line.component_group_id);
+    const groupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId);
+    expect(directLine).toBeTruthy();
+    expect(groupLine).toBeTruthy();
+    expect(Number(directLine!.unit_cost)).toBe(20);
+    expect(Number(directLine!.line_cost)).toBe(22);
+    expect(Number(groupLine!.unit_cost)).toBe(20);
+    expect(Number(groupLine!.line_cost)).toBe(20);
+    expect(groupLine!.component_group_name).toBe('Cost Component Group');
+    expect(Number(groupLine!.component_group_quantity)).toBe(2);
 
     const missing = await asUser(managerId, async () =>
       rows<{ r: { success: boolean; error: string } }>(
@@ -274,16 +287,20 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(history[1].reference_number).toBe('RAW-COST-PO');
 
     const detail = await asUser(managerId, async () =>
-      rows<{ r: { actual_cost: number; recipe_items: Array<{ unit_cost: number; line_cost: number; cost_source: string; cost_reference: string }> } }>(
+      rows<{ r: { actual_cost: number; recipe_items: Array<{ unit_cost: number; line_cost: number; cost_source: string; cost_reference: string; component_group_id?: string | null }> } }>(
         `SELECT public.get_product_costing_detail($1, $2) AS r`,
         [prodId, branchA],
       ),
     );
-    expect(Number(detail[0].r.actual_cost)).toBe(30.8);
-    expect(Number(detail[0].r.recipe_items[0].unit_cost)).toBe(28);
-    expect(Number(detail[0].r.recipe_items[0].line_cost)).toBe(30.8);
-    expect(detail[0].r.recipe_items[0].cost_source).toBe('stock_count');
-    expect(detail[0].r.recipe_items[0].cost_reference).toBe('RAW-COST-SC');
+    expect(Number(detail[0].r.actual_cost)).toBe(58.8); // direct 30.8 + group 28
+    const pricedDirectLine = detail[0].r.recipe_items.find((line) => !line.component_group_id)!;
+    const pricedGroupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId)!;
+    expect(Number(pricedDirectLine.unit_cost)).toBe(28);
+    expect(Number(pricedDirectLine.line_cost)).toBe(30.8);
+    expect(pricedDirectLine.cost_source).toBe('stock_count');
+    expect(pricedDirectLine.cost_reference).toBe('RAW-COST-SC');
+    expect(Number(pricedGroupLine.unit_cost)).toBe(28);
+    expect(Number(pricedGroupLine.line_cost)).toBe(28);
 
     const branchBOverview = await asUser(managerBId, async () =>
       rows<{ raw_material_id: string }>(
