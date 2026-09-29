@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { getAllOfflineSales } from '@/core/offline/offlineStorage';
+import { ensureOperationalDeviceIdentity } from '@/core/runtime/deviceIdentity';
 import { formatNumber } from '@/lib/format';
 import { AdminDataManagementPanel } from './AdminDataManagementPanel';
 import { blockedCountStatus, pendingCountStatus, presenceStatus, zeroCountStatus, type OperationalHealthStatus } from '../services/systemHealthSeverity';
@@ -111,8 +112,20 @@ export function SystemHealthPage() {
 
     const blockedOffline = offline.filter((row) => row.status === 'blocked' || row.status === 'dead_letter').length;
     const retryingOffline = offline.filter((row) => row.status === 'pending' || row.status === 'failed' || row.status === 'syncing').length;
+    const deviceIdentity = ensureOperationalDeviceIdentity({
+      branchId: branchFilter || null,
+      deviceType: 'admin',
+      appVersion: 'web',
+    });
 
     const next: Check[] = [
+      {
+        key: 'device_identity',
+        ar: 'هوية الجهاز التشغيلية',
+        en: 'Operational device identity',
+        status: 'ok',
+        detail: `${deviceIdentity.device_type} · ${deviceIdentity.device_id.slice(0, 8)} · ${deviceIdentity.branch_id || (ar ? 'بدون فرع محدد' : 'No branch scope')}`,
+      },
       {
         key: 'database',
         ar: 'قاعدة البيانات',
