@@ -6,11 +6,12 @@ const read = (path: string) => readFileSync(path, 'utf8');
 describe('catalog terminology and measurement-unit lock contract', () => {
   it('keeps raw-material measurement unit editable only on create', () => {
     const source = read('src/features/manufacturing/pages/RawMaterialsPage.tsx');
+    const dataService = read('src/features/manufacturing/services/rawMaterialData.ts');
 
     expect(source).toContain('raw-material-measurement-unit-create');
     expect(source).toContain('raw-material-measurement-unit-locked');
     expect(source).toContain('Measurement unit is selected when the raw material is created and remains fixed afterwards');
-    expect(source).toContain(".update(commonPayload).eq('id', form.id)");
+    expect(dataService).toContain(".update(payload).eq('id', id)");
     expect(source).toContain('api.catalog.createRawMaterial');
   });
 
