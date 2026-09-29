@@ -1,0 +1,72 @@
+name: Recovery Rehearsal
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - development/stability-closure-architecture-containment-20260928
+    paths:
+      - '.github/workflows/recovery-rehearsal.yml'
+      - 'docs/RECOVERY_RELEASE_RESILIENCE_2026-09-29.md'
+      - 'tests/unit/recoveryReleaseResilience.test.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  restore-rehearsal:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
+      VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
+      SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Verify locked Supabase project identity
+        run: node scripts/db/verify-database-identity.js
+      - name: Build isolated source database
+        run: |
+          node scripts/db/apply-migration.js --file supabase/ci/stub_auth.sql
+          node scripts/db/apply-migration.js --dir supabase/migrations
+          node scripts/db/verify-schema.js
+          node scripts/db/apply-migration.js --file supabase/ci/disable_subscription_guard.sql
+          node scripts/db/apply-migration.js --file supabase/ci/seed_raw_material_branch.sql
+          node scripts/db/apply-migration.js --file supabase/ci/permission_first_role_fixture.sql
+      - name: Create representative logical snapshot
+        run: pg_dump --format=custom --no-owner --no-privileges --dbname="$SUPABASE_DB_URL" --file=/tmp/johna-rehearsal.dump
+      - name: Restore snapshot into second isolated database
+        run: |
+          createdb --host=localhost --username=postgres restored_rehearsal
+          pg_restore --host=localhost --username=postgres --dbname=restored_rehearsal --no-owner --no-privileges /tmp/johna-rehearsal.dump
+          echo "SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/restored_rehearsal" >> "$GITHUB_ENV"
+      - name: Verify restored schema
+        run: node scripts/db/verify-schema.js
+      - name: Run Golden Path on restored database
+        run: npm run test:integration -- tests/integration/functional_core_cycle.test.ts
+      - name: Verify branch isolation on restored database
+        run: npm run test:integration -- tests/integration/rls_branch_isolation.test.ts tests/integration/tenant_data_isolation.test.ts
+      - name: Verify financial reconciliation on restored database
+        run: npm run test:integration -- tests/integration/reporting_truth_reconciliation.test.ts tests/integration/shift_cash_integrity_scope.test.ts
