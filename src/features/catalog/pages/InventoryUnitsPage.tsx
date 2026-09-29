@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Plus, Edit2, Trash2, Beaker } from 'lucide-react';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
@@ -17,6 +16,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { InventoryUnit } from '@/lib/types';
+import { deleteInventoryUnit, loadInventoryUnitComponents, saveInventoryUnit, saveInventoryUnitComponents } from '../services/inventoryUnitData';
 
 interface UnitForm {
   code: string;
@@ -107,15 +107,14 @@ export function InventoryUnitsPage() {
       barcode: form.barcode || null, sku: form.sku || null, description: form.description.trim() || null,
       branch_id: branchFilter || null,
     };
-    if (editing) {
-      const { error } = await supabase.from('inventory_units').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'inventory_units', editing.id);
-    } else {
-      const { error } = await supabase.from('inventory_units').insert({ ...payload, unit_type: 'manufactured' as const });
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'inventory_units');
+    try {
+      await saveInventoryUnit({ id: editing?.id, payload });
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
     }
+    if (editing) await logAudit('update', 'inventory_units', editing.id);
+    else await logAudit('create', 'inventory_units');
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadItems();
@@ -127,18 +126,10 @@ export function InventoryUnitsPage() {
     setRecipeModalOpen(true);
     setRecipeLoading(true);
     const componentBranchId = unit.branch_id || branchFilter || '';
-    let rawMaterialQuery = supabase.from('raw_materials')
-      .select('id,name,branch_id,unit_id,measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)')
-      .eq('is_active', true);
-    if (componentBranchId) rawMaterialQuery = rawMaterialQuery.eq('branch_id', componentBranchId);
-    const [{ data: rawData, error: rawError }, { data: componentData, error: componentError }] = await Promise.all([
-      rawMaterialQuery.order('name'),
-      supabase.from('inventory_unit_recipes').select('id,raw_material_id,quantity,wastage_percent').eq('unit_id', unit.id).order('created_at'),
-    ]);
-    if (rawError) show(rawError.message, 'error');
-    if (componentError) show(componentError.message, 'error');
-    setRawMaterials((rawData as unknown as RawMaterialOption[]) || []);
-    setComponentRows((componentData as ComponentRow[]) || []);
+    const data = await loadInventoryUnitComponents({ unitId: unit.id, branchId: componentBranchId });
+    data.errors.forEach((message) => show(message, 'error'));
+    setRawMaterials(data.rawMaterials);
+    setComponentRows(data.components);
     setRecipeLoading(false);
   };
 
@@ -152,13 +143,12 @@ export function InventoryUnitsPage() {
       return;
     }
     setRecipeLoading(true);
-    const { error: deleteError } = await supabase.from('inventory_unit_recipes').delete().eq('unit_id', componentUnit.id);
-    if (deleteError) { show(deleteError.message, 'error'); setRecipeLoading(false); return; }
-    if (componentRows.length) {
-      const { error: insertError } = await supabase.from('inventory_unit_recipes').insert(componentRows.map((row) => ({
-        unit_id: componentUnit.id, raw_material_id: row.raw_material_id, quantity: Number(row.quantity), wastage_percent: Number(row.wastage_percent) || 0,
-      })));
-      if (insertError) { show(insertError.message, 'error'); setRecipeLoading(false); return; }
+    try {
+      await saveInventoryUnitComponents(componentUnit.id, componentRows);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      setRecipeLoading(false);
+      return;
     }
     await logAudit('update', 'inventory_unit_recipes', componentUnit.id, { unit_name: componentUnit.name, ingredient_count: componentRows.length });
     show(t('saveSuccess'), 'success');
@@ -168,9 +158,13 @@ export function InventoryUnitsPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('inventory_units').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'inventory_units', deleteId); }
+    try {
+      await deleteInventoryUnit(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'inventory_units', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadItems();
   };
