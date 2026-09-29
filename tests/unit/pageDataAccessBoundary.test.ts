@@ -7,7 +7,6 @@ const pagesRoot = join(repoRoot, 'src', 'features');
 
 const legacyAllowlist = new Set([
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
-  "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
   "src/features/trade/pages/SalesPage.tsx",
   "src/features/trade/pages/ShiftsPage.tsx"
@@ -56,6 +55,20 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps ActiveOrdersPage behind its page data service and POS APIs', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/pos/pages/ActiveOrdersPage.tsx'), 'utf8');
+    expect(source).toContain('loadDiningAreas');
+    expect(source).toContain('loadActiveOrderProducts');
+    expect(source).toContain('createDiningArea');
+    expect(source).toContain('deleteDiningArea');
+    expect(source).toContain('deleteDiningTable');
+    expect(source).toContain('api.floorPlan.addTable');
+    expect(source).toContain('api.floorPlan.updateTable');
+    expect(source).toContain('api.floorPlan.transferOrderOperator');
+    expect(source).toContain('api.pos.listOrderTransferTargets');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps ProductsPage behind its feature service and catalog APIs', () => {
