@@ -10,7 +10,6 @@ const legacyAllowlist = new Set([
   "src/features/accounting/pages/EmployeeReceivableDetailPage.tsx",
   "src/features/accounting/pages/EmployeeReceivablesPage.tsx",
   "src/features/accounting/pages/FinancialReportsPage.tsx",
-  "src/features/accounting/pages/PaymentsPage.tsx",
   "src/features/admin/pages/ApprovalCenterPage.tsx",
   "src/features/admin/pages/SettingsControlCenterPage.tsx",
   "src/features/admin/pages/SuperAdminConsolePage.tsx",
