@@ -19,7 +19,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT min(q.id)
+  SELECT min(q.id::text)::uuid
   INTO v_purchase_id
   FROM (
     SELECT DISTINCT p.id
