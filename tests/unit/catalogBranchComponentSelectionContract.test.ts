@@ -6,6 +6,7 @@ const root = resolve(process.cwd());
 const modifiersPage = readFileSync(resolve(root, 'src/features/catalog/pages/ProductModifiersPage.tsx'), 'utf8');
 const modifierSelectors = readFileSync(resolve(root, 'src/features/catalog/services/productModifierSelectors.ts'), 'utf8');
 const setupWizard = readFileSync(resolve(root, 'src/features/catalog/pages/ProductSetupWizardPage.tsx'), 'utf8');
+const setupData = readFileSync(resolve(root, 'src/features/catalog/services/productSetupData.ts'), 'utf8');
 const inventoryUnitsPage = readFileSync(resolve(root, 'src/features/catalog/pages/InventoryUnitsPage.tsx'), 'utf8');
 const pricingPage = readFileSync(resolve(root, 'src/features/catalog/pages/PricingPage.tsx'), 'utf8');
 
@@ -22,11 +23,11 @@ describe('catalog branch/component selection contracts', () => {
   });
 
   it('loads reusable-group and raw-material component choices from the selected product branch only', () => {
-    expect(setupWizard).toContain("supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true)");
-    expect(setupWizard).toContain("supabase.from('raw_materials')");
-    expect(setupWizard).toContain("measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)");
-    expect(setupWizard).toContain(".eq('branch_id', branchId)");
-    expect(setupWizard).toContain(".eq('is_active', true)");
+    expect(setupData).toContain("supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true)");
+    expect(setupData).toContain("supabase.from('raw_materials')");
+    expect(setupData).toContain("measurement_unit:measurement_units!raw_materials_unit_id_fkey(id,name,symbol,code)");
+    expect(setupData).toContain(".eq('branch_id', branchId)");
+    expect(setupData).toContain(".eq('is_active', true)");
     expect(setupWizard).toContain("item.branch_id === branchId && item.unit_type === 'manufactured'");
     expect(setupWizard).toContain('material.branch_id === branchId');
   });
