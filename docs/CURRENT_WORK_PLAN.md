@@ -48,7 +48,8 @@ PR #402 is the active Stability Closure PR and remains Draft until the final mer
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
 - CI يجب أن يفشل إذا السجل الإلزامي مفقود أو لا يطابق المسار النشط.
-- لا Merge إلى `main` ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
+- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
+- لا Merge إلى `main` إلا بعد نفس البوابة وبموافقة صريحة.
 - Single writer on the active development branch.
 - No direct write to `main`.
 - No force push.
