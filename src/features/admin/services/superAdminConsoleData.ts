@@ -144,3 +144,64 @@ export async function fetchUsersAndAudit(): Promise<{
     audit: (auditRes.data as SuperAdminAuditLogRow[] | null) || [],
   };
 }
+
+
+export async function setOrganizationActive(orgId: string, isActive: boolean): Promise<void> {
+  const { error } = await supabase.from('organizations').update({ is_active: isActive }).eq('id', orgId);
+  if (error) throw error;
+}
+
+export async function updateSuperAdminUser(params: {
+  userId: string;
+  fullName: string;
+  role: string;
+  isActive: boolean;
+  branchId: string | null;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({
+      full_name: params.fullName,
+      role: params.role,
+      is_active: params.isActive,
+      branch_id: params.branchId,
+    })
+    .eq('id', params.userId);
+  if (error) throw error;
+}
+
+export async function fetchSuperAdminHealthSnapshot(): Promise<Record<string, { ok: boolean; message: string }>> {
+  const checks: Record<string, { ok: boolean; message: string }> = {};
+
+  try {
+    const dbCheck = await supabase.from('users').select('id', { count: 'exact', head: true });
+    checks.database = {
+      ok: !dbCheck.error,
+      message: dbCheck.error ? dbCheck.error.message : 'Database connection healthy',
+    };
+  } catch (error) {
+    checks.database = { ok: false, message: String(error) };
+  }
+
+  try {
+    const authUser = (await supabase.auth.getUser()).data.user;
+    checks.auth = {
+      ok: !!authUser,
+      message: authUser ? `Authenticated as: ${authUser.email}` : 'No active session',
+    };
+  } catch (error) {
+    checks.auth = { ok: false, message: String(error) };
+  }
+
+  try {
+    const sysRes = await supabase.from('system_settings').select('id').limit(1);
+    checks.system_settings = {
+      ok: !sysRes.error,
+      message: sysRes.error ? sysRes.error.message : 'System settings accessible',
+    };
+  } catch (error) {
+    checks.system_settings = { ok: false, message: String(error) };
+  }
+
+  return checks;
+}
