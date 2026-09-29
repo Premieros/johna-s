@@ -68,7 +68,7 @@ describe('page data-access architecture boundary', () => {
     expect(source).toContain('loadInventoryUnitComponents');
     expect(source).toContain('saveInventoryUnit');
     expect(source).toContain('saveInventoryUnitComponents');
-    expect(source).toContain('deleteInventoryUnit');
+    expect(source).toContain('deleteComponentGroup');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
