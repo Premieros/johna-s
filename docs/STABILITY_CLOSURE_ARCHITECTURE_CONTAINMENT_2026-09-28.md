@@ -34,7 +34,7 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 
 ### Phase 2 — Heavy-page / direct-data containment
 - ✅ Architecture guard prevents any new direct page-level Supabase access outside the legacy allowlist.
-- ✅ Legacy allowlist reduced from about 43 pages to **30 pages**.
+- ✅ Legacy allowlist reduced from about 43 pages to **29 pages**.
 - ✅ `ExpensesPage` removed from direct Supabase and from the allowlist.
 - ✅ `JournalPage` removed from direct Supabase and from the allowlist.
 - ✅ `BranchesPage` removed from direct Supabase and from the allowlist.
@@ -132,6 +132,7 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - 2026-09-29: `PurchasesPage` direct page data access reduced to 0 through `purchasePageData`; exact-head Fast Verify #1391 Green and Full Verify #3349 Green; legacy allowlist reduced to 32.
 - 2026-09-29: `FinancialReportsPage` selector reads moved behind `financialReportSelectors`; page direct Supabase reduced to 0; legacy allowlist reduced to 31.
 - 2026-09-29: `LowStockAlertsPage` direct reads moved behind `lowStockData`; reorder creation RPC unchanged; page direct Supabase reduced to 0; legacy allowlist reduced to 30.
+- 2026-09-29: `StockCountsPage` metadata reads moved behind `stockCountData`; page direct Supabase reduced to 0; legacy allowlist reduced to 29.
 - 2026-09-29: `PurchasesPage` direct Supabase data calls reduced to 0 through `purchasePageData` service; purchase payloads, branch filters, and inline raw-material creation semantics preserved; legacy allowlist reduced to 32.
 
 ## Verification ledger
