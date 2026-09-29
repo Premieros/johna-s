@@ -8,7 +8,6 @@ const pagesRoot = join(repoRoot, 'src', 'features');
 const legacyAllowlist = new Set([
   "src/features/admin/pages/ApprovalCenterPage.tsx",
   "src/features/admin/pages/SuperAdminConsolePage.tsx",
-  "src/features/admin/pages/UsersPage.tsx",
   "src/features/catalog/pages/InventoryUnitsPage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
@@ -64,6 +63,14 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps UsersPage behind its access service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/admin/pages/UsersPage.tsx'), 'utf8');
+    expect(source).toContain('loadUserBranchAccess');
+    expect(source).toContain('saveUserBranchAccess');
+    expect(source).toContain('updateUserProfile');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps EmployeeReceivablesPage behind its accounting service', () => {
