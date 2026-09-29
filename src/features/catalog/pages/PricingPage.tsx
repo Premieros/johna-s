@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BadgeDollarSign, Boxes, Package, RefreshCw, Save } from 'lucide-react';
-import { costing, supabase } from '@/api';
+import { costing } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { Button } from '@/components/Button';
@@ -10,6 +10,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useBranches } from '@/hooks/useBranches';
 import { logAudit } from '@/lib/audit';
 import { formatNumber } from '@/lib/format';
+import { loadPricingRows, updateManufacturedPricing, updateProductPricing } from '../services/pricingData';
 
 type PricingTab = 'raw' | 'manufactured' | 'products';
 
@@ -100,40 +101,15 @@ export function PricingPage() {
 
     setLoading(true);
     try {
-      const [rawResult, manufacturedResult, productResult] = await Promise.all([
-        canRawView
-          ? supabase
-              .from('raw_materials')
-              .select('id,code,name,branch_id,default_cost,is_active')
-              .eq('branch_id', branchId)
-              .order('name')
-          : Promise.resolve({ data: [], error: null }),
-        canRawView
-          ? supabase
-              .from('inventory_units')
-              .select('id,code,name,branch_id,cost_price,sale_price,is_active')
-              .eq('branch_id', branchId)
-              .eq('unit_type', 'manufactured')
-              .order('name')
-          : Promise.resolve({ data: [], error: null }),
-        canProductsView
-          ? supabase
-              .from('products')
-              .select('id,sku,name,branch_id,cost_price,sale_price,wholesale_price,is_active')
-              .eq('branch_id', branchId)
-              .order('name')
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+      const data = await loadPricingRows({
+        branchId,
+        includeRaw: canRawView,
+        includeProducts: canProductsView,
+      });
 
-      const firstError = rawResult.error || manufacturedResult.error || productResult.error;
-      if (firstError) {
-        show(firstError.message, 'error');
-        return;
-      }
-
-      const nextRaw = (rawResult.data || []) as RawPriceRow[];
-      const nextManufactured = (manufacturedResult.data || []) as ManufacturedPriceRow[];
-      const nextProducts = (productResult.data || []) as ProductPriceRow[];
+      const nextRaw = data.rawRows as RawPriceRow[];
+      const nextManufactured = data.manufacturedRows as ManufacturedPriceRow[];
+      const nextProducts = data.productRows as ProductPriceRow[];
 
       setRawRows(nextRaw);
       setManufacturedRows(nextManufactured);
@@ -208,14 +184,15 @@ export function PricingPage() {
     setSavingId(row.id);
     const nextCost = safePrice(draft.cost_price);
     const nextSale = safePrice(draft.sale_price);
-    const { error } = await supabase
-      .from('inventory_units')
-      .update({ cost_price: nextCost, sale_price: nextSale })
-      .eq('id', row.id)
-      .eq('branch_id', branchId)
-      .eq('unit_type', 'manufactured');
-    if (error) {
-      show(error.message, 'error');
+    try {
+      await updateManufacturedPricing({
+        id: row.id,
+        branchId,
+        costPrice: nextCost,
+        salePrice: nextSale,
+      });
+    } catch (error) {
+      show(error instanceof Error ? error.message : (ar ? 'تعذر حفظ تسعير مجموعة المكونات' : 'Could not save component-group pricing'), 'error');
       setSavingId(null);
       return;
     }
@@ -238,13 +215,16 @@ export function PricingPage() {
     const nextCost = safePrice(draft.cost_price);
     const nextSale = safePrice(draft.sale_price);
     const nextWholesale = safePrice(draft.wholesale_price);
-    const { error } = await supabase
-      .from('products')
-      .update({ cost_price: nextCost, sale_price: nextSale, wholesale_price: nextWholesale })
-      .eq('id', row.id)
-      .eq('branch_id', branchId);
-    if (error) {
-      show(error.message, 'error');
+    try {
+      await updateProductPricing({
+        id: row.id,
+        branchId,
+        costPrice: nextCost,
+        salePrice: nextSale,
+        wholesalePrice: nextWholesale,
+      });
+    } catch (error) {
+      show(error instanceof Error ? error.message : (ar ? 'تعذر حفظ تسعير المنتج' : 'Could not save product pricing'), 'error');
       setSavingId(null);
       return;
     }
