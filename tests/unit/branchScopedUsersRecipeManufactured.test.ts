@@ -7,6 +7,7 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), 'utf8');
 
 const usersPage = read('src/features/admin/pages/UsersPage.tsx');
 const recipesPage = read('src/features/manufacturing/pages/RecipesPage.tsx');
+const recipeData = read('src/features/manufacturing/services/recipeData.ts');
 
 describe('branch-scoped admin visibility and reusable recipe component groups', () => {
   it('keeps user administration scoped to already-allowed branches without changing permission definitions', () => {
@@ -18,8 +19,8 @@ describe('branch-scoped admin visibility and reusable recipe component groups', 
   });
 
   it('supports legacy manufactured rows as reusable recipe component groups through the existing operational link contract', () => {
-    expect(recipesPage).toContain("eq('unit_type', 'manufactured')");
-    expect(recipesPage).toContain("from('product_unit_links')");
+    expect(recipeData).toContain("eq('unit_type', 'manufactured')");
+    expect(recipeData).toContain("from('product_unit_links')");
     expect(recipesPage).toContain('api.catalog.setProductUnitLinks(');
     expect(recipesPage).toContain("isAr ? 'مجموعات المكونات داخل الوصفة' : 'Component groups in recipe'");
     expect(recipesPage).toContain('validItems.length === 0 && validManufacturedItems.length === 0');
