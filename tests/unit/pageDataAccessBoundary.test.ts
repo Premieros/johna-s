@@ -6,7 +6,6 @@ const repoRoot = process.cwd();
 const pagesRoot = join(repoRoot, 'src', 'features');
 
 const legacyAllowlist = new Set([
-  "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
@@ -57,6 +56,17 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps ProductsPage behind its feature service and catalog APIs', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/catalog/pages/ProductsPage.tsx'), 'utf8');
+    expect(source).toContain('loadProductEditorData');
+    expect(source).toContain('loadProductStockComponents');
+    expect(source).toContain('updateProductRecord');
+    expect(source).toContain('replaceLegacyProductComponents');
+    expect(source).toContain('api.catalog.setProductUnitLinks');
+    expect(source).toContain('api.catalog.saveProductDirectRawComponents');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps RecipesPage behind its feature service', () => {
