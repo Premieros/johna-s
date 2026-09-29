@@ -36,7 +36,8 @@ describe('sales invoice refund / preview / reprint contract', () => {
     expect(salesPage).toContain('api.trade.processRefund({');
     expect(salesPage).toContain('p_sale_id: refundSale.id');
     expect(salesPage).toContain('p_items,');
-    expect(salesPage).toContain("p_action_type: 'refund'");
+    expect(salesPage).toContain("actionType: 'refund'");
+    expect(salesPageData).toContain('p_action_type: params.actionType');
     expect(salesPage).toContain("can('sales.refund.create')");
     expect(salesPage).toContain("can('refunds.approve')");
   });
