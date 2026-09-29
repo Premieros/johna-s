@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HandCoins, Phone, User, Building2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -18,6 +17,7 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment, TreasurySource } from '@/lib/types';
+import { fetchOpenCustomerInvoices, fetchOpenSupplierPurchases } from '../services/paymentOpenInvoices';
 
 type Tab = 'ar' | 'ap';
 
@@ -112,17 +112,14 @@ export function PaymentsPage() {
   async function openCollect(row: ArAgingRow) {
     setCollecting(row);
     setForm({ sale_id: '', amount: String(row.open_amount), payment_method: 'cash', notes: '' });
-    const { data } = await supabase
-      .from('sales')
-      .select('id, invoice_number, total, paid_amount, refunded_amount')
-      .eq('customer_id', row.customer_id)
-      .eq('branch_id', effectiveBranchFilter)
-      .neq('status', 'returned')
-      .order('created_at', { ascending: true });
-    const inv = ((data as { id: string; invoice_number: string; total: number; paid_amount: number; refunded_amount: number | null }[]) || [])
-      .map((s) => ({ id: s.id, invoice_number: s.invoice_number, open: Number(s.total) - Number(s.paid_amount) - Number(s.refunded_amount || 0) }))
-      .filter((s) => s.open > 0);
-    setOpenInvoices(inv);
+    if (!effectiveBranchFilter) {
+      setOpenInvoices([]);
+      return;
+    }
+    setOpenInvoices(await fetchOpenCustomerInvoices({
+      customerId: row.customer_id,
+      branchId: effectiveBranchFilter,
+    }));
   }
 
   async function openPay(row: ApAgingRow) {
@@ -137,17 +134,14 @@ export function PaymentsPage() {
       treasury_account_id: preferredSource?.id || '',
       notes: '',
     });
-    const { data } = await supabase
-      .from('purchases')
-      .select('id, invoice_number, total, paid_amount, returned_amount')
-      .eq('supplier_id', row.supplier_id)
-      .eq('branch_id', effectiveBranchFilter)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: true });
-    const inv = ((data as { id: string; invoice_number: string; total: number; paid_amount: number; returned_amount: number | null }[]) || [])
-      .map((s) => ({ id: s.id, invoice_number: s.invoice_number, open: Number(s.total) - Number(s.paid_amount) - Number(s.returned_amount || 0) }))
-      .filter((s) => s.open > 0);
-    setOpenApInvoices(inv);
+    if (!effectiveBranchFilter) {
+      setOpenApInvoices([]);
+      return;
+    }
+    setOpenApInvoices(await fetchOpenSupplierPurchases({
+      supplierId: row.supplier_id,
+      branchId: effectiveBranchFilter,
+    }));
   }
 
   const collect = async () => {
