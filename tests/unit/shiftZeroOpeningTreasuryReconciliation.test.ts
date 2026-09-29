@@ -13,7 +13,11 @@ const historicalSequenceMigration = fs.readFileSync(
   'supabase/migrations/20260927215500_treasury_historical_opening_sequence.sql',
   'utf8',
 );
-const handoverMigration = fs.readFileSync(\n  'supabase/migrations/20260929233500_cash_handover_single_source_reconciliation.sql',\n  'utf8',\n);\nconst migration = `${baseMigration}\\n${reconciliationMigration}\\n${historicalSequenceMigration}\\n${handoverMigration}`;
+const handoverMigration = fs.readFileSync(
+  'supabase/migrations/20260929233500_cash_handover_single_source_reconciliation.sql',
+  'utf8',
+);
+const migration = `${baseMigration}\n${reconciliationMigration}\n${historicalSequenceMigration}\n${handoverMigration}`;
 const shiftsPage = fs.readFileSync('src/features/trade/pages/ShiftsPage.tsx', 'utf8');
 const shiftModal = fs.readFileSync('src/features/pos/components/shift/ShiftModal.tsx', 'utf8');
 const treasuryPage = fs.readFileSync('src/features/accounting/pages/TreasuryPage.tsx', 'utf8');
@@ -81,7 +85,10 @@ describe('treasury daily single-row UI contract', () => {
       'مشتريات',
       'تحويل وارد',
       'تحويل صادر',
-      'صافي نقدي الشفتات',\n      'حركات نقدية خارج الشفتات',\n      'صافي نقدي اليوم',\n      'رصيد نقدي فعلي',
+      'صافي نقدي الشفتات',
+      'حركات نقدية خارج الشفتات',
+      'صافي نقدي اليوم',
+      'رصيد نقدي فعلي',
       'رصيد بنك فعلي',
       'إجمالي آخر اليوم',
       'تفاصيل',
@@ -189,7 +196,10 @@ describe('treasury daily journal configurable columns', () => {
     expect(treasuryPage).toContain("isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance'");
     expect(treasuryPage).toContain("isAr ? 'رصيد بنك فعلي' : 'Actual bank balance'");
     expect(treasuryPage).toContain("isAr ? 'تحديد الأعمدة' : 'Choose columns'");
-    expect(treasuryPage).toContain("treasury.dailyJournal.columns.v2");\n    expect(treasuryPage).toContain("isAr ? 'صافي نقدي الشفتات' : 'Shift cash net'");\n    expect(treasuryPage).toContain("isAr ? 'حركات نقدية خارج الشفتات' : 'Cash outside shifts'");\n    expect(treasuryPage).toContain("isAr ? 'صافي نقدي اليوم' : 'Daily cash net'");
+    expect(treasuryPage).toContain("treasury.dailyJournal.columns.v2");
+    expect(treasuryPage).toContain("isAr ? 'صافي نقدي الشفتات' : 'Shift cash net'");
+    expect(treasuryPage).toContain("isAr ? 'حركات نقدية خارج الشفتات' : 'Cash outside shifts'");
+    expect(treasuryPage).toContain("isAr ? 'صافي نقدي اليوم' : 'Daily cash net'");
   });
 });
 
