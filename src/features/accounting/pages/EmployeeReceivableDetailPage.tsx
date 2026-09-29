@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, HandCoins } from 'lucide-react';
-import { supabase } from '@/api';
 import { Button } from '@/components/Button';
 import { DataTable, type Column } from '@/components/DataTable';
 import { DesignPageHeader, DesignSurface } from '@/components/design/DesignSurface';
@@ -10,31 +9,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useSettings } from '@/context/SettingsContext';
 import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
-import type { ArAgingRow } from '@/lib/types';
-
-type EmployeeCustomer = {
-  id: string;
-  name: string;
-  name_en: string | null;
-  phone: string | null;
-  email: string | null;
-  branch_id: string;
-};
-
-type PartyStatementRow = {
-  line_id: string;
-  entry_date: string;
-  entry_number: string | null;
-  reference_type: string | null;
-  reference_number: string | null;
-  description: string | null;
-  debit: number | string;
-  credit: number | string;
-};
-
-type PartyStatement = {
-  rows?: PartyStatementRow[];
-};
+import { fetchEmployeeReceivableSnapshot, type EmployeeCustomerSnapshot } from '../services/employeeReceivableDetail';
 
 type StatementRow = {
   id: string;
@@ -63,7 +38,7 @@ export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
   const can = useCan();
   const { effectiveSettings } = useSettings();
   const { show } = useToast();
-  const [employee, setEmployee] = useState<EmployeeCustomer | null>(null);
+  const [employee, setEmployee] = useState<EmployeeCustomerSnapshot | null>(null);
   const [rows, setRows] = useState<StatementRow[]>([]);
   const [loading, setLoading] = useState(true);
   const currency = effectiveSettings(employee?.branch_id || null)?.currency || 'EGP';
@@ -72,93 +47,70 @@ export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
     if (!customerId || !can('accounts.view')) return;
     setLoading(true);
 
-    const customerRes = await supabase
-      .from('customers')
-      .select('id,name,name_en,phone,email,branch_id,customer_type')
-      .eq('id', customerId)
-      .eq('customer_type', 'employee')
-      .maybeSingle();
+    try {
+      const snapshot = await fetchEmployeeReceivableSnapshot({
+        customerId,
+        openingDate: OPENING_DATE,
+      });
+      const customer = snapshot.customer;
+      setEmployee(customer);
 
-    if (customerRes.error || !customerRes.data) {
-      show(customerRes.error?.message || (ar ? 'تعذر العثور على الموظف' : 'Employee not found'), 'error');
+      const currentBalance = Number(snapshot.agingRows.find((row) => row.customer_id === customer.id)?.open_amount || 0);
+      const journalRows = snapshot.journalRows;
+      const journalNet = journalRows.reduce((sum, row) => sum + Number(row.debit || 0) - Number(row.credit || 0), 0);
+      const openingBalance = Number((currentBalance - journalNet).toFixed(2));
+
+      const movements: StatementRow[] = [{
+        id: `opening-${customer.id}`,
+        occurred_at: OPENING_OCCURRED_AT,
+        kind: 'opening',
+        reference: null,
+        description: ar ? 'رصيد افتتاحي معتمد' : 'Approved opening balance',
+        source: ar ? 'رصيد افتتاحي' : 'Opening balance',
+        debit: openingBalance,
+        credit: 0,
+        balance: openingBalance,
+      }];
+
+      let running = openingBalance;
+      for (const row of journalRows) {
+        const debit = Number(row.debit || 0);
+        const credit = Number(row.credit || 0);
+        running = Number((running + debit - credit).toFixed(2));
+        const refType = row.reference_type || '';
+        const kind: StatementRow['kind'] = /payment/i.test(refType)
+          ? 'payment'
+          : /sale/i.test(refType)
+            ? 'sale'
+            : 'adjustment';
+        movements.push({
+          id: row.line_id,
+          occurred_at: `${row.entry_date}T12:00:00+03:00`,
+          kind,
+          reference: row.reference_number || row.entry_number || null,
+          description: row.description || (ar ? 'حركة ذمة' : 'Receivable movement'),
+          source: row.reference_type || row.entry_number || null,
+          debit,
+          credit,
+          balance: running,
+        });
+      }
+
+      setRows(movements);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      show(
+        message === 'EMPLOYEE_NOT_FOUND'
+          ? (ar ? 'تعذر العثور على الموظف' : 'Employee not found')
+          : message || (ar ? 'تعذر تحميل كشف الحساب' : 'Could not load statement'),
+        'error',
+      );
       setEmployee(null);
       setRows([]);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const customer = customerRes.data as EmployeeCustomer;
-    setEmployee(customer);
-
-    const today = new Date().toISOString().slice(0, 10);
-    const [balancesRes, statementRes] = await Promise.all([
-      supabase.rpc('get_employee_receivable_balances', {
-        p_branch_id: customer.branch_id,
-        p_as_of: today,
-      }),
-      supabase.rpc('get_party_statement', {
-        p_branch_id: customer.branch_id,
-        p_side: 'ar',
-        p_party_id: customer.id,
-        p_from_date: OPENING_DATE,
-        p_to_date: null,
-      }),
-    ]);
-
-    if (balancesRes.error || statementRes.error) {
-      show(balancesRes.error?.message || statementRes.error?.message || (ar ? 'تعذر تحميل كشف الحساب' : 'Could not load statement'), 'error');
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    const agingRows = (balancesRes.data || []) as ArAgingRow[];
-    const currentBalance = Number(agingRows.find((row) => row.customer_id === customer.id)?.open_amount || 0);
-    const statement = (statementRes.data || {}) as PartyStatement;
-    const journalRows = statement.rows || [];
-    const journalNet = journalRows.reduce((sum, row) => sum + Number(row.debit || 0) - Number(row.credit || 0), 0);
-    const openingBalance = Number((currentBalance - journalNet).toFixed(2));
-
-    const movements: StatementRow[] = [{
-      id: `opening-${customer.id}`,
-      occurred_at: OPENING_OCCURRED_AT,
-      kind: 'opening',
-      reference: null,
-      description: ar ? 'رصيد افتتاحي معتمد' : 'Approved opening balance',
-      source: ar ? 'رصيد افتتاحي' : 'Opening balance',
-      debit: openingBalance,
-      credit: 0,
-      balance: openingBalance,
-    }];
-
-    let running = openingBalance;
-    for (const row of journalRows) {
-      const debit = Number(row.debit || 0);
-      const credit = Number(row.credit || 0);
-      running = Number((running + debit - credit).toFixed(2));
-      const refType = row.reference_type || '';
-      const kind: StatementRow['kind'] = /payment/i.test(refType)
-        ? 'payment'
-        : /sale/i.test(refType)
-          ? 'sale'
-          : 'adjustment';
-      movements.push({
-        id: row.line_id,
-        occurred_at: `${row.entry_date}T12:00:00+03:00`,
-        kind,
-        reference: row.reference_number || row.entry_number || null,
-        description: row.description || (ar ? 'حركة ذمة' : 'Receivable movement'),
-        source: row.reference_type || row.entry_number || null,
-        debit,
-        credit,
-        balance: running,
-      });
-    }
-
-    setRows(movements);
-    setLoading(false);
   }, [customerId, can, show, ar]);
-
   useEffect(() => { void load(); }, [load]);
 
   const totals = useMemo(() => rows.reduce((acc, row) => ({
