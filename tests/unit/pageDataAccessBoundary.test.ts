@@ -7,7 +7,6 @@ const pagesRoot = join(repoRoot, 'src', 'features');
 
 const legacyAllowlist = new Set([
   "src/features/accounting/pages/AccountsPage.tsx",
-  "src/features/accounting/pages/EmployeeReceivableDetailPage.tsx",
   "src/features/accounting/pages/EmployeeReceivablesPage.tsx",
   "src/features/accounting/pages/FinancialReportsPage.tsx",
   "src/features/admin/pages/ApprovalCenterPage.tsx",
