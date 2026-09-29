@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/api';
 
 export function CashierDiscountApprovalCard({
@@ -20,12 +20,51 @@ export function CashierDiscountApprovalCard({
   const [requestId, setRequestId] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected'>('idle');
   const [busy, setBusy] = useState(false);
+  const appliedRequestRef = useRef<string | null>(null);
 
   useEffect(() => setType(currentType), [currentType]);
 
+  const applyDecision = useCallback((row: {
+    id?: string;
+    status?: string;
+    payload?: Record<string, unknown> | null;
+  } | null) => {
+    if (!row || !requestId) return;
+    if (row.status === 'approved') {
+      if (appliedRequestRef.current === requestId) return;
+      const approvedPayload = row.payload || {};
+      const approvedType = approvedPayload.discount_type === 'percent' ? 'percent' : 'amount';
+      const requestedValue = Number(
+        approvedPayload.requested_value ??
+        approvedPayload.discount_amount ??
+        0,
+      );
+      const approvedValue = approvedType === 'percent'
+        ? Math.min(Math.max(requestedValue, 0), 100)
+        : Math.min(Math.max(requestedValue, 0), Math.max(subtotal, 0));
+      if (approvedValue <= 0) return;
+      appliedRequestRef.current = requestId;
+      setStatus('approved');
+      onApproved(approvedType, approvedValue);
+    } else if (row.status === 'rejected' || row.status === 'expired') {
+      setStatus('rejected');
+    }
+  }, [onApproved, requestId, subtotal]);
+
+  const refreshDecision = useCallback(async () => {
+    if (!requestId) return;
+    const { data } = await supabase
+      .from('approval_requests')
+      .select('id,status,payload')
+      .eq('id', requestId)
+      .maybeSingle();
+    applyDecision(data as { id?: string; status?: string; payload?: Record<string, unknown> | null } | null);
+  }, [applyDecision, requestId]);
 
   useEffect(() => {
-    if (!requestId) return;
+    if (!requestId || status !== 'pending') return;
+
+    void refreshDecision();
 
     const channel = supabase
       .channel(`discount-approval-${requestId}`)
@@ -38,25 +77,28 @@ export function CashierDiscountApprovalCard({
           filter: `id=eq.${requestId}`,
         },
         (payload) => {
-          const next = payload.new as {
+          applyDecision(payload.new as {
+            id?: string;
             status?: string;
-            payload?: Record<string, unknown>;
-          };
-
-          if (next.status === 'approved') {
-            setStatus('approved');
-            onApproved(type, type === 'percent' ? Math.min(amount, 100) : Math.min(amount, Math.max(subtotal, 0)));
-          } else if (next.status === 'rejected' || next.status === 'expired') {
-            setStatus('rejected');
-          }
+            payload?: Record<string, unknown> | null;
+          });
         },
       )
       .subscribe();
 
+    const interval = window.setInterval(() => {
+      void refreshDecision();
+    }, 3000);
+
+    const onFocus = () => void refreshDecision();
+    window.addEventListener('focus', onFocus);
+
     return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
       void supabase.removeChannel(channel);
     };
-  }, [requestId, type, amount, subtotal, onApproved]);
+  }, [applyDecision, refreshDecision, requestId, status]);
 
   if (canDirectDiscount) return null;
 
@@ -93,6 +135,7 @@ export function CashierDiscountApprovalCard({
       } | null;
 
       if (res?.success && res.request_id) {
+        appliedRequestRef.current = null;
         setRequestId(res.request_id);
         setStatus('pending');
       }
