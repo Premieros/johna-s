@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Edit2, Plus, Shield, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -22,6 +21,7 @@ import { ROLE_META, useCan } from '@/lib/permissions';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { AppUser } from '@/lib/types';
+import { loadUserBranchAccess, saveUserBranchAccess, updateUserProfile } from '../services/userAccessData';
 
 export function UsersPage() {
   const { t, lang } = useLanguage();
@@ -73,11 +73,10 @@ export function UsersPage() {
     setForm({ full_name: u.full_name || '', username: u.username || '', role: u.role, branch_id: u.branch_id || '', is_active: u.is_active });
     setNewPassword('');
     if (canManageBranches) {
-      const { data, error } = await supabase.rpc('get_user_branch_access', { p_user_id: u.id });
-      if (error) {
+      try {
+        setBranchAccessIds(await loadUserBranchAccess(u.id));
+      } catch {
         setBranchAccessIds(u.branch_id ? [u.branch_id] : []);
-      } else {
-        setBranchAccessIds(((data as { branch_id: string }[]) ?? []).map((r) => r.branch_id));
       }
     } else {
       setBranchAccessIds(u.branch_id ? [u.branch_id] : []);
@@ -127,14 +126,19 @@ export function UsersPage() {
       : [addForm.branch_id];
 
     if (result.user_id && canManageBranches) {
-      const { data: accessData, error: accessError } = await supabase.rpc('set_user_branch_access', {
-        p_user_id: result.user_id,
-        p_branch_ids: auditedBranchIds,
-      });
-      const accessResult = accessData as { success?: boolean; error?: string; detail?: string } | null;
-      if (accessError || !accessResult?.success) {
+      try {
+        const accessResult = await saveUserBranchAccess(result.user_id, auditedBranchIds);
+        if (!accessResult?.success) {
+          show(
+            `${isAr ? 'تم إنشاء المستخدم لكن تعذر حفظ صلاحيات الفروع: ' : 'User created, but branch access could not be saved: '}${accessResult?.detail || accessResult?.error || 'unknown'}`,
+            'error',
+          );
+          await reloadUsers();
+          return;
+        }
+      } catch (error) {
         show(
-          `${isAr ? 'تم إنشاء المستخدم لكن تعذر حفظ صلاحيات الفروع: ' : 'User created, but branch access could not be saved: '}${accessError?.message || accessResult?.detail || accessResult?.error || 'unknown'}`,
+          `${isAr ? 'تم إنشاء المستخدم لكن تعذر حفظ صلاحيات الفروع: ' : 'User created, but branch access could not be saved: '}${error instanceof Error ? error.message : String(error)}`,
           'error',
         );
         await reloadUsers();
@@ -167,8 +171,12 @@ export function UsersPage() {
       if (!form.branch_id) { show(t('required'), 'error'); return; }
 
       const payload = { full_name: form.full_name, username, role: form.role, branch_id: form.branch_id, is_active: form.is_active };
-      const { error } = await supabase.from('users').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
+      try {
+        await updateUserProfile(editing.id, payload);
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
+      }
 
       if (newPassword) {
         if (newPassword.length < 4 || (newPassword.length === 4 && !/^\d{4}$/.test(newPassword))) { show(t('weakPassword'), 'error'); return; }
@@ -186,13 +194,14 @@ export function UsersPage() {
 
     const branchIds = ensurePrimaryBranch(branchAccessIds, form.branch_id);
     if (canManageBranches) {
-      const { data: accessData, error: accessError } = await supabase.rpc('set_user_branch_access', {
-        p_user_id: editing.id,
-        p_branch_ids: branchIds,
-      });
-      const accessResult = accessData as { success?: boolean; error?: string; detail?: string } | null;
-      if (accessError || !accessResult?.success) {
-        show(accessError?.message || accessResult?.detail || accessResult?.error || 'BRANCH_ACCESS_SAVE_FAILED', 'error');
+      try {
+        const accessResult = await saveUserBranchAccess(editing.id, branchIds);
+        if (!accessResult?.success) {
+          show(accessResult?.detail || accessResult?.error || 'BRANCH_ACCESS_SAVE_FAILED', 'error');
+          return;
+        }
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
         return;
       }
     }
