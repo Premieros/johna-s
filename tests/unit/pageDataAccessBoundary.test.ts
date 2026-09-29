@@ -11,17 +11,13 @@ const legacyAllowlist = new Set([
   "src/features/admin/pages/ApprovalCenterPage.tsx",
   "src/features/admin/pages/SuperAdminConsolePage.tsx",
   "src/features/admin/pages/UsersPage.tsx",
-  "src/features/catalog/pages/CategoriesPage.tsx",
   "src/features/catalog/pages/InventoryUnitsPage.tsx",
   "src/features/catalog/pages/ProductSetupWizardPage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
-  "src/features/inventory/pages/WarehousesPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
   "src/features/manufacturing/pages/RawMaterialsPage.tsx",
   "src/features/manufacturing/pages/RecipesPage.tsx",
-  "src/features/parties/pages/CustomersPage.tsx",
-  "src/features/parties/pages/SuppliersPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
   "src/features/trade/pages/SalesPage.tsx",
@@ -71,6 +67,20 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps simple master-data pages behind feature services', () => {
+    const checks = [
+      ['src/features/catalog/pages/CategoriesPage.tsx', 'saveCategory'],
+      ['src/features/inventory/pages/WarehousesPage.tsx', 'saveWarehouse'],
+      ['src/features/parties/pages/CustomersPage.tsx', 'saveCustomer'],
+      ['src/features/parties/pages/SuppliersPage.tsx', 'saveSupplier'],
+    ] as const;
+    for (const [relativePath, marker] of checks) {
+      const source = readFileSync(join(repoRoot, relativePath), 'utf8');
+      expect(source).toContain(marker);
+      expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
+    }
   });
 
   it('keeps VisualDashboardPage behind dashboard services', () => {
