@@ -34,7 +34,7 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 
 ### Phase 2 — Heavy-page / direct-data containment
 - ✅ Architecture guard prevents any new direct page-level Supabase access outside the legacy allowlist.
-- ✅ Legacy allowlist reduced from about 43 pages to **28 pages**.
+- ✅ Legacy allowlist reduced from about 43 pages to **25 pages**.
 - ✅ `ExpensesPage` removed from direct Supabase and from the allowlist.
 - ✅ `JournalPage` removed from direct Supabase and from the allowlist.
 - ✅ `BranchesPage` removed from direct Supabase and from the allowlist.
@@ -134,6 +134,9 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - 2026-09-29: `LowStockAlertsPage` direct reads moved behind `lowStockData`; reorder creation RPC unchanged; page direct Supabase reduced to 0; legacy allowlist reduced to 30.
 - 2026-09-29: `StockCountsPage` metadata reads moved behind `stockCountData`; page direct Supabase reduced to 0; legacy allowlist reduced to 29.
 - 2026-09-29: `DashboardExecutiveInsightsV2` sales, inventory and payment reads moved behind `executiveInsightsData`; page direct Supabase reduced to 0; legacy allowlist reduced to 28; existing branch/date limits and payment fallback semantics preserved.
+- 2026-09-29: `PurchaseRequestsPage` metadata/item-detail reads moved behind `purchaseRequestPageData`; page direct Supabase reduced to 0.
+- 2026-09-29: `RfqsPage` metadata reads moved behind `rfqPageData`; page direct Supabase reduced to 0.
+- 2026-09-29: `TransfersPage` metadata and average-cost reads moved behind `transferPageData`; page direct Supabase reduced to 0; transfer mutation/RPC behavior unchanged; legacy allowlist reduced to 25.
 - 2026-09-29: `PurchasesPage` direct Supabase data calls reduced to 0 through `purchasePageData` service; purchase payloads, branch filters, and inline raw-material creation semantics preserved; legacy allowlist reduced to 32.
 
 ## Verification ledger
