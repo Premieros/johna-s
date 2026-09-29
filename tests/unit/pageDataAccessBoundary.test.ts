@@ -22,7 +22,6 @@ const legacyAllowlist = new Set([
   "src/features/dashboard/pages/DashboardDataPage.tsx",
   "src/features/dashboard/pages/DashboardExecutiveInsightsV2.tsx",
   "src/features/dashboard/pages/VisualDashboardPage.tsx",
-  "src/features/import-export/pages/ImportExportCenterPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/inventory/pages/LowStockAlertsPage.tsx",
   "src/features/inventory/pages/StockCountsPage.tsx",
@@ -64,6 +63,12 @@ describe('page data-access architecture boundary', () => {
 
     expect(unexpected, 'Move new page data access behind src/api/domains or a feature service').toEqual([]);
     expect(directPages.length).toBeLessThanOrEqual(legacyAllowlist.size);
+  });
+
+  it('keeps ImportExportCenterPage behind its validation context service', () => {
+    const importExport = readFileSync(join(repoRoot, 'src/features/import-export/pages/ImportExportCenterPage.tsx'), 'utf8');
+    expect(importExport).toContain('loadImportExportValidationContext');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(importExport)).toBe(false);
   });
 
   it('keeps ReportsPage behind feature services/domain boundaries', () => {
