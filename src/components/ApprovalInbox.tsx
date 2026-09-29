@@ -147,8 +147,8 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
   const [readAlertKeys, setReadAlertKeys] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const allowed = can('approvals.review');
-  const alertStorageKey = user?.id && user?.branch_id
-    ? `${ALERT_STATE_PREFIX}:${user.id}:${user.branch_id}`
+  const alertStorageKey = user?.id
+    ? `${ALERT_STATE_PREFIX}:${user.id}:${user.branch_id || 'all'}`
     : null;
 
   useEffect(() => {
@@ -163,29 +163,50 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
   }, [alertStorageKey]);
 
   const load = useCallback(async () => {
-    if (!allowed || !user?.branch_id) return;
+    if (!allowed || !user?.id) return;
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const [approvalsResult, printResult] = await Promise.all([
-      supabase
-        .from('approval_requests')
-        .select('id,action_type,entity_type,entity_id,payload,reason,status,created_at,requester_id,expires_at')
-        .eq('branch_id', user.branch_id)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(30),
-      supabase
-        .from('cloud_print_jobs')
-        .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at')
-        .eq('branch_id', user.branch_id)
-        .in('status', ['failed', 'submitted'])
-        .gte('updated_at', since)
-        .order('updated_at', { ascending: false })
-        .limit(40),
-    ]);
+    const approvalsPromise = supabase.rpc('get_operational_approval_queue', { p_branch_id: null });
+    const printPromise = user.branch_id
+      ? supabase
+          .from('cloud_print_jobs')
+          .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at')
+          .eq('branch_id', user.branch_id)
+          .in('status', ['failed', 'submitted'])
+          .gte('updated_at', since)
+          .order('updated_at', { ascending: false })
+          .limit(40)
+      : Promise.resolve({ data: [], error: null });
 
-    const approvalRows = (approvalsResult.data ?? []) as ApprovalRequest[];
+    const [approvalsResult, printResult] = await Promise.all([approvalsPromise, printPromise]);
+
+    const approvalRows = ((approvalsResult.data ?? []) as Array<{
+      source_type: string;
+      source_id: string;
+      title: string;
+      status: string;
+      requested_by: string | null;
+      requested_at: string;
+      payload: {
+        entity_type?: string;
+        entity_id?: string | null;
+        reason?: string;
+        payload?: Record<string, unknown>;
+      };
+    }>)
+      .filter((item) => item.source_type === 'manager_approval')
+      .map((item) => ({
+        id: item.source_id,
+        action_type: item.title,
+        entity_type: item.payload?.entity_type || '',
+        entity_id: item.payload?.entity_id || null,
+        payload: item.payload?.payload || {},
+        reason: item.payload?.reason || '',
+        status: item.status,
+        created_at: item.requested_at,
+        requester_id: item.requested_by || '',
+      })) as ApprovalRequest[];
+
     const requesterIds = Array.from(new Set(approvalRows.map((item) => item.requester_id).filter(Boolean)));
     let requesterNames: Record<string, string> = {};
     if (requesterIds.length > 0) {
@@ -208,26 +229,31 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
       .filter((item) => item.status === 'failed' || (item.status === 'submitted' && item.attempts > 1))
       .slice(0, 20);
     setPrintAlerts(recent);
-  }, [allowed, user?.branch_id]);
+  }, [allowed, user?.branch_id, user?.id]);
 
   useEffect(() => {
     void load();
-    if (!allowed || !user?.branch_id) return;
-    const channel = supabase
-      .channel(`approval-inbox-${user.branch_id}`)
+    if (!allowed || !user?.id) return;
+
+    let channel = supabase
+      .channel(`approval-inbox-${user.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'approval_requests', filter: `branch_id=eq.${user.branch_id}` },
+        { event: '*', schema: 'public', table: 'approval_requests' },
         () => void load(),
-      )
-      .on(
+      );
+
+    if (user.branch_id) {
+      channel = channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'cloud_print_jobs', filter: `branch_id=eq.${user.branch_id}` },
         () => void load(),
-      )
-      .subscribe();
+      );
+    }
+
+    channel.subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [allowed, user?.branch_id, load]);
+  }, [allowed, user?.branch_id, user?.id, load]);
 
   const decide = async (id: string, approve: boolean) => {
     setBusy(id);
