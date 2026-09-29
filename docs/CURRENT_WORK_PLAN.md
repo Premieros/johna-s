@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Shift refund single deduction final**
+- Track: **Supplier balance single source**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `af667984d5b6141232f26e4cf6422abff495a4b8`
-- Active development branch: `development/shift-refund-single-deduction-final-20260930`
-- Mandatory active work log: `docs/SHIFT_REFUND_SINGLE_DEDUCTION_FINAL_2026-09-30.md`
+- Latest main baseline reconciled: `d995b7417432a41b5e0c6e256e02bd463f540447`
+- Active development branch: `development/supplier-balance-single-source-20260930`
+- Mandatory active work log: `docs/SUPPLIER_BALANCE_SINGLE_SOURCE_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/shift-refund-single-deduction-final-20260930`
+4. `development/supplier-balance-single-source-20260930`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -76,7 +76,7 @@ Resolve the urgent cash-handover ambiguity without changing printing/KDS:
 6. expose discrepancies instead of attributing them to employees.
 
 Detailed execution and verification are maintained only in:
-`docs/SHIFT_REFUND_SINGLE_DEDUCTION_FINAL_2026-09-30.md`
+`docs/SUPPLIER_BALANCE_SINGLE_SOURCE_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:

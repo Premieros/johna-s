@@ -18,6 +18,8 @@ type SupplierStatementSummary = {
   recorded_other_payments: number;
   recorded_payments_total: number;
   invoice_time_paid: number;
+  opening_remaining?: number;
+  payment_log_variance?: number;
 };
 
 type SupplierStatementEntry = {
@@ -64,6 +66,7 @@ const entryLabel = (entryType: string, ar: boolean) => {
   if (entryType === 'opening_balance') return ar ? 'رصيد افتتاحي' : 'Opening balance';
   if (entryType === 'purchase') return ar ? 'فاتورة شراء' : 'Purchase';
   if (entryType === 'invoice_time_payment') return ar ? 'مدفوع عند إنشاء الفاتورة (تجميعي)' : 'Invoice-time payment (aggregate)';
+  if (entryType === 'balance_reconciliation') return ar ? 'تسوية رصيد العرض' : 'Balance reconciliation';
   return ar ? 'دفعة' : 'Payment';
 };
 
@@ -127,6 +130,13 @@ export function SupplierStatementModal({ open, supplierId, branchId, currency, o
               </div>
             ))}
           </div>
+          {Math.abs(Number(s.payment_log_variance || 0)) > 0.009 && (
+            <div className="rounded-xl bg-ui-warning-soft p-3 text-xs text-ui-warning">
+              {ar
+                ? 'الرصيد المستحق يعتمد على المبالغ المطبقة فعليًا على الفواتير والرصيد الافتتاحي. سجل الدفعات التاريخي معروض للتدقيق فقط وقد يحتوي فروقًا قديمة لا تغيّر الرصيد الحالي.'
+                : 'Current payable uses amounts actually applied to invoices and opening balance. Historical payment logs are audit-only and may contain legacy differences that do not change the current payable.'}
+            </div>
+          )}
           <div className="rounded-2xl border border-ui-border p-4">
             <p className="mb-3 text-sm font-black text-ui-text">{ar ? 'تفصيل الدفعات المسجلة' : 'Recorded payment breakdown'}</p>
             <div className="grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
