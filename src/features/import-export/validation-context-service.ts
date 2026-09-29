@@ -67,7 +67,7 @@ export async function loadImportExportValidationContext(
       id: String(category.id || ''),
       code: String(category.code || category.name || ''),
       name: String(category.name || ''),
-      name_ar: category.name_ar ? String(category.name_ar) : undefined,
+      name_en: category.name_en ? String(category.name_en) : undefined,
     })),
     existingComponents: components.map((component) => ({
       id: String(component.id || ''),
