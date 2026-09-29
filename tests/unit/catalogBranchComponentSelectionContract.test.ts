@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 const root = resolve(process.cwd());
 const modifiersPage = readFileSync(resolve(root, 'src/features/catalog/pages/ProductModifiersPage.tsx'), 'utf8');
+const modifierSelectors = readFileSync(resolve(root, 'src/features/catalog/services/productModifierSelectors.ts'), 'utf8');
 const setupWizard = readFileSync(resolve(root, 'src/features/catalog/pages/ProductSetupWizardPage.tsx'), 'utf8');
 const inventoryUnitsPage = readFileSync(resolve(root, 'src/features/catalog/pages/InventoryUnitsPage.tsx'), 'utf8');
 const pricingPage = readFileSync(resolve(root, 'src/features/catalog/pages/PricingPage.tsx'), 'utf8');
@@ -12,7 +13,7 @@ describe('catalog branch/component selection contracts', () => {
   it('keeps reusable modifier administration scoped to one active branch', () => {
     expect(modifiersPage).toContain('const branchFilter = useBranchFilter()');
     expect(modifiersPage).toContain('if (!branchFilter)');
-    expect(modifiersPage).toContain("supabase.from('products').select('*').eq('branch_id', branchFilter)");
+    expect(modifierSelectors).toContain("supabase.from('products').select('*').eq('branch_id', branchId)");
     expect(modifiersPage).toContain('api.catalog.listModifierGroupsAdmin(branchFilter)');
     expect(modifiersPage).toContain('p_branch_id: branchFilter');
     expect(modifiersPage).toContain('product_ids: string[]');
