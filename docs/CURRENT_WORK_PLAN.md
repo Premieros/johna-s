@@ -5,9 +5,16 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline to reconcile: `62daffd608b7e0dba4052157a8b3bd6b4e9022bc`
+- Latest main baseline reconciled: `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`
 - Active development branch: `development/stability-closure-architecture-containment-20260928`
 - Mandatory active work log: `docs/STABILITY_CLOSURE_ARCHITECTURE_CONTAINMENT_2026-09-28.md`
+
+## Emergency hotfix now reconciled from main
+- PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
+- The hotfix preserves exact persisted `order_items.id` identity across resume/transfer/split/Void flows.
+- It introduced no Production migration, inventory deduction change, printing/KDS routing change, payment change, or shift change.
+- PR #402 reconciled this hotfix via merge commit `bfecf962efb8f824a30dcd245193b68cec5c75d7` without force push.
+- Final verification for PR #402 must run on the post-reconciliation head before merge.
 
 ## Completed parallel work now present on main
 The parallel product/costing repair is complete and is no longer an active execution track:
