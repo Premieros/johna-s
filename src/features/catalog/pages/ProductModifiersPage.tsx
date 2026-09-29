@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import type { Category, InventoryUnit, Product } from '@/lib/types';
+import { loadProductModifierSelectors } from '../services/productModifierSelectors';
 
 type InventoryEffect = {
   target_type: 'raw_material' | 'inventory_unit';
