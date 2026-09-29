@@ -15,7 +15,6 @@ const legacyAllowlist = new Set([
   "src/features/catalog/pages/InventoryUnitsPage.tsx",
   "src/features/catalog/pages/ProductSetupWizardPage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
-  "src/features/dashboard/pages/VisualDashboardPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/inventory/pages/WarehousesPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
@@ -72,6 +71,14 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps VisualDashboardPage behind dashboard services', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/dashboard/pages/VisualDashboardPage.tsx'), 'utf8');
+    expect(source).toContain('loadVisualDashboardCore');
+    expect(source).toContain('loadVisualDashboardMonthlyRows');
+    expect(source).toContain('loadDashboardPaymentAggregates');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps DashboardDataPage behind dashboard services', () => {
