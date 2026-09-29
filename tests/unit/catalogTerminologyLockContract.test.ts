@@ -37,8 +37,9 @@ describe('catalog terminology and measurement-unit lock contract', () => {
 
   it('keeps product creation free of product measurement units and links only reusable component groups', () => {
     const source = read('src/features/catalog/pages/ProductSetupWizardPage.tsx');
+    const dataService = read('src/features/catalog/services/productSetupData.ts');
 
-    expect(source).toContain(".eq('unit_type', 'manufactured')");
+    expect(dataService).toContain(".eq('unit_type', 'manufactured')");
     expect(source).toContain("['2', isAr ? 'مجموعات المكونات' : 'Component groups']");
     expect(source).toContain('Measurement units come from the raw material and remain fixed.');
     expect(source).not.toContain("'وحدات المنتج'");
@@ -47,8 +48,9 @@ describe('catalog terminology and measurement-unit lock contract', () => {
 
   it('shows each raw-material unit in product selection, quantity entry, and review', () => {
     const source = read('src/features/catalog/pages/ProductSetupWizardPage.tsx');
+    const dataService = read('src/features/catalog/services/productSetupData.ts');
 
-    expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
+    expect(dataService).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
     expect(source).toContain('rawMaterialLabel(material)');
     expect(source).toContain('rawUnitLabel(material)');
     expect(source).toContain("'لا يمكن استخدام خامة بدون وحدة قياس. افتح الخامة وحدد وحدتها أولًا.'");
