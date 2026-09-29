@@ -138,7 +138,8 @@ describe.skipIf(!dbUrl)('supplier statements and employee receivables', () => {
     });
 
     const entries = payload.entries || [];
-    expect(entries.some((entry) => entry.entry_type === 'invoice_time_payment' && Number(entry.credit) === 30)).toBe(true);
+    expect(entries.some((entry) => entry.entry_type === 'balance_reconciliation' && Number(entry.credit) === 30)).toBe(true);
+    expect(entries.some((entry) => entry.entry_type === 'invoice_time_payment')).toBe(false);
     expect(entries.some((entry) => entry.entry_type === 'payment' && Number(entry.credit) === 20)).toBe(true);
     expect(Number(entries[0]?.running_balance)).toBe(50);
 
