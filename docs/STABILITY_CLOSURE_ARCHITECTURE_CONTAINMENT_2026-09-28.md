@@ -439,3 +439,5 @@ This track is complete only when:
 - 2026-09-29: `RecipesPage` direct access moved behind `recipeData`; metadata/component/item reads and create/update/delete flows preserve existing RPC/table semantics; page direct Supabase reduced to 0; legacy allowlist reduced to 6.
 
 - 2026-09-29: `ProductsPage` direct access moved behind `productPageData`; product metadata/composition reads and legacy component/product CRUD preserve existing `api.catalog` operational contracts; page direct Supabase reduced to 0; legacy allowlist reduced to 5.
+
+- 2026-09-29: `ActiveOrdersPage` direct dining-area/product/table access moved behind `activeOrdersPageData`; protected floor-plan/order RPCs remain on existing APIs; page direct Supabase reduced to 0; legacy allowlist reduced to 4.
