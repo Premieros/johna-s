@@ -1,5 +1,4 @@
 ﻿import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -11,6 +10,7 @@ import { Select } from '@/components/Input';
 import { formatNumber } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
 import type { StockValuationRow, StockValuationSummaryRow, Warehouse } from '@/lib/types';
+import { fetchStockValuationOptions } from '../services/stockValuationOptions';
 
 export function StockValuationPage() {
   const { t, lang } = useLanguage();
@@ -31,14 +31,19 @@ export function StockValuationPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [br, wh] = await Promise.all([
-      supabase.from('branches').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-    ]);
-    if (br.error) { setError(br.error.message); setLoading(false); show(br.error.message, 'error'); return; }
-    const b = (br.data as { id: string; name: string }[] | null) || [];
+    let options;
+    try {
+      options = await fetchStockValuationOptions();
+    } catch (optionError) {
+      const message = optionError instanceof Error ? optionError.message : t('error');
+      setError(message);
+      setLoading(false);
+      show(message, 'error');
+      return;
+    }
+    const b = options.branches;
     setBranches(b);
-    setWarehouses((wh.data as Warehouse[]) || []);
+    setWarehouses(options.warehouses);
     let effBranch = branchId;
     if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }
 
