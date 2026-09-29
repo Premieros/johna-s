@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { Input, Select, Textarea } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { formatCurrency, formatDateTime } from '@/lib/format';
+import { businessDateISO } from '@/lib/businessTime';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
@@ -69,7 +70,7 @@ export function PaymentsPage() {
     setLoading(true);
     try {
       if (effectiveBranchFilter) {
-        const asOf = new Date().toISOString().slice(0, 10);
+        const asOf = businessDateISO();
         if (tab === 'ar') {
           const { data: aging } = await api.accounting.getArAging({
             p_branch_id: effectiveBranchFilter,
