@@ -16,7 +16,7 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { InventoryUnit } from '@/lib/types';
-import { deleteInventoryUnit, loadInventoryUnitComponents, saveInventoryUnit, saveInventoryUnitComponents } from '../services/inventoryUnitData';
+import { deleteComponentGroup, loadInventoryUnitComponents, saveInventoryUnit, saveInventoryUnitComponents } from '../services/inventoryUnitData';
 
 interface UnitForm {
   code: string;
@@ -159,7 +159,7 @@ export function InventoryUnitsPage() {
   const remove = async () => {
     if (!deleteId) return;
     try {
-      await deleteInventoryUnit(deleteId);
+      await deleteComponentGroup(deleteId);
       show(t('deleteSuccess'), 'success');
       await logAudit('delete', 'inventory_units', deleteId);
     } catch (error) {
