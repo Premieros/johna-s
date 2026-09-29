@@ -20,7 +20,7 @@ import {
   Sliders,
   History,
 } from 'lucide-react';
-import { supabase, admin } from '@/api';
+import { admin } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useSettings } from '@/context/SettingsContext';
@@ -37,6 +37,9 @@ import {
   fetchTenantStats,
   fetchUserCreationControl,
   fetchUsersAndAudit,
+  fetchSuperAdminHealthSnapshot,
+  setOrganizationActive,
+  updateSuperAdminUser,
   type SuperAdminAuditLogRow as AuditLogRow,
   type SuperAdminTenantStats as TenantStats,
   type SuperAdminTenantUser as TenantUser,
@@ -221,8 +224,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   // ─────────────────────────────────────────────────────────────
   const toggleOrgStatus = async (orgId: string, currentActive: boolean) => {
     try {
-      const { error } = await supabase.from('organizations').update({ is_active: !currentActive }).eq('id', orgId);
-      if (error) throw error;
+      await setOrganizationActive(orgId, !currentActive);
       show(ar ? 'تم تحديث حالة المنظمة بنجاح' : 'Organization status updated', 'success');
       void loadTenants();
     } catch {
@@ -293,17 +295,13 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     if (!editingUser) return;
     setSavingUser(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: editingUser.full_name,
-          role: editingUser.role,
-          is_active: editingUser.is_active,
-          branch_id: editingUser.branch_id,
-        })
-        .eq('id', editingUser.user_id);
-
-      if (error) throw error;
+      await updateSuperAdminUser({
+        userId: editingUser.user_id,
+        fullName: editingUser.full_name,
+        role: editingUser.role,
+        isActive: editingUser.is_active,
+        branchId: editingUser.branch_id,
+      });
 
       if (newPassword.trim()) {
         await admin.updateUserPassword({
@@ -324,38 +322,18 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
 
   const runHealthChecks = async () => {
     setHealthRunning(true);
-    const checks: Record<string, { ok: boolean; message: string }> = {};
-
-    try {
-      const dbCheck = await supabase.from('users').select('id', { count: 'exact', head: true });
-      checks['database'] = {
-        ok: !dbCheck.error,
-        message: dbCheck.error ? dbCheck.error.message : ar ? 'اتصال قاعدة البيانات نشط وسليم' : 'Database connection healthy',
-      };
-    } catch (e) {
-      checks['database'] = { ok: false, message: String(e) };
+    const checks = await fetchSuperAdminHealthSnapshot();
+    if (checks.database?.ok) {
+      checks.database.message = ar ? 'اتصال قاعدة البيانات نشط وسليم' : 'Database connection healthy';
     }
-
-    try {
-      const authUser = (await supabase.auth.getUser()).data.user;
-      checks['auth'] = {
-        ok: !!authUser,
-        message: authUser ? `${ar ? 'المستخدم المصادق:' : 'Authenticated as:'} ${authUser.email}` : ar ? 'لا توجد جلسة نشطة' : 'No active session',
-      };
-    } catch (e) {
-      checks['auth'] = { ok: false, message: String(e) };
+    if (checks.auth?.ok && checks.auth.message.startsWith('Authenticated as:')) {
+      checks.auth.message = `${ar ? 'المستخدم المصادق:' : 'Authenticated as:'}${checks.auth.message.slice('Authenticated as:'.length)}`;
+    } else if (checks.auth && !checks.auth.ok && checks.auth.message === 'No active session') {
+      checks.auth.message = ar ? 'لا توجد جلسة نشطة' : 'No active session';
     }
-
-    try {
-      const sysRes = await supabase.from('system_settings').select('id').limit(1);
-      checks['system_settings'] = {
-        ok: !sysRes.error,
-        message: sysRes.error ? sysRes.error.message : ar ? 'جدول الإعدادات العامة متاح' : 'System settings accessible',
-      };
-    } catch (e) {
-      checks['system_settings'] = { ok: false, message: String(e) };
+    if (checks.system_settings?.ok) {
+      checks.system_settings.message = ar ? 'جدول الإعدادات العامة متاح' : 'System settings accessible';
     }
-
     setHealthStatus(checks);
     setHealthRunning(false);
   };
