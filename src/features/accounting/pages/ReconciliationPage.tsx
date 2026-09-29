@@ -22,6 +22,7 @@ import type {
   BankReconciliation, ReconciliationDetail,
   TreasuryAccount,
 } from '@/lib/types';
+import { fetchActiveTreasuryAccounts } from '../services/reconciliationAccounts';
 
 export function ReconciliationPage() {
   const { t, lang } = useLanguage();
