@@ -22,7 +22,7 @@ import { usePosOrder } from '../hooks/usePosOrder';
 import { useActiveOrders } from '../hooks/useActiveOrders';
 import { usePosPermissions } from '../hooks/usePosPermissions';
 import { usePosKeyboard } from '../hooks/usePosKeyboard';
-import { cartLineKey, orderItemLineKey } from '../utils/cart';
+import { cartConfigurationKey, cartLineKey, orderItemLineKey } from '../utils/cart';
 import { OrderStartWizard, type StartStep, type StartOrderOptions } from '../components/start/OrderStartWizard';
 import { ProductBrowser } from '../components/catalog/ProductBrowser';
 import { ProductConfigModal } from '../components/catalog/ProductConfigModal';
@@ -196,7 +196,9 @@ export function PosWorkspacePage() {
     if (pos.cart.length === 0) return false;
     return pos.cart.some((cItem) => {
       const lineKey = cartLineKey(cItem);
-      const orderItem = orderItemsForActive.find((oi) => orderItemLineKey(oi) === lineKey);
+      const orderItem = cItem.order_item_id
+        ? orderItemsForActive.find((oi) => oi.id === cItem.order_item_id)
+        : orderItemsForActive.find((oi) => orderItemLineKey(oi) === lineKey);
       if (!orderItem) return true;
       const send = kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id);
       return Number(send?.sent_quantity || 0) < cItem.quantity;
@@ -1079,12 +1081,14 @@ export function PosWorkspacePage() {
           onConfirm={(item) => {
             if (configItem) {
               const originalLineKey = cartLineKey(configItem);
-              const matchingOrderItem = orderItemsForActive.find((row) => orderItemLineKey(row) === originalLineKey);
+              const matchingOrderItem = configItem.order_item_id
+                ? orderItemsForActive.find((row) => row.id === configItem.order_item_id)
+                : orderItemsForActive.find((row) => orderItemLineKey(row) === originalLineKey);
               const matchingSend = matchingOrderItem
                 ? kitchenSendsForActive.find((row) => row.order_item_id === matchingOrderItem.id)
                 : null;
               const sentQty = Number(matchingSend?.sent_quantity || 0);
-              const identityChanged = cartLineKey(item) !== originalLineKey;
+              const identityChanged = cartConfigurationKey(item) !== cartConfigurationKey(configItem);
 
               if (sentQty > 0 && (identityChanged || item.quantity < sentQty)) {
                 show(
@@ -1096,7 +1100,7 @@ export function PosWorkspacePage() {
                 return;
               }
 
-              pos.replaceCartLine(originalLineKey, item);
+              pos.replaceCartLine(originalLineKey, { ...item, order_item_id: configItem.order_item_id });
             } else {
               pos.addToCart(
                 item.product,
