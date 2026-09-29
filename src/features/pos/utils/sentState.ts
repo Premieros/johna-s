@@ -27,7 +27,8 @@ export function computeSentState(
 
   const orderItemKeyById = new Map<string, string>();
   for (const oi of orderItems) {
-    const lineKey = orderItemLineKey(oi);
+    const persistedLineKey = `order-item:${oi.id}`;
+    const lineKey = map[persistedLineKey] ? persistedLineKey : orderItemLineKey(oi);
     orderItemKeyById.set(oi.id, lineKey);
     if (!map[lineKey] || !sentOrderItemIds.has(oi.id)) continue;
     map[lineKey].sentQty += Math.max(0, Number(oi.quantity) || 0);
