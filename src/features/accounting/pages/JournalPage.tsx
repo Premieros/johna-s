@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Eye, Scale, Plus, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +18,7 @@ import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import type { JournalDto, ChartOfAccount } from '@/lib/types';
+import { fetchActiveJournalAccounts } from '../services/journalAccounts';
 
 interface ManualLine {
   account_id: string;
@@ -105,13 +105,18 @@ export function JournalPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (effectiveBranchFilter) {
-      supabase.from('chart_of_accounts').select('id, code, name, name_en').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('code').then(({ data }) => {
-        setAccounts((data as ChartOfAccount[]) || []);
-      });
-    } else {
+    let cancelled = false;
+
+    if (!effectiveBranchFilter) {
       setAccounts([]);
+      return () => { cancelled = true; };
     }
+
+    void fetchActiveJournalAccounts(effectiveBranchFilter).then((rows) => {
+      if (!cancelled) setAccounts(rows);
+    });
+
+    return () => { cancelled = true; };
   }, [effectiveBranchFilter]);
 
   useEffect(() => {

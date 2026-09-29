@@ -30,7 +30,6 @@ import {
   Sparkles,
   AlertTriangle,
 } from 'lucide-react';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
@@ -51,6 +50,7 @@ import {
 } from '../types';
 import { ExcelService, ParsedSpreadsheet } from '../excel-service';
 import { ValidationEngine, ValidationContext } from '../validation-engine';
+import { loadImportExportValidationContext } from '../validation-context-service';
 import { ImportExecutor } from '../import-executor';
 import { ExportService } from '../export-service';
 
@@ -86,93 +86,11 @@ export function ImportExportCenterPage() {
   const loadContextData = useCallback(async () => {
     setLoadingContext(true);
     try {
-      const [
-        prodsRes,
-        catsRes,
-        compsRes,
-        suppsRes,
-        custsRes,
-        whsRes,
-        brsRes,
-        usersRes,
-      ] = await Promise.all([
-        Promise.resolve(supabase.from('products').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('categories').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('raw_materials').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('suppliers').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('customers').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('warehouses').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('branches').select('*')).catch(() => ({ data: [], error: null })),
-        Promise.resolve(supabase.from('users').select('*')).catch(() => ({ data: [], error: null })),
-      ]);
-
-      const isSuper = user?.role === 'super_admin';
-      const userBranch = user?.branch_id || null;
-      const branches = ((brsRes as { data: Array<{ id: string; code?: string; name: string }> })?.data || []) as Array<{ id: string; code?: string; name: string }>;
-      const warehouses = ((whsRes as { data: Array<{ id: string; code?: string; name: string; branch_id?: string }> })?.data || []) as Array<{ id: string; code?: string; name: string; branch_id?: string }>;
-
-      const allowedBranches = isSuper
-        ? branches.map((b) => b.id)
-        : userBranch
-        ? [userBranch]
-        : [];
-
-      const allowedWarehouses = isSuper
-        ? warehouses.map((w) => w.id)
-        : warehouses.filter((w) => !w.branch_id || allowedBranches.includes(w.branch_id)).map((w) => w.id);
-
-      const prodsList = ((prodsRes as { data: Record<string, unknown>[] })?.data || []);
-      const catsList = ((catsRes as { data: Record<string, unknown>[] })?.data || []);
-      const compsList = ((compsRes as { data: Record<string, unknown>[] })?.data || []);
-      const suppsList = ((suppsRes as { data: Record<string, unknown>[] })?.data || []);
-      const custsList = ((custsRes as { data: Record<string, unknown>[] })?.data || []);
-      const usersList = ((usersRes as { data: Record<string, unknown>[] })?.data || []);
-
-      setValidationContext({
-        existingProducts: prodsList.map((p) => ({
-          id: String(p.id || ''),
-          sku: String(p.sku || p.name || ''),
-          name: String(p.name || ''),
-          barcode: p.barcode ? String(p.barcode) : undefined,
-          category_id: p.category_id ? String(p.category_id) : undefined,
-        })),
-        existingCategories: catsList.map((c) => ({
-          id: String(c.id || ''),
-          code: String(c.code || c.name || ''),
-          name: String(c.name || ''),
-          name_en: c.name_en ? String(c.name_en) : undefined,
-        })),
-        existingComponents: compsList.map((c) => ({
-          id: String(c.id || ''),
-          sku: String(c.code || c.sku || c.name || ''),
-          name: String(c.name || ''),
-          unit: String(c.unit || c.description || 'قطعة'),
-          cost: Number(c.default_cost ?? c.cost_price ?? 0),
-        })),
-        existingSuppliers: suppsList.map((s) => ({
-          id: String(s.id || ''),
-          code: s.code ? String(s.code) : undefined,
-          name: String(s.name || ''),
-          phone: s.phone ? String(s.phone) : undefined,
-        })),
-        existingCustomers: custsList.map((c) => ({
-          id: String(c.id || ''),
-          code: c.code ? String(c.code) : undefined,
-          name: String(c.name || ''),
-          phone: c.phone ? String(c.phone) : undefined,
-        })),
-        existingWarehouses: warehouses,
-        existingBranches: branches,
-        existingUsers: usersList.map((u) => ({
-          id: String(u.id || ''),
-          username: String(u.username || u.email || 'user'),
-          email: u.email ? String(u.email) : undefined,
-        })),
-        userBranchId: userBranch,
-        isSuperAdmin: isSuper,
-        allowedBranchIds: allowedBranches,
-        allowedWarehouseIds: allowedWarehouses,
+      const context = await loadImportExportValidationContext({
+        branchId: user?.branch_id || null,
+        role: user?.role || null,
       });
+      setValidationContext(context);
     } catch (err) {
       console.error('Failed loading import/export metadata:', err);
     } finally {

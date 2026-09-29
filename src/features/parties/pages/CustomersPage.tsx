@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -23,6 +22,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ArAgingRow, Customer } from '@/lib/types';
+import { deleteCustomer, saveCustomer } from '../services/customerCrud';
 
 export function CustomersPage() {
   const { t, lang } = useLanguage();
@@ -75,15 +75,14 @@ export function CustomersPage() {
   const save = async () => {
     if (!form.name) { show(t('required'), 'error'); return; }
     const payload = { ...form, branch_id: branchFilter || form.branch_id || null };
-    if (editing) {
-      const { error } = await supabase.from('customers').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'customers', editing.id);
-    } else {
-      const { error } = await supabase.from('customers').insert(payload);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'customers');
+    try {
+      await saveCustomer({ id: editing?.id, payload });
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
     }
+    if (editing) await logAudit('update', 'customers', editing.id);
+    else await logAudit('create', 'customers');
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadCustomers();
@@ -91,9 +90,13 @@ export function CustomersPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('customers').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'customers', deleteId); }
+    try {
+      await deleteCustomer(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'customers', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadCustomers();
   };
@@ -102,9 +105,13 @@ export function CustomersPage() {
     try {
       const rows = await importFromExcel(file);
       const payload = rows.map((r) => ({ name: String(r.Name || r.name || ''), phone: String(r.Phone || r.phone || ''), email: String(r.Email || r.email || ''), address: String(r.Address || r.address || ''), tax_number: String(r.TaxNumber || ''), balance: 0, branch_id: branchFilter || branches[0]?.id || null })).filter((r) => r.name);
-      const { error } = await supabase.from('customers').insert(payload);
-      if (error) show(error.message, 'error');
-      else { show(`${payload.length} ${t('import')} OK`, 'success'); reloadCustomers(); }
+      try {
+        await saveCustomer({ payload });
+        show(`${payload.length} ${t('import')} OK`, 'success');
+        reloadCustomers();
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+      }
     } catch (err) { show(String(err), 'error'); }
   };
 

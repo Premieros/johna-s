@@ -78,7 +78,7 @@ describe('POS realtime branch-local wake filtering', () => {
 describe('POS realtime traffic contracts', () => {
   it('retains empty open order ids before operational filtering', () => {
     const source = readFileSync('src/features/pos/services/posOrders.ts', 'utf8');
-    expect(source).toContain('const watchedOrderIds = orders.map((o) => o.id);');
+    expect(source).toContain('const watchedOrderIds = snapshotRows.map((order) => order.id);');
     expect(source).toContain('return { orders, tables, orderItems, kitchenSends, watchedOrderIds };');
   });
 

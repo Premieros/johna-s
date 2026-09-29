@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -16,9 +15,10 @@ import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { mergeEffectiveSettings, useSettings } from '@/context/SettingsContext';
+import { changeSalePaymentMethod, loadReceiptSettingsRows, loadSalePaymentRows, loadSalesCustomers, requestSaleManagerApproval, updateSaleMetadata } from '../services/salesPageData';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
-import type { BranchSettings, Customer, Settings } from '@/lib/types';
+import type { Customer, Settings } from '@/lib/types';
 import {
   APPROVED_FIXED_THERMAL_WIDTH_MM,
   ReceiptPrintApprovalError,
@@ -96,16 +96,12 @@ export function SalesPage() {
 
   async function loadCustomersForBranch(branchId: string) {
     if (!canEditSaleMetadata || !branchId || customersBranchId === branchId) return;
-    const { data: customersRes, error: customersError } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('branch_id', branchId)
-      .order('name');
-    if (customersError) {
-      show(customersError.message, 'error');
+    try {
+      setCustomers(await loadSalesCustomers(branchId));
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
       return;
     }
-    setCustomers((customersRes as Customer[]) || []);
     setCustomersBranchId(branchId);
   }
 
@@ -136,14 +132,15 @@ export function SalesPage() {
   };
 
   const loadReceiptPayments = async (sale: SaleRow): Promise<Array<{ method: string; amount: number }>> => {
-    const { data, error: paymentError } = await supabase
-      .from('sale_payments')
-      .select('payment_method, amount, refunded_amount, created_at')
-      .eq('sale_id', sale.id)
-      .order('created_at', { ascending: true });
+    let paymentRows: Awaited<ReturnType<typeof loadSalePaymentRows>> = [];
+    try {
+      paymentRows = await loadSalePaymentRows(sale.id);
+    } catch {
+      paymentRows = [];
+    }
 
-    if (!paymentError && Array.isArray(data) && data.length > 0) {
-      const payments = data
+    if (paymentRows.length > 0) {
+      const payments = paymentRows
         .map((row) => ({
           method: String(row.payment_method || 'other'),
           amount: Math.max(0, Number(row.amount || 0) - Number(row.refunded_amount || 0)),
@@ -164,17 +161,12 @@ export function SalesPage() {
 
     // Receipt actions normally use the shared settings cache. Only when that
     // cache is missing do a single read-only branch-scoped recovery read.
-    const [globalResult, branchResult] = await Promise.all([
-      supabase.from('settings').select('*').maybeSingle(),
-      supabase.from('branch_settings').select('*').eq('branch_id', branchId).maybeSingle(),
-    ]);
-    if (globalResult.error) throw new Error(`SETTINGS_LOAD_FAILED: ${globalResult.error.message}`);
-    if (branchResult.error) throw new Error(`BRANCH_SETTINGS_LOAD_FAILED: ${branchResult.error.message}`);
-    if (!globalResult.data) return null;
+    const { globalSettings, branchSettings } = await loadReceiptSettingsRows(branchId);
+    if (!globalSettings) return null;
 
     return mergeEffectiveSettings(
-      globalResult.data as Settings,
-      (branchResult.data as BranchSettings | null) || null,
+      globalSettings,
+      branchSettings,
     );
   };
 
@@ -392,23 +384,23 @@ export function SalesPage() {
     const result = data as { success: boolean; error?: string; detail?: string; refunded_amount?: number } | null;
     if (!result?.success) {
       if (result?.error === 'APPROVAL_REQUIRED' && canRequestRefundApproval) {
-        const { data: approvalData, error: approvalError } = await supabase.rpc('request_manager_approval', {
-          p_action_type: 'refund',
-          p_entity_type: 'sale',
-          p_entity_id: refundSale.id,
-          p_payload: {
-            items: p_items,
-            reason: refundReason.trim() || null,
-            refund_total: refundTotal(),
-            invoice_number: refundSale.invoice_number,
-          },
-          p_reason: refundReason.trim() || (isAr ? 'طلب مرتجع من الكاشير' : 'Cashier refund request'),
-        });
-        if (approvalError) {
-          show(approvalError.message, 'error');
+        let approvalResult: { success?: boolean; error?: string; request_id?: string };
+        try {
+          approvalResult = await requestSaleManagerApproval({
+            actionType: 'refund',
+            saleId: refundSale.id,
+            payload: {
+              items: p_items,
+              reason: refundReason.trim() || null,
+              refund_total: refundTotal(),
+              invoice_number: refundSale.invoice_number,
+            },
+            reason: refundReason.trim() || (isAr ? 'طلب مرتجع من الكاشير' : 'Cashier refund request'),
+          });
+        } catch (error) {
+          show(error instanceof Error ? error.message : String(error), 'error');
           return;
         }
-        const approvalResult = approvalData as { success?: boolean; error?: string; request_id?: string } | null;
         if (!approvalResult?.success) {
           show(approvalResult?.error || (isAr ? 'تعذر إرسال طلب الموافقة' : 'Could not request approval'), 'error');
           return;
@@ -439,29 +431,34 @@ export function SalesPage() {
         return;
       }
 
-      const { data, error } = await supabase.rpc('change_sale_payment_method', {
-        p_sale_id: viewSale.id,
-        p_new_method: editForm.payment_method,
-        p_reason: null,
-      });
-      if (error) { show(error.message, 'error'); return; }
-
-      const result = data as { success?: boolean; error?: string; detail?: string } | null;
+      let result: { success?: boolean; error?: string; detail?: string };
+      try {
+        result = await changeSalePaymentMethod({
+          saleId: viewSale.id,
+          newMethod: editForm.payment_method,
+        });
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
+      }
       if (!result?.success) {
         if (result?.error === 'APPROVAL_REQUIRED' && canRequestPaymentApproval) {
-          const { data: approvalData, error: approvalError } = await supabase.rpc('request_manager_approval', {
-            p_action_type: 'change_payment_method',
-            p_entity_type: 'sale',
-            p_entity_id: viewSale.id,
-            p_payload: {
-              old_method: viewSale.payment_method,
-              new_method: editForm.payment_method,
-              invoice_number: viewSale.invoice_number,
-            },
-            p_reason: isAr ? 'طلب تغيير طريقة دفع من الكاشير' : 'Cashier payment-method correction request',
-          });
-          if (approvalError) { show(approvalError.message, 'error'); return; }
-          const approvalResult = approvalData as { success?: boolean; error?: string } | null;
+          let approvalResult: { success?: boolean; error?: string };
+          try {
+            approvalResult = await requestSaleManagerApproval({
+              actionType: 'change_payment_method',
+              saleId: viewSale.id,
+              payload: {
+                old_method: viewSale.payment_method,
+                new_method: editForm.payment_method,
+                invoice_number: viewSale.invoice_number,
+              },
+              reason: isAr ? 'طلب تغيير طريقة دفع من الكاشير' : 'Cashier payment-method correction request',
+            });
+          } catch (error) {
+            show(error instanceof Error ? error.message : String(error), 'error');
+            return;
+          }
           if (!approvalResult?.success) {
             show(approvalResult?.error || (isAr ? 'تعذر إرسال طلب الموافقة' : 'Could not request approval'), 'error');
             return;
@@ -475,12 +472,17 @@ export function SalesPage() {
     }
 
     if (canEditSaleMetadata) {
-      const { error } = await supabase.from('sales').update({
-        customer_id: editForm.customer_id || null,
-        status: editForm.status,
-        notes: editForm.notes || null,
-      }).eq('id', viewSale.id);
-      if (error) { show(error.message, 'error'); return; }
+      try {
+        await updateSaleMetadata({
+          saleId: viewSale.id,
+          customerId: editForm.customer_id || null,
+          status: editForm.status,
+          notes: editForm.notes || null,
+        });
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
+      }
     }
 
     await logAudit('update', 'sales', viewSale.id, paymentChanged ? { payment_method: editForm.payment_method } : undefined);

@@ -16,6 +16,11 @@ type PosOrderOperatorLabel = {
   operator_name: string | null;
 };
 
+type ActiveOrderSnapshotRow = Order & {
+  order_items?: OrderItem[] | null;
+  order_kitchen_sends?: OrderKitchenSend[] | null;
+};
+
 type PosOrderAccessResult = {
   success?: boolean;
   error?: string;
@@ -36,7 +41,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   const [tRes, oRes, operatorRes] = await Promise.all([
     supabase.from('dining_tables').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
     supabase.from('orders')
-      .select('*, table:dining_tables(*)')
+      .select('*, table:dining_tables(*), order_items!order_items_order_id_fkey(*), order_kitchen_sends!order_kitchen_sends_order_id_fkey(*)')
       .eq('branch_id', branchId)
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),
@@ -47,39 +52,38 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   const tables = (tRes.data as DiningTable[]) || [];
   const operatorLabels = (operatorRes.data as PosOrderOperatorLabel[] | null) || [];
   const operatorByOrder = new Map(operatorLabels.map((row) => [row.order_id, row]));
-  let orders = (((oRes.data as Order[]) || []).map((order) => {
-    const label = operatorByOrder.get(order.id);
-    if (!label?.cashier_id) return order;
-    return {
-      ...order,
-      cashier: {
-        id: label.cashier_id,
-        full_name: label.operator_name,
-        email: null,
-      },
-    } satisfies Order;
-  }));
-  const watchedOrderIds = orders.map((o) => o.id);
-  let orderItems: OrderItem[] = [];
-  let kitchenSends: OrderKitchenSend[] = [];
-  if (watchedOrderIds.length > 0) {
-    const ids = watchedOrderIds;
-    const [iRes, kRes] = await Promise.all([
-      supabase.from('order_items').select('*').in('order_id', ids),
-      supabase.from('order_kitchen_sends').select('*').in('order_id', ids),
-    ]);
-    orderItems = (iRes.data as OrderItem[]) || [];
-    kitchenSends = (kRes.data as OrderKitchenSend[]) || [];
+  const snapshotRows = (oRes.data as ActiveOrderSnapshotRow[] | null) || [];
+  const watchedOrderIds = snapshotRows.map((order) => order.id);
 
-    const effectiveOrderIds = new Set(
-      orderItems
-        .filter((item) => Number(item.quantity || 0) > 0)
-        .map((item) => item.order_id),
-    );
-    orders = orders.filter((order) => effectiveOrderIds.has(order.id));
-    orderItems = orderItems.filter((item) => effectiveOrderIds.has(item.order_id));
-    kitchenSends = kitchenSends.filter((send) => effectiveOrderIds.has(send.order_id));
-  }
+  let orderItems = snapshotRows.flatMap((order) => order.order_items || []);
+  let kitchenSends = snapshotRows.flatMap((order) => order.order_kitchen_sends || []);
+  const effectiveOrderIds = new Set(
+    orderItems
+      .filter((item) => Number(item.quantity || 0) > 0)
+      .map((item) => item.order_id),
+  );
+
+  const orders = snapshotRows
+    .filter((order) => effectiveOrderIds.has(order.id))
+    .map((order) => {
+      const { order_items: _orderItems, order_kitchen_sends: _kitchenSends, ...baseOrder } = order;
+      void _orderItems;
+      void _kitchenSends;
+      const label = operatorByOrder.get(order.id);
+      if (!label?.cashier_id) return baseOrder as Order;
+      return {
+        ...baseOrder,
+        cashier: {
+          id: label.cashier_id,
+          full_name: label.operator_name,
+          email: null,
+        },
+      } satisfies Order;
+    });
+
+  orderItems = orderItems.filter((item) => effectiveOrderIds.has(item.order_id));
+  kitchenSends = kitchenSends.filter((send) => effectiveOrderIds.has(send.order_id));
+
   return { orders, tables, orderItems, kitchenSends, watchedOrderIds };
 }
 

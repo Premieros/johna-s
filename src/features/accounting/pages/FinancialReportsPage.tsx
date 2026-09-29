@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, BadgeAlert, Landmark, ArrowLeftRight, Receipt, WalletCards, PackageSearch } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { DesignSurface, DesignPageHeader, DesignPanel } from '@/components/design';
@@ -14,6 +13,12 @@ import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { businessMetricLabel } from '@/lib/businessMetrics';
+import {
+  loadInventoryStatementOptions,
+  loadLedgerAccounts,
+  loadPartyStatementOptions,
+  loadTreasuryAccounts,
+} from '../services/financialReportSelectors';
 import type {
   TrialBalanceRow, GeneralLedgerRow, TrialBalanceSummary,
   IncomeStatementResult, BalanceSheetResult, ArAgingRow, ApAgingRow,
@@ -97,75 +102,42 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     }
 
     if (view === 'ledger') {
-      void supabase
-        .from('chart_of_accounts')
-        .select('id, code, name, name_en, account_type')
-        .eq('branch_id', effectiveBranchFilter)
-        .order('code')
-        .then(({ data }) => {
-          if (cancelled) return;
-          const rows = (data as ChartOfAccount[]) || [];
-          setAccounts(rows);
-          setAccountId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
-          setLoadedSelectorContextKey(selectorContextKey);
-        });
-    } else if (view === 'treasury_statement') {
-      void supabase
-        .from('treasury_accounts')
-        .select('id, account_name, kind, scope')
-        .eq('branch_id', effectiveBranchFilter)
-        .eq('is_active', true)
-        .order('account_name')
-        .then(({ data }) => {
-          if (cancelled) return;
-          const rows = (data as { id: string; account_name: string; kind: string; scope: string }[]) || [];
-          setTreasuryAccounts(rows);
-          setTreasuryId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
-          setLoadedSelectorContextKey(selectorContextKey);
-        });
-    } else if (view === 'inventory_movement') {
-      const table = inventoryItemType === 'product' ? 'products' : 'raw_materials';
-      void Promise.all([
-        supabase.from(table).select('id, name').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('name'),
-        supabase.from('warehouses').select('id, name').eq('branch_id', effectiveBranchFilter).eq('is_active', true).order('name'),
-      ]).then(([items, wh]) => {
+      void loadLedgerAccounts(effectiveBranchFilter).then((rows) => {
         if (cancelled) return;
-        const itemRows = (items.data as { id: string; name: string }[]) || [];
-        const warehouseRows = (wh.data as { id: string; name: string }[]) || [];
-        setInventoryItems(itemRows);
-        setInventoryItemId((prev) => itemRows.some((x) => x.id === prev) ? prev : (itemRows[0]?.id || ''));
+        setAccounts(rows);
+        setAccountId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
+        setLoadedSelectorContextKey(selectorContextKey);
+      });
+    } else if (view === 'treasury_statement') {
+      void loadTreasuryAccounts(effectiveBranchFilter).then((rows) => {
+        if (cancelled) return;
+        setTreasuryAccounts(rows);
+        setTreasuryId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
+        setLoadedSelectorContextKey(selectorContextKey);
+      });
+    } else if (view === 'inventory_movement') {
+      void loadInventoryStatementOptions(effectiveBranchFilter, inventoryItemType).then(({ items, warehouses: warehouseRows }) => {
+        if (cancelled) return;
+        setInventoryItems(items);
+        setInventoryItemId((prev) => items.some((x) => x.id === prev) ? prev : (items[0]?.id || ''));
         setWarehouses(warehouseRows);
         setWarehouseId((prev) => warehouseRows.some((x) => x.id === prev) ? prev : '');
         setLoadedSelectorContextKey(selectorContextKey);
       });
     } else if (view === 'party_statement') {
-      if (partySide === 'ar') {
-        void supabase
-          .from('customers')
-          .select('id, name, phone')
-          .eq('branch_id', effectiveBranchFilter)
-          .order('name')
-          .then(({ data }) => {
-            if (cancelled) return;
-            const rows = (data as Customer[]) || [];
-            setCustomers(rows);
-            setPartyId((prev) => rows.some((x) => x.id === prev) ? prev : '');
-            setLoadedSelectorContextKey(selectorContextKey);
-          });
-      } else {
-        void supabase
-          .from('suppliers')
-          .select('id, name, phone')
-          .eq('branch_id', effectiveBranchFilter)
-          .order('name')
-          .then(({ data }) => {
-            if (cancelled) return;
-            const rows = (data as Supplier[]) || [];
-            setSuppliers(rows);
-            setPartyId((prev) => rows.some((x) => x.id === prev) ? prev : '');
-            setLoadedSelectorContextKey(selectorContextKey);
-          });
-      }
+      void loadPartyStatementOptions(effectiveBranchFilter, partySide).then((rows) => {
+        if (cancelled) return;
+        if (partySide === 'ar') {
+          const customers = rows as Customer[];
+          setCustomers(customers);
+          setPartyId((prev) => customers.some((x) => x.id === prev) ? prev : '');
+        } else {
+          const suppliers = rows as Supplier[];
+          setSuppliers(suppliers);
+          setPartyId((prev) => suppliers.some((x) => x.id === prev) ? prev : '');
+        }
+        setLoadedSelectorContextKey(selectorContextKey);
+      });
     }
 
     return () => { cancelled = true; };

@@ -1,6 +1,5 @@
 ﻿import { useEffect, useState } from 'react';
 import { Download, Pencil, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -19,11 +18,10 @@ import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { Expense } from '@/lib/types';
+import { fetchExpensePostingOptions, type ExpenseAccountOption, type TreasuryOption } from '../services/expenseOptions';
 
 const EXPENSE_CATEGORIES = ['rent', 'utilities', 'salaries', 'supplies', 'maintenance', 'marketing', 'transport', 'other'];
 
-type ExpenseAccountOption = { id: string; code: string; name: string; name_en: string | null };
-type TreasuryOption = { id: string; account_name: string; account_type: string };
 type ExpenseRoute = {
   id: string;
   category: string;
@@ -121,14 +119,13 @@ export function ExpensesPage() {
     }
     let cancelled = false;
     void Promise.all([
-      supabase.from('chart_of_accounts').select('id,code,name,name_en').eq('branch_id', effectiveBranchId).eq('account_type', 'expense').eq('is_active', true).order('code'),
-      supabase.from('treasury_accounts').select('id,account_name,account_type').eq('branch_id', effectiveBranchId).eq('is_active', true).order('account_type'),
+      fetchExpensePostingOptions(effectiveBranchId),
       api.pos.getActiveShift({ p_branch_id: effectiveBranchId }),
       api.accounting.getExpenseRoutingRules({ p_branch_id: effectiveBranchId }),
-    ]).then(([accountsRes, treasuryRes, shiftRes, routesRes]) => {
+    ]).then(([options, shiftRes, routesRes]) => {
       if (cancelled) return;
-      setExpenseAccounts((accountsRes.data || []) as ExpenseAccountOption[]);
-      setTreasuryAccounts((treasuryRes.data || []) as TreasuryOption[]);
+      setExpenseAccounts(options.expenseAccounts);
+      setTreasuryAccounts(options.treasuryAccounts);
       setRoutes((routesRes.data || []) as ExpenseRoute[]);
       const active = shiftRes.data as unknown as { open?: boolean; shift?: { id?: string } | null } | null;
       setActiveShiftId(active?.open ? active.shift?.id || null : null);

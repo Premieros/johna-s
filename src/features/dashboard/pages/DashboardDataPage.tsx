@@ -6,7 +6,7 @@ import {
   Calculator, ShoppingCart, ChefHat,
   Settings, History as HistoryIcon, Landmark,
 } from 'lucide-react';
-import { reporting, supabase } from '@/api';
+import { reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useSettings } from '@/context/SettingsContext';
@@ -21,6 +21,7 @@ import {
 } from '@/features/reporting/numericIntegrity';
 import { loadDashboardPaymentAggregates } from '../services/dashboardPayments';
 import { loadDashboardSalesSnapshot, type DashboardSalesSnapshot } from '../services/dashboardSnapshot';
+import { loadDashboardFallbackSales, loadDashboardOpsRows, loadDashboardStockRows } from '../services/dashboardRawData';
 import { DashboardStandbyBar } from '../components/DashboardStandbyBar';
 
 type Range = 'today' | 'week' | 'month' | 'year';
@@ -268,23 +269,20 @@ export function DashboardDataPage() {
     }
 
     setSnapshot(null);
-    const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
-    const previousFields = 'id,total,paid_amount,payment_method,branch_id,created_at,refunded_amount,discount_amount';
-    let currentQuery = supabase.from('sales').select(fields).gte('created_at', window.start.toISOString()).lte('created_at', window.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
-    let previousQuery = supabase.from('sales').select(previousFields).gte('created_at', window.previousStart.toISOString()).lte('created_at', window.previousEnd.toISOString()).order('created_at', { ascending: false }).limit(5000);
-    if (branchFilter) {
-      currentQuery = currentQuery.eq('branch_id', branchFilter);
-      previousQuery = previousQuery.eq('branch_id', branchFilter);
-    }
-
-    const [currentResult, previousResult] = await Promise.all([currentQuery, previousQuery]);
-    const currentRows = currentResult.error ? [] : ((currentResult.data || []) as unknown as Sale[]);
-    const previousRows = previousResult.error ? [] : ((previousResult.data || []) as unknown as Sale[]);
+    const fallback = await loadDashboardFallbackSales({
+      branchId: branchFilter || null,
+      currentFrom: window.start.toISOString(),
+      currentTo: window.end.toISOString(),
+      previousFrom: window.previousStart.toISOString(),
+      previousTo: window.previousEnd.toISOString(),
+    });
+    const currentRows = fallback.currentRows as Sale[];
+    const previousRows = fallback.previousRows as Sale[];
     setSales(currentRows);
     setPreviousSales(previousRows);
-    if (currentResult.error) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
+    if (fallback.currentErrorMessage) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
 
-    const paymentPromise = Promise.allSettled([
+    const paymentResults = await Promise.allSettled([
       loadDashboardPaymentAggregates({
         sales: currentRows,
         from: window.start.toISOString(),
@@ -296,19 +294,6 @@ export function DashboardDataPage() {
         to: window.previousEnd.toISOString(),
       }),
     ]);
-    let itemPromise: PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }> = Promise.resolve({ data: [], error: null });
-    if (currentRows.length) {
-      let itemQuery = supabase
-        .from('sale_items')
-        .select('quantity,refunded_quantity,product:products(name),sale:sales!inner(created_at,branch_id)')
-        .gte('sale.created_at', window.start.toISOString())
-        .lte('sale.created_at', window.end.toISOString())
-        .limit(5000);
-      if (branchFilter) itemQuery = itemQuery.eq('sale.branch_id', branchFilter);
-      itemPromise = itemQuery;
-    }
-
-    const [paymentResults, itemResult] = await Promise.all([paymentPromise, itemPromise]);
     const currentPaymentResult = paymentResults[0];
     const previousPaymentResult = paymentResults[1];
     setPaymentAggregates(currentPaymentResult.status === 'fulfilled' ? currentPaymentResult.value : []);
@@ -316,7 +301,7 @@ export function DashboardDataPage() {
     if (paymentResults.some((result) => result.status === 'rejected')) {
       setError(ar ? 'تعذر تحميل تفاصيل طرق الدفع. أعد المحاولة.' : 'Payment-method details could not be loaded. Please retry.');
     }
-    setItems(itemResult.error ? [] : ((itemResult.data || []) as unknown as SaleItem[]));
+    setItems(fallback.itemRows as SaleItem[]);
 
     setLoading(false);
     setRefreshing(false);
@@ -327,32 +312,19 @@ export function DashboardDataPage() {
   useEffect(() => {
     void (async () => {
       const now = new Date();
-      let rawMasterQuery = canViewInventory ? supabase.from('raw_materials').select('id,branch_id,name,min_stock,is_active').eq('is_active', true) : null;
-      let rawBalanceQuery = canViewInventory ? supabase.from('raw_material_inventory').select('raw_material_id,branch_id,quantity') : null;
-      let unitMasterQuery = canViewInventory ? supabase.from('inventory_units').select('id,branch_id,name,min_stock,low_stock_threshold,is_active').eq('is_active', true) : null;
-      let unitBatchQuery = canViewInventory ? supabase.from('inventory_unit_batches').select('unit_id,branch_id,quantity') : null;
-      if (branchFilter) {
-        if (rawMasterQuery) rawMasterQuery = rawMasterQuery.eq('branch_id', branchFilter);
-        if (rawBalanceQuery) rawBalanceQuery = rawBalanceQuery.eq('branch_id', branchFilter);
-        if (unitMasterQuery) unitMasterQuery = unitMasterQuery.eq('branch_id', branchFilter);
-        if (unitBatchQuery) unitBatchQuery = unitBatchQuery.eq('branch_id', branchFilter);
-      }
-      const [rawMastersResult, rawBalancesResult, unitMastersResult, unitBatchesResult] = await Promise.all([
-        rawMasterQuery ?? Promise.resolve({ data: [], error: null }),
-        rawBalanceQuery ?? Promise.resolve({ data: [], error: null }),
-        unitMasterQuery ?? Promise.resolve({ data: [], error: null }),
-        unitBatchQuery ?? Promise.resolve({ data: [], error: null }),
-      ]);
-      const stockQueryFailed = !canViewInventory || Boolean(rawMastersResult.error || rawBalancesResult.error || unitMastersResult.error || unitBatchesResult.error);
-      const alerts = stockQueryFailed ? [] : buildStockAlerts(
-        (rawMastersResult.data || []) as RawStockMaster[],
-        (rawBalancesResult.data || []) as RawStockBalance[],
-        (unitMastersResult.data || []) as UnitStockMaster[],
-        (unitBatchesResult.data || []) as UnitStockBatch[],
+      const stock = await loadDashboardStockRows({
+        enabled: canViewInventory,
+        branchId: branchFilter || null,
+      });
+      const alerts = stock.failed ? [] : buildStockAlerts(
+        stock.rawMasters as RawStockMaster[],
+        stock.rawBalances as RawStockBalance[],
+        stock.unitMasters as UnitStockMaster[],
+        stock.unitBatches as UnitStockBatch[],
         Number(settings?.low_stock_threshold ?? 5),
       );
       setStockAlerts(alerts);
-      const lowStockCount = stockQueryFailed ? null : alerts.length;
+      const lowStockCount = stock.failed ? null : alerts.length;
       const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const to = now.toISOString().slice(0, 10);
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
@@ -374,46 +346,23 @@ export function DashboardDataPage() {
       const fromIso = window.start.toISOString();
       const fromDate = fromIso.slice(0, 10);
 
-      const orderPromise = canViewPos
-        ? (() => {
-            let q = supabase
-              .from('orders')
-              .select('id,status,order_type,table_id,branch_id,total,order_items(quantity)')
-              .in('status', ['open', 'held'])
-              .limit(5000);
-            if (branchFilter) q = q.eq('branch_id', branchFilter);
-            return q;
-          })()
-        : Promise.resolve({ data: [], error: null });
-
-      const purchasePromise = canViewPurchases
-        ? (() => {
-            let q = supabase.from('purchases').select('total,returned_amount,branch_id,created_at').gte('created_at', fromIso);
-            if (branchFilter) q = q.eq('branch_id', branchFilter);
-            return q;
-          })()
-        : Promise.resolve({ data: [], error: null });
-
-      const expensePromise = canViewExpenses
-        ? (() => {
-            let q = supabase.from('expenses').select('amount,branch_id,expense_date,status').gte('expense_date', fromDate).neq('status', 'voided');
-            if (branchFilter) q = q.eq('branch_id', branchFilter);
-            return q;
-          })()
-        : Promise.resolve({ data: [], error: null });
-
-      const [ordersRes, purchasesRes, expensesRes] = await Promise.all([
-        orderPromise, purchasePromise, expensePromise,
-      ]);
+      const data = await loadDashboardOpsRows({
+        branchId: branchFilter || null,
+        fromIso,
+        fromDate,
+        includePos: canViewPos,
+        includePurchases: canViewPurchases,
+        includeExpenses: canViewExpenses,
+      });
       if (cancelled) return;
 
-      const activeOrders = ((ordersRes.data || []) as unknown as ActiveOrderRow[]).filter((order) =>
+      const activeOrders = (data.orders as ActiveOrderRow[]).filter((order) =>
         (order.order_items || []).some((item) => Number(item.quantity || 0) > 0),
       );
       setOps({
         openOrderValue: activeOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
-        purchases: (purchasesRes.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + Math.max(0, Number(row.total || 0) - Number(row.returned_amount || 0)), 0),
-        expenses: (expensesRes.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0),
+        purchases: data.purchases.reduce((sum, row) => sum + Math.max(0, Number(row.total || 0) - Number(row.returned_amount || 0)), 0),
+        expenses: data.expenses.reduce((sum, row) => sum + Number(row.amount || 0), 0),
       });
     })();
 

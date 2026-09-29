@@ -1,6 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpenText } from 'lucide-react';
-import { supabase } from '@/api';
 import { rpc } from '@/api/rpc';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
@@ -12,6 +11,7 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { Select } from '@/components/Input';
 import { formatNumber, formatDateTime } from '@/lib/format';
 import { exportToExcel } from '@/lib/excel';
+import { fetchActiveInventoryLedgerBranches } from '../services/inventoryLedgerBranches';
 
 const PAGE_SIZE = 50;
 
@@ -77,11 +77,7 @@ export function InventoryLedgerPage() {
   }, [search]);
 
   useEffect(() => {
-    async function loadBranches() {
-      const br = await supabase.from('branches').select('id, name').eq('is_active', true).order('name');
-      setBranches((br.data as { id: string; name: string }[]) || []);
-    }
-    void loadBranches();
+    void fetchActiveInventoryLedgerBranches().then(setBranches);
   }, []);
 
   const fetchPage = useCallback(async (reset: boolean) => {

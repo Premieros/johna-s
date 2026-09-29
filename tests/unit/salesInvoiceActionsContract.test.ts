@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const salesPage = readFileSync('src/features/trade/pages/SalesPage.tsx', 'utf8');
+const salesPageData = readFileSync('src/features/trade/services/salesPageData.ts', 'utf8');
 const printing = readFileSync('src/features/pos/utils/printing.ts', 'utf8');
 
 describe('sales invoice refund / preview / reprint contract', () => {
@@ -17,8 +18,8 @@ describe('sales invoice refund / preview / reprint contract', () => {
 
   it('recovers branch receipt settings read-only when the shared cache is temporarily empty', () => {
     expect(salesPage).toContain('const resolveReceiptSettings = async');
-    expect(salesPage).toContain("supabase.from('settings').select('*').maybeSingle()");
-    expect(salesPage).toContain("supabase.from('branch_settings').select('*').eq('branch_id', branchId).maybeSingle()");
+    expect(salesPageData).toContain("supabase.from('settings').select('*').maybeSingle()");
+    expect(salesPageData).toContain("supabase.from('branch_settings').select('*').eq('branch_id', branchId).maybeSingle()");
     expect(salesPage).toContain('mergeEffectiveSettings(');
     expect(salesPage.match(/await resolveReceiptSettings\(/g)?.length).toBe(3);
   });
@@ -35,7 +36,8 @@ describe('sales invoice refund / preview / reprint contract', () => {
     expect(salesPage).toContain('api.trade.processRefund({');
     expect(salesPage).toContain('p_sale_id: refundSale.id');
     expect(salesPage).toContain('p_items,');
-    expect(salesPage).toContain("p_action_type: 'refund'");
+    expect(salesPage).toContain("actionType: 'refund'");
+    expect(salesPageData).toContain('p_action_type: params.actionType');
     expect(salesPage).toContain("can('sales.refund.create')");
     expect(salesPage).toContain("can('refunds.approve')");
   });

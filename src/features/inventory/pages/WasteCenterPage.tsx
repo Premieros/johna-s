@@ -10,8 +10,8 @@ import { Modal } from '@/components/Modal';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { formatNumber, formatQuantity } from '@/lib/format';
-import { supabase } from '@/api';
 import type { WasteEntry, WasteCategory } from '@/lib/types';
+import { createWasteEntry, decideWasteEntry, loadWasteCenterData, loadWasteReport, type WasteProductOption as ProductOption, type WasteUnitOption as UnitOption, type WasteWarehouseOption as WarehouseOption } from '../services/wasteCenterData';
 
 const WASTE_TYPES = [
   { value: 'raw_material', ar: 'مادة خام', en: 'Raw Material' },
@@ -21,9 +21,6 @@ const WASTE_TYPES = [
   { value: 'damaged', ar: 'تالف', en: 'Damaged' },
 ] as const;
 
-type ProductOption = { id: string; name: string; name_en?: string | null; sale_price?: number | null; cost_price?: number | null };
-type UnitOption = { id: string; name: string; name_en?: string | null; cost_price?: number | null };
-type WarehouseOption = { id: string; name: string };
 
 interface WasteForm {
   waste_category_id: string;
@@ -71,42 +68,12 @@ export function WasteCenterPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const productQuery = supabase
-        .from('products')
-        .select('id,name,name_en,sale_price,cost_price')
-        .eq('is_active', true)
-        .order('name');
-      if (branchFilter) productQuery.eq('branch_id', branchFilter);
-
-      const entryQuery = supabase
-        .from('waste_entries')
-        .select('*, waste_category:waste_categories(*), product:products(id,name,name_en), inventory_unit:inventory_units(id,name,name_en), warehouse:warehouses(id,name)')
-        .order('created_at', { ascending: false });
-      if (branchFilter) entryQuery.eq('branch_id', branchFilter);
-
-      let unitQuery = supabase.from('inventory_units').select('id,name,name_en,cost_price').eq('is_active', true).order('name');
-      let warehouseQuery = supabase.from('warehouses').select('id,name').eq('is_active', true).order('name');
-      if (branchFilter) {
-        unitQuery = unitQuery.or(`branch_id.eq.${branchFilter},branch_id.is.null`);
-        warehouseQuery = warehouseQuery.eq('branch_id', branchFilter);
-      }
-      const [catRes, productRes, unitRes, warehouseRes, entryRes] = await Promise.all([
-        supabase.from('waste_categories').select('*').eq('is_active', true).order('name'),
-        productQuery,
-        unitQuery,
-        warehouseQuery,
-        entryQuery,
-      ]);
-      if (catRes.error) throw catRes.error;
-      if (productRes.error) throw productRes.error;
-      if (unitRes.error) throw unitRes.error;
-      if (warehouseRes.error) throw warehouseRes.error;
-      if (entryRes.error) throw entryRes.error;
-      setCategories(catRes.data ?? []);
-      setProducts((productRes.data ?? []) as ProductOption[]);
-      setInventoryUnits((unitRes.data ?? []) as UnitOption[]);
-      setWarehouses((warehouseRes.data ?? []) as WarehouseOption[]);
-      setEntries((entryRes.data ?? []) as unknown as WasteEntry[]);
+      const data = await loadWasteCenterData(branchFilter);
+      setCategories(data.categories);
+      setProducts(data.products);
+      setInventoryUnits(data.inventoryUnits);
+      setWarehouses(data.warehouses);
+      setEntries(data.entries);
     } catch (err) {
       show((ar ? 'خطأ في التحميل: ' : 'Load error: ') + String((err as Error).message ?? err), 'error');
     } finally {
@@ -140,18 +107,17 @@ export function WasteCenterPage() {
       return;
     }
     try {
-      const { error } = await supabase.rpc('create_waste_entry', {
-        p_branch_id: branchFilter,
-        p_waste_category_id: form.waste_category_id,
-        p_waste_type: form.waste_type,
-        p_quantity: form.quantity,
-        p_unit_cost: form.unit_cost,
-        p_reason: form.reason || null,
-        p_product_id: form.target_type === 'product' ? form.product_id : null,
-        p_inventory_unit_id: form.target_type === 'inventory_unit' ? form.inventory_unit_id : null,
-        p_warehouse_id: form.warehouse_id,
+      await createWasteEntry({
+        branchId: branchFilter,
+        wasteCategoryId: form.waste_category_id,
+        wasteType: form.waste_type,
+        quantity: form.quantity,
+        unitCost: form.unit_cost,
+        reason: form.reason || null,
+        productId: form.target_type === 'product' ? form.product_id : null,
+        inventoryUnitId: form.target_type === 'inventory_unit' ? form.inventory_unit_id : null,
+        warehouseId: form.warehouse_id,
       });
-      if (error) throw error;
       show(ar ? 'تم تسجيل الهالك' : 'Waste recorded', 'success');
       setShowForm(false);
       setForm(EMPTY_FORM);
@@ -168,12 +134,11 @@ export function WasteCenterPage() {
       if (rejectionReason === null) return;
     }
     try {
-      const { error } = await supabase.rpc('approve_waste', {
-        p_waste_id: id,
-        p_approve: approve,
-        ...(approve ? {} : { p_rejection_reason: rejectionReason || null }),
+      await decideWasteEntry({
+        wasteId: id,
+        approve,
+        rejectionReason: approve ? null : (rejectionReason || null),
       });
-      if (error) throw error;
       show(approve ? (ar ? 'تم الاعتماد' : 'Approved') : (ar ? 'تم الرفض' : 'Rejected'), 'success');
       void load();
     } catch (err) {
@@ -292,9 +257,11 @@ function WasteReport({ ar, branchFilter }: { ar: boolean; branchFilter: string |
       try {
         const to = new Date().toISOString().slice(0, 10);
         const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-        const { data, error } = await supabase.rpc('get_waste_report', { p_branch_id: branchFilter, p_from_date: from, p_to_date: to });
-        if (error) throw error;
-        setRows((data ?? []) as Record<string, unknown>[]);
+        setRows(await loadWasteReport({
+          branchId: branchFilter,
+          fromDate: from,
+          toDate: to,
+        }));
       } catch { /* optional report */ }
       setLoading(false);
     })();

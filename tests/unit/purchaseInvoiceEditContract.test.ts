@@ -51,11 +51,13 @@ describe('purchase invoice edit and inline raw-material contract', () => {
 
   it('creates raw materials inline only with the canonical manage permission and required unit', () => {
     const page = read('src/features/trade/pages/PurchasesPage.tsx');
+    const dataService = read('src/features/trade/services/purchasePageData.ts');
 
     expect(page).toContain("can('raw_materials.manage')");
-    expect(page).toContain("supabase.from('measurement_units')");
+    expect(dataService).toContain("supabase.from('measurement_units')");
     expect(page).toContain("!rawForm.code.trim() || !rawForm.name.trim() || !rawForm.unit_id");
-    expect(page).toContain("supabase.from('raw_materials').insert(payload).select('*').single()");
+    expect(page).toContain('createPurchaseRawMaterial(payload)');
+    expect(dataService).toContain("supabase.from('raw_materials').insert(payload).select('*').single()");
     expect(page).toContain("source: 'purchase_invoice'");
   });
 

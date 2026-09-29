@@ -14,7 +14,6 @@ import {
   Unlock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -28,16 +27,9 @@ import { logAudit } from '@/lib/audit';
 import { findUiTheme, UI_THEMES } from '@/lib/themes';
 import type { BranchSettings } from '@/lib/types';
 import { APP_ROUTES } from '@/core/navigation/routes';
+import { fetchBranchStaff, type BranchStaffOption } from '../services/branchStaff';
 
 type SettingsTab = 'branch_profile' | 'tax' | 'business_day' | 'branch_staff' | 'appearance' | 'language';
-
-interface UserRow {
-  id: string;
-  full_name: string;
-  email: string;
-  role: string;
-  is_active: boolean;
-}
 
 export function SettingsControlCenterPage() {
   const { user } = useAuth();
@@ -57,7 +49,7 @@ export function SettingsControlCenterPage() {
   const [selectedBranchId, setSelectedBranchId] = useState<string>(myBranchId);
   const [branchForm, setBranchForm] = useState<Partial<BranchSettings>>({});
 
-  const [branchStaff, setBranchStaff] = useState<UserRow[]>([]);
+  const [branchStaff, setBranchStaff] = useState<BranchStaffOption[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
 
   const targetBranchId = selectedBranchId || myBranchId;
@@ -84,14 +76,12 @@ export function SettingsControlCenterPage() {
   const loadBranchStaff = useCallback(async () => {
     if (!targetBranchId) return;
     setLoadingStaff(true);
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, full_name, email, role, is_active')
-      .eq('branch_id', targetBranchId)
-      .order('full_name');
-    setLoadingStaff(false);
-    if (!error && data) {
-      setBranchStaff(data as UserRow[]);
+    try {
+      setBranchStaff(await fetchBranchStaff(targetBranchId));
+    } catch {
+      setBranchStaff([]);
+    } finally {
+      setLoadingStaff(false);
     }
   }, [targetBranchId]);
 

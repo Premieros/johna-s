@@ -20,7 +20,7 @@ import {
   Sliders,
   History,
 } from 'lucide-react';
-import { supabase, admin } from '@/api';
+import { admin } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useSettings } from '@/context/SettingsContext';
@@ -33,41 +33,16 @@ import { Input, Textarea, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { RolesTab } from './RolesTab';
 import { formatDate, formatDateTime } from '@/lib/format';
-
-interface TenantStats {
-  organization_id: string;
-  organization_name: string;
-  organization_slug: string;
-  is_active: boolean;
-  created_at: string;
-  branch_count: number;
-  user_count: number;
-  total_branches: number;
-  active_branches: number;
-}
-
-interface TenantUser {
-  user_id: string;
-  email: string;
-  username: string;
-  full_name: string;
-  role: string;
-  is_active: boolean;
-  branch_id: string | null;
-  branch_name: string | null;
-  org_id: string | null;
-  org_name: string | null;
-  created_at: string;
-}
-
-interface AuditLogRow {
-  id: string;
-  action: string;
-  entity: string;
-  user_email: string | null;
-  created_at: string;
-  details: unknown;
-}
+import {
+  fetchTenantStats,
+  fetchUserCreationControl,
+  fetchUsersAndAudit,
+  fetchSuperAdminHealthSnapshot,
+  type SuperAdminAuditLogRow as AuditLogRow,
+  type SuperAdminTenantStats as TenantStats,
+  type SuperAdminTenantUser as TenantUser,
+} from '../services/superAdminConsoleData';
+import { setOrganizationActive, updateSuperAdminUser } from '../services/superAdminConsoleActions';
 
 type SuperTab =
   | 'tenants'
@@ -133,27 +108,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   // ─────────────────────────────────────────────────────────────
   const loadSystemControls = useCallback(async () => {
     try {
-      const { data } = await admin.canCreateNewUser();
-      if (data && typeof data.allowed === 'boolean') {
-        setAllowNewUserCreation(data.allowed);
-      } else {
-        const { data: sData } = await supabase.from('system_settings').select('config').eq('id', 1).maybeSingle();
-        if (sData?.config?.security && typeof sData.config.security.allow_new_user_creation === 'boolean') {
-          setAllowNewUserCreation(sData.config.security.allow_new_user_creation);
-        }
-      }
-
-      // Fetch audit logs for user creation toggle
-      const { data: aData } = await supabase
-        .from('audit_log')
-        .select('*')
-        .eq('action', 'TOGGLE_ALLOW_NEW_USER_CREATION')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (aData) {
-        setUserCreationAudit(aData as AuditLogRow[]);
-      }
+      const snapshot = await fetchUserCreationControl();
+      if (typeof snapshot.allowed === 'boolean') setAllowNewUserCreation(snapshot.allowed);
+      setUserCreationAudit(snapshot.audit);
     } catch (err) {
       console.warn('Failed to load system controls:', err);
     }
@@ -188,34 +145,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const loadTenants = useCallback(async () => {
     setLoadingTenants(true);
     try {
-      const [orgsRes, brRes, memRes] = await Promise.all([
-        supabase.from('organizations').select('*').order('created_at', { ascending: false }),
-        supabase.from('branches').select('id, name, is_active, organization_id'),
-        supabase.from('organization_members').select('organization_id, user_id, is_active'),
-      ]);
-
-      const orgs = orgsRes.data || [];
-      const brs = brRes.data || [];
-      const mems = memRes.data || [];
-
-      const stats: TenantStats[] = orgs.map((o) => {
-        const orgBranches = brs.filter((b) => b.organization_id === o.id);
-        const orgMembers = mems.filter((m) => m.organization_id === o.id && m.is_active);
-
-        return {
-          organization_id: o.id,
-          organization_name: o.name,
-          organization_slug: o.slug,
-          is_active: o.is_active ?? true,
-          created_at: o.created_at,
-          branch_count: orgBranches.length,
-          user_count: orgMembers.length,
-          total_branches: orgBranches.length,
-          active_branches: orgBranches.filter((b) => b.is_active).length,
-        };
-      });
-
-      setTenants(stats);
+      setTenants(await fetchTenantStats());
     } catch {
       // Ignored
     } finally {
@@ -229,39 +159,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const loadUsersAndAudit = useCallback(async () => {
     setLoadingUsersAudit(true);
     try {
-      const [uRes, aRes, bRes, oRes, mRes] = await Promise.all([
-        supabase.from('users').select('id, email, username, full_name, role, is_active, branch_id, created_at').order('created_at', { ascending: false }),
-        supabase.from('audit_log').select('id, action, entity, user_email, created_at, details').order('created_at', { ascending: false }).limit(100),
-        supabase.from('branches').select('id, name, organization_id'),
-        supabase.from('organizations').select('id, name'),
-        supabase.from('organization_members').select('user_id, organization_id').eq('is_active', true),
-      ]);
-
-      const branchMap = new Map((bRes.data || []).map((b) => [b.id, b]));
-      const orgMap = new Map((oRes.data || []).map((o) => [o.id, o]));
-      const memberMap = new Map((mRes.data || []).map((m) => [m.user_id, m.organization_id]));
-
-      const computedUsers: TenantUser[] = (uRes.data || []).map((u) => {
-        const branch = u.branch_id ? branchMap.get(u.branch_id) : undefined;
-        const orgId = memberMap.get(u.id) || branch?.organization_id || null;
-        const org = orgId ? orgMap.get(orgId) : undefined;
-        return {
-          user_id: u.id,
-          email: u.email || '',
-          username: u.username || '',
-          full_name: u.full_name || '',
-          role: u.role || 'cashier',
-          is_active: u.is_active ?? true,
-          branch_id: u.branch_id || null,
-          branch_name: branch?.name || null,
-          org_id: orgId,
-          org_name: org?.name || null,
-          created_at: u.created_at || new Date().toISOString(),
-        };
-      });
-
-      setAllUsers(computedUsers);
-      setAuditLogs((aRes.data || []) as AuditLogRow[]);
+      const snapshot = await fetchUsersAndAudit();
+      setAllUsers(snapshot.users);
+      setAuditLogs(snapshot.audit);
     } catch {
       // Ignored
     } finally {
@@ -323,8 +223,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   // ─────────────────────────────────────────────────────────────
   const toggleOrgStatus = async (orgId: string, currentActive: boolean) => {
     try {
-      const { error } = await supabase.from('organizations').update({ is_active: !currentActive }).eq('id', orgId);
-      if (error) throw error;
+      await setOrganizationActive(orgId, !currentActive);
       show(ar ? 'تم تحديث حالة المنظمة بنجاح' : 'Organization status updated', 'success');
       void loadTenants();
     } catch {
@@ -395,17 +294,13 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     if (!editingUser) return;
     setSavingUser(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: editingUser.full_name,
-          role: editingUser.role,
-          is_active: editingUser.is_active,
-          branch_id: editingUser.branch_id,
-        })
-        .eq('id', editingUser.user_id);
-
-      if (error) throw error;
+      await updateSuperAdminUser({
+        userId: editingUser.user_id,
+        fullName: editingUser.full_name,
+        role: editingUser.role,
+        isActive: editingUser.is_active,
+        branchId: editingUser.branch_id,
+      });
 
       if (newPassword.trim()) {
         await admin.updateUserPassword({
@@ -426,38 +321,18 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
 
   const runHealthChecks = async () => {
     setHealthRunning(true);
-    const checks: Record<string, { ok: boolean; message: string }> = {};
-
-    try {
-      const dbCheck = await supabase.from('users').select('id', { count: 'exact', head: true });
-      checks['database'] = {
-        ok: !dbCheck.error,
-        message: dbCheck.error ? dbCheck.error.message : ar ? 'اتصال قاعدة البيانات نشط وسليم' : 'Database connection healthy',
-      };
-    } catch (e) {
-      checks['database'] = { ok: false, message: String(e) };
+    const checks = await fetchSuperAdminHealthSnapshot();
+    if (checks.database?.ok) {
+      checks.database.message = ar ? 'اتصال قاعدة البيانات نشط وسليم' : 'Database connection healthy';
     }
-
-    try {
-      const authUser = (await supabase.auth.getUser()).data.user;
-      checks['auth'] = {
-        ok: !!authUser,
-        message: authUser ? `${ar ? 'المستخدم المصادق:' : 'Authenticated as:'} ${authUser.email}` : ar ? 'لا توجد جلسة نشطة' : 'No active session',
-      };
-    } catch (e) {
-      checks['auth'] = { ok: false, message: String(e) };
+    if (checks.auth?.ok && checks.auth.message.startsWith('Authenticated as:')) {
+      checks.auth.message = `${ar ? 'المستخدم المصادق:' : 'Authenticated as:'}${checks.auth.message.slice('Authenticated as:'.length)}`;
+    } else if (checks.auth && !checks.auth.ok && checks.auth.message === 'No active session') {
+      checks.auth.message = ar ? 'لا توجد جلسة نشطة' : 'No active session';
     }
-
-    try {
-      const sysRes = await supabase.from('system_settings').select('id').limit(1);
-      checks['system_settings'] = {
-        ok: !sysRes.error,
-        message: sysRes.error ? sysRes.error.message : ar ? 'جدول الإعدادات العامة متاح' : 'System settings accessible',
-      };
-    } catch (e) {
-      checks['system_settings'] = { ok: false, message: String(e) };
+    if (checks.system_settings?.ok) {
+      checks.system_settings.message = ar ? 'جدول الإعدادات العامة متاح' : 'System settings accessible';
     }
-
     setHealthStatus(checks);
     setHealthRunning(false);
   };

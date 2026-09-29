@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Download, Upload, Barcode as BarcodeIcon, QrCode, Move } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -27,13 +26,11 @@ import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCa
 import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
 import type { Product, Category, ProductUnit, ProductComponentInput } from '@/lib/types';
+import { deleteProductRecord, importProductRecords, loadProductCategories, loadProductEditorData, loadProductStockComponents, replaceLegacyProductComponents, updateProductRecord, type ProductLinkedInventoryUnit as LinkedInventoryUnit, type ProductManufacturedInventoryUnit as ManufacturedInventoryUnit, type ProductRawMaterialOption as RawMaterialOption, type ProductStockComponent } from '../services/productPageData';
 
 const UNIT_NAMES = ['piece', 'carton', 'box', 'pack', 'kg', 'liter', 'meter', 'gram'];
 
 type OperationalIngredient = { raw_material_id: string; quantity: number; wastage_percent: number; raw_material?: { name: string } | null };
-type RawMaterialOption = { id: string; name: string; branch_id: string | null };
-type LinkedInventoryUnit = { unit_id: string; quantity: number; unit?: { id: string; name: string; unit_type: 'ready' | 'manufactured'; cost_price: number } | null };
-type ManufacturedInventoryUnit = { id: string; name: string; unit_type: 'manufactured'; cost_price: number; branch_id: string | null };
 
 export function ProductsPage() {
   const { t, lang } = useLanguage();
@@ -72,7 +69,7 @@ export function ProductsPage() {
   });
   const [units, setUnits] = useState<ProductUnit[]>([]);
   const [productComponents, setProductComponents] = useState<ProductComponentInput[]>([]);
-  const [stockComponents, setStockComponents] = useState<{ product_id: string; name: string; total: number; cost_price: number }[]>([]);
+  const [stockComponents, setStockComponents] = useState<ProductStockComponent[]>([]);
   const [componentSel, setComponentSel] = useState('');
   const [componentQty, setComponentQty] = useState(1);
   const [recipeIngredients, setRecipeIngredients] = useState<OperationalIngredient[]>([]);
@@ -87,29 +84,11 @@ export function ProductsPage() {
   const [linkedUnitQty, setLinkedUnitQty] = useState(1);
 
   const loadStockComponents = useCallback(async () => {
-    let invQuery = supabase.from('inventory').select('product_id, quantity, product:products(id, name, cost_price, is_active)');
-    if (branchFilter) {
-      const { data: whs } = await supabase.from('warehouses').select('id').eq('branch_id', branchFilter).eq('is_active', true);
-      const ids = ((whs as { id: string }[] | null) || []).map((w) => w.id);
-      if (ids.length === 0) { setStockComponents([]); return; }
-      invQuery = invQuery.in('warehouse_id', ids);
-    }
-    const { data } = await invQuery;
-    const totals: Record<string, { name: string; cost_price: number; total: number }> = {};
-    for (const row of ((data || []) as unknown as { product_id: string; quantity: number; product: { id: string; name: string; cost_price: number; is_active: boolean } | null }[])) {
-      if (!row.product || !row.product.is_active) continue;
-      const t = totals[row.product_id] || { name: row.product.name, cost_price: row.product.cost_price, total: 0 };
-      t.total += Number(row.quantity) || 0;
-      totals[row.product_id] = t;
-    }
-    setStockComponents(Object.entries(totals).filter(([, v]) => v.total > 0).map(([product_id, v]) => ({ product_id, name: v.name, total: v.total, cost_price: v.cost_price })).sort((a, b) => a.name.localeCompare(b.name)));
+    setStockComponents(await loadProductStockComponents(branchFilter));
   }, [branchFilter]);
 
   const loadMeta = useCallback(async () => {
-    let cq = supabase.from('categories').select('*');
-    if (branchFilter) cq = cq.eq('branch_id', branchFilter);
-    const { data: c } = await cq.order('name');
-    setCategories((c as Category[]) || []);
+    setCategories(await loadProductCategories(branchFilter));
   }, [branchFilter]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
@@ -125,23 +104,18 @@ export function ProductsPage() {
     const stockComponentsPromise = loadStockComponents();
     setEditing(p);
     setForm({ name: p.name, name_en: p.name_en || '', barcode: p.barcode || '', sku: p.sku || '', category_id: p.category_id || '', description: p.description || '', cost_price: p.cost_price, sale_price: p.sale_price, wholesale_price: p.wholesale_price, image_url: p.image_url || '', image_position_x: Number(p.image_position_x) || 0, image_position_y: Number(p.image_position_y) || 0, image_zoom: Number(p.image_zoom) || 1, is_active: p.is_active, low_stock_threshold: p.low_stock_threshold, min_stock: p.min_stock ?? 0, max_stock: p.max_stock ?? 0, reorder_point: p.reorder_point ?? 0, product_type: p.product_type || 'ready', branch_id: p.branch_id || branchFilter || '' });
-    const [u, comps] = await Promise.all([
-      supabase.from('product_units').select('*').eq('product_id', p.id),
-      supabase.from('product_components').select('component_product_id, quantity').eq('product_id', p.id),
-    ]);
-    setUnits((u.data as ProductUnit[]) || [{ id: '', product_id: p.id, unit_name: 'piece', unit_name_en: 'piece', conversion_factor: 1, sale_price: p.sale_price, cost_price: p.cost_price, barcode: p.barcode || '', is_base: true, created_at: '' }]);
-    setProductComponents(((comps.data as { component_product_id: string; quantity: number }[] | null) || []).map((c) => ({ component_product_id: c.component_product_id, quantity: Number(c.quantity) || 1 })));
     const effectiveProductBranch = p.branch_id || branchFilter || '';
+    const editorData = await loadProductEditorData({ productId: p.id, branchId: effectiveProductBranch });
+    setUnits(editorData.units.length ? editorData.units : [{ id: '', product_id: p.id, unit_name: 'piece', unit_name_en: 'piece', conversion_factor: 1, sale_price: p.sale_price, cost_price: p.cost_price, barcode: p.barcode || '', is_base: true, created_at: '' }]);
+    setProductComponents(editorData.components);
+
     let recipeRows: OperationalIngredient[] = [];
     let currentYield = 1;
     if (effectiveProductBranch) {
       try {
-        const [composition, rawResult] = await Promise.all([
-          api.catalog.getProductDirectRawComponents(p.id, effectiveProductBranch),
-          supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', effectiveProductBranch).eq('is_active', true).order('name'),
-        ]);
-        if (rawResult.error) throw rawResult.error;
-        const options = ((rawResult.data || []) as RawMaterialOption[]);
+        if (editorData.rawMaterialError) throw new Error(editorData.rawMaterialError);
+        const composition = await api.catalog.getProductDirectRawComponents(p.id, effectiveProductBranch);
+        const options = editorData.rawMaterials;
         setRawMaterialOptions(options);
         const names = new Map(options.map((row) => [row.id, row.name]));
         currentYield = Number(composition.yield_quantity) || 1;
@@ -158,22 +132,16 @@ export function ProductsPage() {
     } else {
       setRawMaterialOptions([]);
     }
-    const { data: inventoryLinks } = await supabase.from('product_unit_links').select('unit_id,quantity,unit:inventory_units(id,name,unit_type,cost_price)').eq('product_id', p.id);
-    const displayInventoryLinks = ((inventoryLinks || []) as unknown as LinkedInventoryUnit[]).map((row) => ({ ...row, quantity: Number(row.quantity) || 0 }));
-    if (effectiveProductBranch) {
-      const { data: manufacturedUnits, error: manufacturedUnitsError } = await supabase.from('inventory_units').select('id,name,unit_type,cost_price,branch_id').eq('branch_id', effectiveProductBranch).eq('unit_type', 'manufactured').eq('is_active', true).order('name');
-      if (manufacturedUnitsError) show(manufacturedUnitsError.message, 'error');
-      setManufacturedInventoryUnits(((manufacturedUnits || []) as unknown as ManufacturedInventoryUnit[]));
-    } else {
-      setManufacturedInventoryUnits([]);
-    }
+
+    if (editorData.manufacturedUnitsError) show(editorData.manufacturedUnitsError, 'error');
+    setManufacturedInventoryUnits(editorData.manufacturedUnits);
     await stockComponentsPromise;
     setRecipeYield(currentYield);
     setRecipeIngredients(recipeRows);
     setRawMaterialSel('');
     setRawMaterialQty(1);
     setRawMaterialWaste(0);
-    setLinkedInventoryUnits(displayInventoryLinks);
+    setLinkedInventoryUnits(editorData.inventoryLinks);
     setLinkedUnitSel('');
     setLinkedUnitQty(1);
     setComponentSel('');
@@ -194,8 +162,12 @@ export function ProductsPage() {
     const unitPayload = units.filter(u => u.unit_name).map((u) => ({ unit_name: u.unit_name, unit_name_en: u.unit_name_en || u.unit_name, conversion_factor: u.conversion_factor, sale_price: u.sale_price, cost_price: u.cost_price, barcode: u.barcode || null, is_base: u.is_base }));
     let pid: string;
     if (editing) {
-      const { error } = await supabase.from('products').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
+      try {
+        await updateProductRecord(editing.id, payload);
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
+      }
       pid = editing.id;
       const { error: unitError } = await api.catalog.replaceProductUnits({ p_product_id: editing.id, p_units: unitPayload });
       if (unitError) { show(unitError.message, 'error'); return; }
@@ -257,11 +229,15 @@ export function ProductsPage() {
 
     const usesOperationalComposition = recipeIngredients.length > 0 || linkedInventoryUnits.length > 0;
     if (!usesOperationalComposition) {
-      const { error: compDelError } = await supabase.from('product_components').delete().eq('product_id', pid);
-      if (compDelError) { show(compDelError.message, 'error'); return; }
-      if (form.product_type === 'manufactured' && productComponents.length > 0) {
-        const { error: compInsError } = await supabase.from('product_components').insert(productComponents.map((c) => ({ product_id: pid, component_product_id: c.component_product_id, quantity: c.quantity })));
-        if (compInsError) { show(compInsError.message, 'error'); return; }
+      try {
+        await replaceLegacyProductComponents({
+          productId: pid,
+          productType: form.product_type,
+          components: productComponents,
+        });
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
       }
     }
     show(t('saveSuccess'), 'success');
@@ -309,8 +285,13 @@ export function ProductsPage() {
 
   const remove = async () => {
     if (!deleteId || !can('products.delete')) return;
-    const { error } = await supabase.from('products').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error'); else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'products', deleteId); }
+    try {
+      await deleteProductRecord(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'products', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     await invalidatePosCatalogCache();
     reloadProducts();
@@ -328,8 +309,14 @@ export function ProductsPage() {
       const rows = await importFromExcel(file);
       const payload = rows.map((r) => ({ name: String(r.Name || r.name || ''), name_en: String(r.NameEn || r.name_en || ''), barcode: String(r.Barcode || r.barcode || ''), sku: String(r.SKU || r.sku || ''), product_type: String(r.ProductType || r.product_type || 'ready') === 'manufactured' ? 'manufactured' as const : 'ready' as const, cost_price: Number(r.CostPrice || r.cost_price || 0), sale_price: Number(r.SalePrice || r.sale_price || 0), wholesale_price: Number(r.WholesalePrice || r.wholesale_price || 0), is_active: true, low_stock_threshold: Number(r.LowStockThreshold || 5), min_stock: Number(r.MinStock || r.min_stock || 0), max_stock: Number(r.MaxStock || r.max_stock || 0), reorder_point: Number(r.ReorderPoint || r.reorder_point || 0), branch_id: branchFilter })).filter(r => r.name);
       if (payload.length === 0) { show('No valid rows', 'error'); return; }
-      const { error } = await supabase.from('products').insert(payload);
-      if (error) show(error.message, 'error'); else { show(`${payload.length} ${t('import')} OK`, 'success'); await invalidatePosCatalogCache(); reloadProducts(); }
+      try {
+        await importProductRecords(payload);
+        show(`${payload.length} ${t('import')} OK`, 'success');
+        await invalidatePosCatalogCache();
+        reloadProducts();
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+      }
     } catch (err) { show(String(err), 'error'); }
   };
 

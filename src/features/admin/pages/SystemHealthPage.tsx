@@ -6,10 +6,12 @@ import { Button } from '@/components/Button';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { getAllOfflineSales } from '@/core/offline/offlineStorage';
+import { ensureOperationalDeviceIdentity } from '@/core/runtime/deviceIdentity';
 import { formatNumber } from '@/lib/format';
 import { AdminDataManagementPanel } from './AdminDataManagementPanel';
+import { blockedCountStatus, pendingCountStatus, presenceStatus, zeroCountStatus, type OperationalHealthStatus } from '../services/systemHealthSeverity';
 
-type Status = 'ok' | 'warning' | 'error' | 'checking';
+type Status = OperationalHealthStatus;
 type Check = { key: string; ar: string; en: string; status: Status; detail: string; count?: number };
 
 type HealthSnapshot = {
@@ -58,7 +60,7 @@ function zeroCheck(
     key,
     ar,
     en,
-    status: count === 0 ? 'ok' : severity,
+    status: zeroCountStatus(count, severity),
     count,
     detail: count === 0 ? 'OK' : `${count}`,
   };
@@ -110,8 +112,20 @@ export function SystemHealthPage() {
 
     const blockedOffline = offline.filter((row) => row.status === 'blocked' || row.status === 'dead_letter').length;
     const retryingOffline = offline.filter((row) => row.status === 'pending' || row.status === 'failed' || row.status === 'syncing').length;
+    const deviceIdentity = ensureOperationalDeviceIdentity({
+      branchId: branchFilter || null,
+      deviceType: 'admin',
+      appVersion: 'web',
+    });
 
     const next: Check[] = [
+      {
+        key: 'device_identity',
+        ar: 'هوية الجهاز التشغيلية',
+        en: 'Operational device identity',
+        status: 'ok',
+        detail: `${deviceIdentity.device_type} · ${deviceIdentity.device_id.slice(0, 8)} · ${deviceIdentity.branch_id || (ar ? 'بدون فرع محدد' : 'No branch scope')}`,
+      },
       {
         key: 'database',
         ar: 'قاعدة البيانات',
@@ -156,7 +170,7 @@ export function SystemHealthPage() {
         key: 'work_auth',
         ar: 'طلبات تصريح العمل المنتظرة',
         en: 'Pending work authorizations',
-        status: n(snapshot.pending_work_authorizations) > 0 ? 'warning' : 'ok',
+        status: pendingCountStatus(snapshot.pending_work_authorizations),
         detail: ar ? 'الطلبات المعلقة حاليًا' : 'Currently pending requests',
         count: n(snapshot.pending_work_authorizations),
       },
@@ -164,7 +178,7 @@ export function SystemHealthPage() {
         key: 'offline_retrying',
         ar: 'عمليات Offline تنتظر المزامنة',
         en: 'Offline items awaiting sync',
-        status: retryingOffline > 0 ? 'warning' : 'ok',
+        status: pendingCountStatus(retryingOffline),
         detail: ar ? 'محلية على هذا الجهاز فقط' : 'Local to this device only',
         count: retryingOffline,
       },
@@ -172,7 +186,7 @@ export function SystemHealthPage() {
         key: 'offline_blocked',
         ar: 'عمليات Offline تحتاج تدخل',
         en: 'Offline items needing review',
-        status: blockedOffline > 0 ? 'error' : 'ok',
+        status: blockedCountStatus(blockedOffline),
         detail: ar ? 'Blocked / dead-letter على هذا الجهاز' : 'Blocked / dead-letter on this device',
         count: blockedOffline,
       },
@@ -180,7 +194,7 @@ export function SystemHealthPage() {
         key: 'day_close',
         ar: 'آخر إغلاق يوم',
         en: 'Latest day close',
-        status: snapshot.latest_daily_close_at ? 'ok' : 'warning',
+        status: presenceStatus(snapshot.latest_daily_close_at),
         detail: snapshot.latest_daily_close_at
           ? new Date(snapshot.latest_daily_close_at).toLocaleString()
           : (ar ? 'لا يوجد إغلاق يوم ضمن النطاق' : 'No day close found in scope'),

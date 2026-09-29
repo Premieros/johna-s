@@ -30,7 +30,7 @@ describe('FinancialReports selector/branch race contract', () => {
 
   it('normalizes stale account/item/warehouse selections against the newly loaded branch', () => {
     expect(source).toContain("rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || '')");
-    expect(source).toContain("itemRows.some((x) => x.id === prev) ? prev : (itemRows[0]?.id || '')");
+    expect(source).toContain("items.some((x) => x.id === prev) ? prev : (items[0]?.id || '')");
     expect(source).toContain("warehouseRows.some((x) => x.id === prev) ? prev : ''");
   });
 });

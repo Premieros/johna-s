@@ -5,7 +5,6 @@ import {
   XCircle, RefreshCw, Banknote, Activity, Pause,
   Truck, ShoppingBag,
 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -24,6 +23,7 @@ import { TableFloorPlan } from '../components/floor/TableFloorPlan';
 import { STATUS_STYLES } from '../utils/orderTypes';
 import { orderTypeLabel } from '../utils/format';
 import { filterOrdersByType, filterOrdersByStatus } from '../utils/orderFilters';
+import { createDiningArea, deleteDiningArea, deleteDiningTable, loadActiveOrderProducts, loadDiningAreas } from '../services/activeOrdersPageData';
 
 interface FilterState {
   filter?: '' | 'held' | 'delivery' | 'takeaway' | null;
@@ -80,8 +80,7 @@ export function ActiveOrdersPage() {
     if (!effectiveBranch) { setAreas([]); return; }
     setAreasLoading(true);
     try {
-      const { data } = await supabase.from('dining_areas').select('*').eq('branch_id', effectiveBranch).order('sort_order');
-      setAreas((data as DiningArea[]) || []);
+      setAreas(await loadDiningAreas(effectiveBranch));
     } finally {
       setAreasLoading(false);
     }
@@ -93,12 +92,12 @@ export function ActiveOrdersPage() {
       setProducts([]);
       return () => { cancelled = true; };
     }
-    supabase.from('products')
-      .select('id, name, name_en')
-      .eq('is_active', true)
-      .eq('branch_id', effectiveBranch)
-      .then(({ data }) => {
-        if (!cancelled) setProducts((data as { id: string; name: string; name_en: string | null }[]) || []);
+    loadActiveOrderProducts(effectiveBranch)
+      .then((data) => {
+        if (!cancelled) setProducts(data);
+      })
+      .catch(() => {
+        if (!cancelled) setProducts([]);
       });
     return () => { cancelled = true; };
   }, [effectiveBranch]);
@@ -204,8 +203,12 @@ export function ActiveOrdersPage() {
 
   const createArea = async () => {
     if (!areaName.trim()) { show(t('required'), 'error'); return; }
-    const { error } = await supabase.from('dining_areas').insert({ name: areaName.trim(), branch_id: effectiveBranch });
-    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
+    try {
+      await createDiningArea({ branchId: effectiveBranch, name: areaName.trim() });
+    } catch (error) {
+      show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
+      return;
+    }
     show(t('saveSuccess'), 'success');
     setAreaName('');
     setAreaModal(false);
@@ -261,8 +264,12 @@ export function ActiveOrdersPage() {
 
   const deleteTable = async (table: DiningTable) => {
     if (!window.confirm(isAr ? `حذف الطاولة "${table.name}"؟` : `Delete table "${table.name}"?`)) return;
-    const { error } = await supabase.from('dining_tables').delete().eq('id', table.id);
-    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
+    try {
+      await deleteDiningTable(table.id);
+    } catch (error) {
+      show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
+      return;
+    }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
   };
 
@@ -272,8 +279,12 @@ export function ActiveOrdersPage() {
       return;
     }
     if (!window.confirm(isAr ? `حذف المنطقة "${area.name}"؟` : `Delete area "${area.name}"?`)) return;
-    const { error } = await supabase.from('dining_areas').delete().eq('id', area.id);
-    if (error) { show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error'); return; }
+    try {
+      await deleteDiningArea(area.id);
+    } catch (error) {
+      show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
+      return;
+    }
     show(isAr ? 'تم الحذف' : 'Deleted', 'success');
     await loadAreas();
   };

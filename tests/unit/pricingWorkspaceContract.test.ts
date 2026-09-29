@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const pricing = readFileSync('src/features/catalog/pages/PricingPage.tsx', 'utf8');
+const pricingData = readFileSync('src/features/catalog/services/pricingData.ts', 'utf8');
 const pricingCostMigration = readFileSync(
   'supabase/migrations/20260919180000_raw_pricing_authoritative_cost_cycle.sql',
   'utf8',
@@ -27,12 +28,12 @@ describe('pricing workspace contract', () => {
     expect(pricing).toContain("can('raw_materials.manage')");
     expect(pricing).toContain("can('products.view')");
     expect(pricing).toContain("can('products.edit')");
-    expect(pricing).toContain(".eq('branch_id', branchId)");
-    expect(pricing).toContain(".eq('unit_type', 'manufactured')");
+    expect(pricingData).toContain(".eq('branch_id', params.branchId)");
+    expect(pricingData).toContain(".eq('unit_type', 'manufactured')");
   });
 
   it('routes raw pricing through costing history without overwriting inventory average cost', () => {
-    expect(pricing).toContain(".from('raw_materials')");
+    expect(pricingData).toContain(".from('raw_materials')");
     expect(pricing).toContain('costing.setRawMaterialPrice({');
     expect(pricing).not.toContain(".update({ default_cost: nextCost })");
     expect(pricing).not.toContain(".from('raw_material_inventory').update");

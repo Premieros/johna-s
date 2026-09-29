@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowUpRight, Boxes, Building2, CreditCard, Package, RefreshCw, ShoppingCart, Sparkles, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
@@ -10,6 +9,7 @@ import { isAdminRole } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { aggregatePaymentMethods, netSaleAmount, type SalePaymentLike } from '@/features/reporting/numericIntegrity';
+import { loadExecutiveInsightsData } from '../services/executiveInsightsData';
 
 type Sale = {
   id: string;
@@ -56,21 +56,14 @@ export function DashboardExecutiveInsightsV2() {
       if (range === 'today') start.setHours(0, 0, 0, 0);
       if (range === 'week') start.setDate(start.getDate() - 6);
       if (range === 'month') start.setDate(start.getDate() - 29);
-      let salesQuery = supabase.from('sales').select('id,total,paid_amount,refunded_amount,payment_method,order_type,branch_id,created_at').gte('created_at', start.toISOString()).lte('created_at', end.toISOString()).order('created_at', { ascending: false }).limit(5000);
-      let inventoryQuery = supabase.from('inventory').select('quantity,branch_id,product:products(low_stock_threshold)').limit(5000);
-      if (branchId) { salesQuery = salesQuery.eq('branch_id', branchId); inventoryQuery = inventoryQuery.eq('branch_id', branchId); }
-      const [salesResult, inventoryResult] = await Promise.all([salesQuery, inventoryQuery]);
-      if (salesResult.error) throw salesResult.error;
-      if (inventoryResult.error) throw inventoryResult.error;
-      const saleRows = (salesResult.data || []) as Sale[];
-      setSales(saleRows);
-      setStock((inventoryResult.data || []) as unknown as Stock[]);
-      if (saleRows.length) {
-        const paymentResult = await supabase.from('sale_payments').select('sale_id,branch_id,payment_method,amount,refunded_amount').in('sale_id', saleRows.map((sale) => sale.id)).limit(10000);
-        setSalePayments(paymentResult.error ? [] : ((paymentResult.data || []) as SalePaymentLike[]));
-      } else {
-        setSalePayments([]);
-      }
+      const data = await loadExecutiveInsightsData({
+        branchId: branchId || null,
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+      });
+      setSales(data.sales as Sale[]);
+      setStock(data.stock as Stock[]);
+      setSalePayments(data.salePayments);
     } catch (error) {
       console.error('Executive dashboard load failed', error);
       setSales([]); setSalePayments([]); setStock([]);

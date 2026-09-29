@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit2, Boxes, Layers, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -17,6 +16,7 @@ import { formatNumber, formatDate, formatRawMaterialQuantity, measurementUnitLab
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { RawMaterial, RawMaterialInventory, RawMaterialBatch, Unit, Branch, RpcResult } from '@/lib/types';
+import { deleteRawMaterial, loadRawMaterialMeta, updateRawMaterial } from '../services/rawMaterialData';
 
 type Tab = 'materials' | 'stock' | 'batches';
 
@@ -71,16 +71,11 @@ export function RawMaterialsPage() {
   async function loadMeta() {
     setLoading(true);
     try {
-      const [inv, b, u, br] = await Promise.all([
-        supabase.from('raw_material_inventory').select('*, raw_material:raw_materials(*), branch:branches(*)').order('updated_at', { ascending: false }),
-        supabase.from('raw_material_batches').select('*, raw_material:raw_materials(*), branch:branches(*)').order('created_at', { ascending: false }),
-        supabase.from('measurement_units').select('*').eq('is_active', true).order('name'),
-        supabase.from('branches').select('*').eq('is_active', true).order('name'),
-      ]);
-      setInventory((inv.data as RawMaterialInventory[]) || []);
-      setBatches((b.data as RawMaterialBatch[]) || []);
-      setUnits((u.data as Unit[]) || []);
-      setBranches((br.data as Branch[]) || []);
+      const meta = await loadRawMaterialMeta();
+      setInventory(meta.inventory);
+      setBatches(meta.batches);
+      setUnits(meta.units);
+      setBranches(meta.branches);
     } finally {
       setLoading(false);
     }
@@ -132,8 +127,12 @@ export function RawMaterialsPage() {
       is_active: form.is_active,
     };
     if (form.id) {
-      const { error } = await supabase.from('raw_materials').update(commonPayload).eq('id', form.id);
-      if (error) { show(error.message, 'error'); return; }
+      try {
+        await updateRawMaterial(form.id, commonPayload);
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
+      }
       await logAudit('update', 'raw_materials', form.id);
       show(t('saveSuccess'), 'success');
     } else {
@@ -157,9 +156,13 @@ export function RawMaterialsPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('raw_materials').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'raw_materials', deleteId); }
+    try {
+      await deleteRawMaterial(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'raw_materials', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadMaterials();
   };

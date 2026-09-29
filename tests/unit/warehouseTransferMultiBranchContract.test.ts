@@ -4,19 +4,22 @@ import { resolve } from 'node:path';
 
 const root = resolve(process.cwd());
 const page = readFileSync(resolve(root, 'src/features/inventory/pages/TransfersPage.tsx'), 'utf8');
+const dataService = readFileSync(resolve(root, 'src/features/inventory/services/transferPageData.ts'), 'utf8');
 const api = readFileSync(resolve(root, 'src/api/domains/inventory.ts'), 'utf8');
 const crossBranchMigration = readFileSync(resolve(root, 'supabase/migrations/20260911004000_cross_branch_inventory_transfers.sql'), 'utf8');
 const warehouseRawMigration = readFileSync(resolve(root, 'supabase/migrations/20260911150000_raw_material_warehouse_stage_b.sql'), 'utf8');
 
 describe('warehouse transfer current operating contract', () => {
   it('shows RLS-visible source/destination branches and raw materials only', () => {
-    expect(page).toContain("supabase.from('branches').select('*')");
-    expect(page).toContain("supabase.from('raw_materials').select('id,name,branch_id,unit_id,default_cost')");
+    expect(dataService).toContain("supabase.from('branches')");
+    expect(dataService).toContain(".select('*')");
+    expect(dataService).toContain("supabase.from('raw_materials')");
+    expect(dataService).toContain(".select('id,name,branch_id,unit_id,default_cost')");
     expect(page).toContain('source_branch_id');
     expect(page).toContain('destination_branch_id');
     expect(page).toContain("item_type: 'raw_material'");
     expect(page).toContain('sourceRawMaterials');
-    expect(page).not.toContain("supabase.from('products')");
+    expect(dataService).not.toContain("supabase.from('products')");
     expect(page).not.toContain("value=\"product\"");
     expect(page).not.toContain("type TransferItemType = 'product' | 'raw_material'");
   });
@@ -72,9 +75,9 @@ describe('warehouse transfer current operating contract', () => {
   });
 
   it('prices the transfer preview from the source warehouse raw-material view', () => {
-    expect(page).toContain("supabase.from('raw_material_warehouse_inventory')");
-    expect(page).toContain(".eq('warehouse_id', form.from_warehouse_id)");
-    expect(page).not.toContain("supabase.from('inventory_batches')");
+    expect(dataService).toContain(".from('raw_material_warehouse_inventory')");
+    expect(dataService).toContain(".eq('warehouse_id', params.warehouseId)");
+    expect(dataService).not.toContain("supabase.from('inventory_batches')");
   });
 
   it('keeps historical database item identities explicit and mutually exclusive', () => {

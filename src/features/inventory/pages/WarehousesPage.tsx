@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
@@ -19,6 +18,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useGuidedWorkflow } from '@/core/guard';
 import type { Warehouse, Branch } from '@/lib/types';
+import { deleteWarehouse, saveWarehouse } from '../services/warehouseCrud';
 
 export function WarehousesPage() {
   const { t } = useLanguage();
@@ -45,15 +45,14 @@ export function WarehousesPage() {
   const save = async () => {
     if (!form.name) { show(t('required'), 'error'); return; }
     const payload = { ...form, branch_id: branchFilter || form.branch_id || null };
-    if (editing) {
-      const { error } = await supabase.from('warehouses').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'warehouses', editing.id);
-    } else {
-      const { error } = await supabase.from('warehouses').insert(payload);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'warehouses');
+    try {
+      await saveWarehouse({ id: editing?.id, payload });
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
     }
+    if (editing) await logAudit('update', 'warehouses', editing.id);
+    else await logAudit('create', 'warehouses');
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadWarehouses();
@@ -67,9 +66,13 @@ export function WarehousesPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('warehouses').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'warehouses', deleteId); }
+    try {
+      await deleteWarehouse(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'warehouses', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadWarehouses();
   };

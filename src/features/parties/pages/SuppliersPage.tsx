@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Trophy, FileText } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -24,6 +23,7 @@ import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useGuidedWorkflow } from '@/core/guard';
 import { SupplierStatementModal } from '../components/SupplierStatementModal';
 import type { ApAgingRow, Supplier, SupplierEvaluationRow } from '@/lib/types';
+import { deleteSupplier, saveSupplier } from '../services/supplierCrud';
 
 export function SuppliersPage() {
   const { t, lang } = useLanguage();
@@ -120,16 +120,14 @@ export function SuppliersPage() {
     }
     const payload = { ...form, branch_id: targetBranchId };
     let supplierId = editing?.id || '';
-    if (editing) {
-      const { error } = await supabase.from('suppliers').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'suppliers', editing.id);
-    } else {
-      const { data, error } = await supabase.from('suppliers').insert(payload).select('id').single();
-      if (error) { show(error.message, 'error'); return; }
-      supplierId = data?.id || '';
-      await logAudit('create', 'suppliers', supplierId || undefined);
+    try {
+      supplierId = (await saveSupplier({ id: editing?.id, payload })) || '';
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
     }
+    if (editing) await logAudit('update', 'suppliers', editing.id);
+    else await logAudit('create', 'suppliers', supplierId || undefined);
 
     if (canManageOpening && !existingOpening && Number(openingAmount) > 0 && supplierId && targetBranchId) {
       const { data, error } = await api.accounting.setSupplierOpeningBalance({
@@ -160,9 +158,13 @@ export function SuppliersPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('suppliers').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'suppliers', deleteId); }
+    try {
+      await deleteSupplier(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'suppliers', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadSuppliers();
   };

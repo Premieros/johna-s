@@ -16,11 +16,16 @@ describe('financial reports branch scope contract', () => {
     expect(page).not.toContain("t('allBranches')");
   });
 
-  it('keeps every financial RPC scoped to one explicit accessible branch', () => {
+  it('keeps every financial RPC and selector read scoped to one explicit accessible branch', () => {
     const page = read('src/features/accounting/pages/FinancialReportsPage.tsx');
+    const selectors = read('src/features/accounting/services/financialReportSelectors.ts');
 
     expect(page).toContain('p_branch_id: effectiveBranchFilter');
     expect(page).toContain('if (!effectiveBranchFilter)');
-    expect(page).toContain(".eq('branch_id', effectiveBranchFilter)");
+    expect(page).toContain('loadLedgerAccounts(effectiveBranchFilter)');
+    expect(page).toContain('loadTreasuryAccounts(effectiveBranchFilter)');
+    expect(page).toContain('loadInventoryStatementOptions(effectiveBranchFilter, inventoryItemType)');
+    expect(page).toContain('loadPartyStatementOptions(effectiveBranchFilter, partySide)');
+    expect(selectors).toContain(".eq('branch_id', branchId)");
   });
 });

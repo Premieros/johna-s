@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Trash2, ChefHat, Calculator, Package } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -17,6 +16,7 @@ import { formatCurrency, formatNumber, formatRawMaterialQuantity, measurementUni
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { Recipe, RecipeItem, RawMaterial, Product, Branch, RecipeItemInput, Unit } from '@/lib/types';
+import { createRecipeWithItems, deleteRecipeControlled, loadRecipeComponents, loadRecipeItems, loadRecipeManufacturedLinks, loadRecipeMeta, updateRecipeWithItems, type RecipeManufacturedUnitOption as ManufacturedUnitOption, type RecipeMutationResult } from '../services/recipeData';
 
 interface ItemForm {
   raw_material_id: string;
@@ -24,22 +24,9 @@ interface ItemForm {
   wastage_percent: number;
 }
 
-interface ManufacturedUnitOption {
-  id: string;
-  name: string;
-  branch_id: string | null;
-  cost_price: number;
-}
-
 interface ManufacturedComponentForm {
   unit_id: string;
   quantity: number;
-}
-
-interface RecipeMutationResult {
-  success?: boolean;
-  error?: string;
-  detail?: string;
 }
 
 const EMPTY_ITEM: ItemForm = { raw_material_id: '', quantity: 1, wastage_percent: 0 };
@@ -79,26 +66,17 @@ export function RecipesPage() {
 
   const loadMeta = useCallback(async () => {
     setMetaError(null);
-    let productQuery = supabase.from('products').select('*').eq('is_active', true);
-    if (branchFilter) productQuery = productQuery.eq('branch_id', branchFilter);
-    let branchQuery = supabase.from('branches').select('*').eq('is_active', true);
-    if (branchFilter) branchQuery = branchQuery.eq('id', branchFilter);
-
-    const [pr, br, unitRes] = await Promise.all([
-      productQuery.order('name'),
-      branchQuery.order('name'),
-      supabase.from('measurement_units').select('*').eq('is_active', true).order('name'),
-    ]);
-    if (pr.error || br.error || unitRes.error) {
-      setMetaError(pr.error?.message || br.error?.message || unitRes.error?.message || 'Failed to load recipe metadata');
+    try {
+      const data = await loadRecipeMeta(branchFilter);
+      setProducts(data.products);
+      setBranches(data.branches);
+      setUnits(data.units);
+    } catch (error) {
+      setMetaError(error instanceof Error ? error.message : 'Failed to load recipe metadata');
       setProducts([]);
       setBranches([]);
       setUnits([]);
-      return;
     }
-    setProducts((pr.data as Product[]) || []);
-    setBranches((br.data as Branch[]) || []);
-    setUnits((unitRes.data as Unit[]) || []);
   }, [branchFilter]);
 
   const loadMaterialsForBranch = useCallback(async (branchId: string) => {
@@ -108,32 +86,17 @@ export function RecipesPage() {
       setManufacturedUnits([]);
       return;
     }
-    const [materialsRes, inventoryRes, manufacturedRes] = await Promise.all([
-      supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
-      supabase.from('raw_material_inventory').select('raw_material_id,avg_cost').eq('branch_id', branchId),
-      supabase.from('inventory_units').select('id,name,branch_id,cost_price').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
-    ]);
-    if (materialsRes.error || manufacturedRes.error) {
-      setMetaError(materialsRes.error?.message || manufacturedRes.error?.message || 'Failed to load recipe components');
+    try {
+      const data = await loadRecipeComponents(branchId);
+      setMaterials(data.materials);
+      setMaterialCosts(data.materialCosts);
+      setManufacturedUnits(data.manufacturedUnits);
+    } catch (error) {
+      setMetaError(error instanceof Error ? error.message : 'Failed to load recipe components');
       setMaterials([]);
       setMaterialCosts({});
       setManufacturedUnits([]);
-      return;
     }
-    const rows = (materialsRes.data as RawMaterial[]) || [];
-    setMaterials(rows);
-    setManufacturedUnits(((manufacturedRes.data || []) as ManufacturedUnitOption[]).map((row) => ({
-      ...row,
-      cost_price: Number(row.cost_price || 0),
-    })));
-    const nextCosts: Record<string, number> = {};
-    for (const row of (inventoryRes.data || []) as { raw_material_id: string; avg_cost: number }[]) {
-      if (Number(row.avg_cost) > 0) nextCosts[row.raw_material_id] = Number(row.avg_cost);
-    }
-    for (const material of rows) {
-      if (!(material.id in nextCosts)) nextCosts[material.id] = Number(material.default_cost || 0);
-    }
-    setMaterialCosts(nextCosts);
   }, []);
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
@@ -146,20 +109,15 @@ export function RecipesPage() {
     }
     let cancelled = false;
     void (async () => {
-      const { data, error: linksError } = await supabase
-        .from('product_unit_links')
-        .select('unit_id,quantity')
-        .eq('product_id', form.product_id);
-      if (cancelled) return;
-      if (linksError) {
-        setMetaError(linksError.message);
+      try {
+        const data = await loadRecipeManufacturedLinks(form.product_id);
+        if (cancelled) return;
+        setManufacturedItems(data);
+      } catch (error) {
+        if (cancelled) return;
+        setMetaError(error instanceof Error ? error.message : String(error));
         setManufacturedItems([]);
-        return;
       }
-      setManufacturedItems(((data || []) as { unit_id: string; quantity: number }[]).map((row) => ({
-        unit_id: row.unit_id,
-        quantity: Number(row.quantity) || 1,
-      })));
     })();
     return () => { cancelled = true; };
   }, [modalOpen, form.product_id]);
@@ -191,11 +149,16 @@ export function RecipesPage() {
   };
 
   const openEdit = async (rc: Recipe) => {
-    const { data, error: itemError } = await supabase.from('recipe_items').select('*').eq('recipe_id', rc.id).order('created_at');
-    if (itemError) { show(itemError.message, 'error'); return; }
+    let recipeItems: RecipeItem[];
+    try {
+      recipeItems = await loadRecipeItems(rc.id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
+    }
     setEditing(rc);
     setForm({ product_id: rc.product_id, branch_id: rc.branch_id, name: rc.name || '', yield_quantity: Number(rc.yield_quantity) || 1, notes: rc.notes || '', is_active: rc.is_active });
-    const fetched = ((data as RecipeItem[]) || []).map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) }));
+    const fetched = recipeItems.map((it) => ({ raw_material_id: it.raw_material_id, quantity: Number(it.quantity), wastage_percent: Number(it.wastage_percent) }));
     setItems(fetched.length ? fetched : [{ ...EMPTY_ITEM }]);
     setManufacturedUnitSel('');
     setManufacturedUnitQty(1);
@@ -241,25 +204,31 @@ export function RecipesPage() {
 
     let recipeId = editing?.id || '';
     if (editing) {
-      const { data, error: rpcError } = await supabase.rpc('update_recipe_with_items', {
-        p_recipe_id: editing.id,
-        p_name: form.name.trim(),
-        p_yield_quantity: Number(form.yield_quantity) || 1,
-        p_notes: form.notes.trim(),
-        p_is_active: form.is_active,
-        p_items: itemRows,
-      });
-      const result = data as RecipeMutationResult | null;
-      if (rpcError || !result?.success) {
-        show(rpcError?.message || result?.detail || result?.error || t('error'), 'error');
+      let result: RecipeMutationResult;
+      try {
+        result = await updateRecipeWithItems({
+          recipeId: editing.id,
+          name: form.name.trim(),
+          yieldQuantity: Number(form.yield_quantity) || 1,
+          notes: form.notes.trim(),
+          isActive: form.is_active,
+          items: itemRows,
+        });
+      } catch (error) {
+        show(error instanceof Error ? error.message : String(error), 'error');
+        return;
+      }
+      if (!result?.success) {
+        show(result?.detail || result?.error || t('error'), 'error');
         return;
       }
     } else {
-      const { data, error: insertError } = await supabase.from('recipes').insert(payload).select().single();
-      if (insertError || !data) { show(insertError?.message || t('error'), 'error'); return; }
-      recipeId = (data as Recipe).id;
-      const { error: itemsError } = await supabase.from('recipe_items').insert(itemRows.map((item) => ({ ...item, recipe_id: recipeId })));
-      if (itemsError) { show(itemsError.message, 'error'); return; }
+      try {
+        recipeId = await createRecipeWithItems({ payload, items: itemRows });
+      } catch (error) {
+        show(error instanceof Error ? error.message : t('error'), 'error');
+        return;
+      }
       await logAudit('create', 'recipes', recipeId);
     }
 
@@ -280,10 +249,13 @@ export function RecipesPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { data, error: deleteError } = await supabase.rpc('delete_recipe_controlled', { p_recipe_id: deleteId });
-    const result = data as RecipeMutationResult | null;
-    if (deleteError || !result?.success) show(deleteError?.message || result?.detail || result?.error || t('error'), 'error');
-    else show(t('deleteSuccess'), 'success');
+    try {
+      const result = await deleteRecipeControlled(deleteId);
+      if (!result?.success) show(result?.detail || result?.error || t('error'), 'error');
+      else show(t('deleteSuccess'), 'success');
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadRecipes();
   };

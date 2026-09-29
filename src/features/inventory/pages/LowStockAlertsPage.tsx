@@ -1,7 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -23,6 +22,7 @@ import {
   type ReorderLine,
 } from '@/lib/reorder';
 import type { LowStockAlertRow, Warehouse, Supplier } from '@/lib/types';
+import { loadLowStockOptions, loadProductCostMap, loadRawMaterialReorderRows } from '../services/lowStockData';
 
 export function LowStockAlertsPage() {
   const { t, lang } = useLanguage();
@@ -61,16 +61,12 @@ export function LowStockAlertsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [br, wh, sp] = await Promise.all([
-      supabase.from('branches').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-      supabase.from('suppliers').select('*').order('name'),
-    ]);
-    if (br.error) { setError(br.error.message); setLoading(false); show(br.error.message, 'error'); return; }
-    const b = (br.data as { id: string; name: string }[] | null) || [];
+    const options = await loadLowStockOptions();
+    if (options.branchError) { setError(options.branchError.message); setLoading(false); show(options.branchError.message, 'error'); return; }
+    const b = options.branches;
     setBranches(b);
-    setWarehouses((wh.data as Warehouse[]) || []);
-    setSuppliers((sp.data as Supplier[]) || []);
+    setWarehouses(options.warehouses);
+    setSuppliers(options.suppliers);
     let effBranch = branchId;
     if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }
 
@@ -112,30 +108,18 @@ export function LowStockAlertsPage() {
   const loadReorder = useCallback(async (branchId: string) => {
     if (!branchId) return;
     setLoadingReorder(true);
-    const [alerts, rawRes] = await Promise.all([
+    const [alerts, rawRowsData] = await Promise.all([
       api.inventory.getLowStockAlerts({ p_branch_id: branchId, p_warehouse_id: null }),
-      supabase
-        .from('raw_material_inventory')
-        .select('raw_material_id, quantity, min_stock, raw_material:raw_materials(id, name, code, min_stock, default_cost, is_active, unit:units(name))')
-        .eq('branch_id', branchId),
+      loadRawMaterialReorderRows(branchId),
     ]);
     const alertRows = alerts.data || [];
     const productIds = alertRows.map((r) => r.product_id);
-    const costMap: Record<string, number> = {};
-    if (productIds.length > 0) {
-      const { data: costs } = await supabase.from('products').select('id, cost_price').in('id', productIds);
-      for (const c of (costs as { id: string; cost_price: number }[] | null) || []) costMap[c.id] = Number(c.cost_price) || 0;
-    }
+    const costMap = await loadProductCostMap(productIds);
     const productLines = buildProductReorderLines(alertRows).map((l) => ({
       ...l,
       estimated_cost: costMap[l.product_id || ''] || 0,
     }));
-    const rawRows = ((rawRes.data || []) as unknown as {
-      raw_material_id: string;
-      quantity: number;
-      min_stock: number;
-      raw_material: { id: string; name: string; code: string | null; min_stock: number; default_cost: number; is_active: boolean; unit: { name: string } | null } | null;
-    }[]).filter((r) => r.raw_material && r.raw_material.is_active !== false).map((r) => ({
+    const rawRows = rawRowsData.filter((r) => r.raw_material && r.raw_material.is_active !== false).map((r) => ({
       raw_material_id: r.raw_material_id,
       name: r.raw_material!.name,
       unit_name: r.raw_material!.unit?.name || null,

@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, Eye, Link2, CheckCircle2, CircleDashed } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -23,6 +22,7 @@ import type {
   BankReconciliation, ReconciliationDetail,
   TreasuryAccount,
 } from '@/lib/types';
+import { fetchActiveTreasuryAccounts } from '../services/reconciliationAccounts';
 
 export function ReconciliationPage() {
   const { t, lang } = useLanguage();
@@ -61,13 +61,7 @@ export function ReconciliationPage() {
 
   const loadAccounts = useCallback(async () => {
     if (!effectiveBranchFilter) { setAccounts([]); return; }
-    const { data: acc } = await supabase
-      .from('treasury_accounts')
-      .select('*')
-      .eq('branch_id', effectiveBranchFilter)
-      .eq('is_active', true)
-      .order('account_type');
-    setAccounts((acc as TreasuryAccount[]) || []);
+    setAccounts(await fetchActiveTreasuryAccounts(effectiveBranchFilter));
   }, [effectiveBranchFilter]);
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);

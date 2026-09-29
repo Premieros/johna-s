@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, Eye, Send, Check, X, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +18,7 @@ import { useCan } from '@/lib/permissions';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { Supplier, Product, RawMaterial, RpcResult, PurchaseRequestRow, ProcurementLineInput } from '@/lib/types';
+import { loadPurchaseRequestItems, loadPurchaseRequestMeta } from '../services/purchaseRequestPageData';
 
 interface RequestFormItem {
   line_type: 'product' | 'raw';
@@ -77,14 +77,10 @@ export function PurchaseRequestsPage() {
   const [lineItems, setLineItems] = useState<RequestFormItem[]>([{ ...EMPTY_LINE }]);
 
   async function loadMeta() {
-    const [s, pr, rm] = await Promise.all([
-      supabase.from('suppliers').select('*').order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
-    ]);
-    setSuppliers((s.data as Supplier[]) || []);
-    setProducts((pr.data as Product[]) || []);
-    setRawMaterials((rm.data as RawMaterial[]) || []);
+    const meta = await loadPurchaseRequestMeta();
+    setSuppliers(meta.suppliers);
+    setProducts(meta.products);
+    setRawMaterials(meta.rawMaterials);
   }
   useEffect(() => { loadMeta(); }, []);
 
@@ -149,12 +145,7 @@ export function PurchaseRequestsPage() {
 
   const viewRequest = async (r: PurchaseRequestRow) => {
     setViewModal(r);
-    const { data } = await supabase.from('purchase_request_items').select('*, product:products(name), raw_material:raw_materials(name)').eq('request_id', r.id);
-    setViewItems((data || []).map((i: Record<string, unknown>) => ({
-      name: (i.product as { name: string })?.name || (i.raw_material as { name: string })?.name || '-',
-      quantity: Number(i.quantity),
-      estimated_cost: i.estimated_cost != null ? Number(i.estimated_cost) : null,
-    })));
+    setViewItems(await loadPurchaseRequestItems(r.id));
   };
 
   const columns: Column<PurchaseRequestRow & { supplier?: Supplier }>[] = [

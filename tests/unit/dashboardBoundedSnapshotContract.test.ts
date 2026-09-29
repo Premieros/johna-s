@@ -3,23 +3,23 @@ import { readFileSync } from 'node:fs';
 
 const page = readFileSync('src/features/dashboard/pages/DashboardDataPage.tsx', 'utf8');
 const service = readFileSync('src/features/dashboard/services/dashboardSnapshot.ts', 'utf8');
+const rawData = readFileSync('src/features/dashboard/services/dashboardRawData.ts', 'utf8');
 
 describe('dashboard bounded snapshot preference', () => {
   it('prefers one aggregate snapshot before the legacy raw-sales fallback', () => {
     expect(page).toContain('await loadDashboardSalesSnapshot({');
     expect(page).toContain('if (boundedSnapshot) {');
     expect(page).toContain('setSnapshot(boundedSnapshot)');
-    expect(page).toContain("supabase.from('sales')");
-    expect(page).toContain("sale:sales!inner(created_at,branch_id)");
-    expect(page).toContain(".gte('sale.created_at', window.start.toISOString())");
-    expect(page).toContain(".lte('sale.created_at', window.end.toISOString())");
-    expect(page).toContain(".limit(5000)");
-    expect(page).not.toContain(".in('sale_id', currentRows.map((sale) => sale.id))");
+    expect(rawData).toContain(".from('sales')");
+    expect(rawData).toContain("sale:sales!inner(created_at,branch_id)");
+    expect(rawData).toContain(".gte('sale.created_at', params.currentFrom)");
+    expect(rawData).toContain(".lte('sale.created_at', params.currentTo)");
+    expect(rawData).toContain(".limit(5000)");
+    expect(rawData).not.toContain(".in('sale_id', currentRows.map((sale) => sale.id))");
 
     const snapshotCall = page.indexOf('await loadDashboardSalesSnapshot({');
-    const rawSalesFallback = page.indexOf("supabase.from('sales')");
     expect(snapshotCall).toBeGreaterThanOrEqual(0);
-    expect(rawSalesFallback).toBeGreaterThan(snapshotCall);
+    expect(page).toContain('loadDashboardFallbackSales({');
   });
 
   it('keeps dashboard financial semantics server-bounded and typed', () => {

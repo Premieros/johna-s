@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-28",
+  "scope": "stability_closure",
+  "notes": [
+    "Budgets are conservative operational guardrails, not hard Production SLAs.",
+    "Production-only latency must be measured read-only and recorded in the active stability log.",
+    "CI should enforce structural/call-shape contracts; CI must not depend on live Production latency."
+  ],
+  "paths": {
+    "pos.active_orders_snapshot": {
+      "warning_ms": 750,
+      "critical_ms": 1500,
+      "max_client_round_trips": 3,
+      "basis": "Active snapshot now embeds order_items and order_kitchen_sends into the orders read; remaining client requests are dining tables, orders snapshot, and operator labels. Historical pg_stat_statements identified the removed item/send reads as the dominant repeated POS read family."
+    },
+    "pos.cart_availability": {
+      "warning_ms": 750,
+      "critical_ms": 1500,
+      "max_client_round_trips": 4,
+      "basis": "Cart availability currently reads order_items and kitchen_sends before warehouse/availability resolution."
+    },
+    "pos.active_shift": {
+      "warning_ms": 250,
+      "critical_ms": 750,
+      "max_client_round_trips": 1,
+      "basis": "Production pg_stat_statements shows the canonical active-shift RPC is normally low-latency."
+    },
+    "pos.send_to_kitchen": {
+      "warning_ms": 1000,
+      "critical_ms": 2000,
+      "max_client_round_trips": 1,
+      "basis": "Historical cumulative mean is roughly 0.77s across high call volume; kitchen behavior is frozen and only measured regressions may be optimized."
+    },
+    "dashboard.sales_snapshot": {
+      "warning_ms": 750,
+      "critical_ms": 1500,
+      "max_client_round_trips": 1,
+      "basis": "Direct 2026-09-28 DB measurements were about 14-98ms for 7-day branch snapshots and about 81ms for all-branch year-to-date."
+    },
+    "inventory.ledger": {
+      "warning_ms": 3000,
+      "critical_ms": 8000,
+      "max_client_round_trips": 2,
+      "basis": "Inventory-ledger reads remain a known historical heavy path and need bounded query shape before tighter targets."
+    },
+    "costing.sales_summary": {
+      "warning_ms": 2500,
+      "critical_ms": 5000,
+      "max_client_round_trips": 1,
+      "basis": "Cumulative pg_stat_statements includes a repeated shape around 1.7s mean and slower diagnostic variants."
+    },
+    "costing.raw_material_overview": {
+      "warning_ms": 2000,
+      "critical_ms": 4000,
+      "max_client_round_trips": 1,
+      "basis": "Cumulative pg_stat_statements includes a repeated shape around 1.25s mean."
+    },
+    "closing.shift_day_reads": {
+      "warning_ms": 1500,
+      "critical_ms": 3000,
+      "max_client_round_trips": 3,
+      "basis": "Closing is operationally critical; budget is intentionally conservative until a repeatable current baseline is recorded."
+    }
+  }
+}
