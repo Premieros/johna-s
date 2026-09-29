@@ -57,11 +57,11 @@ jobs:
           node scripts/db/apply-migration.js --file supabase/ci/seed_raw_material_branch.sql
           node scripts/db/apply-migration.js --file supabase/ci/permission_first_role_fixture.sql
       - name: Create representative logical snapshot
-        run: pg_dump --format=custom --no-owner --no-privileges --dbname="$SUPABASE_DB_URL" --file=/tmp/johna-rehearsal.dump
+        run: pg_dump --format=custom --no-owner --dbname="$SUPABASE_DB_URL" --file=/tmp/johna-rehearsal.dump
       - name: Restore snapshot into second isolated database
         run: |
           createdb --host=127.0.0.1 --username=postgres restored_rehearsal
-          pg_restore --host=127.0.0.1 --username=postgres --dbname=restored_rehearsal --no-owner --no-privileges /tmp/johna-rehearsal.dump
+          pg_restore --host=127.0.0.1 --username=postgres --dbname=restored_rehearsal --no-owner /tmp/johna-rehearsal.dump
           echo "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:5432/restored_rehearsal" >> "$GITHUB_ENV"
       - name: Verify restored schema
         run: node scripts/db/verify-schema.js
