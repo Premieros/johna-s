@@ -441,3 +441,5 @@ This track is complete only when:
 - 2026-09-29: `ProductsPage` direct access moved behind `productPageData`; product metadata/composition reads and legacy component/product CRUD preserve existing `api.catalog` operational contracts; page direct Supabase reduced to 0; legacy allowlist reduced to 5.
 
 - 2026-09-29: `ActiveOrdersPage` direct dining-area/product/table access moved behind `activeOrdersPageData`; protected floor-plan/order RPCs remain on existing APIs; page direct Supabase reduced to 0; legacy allowlist reduced to 4.
+
+- 2026-09-29: `SalesPage` direct access moved behind `salesPageData`; customer/payment/settings reads and approval/payment-method/metadata operations preserve existing trade and receipt paths; `buildReceiptHtml`, `openPrintWindow`, and `processRefund` remain unchanged; page direct Supabase reduced to 0; legacy allowlist reduced to 3.
