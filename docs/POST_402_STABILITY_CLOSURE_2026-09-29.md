@@ -37,6 +37,23 @@ State: **BLOCKED** — Production writes and merge remain blocked by verificatio
 - 2026-09-29: opened this post-#402 stability closure log.
 - Next planned work: Source-of-Truth closure, then Business Day / Auto Close Integrity before payment, performance, heavy-page, runtime, print-observability, DB-hygiene, security-surface, and System Health work.
 
+
+
+### 2026-09-29 — Business-day P0 root cause
+- Production read-only evidence confirmed current state drift: Cleopatra business_date=2026-09-30 and Smouha business_date=2026-10-01 while Cairo date is 2026-09-29.
+- Future daily_close rows were user-attributed, not system cron closes. Smouha closed 2026-09-28 and 2026-09-29 twelve seconds apart, then 2026-09-30 on 2026-09-28.
+- Root cause chain:
+  1. `rollover_business_day/day_close` allowed rollover before the configured cutoff.
+  2. Repeated rollover created future `daily_closes`.
+  3. `_ensure_business_day_state` trusted the highest historical close and advanced a later shift to `last_close + 1`, propagating the future date.
+- Branch-only fix added in `20260929223000_business_day_integrity_guard.sql`:
+  - bounds live state to the clock-reachable business date;
+  - blocks rollover before configured cutoff;
+  - advances exactly one date;
+  - refuses to skip over an already-closed next date.
+- Contract test added at `tests/unit/businessDayIntegrityGuardContract.test.ts`.
+- No Production migration or historical data correction has been applied.
+
 ## Verification ledger
 - Baseline main commit confirmed: `5c74a25448afb65c4e3b528751f749215162cd1b`.
 - Production Supabase project confirmed ACTIVE_HEALTHY.
