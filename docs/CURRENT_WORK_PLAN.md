@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Stability Closure / Architecture Containment / no feature development**
+- Track: **Emergency cash handover single-source reconciliation**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`
-- Active development branch: `development/stability-closure-architecture-containment-20260928`
-- Mandatory active work log: `docs/STABILITY_CLOSURE_ARCHITECTURE_CONTAINMENT_2026-09-28.md`
+- Latest main baseline reconciled: `5c74a25448afb65c4e3b528751f749215162cd1b`
+- Active development branch: `development/cash-handover-single-source-20260929`
+- Mandatory active work log: `docs/CASH_HANDOVER_SINGLE_SOURCE_2026-09-29.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/stability-closure-architecture-containment-20260928`
+4. `development/cash-handover-single-source-20260929`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -50,7 +50,7 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 - #357 — Smouha V8.1.1 final
 
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
-PR #402 is the active Stability Closure PR and remains Draft until the final merge gate.
+PR #402 is merged/closed. PR #409 is the active emergency financial reconciliation PR and remains Draft until the final merge gate.
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -67,18 +67,16 @@ PR #402 is the active Stability Closure PR and remains Draft until the final mer
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Do not add product features. Close the remaining structural and operational stability debt after Stability Foundation:
-1. source-of-truth and branch hygiene;
-2. formal latency/call budgets for critical paths;
-3. measured repair of remaining performance hotspots;
-4. containment of oversized/heavy pages behind domain/feature services;
-5. monotonic reduction of the legacy direct-Supabase page allowlist;
-6. centralized runtime state and System Health severity semantics;
-7. minimal device/workstation operational identity foundation;
-8. restore/recovery and rollback readiness.
+Resolve the urgent cash-handover ambiguity without changing printing/KDS:
+1. one canonical calculated shift cash net for employee handover;
+2. employee counted cash remains informational only and never drives accounting;
+3. add explicit Treasury columns for shift cash net, outside-shift cash movement, and daily cash net;
+4. guarantee cash carried + daily cash net = actual cash closing balance;
+5. apply the same rule to every branch;
+6. expose discrepancies instead of attributing them to employees.
 
-Detailed phase gates, findings, budgets, and change ledger are maintained only in:
-`docs/STABILITY_CLOSURE_ARCHITECTURE_CONTAINMENT_2026-09-28.md`
+Detailed execution and verification are maintained only in:
+`docs/CASH_HANDOVER_SINGLE_SOURCE_2026-09-29.md`
 
 ## Definition of done
 This track is complete only when:
