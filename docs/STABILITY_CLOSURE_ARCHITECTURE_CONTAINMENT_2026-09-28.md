@@ -29,12 +29,12 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - ✅ Regression contract added and round-trip budget tightened from 5 to 3.
 - ✅ Inventory Ledger page direct branch lookup removed from the page; ledger RPC behavior itself remains unchanged.
 - 🟡 Costing summary / raw-material overview still have cumulative hotspot evidence, but current direct authenticated latency baselines are not yet complete.
-- ⛔ Cart-availability optimization is deferred until the user's parallel product repair is merged because that RPC scans product/catalog data.
-- ⛔ Dashboard raw inventory/product fallback restructuring is deferred for the same product-work conflict.
+- 🟡 Cart-availability optimization is now unblocked by the completed product repair; remeasurement is required before any change.
+- 🟡 Dashboard raw inventory/product fallback review is now unblocked; previous direct snapshot measurements were healthy, so changes require fresh evidence.
 
 ### Phase 2 — Heavy-page / direct-data containment
 - ✅ Architecture guard prevents any new direct page-level Supabase access outside the legacy allowlist.
-- ✅ Legacy allowlist reduced from about 43 pages to **35 pages**.
+- ✅ Legacy allowlist reduced from about 43 pages to **33 pages**.
 - ✅ `ExpensesPage` removed from direct Supabase and from the allowlist.
 - ✅ `JournalPage` removed from direct Supabase and from the allowlist.
 - ✅ `BranchesPage` removed from direct Supabase and from the allowlist.
@@ -42,11 +42,13 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - ✅ `PaymentsPage` removed from direct Supabase and from the allowlist.
 - ✅ `EmployeeReceivableDetailPage` removed from direct Supabase and from the allowlist.
 - ✅ `InventoryLedgerPage` removed from direct Supabase and from the allowlist.
+- ✅ `StockValuationPage` filter-option reads moved behind a read-only feature service; valuation RPC behavior stayed unchanged; page removed from the allowlist.
+- ✅ `ImportExportCenterPage` validation-context master-data reads moved behind a feature service with the same branch/super-admin scoping; page direct Supabase reduced from 8 to 0 and removed from the allowlist.
 - 🟡 `SuperAdminConsolePage` heavy read orchestration moved behind a read-only service; direct Supabase calls reduced from 12 to 3, but the remaining calls include sensitive mutations/health checks so the page remains allowlisted.
 - 🟡 POS active-order data access is contained and cheaper, but `PosWorkspacePage` still has legacy direct data orchestration and remains allowlisted.
-- ⛔ Product/catalog pages are intentionally untouched while parallel product work is active.
+- 🟡 Product/catalog pages are no longer blocked by parallel work after latest-main reconciliation; measured containment/performance review may proceed without changing product behavior.
 - ⛔ `ShiftsPage`, Print/KDS/Print Agent paths remain frozen because they are operationally sensitive.
-- ⏳ `ImportExportCenterPage`, `SalesPage`, and the remaining allowlisted pages still need risk-ranked containment after conflict-sensitive areas are cleared.
+- ⏳ `SalesPage` and the remaining allowlisted pages still need risk-ranked containment; `ImportExportCenterPage` is now contained.
 
 ### Phase 3 — Unified runtime control / health semantics ✅ COMPLETE
 - ✅ Existing canonical `OfflineContext` + `syncEngine` baseline verified.
@@ -123,6 +125,9 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - 2026-09-29: Phase 4 Recovery / Release Resilience runbook and CI rehearsal workflow added.
 - 2026-09-29: isolated restore rehearsal completed successfully on PostgreSQL 16 using a logical snapshot restored into a second database; schema verification, Golden Path, branch isolation and financial reconciliation all passed without touching Production.
 - 2026-09-29: Phase 4 Recovery / Release Resilience closed as complete.
+- 2026-09-29: latest `main@62daffd608b7e0dba4052157a8b3bd6b4e9022bc` reconciled into the active branch without force push; product/costing parallel work is no longer a blocker.
+- 2026-09-29: `StockValuationPage` direct Supabase reads reduced from 2 to 0 through `stockValuationOptions` service; valuation RPCs unchanged; legacy allowlist reduced to 34.
+- 2026-09-29: `ImportExportCenterPage` validation-context direct Supabase reads reduced from 8 to 0 through `validation-context-service`; existing branch/super-admin scope preserved; legacy allowlist reduced to 33.
 
 ## Verification ledger
 - Fast Verify #1286 on `26ccdad564092cb0f40953529ba9be0434d3c883`: Green.
@@ -141,6 +146,8 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - Fast Verify #1366 on `7d5967638abf3d91088ebb8fcea47fccfe1215df`: Green — initial recovery workflow integration.
 - Fast Verify #1367 on `e089ec010f8ff82263447dddc53f720493b6134a`: Green — IPv4 restore connectivity fix.
 - Recovery Rehearsal #4 on `78913cdc507afb1a3bdbcaa02e17b91603ab9827`: Green — snapshot creation, restore into second isolated DB, schema verify, Golden Path, branch isolation and financial reconciliation all passed.
+- Fast Verify #1379 on `7496fbc015c6816d9fd9d23ba84613240ebaafbd`: Green — StockValuation containment exact-head checkpoint.
+- Full Verify #3337 on the same head: Green — application, DB and browser verification after StockValuation containment and latest-main reconciliation.
 
 ## Production gate
 Production writes: **BLOCKED**.
