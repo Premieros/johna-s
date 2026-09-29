@@ -437,3 +437,5 @@ This track is complete only when:
 - 2026-09-29: `WasteCenterPage` direct access moved behind `wasteCenterData`; load/create/approve/report semantics and branch scoping preserved; page direct Supabase reduced to 0; legacy allowlist reduced to 7.
 
 - 2026-09-29: `RecipesPage` direct access moved behind `recipeData`; metadata/component/item reads and create/update/delete flows preserve existing RPC/table semantics; page direct Supabase reduced to 0; legacy allowlist reduced to 6.
+
+- 2026-09-29: `ProductsPage` direct access moved behind `productPageData`; product metadata/composition reads and legacy component/product CRUD preserve existing `api.catalog` operational contracts; page direct Supabase reduced to 0; legacy allowlist reduced to 5.
