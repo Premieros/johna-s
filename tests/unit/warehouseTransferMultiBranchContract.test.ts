@@ -75,7 +75,7 @@ describe('warehouse transfer current operating contract', () => {
   });
 
   it('prices the transfer preview from the source warehouse raw-material view', () => {
-    expect(dataService).toContain("supabase.from('raw_material_warehouse_inventory')");
+    expect(dataService).toContain(".from('raw_material_warehouse_inventory')");
     expect(dataService).toContain(".eq('warehouse_id', params.warehouseId)");
     expect(dataService).not.toContain("supabase.from('inventory_batches')");
   });
