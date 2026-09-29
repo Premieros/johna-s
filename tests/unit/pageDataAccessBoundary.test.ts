@@ -22,7 +22,6 @@ const legacyAllowlist = new Set([
   "src/features/dashboard/pages/DashboardExecutiveInsightsV2.tsx",
   "src/features/dashboard/pages/VisualDashboardPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
-  "src/features/inventory/pages/LowStockAlertsPage.tsx",
   "src/features/inventory/pages/StockCountsPage.tsx",
   "src/features/inventory/pages/TransfersPage.tsx",
   "src/features/inventory/pages/WarehousesPage.tsx",
@@ -61,6 +60,14 @@ describe('page data-access architecture boundary', () => {
 
     expect(unexpected, 'Move new page data access behind src/api/domains or a feature service').toEqual([]);
     expect(directPages.length).toBeLessThanOrEqual(legacyAllowlist.size);
+  });
+
+  it('keeps LowStockAlertsPage behind its read-only feature service', () => {
+    const lowStock = readFileSync(join(repoRoot, 'src/features/inventory/pages/LowStockAlertsPage.tsx'), 'utf8');
+    expect(lowStock).toContain('loadLowStockOptions');
+    expect(lowStock).toContain('loadRawMaterialReorderRows');
+    expect(lowStock).toContain('loadProductCostMap');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(lowStock)).toBe(false);
   });
 
   it('keeps FinancialReportsPage behind selector services/domain APIs', () => {
