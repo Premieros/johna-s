@@ -61,13 +61,14 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - ✅ Existing direct connectivity checks inside sensitive POS/payment/cloud-print/cart execution paths remain deliberate compatibility exceptions behind the boundary contract; migration is not required to close this foundation phase.
 
 ### Phase 4 — Recovery / release resilience
-- ⏳ Restore rehearsal procedure.
-- ⏳ Non-Production restore + migrations + schema verification.
-- ⏳ Golden Path on restored environment.
-- ⏳ Branch-isolation / financial-reconciliation checks after restore.
-- ⏳ Application rollback procedure.
-- ⏳ Forward-only migration recovery policy.
-- ⏳ Print Agent independent recovery verification.
+- ✅ Restore rehearsal procedure documented in `docs/RECOVERY_RELEASE_RESILIENCE_2026-09-29.md`.
+- ⏳ Non-Production restore + migrations + schema verification execution/evidence.
+- ⏳ Golden Path on restored environment execution/evidence.
+- ⏳ Branch-isolation / financial-reconciliation checks after restore execution/evidence.
+- ✅ Application rollback procedure documented.
+- ✅ Forward-only migration recovery policy documented and locked by unit contract.
+- ✅ Print Agent independent recovery procedure documented with Cleopatra/Smouha branch preservation.
+- 🟡 Recovery contract test added; exact-head Fast Verify pending for this checkpoint.
 
 ### Final merge gate
 - 🟡 `main` has advanced because of parallel product work. Before merge, this branch **must be updated from the latest `main`**, conflicts reconciled, and all product-side changes absorbed safely.
@@ -135,7 +136,7 @@ Production writes: **BLOCKED**.
 No Production schema/data change is authorized by this track unless exact-head Full Verify is Green and the user gives explicit approval.
 
 ## Next action
-Phase 3 is complete. Continue Phase 2/Phase 1 only in areas that do not conflict with the user's parallel product repair, or begin Phase 4 recovery/release resilience. Before this PR can merge, update the branch from the latest `main`, reconcile the parallel product changes, then rerun exact-head Fast Verify + Full Verify + Production API parity and stop for explicit user approval.
+Phase 3 is complete. Phase 4 recovery policy/runbook is now documented and contract-locked. Next, verify this checkpoint, then execute a real restore rehearsal only against an isolated Fresh/Test database and record evidence before marking Phase 4 complete. Before this PR can merge, update the branch from the latest `main`, reconcile the parallel product changes, then rerun exact-head Fast Verify + Full Verify + Production API parity and stop for explicit user approval.
 
 
 ## Scope
