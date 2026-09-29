@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { ClipboardCheck, Plus, Eye, Send, CheckCircle2, XCircle, CheckCheck, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -17,6 +16,7 @@ import { formatNumber, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { StockCount, StockCountItem, Branch, Warehouse, Product, RawMaterial } from '@/lib/types';
+import { loadStockCountMetadata } from '../services/stockCountData';
 
 interface EditLine {
   product_id: string;
@@ -79,16 +79,11 @@ export function StockCountsPage() {
   const editProducts = editTarget ? products.filter((p) => p.branch_id === editTarget.branch_id) : [];
 
   async function loadMeta() {
-    const [br, wh, pr, rm] = await Promise.all([
-      supabase.from('branches').select('*').eq('is_active', true).order('name'),
-      supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
-    ]);
-    setBranches((br.data as Branch[]) || []);
-    setWarehouses((wh.data as Warehouse[]) || []);
-    setProducts((pr.data as Product[]) || []);
-    setRawMaterials((rm.data as RawMaterial[]) || []);
+    const metadata = await loadStockCountMetadata();
+    setBranches(metadata.branches);
+    setWarehouses(metadata.warehouses);
+    setProducts(metadata.products);
+    setRawMaterials(metadata.rawMaterials);
   }
   useEffect(() => { loadMeta(); }, []);
 
