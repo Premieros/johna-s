@@ -8,7 +8,6 @@ const pagesRoot = join(repoRoot, 'src', 'features');
 const legacyAllowlist = new Set([
   "src/features/accounting/pages/AccountsPage.tsx",
   "src/features/accounting/pages/EmployeeReceivablesPage.tsx",
-  "src/features/accounting/pages/FinancialReportsPage.tsx",
   "src/features/admin/pages/ApprovalCenterPage.tsx",
   "src/features/admin/pages/SuperAdminConsolePage.tsx",
   "src/features/admin/pages/UsersPage.tsx",
@@ -62,6 +61,13 @@ describe('page data-access architecture boundary', () => {
 
     expect(unexpected, 'Move new page data access behind src/api/domains or a feature service').toEqual([]);
     expect(directPages.length).toBeLessThanOrEqual(legacyAllowlist.size);
+  });
+
+  it('keeps FinancialReportsPage behind selector services/domain APIs', () => {
+    const financialReports = readFileSync(join(repoRoot, 'src/features/accounting/pages/FinancialReportsPage.tsx'), 'utf8');
+    expect(financialReports).toContain('loadLedgerAccounts');
+    expect(financialReports).toContain('loadInventoryStatementOptions');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
   });
 
   it('keeps ImportExportCenterPage behind its validation context service', () => {
