@@ -18,7 +18,7 @@ import { mergeEffectiveSettings, useSettings } from '@/context/SettingsContext';
 import { changeSalePaymentMethod, loadReceiptSettingsRows, loadSalePaymentRows, loadSalesCustomers, requestSaleManagerApproval, updateSaleMetadata } from '../services/salesPageData';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
-import type { BranchSettings, Customer, Settings } from '@/lib/types';
+import type { Customer, Settings } from '@/lib/types';
 import {
   APPROVED_FIXED_THERMAL_WIDTH_MM,
   ReceiptPrintApprovalError,
