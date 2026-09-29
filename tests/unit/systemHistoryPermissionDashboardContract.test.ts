@@ -15,6 +15,7 @@ describe('permission-aware dashboard and system history contract', () => {
 
   it('renders only the requested operational dashboard KPIs', () => {
     const dashboard = read('src/features/dashboard/pages/DashboardDataPage.tsx');
+    const dashboardData = read('src/features/dashboard/services/dashboardRawData.ts');
     expect(dashboard).toContain("can('pos.view')");
     expect(dashboard).toContain("can('sales.view')");
     expect(dashboard).toContain("can('inventory.view')");
@@ -28,7 +29,7 @@ describe('permission-aware dashboard and system history contract', () => {
     expect(dashboard).toContain('current.discounts');
     expect(dashboard).toContain('current.returns');
     expect(dashboard).toContain('data-testid={testId}');
-    expect(dashboard).toContain("status', ['open', 'held']");
+    expect(dashboardData).toContain("status', ['open', 'held']");
     expect(dashboard).not.toContain('testId="kpi-open-orders"');
     expect(dashboard).not.toContain('testId="kpi-net-sales"');
     expect(dashboard).not.toContain('testId="kpi-occupied-tables"');
