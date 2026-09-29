@@ -6,7 +6,6 @@ const repoRoot = process.cwd();
 const pagesRoot = join(repoRoot, 'src', 'features');
 
 const legacyAllowlist = new Set([
-  "src/features/admin/pages/ApprovalCenterPage.tsx",
   "src/features/admin/pages/SuperAdminConsolePage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
@@ -61,6 +60,14 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps ApprovalCenterPage behind its approval service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/admin/pages/ApprovalCenterPage.tsx'), 'utf8');
+    expect(source).toContain('loadOperationalApprovalQueue');
+    expect(source).toContain('decideOperationalApproval');
+    expect(source).toContain('loadApprovalPolicyData');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps InventoryUnitsPage behind its feature service', () => {
