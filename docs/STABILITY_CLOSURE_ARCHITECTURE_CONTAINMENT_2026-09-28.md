@@ -48,13 +48,17 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - ⛔ `ShiftsPage`, Print/KDS/Print Agent paths remain frozen because they are operationally sensitive.
 - ⏳ `ImportExportCenterPage`, `SalesPage`, and the remaining allowlisted pages still need risk-ranked containment after conflict-sensitive areas are cleared.
 
-### Phase 3 — Unified runtime control / health semantics
+### Phase 3 — Unified runtime control / health semantics ✅ COMPLETE
 - ✅ Existing canonical `OfflineContext` + `syncEngine` baseline verified.
-- 🟡 Runtime connectivity boundary contract added to stop new direct `navigator.onLine` usage outside the known legacy list; Fast Verify for this exact head is currently running.
-- ⏳ Existing direct connectivity checks in POS/payment/cloud-print/cart/topbar still need gradual migration to the canonical runtime state.
-- 🟡 System Health already has practical warning/error semantics inline, but they still need extraction into a deterministic tested helper.
-- ⏳ Canonical runtime states `online / degraded / offline / syncing / blocked` are not yet fully centralized for all consumers.
-- ⏳ Device/workstation identity foundation has not started.
+- ✅ Runtime connectivity boundary contract prevents any new direct `navigator.onLine` usage outside the explicitly known compatibility list.
+- ✅ Canonical runtime states `online / degraded / offline / syncing / blocked` are implemented as a pure tested derivation.
+- ✅ `OfflineContext` exposes the canonical `runtimeState` additively while preserving the legacy `isOnline/isSyncing/pendingCount` contract.
+- ✅ `OfflineStatusIndicator` and `OfflineSyncCenterModal` consume the canonical state for presentation; sync execution guards remain backward compatible.
+- ✅ System Health warning/error decisions are centralized in a deterministic tested severity helper.
+- ✅ Local operational device/workstation identity foundation implemented with stable `device_id`, branch attribution, device type, app version, first-seen and last-seen metadata.
+- ✅ Device identity is local-only (no Supabase write, no network heartbeat) and surfaced in System Health for operational attribution.
+- ✅ Printing / Print Agent / KDS behavior was not modified.
+- ✅ Existing direct connectivity checks inside sensitive POS/payment/cloud-print/cart execution paths remain deliberate compatibility exceptions behind the boundary contract; migration is not required to close this foundation phase.
 
 ### Phase 4 — Recovery / release resilience
 - ⏳ Restore rehearsal procedure.
@@ -106,6 +110,11 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - 2026-09-28: switched `CURRENT_WORK_PLAN.md` to this branch and marked Stability Foundation as merged/closed.
 - 2026-09-28: opened Draft PR #402.
 - 2026-09-28: added compatibility markers required by the mandatory worklog CI gate.
+- 2026-09-29: Phase 3 runtime connectivity boundary added; new direct `navigator.onLine` usage outside the known compatibility list is blocked by CI.
+- 2026-09-29: System Health severity decisions extracted to deterministic helpers with explicit unit contracts.
+- 2026-09-29: canonical runtime state `online/degraded/offline/syncing/blocked` added and exposed through OfflineContext; status UI consumers migrated without changing sync execution guards.
+- 2026-09-29: local operational device identity foundation added and surfaced in System Health with no DB/network persistence.
+- 2026-09-29: Phase 3 Unified Runtime Control closed as complete; sensitive POS/print connectivity checks remain bounded compatibility exceptions rather than being rewritten in this phase.
 
 ## Verification ledger
 - Fast Verify #1286 on `26ccdad564092cb0f40953529ba9be0434d3c883`: Green.
@@ -114,13 +123,19 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - Fast Verify #1280 on `895831dc68952e2f2610e95f06bb517fa7269d46`: Green.
 - Full Verify #3297 on the same head: failed only at `activeWorklogGateContract.test.ts` before app/DB/browser jobs ran.
 - Next verification: exact-head Fast Verify + Full Verify after this worklog compatibility repair.
+- Fast Verify #1343 on `98c47a440e193eb3e3151e0e9e9537a88807b1c2`: Green — runtime connectivity boundary.
+- Fast Verify #1348 on `0d9abc5ede499f7b3d00f0d7ba1456da25be53c8`: Green — deterministic System Health severity.
+- Fast Verify #1350 on `7c8772a74171524d585faca71958bb90c9c9ab36`: Green — canonical runtime state semantics.
+- Fast Verify #1355 on `96d7f826c5f1783349eb0171780dff40807c59b1`: Green — OfflineContext/runtime UI integration.
+- Fast Verify #1357 on `719df0183b7fae8898e974584a2e582ddb6d4163`: Green — local device identity foundation.
+- Fast Verify #1359 on `cb22dd4528aa73f5d75b9da13ddd7ecfa17656ca`: Green — System Health device identity integration.
 
 ## Production gate
 Production writes: **BLOCKED**.
 No Production schema/data change is authorized by this track unless exact-head Full Verify is Green and the user gives explicit approval.
 
 ## Next action
-Verify the active-order snapshot fan-out reduction on the exact current head. If Green, measure and contain the next POS hotspot (`cart availability`) while avoiding all product-area files until the user's parallel product repair is merged. Before this PR can merge, update/rebase from the latest `main` and rerun full verification.
+Phase 3 is complete. Continue Phase 2/Phase 1 only in areas that do not conflict with the user's parallel product repair, or begin Phase 4 recovery/release resilience. Before this PR can merge, update the branch from the latest `main`, reconcile the parallel product changes, then rerun exact-head Fast Verify + Full Verify + Production API parity and stop for explicit user approval.
 
 
 ## Scope
@@ -275,8 +290,18 @@ Exit gate:
 - no new direct page-level Supabase access;
 - priority pages no longer mix heavy data orchestration with rendering where practical.
 
-# Phase 3 — Unified runtime control
+# Phase 3 — Unified runtime control ✅ COMPLETE
 This is an operational foundation, not a user-facing feature initiative.
+
+Completion record:
+- [x] canonical runtime state derivation implemented and tested;
+- [x] OfflineContext exposes the canonical runtime state without breaking existing consumers;
+- [x] non-sensitive runtime status UI consumes the canonical state;
+- [x] direct connectivity usage cannot expand outside the known compatibility boundary;
+- [x] System Health severity rules are centralized and tested;
+- [x] local device/workstation identity foundation is implemented and visible in System Health;
+- [x] no Supabase/device heartbeat writes were introduced;
+- [x] Print/KDS/Print Agent execution behavior remains unchanged.
 
 ## 3A. Runtime state model
 Unify the currently scattered runtime signals into a small canonical state model:
