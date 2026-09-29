@@ -35,7 +35,6 @@ const legacyAllowlist = new Set([
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
   "src/features/trade/pages/PurchaseRequestsPage.tsx",
-  "src/features/trade/pages/PurchasesPage.tsx",
   "src/features/trade/pages/RfqsPage.tsx",
   "src/features/trade/pages/SalesPage.tsx",
   "src/features/trade/pages/ShiftsPage.tsx"
@@ -69,6 +68,13 @@ describe('page data-access architecture boundary', () => {
     const importExport = readFileSync(join(repoRoot, 'src/features/import-export/pages/ImportExportCenterPage.tsx'), 'utf8');
     expect(importExport).toContain('loadImportExportValidationContext');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(importExport)).toBe(false);
+  });
+
+  it('keeps PurchasesPage behind its trade data service', () => {
+    const purchases = readFileSync(join(repoRoot, 'src/features/trade/pages/PurchasesPage.tsx'), 'utf8');
+    expect(purchases).toContain('fetchPurchaseMeta');
+    expect(purchases).toContain('createPurchaseRawMaterial');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(purchases)).toBe(false);
   });
 
   it('keeps ReportsPage behind feature services/domain boundaries', () => {
