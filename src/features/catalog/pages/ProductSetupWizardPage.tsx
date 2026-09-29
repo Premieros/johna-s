@@ -18,7 +18,6 @@ import { deleteProductSetupRollback, loadProductSetupChoices, type ProductSetupR
 
 type ManufacturedComponent = { unit_id: string; quantity: number };
 type RawComponent = { raw_material_id: string; quantity: number; wastage_percent: number };
-type MeasurementUnit = { id: string; name: string; symbol?: string | null; code?: string | null };
 type RawMaterial = ProductSetupRawMaterial;
 
 export function ProductSetupWizardPage() {
