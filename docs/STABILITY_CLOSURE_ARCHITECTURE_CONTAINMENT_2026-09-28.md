@@ -433,3 +433,5 @@ This track is complete only when:
 - No Production write without an explicit documented gate and user approval.
 
 - 2026-09-29: `SuperAdminConsolePage` remaining organization/user/health access moved behind `superAdminConsoleData`; page direct Supabase reduced to 0; legacy allowlist reduced to 8.
+
+- 2026-09-29: `WasteCenterPage` direct access moved behind `wasteCenterData`; load/create/approve/report semantics and branch scoping preserved; page direct Supabase reduced to 0; legacy allowlist reduced to 7.
