@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/pos-duplicate-line-identity-20260929`
 Current PR: `#407`
-Last updated: 2026-09-29 19:45 Africa/Cairo
+Last updated: 2026-09-29 20:00 Africa/Cairo
 
 ## Work status
 State: **BLOCKED**
@@ -55,8 +55,9 @@ Blocked only on exact-head verification. The code fix is complete and remains un
 - Regression test added ✅
 - Verify run `36599677700`: stopped at active-worklog branch mismatch before lint/typecheck.
 - Verify run `36599874568`: branch match passed; stopped because the new worklog headings did not match the repository-mandated structure.
-- Code lint/typecheck/unit/build have not yet run on the corrected worklog head.
-- DB/browser jobs remain pending behind the verify gate.
+- Verify run `36601464412`: repository gates, lint, and app typecheck passed; test typecheck found the regression fixture missing the required `created_at` field.
+- The test fixture was corrected by adding only the required `created_at` field. Production logic was not changed by this correction.
+- Unit/build and downstream DB/browser jobs remain pending behind the exact-head rerun.
 
 ## Production gate
 Do not merge or deploy until the exact final hotfix HEAD passes repository Verify, DB, and browser-smoke gates according to the repository workflow. No Production migration is required for this fix.
