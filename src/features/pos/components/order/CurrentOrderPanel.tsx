@@ -137,7 +137,7 @@ export function CurrentOrderPanel({
   const selectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
   const selectedSent = selectedItem ? sentState[cartLineKey(selectedItem)] : null;
   const selectedMatches = selectedItem
-    ? orderItems.filter((row) => orderItemLineKey(row) === cartLineKey(selectedItem))
+    ? orderItems.filter((row) => selectedItem.order_item_id ? row.id === selectedItem.order_item_id : orderItemLineKey(row) === cartLineKey(selectedItem))
     : [];
   const selectedCanSplit = perms.canSplitOrder && !!activeOrderId && !!selectedItem && (selectedSent?.sentQty || 0) === 0 && selectedMatches.length === 1;
   const selectedSentQty = selectedSent?.sentQty || 0;
@@ -148,7 +148,7 @@ export function CurrentOrderPanel({
       : canDeleteItem);
   const selectedTransferLines = useMemo<TransferItemLine[]>(() => selectedItems.flatMap((item) => {
     const lineKey = cartLineKey(item);
-    const matches = orderItems.filter((row) => orderItemLineKey(row) === lineKey);
+    const matches = orderItems.filter((row) => item.order_item_id ? row.id === item.order_item_id : orderItemLineKey(row) === lineKey);
     if (matches.length !== 1) return [];
     return [{ item, orderItemId: matches[0].id }];
   }), [selectedItems, orderItems]);
@@ -161,7 +161,9 @@ export function CurrentOrderPanel({
     selectedTransferLines.length === selectedItems.length;
 
   const splitLineKey = splitItem ? cartLineKey(splitItem) : null;
-  const splitOrderItemMatches = splitLineKey ? orderItems.filter((row) => orderItemLineKey(row) === splitLineKey) : [];
+  const splitOrderItemMatches = splitItem
+    ? orderItems.filter((row) => splitItem.order_item_id ? row.id === splitItem.order_item_id : orderItemLineKey(row) === splitLineKey)
+    : [];
   const splitOrderItemId = splitOrderItemMatches.length === 1 ? splitOrderItemMatches[0].id : null;
 
   const applyCompletedSplit = (quantity: number) => {

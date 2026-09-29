@@ -20,8 +20,12 @@ const modifierIdsFromCart = (item: Pick<CartItem, 'modifier_option_ids' | 'modif
 
 const normalizedModifierIds = (ids?: string[]) => [...(ids || [])].sort();
 
-export function cartLineKey(item: Pick<CartItem, 'product' | 'modifier_option_ids' | 'modifiers' | 'item_note'>): string {
+export function cartConfigurationKey(item: Pick<CartItem, 'product' | 'modifier_option_ids' | 'modifiers' | 'item_note'>): string {
   return `${item.product.id}|${normalizedModifierIds(modifierIdsFromCart(item)).join(',')}|${item.item_note || ''}`;
+}
+
+export function cartLineKey(item: Pick<CartItem, 'product' | 'modifier_option_ids' | 'modifiers' | 'item_note' | 'order_item_id'>): string {
+  return item.order_item_id ? `order-item:${item.order_item_id}` : cartConfigurationKey(item);
 }
 
 export function orderItemLineKey(item: Pick<OrderItem, 'product_id' | 'modifier_option_ids' | 'notes'>): string {
@@ -29,7 +33,7 @@ export function orderItemLineKey(item: Pick<OrderItem, 'product_id' | 'modifier_
 }
 
 export function sameCartConfiguration(a: Pick<CartItem, 'product' | 'modifier_option_ids' | 'modifiers' | 'item_note'>, b: Pick<CartItem, 'product' | 'modifier_option_ids' | 'modifiers' | 'item_note'>): boolean {
-  return cartLineKey(a) === cartLineKey(b);
+  return cartConfigurationKey(a) === cartConfigurationKey(b);
 }
 
 export function cartToItems(cart: CartItem[]): ItemPayload[] {
@@ -57,6 +61,7 @@ export function orderItemsToCart(items: OrderItem[], products: Product[]): CartI
       unit_price: Number(i.unit_price),
       discount_amount: Number(i.discount_amount),
       bonus_quantity: Number(i.bonus_quantity),
+      order_item_id: i.id,
       modifier_option_ids: i.modifier_option_ids || [],
       modifiers: (i.modifiers_snapshot || []).map((m) => ({
         id: m.option_id,

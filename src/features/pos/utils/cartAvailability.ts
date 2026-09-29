@@ -27,7 +27,9 @@ export function computeUnsentCartDemand(
 
   const demandByProduct = new Map<string, number>();
   for (const item of cart) {
-    const matching = orderItems.find((row) => orderItemLineKey(row) === cartLineKey(item));
+    const matching = item.order_item_id
+      ? orderItems.find((row) => row.id === item.order_item_id)
+      : orderItems.find((row) => orderItemLineKey(row) === cartLineKey(item));
     const sent = matching ? sentByOrderItem.get(matching.id) || 0 : 0;
     const unsent = Math.max(Number(item.quantity || 0) - sent, 0);
     if (unsent <= 0) continue;

@@ -233,6 +233,8 @@ export interface CartItem {
   unit_price: number;
   discount_amount: number;
   bonus_quantity: number;
+  // Stable persisted row identity. Present for resumed/server-backed order lines.
+  order_item_id?: string;
   modifier_option_ids?: string[];
   modifiers?: { id?: string; group_name?: string; name: string; price_delta?: number }[];
   item_note?: string;
