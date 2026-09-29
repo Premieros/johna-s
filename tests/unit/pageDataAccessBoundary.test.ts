@@ -15,7 +15,6 @@ const legacyAllowlist = new Set([
   "src/features/catalog/pages/InventoryUnitsPage.tsx",
   "src/features/catalog/pages/ProductSetupWizardPage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
-  "src/features/catalog/pages/PricingPage.tsx",
   "src/features/dashboard/pages/DashboardDataPage.tsx",
   "src/features/dashboard/pages/VisualDashboardPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
@@ -74,6 +73,14 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps PricingPage behind its data service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/catalog/pages/PricingPage.tsx'), 'utf8');
+    expect(source).toContain('loadPricingRows');
+    expect(source).toContain('updateManufacturedPricing');
+    expect(source).toContain('updateProductPricing');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps ProductModifiersPage behind selector services', () => {
