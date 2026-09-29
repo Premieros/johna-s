@@ -26,7 +26,6 @@ const legacyAllowlist = new Set([
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/inventory/pages/LowStockAlertsPage.tsx",
   "src/features/inventory/pages/StockCountsPage.tsx",
-  "src/features/inventory/pages/StockValuationPage.tsx",
   "src/features/inventory/pages/TransfersPage.tsx",
   "src/features/inventory/pages/WarehousesPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
