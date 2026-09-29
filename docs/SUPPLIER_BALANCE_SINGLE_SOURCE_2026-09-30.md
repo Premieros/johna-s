@@ -15,7 +15,12 @@ State: **BLOCKED**
 - Historical payment logs remain audit detail only.
 - No direct main write, no force push, no Production migration before exact-head Green.
 
-## Root cause
+## Baseline
+- Base main: `d995b7417432a41b5e0c6e256e02bd463f540447`.
+- Production DB: `azzdesuowpdcoflmyezn`.
+- Supplier list and supplier-payment screen already use AP aging and purchase applied balances.
+
+## Root-cause ledger
 - Supplier list and supplier-payment screen use AP aging based on purchases.paid_amount + returned_amount + opening remaining.
 - Supplier statement rebuilt current payable from raw supplier_payments plus legacy invoice-time logic.
 - Legacy rows can be missing or oversized compared with amounts actually applied to purchases.
@@ -23,21 +28,19 @@ State: **BLOCKED**
   - Cleopatra / الفريدة: canonical payable 4031.25 while statement-derived result was 0.00 because a 12900 historical payment log exceeds the 8600 actually applied to purchases.
   - Smouha / المتحدة: statement-derived payable was 95.00 higher because paid_amount contains 95.00 without a separate supplier_payments row.
 
-## Change
-- get_supplier_statement now uses:
-  opening remaining + sum(max(total-paid_amount-returned_amount,0))
-  as open_balance.
+## Change ledger
+- get_supplier_statement now uses opening remaining + sum(max(total-paid_amount-returned_amount,0)) as open_balance.
 - total_paid uses opening settled + purchases.paid_amount.
 - supplier_payments remains for payment-method/history display only.
 - Any legacy mismatch is shown as a display reconciliation row so running balance ends at the same canonical payable.
 - No business data is mutated.
 - Added regression test supplierBalanceSingleSource.test.ts.
 
-## Verification
+## Verification ledger
 - Production read-only mismatch scan identified exactly the current affected suppliers above.
 - Payment modal and open invoice selector already use the same purchase open formula.
 - Current pay_supplier_from_treasury already blocks PAYMENT_EXCEEDS_AP / PAYMENT_EXCEEDS_INVOICE.
-- Exact-head CI pending.
+- Exact-head CI pending after worklog repair.
 
 ## Production gate
 State: **BLOCKED**
@@ -45,7 +48,14 @@ State: **BLOCKED**
 - No merge until Fast Verify + Full Verify Green.
 
 ## Next action
-1. Open Draft PR.
-2. Run exact-head Fast Verify + Full Verify.
-3. If Green, merge and apply only supplier_balance_single_source migration.
-4. Recheck all suppliers for zero difference between statement and AP aging.
+1. Re-run exact-head Fast Verify + Full Verify.
+2. If Green, merge and apply only supplier_balance_single_source migration.
+3. Recheck all suppliers for zero difference between statement and AP aging.
+4. Verify post-merge main workflow and deployment.
+
+## Mandatory update protocol
+- Verify HEAD before every repository write.
+- Unexpected HEAD movement => STOP_AND_RECONCILE.
+- Keep CURRENT_WORK_PLAN pointed to this work log while PR #416 is active.
+- Record exact-head CI results.
+- No merge or Production migration before full verification.
