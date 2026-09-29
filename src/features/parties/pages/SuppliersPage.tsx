@@ -14,6 +14,7 @@ import { Modal } from '@/components/Modal';
 import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatDate, formatCurrency } from '@/lib/format';
+import { businessDateISO } from '@/lib/businessTime';
 import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
@@ -52,7 +53,7 @@ export function SuppliersPage() {
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
   const [form, setForm] = useState({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: '' });
   const [openingAmount, setOpeningAmount] = useState('');
-  const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [openingDate, setOpeningDate] = useState(() => businessDateISO());
   const [openingNotes, setOpeningNotes] = useState('');
   const [existingOpening, setExistingOpening] = useState<{ amount: number; remaining_amount: number; opening_date: string; notes?: string | null } | null>(null);
   const canManageOpening = can('suppliers.opening_balance.manage');
@@ -66,7 +67,7 @@ export function SuppliersPage() {
         return;
       }
       const results = await Promise.all(
-        branchIds.map((branchId) => api.accounting.getApAging({ p_branch_id: branchId, p_as_of: new Date().toISOString().slice(0, 10) })),
+        branchIds.map((branchId) => api.accounting.getApAging({ p_branch_id: branchId, p_as_of: businessDateISO() })),
       );
       const next: Record<string, number> = {};
       results.forEach(({ data }) => {
@@ -84,7 +85,7 @@ export function SuppliersPage() {
     setEditing(null);
     setExistingOpening(null);
     setOpeningAmount('');
-    setOpeningDate(new Date().toISOString().slice(0, 10));
+    setOpeningDate(businessDateISO());
     setOpeningNotes('');
     setForm({ name: '', name_en: '', phone: '', email: '', address: '', tax_number: '', balance: 0, notes: '', branch_id: branchFilter || '' });
     setModalOpen(true);
@@ -93,7 +94,7 @@ export function SuppliersPage() {
     setEditing(s);
     setExistingOpening(null);
     setOpeningAmount('');
-    setOpeningDate(new Date().toISOString().slice(0, 10));
+    setOpeningDate(businessDateISO());
     setOpeningNotes('');
     setForm({ name: s.name, name_en: s.name_en || '', phone: s.phone || '', email: s.email || '', address: s.address || '', tax_number: s.tax_number || '', balance: s.balance, notes: s.notes || '', branch_id: s.branch_id || branchFilter || '' });
     setModalOpen(true);
