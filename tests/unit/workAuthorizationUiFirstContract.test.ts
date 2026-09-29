@@ -6,6 +6,7 @@ const contract = readFileSync('src/features/admin/work-authorization/workAuthori
 const mock = readFileSync('src/features/admin/work-authorization/mockWorkAuthorizationProvider.ts', 'utf8');
 const provider = readFileSync('src/features/admin/work-authorization/supabaseWorkAuthorizationProvider.ts', 'utf8');
 const approvalCenter = readFileSync('src/features/admin/pages/ApprovalCenterPage.tsx', 'utf8');
+const approvalCenterData = readFileSync('src/features/admin/services/approvalCenterData.ts', 'utf8');
 const gate = readFileSync('src/features/admin/work-authorization/WorkAuthorizationGate.tsx', 'utf8');
 const boundary = readFileSync('src/features/admin/work-authorization/WorkAuthorizationAppBoundary.tsx', 'utf8');
 const app = readFileSync('src/app/App.tsx', 'utf8');
@@ -42,8 +43,10 @@ describe('work authorization UI-first contract', () => {
 
   it('mounts the staged preview without replacing the existing operational approval queue', () => {
     expect(approvalCenter).toContain('<WorkAuthorizationPreview');
-    expect(approvalCenter).toContain("supabase.rpc('get_operational_approval_queue'");
-    expect(approvalCenter).toContain("supabase.rpc('decide_operational_approval'");
+    expect(approvalCenter).toContain('loadOperationalApprovalQueue');
+    expect(approvalCenter).toContain('decideOperationalApproval');
+    expect(approvalCenterData).toContain("supabase.rpc('get_operational_approval_queue'");
+    expect(approvalCenterData).toContain("supabase.rpc('decide_operational_approval'");
   });
 
   it('keeps the employee gate centralized with one-minute realtime waiting and no polling', () => {
