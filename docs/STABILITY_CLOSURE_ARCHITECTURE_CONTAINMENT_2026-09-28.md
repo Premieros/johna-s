@@ -60,15 +60,19 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - ✅ Printing / Print Agent / KDS behavior was not modified.
 - ✅ Existing direct connectivity checks inside sensitive POS/payment/cloud-print/cart execution paths remain deliberate compatibility exceptions behind the boundary contract; migration is not required to close this foundation phase.
 
-### Phase 4 — Recovery / release resilience
+### Phase 4 — Recovery / release resilience ✅ COMPLETE
 - ✅ Restore rehearsal procedure documented in `docs/RECOVERY_RELEASE_RESILIENCE_2026-09-29.md`.
-- ⏳ Non-Production restore + migrations + schema verification execution/evidence.
-- ⏳ Golden Path on restored environment execution/evidence.
-- ⏳ Branch-isolation / financial-reconciliation checks after restore execution/evidence.
+- ✅ Isolated PostgreSQL 16 source database built from canonical migrations; no Production connection used.
+- ✅ Representative logical snapshot created and restored into a second isolated database.
+- ✅ Restored schema verification passed.
+- ✅ DB-backed Golden Path passed on the restored database.
+- ✅ Branch isolation passed on the restored database.
+- ✅ Financial reconciliation checks passed on the restored database.
 - ✅ Application rollback procedure documented.
 - ✅ Forward-only migration recovery policy documented and locked by unit contract.
 - ✅ Print Agent independent recovery procedure documented with Cleopatra/Smouha branch preservation.
-- 🟡 Recovery contract test added; exact-head Fast Verify pending for this checkpoint.
+- ✅ Recovery Rehearsal #4 Green on `78913cdc507afb1a3bdbcaa02e17b91603ab9827`.
+- ✅ No Production schema/data write occurred during the rehearsal.
 
 ### Final merge gate
 - 🟡 `main` has advanced because of parallel product work. Before merge, this branch **must be updated from the latest `main`**, conflicts reconciled, and all product-side changes absorbed safely.
@@ -116,6 +120,9 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - 2026-09-29: canonical runtime state `online/degraded/offline/syncing/blocked` added and exposed through OfflineContext; status UI consumers migrated without changing sync execution guards.
 - 2026-09-29: local operational device identity foundation added and surfaced in System Health with no DB/network persistence.
 - 2026-09-29: Phase 3 Unified Runtime Control closed as complete; sensitive POS/print connectivity checks remain bounded compatibility exceptions rather than being rewritten in this phase.
+- 2026-09-29: Phase 4 Recovery / Release Resilience runbook and CI rehearsal workflow added.
+- 2026-09-29: isolated restore rehearsal completed successfully on PostgreSQL 16 using a logical snapshot restored into a second database; schema verification, Golden Path, branch isolation and financial reconciliation all passed without touching Production.
+- 2026-09-29: Phase 4 Recovery / Release Resilience closed as complete.
 
 ## Verification ledger
 - Fast Verify #1286 on `26ccdad564092cb0f40953529ba9be0434d3c883`: Green.
@@ -130,13 +137,17 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - Fast Verify #1355 on `96d7f826c5f1783349eb0171780dff40807c59b1`: Green — OfflineContext/runtime UI integration.
 - Fast Verify #1357 on `719df0183b7fae8898e974584a2e582ddb6d4163`: Green — local device identity foundation.
 - Fast Verify #1359 on `cb22dd4528aa73f5d75b9da13ddd7ecfa17656ca`: Green — System Health device identity integration.
+- Fast Verify #1365 on `93078dad7e05013b06d73f9031ecdd91bba628bc`: Green — recovery runbook/contract checkpoint.
+- Fast Verify #1366 on `7d5967638abf3d91088ebb8fcea47fccfe1215df`: Green — initial recovery workflow integration.
+- Fast Verify #1367 on `e089ec010f8ff82263447dddc53f720493b6134a`: Green — IPv4 restore connectivity fix.
+- Recovery Rehearsal #4 on `78913cdc507afb1a3bdbcaa02e17b91603ab9827`: Green — snapshot creation, restore into second isolated DB, schema verify, Golden Path, branch isolation and financial reconciliation all passed.
 
 ## Production gate
 Production writes: **BLOCKED**.
 No Production schema/data change is authorized by this track unless exact-head Full Verify is Green and the user gives explicit approval.
 
 ## Next action
-Phase 3 is complete. Phase 4 recovery policy/runbook is now documented and contract-locked. Next, verify this checkpoint, then execute a real restore rehearsal only against an isolated Fresh/Test database and record evidence before marking Phase 4 complete. Before this PR can merge, update the branch from the latest `main`, reconcile the parallel product changes, then rerun exact-head Fast Verify + Full Verify + Production API parity and stop for explicit user approval.
+Phases 3 and 4 are complete. Continue remaining Phase 1/2 containment only where it does not conflict with the user's parallel product repair. Before this PR can merge, update the branch from the latest `main`, reconcile the parallel product changes, then rerun exact-head Fast Verify + Full Verify + Production API parity and stop for explicit user approval.
 
 
 ## Scope
