@@ -5,7 +5,7 @@ import {
   CreditCard, Download, Filter, RefreshCw, RotateCcw, ShoppingBag, Tag, Trash2, Wallet,
 } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { reporting, supabase } from '@/api';
+import { reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
@@ -18,6 +18,7 @@ import {
   type PaymentMethodAggregate,
 } from '@/features/reporting/numericIntegrity';
 import { loadDashboardPaymentAggregates } from '../services/dashboardPayments';
+import { loadVisualDashboardCore, loadVisualDashboardMonthlyRows } from '../services/visualDashboardData';
 
 type Range = 'today' | 'week' | 'month' | 'year';
 type Sale = {
@@ -128,25 +129,23 @@ export function VisualDashboardPage() {
     setRefreshing(true);
     try {
       const w = windowFor(range);
-      const saleFields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
-      let q = supabase.from('sales').select(saleFields).gte('created_at', w.start.toISOString()).lte('created_at', w.end.toISOString()).order('created_at', { ascending: false }).limit(5000);
-      let pq = supabase.from('sales').select(saleFields).gte('created_at', w.previousStart.toISOString()).lt('created_at', w.previousEnd.toISOString()).limit(5000);
-      let iq = supabase.from('inventory').select('quantity,product:products(name,low_stock_threshold)').limit(5000);
-      if (effectiveBranch) { q = q.eq('branch_id', effectiveBranch); pq = pq.eq('branch_id', effectiveBranch); iq = iq.eq('branch_id', effectiveBranch); }
-      const [a, b, c] = await Promise.all([q, pq, iq]);
-      if (a.error) throw a.error; if (b.error) throw b.error; if (c.error) throw c.error;
-      const rows = (a.data || []) as unknown as Sale[];
-      const previousRows = (b.data || []) as unknown as Sale[];
-      setSales(rows); setPreviousSales(previousRows); setInventory((c.data || []) as unknown as Inventory[]);
-      setPaymentWindow(w);
-      if (rows.length) {
-        const si = await supabase.from('sale_items').select('quantity,refunded_quantity,product:products(name)').in('sale_id', rows.map((r) => r.id)).limit(10000);
-        setItems(si.error ? [] : ((si.data || []) as unknown as SaleItem[]));
-      } else setItems([]);
       const wFrom = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
       const wTo = new Date().toISOString().slice(0, 10);
-      const wr = await supabase.rpc('get_waste_report', { p_branch_id: effectiveBranch, p_from_date: wFrom, p_to_date: wTo });
-      setWasteRows(wr.error ? [] : ((wr.data || []) as typeof wasteRows));
+      const data = await loadVisualDashboardCore({
+        branchId: effectiveBranch || null,
+        currentFrom: w.start.toISOString(),
+        currentTo: w.end.toISOString(),
+        previousFrom: w.previousStart.toISOString(),
+        previousTo: w.previousEnd.toISOString(),
+        wasteFrom: wFrom,
+        wasteTo: wTo,
+      });
+      setSales(data.sales as Sale[]);
+      setPreviousSales(data.previousSales as Sale[]);
+      setInventory(data.inventory as Inventory[]);
+      setItems(data.items as SaleItem[]);
+      setWasteRows(data.wasteRows as typeof wasteRows);
+      setPaymentWindow(w);
     } catch (e) {
       console.error('Dashboard load failed', e);
       setSales([]); setPreviousSales([]); setPaymentAggregates([]); setPreviousPaymentAggregates([]); setPaymentWindow(null); setInventory([]); setItems([]);
@@ -198,12 +197,13 @@ export function VisualDashboardPage() {
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
       const monthDateStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const monthDateEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
-      let salesQuery = supabase.from('sales').select('total,refunded_amount').gte('created_at', monthStart).lte('created_at', monthEnd);
-      let inventoryQuery = supabase.from('inventory').select('quantity, product:products(low_stock_threshold)');
-      if (effectiveBranch) { salesQuery = salesQuery.eq('branch_id', effectiveBranch); inventoryQuery = inventoryQuery.eq('branch_id', effectiveBranch); }
-      const [salesRes, inventoryRes] = await Promise.all([salesQuery, inventoryQuery]);
-      const totalSales = (salesRes.data || []).reduce((sum: number, row: Record<string, unknown>) => sum + netSaleAmount(row), 0);
-      const lowStockCount = (inventoryRes.data || []).filter((row: Record<string, unknown>) => {
+      const data = await loadVisualDashboardMonthlyRows({
+        branchId: effectiveBranch || null,
+        monthStart,
+        monthEnd,
+      });
+      const totalSales = data.sales.reduce((sum, row) => sum + netSaleAmount(row), 0);
+      const lowStockCount = data.inventory.filter((row) => {
         const qty = Number(row.quantity || 0);
         const product = row.product as { low_stock_threshold?: number }[] | null;
         return qty <= Number(product?.[0]?.low_stock_threshold ?? 5);
