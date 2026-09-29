@@ -49,7 +49,7 @@ State: **BLOCKED**
   - Cleopatra 2026-09-23: shift cash net = treasury daily cash net = 7360.34; difference 0.00.
   - Cleopatra 2026-09-21: real historical pre-shift activity remains and is not employee liability.
 - Full Verify run 36631681882 failed only at mandatory active work-log structure before app/DB/browser checks.
-- Fast Verify run 36631640101 is pending at latest check.
+- Earlier verification was superseded by the expense main-treasury addition. Exact-head verification must run again on the latest commit.
 
 ## Production gate
 State: **BLOCKED**
