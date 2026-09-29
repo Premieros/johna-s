@@ -21,7 +21,6 @@ const legacyAllowlist = new Set([
   "src/features/dashboard/pages/DashboardDataPage.tsx",
   "src/features/dashboard/pages/VisualDashboardPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
-  "src/features/inventory/pages/TransfersPage.tsx",
   "src/features/inventory/pages/WarehousesPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
   "src/features/manufacturing/pages/RawMaterialsPage.tsx",
@@ -30,8 +29,6 @@ const legacyAllowlist = new Set([
   "src/features/parties/pages/SuppliersPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
-  "src/features/trade/pages/PurchaseRequestsPage.tsx",
-  "src/features/trade/pages/RfqsPage.tsx",
   "src/features/trade/pages/SalesPage.tsx",
   "src/features/trade/pages/ShiftsPage.tsx"
 ]);
@@ -79,6 +76,26 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps PurchaseRequestsPage behind its data service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/trade/pages/PurchaseRequestsPage.tsx'), 'utf8');
+    expect(source).toContain('loadPurchaseRequestMeta');
+    expect(source).toContain('loadPurchaseRequestItems');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
+  });
+
+  it('keeps RfqsPage behind its data service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/trade/pages/RfqsPage.tsx'), 'utf8');
+    expect(source).toContain('loadRfqMeta');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
+  });
+
+  it('keeps TransfersPage behind its data service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/inventory/pages/TransfersPage.tsx'), 'utf8');
+    expect(source).toContain('loadTransferMeta');
+    expect(source).toContain('loadTransferAverageCost');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps DashboardExecutiveInsightsV2 behind its data service', () => {
