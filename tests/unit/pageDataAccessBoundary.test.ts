@@ -6,7 +6,6 @@ const repoRoot = process.cwd();
 const pagesRoot = join(repoRoot, 'src', 'features');
 
 const legacyAllowlist = new Set([
-  "src/features/admin/pages/SuperAdminConsolePage.tsx",
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
@@ -60,6 +59,14 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps SuperAdminConsolePage behind its feature service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/admin/pages/SuperAdminConsolePage.tsx'), 'utf8');
+    expect(source).toContain('fetchSuperAdminHealthSnapshot');
+    expect(source).toContain('setOrganizationActive');
+    expect(source).toContain('updateSuperAdminUser');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps ApprovalCenterPage behind its approval service', () => {
