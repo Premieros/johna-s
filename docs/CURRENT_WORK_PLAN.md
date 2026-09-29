@@ -5,9 +5,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Current production/main baseline: `69ee1d0c80d43bcdecfdb2a104455eafe7a5349b`
+- Latest main baseline to reconcile: `62daffd608b7e0dba4052157a8b3bd6b4e9022bc`
 - Active development branch: `development/stability-closure-architecture-containment-20260928`
 - Mandatory active work log: `docs/STABILITY_CLOSURE_ARCHITECTURE_CONTAINMENT_2026-09-28.md`
+
+## Completed parallel work now present on main
+The parallel product/costing repair is complete and is no longer an active execution track:
+- Former track: **Hotfix — canonical theoretical costing source**
+- Former branch: `hotfix/costing-theoretical-source-20260928`
+- Historical log: `docs/COSTING_THEORETICAL_HOTFIX_2026-09-28.md`
+- Main now contains the decimal input, linked component-group costing, and canonical theoretical-cost source work from that track.
+- Product/costing files are no longer deferred solely because of parallel work. They may be touched by this stability track only when needed for measured containment/performance work and only after latest-main reconciliation.
 
 ## Closed predecessor
 The previous track **Stability Foundation** is complete, merged, deployed, and closed for execution:
@@ -35,11 +43,12 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 - #357 — Smouha V8.1.1 final
 
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
+PR #402 is the active Stability Closure PR and remains Draft until the final merge gate.
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
 - CI يجب أن يفشل إذا السجل الإلزامي مفقود أو لا يطابق المسار النشط.
-- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
+- لا Merge إلى `main` ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Single writer on the active development branch.
 - No direct write to `main`.
 - No force push.
@@ -72,6 +81,7 @@ This track is complete only when:
 - the legacy direct-Supabase page allowlist is materially reduced and cannot grow;
 - runtime state is centralized/testable and System Health has explicit severity thresholds;
 - restore/recovery has been rehearsed on non-Production;
+- latest `main` has been reconciled into this branch;
 - no stale active work references remain;
 - Smouha and Cleopatra remain operational;
 - no unexpected printing/KDS/agent behavior changed.
