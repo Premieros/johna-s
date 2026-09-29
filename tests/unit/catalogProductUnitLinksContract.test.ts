@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 const productsPage = read('src/features/catalog/pages/ProductsPage.tsx');
+const productPageData = read('src/features/catalog/services/productPageData.ts');
 const catalogApi = read('src/api/domains/catalog.ts');
 
 describe('catalog product unit links contract (PR3 6B)', () => {
@@ -16,7 +17,7 @@ describe('catalog product unit links contract (PR3 6B)', () => {
   });
 
   it('keeps product_unit_links reads in the page read-only', () => {
-    expect(productsPage).toContain("from('product_unit_links').select('unit_id,quantity,unit:inventory_units(id,name,unit_type,cost_price)')");
+    expect(productPageData).toContain("from('product_unit_links').select('unit_id,quantity,unit:inventory_units(id,name,unit_type,cost_price)')");
   });
 
   it('preserves the proven diff update semantics inside setProductUnitLinks', () => {
