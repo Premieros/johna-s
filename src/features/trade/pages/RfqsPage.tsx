@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, Eye, Send, X, BadgeCheck, Scale, Check } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +18,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useSettings } from '@/context/SettingsContext';
 import type { Supplier, Product, RawMaterial, RpcResult, RfqRow, RfqComparisonRow, ProcurementLineInput, PurchaseRequestRow } from '@/lib/types';
+import { loadRfqMeta } from '../services/rfqPageData';
 
 interface RfqFormItem {
   line_type: 'product' | 'raw';
@@ -95,16 +95,11 @@ export function RfqsPage() {
   const [quoteItems, setQuoteItems] = useState<QuotationFormItem[]>([{ ...EMPTY_QUOTE_LINE }]);
 
   async function loadMeta() {
-    const [s, pr, rm, rq] = await Promise.all([
-      supabase.from('suppliers').select('*').order('name'),
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
-      supabase.from('purchase_requests').select('*').eq('status', 'approved').order('request_number', { ascending: false }),
-    ]);
-    setSuppliers((s.data as Supplier[]) || []);
-    setProducts((pr.data as Product[]) || []);
-    setRawMaterials((rm.data as RawMaterial[]) || []);
-    setRequests((rq.data as PurchaseRequestRow[]) || []);
+    const meta = await loadRfqMeta();
+    setSuppliers(meta.suppliers);
+    setProducts(meta.products);
+    setRawMaterials(meta.rawMaterials);
+    setRequests(meta.requests);
   }
   useEffect(() => { loadMeta(); }, []);
 
