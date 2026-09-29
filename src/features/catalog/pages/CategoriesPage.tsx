@@ -1,6 +1,5 @@
 ﻿import { useState } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
@@ -17,6 +16,7 @@ import { useCan } from '@/lib/permissions';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { Category } from '@/lib/types';
+import { deleteCategory, saveCategory } from '../services/categoryCrud';
 
 export function CategoriesPage() {
   const { t } = useLanguage();
@@ -44,15 +44,14 @@ export function CategoriesPage() {
   const save = async () => {
     if (!form.name) { show(t('required'), 'error'); return; }
     const payload = { ...form, branch_id: branchFilter || form.branch_id || null };
-    if (editing) {
-      const { error } = await supabase.from('categories').update(payload).eq('id', editing.id);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('update', 'categories', editing.id);
-    } else {
-      const { error } = await supabase.from('categories').insert(payload);
-      if (error) { show(error.message, 'error'); return; }
-      await logAudit('create', 'categories');
+    try {
+      await saveCategory({ id: editing?.id, payload });
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      return;
     }
+    if (editing) await logAudit('update', 'categories', editing.id);
+    else await logAudit('create', 'categories');
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadCategories();
@@ -60,9 +59,13 @@ export function CategoriesPage() {
 
   const remove = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('categories').delete().eq('id', deleteId);
-    if (error) show(error.message, 'error');
-    else { show(t('deleteSuccess'), 'success'); await logAudit('delete', 'categories', deleteId); }
+    try {
+      await deleteCategory(deleteId);
+      show(t('deleteSuccess'), 'success');
+      await logAudit('delete', 'categories', deleteId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeleteId(null);
     reloadCategories();
   };
@@ -71,7 +74,7 @@ export function CategoriesPage() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     for (const id of ids) {
-      await supabase.from('categories').delete().eq('id', id);
+      await deleteCategory(id);
       await logAudit('delete', 'categories', id);
     }
     show(t('deleteSuccess'), 'success');
