@@ -7,9 +7,10 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 describe('UI and production database drift guards', () => {
   it('loads recipe products from the active branch without the removed manufactured-only filter', () => {
     const source = read('src/features/manufacturing/pages/RecipesPage.tsx');
-    expect(source).not.toContain(".eq('product_type', 'manufactured')");
-    expect(source).toContain("productQuery = productQuery.eq('branch_id', branchFilter)");
-    expect(source).toContain(".from('raw_material_inventory')");
+    const recipeData = read('src/features/manufacturing/services/recipeData.ts');
+    expect(recipeData).not.toContain(".eq('product_type', 'manufactured')");
+    expect(recipeData).toContain("productQuery = productQuery.eq('branch_id', branchId)");
+    expect(recipeData).toContain(".from('raw_material_inventory')");
     expect(source).toContain('materialCosts[item.raw_material_id]');
   });
 
