@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Clock3, Plus, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
-import { supabase } from '@/api';
 import { Button } from '@/components/Button';
 import { Input, Select } from '@/components/Input';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
@@ -14,18 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useV2Can } from '@/v2/core/useV2Can';
 import { WorkAuthorizationPreview } from '@/features/admin/work-authorization/WorkAuthorizationPreview';
 import { createSupabaseWorkAuthorizationClient } from '@/features/admin/work-authorization/supabaseWorkAuthorizationProvider';
-
-type QueueItem = {
-  source_type: 'manager_approval' | 'waste' | 'stock_count' | 'warehouse_transfer';
-  source_id: string;
-  branch_id: string;
-  title: string;
-  status: string;
-  requested_by: string | null;
-  requested_at: string;
-  required_permission: string;
-  payload: Record<string, unknown>;
-};
+import { createApprovalPolicy, decideOperationalApproval, deleteApprovalPolicy, loadApprovalPolicyData, loadOperationalApprovalQueue, setApprovalPolicyActive, type ApprovalPolicyRow as ApprovalPolicy, type ApprovalQueueItem as QueueItem } from '../services/approvalCenterData';
 
 const sourceLabels: Record<string, { ar: string; en: string }> = {
   manager_approval: { ar: 'طلب موافقة مدير', en: 'Manager approval' },
@@ -56,12 +44,14 @@ export function ApprovalCenterPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('get_operational_approval_queue', {
-      p_branch_id: branchId || null,
-    });
-    if (error) show(error.message, 'error');
-    setRows((data || []) as QueueItem[]);
-    setLoading(false);
+    try {
+      setRows(await loadOperationalApprovalQueue(branchId || null));
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, [branchId, show]);
 
   useEffect(() => { void load(); }, [load]);
@@ -77,15 +67,18 @@ export function ApprovalCenterPage() {
       if (reason === null) return;
     }
     setDeciding(row.source_id);
-    const { data, error } = await supabase.rpc('decide_operational_approval', {
-      p_source_type: row.source_type,
-      p_source_id: row.source_id,
-      p_approve: approve,
-      p_reason: reason,
-    });
-    const result = data as { success?: boolean; error?: string; detail?: string } | null;
-    if (error || !result?.success) show(error?.message || result?.detail || result?.error || 'Approval failed', 'error');
-    else show(approve ? (ar ? 'تمت الموافقة' : 'Approved') : (ar ? 'تم الرفض' : 'Rejected'), 'success');
+    try {
+      const result = await decideOperationalApproval({
+        sourceType: row.source_type,
+        sourceId: row.source_id,
+        approve,
+        reason,
+      });
+      if (!result?.success) show(result?.detail || result?.error || 'Approval failed', 'error');
+      else show(approve ? (ar ? 'تمت الموافقة' : 'Approved') : (ar ? 'تم الرفض' : 'Rejected'), 'success');
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
     setDeciding(null);
     await load();
   };
@@ -158,19 +151,6 @@ export function ApprovalCenterPage() {
   );
 }
 
-type ApprovalPolicy = {
-  id: string;
-  scope: string;
-  branch_id: string | null;
-  min_amount: number | null;
-  max_amount: number | null;
-  approver_mode: 'permission' | 'user' | 'both';
-  approver_permission: string | null;
-  approver_user_id: string | null;
-  priority: number;
-  is_active: boolean;
-};
-
 const POLICY_SCOPES = [
   'manager:discount', 'manager:reprint', 'manager:void_order', 'manager:cancel_sent_item',
   'manager:refund', 'manager:open_drawer', 'manager:change_payment_method',
@@ -191,13 +171,10 @@ function ApprovalPoliciesPanel({ ar, branches, userId, allowGlobal }: { ar: bool
   const [maxAmount, setMaxAmount] = useState('');
 
   const load = useCallback(async () => {
-    const [policyRes, userRes] = await Promise.all([
-      supabase.from('approval_policies').select('*').order('priority').order('created_at'),
-      supabase.from('users').select('id,full_name').eq('is_active', true).order('full_name'),
-    ]);
-    if (policyRes.error) show(policyRes.error.message, 'error');
-    else setRows((policyRes.data || []) as ApprovalPolicy[]);
-    if (!userRes.error) setUsers((userRes.data || []) as Array<{ id: string; full_name: string }>);
+    const data = await loadApprovalPolicyData();
+    if (data.policyError) show(data.policyError, 'error');
+    else setRows(data.policies);
+    if (!data.userError) setUsers(data.users);
   }, [show]);
 
   useEffect(() => { void load(); }, [load]);
@@ -205,28 +182,40 @@ function ApprovalPoliciesPanel({ ar, branches, userId, allowGlobal }: { ar: bool
 
   const create = async () => {
     if (!scope || (!allowGlobal && !branchId) || (mode !== 'permission' && !approverUserId)) return;
-    const { error } = await supabase.from('approval_policies').insert({
-      scope,
-      branch_id: branchId || null,
-      min_amount: minAmount === '' ? null : Number(minAmount),
-      max_amount: maxAmount === '' ? null : Number(maxAmount),
-      approver_mode: mode,
-      approver_permission: mode === 'user' ? null : permission,
-      approver_user_id: mode === 'permission' ? null : approverUserId,
-      created_by: userId,
-    });
-    if (error) show(error.message, 'error');
-    else { show(ar ? 'تمت إضافة سياسة الموافقة' : 'Approval policy added', 'success'); await load(); }
+    try {
+      await createApprovalPolicy({
+        scope,
+        branch_id: branchId || null,
+        min_amount: minAmount === '' ? null : Number(minAmount),
+        max_amount: maxAmount === '' ? null : Number(maxAmount),
+        approver_mode: mode,
+        approver_permission: mode === 'user' ? null : permission,
+        approver_user_id: mode === 'permission' ? null : approverUserId,
+        created_by: userId,
+      });
+      show(ar ? 'تمت إضافة سياسة الموافقة' : 'Approval policy added', 'success');
+      await load();
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
   };
 
   const updateActive = async (row: ApprovalPolicy) => {
-    const { error } = await supabase.from('approval_policies').update({ is_active: !row.is_active }).eq('id', row.id);
-    if (error) show(error.message, 'error'); else await load();
+    try {
+      await setApprovalPolicyActive(row.id, !row.is_active);
+      await load();
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
   };
   const remove = async (id: string) => {
     if (!window.confirm(ar ? 'حذف سياسة الموافقة؟' : 'Delete approval policy?')) return;
-    const { error } = await supabase.from('approval_policies').delete().eq('id', id);
-    if (error) show(error.message, 'error'); else await load();
+    try {
+      await deleteApprovalPolicy(id);
+      await load();
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
   };
 
   return (
