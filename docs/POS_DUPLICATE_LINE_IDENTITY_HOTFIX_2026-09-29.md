@@ -3,55 +3,66 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/pos-duplicate-line-identity-20260929`
-PR: `#407`
-Production baseline: `62daffd608b7e0dba4052157a8b3bd6b4e9022bc`
+Current PR: `#407`
+Last updated: 2026-09-29 19:45 Africa/Cairo
 
-## State
-**VERIFYING**
+## Work status
+State: **BLOCKED**
 
-## Incident
-Smouha branch reported that after moving an item from Table 27, the operator could not move it again or remove/Void it.
+Blocked only on exact-head verification. The code fix is complete and remains unmerged.
 
-Production read-only evidence showed:
-- the first transfer succeeded;
-- moved sent lines preserved kitchen history and did not re-deduct inventory;
-- later attempts by Super Admin `eslam` stopped before transfer/Void RPC execution;
-- the source order contained two persisted Water rows with the same product/modifiers/note configuration but different `order_items.id` values and quantities;
-- the client configuration-only line key made those rows ambiguous.
+## Guardrails
+- No direct write to `main`.
+- No force push.
+- No Production data write.
+- No database migration.
+- No inventory deduction logic change.
+- No send-to-kitchen/KDS routing change.
+- No printing or Print Agent change.
+- No payment or shift change.
+- Exact-head Full Verify must be Green before merge.
+- Merge requires explicit user approval.
 
-## Root cause
-Persisted order rows were reconstructed into `CartItem` without retaining `order_items.id`. UI selection, sent-state matching, transfer lookup and Void lookup therefore depended on product + modifiers + note only. Two persisted rows with the same configuration became indistinguishable even though the database correctly maintained distinct rows.
+## Baseline
+- Production/main baseline: `62daffd608b7e0dba4052157a8b3bd6b4e9022bc`.
+- Incident branch: Smouha.
+- Reported flow: item moved from Table 27, then could not be moved again or removed/Void.
+- Production investigation was read-only.
 
-## Hotfix
-- add optional `order_item_id` to `CartItem`;
-- retain `order_items.id` when rebuilding a cart from a persisted order;
-- keep persisted row identity separate from cart configuration identity;
-- use exact row id for sent state, transfer, split, Void and availability when available;
-- preserve row identity through the workspace edit path;
-- add regression coverage for two identical persisted Water rows with quantities 4 and 5.
+## Root-cause ledger
+1. The first item transfer succeeded.
+2. Later attempts by Super Admin `eslam` reached the client-side exact-line lookup but did not invoke transfer/Void RPCs.
+3. The order contained two persisted Water rows with the same product/modifiers/note configuration but different `order_items.id` values and quantities.
+4. Persisted order rows were reconstructed into `CartItem` without retaining `order_items.id`.
+5. UI identity therefore collapsed distinct persisted rows onto the same configuration-only line key.
+6. The client correctly refused to guess which persisted row to mutate, causing the operational block.
 
-## Safety boundaries
-- no direct write to `main`;
-- no force push;
-- no Production data write;
-- no database migration;
-- no inventory deduction logic change;
-- no send-to-kitchen/KDS routing change;
-- no printing or Print Agent change;
-- no payment or shift change;
-- exact-head verification required before merge;
-- merge requires explicit user approval.
+## Change ledger
+- Added optional `order_item_id` to `CartItem`.
+- `orderItemsToCart` now retains the authoritative persisted `order_items.id`.
+- Added separate configuration identity for unsaved cart grouping and note/modifier comparison.
+- Persisted cart line keys now use exact row identity when available.
+- Sent-state matching now binds to the exact persisted row.
+- Transfer and sent-item Void resolution now prefer `order_item_id`.
+- Cart-aware availability now uses exact persisted row identity when present.
+- Workspace item editing preserves persisted row identity.
+- Added regression coverage for two otherwise identical persisted Water rows with quantities 4 and 5.
+- No migration, print, KDS, inventory mutation, payment, or shift file changed.
 
 ## Verification ledger
 - Production root-cause inspection: read-only ✅
-- Main baseline unchanged during branch creation: ✅
-- Focused regression test added: ✅
-- First Verify run #36599677700: stopped only by active-worklog branch gate because CURRENT_WORK_PLAN still pointed at the prior costing hotfix.
-- Full Verify on corrected active-worklog head: pending.
+- Main baseline remained unchanged while creating the hotfix branch ✅
+- Regression test added ✅
+- Verify run `36599677700`: stopped at active-worklog branch mismatch before lint/typecheck.
+- Verify run `36599874568`: branch match passed; stopped because the new worklog headings did not match the repository-mandated structure.
+- Code lint/typecheck/unit/build have not yet run on the corrected worklog head.
+- DB/browser jobs remain pending behind the verify gate.
 
-## Definition of done
-- active-worklog gate passes on this exact PR head;
-- lint, typecheck, unit tests and build pass;
-- DB/browser jobs pass or are proven unaffected according to repository CI;
-- changed-file audit contains no migration, printing, KDS, inventory mutation, payment or shift files;
-- no merge before user approval.
+## Production gate
+Do not merge or deploy until the exact final hotfix HEAD passes repository Verify, DB, and browser-smoke gates according to the repository workflow. No Production migration is required for this fix.
+
+## Next action
+Re-run exact-head verification after this worklog-only correction. If Green, recheck that `main` has not moved unexpectedly, then request/confirm merge approval.
+
+## Mandatory update protocol
+Update this log after every material write, verification result, unexpected HEAD change, merge, or deployment result. Keep State **BLOCKED** until the exact final HEAD is fully verified and explicit merge approval is available.
