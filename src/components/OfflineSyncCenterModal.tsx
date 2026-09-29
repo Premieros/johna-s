@@ -13,7 +13,7 @@ interface OfflineSyncCenterModalProps {
 }
 
 export function OfflineSyncCenterModal({ open, onClose }: OfflineSyncCenterModalProps) {
-  const { isOnline, isSyncing, pendingCount, syncNow, getOfflineQueue, discardQueuedSale, lastSyncTime, lastError } = useOffline();
+  const { isOnline, isSyncing, pendingCount, runtimeState, syncNow, getOfflineQueue, discardQueuedSale, lastSyncTime, lastError } = useOffline();
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
 
@@ -71,12 +71,38 @@ export function OfflineSyncCenterModal({ open, onClose }: OfflineSyncCenterModal
         {/* Status card */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="p-4 rounded-xl border border-ui-border bg-ui-page flex items-center gap-3">
-            <div className={`p-2.5 rounded-lg ${isOnline ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-danger-soft text-ui-danger'}`}>
-              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-ui-success animate-pulse' : 'bg-ui-danger'}`} />
+            <div className={`p-2.5 rounded-lg ${
+              runtimeState.state === 'blocked' || runtimeState.state === 'offline'
+                ? 'bg-ui-danger-soft text-ui-danger'
+                : runtimeState.state === 'degraded'
+                ? 'bg-ui-warning-soft text-ui-warning'
+                : runtimeState.state === 'syncing'
+                ? 'bg-ui-info-soft text-ui-info'
+                : 'bg-ui-success-soft text-ui-success'
+            }`}>
+              <div className={`w-3 h-3 rounded-full ${
+                runtimeState.state === 'blocked' || runtimeState.state === 'offline'
+                  ? 'bg-ui-danger'
+                  : runtimeState.state === 'degraded'
+                  ? 'bg-ui-warning'
+                  : runtimeState.state === 'syncing'
+                  ? 'bg-ui-info animate-pulse'
+                  : 'bg-ui-success animate-pulse'
+              }`} />
             </div>
             <div>
-              <p className="text-xs text-ui-subtle">{isAr ? 'حالة الشبكة' : 'Network Status'}</p>
-              <p className="text-sm font-bold text-ui-text">{isOnline ? (isAr ? 'متصل بالإنترنت' : 'Online') : (isAr ? 'بدون اتصال (Offline)' : 'Offline')}</p>
+              <p className="text-xs text-ui-subtle">{isAr ? 'حالة التشغيل' : 'Runtime Status'}</p>
+              <p className="text-sm font-bold text-ui-text">
+                {runtimeState.state === 'blocked'
+                  ? (isAr ? 'يحتاج تدخل' : 'Blocked')
+                  : runtimeState.state === 'degraded'
+                  ? (isAr ? 'متصل بتحذير' : 'Degraded')
+                  : runtimeState.state === 'syncing'
+                  ? (isAr ? 'جاري المزامنة' : 'Syncing')
+                  : runtimeState.state === 'offline'
+                  ? (isAr ? 'بدون اتصال' : 'Offline')
+                  : (isAr ? 'متصل' : 'Online')}
+              </p>
             </div>
           </div>
 
