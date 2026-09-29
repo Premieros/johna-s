@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Plus, CheckCircle2, XCircle, ArrowLeftRight, Trash2 } from 'lucide-react';
-import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -19,8 +18,8 @@ import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { WarehouseTransfer, Warehouse, Branch, RpcResult } from '@/lib/types';
+import { loadTransferAverageCost, loadTransferMeta, type TransferRawMaterialChoice } from '../services/transferPageData';
 
-interface RawMaterialChoice { id: string; name: string; branch_id: string; unit_id: string | null; default_cost: number; }
 interface TransferLine { item_type: 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
 interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; }
 
@@ -48,7 +47,7 @@ export function TransfersPage() {
     pageSize: 100,
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [rawMaterials, setRawMaterials] = useState<RawMaterialChoice[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<TransferRawMaterialChoice[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -58,14 +57,10 @@ export function TransfersPage() {
   const [rejectReason, setRejectReason] = useState('');
 
   async function loadMeta() {
-    const [w, rm, br] = await Promise.all([
-      supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-      supabase.from('raw_materials').select('id,name,branch_id,unit_id,default_cost').eq('is_active', true).order('name'),
-      supabase.from('branches').select('*').eq('is_active', true).order('name'),
-    ]);
-    setWarehouses((w.data as Warehouse[]) || []);
-    setRawMaterials((rm.data as RawMaterialChoice[]) || []);
-    setBranches((br.data as Branch[]) || []);
+    const meta = await loadTransferMeta();
+    setWarehouses(meta.warehouses);
+    setRawMaterials(meta.rawMaterials);
+    setBranches(meta.branches);
   }
   useEffect(() => { void loadMeta(); }, []);
 
@@ -136,13 +131,11 @@ export function TransfersPage() {
 
   const lookupAvgCost = async (line: TransferLine): Promise<number> => {
     if (!line.item_id || !form.from_warehouse_id) return 0;
-    const { data } = await supabase.from('raw_material_warehouse_inventory')
-      .select('avg_cost')
-      .eq('raw_material_id', line.item_id)
-      .eq('branch_id', form.source_branch_id)
-      .eq('warehouse_id', form.from_warehouse_id)
-      .maybeSingle();
-    return Number((data as { avg_cost?: number } | null)?.avg_cost || 0);
+    return loadTransferAverageCost({
+      rawMaterialId: line.item_id,
+      branchId: form.source_branch_id,
+      warehouseId: form.from_warehouse_id,
+    });
   };
   const updateLineItem = async (idx: number, itemId: string) => {
     const next = lines.map((l) => ({ ...l }));
