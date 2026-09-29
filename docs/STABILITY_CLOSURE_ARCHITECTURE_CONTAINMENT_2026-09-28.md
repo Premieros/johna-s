@@ -34,7 +34,7 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 
 ### Phase 2 — Heavy-page / direct-data containment
 - ✅ Architecture guard prevents any new direct page-level Supabase access outside the legacy allowlist.
-- ✅ Legacy allowlist reduced from about 43 pages to **33 pages**.
+- ✅ Legacy allowlist reduced from about 43 pages to **32 pages**.
 - ✅ `ExpensesPage` removed from direct Supabase and from the allowlist.
 - ✅ `JournalPage` removed from direct Supabase and from the allowlist.
 - ✅ `BranchesPage` removed from direct Supabase and from the allowlist.
@@ -44,11 +44,12 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - ✅ `InventoryLedgerPage` removed from direct Supabase and from the allowlist.
 - ✅ `StockValuationPage` filter-option reads moved behind a read-only feature service; valuation RPC behavior stayed unchanged; page removed from the allowlist.
 - ✅ `ImportExportCenterPage` validation-context master-data reads moved behind a feature service with the same branch/super-admin scoping; page direct Supabase reduced from 8 to 0 and removed from the allowlist.
+- ✅ `PurchasesPage` metadata, purchase-item detail reads, and inline raw-material creation moved behind a trade feature service without changing payloads or branch filters; page direct Supabase reduced from 7 data calls to 0 and removed from the allowlist.
 - 🟡 `SuperAdminConsolePage` heavy read orchestration moved behind a read-only service; direct Supabase calls reduced from 12 to 3, but the remaining calls include sensitive mutations/health checks so the page remains allowlisted.
 - 🟡 POS active-order data access is contained and cheaper, but `PosWorkspacePage` still has legacy direct data orchestration and remains allowlisted.
 - 🟡 Product/catalog pages are no longer blocked by parallel work after latest-main reconciliation; measured containment/performance review may proceed without changing product behavior.
 - ⛔ `ShiftsPage`, Print/KDS/Print Agent paths remain frozen because they are operationally sensitive.
-- ⏳ `SalesPage` and the remaining allowlisted pages still need risk-ranked containment; `ImportExportCenterPage` is now contained.
+- ⏳ `SalesPage` and the remaining allowlisted pages still need risk-ranked containment; `ImportExportCenterPage` and `PurchasesPage` are now contained.
 
 ### Phase 3 — Unified runtime control / health semantics ✅ COMPLETE
 - ✅ Existing canonical `OfflineContext` + `syncEngine` baseline verified.
@@ -128,6 +129,7 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - 2026-09-29: latest `main@62daffd608b7e0dba4052157a8b3bd6b4e9022bc` reconciled into the active branch without force push; product/costing parallel work is no longer a blocker.
 - 2026-09-29: `StockValuationPage` direct Supabase reads reduced from 2 to 0 through `stockValuationOptions` service; valuation RPCs unchanged; legacy allowlist reduced to 34.
 - 2026-09-29: `ImportExportCenterPage` validation-context direct Supabase reads reduced from 8 to 0 through `validation-context-service`; existing branch/super-admin scope preserved; legacy allowlist reduced to 33.
+- 2026-09-29: `PurchasesPage` direct Supabase data calls reduced to 0 through `purchasePageData` service; purchase payloads, branch filters, and inline raw-material creation semantics preserved; legacy allowlist reduced to 32.
 
 ## Verification ledger
 - Fast Verify #1286 on `26ccdad564092cb0f40953529ba9be0434d3c883`: Green.
@@ -148,6 +150,7 @@ Legend: ✅ complete · 🟡 in progress/partial · ⏳ not started · ⛔ inten
 - Recovery Rehearsal #4 on `78913cdc507afb1a3bdbcaa02e17b91603ab9827`: Green — snapshot creation, restore into second isolated DB, schema verify, Golden Path, branch isolation and financial reconciliation all passed.
 - Fast Verify #1379 on `7496fbc015c6816d9fd9d23ba84613240ebaafbd`: Green — StockValuation containment exact-head checkpoint.
 - Full Verify #3337 on the same head: Green — application, DB and browser verification after StockValuation containment and latest-main reconciliation.
+- Fast Verify #1386 on `9b8377a168f40dd45bd5b232ee78a3de2bc32327`: Green — ImportExport containment exact-head checkpoint after parser/lint repair.
 
 ## Production gate
 Production writes: **BLOCKED**.
