@@ -70,7 +70,7 @@ export async function saveInventoryUnitComponents(unitId: string, rows: Inventor
   if (insertError) throw insertError;
 }
 
-export async function deleteInventoryUnit(id: string): Promise<void> {
+export async function deleteComponentGroup(id: string): Promise<void> {
   const { error } = await supabase.from('inventory_units').delete().eq('id', id);
   if (error) throw error;
 }
