@@ -17,11 +17,12 @@ describe('catalog terminology and measurement-unit lock contract', () => {
 
   it('presents legacy manufactured rows as reusable component groups and forces type only on create', () => {
     const source = read('src/features/catalog/pages/InventoryUnitsPage.tsx');
+    const dataService = read('src/features/catalog/services/inventoryUnitData.ts');
     const menu = read('src/core/navigation/menu.config.ts');
 
     expect(source).toContain("filters: [{ column: 'unit_type', value: 'manufactured' }]");
-    expect(source).toContain(".update(payload).eq('id', editing.id)");
-    expect(source).toContain("insert({ ...payload, unit_type: 'manufactured' as const })");
+    expect(dataService).toContain(".update(params.payload).eq('id', params.id)");
+    expect(dataService).toContain("insert({ ...params.payload, unit_type: 'manufactured' as const })");
     expect(source).toContain("title={isAr ? 'مجموعات المكونات' : 'Component Groups'}");
     expect(source).not.toContain('<option value="ready">');
     expect(menu).toContain("label: { ar: 'مجموعات المكونات', en: 'Component Groups' }");
@@ -29,8 +30,9 @@ describe('catalog terminology and measurement-unit lock contract', () => {
 
   it('shows immutable raw measurement units when composing reusable component groups', () => {
     const source = read('src/features/catalog/pages/InventoryUnitsPage.tsx');
+    const dataService = read('src/features/catalog/services/inventoryUnitData.ts');
 
-    expect(source).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
+    expect(dataService).toContain('measurement_unit:measurement_units!raw_materials_unit_id_fkey');
     expect(source).toContain('materialLabel(material)');
     expect(source).toContain("'لا يمكن استخدام خامة بدون وحدة قياس. حدد وحدة الخامة أولًا.'");
     expect(source).toContain("const componentBranchId = unit.branch_id || branchFilter || ''");
