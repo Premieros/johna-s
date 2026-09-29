@@ -56,16 +56,17 @@ export async function decideOperationalApproval(params: {
 export async function loadApprovalPolicyData(): Promise<{
   policies: ApprovalPolicyRow[];
   users: Array<{ id: string; full_name: string }>;
+  policyError: string | null;
   userError: string | null;
 }> {
   const [policyResult, userResult] = await Promise.all([
     supabase.from('approval_policies').select('*').order('priority').order('created_at'),
     supabase.from('users').select('id,full_name').eq('is_active', true).order('full_name'),
   ]);
-  if (policyResult.error) throw policyResult.error;
   return {
-    policies: (policyResult.data || []) as ApprovalPolicyRow[],
+    policies: policyResult.error ? [] : ((policyResult.data || []) as ApprovalPolicyRow[]),
     users: userResult.error ? [] : ((userResult.data || []) as Array<{ id: string; full_name: string }>),
+    policyError: policyResult.error?.message || null,
     userError: userResult.error?.message || null,
   };
 }
