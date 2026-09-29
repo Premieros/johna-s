@@ -4,7 +4,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/post-402-stability-closure-20260929`
-Current PR: `#0`
+Current PR: `#408`
 Last updated: 2026-09-29
 State: **BLOCKED** — Production writes and merge remain blocked by verification gates.
 
