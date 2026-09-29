@@ -165,7 +165,7 @@ BEGIN
       reference_type,
       reference_id
     ) VALUES (
-      v_treasury.branch_id,
+      v_expense.branch_id,
       v_tx_type,
       CASE WHEN v_tx_type='withdrawal' THEN v_treasury.id ELSE NULL END,
       CASE WHEN v_tx_type='deposit' THEN v_treasury.id ELSE NULL END,
@@ -226,7 +226,7 @@ INSERT INTO public.treasury_transactions(
   reference_type,reference_id
 )
 SELECT
-  f.treasury_branch_id,
+  f.expense_branch_id,
   CASE WHEN f.reference_type='expense_funding' THEN 'withdrawal' ELSE 'deposit' END,
   CASE WHEN f.reference_type='expense_funding' THEN f.treasury_account_id ELSE NULL END,
   CASE WHEN f.reference_type='expense_funding_reversal' THEN f.treasury_account_id ELSE NULL END,
