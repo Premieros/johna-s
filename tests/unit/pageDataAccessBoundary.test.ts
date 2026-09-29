@@ -8,7 +8,6 @@ const pagesRoot = join(repoRoot, 'src', 'features');
 const legacyAllowlist = new Set([
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
-  "src/features/trade/pages/SalesPage.tsx",
   "src/features/trade/pages/ShiftsPage.tsx"
 ]);
 
@@ -55,6 +54,20 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps SalesPage behind its data service while preserving protected trade and print paths', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/trade/pages/SalesPage.tsx'), 'utf8');
+    expect(source).toContain('loadSalesCustomers');
+    expect(source).toContain('loadSalePaymentRows');
+    expect(source).toContain('loadReceiptSettingsRows');
+    expect(source).toContain('requestSaleManagerApproval');
+    expect(source).toContain('changeSalePaymentMethod');
+    expect(source).toContain('updateSaleMetadata');
+    expect(source).toContain('api.trade.processRefund');
+    expect(source).toContain('buildReceiptHtml');
+    expect(source).toContain('openPrintWindow');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps ActiveOrdersPage behind its page data service and POS APIs', () => {
