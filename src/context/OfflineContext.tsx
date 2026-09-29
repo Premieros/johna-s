@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { offlineSyncEngine, type SyncStatus } from '@/core/offline/syncEngine';
+import { deriveRuntimeOperationalState, type RuntimeStateSnapshot } from '@/core/offline/runtimeState';
 import {
   saveOfflineCache,
   getOfflineCache,
@@ -19,6 +20,7 @@ interface OfflineContextValue {
   lastSyncTime: string | null;
   lastError: string | null;
   syncedRecentlyCount: number;
+  runtimeState: RuntimeStateSnapshot;
   syncNow: () => Promise<{ successCount: number; failedCount: number }>;
   cachePosData: (data: {
     branchId: string;
@@ -55,11 +57,24 @@ function belongsToBranch(value: unknown, branchId?: string): boolean {
 
 export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>(() => offlineSyncEngine.getStatus());
+  const [runtimeState, setRuntimeState] = useState<RuntimeStateSnapshot>(() => deriveRuntimeOperationalState(offlineSyncEngine.getStatus(), []));
 
   useEffect(() => {
     const unsub = offlineSyncEngine.subscribe((st) => setStatus(st));
     return unsub;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAllOfflineSales()
+      .then((queue) => {
+        if (!cancelled) setRuntimeState(deriveRuntimeOperationalState(status, queue));
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeState(deriveRuntimeOperationalState(status, []));
+      });
+    return () => { cancelled = true; };
+  }, [status]);
 
   const syncNow = useCallback(async () => {
     return await offlineSyncEngine.syncAll({ force: true });
@@ -174,6 +189,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   const value: OfflineContextValue = {
     ...status,
+    runtimeState,
     syncNow,
     cachePosData,
     loadCachedPosData,
@@ -192,6 +208,14 @@ const defaultOfflineValue: OfflineContextValue = {
   lastSyncTime: null,
   lastError: null,
   syncedRecentlyCount: 0,
+  runtimeState: deriveRuntimeOperationalState({
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    isSyncing: false,
+    pendingCount: 0,
+    lastSyncTime: null,
+    lastError: null,
+    syncedRecentlyCount: 0,
+  }, []),
   syncNow: async () => ({ successCount: 0, failedCount: 0 }),
   cachePosData: async () => {},
   loadCachedPosData: async () => ({
