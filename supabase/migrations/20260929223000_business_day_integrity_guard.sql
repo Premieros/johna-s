@@ -9,7 +9,7 @@ RETURNS date
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public','private','pg_temp'
+SET search_path TO 'public','pg_temp'
 AS $function$
 DECLARE
   v_start time := '00:00';
@@ -37,7 +37,7 @@ CREATE OR REPLACE FUNCTION public._ensure_business_day_state(p_branch_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public','private','pg_temp'
+SET search_path TO 'public','pg_temp'
 AS $function$
 DECLARE
   v_existing public.business_day_state%ROWTYPE;
@@ -173,7 +173,7 @@ CREATE OR REPLACE FUNCTION public.rollover_business_day(p_branch_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public','private','pg_temp'
+SET search_path TO 'public','pg_temp'
 AS $function$
 DECLARE
   v_uid uuid:=auth.uid();
