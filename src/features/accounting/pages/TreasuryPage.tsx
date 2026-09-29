@@ -52,6 +52,9 @@ interface TreasuryDayCloseRow {
   cash_purchases: number;
   transfer_in: number;
   transfer_out: number;
+  shift_cash_net: number;
+  cash_outside_shifts: number;
+  cash_day_net: number;
   opening_balance: number;
   cash_opening_balance: number;
   bank_opening_balance: number;
@@ -89,10 +92,10 @@ export function TreasuryPage() {
   const [dayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
   const [treasuryView, setTreasuryView] = useState<TreasuryScopeView>('branch');
   const dailyColumnOptions = [
-    'business_date','cash_opening_balance','bank_opening_balance','cash_sales','bank_sales','credit_sales','cash_purchases','expenses','transfer_in','transfer_out','cash_balance_after_close','bank_balance_after_close','closing_balance','report',
+    'business_date','cash_opening_balance','bank_opening_balance','shift_cash_net','cash_outside_shifts','cash_day_net','cash_sales','bank_sales','credit_sales','cash_purchases','expenses','transfer_in','transfer_out','cash_balance_after_close','bank_balance_after_close','closing_balance','report',
   ] as const;
   type DailyColumnKey = typeof dailyColumnOptions[number];
-  const dailyColumnStorageKey = 'treasury.dailyJournal.columns.v1';
+  const dailyColumnStorageKey = 'treasury.dailyJournal.columns.v2';
   const [visibleDailyColumns, setVisibleDailyColumns] = useState<DailyColumnKey[]>(() => {
     try {
       const raw = window.localStorage.getItem(dailyColumnStorageKey);
@@ -241,6 +244,9 @@ export function TreasuryPage() {
     ...row,
     opening_balance: Number(row.opening_balance || 0),
     day_net: Number(row.day_net || 0),
+    shift_cash_net: Number(row.shift_cash_net || 0),
+    cash_outside_shifts: Number(row.cash_outside_shifts || 0),
+    cash_day_net: Number(row.cash_day_net || 0),
     closing_balance: Number(row.closing_balance || 0),
   })), [dayCloses]);
   const periodTotals = useMemo(() => {
@@ -298,6 +304,9 @@ export function TreasuryPage() {
     expenses: { key: 'expenses', header: isAr ? 'مصروفات' : 'Expenses', render: (row) => formatCurrency(row.expenses, currency, lang) },
     transfer_in: { key: 'transfer_in', header: isAr ? 'تحويل وارد' : 'Transfer in', render: (row) => formatCurrency(row.transfer_in, currency, lang) },
     transfer_out: { key: 'transfer_out', header: isAr ? 'تحويل صادر' : 'Transfer out', render: (row) => formatCurrency(row.transfer_out, currency, lang) },
+    shift_cash_net: { key: 'shift_cash_net', header: isAr ? 'صافي نقدي الشفتات' : 'Shift cash net', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.shift_cash_net, currency, lang)}</span> },
+    cash_outside_shifts: { key: 'cash_outside_shifts', header: isAr ? 'حركات نقدية خارج الشفتات' : 'Cash outside shifts', render: (row) => formatCurrency(row.cash_outside_shifts, currency, lang) },
+    cash_day_net: { key: 'cash_day_net', header: isAr ? 'صافي نقدي اليوم' : 'Daily cash net', render: (row) => <span className="font-black text-ui-primary">{formatCurrency(row.cash_day_net, currency, lang)}</span> },
     cash_balance_after_close: { key: 'cash_balance_after_close', header: isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.cash_balance_after_close, currency, lang)}</span> },
     bank_balance_after_close: { key: 'bank_balance_after_close', header: isAr ? 'رصيد بنك فعلي' : 'Actual bank balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.bank_balance_after_close, currency, lang)}</span> },
     closing_balance: { key: 'closing_balance', header: isAr ? 'إجمالي آخر اليوم' : 'Day closing total', render: (row) => <span className={`font-black ${row.is_latest ? 'text-ui-primary' : 'text-ui-text'}`}>{formatCurrency(row.closing_balance, currency, lang)}</span> },
@@ -383,7 +392,7 @@ export function TreasuryPage() {
         <DesignPanel title={isAr ? 'يومية الخزينة' : 'Treasury Daily Journal'} testId="treasury-day-close-reconciliation-panel">
           <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
             {isAr
-              ? 'يومية خزينة متصلة: النقدي والبنك المرحّل يساويان رصيد آخر اليوم السابق، وتظهر المبيعات والمصروفات والمشتريات والتحويلات حتى الوصول لرصيد نقدي وبنك فعلي آخر اليوم.'
+              ? 'يومية خزينة متصلة: النقدي المرحّل + صافي نقدي اليوم = الرصيد النقدي الفعلي آخر اليوم. صافي الشفتات يظهر مستقلًا، وأي حركة نقدية خارج الشفتات تظهر بوضوح حتى لا تُحمّل على الموظف.'
               : 'Continuous treasury journal: carried cash and bank equal the prior day closing balances, with sales, expenses, purchases, and transfers explaining the actual cash and bank closing balances.'}
           </div>
           <details className="mb-3 rounded-lg border border-ui-border bg-ui-surface p-3">
