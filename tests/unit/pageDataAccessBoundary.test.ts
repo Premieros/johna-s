@@ -12,7 +12,6 @@ const legacyAllowlist = new Set([
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
   "src/features/inventory/pages/WasteCenterPage.tsx",
-  "src/features/manufacturing/pages/RawMaterialsPage.tsx",
   "src/features/manufacturing/pages/RecipesPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
@@ -63,6 +62,14 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps RawMaterialsPage behind its feature service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/manufacturing/pages/RawMaterialsPage.tsx'), 'utf8');
+    expect(source).toContain('loadRawMaterialMeta');
+    expect(source).toContain('updateRawMaterial');
+    expect(source).toContain('deleteRawMaterial');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps UsersPage behind its access service', () => {
