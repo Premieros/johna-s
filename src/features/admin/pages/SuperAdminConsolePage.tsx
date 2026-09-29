@@ -38,12 +38,11 @@ import {
   fetchUserCreationControl,
   fetchUsersAndAudit,
   fetchSuperAdminHealthSnapshot,
-  setOrganizationActive,
-  updateSuperAdminUser,
   type SuperAdminAuditLogRow as AuditLogRow,
   type SuperAdminTenantStats as TenantStats,
   type SuperAdminTenantUser as TenantUser,
 } from '../services/superAdminConsoleData';
+import { setOrganizationActive, updateSuperAdminUser } from '../services/superAdminConsoleActions';
 
 type SuperTab =
   | 'tenants'
