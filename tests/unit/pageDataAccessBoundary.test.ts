@@ -8,7 +8,6 @@ const pagesRoot = join(repoRoot, 'src', 'features');
 const legacyAllowlist = new Set([
   "src/features/catalog/pages/ProductsPage.tsx",
   "src/features/inventory/pages/KitchenDisplayPage.tsx",
-  "src/features/inventory/pages/WasteCenterPage.tsx",
   "src/features/manufacturing/pages/RecipesPage.tsx",
   "src/features/pos/pages/ActiveOrdersPage.tsx",
   "src/features/pos/pages/PosWorkspacePage.tsx",
@@ -59,6 +58,15 @@ describe('page data-access architecture boundary', () => {
     expect(financialReports).toContain('loadLedgerAccounts');
     expect(financialReports).toContain('loadInventoryStatementOptions');
     expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(financialReports)).toBe(false);
+  });
+
+  it('keeps WasteCenterPage behind its feature service', () => {
+    const source = readFileSync(join(repoRoot, 'src/features/inventory/pages/WasteCenterPage.tsx'), 'utf8');
+    expect(source).toContain('loadWasteCenterData');
+    expect(source).toContain('createWasteEntry');
+    expect(source).toContain('decideWasteEntry');
+    expect(source).toContain('loadWasteReport');
+    expect(/supabase\s*\.\s*(?:from|rpc)\s*\(/.test(source)).toBe(false);
   });
 
   it('keeps SuperAdminConsolePage behind its feature service', () => {
