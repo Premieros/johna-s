@@ -19,6 +19,7 @@ function row(id: string, quantity: number): OrderItem {
     notes: null,
     modifier_option_ids: [],
     modifiers_snapshot: [],
+    created_at: '2026-09-29T00:00:00.000Z',
   } as OrderItem;
 }
 
