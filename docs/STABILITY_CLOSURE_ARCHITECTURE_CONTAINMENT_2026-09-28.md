@@ -1,3 +1,8 @@
+> **HISTORICAL / CLOSED — 2026-09-29**  
+> PR #402 was merged and deployed to `main` at `5c74a25448afb65c4e3b528751f749215162cd1b`.  
+> This file is preserved as historical evidence only and is no longer an active execution log.  
+> Active work moved to `docs/POST_402_STABILITY_CLOSURE_2026-09-29.md` on branch `development/post-402-stability-closure-20260929`.
+
 # STABILITY CLOSURE / ARCHITECTURE CONTAINMENT — 2026-09-28
 
 ## Work status
