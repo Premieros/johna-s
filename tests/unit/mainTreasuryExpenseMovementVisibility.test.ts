@@ -10,11 +10,10 @@ const treasuryPage = fs.readFileSync(
   'utf8',
 );
 
-describe('purchase return linkage and main treasury expense movement visibility', () => {
-  it('links legacy and future purchase return journals without changing financial values', () => {
-    expect(migration).toContain('trg_link_purchase_return_reference');
-    expect(migration).toContain("je.reference_type = 'purchase_return'");
-    expect(migration).toContain('SET reference_id = c.purchase_id');
+describe('main treasury expense movement visibility', () => {
+  it('does not rewrite purchase-return references or financial history', () => {
+    expect(migration).not.toContain('link_purchase_return_reference');
+    expect(migration).not.toContain("SET reference_id = c.purchase_id");
     expect(migration).not.toContain('UPDATE public.purchases');
     expect(migration).not.toContain('UPDATE public.purchase_items');
   });
