@@ -2,7 +2,7 @@
 -- Scope: business_day_state / manual rollover / no-open-shift day_close only.
 -- No treasury formula, printing, KDS, inventory, payment, or historical data rewrite.
 
-CREATE OR REPLACE FUNCTION private.max_reachable_business_state_date(
+CREATE OR REPLACE FUNCTION private.current_fixed_business_date(
   p_branch_id uuid,
   p_at timestamptz DEFAULT now()
 )
@@ -16,7 +16,6 @@ DECLARE
   v_start time := '00:00';
   v_local timestamp;
   v_business_date date;
-  v_cutoff timestamptz;
 BEGIN
   SELECT COALESCE(bs.business_day_start,'00:00'::time)
   INTO v_start
@@ -28,7 +27,30 @@ BEGIN
   IF v_local::time < v_start THEN
     v_business_date:=v_business_date-1;
   END IF;
+  RETURN v_business_date;
+END;
+$function$;
 
+REVOKE ALL ON FUNCTION private.current_fixed_business_date(uuid,timestamptz)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION private.current_fixed_business_date(uuid,timestamptz)
+  TO service_role,postgres;
+
+CREATE OR REPLACE FUNCTION private.max_reachable_business_state_date(
+  p_branch_id uuid,
+  p_at timestamptz DEFAULT now()
+)
+RETURNS date
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public','pg_temp'
+AS $function$
+DECLARE
+  v_business_date date;
+  v_cutoff timestamptz;
+BEGIN
+  v_business_date:=private.current_fixed_business_date(p_branch_id,p_at);
   v_cutoff:=private.business_day_fixed_cutoff(p_branch_id,v_business_date);
   IF v_cutoff IS NOT NULL AND p_at>=v_cutoff THEN
     RETURN v_business_date+1;
