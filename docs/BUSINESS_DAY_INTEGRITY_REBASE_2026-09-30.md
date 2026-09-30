@@ -56,7 +56,8 @@ State: **BLOCKED**
 - Verify #3525 / run `36679061600`: failed only at mandatory active-worklog structure before lint/typecheck/unit/build; DB and Browser Smoke were skipped.
 - Failure cause: this log did not yet contain every mandatory structural heading and declared `Current PR: pending`.
 - Verify #3526 / run `36680984404`: application gate Green; DB integration failed 4 tests and exposed an over-strict no-open-shift manual-close guard plus new-test isolation issues.
-- Verify #3529 / run `36681680172`: application gate Green; DB integration reached 874/877 passed. All new Business Day integrity tests and rollover tests passed. Remaining root failure: shared fixtures can contain an open shift with `opened_at IS NULL`; `_ensure_business_day_state` attempted to persist a NULL `started_at`, aborting two downstream suites. The migration now uses an internal `COALESCE(opened_at, now())` only for Business Day state initialization and does not mutate the shift row. Added explicit regression coverage.
+- Verify #3529 / run `36681680172`: application gate Green; DB integration reached 874/877 passed.
+- Verify #3532 / run `36683439029`: application gate Green; DB integration 874/878 passed. The added `opened_at=NULL` fixture was invalid because `shifts.opened_at` is NOT NULL. The remaining real failure occurs when business_day_state is initialized after the open shift has already been closed. The insert now enforces `started_at` with `COALESCE(v_started_at,v_effective_open,v_last_close.closed_at,now())`, and the invalid fixture was replaced by a valid post-shift initialization regression.
 - Branch compare before this documentation correction: ahead 7, behind 0 from `main`.
 
 ## Production gate
