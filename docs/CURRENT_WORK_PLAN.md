@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Main treasury movement production-safety correction**
+- Track: **Emergency hotfix — Cleopatra table 41 served-order resend**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `b604decb34c97aa510c390e87b39ce76ff18c080`
-- Active development branch: `development/main-treasury-movement-prod-safety-20260930`
-- Mandatory active work log: `docs/PURCHASE_RETURN_LINK_MAIN_TREASURY_MOVEMENT_2026-09-30.md`
+- Latest main baseline reconciled: `975fa9bfc2ee07f306f5cfd9b46cf04eb1748057`
+- Active development branch: `development/hotfix-cleopatra-table41-served-resend-20260930`
+- Mandatory active work log: `docs/CLEOPATRA_TABLE41_SERVED_RESEND_HOTFIX_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/purchase-return-link-main-treasury-movement-20260930`
+4. `development/hotfix-cleopatra-table41-served-resend-20260930`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -50,7 +50,7 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 - #357 — Smouha V8.1.1 final
 
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
-PR #402 is merged/closed. PR #409 is the active emergency financial reconciliation PR and remains Draft until the final merge gate.
+PR #402 and PR #409 are historical/closed tracks for this task. PR #420 is the active emergency POS/KDS hotfix and remains Draft until the final merge gate.
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -67,16 +67,16 @@ PR #402 is merged/closed. PR #409 is the active emergency financial reconciliati
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Resolve the urgent cash-handover ambiguity without changing printing/KDS:
-1. one canonical calculated shift cash net for employee handover;
-2. employee counted cash remains informational only and never drives accounting;
-3. add explicit Treasury columns for shift cash net, outside-shift cash movement, and daily cash net;
-4. guarantee cash carried + daily cash net = actual cash closing balance;
-5. apply the same rule to every branch;
-6. expose discrepancies instead of attributing them to employees.
+Restore safe service on Cleopatra table 41 and prevent recurrence:
+1. allow an open/unpaid order that already reached `served` to accept later additions;
+2. when later additions are sent, reopen the kitchen lifecycle to `sent`;
+3. expose only the newly sent quantity in KDS, never previously served quantities;
+4. preserve stock deduction semantics and prevent duplicate inventory consumption;
+5. preserve printing routing, payment state, permissions, branch isolation, and table binding;
+6. verify the same behavior is safe for Smouha and Cleopatra.
 
 Detailed execution and verification are maintained only in:
-`docs/PURCHASE_RETURN_LINK_MAIN_TREASURY_MOVEMENT_2026-09-30.md`
+`docs/CLEOPATRA_TABLE41_SERVED_RESEND_HOTFIX_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:
