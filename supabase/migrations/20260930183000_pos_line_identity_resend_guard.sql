@@ -271,7 +271,6 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'TRANSACTION_FAILED', 'detail', SQLERRM);
   END;
 END;
-$function$
-
+$function$;
 
 NOTIFY pgrst, 'reload schema';
