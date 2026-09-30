@@ -1,12 +1,12 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Purchase return link + main treasury movement visibility**
+- Track: **Main treasury movement production-safety correction**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `26193f0c7866367c7d55419bd94030de6baf23bb`
-- Active development branch: `development/purchase-return-link-main-treasury-movement-20260930`
+- Latest main baseline reconciled: `b604decb34c97aa510c390e87b39ce76ff18c080`
+- Active development branch: `development/main-treasury-movement-prod-safety-20260930`
 - Mandatory active work log: `docs/PURCHASE_RETURN_LINK_MAIN_TREASURY_MOVEMENT_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
