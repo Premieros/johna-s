@@ -362,8 +362,9 @@ BEGIN
   END IF;
 
   v_target_date:=COALESCE(p_business_date,(now() AT TIME ZONE 'Africa/Cairo')::date);
-  v_cutoff:=private.business_day_fixed_cutoff(p_branch_id,v_target_date);
-  IF v_cutoff IS NULL OR now()<v_cutoff THEN
+  v_max_state_date:=private.max_reachable_business_state_date(p_branch_id,now());
+  IF v_target_date>v_max_state_date THEN
+    v_cutoff:=private.business_day_fixed_cutoff(p_branch_id,v_target_date);
     RETURN jsonb_build_object(
       'success',false,
       'error','BUSINESS_DAY_NOT_FINISHED',
