@@ -48,14 +48,15 @@ State: **BLOCKED**
 - Replaced `_ensure_business_day_state` so future historical closes cannot drag a new live state beyond the reachable ceiling.
 - Replaced `rollover_business_day` so rollover before cutoff returns `BUSINESS_DAY_NOT_FINISHED`, advances exactly one day, and refuses to skip over a preclosed next date.
 - Replaced `day_close` so no-open-shift closes also require the configured cutoff and cannot advance state beyond the reachable ceiling.
-- Added unit and integration regression coverage, including the 02:30 cutoff / 08:00 next-start interval.
+- Added unit and integration regression coverage, including the 02:30 cutoff / 08:00 next-start interval and open-shift rows with missing `opened_at`.
 - Updated the existing rollover integration test to require a genuinely due date and to assert immediate second rollover is blocked.
 - No treasury formula, printing, KDS, inventory, supplier, or payment code was changed.
 
 ## Verification ledger
 - Verify #3525 / run `36679061600`: failed only at mandatory active-worklog structure before lint/typecheck/unit/build; DB and Browser Smoke were skipped.
 - Failure cause: this log did not yet contain every mandatory structural heading and declared `Current PR: pending`.
-- Verify #3526 / run `36680984404`: application gate Green, DB integration failed 4 tests; 873/877 integration tests passed. Two failures were new-test isolation issues, and two existing tests proved the no-open-shift `day_close` guard was stricter than existing valid manual-close semantics.
+- Verify #3526 / run `36680984404`: application gate Green; DB integration failed 4 tests and exposed an over-strict no-open-shift manual-close guard plus new-test isolation issues.
+- Verify #3529 / run `36681680172`: application gate Green; DB integration reached 874/877 passed. All new Business Day integrity tests and rollover tests passed. Remaining root failure: shared fixtures can contain an open shift with `opened_at IS NULL`; `_ensure_business_day_state` attempted to persist a NULL `started_at`, aborting two downstream suites. The migration now uses an internal `COALESCE(opened_at, now())` only for Business Day state initialization and does not mutate the shift row. Added explicit regression coverage.
 - Branch compare before this documentation correction: ahead 7, behind 0 from `main`.
 
 ## Production gate
