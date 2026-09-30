@@ -62,9 +62,32 @@ State: **BLOCKED**
 - Verify #3538 / run `36687420644`: application/unit/build Green; DB integration improved to 877/878 passed. All existing operational suites passed, including `functional_core_cycle`, `shift_day_close_expense_gl`, rollover, auto-close, print, KDS, inventory, and permission/security suites. The only failure was in the new regression test because one SQL SELECT both invoked `_ensure_business_day_state()` and read the table in a sibling subquery; PostgreSQL may evaluate the read first. Test was corrected to execute mutation and verification as separate statements. No production code change was needed.
 - Branch remains based on `main@975fa9bfc2ee07f306f5cfd9b46cf04eb1748057`; no Production write or merge has occurred.
 
+## Production read-only verification — 2026-09-30
+- Exact-head Verify #3540 / run `36695015715`: **GREEN** across application, unit, build, DB integration/security, and Browser Smoke.
+- Production functions are still the old unguarded versions; no Production migration has been applied.
+- Cleopatra is healthy at `business_date=2026-09-30`, one open shift, max closed date `2026-09-29`.
+- Smouha is still corrupted at `business_date=2026-10-03` with one open shift; max closed date is `2026-10-02`.
+- Smouha future daily closes:
+  - 2026-09-30: zero snapshot, created 2026-09-28.
+  - 2026-10-01: snapshot contains 19 invoices / net sales 5,885 / cash snapshot 3,391, created 2026-09-29.
+  - 2026-10-02: zero snapshot, created 2026-09-29.
+- The 2026-10-01 snapshot exactly matches the second Smouha shift on 2026-09-29 by invoice count and net sales: 19 invoices / 5,885.
+- Correct 2026-09-29 source data is broader than that snapshot: 29 completed sales / 9,189 total, 4 purchases / 8,648, 9 non-voided expenses / 25,799.99.
+- Current Smouha activity on 2026-09-30 at read time: 2 completed sales / 250 total, 8 orders created in the current-day window, 6 open/held orders.
+- Therefore the historical repair MUST NOT simply rename/relabel the 2026-10-01 snapshot as 2026-09-29.
+- No historical correction is permitted while the live Smouha shift has open orders.
+- Required repair shape after a safe maintenance point:
+  1. preserve invalid future snapshots in an audit-safe form before mutation;
+  2. rebuild the correct 2026-09-29 close from canonical source tables;
+  3. remove only invalid future close rows after preservation/reconciliation;
+  4. reset `business_day_state` to the actual reachable date;
+  5. verify treasury/day-close/report parity before reopening automatic rollover;
+  6. keep this data repair separate from the code guard migration.
+
 ## Production gate
 State: **BLOCKED**
-- Exact-head Full Verify Green: NO.
+- Exact-head Verify Green: YES — #3540 / `36695015715` on code head `db848343d9c8d766905d48d348dbd77f5f53b704` before this documentation-only update.
+- Exact-head Full Verify on the final documentation head: pending rerun.
 - Production API parity Green: NO.
 - Production migration approved: NO.
 - Production migration applied: NO.
@@ -72,11 +95,11 @@ State: **BLOCKED**
 - Merge approved: NO.
 
 ## Next action
-1. Re-run exact-head Verify after this worklog-only correction.
-2. If application/DB/browser gates are Green, re-check latest `main` drift.
-3. Re-run read-only Smouha/Cleopatra state checks.
-4. Do not correct Production state/history yet.
-5. Stop before Production migration or merge for explicit approval.
+1. Re-run exact-head Verify after this documentation-only update.
+2. Re-check latest `main` drift.
+3. Prepare a separate, reviewable historical-reconciliation script/plan for Smouha; do not execute it while the live shift/open orders exist.
+4. Keep code-guard migration and historical data repair as separate approvals.
+5. Stop before any Production migration, data correction, or merge for explicit approval.
 
 ## Mandatory update protocol
 - Verify branch HEAD before every repository write.
