@@ -9,12 +9,10 @@ DECLARE
   v_next text;
   v_old_decl text := $old$
   v_matched_id uuid;
-  v_owner_id uuid;
 $old$;
   v_new_decl text := $new$
   v_matched_id uuid;
   v_requested_item_id uuid;
-  v_owner_id uuid;
 $new$;
   v_old_match text := $old$
       v_matched_id := NULL;
@@ -106,12 +104,13 @@ BEGIN
   END IF;
 
   SELECT pg_get_functiondef(v_oid::oid) INTO v_def;
-  v_next := replace(v_def, v_old_decl, v_new_decl);
-  IF v_next = v_def THEN
-    RAISE EXCEPTION 'update_order declaration patch marker not found';
+  IF position('v_requested_item_id uuid;' IN v_def) = 0 THEN
+    v_next := replace(v_def, v_old_decl, v_new_decl);
+    IF v_next = v_def THEN
+      RAISE EXCEPTION 'update_order declaration patch marker not found';
+    END IF;
+    v_def := v_next;
   END IF;
-
-  v_def := v_next;
   v_next := replace(v_def, v_old_match, v_new_match);
   IF v_next = v_def THEN
     RAISE EXCEPTION 'update_order matching patch marker not found';
