@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Month-opening raw-material stock count Excel workflow**
+- Track: **Emergency operational containment — stale-client duplicate sent line**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `b9e2238cdafcd5b79d6cea73ce80fe6a6ed680fa`
-- Active development branch: `development/stock-count-excel-20260930`
-- Mandatory active work log: `docs/STOCK_COUNT_EXCEL_2026-09-30.md`
+- Latest main baseline reconciled: `1cfaec2d22ce55cfec2ce58cca1222eca564d828`
+- Active development branch: `development/emergency-stale-client-guard-main-sync-20260930`
+- Mandatory active work log: `docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/stock-count-excel-20260930`
+4. `development/emergency-stale-client-guard-main-sync-20260930`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -50,8 +50,8 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 - #357 — Smouha V8.1.1 final
 
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
-The emergency POS line-identity fix is already present on the current main baseline `b9e2238cdafcd5b79d6cea73ce80fe6a6ed680fa` and is historical for this stock-count task.
-The active PR is #423 for the month-opening raw-material stock-count Excel workflow.
+PR #423 (month-opening raw-material stock-count Excel workflow) is merged on main at `1cfaec2d22ce55cfec2ce58cca1222eca564d828` and is historical for this emergency track.
+The active emergency PR is the latest-main-synced stale-client duplicate sent-line containment branch above.
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -68,33 +68,27 @@ The active PR is #423 for the month-opening raw-material stock-count Excel workf
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Provide a safe month-opening raw-material count flow for Smouha and Cleopatra without bypassing the canonical stock-count lifecycle:
-1. export active raw materials for the selected branch + warehouse from the Stock Counts page;
-2. include immutable identity/reference columns and a user-editable counted quantity + optional variance reason;
-3. import the same workbook back into the count draft without directly writing inventory or FIFO batches;
-4. create the stock-count document through the existing `create_stock_count` RPC only;
-5. preserve the existing Draft -> Submit -> Approve -> Apply permission split;
-6. on Apply, keep the existing warehouse-aware FIFO adjustment authority and auditability;
-7. reject or report invalid, foreign-branch, duplicate, negative, or malformed rows clearly;
-8. verify the complete UI + RPC + integration + browser-smoke path before merge;
-9. keep printing, KDS, POS, payments, shifts, and unrelated production behavior untouched.
+Contain the remaining stale-client recurrence path without changing established POS/KDS/printing/inventory behavior:
+1. stale/cached POS clients that omit `order_item_id` must not create a fresh same-configuration line after kitchen-send history already exists;
+2. preserve legitimate new configurations, modifiers, notes, prices, and unsent new orders;
+3. keep inventory deduction authority, KDS routing, Print Agent routing, payments, shifts, tables, and branch isolation unchanged;
+4. run exact-head Full Verify on a branch created directly from latest `main`;
+5. apply the migration to Production only after Green verification;
+6. run post-deploy read-only checks on Smouha and Cleopatra for duplicate-line / repeated-kitchen-delta recurrence.
 
 Detailed execution and verification are maintained only in:
-`docs/STOCK_COUNT_EXCEL_2026-09-30.md`
+`docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:
-- Excel export is scoped to the selected branch and warehouse;
-- upload fills a draft count only and performs no direct stock write;
-- zero quantities are valid; negative/non-numeric values are rejected;
-- duplicate rows are handled deterministically and reported;
-- workbook identity cannot switch a row to another branch/material;
-- Draft -> Submit -> Approve -> Apply remains permission-separated;
-- apply remains warehouse-aware and FIFO-backed through the existing RPC;
-- focused stock-count Excel tests are Green;
-- exact-head Full Verify is Green, including DB integration/security and Browser Smoke;
-- latest `main` is reconciled before merge;
-- no unexpected printing/KDS/POS/payment/shift behavior changed;
-- no Production migration or manual stock rewrite is required by this feature.
+- exact-head Full Verify is Green, including DB integration/security/RLS and Browser Smoke;
+- the stale-client guard regression is Green;
+- the PR is mergeable from latest `main` with no force push;
+- Production migration is applied deliberately and verified;
+- Production API/schema parity is confirmed after migration;
+- no new duplicate same-configuration line is observed from stale-client behavior;
+- Smouha and Cleopatra remain operational;
+- printing, KDS, inventory consumption, payments, shifts, and table flows show no regression;
+- no stale active-work references remain.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
