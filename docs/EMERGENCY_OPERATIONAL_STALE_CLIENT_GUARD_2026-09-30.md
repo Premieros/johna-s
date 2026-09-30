@@ -3,6 +3,8 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/emergency-stale-client-duplicate-line-guard-20260930`
+Current PR: `#422`
+Last updated: 2026-09-30 19:15 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -41,7 +43,8 @@ State: **BLOCKED**
 - Migration applied inside Production transaction + ROLLBACK: ✅
 - Confirmed Smouha corrupted residual corrected: ✅
 - Unit contract added: ✅
-- Exact-head Full Verify: pending.
+- Verify #3558: stopped only at mandatory worklog metadata gate before code checks; missing Current PR / Last updated.
+- Exact-head Full Verify rerun: pending.
 - DB integration/security: pending.
 - Browser Smoke: pending.
 - Production post-deploy operational audit: pending.
