@@ -18,6 +18,7 @@ import { exportToExcelAdvanced, importFromExcel } from '@/lib/excel';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { StockCount, StockCountItem, Branch, Warehouse, Product, RawMaterial } from '@/lib/types';
 import { loadRawMaterialWarehouseSnapshot, loadStockCountMetadata } from '../services/stockCountData';
+import { buildStockCountExcelRows, parseStockCountExcelRows, stockCountExcelColumns } from '../utils/stockCountExcel';
 
 interface EditLine {
   product_id: string;
@@ -137,26 +138,37 @@ export function StockCountsPage() {
       const snapshot = await loadRawMaterialWarehouseSnapshot(form.branch_id, form.warehouse_id);
       const branchName = branches.find((b) => b.id === form.branch_id)?.name || '';
       const warehouseName = warehouses.find((w) => w.id === form.warehouse_id)?.name || '';
-      const idCol = isAr ? 'معرف الخامة (لا تعدله)' : 'Raw Material ID (do not edit)';
-      const codeCol = isAr ? 'كود الخامة' : 'Raw Material Code';
-      const nameCol = isAr ? 'اسم الخامة' : 'Raw Material';
-      const systemCol = isAr ? 'رصيد النظام' : 'System Quantity';
-      const countedCol = isAr ? 'الكمية الفعلية' : 'Counted Quantity';
-      const reasonCol = isAr ? 'سبب الفرق' : 'Variance Reason';
-
+      const columns = stockCountExcelColumns(isAr);
       await exportToExcelAdvanced({
-        data: formRawMaterials.map((material) => ({
-          [idCol]: material.id,
-          [codeCol]: material.code || '',
-          [nameCol]: material.name,
-          [systemCol]: snapshot[material.id] || 0,
-          [countedCol]: '',
-          [reasonCol]: '',
-        })),
+        data: buildStockCountExcelRows({
+          materials: formRawMaterials,
+          snapshot,
+          branchId: form.branch_id,
+          warehouseId: form.warehouse_id,
+          isAr,
+        }),
         filename: `stock-count-${branchName || form.branch_id}-${warehouseName || form.warehouse_id}-${new Date().toISOString().slice(0, 10)}`,
         sheetName: isAr ? 'جرد الخامات' : 'Raw Material Count',
-        columns: [idCol, codeCol, nameCol, systemCol, countedCol, reasonCol],
-        columnWidths: { [idCol]: 38, [codeCol]: 18, [nameCol]: 32, [systemCol]: 16, [countedCol]: 18, [reasonCol]: 30 },
+        columns: [
+          columns.rawMaterialId,
+          columns.code,
+          columns.name,
+          columns.systemQuantity,
+          columns.countedQuantity,
+          columns.reason,
+          columns.branchId,
+          columns.warehouseId,
+        ],
+        columnWidths: {
+          [columns.rawMaterialId]: 38,
+          [columns.code]: 18,
+          [columns.name]: 32,
+          [columns.systemQuantity]: 16,
+          [columns.countedQuantity]: 18,
+          [columns.reason]: 30,
+          [columns.branchId]: 38,
+          [columns.warehouseId]: 38,
+        },
       });
     } catch (err) {
       show(err instanceof Error ? err.message : String(err), 'error');
@@ -174,47 +186,34 @@ export function StockCountsPage() {
 
     try {
       const rows = await importFromExcel(file);
-      const byId = new Map(formRawMaterials.map((material) => [material.id, material]));
-      const byCode = new Map(formRawMaterials.filter((material) => material.code).map((material) => [String(material.code).trim().toLowerCase(), material]));
-      const byName = new Map(formRawMaterials.map((material) => [material.name.trim().toLowerCase(), material]));
-      const imported = new Map<string, CreateLine>();
-      let blankCount = 0;
-      let invalidCount = 0;
+      const parsed = parseStockCountExcelRows({
+        rows,
+        materials: formRawMaterials,
+        branchId: form.branch_id,
+        warehouseId: form.warehouse_id,
+        requireComplete: form.count_type === 'full',
+        isAr,
+      });
 
-      for (const row of rows) {
-        const rawId = String(row['معرف الخامة (لا تعدله)'] ?? row['Raw Material ID (do not edit)'] ?? row['RawMaterialId'] ?? '').trim();
-        const rawCode = String(row['كود الخامة'] ?? row['Raw Material Code'] ?? row['Code'] ?? '').trim().toLowerCase();
-        const rawName = String(row['اسم الخامة'] ?? row['Raw Material'] ?? row['Name'] ?? '').trim().toLowerCase();
-        const material = byId.get(rawId) || byCode.get(rawCode) || byName.get(rawName);
-        if (!material) { invalidCount += 1; continue; }
-
-        const rawQuantity = row['الكمية الفعلية'] ?? row['Counted Quantity'] ?? row['CountedQuantity'];
-        if (rawQuantity == null || String(rawQuantity).trim() === '') { blankCount += 1; continue; }
-        const quantity = Number(rawQuantity);
-        if (!Number.isFinite(quantity) || quantity < 0) { invalidCount += 1; continue; }
-
-        imported.set(material.id, {
-          item_id: material.id,
-          counted_quantity: String(quantity),
-          reason: String(row['سبب الفرق'] ?? row['Variance Reason'] ?? row['Reason'] ?? '').trim(),
-        });
+      if (parsed.errors.length > 0) {
+        const preview = parsed.errors.slice(0, 5).join('\n');
+        const more = parsed.errors.length > 5
+          ? (isAr ? `\n… و${parsed.errors.length - 5} أخطاء أخرى` : `\n… and ${parsed.errors.length - 5} more errors`)
+          : '';
+        show(preview + more, 'error');
+        return;
       }
-
-      if (imported.size === 0) {
-        show(isAr ? 'لم يتم العثور على أي كمية فعلية صالحة في ملف الجرد.' : 'No valid counted quantities were found in the stock-count file.', 'error');
+      if (parsed.lines.length === 0) {
+        show(isAr ? 'لم يتم العثور على أي كمية فعلية في ملف الجرد.' : 'No counted quantities were found in the stock-count file.', 'error');
         return;
       }
 
-      setFormItems(Array.from(imported.values()));
-      const warnings = [
-        blankCount > 0 ? (isAr ? `${blankCount} صف بدون كمية فعلية` : `${blankCount} rows without a counted quantity`) : '',
-        invalidCount > 0 ? (isAr ? `${invalidCount} صف غير صالح` : `${invalidCount} invalid rows`) : '',
-      ].filter(Boolean).join('، ');
+      setFormItems(parsed.lines);
       show(
         isAr
-          ? `تم تحميل ${imported.size} خامة إلى مسودة الجرد${warnings ? ` — ${warnings}` : ''}. لم يتم تعديل المخزون بعد.`
-          : `Loaded ${imported.size} materials into the draft count${warnings ? ` — ${warnings}` : ''}. Stock has not been changed yet.`,
-        warnings ? 'warning' : 'success',
+          ? `تم تحميل ${parsed.lines.length} خامة إلى مسودة الجرد. لم يتم تعديل المخزون بعد.`
+          : `Loaded ${parsed.lines.length} materials into the draft count. Stock has not been changed yet.`,
+        'success',
       );
     } catch (err) {
       show(err instanceof Error ? err.message : String(err), 'error');
