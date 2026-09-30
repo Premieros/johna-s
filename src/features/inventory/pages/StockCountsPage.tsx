@@ -155,14 +155,8 @@ export function StockCountsPage() {
         })),
         filename: `stock-count-${branchName || form.branch_id}-${warehouseName || form.warehouse_id}-${new Date().toISOString().slice(0, 10)}`,
         sheetName: isAr ? 'جرد الخامات' : 'Raw Material Count',
-        title: isAr ? 'ورقة جرد الخامات' : 'Raw Material Stock Count',
-        subtitle: isAr ? `${branchName} - ${warehouseName}` : `${branchName} - ${warehouseName}`,
         columns: [idCol, codeCol, nameCol, systemCol, countedCol, reasonCol],
         columnWidths: { [idCol]: 38, [codeCol]: 18, [nameCol]: 32, [systemCol]: 16, [countedCol]: 18, [reasonCol]: 30 },
-        sourceNote: isAr
-          ? 'رصيد النظام للمرجعية فقط. عدّل عمود الكمية الفعلية فقط ثم ارفع نفس الملف من صفحة الجرد.'
-          : 'System quantity is reference-only. Edit Counted Quantity, then upload the same file from Stock Counts.',
-        lang,
       });
     } catch (err) {
       show(err instanceof Error ? err.message : String(err), 'error');
