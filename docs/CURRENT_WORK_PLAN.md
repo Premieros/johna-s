@@ -5,7 +5,7 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `c1c0b4a72a8cf3a3e233a66f2d15081a931de12e`
+- Latest main baseline reconciled: `1cfaec2d22ce55cfec2ce58cca1222eca564d828`
 - Active development branch: `development/emergency-stale-client-duplicate-line-guard-20260930`
 - Mandatory active work log: `docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
 
@@ -50,7 +50,8 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 - #357 — Smouha V8.1.1 final
 
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
-PR #420 is merged and is now historical for this task. The active emergency PR is the POS line-identity / repeated-send hotfix opened from the branch above.
+PR #423 (month-opening raw-material stock-count Excel workflow) is merged on main at `1cfaec2d22ce55cfec2ce58cca1222eca564d828` and is historical for this emergency track.
+The active emergency PR is #422 for stale-client duplicate sent-line containment.
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -67,27 +68,27 @@ PR #420 is merged and is now historical for this task. The active emergency PR i
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Contain the only remaining operational recurrence path found during the emergency audit:
-1. stale/cached POS clients that omit `order_item_id` must not create a new same-configuration line after kitchen-send history exists;
-2. preserve all current inventory, payment, table, KDS, and printing contracts;
-3. correct only the confirmed corrupted unsent delta on Smouha order Johna's-01525;
-4. return to read-only operational monitoring after deployment.
+Contain the remaining stale-client recurrence path without changing established POS/KDS/printing/inventory behavior:
+1. stale/cached POS clients that omit `order_item_id` must not create a fresh same-configuration line after kitchen-send history already exists;
+2. preserve legitimate new configurations, modifiers, notes, prices, and unsent new orders;
+3. keep inventory deduction authority, KDS routing, Print Agent routing, payments, shifts, tables, and branch isolation unchanged;
+4. run exact-head Full Verify after reconciliation with latest `main`;
+5. apply the migration to Production only after Green verification and explicit approval already provided in this conversation;
+6. run post-deploy read-only checks on Smouha and Cleopatra for duplicate-line / repeated-kitchen-delta recurrence.
 
 Detailed execution and verification are maintained only in:
 `docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:
-- exact-head Fast Verify and Full Verify are Green;
-- Production API parity is Green;
-- critical page/RPC latency and call budgets are documented and verified;
-- priority heavy pages have bounded data orchestration behind service/domain boundaries;
-- the legacy direct-Supabase page allowlist is materially reduced and cannot grow;
-- runtime state is centralized/testable and System Health has explicit severity thresholds;
-- restore/recovery has been rehearsed on non-Production;
-- latest `main` has been reconciled into this branch;
-- no stale active work references remain;
+- latest `main` is reconciled without force push;
+- exact-head Full Verify is Green, including DB integration/security/RLS and Browser Smoke;
+- the stale-client guard regression is Green;
+- Production migration is applied deliberately and verified;
+- Production API/schema parity is confirmed after migration;
+- no new duplicate same-configuration line is observed from stale-client behavior;
 - Smouha and Cleopatra remain operational;
-- no unexpected printing/KDS/agent behavior changed.
+- printing, KDS, inventory consumption, payments, shifts, and table flows show no regression;
+- no stale active-work references remain.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
