@@ -75,14 +75,24 @@ describe.skipIf(!dbUrl)('business-day integrity rebase', () => {
       [ids.branchA, futureDate, ids.users.super_admin],
     );
 
+    const ensured = await client.query<{ d: string }>(
+      `SELECT (public._ensure_business_day_state($1)->>'business_date')::text AS d`,
+      [ids.branchA],
+    );
     const state = await client.query<{ d: string; le_max: boolean }>(
-      `SELECT
-         (public._ensure_business_day_state($1)->>'business_date')::text AS d,
-         ((SELECT business_date FROM public.business_day_state WHERE branch_id=$1) <= $2::date) AS le_max`,
+      `SELECT business_date::text AS d, business_date <= $2::date AS le_max
+       FROM public.business_day_state WHERE branch_id=$1`,
       [ids.branchA, maxDate],
     );
     expect(state.rows[0].le_max).toBe(true);
+    expect(ensured.rows[0].d).toBe(state.rows[0].d);
     expect(state.rows[0].d).not.toBe(futureDate);
+
+    await client.query(
+      `DELETE FROM public.daily_closes
+       WHERE branch_id=$1 AND business_date=$2::date`,
+      [ids.branchA, futureDate],
+    );
   });
 
   it('blocks a corrupted future state from rolling forward again', async () => {
