@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/emergency-stale-client-duplicate-line-guard-20260930`
 Current PR: `#422`
-Last updated: 2026-09-30 19:15 Africa/Cairo
+Last updated: 2026-09-30 20:55 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -26,7 +26,8 @@ State: **BLOCKED**
 ## Baseline
 - Main contains PR #421 merge `b9e2238cdafcd5b79d6cea73ce80fe6a6ed680fa`.
 - Production already contains `20260930183000_pos_line_identity_resend_guard`.
-- New emergency branch created from current main.
+- Original emergency branch was created from main before PR #423.
+- Reconciled latest main `1cfaec2d22ce55cfec2ce58cca1222eca564d828` into the branch content without force push; the merged stock-count workflow is preserved intact.
 
 ## Root-cause ledger
 1. New clients preserve `order_item_id`, but a stale cached client can still omit it for all resumed lines.
@@ -44,7 +45,9 @@ State: **BLOCKED**
 - Confirmed Smouha corrupted residual corrected: ✅
 - Unit contract added: ✅
 - Verify #3558: stopped only at mandatory worklog metadata gate before code checks; missing Current PR / Last updated.
-- Exact-head Full Verify rerun: pending.
+- Latest-main stock-count runtime/tests reconciled into this branch: ✅
+- Active work plan reconciled to PR #422 on latest-main content: ✅
+- Exact-head Full Verify on the reconciled head: pending.
 - DB integration/security: pending.
 - Browser Smoke: pending.
 - Production post-deploy operational audit: pending.
@@ -53,7 +56,7 @@ State: **BLOCKED**
 Blocked until exact-head Full Verify, DB integration/security, and Browser Smoke are all Green, then merge and apply deliberately to Production.
 
 ## Next action
-Open the emergency PR, run exact-head Full Verify, merge only if Green, apply the migration to Production, then resume read-only operational checks on both branches.
+Run exact-head Full Verify on the latest-main-reconciled PR #422 head. If Green and GitHub reports the PR mergeable, merge with expected-head protection, apply the migration deliberately to Production, then run read-only operational checks on Smouha and Cleopatra.
 
 ## Mandatory update protocol
 Update this log after each verification, merge, migration, or Production-state change. Keep `State: **BLOCKED**` until the Production gate is complete.
