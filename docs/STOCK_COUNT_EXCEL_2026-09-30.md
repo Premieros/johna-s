@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/stock-count-excel-20260930`
 Current PR: `#423`
-Last updated: 2026-09-30 20:20 Africa/Cairo
+Last updated: 2026-09-30 20:28 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -12,6 +12,7 @@ State: **BLOCKED**
 - Existing canonical stock-count lifecycle already exists: Draft -> Submit -> Approve -> Apply.
 - Excel export/import implementation is on PR #423 and intentionally adds no Production migration.
 - First Verify run #3560 failed only at the mandatory active-work-log gate because this track had not yet been declared active.
+- Workbook hardening and end-to-end DB lifecycle coverage are now added on the active branch.
 - No Production inventory data has been changed by this feature.
 
 ## Guardrails
@@ -36,16 +37,22 @@ State: **BLOCKED**
 3. Generic Excel export can create a Summary sheet when title/subtitle are used; generic import reads the first sheet, so stock-count workbooks must remain a single data sheet.
 4. Counted quantities must never be applied during upload; upload must only prepare the draft.
 5. The apply RPC recalculates current warehouse quantity at application time, so long delays between physical count and Apply can create an invalid variance if stock movements continue.
+6. Matching by code/name could allow a changed workbook row to target the wrong material; exact material identity is therefore mandatory.
+7. Duplicate rows must not silently overwrite one another.
 
 ## Change ledger
 - Added in-page Excel export after selecting branch + warehouse.
-- Workbook columns: immutable raw-material ID, code, name, system quantity reference, counted quantity, variance reason.
+- Workbook columns: raw-material ID, code, name, system quantity reference, counted quantity, variance reason, branch ID, warehouse ID.
 - Export system quantity is read from `raw_material_batches` for the selected branch + warehouse.
 - Workbook is intentionally single-sheet so the same file can be re-imported safely.
-- Import resolves rows by raw-material ID first, with code/name only as compatibility fallbacks.
-- Upload validates quantity as finite and non-negative and loads valid rows into the draft form only.
+- Import validates exact branch ID, warehouse ID, and raw-material ID; no code/name fallback can redirect a row.
+- Duplicate raw-material rows are rejected explicitly instead of silently overwriting quantities.
+- Zero is accepted; negative and non-numeric counts are rejected.
+- Full counts require a counted quantity for every active raw material; partial/cycle counts may leave rows blank.
+- Upload only populates the draft form and performs no stock write.
 - Existing `create_stock_count` RPC persists the draft; existing submit/approve/reject/apply functions remain unchanged.
-- Added focused contract coverage in `tests/unit/stockCountExcelWorkflow.test.ts`.
+- Added focused contract and validation coverage in `tests/unit/stockCountExcelWorkflow.test.ts` and `tests/unit/stockCountExcelValidation.test.ts`.
+- Added DB integration coverage in `tests/integration/stock_count_excel_lifecycle.test.ts` proving Create/Submit/Approve do not change stock and Apply alone posts the FIFO-backed variance.
 - No database migration, print, KDS, POS, payment, or shift code touched.
 
 ## Verification ledger
@@ -54,6 +61,8 @@ State: **BLOCKED**
 - Production historical opening-count state inspected read-only: ✅
 - First Verify #3560: ❌ mandatory worklog gate only; code checks were skipped.
 - Mandatory worklog/current-plan activation: ✅
+- Workbook edge-case coverage added for zero / negative / non-numeric / duplicate / foreign branch / foreign warehouse / incomplete full count: pending CI execution.
+- Full RPC lifecycle integration test added: pending CI execution.
 - Focused unit/type/build verification on exact head: pending.
 - DB integration/security: pending.
 - Browser Smoke: pending.
@@ -71,7 +80,7 @@ Merge/deploy is blocked until:
 No Production migration is expected.
 
 ## Next action
-Harden workbook validation and add complete focused coverage for export/import/draft/workflow boundaries, then rerun Full Verify on the new exact head.
+Run exact-head Full Verify. Fix any unit/type/integration/browser failure before merge. If Green, reconcile latest main once more and present the PR for explicit merge approval.
 
 ## Mandatory update protocol
 Verify branch/main relationship before every repository write. Update this log after every material code/test/CI/merge change. Keep `State: **BLOCKED**` until all merge gates are satisfied.
