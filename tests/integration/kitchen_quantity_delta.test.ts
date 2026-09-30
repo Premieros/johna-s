@@ -224,4 +224,78 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     expect(Number(pending.rows[0].q)).toBe(0);
   });
 
+
+  it('reopens a served order and exposes only the new kitchen delta', async () => {
+    const created = await asCashier(async () => {
+      const r = await client.query(
+        `SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,100,0,'amount',0,100,$3) AS r`,
+        [branchId, itemJson(1), cashierId],
+      );
+      return r.rows[0].r;
+    });
+    expect(created.success).toBe(true);
+    const orderId = String(created.order_id);
+
+    const first = await send(orderId);
+    expect(first.success).toBe(true);
+    expect(first.items_sent_count).toBe(1);
+    const itemId = String(first.sent[0].order_item_id);
+
+    await client.query(`SET LOCAL ROLE service_role`);
+    await client.query(`SELECT public.set_kitchen_status($1, 'served')`, [orderId]);
+    await client.query(`RESET ROLE`);
+
+    const servedBaseline = await client.query(
+      `SELECT served_quantity
+       FROM public.order_kitchen_served_quantities
+       WHERE order_id=$1 AND order_item_id=$2`,
+      [orderId, itemId],
+    );
+    expect(Number(servedBaseline.rows[0]?.served_quantity)).toBe(1);
+
+    const updated = await asCashier(async () => {
+      const r = await client.query(
+        `SELECT public.update_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,300,0,'amount',0,300,'open') AS r`,
+        [orderId, itemJson(3)],
+      );
+      return r.rows[0].r;
+    });
+    expect(updated.success).toBe(true);
+
+    const reopened = await send(orderId);
+    expect(reopened.success, JSON.stringify(reopened)).toBe(true);
+    expect(reopened.items_sent_count).toBe(1);
+    expect(Number(reopened.sent[0].quantity)).toBe(2);
+
+    const orderState = await client.query(
+      `SELECT kitchen_status FROM public.orders WHERE id=$1`,
+      [orderId],
+    );
+    expect(orderState.rows[0].kitchen_status).toBe('sent');
+
+    await client.query(`SET LOCAL ROLE service_role`);
+    const queue = await client.query(
+      `SELECT items FROM public.get_kitchen_queue(NULL, $1) WHERE order_id=$2`,
+      [branchId, orderId],
+    );
+    await client.query(`RESET ROLE`);
+
+    expect(queue.rows).toHaveLength(1);
+    expect(queue.rows[0].items).toHaveLength(1);
+    expect(String(queue.rows[0].items[0].order_item_id)).toBe(itemId);
+    expect(Number(queue.rows[0].items[0].quantity)).toBe(2);
+
+    await client.query(`SET LOCAL ROLE service_role`);
+    await client.query(`SELECT public.set_kitchen_status($1, 'served')`, [orderId]);
+    await client.query(`RESET ROLE`);
+
+    const finalBaseline = await client.query(
+      `SELECT served_quantity
+       FROM public.order_kitchen_served_quantities
+       WHERE order_id=$1 AND order_item_id=$2`,
+      [orderId, itemId],
+    );
+    expect(Number(finalBaseline.rows[0]?.served_quantity)).toBe(3);
+  });
+
 });
