@@ -2,9 +2,9 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/emergency-stale-client-duplicate-line-guard-20260930`
-Current PR: `#422`
-Last updated: 2026-09-30 20:55 Africa/Cairo
+Branch: `development/emergency-stale-client-guard-main-sync-20260930`
+Current PR: `#424`
+Last updated: 2026-09-30 21:12 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -45,8 +45,8 @@ State: **BLOCKED**
 - Confirmed Smouha corrupted residual corrected: ✅
 - Unit contract added: ✅
 - Verify #3558: stopped only at mandatory worklog metadata gate before code checks; missing Current PR / Last updated.
-- Latest-main stock-count runtime/tests reconciled into this branch: ✅
-- Active work plan reconciled to PR #422 on latest-main content: ✅
+- Clean replacement branch created directly from latest main `1cfaec2d22ce55cfec2ce58cca1222eca564d828`: ✅
+- Active work plan reconciled to PR #424 on latest-main content: ✅
 - Exact-head Full Verify on the reconciled head: pending.
 - DB integration/security: pending.
 - Browser Smoke: pending.
@@ -56,7 +56,7 @@ State: **BLOCKED**
 Blocked until exact-head Full Verify, DB integration/security, and Browser Smoke are all Green, then merge and apply deliberately to Production.
 
 ## Next action
-Run exact-head Full Verify on the latest-main-reconciled PR #422 head. If Green and GitHub reports the PR mergeable, merge with expected-head protection, apply the migration deliberately to Production, then run read-only operational checks on Smouha and Cleopatra.
+Run exact-head Full Verify on the clean latest-main PR #424 head. If Green and GitHub reports the PR mergeable, merge with expected-head protection, apply the migration deliberately to Production, then run read-only operational checks on Smouha and Cleopatra.
 
 ## Mandatory update protocol
 Update this log after each verification, merge, migration, or Production-state change. Keep `State: **BLOCKED**` until the Production gate is complete.
