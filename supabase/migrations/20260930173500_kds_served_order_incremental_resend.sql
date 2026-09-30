@@ -258,4 +258,65 @@ $patch_kds_served_delta$;
 REVOKE ALL ON FUNCTION public.get_kitchen_queue(text, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_kitchen_queue(text, uuid) TO authenticated, service_role;
 
+
+DO $patch_pos_guard_served_resend$
+DECLARE
+  v_oid regprocedure := to_regprocedure('public.enforce_pos_permission_mutation()');
+  v_def text;
+  v_next text;
+  v_old text := $old$
+      IF OLD.kitchen_status='pending'
+         AND NEW.kitchen_status='sent'
+         AND public.can_permission('pos.send_kitchen')
+         AND EXISTS(SELECT 1 FROM public.order_kitchen_sends s WHERE s.order_id=OLD.id) THEN
+        RETURN NEW;
+      END IF;
+$old$;
+  v_new text := $new$
+      IF OLD.kitchen_status='pending'
+         AND NEW.kitchen_status='sent'
+         AND public.can_permission('pos.send_kitchen')
+         AND EXISTS(SELECT 1 FROM public.order_kitchen_sends s WHERE s.order_id=OLD.id) THEN
+        RETURN NEW;
+      END IF;
+
+      -- A served order may receive later additions. This is still a
+      -- send-to-kitchen transition, not broad KDS management. Allow it only
+      -- when an authoritative served baseline exists and cumulative sent
+      -- quantity now exceeds that baseline for at least one line.
+      IF OLD.kitchen_status='served'
+         AND NEW.kitchen_status='sent'
+         AND public.can_permission('pos.send_kitchen')
+         AND EXISTS(
+           SELECT 1
+           FROM public.order_kitchen_sends s
+           JOIN public.order_kitchen_served_quantities ksb
+             ON ksb.order_id = OLD.id
+            AND ksb.order_item_id = s.order_item_id
+           WHERE s.order_id = OLD.id
+             AND COALESCE(s.sent_quantity,0) > COALESCE(ksb.served_quantity,0)
+         ) THEN
+        RETURN NEW;
+      END IF;
+$new$;
+BEGIN
+  IF v_oid IS NULL THEN
+    RAISE EXCEPTION 'enforce_pos_permission_mutation() is missing';
+  END IF;
+
+  SELECT pg_get_functiondef(v_oid::oid) INTO v_def;
+  v_next := replace(v_def, v_old, v_new);
+
+  IF v_next = v_def THEN
+    RAISE EXCEPTION 'POS mutation guard served-resend patch marker was not found';
+  END IF;
+  IF position('OLD.kitchen_status=''served''' IN v_next) = 0
+     OR position('order_kitchen_served_quantities ksb' IN v_next) = 0 THEN
+    RAISE EXCEPTION 'POS mutation guard served-resend patch is incomplete';
+  END IF;
+
+  EXECUTE v_next;
+END;
+$patch_pos_guard_served_resend$;
+
 NOTIFY pgrst, 'reload schema';
