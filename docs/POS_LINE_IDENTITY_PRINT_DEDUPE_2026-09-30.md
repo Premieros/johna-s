@@ -53,6 +53,7 @@ State: **BLOCKED**
 - Exact affected Smouha order transaction test: adding +1 to one Water line then calling `send_to_kitchen` produced exactly one delta line and did not move the other identical Water line: ✅
 - First CI run #3550: ❌ worklog structure only.
 - Worklog structure corrected: ✅
+- Verify #3552: cancelled externally during test-suite typecheck after lint + app typecheck passed; no code failure recorded.
 - Exact-head Verify rerun: pending.
 - DB integration/security: pending.
 - Browser Smoke: pending.
