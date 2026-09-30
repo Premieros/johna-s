@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/stock-count-excel-20260930`
 Current PR: `#423`
-Last updated: 2026-09-30 20:28 Africa/Cairo
+Last updated: 2026-09-30 20:34 Africa/Cairo
 State: **BLOCKED**
 
 ## Work status
@@ -12,7 +12,7 @@ State: **BLOCKED**
 - Existing canonical stock-count lifecycle already exists: Draft -> Submit -> Approve -> Apply.
 - Excel export/import implementation is on PR #423 and intentionally adds no Production migration.
 - First Verify run #3560 failed only at the mandatory active-work-log gate because this track had not yet been declared active.
-- Workbook hardening and end-to-end DB lifecycle coverage are now added on the active branch.
+- Workbook hardening, draft guards, and end-to-end DB lifecycle coverage are now added on the active branch.
 - No Production inventory data has been changed by this feature.
 
 ## Guardrails
@@ -39,6 +39,8 @@ State: **BLOCKED**
 5. The apply RPC recalculates current warehouse quantity at application time, so long delays between physical count and Apply can create an invalid variance if stock movements continue.
 6. Matching by code/name could allow a changed workbook row to target the wrong material; exact material identity is therefore mandatory.
 7. Duplicate rows must not silently overwrite one another.
+8. Changing the selected warehouse after importing a workbook could otherwise leave counts from the previous warehouse in memory.
+9. Switching a partially populated draft to Full could otherwise allow a logically incomplete month-opening count.
 
 ## Change ledger
 - Added in-page Excel export after selecting branch + warehouse.
@@ -49,6 +51,10 @@ State: **BLOCKED**
 - Duplicate raw-material rows are rejected explicitly instead of silently overwriting quantities.
 - Zero is accepted; negative and non-numeric counts are rejected.
 - Full counts require a counted quantity for every active raw material; partial/cycle counts may leave rows blank.
+- Draft creation re-validates duplicate, missing, blank, non-numeric, and negative quantities even if data was entered manually.
+- Changing warehouse clears loaded draft lines to prevent cross-warehouse reuse.
+- New stock counts now default to `full` for the month-opening workflow, while partial/cycle remain selectable.
+- The primary action is labeled `Save Draft / حفظ المسودة` to make clear that no stock is applied at that step.
 - Upload only populates the draft form and performs no stock write.
 - Existing `create_stock_count` RPC persists the draft; existing submit/approve/reject/apply functions remain unchanged.
 - Added focused contract and validation coverage in `tests/unit/stockCountExcelWorkflow.test.ts` and `tests/unit/stockCountExcelValidation.test.ts`.
@@ -61,9 +67,10 @@ State: **BLOCKED**
 - Production historical opening-count state inspected read-only: ✅
 - First Verify #3560: ❌ mandatory worklog gate only; code checks were skipped.
 - Mandatory worklog/current-plan activation: ✅
-- Workbook edge-case coverage added for zero / negative / non-numeric / duplicate / foreign branch / foreign warehouse / incomplete full count: pending CI execution.
-- Full RPC lifecycle integration test added: pending CI execution.
-- Focused unit/type/build verification on exact head: pending.
+- Intermediate Verify reached mandatory log, API contract, lint, app typecheck, and test-suite typecheck successfully before cancellation by a newer commit: ✅ through typecheck.
+- Workbook edge-case coverage added for zero / negative / non-numeric / duplicate / foreign branch / foreign warehouse / incomplete full count: pending final CI execution.
+- Full RPC lifecycle integration test added: pending final CI execution.
+- Final focused unit/build verification on exact head: pending.
 - DB integration/security: pending.
 - Browser Smoke: pending.
 - Full Verify exact head: pending.
@@ -80,7 +87,7 @@ Merge/deploy is blocked until:
 No Production migration is expected.
 
 ## Next action
-Run exact-head Full Verify. Fix any unit/type/integration/browser failure before merge. If Green, reconcile latest main once more and present the PR for explicit merge approval.
+Run exact-head Full Verify on the documentation-complete head. Fix any unit/type/integration/browser failure before merge. If Green, reconcile latest main once more and present the PR for explicit merge approval.
 
 ## Mandatory update protocol
 Verify branch/main relationship before every repository write. Update this log after every material code/test/CI/merge change. Keep `State: **BLOCKED**` until all merge gates are satisfied.
