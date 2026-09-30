@@ -2,7 +2,7 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/purchase-return-link-main-treasury-movement-20260930`
+Branch: `development/main-treasury-movement-prod-safety-20260930`
 Current PR: `#417`
 Last updated: 2026-09-30
 
@@ -60,7 +60,7 @@ State: **BLOCKED**
 - Exact-head CI pending.
 
 ## Production gate
-State: **BLOCKED**
+State: **PRODUCTION SAFETY HOTFIX ACTIVE**
 - No Production migration applied.
 - No merge before exact-head Fast Verify + Full Verify Green.
 
@@ -76,3 +76,25 @@ State: **BLOCKED**
 - Unexpected HEAD movement => STOP_AND_RECONCILE.
 - Keep CURRENT_WORK_PLAN pointed to this log while active.
 - Record exact-head CI results.
+
+
+## Production safety correction
+- PR #417 merged to main at `b604decb34c97aa510c390e87b39ce76ff18c080`.
+- First Production migration attempt was fully rolled back by PostgreSQL due `uq_journal_reference` duplicate-key protection while trying to link purchase-return journals.
+- No Production data from that migration attempt was committed.
+- Root cause: a purchase can have multiple purchase_return journals, while `(reference_type, reference_id)` is unique; therefore forcing every return journal to the same purchase UUID is invalid.
+- Corrective decision: remove all purchase-return reference rewrites/backfills from this migration. Financial purchase-return journals are already present and correct; they remain untouched.
+- Keep only main-treasury expense movement audit visibility and UI details column.
+- Corrective branch: `development/main-treasury-movement-prod-safety-20260930`.
+- Production remains unchanged until corrective exact-head CI is Green and the corrective PR is merged.
+
+
+## Production safety correction
+- PR #417 merged to main at `b604decb34c97aa510c390e87b39ce76ff18c080`.
+- First Production migration attempt was fully rolled back by PostgreSQL due `uq_journal_reference` duplicate-key protection while trying to link purchase-return journals.
+- No Production data from that migration attempt was committed.
+- Root cause: a purchase can have multiple purchase_return journals, while `(reference_type, reference_id)` is unique; therefore forcing every return journal to the same purchase UUID is invalid.
+- Corrective decision: remove all purchase-return reference rewrites/backfills from this migration. Financial purchase-return journals are already present and correct; they remain untouched.
+- Keep only main-treasury expense movement audit visibility and UI details column.
+- Corrective branch: `development/main-treasury-movement-prod-safety-20260930`.
+- Production remains unchanged until corrective exact-head CI is Green and the corrective PR is merged.
