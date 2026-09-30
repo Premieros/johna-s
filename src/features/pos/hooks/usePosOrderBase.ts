@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/audit';
 import type { CartItem, Customer, DiningTable, Order, OrderItem, OrderType, Product, RpcResult, Settings } from '@/lib/types';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { resolveOrderBindingForSave } from '../utils/orderBinding';
-import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart } from '../utils/cart';
+import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart, sameCartConfiguration } from '../utils/cart';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
@@ -208,12 +208,17 @@ export function usePosOrder(input: UsePosOrderInput) {
       modifiers,
       item_note: itemNote,
     };
-    const incomingKey = cartLineKey(incoming);
-
     setCart((prev) => {
-      const existing = prev.find((i) => cartLineKey(i) === incomingKey);
+      // Resumed order lines have an order_item_id while a freshly selected
+      // product does not. Match by business configuration here so adding the
+      // same product increments the persisted line instead of creating a
+      // second identical line that can be re-sent to the kitchen.
+      const existing = prev.find((i) => sameCartConfiguration(i, incoming));
       if (existing) {
-        return prev.map((i) => cartLineKey(i) === incomingKey ? { ...i, quantity: i.quantity + quantity } : i);
+        const existingKey = cartLineKey(existing);
+        return prev.map((i) => cartLineKey(i) === existingKey
+          ? { ...i, quantity: i.quantity + quantity }
+          : i);
       }
       return [...prev, incoming];
     });

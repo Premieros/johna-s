@@ -1,6 +1,7 @@
 import type { CartItem, OrderItem, Product } from '@/lib/types';
 
 export interface ItemPayload {
+  order_item_id?: string | null;
   product_id: string;
   unit_name: string;
   quantity: number;
@@ -38,6 +39,7 @@ export function sameCartConfiguration(a: Pick<CartItem, 'product' | 'modifier_op
 
 export function cartToItems(cart: CartItem[]): ItemPayload[] {
   return cart.map((i) => ({
+    order_item_id: i.order_item_id || null,
     product_id: i.product.id,
     unit_name: i.unit_name,
     quantity: i.quantity,
