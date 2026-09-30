@@ -54,7 +54,7 @@ export function StockCountsPage() {
   const [branchId, setBranchId] = useState(branchFilter || '');
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '' });
+  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'full', notes: '' });
   const [formItems, setFormItems] = useState<CreateLine[]>([{ item_id: '', counted_quantity: '', reason: '' }]);
 
   const [viewTarget, setViewTarget] = useState<StockCount | null>(null);
@@ -118,7 +118,7 @@ export function StockCountsPage() {
   const openCreate = () => {
     const defaultBranchId = branchFilter || (visibleBranches.length === 1 ? visibleBranches[0].id : '');
     const branchWarehouses = warehouses.filter((w) => w.branch_id === defaultBranchId);
-    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'cycle', notes: '' });
+    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'full', notes: '' });
     resetCreateLines();
     setCreateOpen(true);
   };
@@ -387,7 +387,7 @@ export function StockCountsPage() {
         </div>
         <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} />
         <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (isAr ? 'الخامة' : 'Raw material') : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{isAr ? 'اختر الخامة' : 'Choose raw material'}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
-        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{t('save')}</Button></div>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{isAr ? 'حفظ المسودة' : 'Save Draft'}</Button></div>
       </div></Modal>
 
       <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <div className="space-y-3"><div className="flex items-center justify-between rounded-lg bg-ui-page-alt px-4 py-3"><span className="text-sm text-ui-muted">{isAr ? 'إجمالي قيمة الجرد' : 'Total Count Value'}</span><span className="text-lg font-bold text-ui-text">{formatNumber(viewTotalValue, 2)}</span></div><DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} /></div>}</Modal>
