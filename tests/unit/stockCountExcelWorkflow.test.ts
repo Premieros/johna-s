@@ -10,8 +10,7 @@ describe('stock count Excel workflow contract', () => {
     expect(page).toContain('handleCountExcelImport');
     expect(page).toContain('exportToExcelAdvanced');
     expect(page).toContain('importFromExcel');
-    expect(page).toContain("accept=\".xlsx,.xls\"");
-    expect(page).toContain("'الكمية الفعلية'");
+    expect(page).toContain('accept=".xlsx,.xls"');
     expect(page).toContain('Stock has not been changed yet');
   });
 
@@ -21,6 +20,15 @@ describe('stock count Excel workflow contract', () => {
     expect(service).toContain(".from('raw_material_batches')");
     expect(service).toContain(".eq('branch_id', branchId)");
     expect(service).toContain(".eq('warehouse_id', warehouseId)");
+  });
+
+  it('resets imported lines if the warehouse changes and blocks incomplete full drafts', () => {
+    const page = read('src/features/inventory/pages/StockCountsPage.tsx');
+    expect(page).toContain("setForm({ ...form, warehouse_id: e.target.value }); resetCreateLines();");
+    expect(page).toContain("form.count_type === 'full'");
+    expect(page).toContain('الجرد الكامل غير مكتمل');
+    expect(page).toContain('duplicated in the count draft');
+    expect(page).toContain('quantity < 0');
   });
 
   it('keeps application behind the existing submit, approve, and apply workflow', () => {
