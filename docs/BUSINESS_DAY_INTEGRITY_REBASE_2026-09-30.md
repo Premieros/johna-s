@@ -108,3 +108,20 @@ State: **BLOCKED**
 - Record every code/data-shape change and every CI run/result here.
 - Keep `docs/CURRENT_WORK_PLAN.md` pointing to this file while PR #419 is active.
 - No merge, Production migration, or historical data correction until the required exact-head gates are Green and explicit approval is recorded.
+
+
+## Production application + root-cause audit — 2026-09-30
+- User approved Production application of the code guard only; historical data repair remains separate.
+- Applied `business_day_integrity_rebase` to Production successfully.
+- Post-apply verification:
+  - Cleopatra state unchanged at 2026-09-30.
+  - Smouha state unchanged at 2026-10-03.
+  - Open shifts/orders were not rewritten.
+  - Production function definitions now contain the reachable-date, cutoff, and no-skip guards.
+  - No new PostgreSQL errors were observed in the immediate post-apply window.
+- Current Smouha max reachable business date is 2026-09-30 while stored state remains 2026-10-03; this is historical corruption, not a new post-guard advance.
+- Audit log proves the future closes were manual rollovers inside the same shift, not auto-close:
+  - 2026-09-29 23:16:41.575721+00: George (george@gmail.com) action `business_day_rollover`, closed 2026-10-01, next 2026-10-02, shift 163cd2b4-6c4f-4cbb-908a-b527dacba65b.
+  - 2026-09-29 23:17:20.128534+00: Eslam (eslam@gmail.com) action `business_day_rollover`, closed 2026-10-02, next 2026-10-03, same shift.
+- Therefore the root cause is confirmed: the old manual rollover path had no cutoff guard and allowed repeated future advancement.
+- Historical repair remains BLOCKED while Smouha has an open shift/open orders.
