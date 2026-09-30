@@ -48,11 +48,6 @@ $old$;
           AND oi.product_id = v_product_id
           AND oi.unit_name = COALESCE(v_item->>'unit_name', 'piece')
           AND oi.unit_price = COALESCE((v_item->>'unit_price')::numeric, oi.unit_price)
-          AND oi.modifier_option_ids = ARRAY(
-            SELECT NULLIF(value, '')::uuid
-            FROM jsonb_array_elements_text(COALESCE(v_item->'modifier_option_ids', '[]'::jsonb))
-            ORDER BY value
-          )
           AND ARRAY(
             SELECT x::uuid
             FROM unnest(COALESCE(oi.modifier_option_ids, ARRAY[]::uuid[])) x
