@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Emergency operational containment — stale-client duplicate sent line**
+- Track: **Raw negative known-cost fallback**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `1cfaec2d22ce55cfec2ce58cca1222eca564d828`
-- Active development branch: `development/emergency-stale-client-guard-main-sync-20260930`
-- Mandatory active work log: `docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
+- Latest main baseline reconciled: `729e30f4471679751220a51c6fd53f3d9a1d3dc2`
+- Active development branch: `development/raw-negative-known-cost-fallback-20260930`
+- Mandatory active work log: `docs/RAW_NEGATIVE_KNOWN_COST_FALLBACK_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/emergency-stale-client-guard-main-sync-20260930`
+4. `development/raw-negative-known-cost-fallback-20260930`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -68,27 +68,25 @@ The active emergency PR is the latest-main-synced stale-client duplicate sent-li
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Contain the remaining stale-client recurrence path without changing established POS/KDS/printing/inventory behavior:
-1. stale/cached POS clients that omit `order_item_id` must not create a fresh same-configuration line after kitchen-send history already exists;
-2. preserve legitimate new configurations, modifiers, notes, prices, and unsent new orders;
-3. keep inventory deduction authority, KDS routing, Print Agent routing, payments, shifts, tables, and branch isolation unchanged;
-4. run exact-head Full Verify on a branch created directly from latest `main`;
-5. apply the migration to Production only after Green verification;
-6. run post-deploy read-only checks on Smouha and Cleopatra for duplicate-line / repeated-kitchen-delta recurrence.
+Correct estimated valuation for negative raw-material debt when a real known price already exists, without altering physical quantities or actual accounting:
+1. keep `inventory_ledger.total_cost`, journal COGS, sales, purchases and historical quantities unchanged;
+2. resolve estimate price from same-warehouse real FIFO issue first, then normalized positive inventory-ledger receipt/purchase price, then real batch price, then `raw_materials.default_cost`;
+3. leave price at zero only when no known price exists anywhere in that hierarchy;
+4. apply the fallback consistently to new oversold batches and estimated negative-consumption reporting;
+5. preserve branch/warehouse isolation and all POS/KDS/Print Agent behavior;
+6. verify Smouha and Cleopatra valuation changes read-only before any Production migration.
 
 Detailed execution and verification are maintained only in:
-`docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
+`docs/RAW_NEGATIVE_KNOWN_COST_FALLBACK_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:
-- exact-head Full Verify is Green, including DB integration/security/RLS and Browser Smoke;
-- the stale-client guard regression is Green;
-- the PR is mergeable from latest `main` with no force push;
-- Production migration is applied deliberately and verified;
-- Production API/schema parity is confirmed after migration;
-- no new duplicate same-configuration line is observed from stale-client behavior;
-- Smouha and Cleopatra remain operational;
-- printing, KDS, inventory consumption, payments, shifts, and table flows show no regression;
-- no stale active-work references remain.
+- known-price zero-cost negative debt no longer remains zero in estimate/reporting;
+- truly unpriced materials remain explicitly unpriced;
+- no physical inventory quantity is rewritten;
+- no actual FIFO ledger cost or accounting journal is rewritten;
+- exact-head Full Verify is Green including DB/security/RLS and Browser Smoke;
+- Production migration is applied only after Green verification and approval;
+- post-deploy read-only checks confirm both branches and no POS/KDS/printing regression.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
