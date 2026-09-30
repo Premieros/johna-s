@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Emergency hotfix — POS line identity / repeated kitchen send and print**
+- Track: **Emergency operational containment — stale-client duplicate sent line**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `c1c0b4a72a8cf3a3e233a66f2d15081a931de12e`
-- Active development branch: `development/emergency-pos-line-identity-print-dedupe-20260930`
-- Mandatory active work log: `docs/POS_LINE_IDENTITY_PRINT_DEDUPE_2026-09-30.md`
+- Active development branch: `development/emergency-stale-client-duplicate-line-guard-20260930`
+- Mandatory active work log: `docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/emergency-pos-line-identity-print-dedupe-20260930`
+4. `development/emergency-stale-client-duplicate-line-guard-20260930`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -67,16 +67,14 @@ PR #420 is merged and is now historical for this task. The active emergency PR i
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Stop repeated kitchen sends/prints and duplicated same-configuration order lines without weakening inventory or permission boundaries:
-1. preserve exact persisted `order_item_id` through resume -> cart -> update_order;
-2. adding the same product/configuration to a resumed order must increment the existing line, not create a second identical line;
-3. `update_order` must never silently swap identities between identical persisted rows;
-4. kitchen delta and print idempotency must continue to use the authoritative persisted line/send identity;
-5. no previously sent quantity may be emitted again because of line remapping;
-6. verify Cleopatra and Smouha with special attention to table 41 and Smouha order Johna's-01525.
+Contain the only remaining operational recurrence path found during the emergency audit:
+1. stale/cached POS clients that omit `order_item_id` must not create a new same-configuration line after kitchen-send history exists;
+2. preserve all current inventory, payment, table, KDS, and printing contracts;
+3. correct only the confirmed corrupted unsent delta on Smouha order Johna's-01525;
+4. return to read-only operational monitoring after deployment.
 
 Detailed execution and verification are maintained only in:
-`docs/POS_LINE_IDENTITY_PRINT_DEDUPE_2026-09-30.md`
+`docs/EMERGENCY_OPERATIONAL_STALE_CLIENT_GUARD_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:
