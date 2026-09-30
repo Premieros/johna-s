@@ -44,6 +44,7 @@ State: **BLOCKED**
 - Added `supabase/migrations/20260930064000_business_day_integrity_rebase.sql`.
 - Added `private.current_fixed_business_date` for the clock Business Day date.
 - Added `private.max_reachable_business_state_date` for a cutoff-aware state ceiling.
+- Refined no-open-shift `day_close`: valid manual close dates at or behind the reachable state ceiling remain allowed; only future/not-reachable dates are blocked. Open-shift rollover remains cutoff-enforced.
 - Replaced `_ensure_business_day_state` so future historical closes cannot drag a new live state beyond the reachable ceiling.
 - Replaced `rollover_business_day` so rollover before cutoff returns `BUSINESS_DAY_NOT_FINISHED`, advances exactly one day, and refuses to skip over a preclosed next date.
 - Replaced `day_close` so no-open-shift closes also require the configured cutoff and cannot advance state beyond the reachable ceiling.
@@ -54,7 +55,7 @@ State: **BLOCKED**
 ## Verification ledger
 - Verify #3525 / run `36679061600`: failed only at mandatory active-worklog structure before lint/typecheck/unit/build; DB and Browser Smoke were skipped.
 - Failure cause: this log did not yet contain every mandatory structural heading and declared `Current PR: pending`.
-- Code/database verification has not yet run on the corrected exact head.
+- Verify #3526 / run `36680984404`: application gate Green, DB integration failed 4 tests; 873/877 integration tests passed. Two failures were new-test isolation issues, and two existing tests proved the no-open-shift `day_close` guard was stricter than existing valid manual-close semantics.
 - Branch compare before this documentation correction: ahead 7, behind 0 from `main`.
 
 ## Production gate
