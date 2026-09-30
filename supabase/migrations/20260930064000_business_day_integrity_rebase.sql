@@ -80,6 +80,7 @@ DECLARE
   v_max_date date;
   v_started_at timestamptz;
   v_local_open timestamp;
+  v_effective_open timestamptz;
   v_next date;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('business_day_state:'||p_branch_id::text,0));
@@ -95,8 +96,14 @@ BEGIN
   FROM public.shifts s
   WHERE s.branch_id=p_branch_id
     AND s.status='open'
-  ORDER BY s.opened_at DESC,s.id DESC
+  ORDER BY s.opened_at DESC NULLS LAST,s.id DESC
   LIMIT 1;
+
+  IF v_shift.id IS NOT NULL THEN
+    -- Legacy/test rows may have an open shift without opened_at populated.
+    -- Business-day state must remain non-null without mutating the shift itself.
+    v_effective_open:=COALESCE(v_shift.opened_at,now());
+  END IF;
 
   SELECT * INTO v_last_close
   FROM public.daily_closes dc
@@ -110,8 +117,8 @@ BEGIN
   FOR UPDATE;
 
   IF v_existing.branch_id IS NOT NULL THEN
-    IF v_shift.id IS NOT NULL AND v_existing.started_at < v_shift.opened_at THEN
-      v_local_open:=v_shift.opened_at AT TIME ZONE 'Africa/Cairo';
+    IF v_shift.id IS NOT NULL AND v_existing.started_at < v_effective_open THEN
+      v_local_open:=v_effective_open AT TIME ZONE 'Africa/Cairo';
       v_candidate:=v_local_open::date;
       IF v_local_open::time < v_start_time THEN
         v_candidate:=v_candidate-1;
@@ -119,7 +126,7 @@ BEGIN
 
       IF v_last_close.id IS NOT NULL
          AND v_last_close.closed_at IS NOT NULL
-         AND v_shift.opened_at>v_last_close.closed_at
+         AND v_effective_open>v_last_close.closed_at
          AND v_last_close.business_date < v_max_date THEN
         v_candidate:=GREATEST(
           v_candidate,
@@ -139,7 +146,7 @@ BEGIN
 
       UPDATE public.business_day_state
       SET business_date=v_candidate,
-          started_at=v_shift.opened_at,
+          started_at=v_effective_open,
           updated_at=now()
       WHERE branch_id=p_branch_id
       RETURNING * INTO v_existing;
@@ -154,12 +161,12 @@ BEGIN
   END IF;
 
   IF v_shift.id IS NOT NULL THEN
-    v_local_open:=v_shift.opened_at AT TIME ZONE 'Africa/Cairo';
+    v_local_open:=v_effective_open AT TIME ZONE 'Africa/Cairo';
     v_candidate:=v_local_open::date;
     IF v_local_open::time < v_start_time THEN
       v_candidate:=v_candidate-1;
     END IF;
-    v_started_at:=v_shift.opened_at;
+    v_started_at:=v_effective_open;
   ELSE
     v_candidate:=v_max_date;
     v_started_at:=COALESCE(v_last_close.closed_at,now());
@@ -168,7 +175,7 @@ BEGIN
   IF v_last_close.id IS NOT NULL
      AND v_last_close.business_date < v_max_date
      AND v_last_close.closed_at IS NOT NULL
-     AND (v_shift.id IS NULL OR v_shift.opened_at>v_last_close.closed_at) THEN
+     AND (v_shift.id IS NULL OR v_effective_open>v_last_close.closed_at) THEN
     v_candidate:=GREATEST(
       v_candidate,
       LEAST(v_last_close.business_date+1,v_max_date)
