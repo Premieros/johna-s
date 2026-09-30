@@ -193,7 +193,12 @@ BEGIN
   v_candidate:=LEAST(v_candidate,v_max_date);
 
   INSERT INTO public.business_day_state(branch_id,business_date,started_at,updated_at)
-  VALUES(p_branch_id,v_candidate,v_started_at,now())
+  VALUES(
+    p_branch_id,
+    v_candidate,
+    COALESCE(v_started_at,v_effective_open,v_last_close.closed_at,now()),
+    now()
+  )
   ON CONFLICT(branch_id) DO NOTHING;
 
   SELECT * INTO v_existing
