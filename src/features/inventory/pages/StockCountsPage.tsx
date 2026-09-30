@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ClipboardCheck, Plus, Eye, Send, CheckCircle2, XCircle, CheckCheck, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ClipboardCheck, Plus, Eye, Send, CheckCircle2, XCircle, CheckCheck, Trash2, Download, Upload } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -14,9 +14,11 @@ import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatNumber, formatDateTime } from '@/lib/format';
 import { logAudit } from '@/lib/audit';
+import { exportToExcelAdvanced, importFromExcel } from '@/lib/excel';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { StockCount, StockCountItem, Branch, Warehouse, Product, RawMaterial } from '@/lib/types';
-import { loadStockCountMetadata } from '../services/stockCountData';
+import { loadRawMaterialWarehouseSnapshot, loadStockCountMetadata } from '../services/stockCountData';
+import { buildStockCountExcelRows, parseStockCountExcelRows, stockCountExcelColumns } from '../utils/stockCountExcel';
 
 interface EditLine {
   product_id: string;
@@ -52,7 +54,7 @@ export function StockCountsPage() {
   const [branchId, setBranchId] = useState(branchFilter || '');
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'cycle', notes: '' });
+  const [form, setForm] = useState({ branch_id: '', warehouse_id: '', count_type: 'full', notes: '' });
   const [formItems, setFormItems] = useState<CreateLine[]>([{ item_id: '', counted_quantity: '', reason: '' }]);
 
   const [viewTarget, setViewTarget] = useState<StockCount | null>(null);
@@ -60,6 +62,7 @@ export function StockCountsPage() {
   const [editLines, setEditLines] = useState<EditLine[]>([]);
   const [confirmTarget, setConfirmTarget] = useState<{ count: StockCount; action: 'submit' | 'approve' | 'reject' | 'apply' } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const countExcelInputRef = useRef<HTMLInputElement>(null);
 
   const statusOptions = [
     { key: 'draft', label: t('countStatusDraft') },
@@ -115,7 +118,7 @@ export function StockCountsPage() {
   const openCreate = () => {
     const defaultBranchId = branchFilter || (visibleBranches.length === 1 ? visibleBranches[0].id : '');
     const branchWarehouses = warehouses.filter((w) => w.branch_id === defaultBranchId);
-    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'cycle', notes: '' });
+    setForm({ branch_id: defaultBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '', count_type: 'full', notes: '' });
     resetCreateLines();
     setCreateOpen(true);
   };
@@ -124,15 +127,152 @@ export function StockCountsPage() {
   const updateFormItem = (idx: number, field: keyof CreateLine, value: string) => setFormItems(formItems.map((l, i) => i === idx ? { ...l, [field]: value } : l));
   const removeFormItem = (idx: number) => setFormItems(formItems.filter((_, i) => i !== idx));
 
+
+  const handleCountExcelExport = async () => {
+    if (!form.branch_id || !form.warehouse_id) {
+      show(isAr ? 'اختر الفرع والمخزن أولاً قبل سحب ملف الجرد.' : 'Select branch and warehouse before exporting the count sheet.', 'error');
+      return;
+    }
+
+    try {
+      const snapshot = await loadRawMaterialWarehouseSnapshot(form.branch_id, form.warehouse_id);
+      const branchName = branches.find((b) => b.id === form.branch_id)?.name || '';
+      const warehouseName = warehouses.find((w) => w.id === form.warehouse_id)?.name || '';
+      const columns = stockCountExcelColumns(isAr);
+      await exportToExcelAdvanced({
+        data: buildStockCountExcelRows({
+          materials: formRawMaterials,
+          snapshot,
+          branchId: form.branch_id,
+          warehouseId: form.warehouse_id,
+          isAr,
+        }),
+        filename: `stock-count-${branchName || form.branch_id}-${warehouseName || form.warehouse_id}-${new Date().toISOString().slice(0, 10)}`,
+        sheetName: isAr ? 'جرد الخامات' : 'Raw Material Count',
+        columns: [
+          columns.rawMaterialId,
+          columns.code,
+          columns.name,
+          columns.systemQuantity,
+          columns.countedQuantity,
+          columns.reason,
+          columns.branchId,
+          columns.warehouseId,
+        ],
+        columnWidths: {
+          [columns.rawMaterialId]: 38,
+          [columns.code]: 18,
+          [columns.name]: 32,
+          [columns.systemQuantity]: 16,
+          [columns.countedQuantity]: 18,
+          [columns.reason]: 30,
+          [columns.branchId]: 38,
+          [columns.warehouseId]: 38,
+        },
+      });
+    } catch (err) {
+      show(err instanceof Error ? err.message : String(err), 'error');
+    }
+  };
+
+  const handleCountExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!form.branch_id || !form.warehouse_id) {
+      show(isAr ? 'اختر الفرع والمخزن أولاً قبل رفع ملف الجرد.' : 'Select branch and warehouse before importing the count sheet.', 'error');
+      return;
+    }
+
+    try {
+      const rows = await importFromExcel(file);
+      const parsed = parseStockCountExcelRows({
+        rows,
+        materials: formRawMaterials,
+        branchId: form.branch_id,
+        warehouseId: form.warehouse_id,
+        requireComplete: form.count_type === 'full',
+        isAr,
+      });
+
+      if (parsed.errors.length > 0) {
+        const preview = parsed.errors.slice(0, 5).join('\n');
+        const more = parsed.errors.length > 5
+          ? (isAr ? `\n… و${parsed.errors.length - 5} أخطاء أخرى` : `\n… and ${parsed.errors.length - 5} more errors`)
+          : '';
+        show(preview + more, 'error');
+        return;
+      }
+      if (parsed.lines.length === 0) {
+        show(isAr ? 'لم يتم العثور على أي كمية فعلية في ملف الجرد.' : 'No counted quantities were found in the stock-count file.', 'error');
+        return;
+      }
+
+      setFormItems(parsed.lines);
+      show(
+        isAr
+          ? `تم تحميل ${parsed.lines.length} خامة إلى مسودة الجرد. لم يتم تعديل المخزون بعد.`
+          : `Loaded ${parsed.lines.length} materials into the draft count. Stock has not been changed yet.`,
+        'success',
+      );
+    } catch (err) {
+      show(err instanceof Error ? err.message : String(err), 'error');
+    }
+  };
+
   const createCount = async () => {
     if (!form.branch_id || !form.warehouse_id) { show(t('required') + ': ' + t('branch') + ' / ' + t('warehouse'), 'error'); return; }
-    const hasActiveForWarehouse = counts.some((c) => c.warehouse_id === form.warehouse_id && (c.status === 'draft' || c.status === 'submitted'));
-    if (hasActiveForWarehouse) show(isAr ? 'توجد بالفعل جلسة جرد قيد المعالجة لهذا المستودع.' : 'An active stock count already exists for this warehouse.', 'warning');
-    const items = formItems.filter((l) => l.item_id).map((l) => ({
+    const activeForWarehouse = counts.find((count) =>
+      count.warehouse_id === form.warehouse_id
+      && (count.status === 'draft' || count.status === 'submitted' || count.status === 'approved')
+    );
+    if (activeForWarehouse) {
+      show(
+        isAr
+          ? `يوجد جرد نشط بالفعل لهذا المخزن (${activeForWarehouse.count_number || activeForWarehouse.status}). يجب إنهاؤه أو رفضه قبل إنشاء جرد جديد.`
+          : `An active stock count already exists for this warehouse (${activeForWarehouse.count_number || activeForWarehouse.status}). Finish or reject it before creating another count.`,
+        'error',
+      );
+      return;
+    }
+
+    const selectedLines = formItems.filter((line) => line.item_id);
+    const seen = new Set<string>();
+    for (const line of selectedLines) {
+      if (seen.has(line.item_id)) {
+        const materialName = formRawMaterials.find((material) => material.id === line.item_id)?.name || line.item_id;
+        show(isAr ? `الخامة "${materialName}" مكررة في مسودة الجرد.` : `Raw material "${materialName}" is duplicated in the count draft.`, 'error');
+        return;
+      }
+      seen.add(line.item_id);
+      const quantity = Number(line.counted_quantity);
+      if (line.counted_quantity.trim() === '' || !Number.isFinite(quantity) || quantity < 0) {
+        const materialName = formRawMaterials.find((material) => material.id === line.item_id)?.name || line.item_id;
+        show(isAr ? `أدخل كمية فعلية صحيحة للخامة "${materialName}".` : `Enter a valid counted quantity for "${materialName}".`, 'error');
+        return;
+      }
+    }
+
+    if (form.count_type === 'full') {
+      const countedIds = new Set(selectedLines.map((line) => line.item_id));
+      const missing = formRawMaterials.filter((material) => !countedIds.has(material.id));
+      if (missing.length > 0) {
+        const preview = missing.slice(0, 5).map((material) => material.name).join('، ');
+        show(
+          isAr
+            ? `الجرد الكامل غير مكتمل. متبقي ${missing.length} خامة: ${preview}${missing.length > 5 ? '…' : ''}`
+            : `Full count is incomplete. Missing ${missing.length} materials: ${preview}${missing.length > 5 ? '…' : ''}`,
+          'error',
+        );
+        return;
+      }
+    }
+
+    const items = selectedLines.map((line) => ({
       product_id: null,
-      raw_material_id: l.item_id,
-      counted_quantity: l.counted_quantity === '' ? null : parseFloat(l.counted_quantity),
-      reason: l.reason || null,
+      raw_material_id: line.item_id,
+      counted_quantity: Number(line.counted_quantity),
+      reason: line.reason || null,
     }));
     const { data, error: err } = await api.inventory.createStockCount({ p_branch_id: form.branch_id, p_warehouse_id: form.warehouse_id, p_count_type: form.count_type, p_notes: form.notes || null, p_items: items.length > 0 ? items : null });
     if (err) { show(err.message, 'error'); return; }
@@ -238,11 +378,27 @@ export function StockCountsPage() {
       <DesignPanel testId="stock-counts-table-panel"><DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={counts.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('newStockCount')} size="lg"><div className="space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select></div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => { setForm({ ...form, warehouse_id: e.target.value }); resetCreateLines(); }}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select></div>
         <p className="text-xs text-ui-subtle">{isAr ? 'الجرد يطبق على الخامة داخل المخزن المحدد، وليس على رصيد منتج جاهز.' : 'The count applies to the raw material in the selected warehouse, not to finished-product stock.'}</p>
+        <div className="rounded-lg border border-ui-border bg-ui-page-alt/40 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input ref={countExcelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleCountExcelImport} data-testid="stock-count-excel-input" />
+            <Button variant="outline" size="sm" onClick={handleCountExcelExport} disabled={!form.branch_id || !form.warehouse_id}>
+              <Download className="w-4 h-4" /> {isAr ? 'سحب خامات Excel' : 'Export Count Excel'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => countExcelInputRef.current?.click()} disabled={!form.branch_id || !form.warehouse_id}>
+              <Upload className="w-4 h-4" /> {isAr ? 'رفع الجرد من Excel' : 'Import Count Excel'}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-ui-subtle">
+            {isAr
+              ? 'اسحب الملف بعد اختيار الفرع والمخزن، اكتب الكمية الفعلية فقط ثم ارفع نفس الملف. الرفع يملأ مسودة الجرد ولا يغيّر الرصيد حتى الإرسال ثم الاعتماد ثم التطبيق.'
+              : 'Export after selecting branch and warehouse, fill only Counted Quantity, then upload the same file. Upload only fills the draft; stock changes only after submit, approval, and apply.'}
+          </p>
+        </div>
         <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} />
         <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (isAr ? 'الخامة' : 'Raw material') : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{isAr ? 'اختر الخامة' : 'Choose raw material'}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
-        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{t('save')}</Button></div>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{isAr ? 'حفظ المسودة' : 'Save Draft'}</Button></div>
       </div></Modal>
 
       <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <div className="space-y-3"><div className="flex items-center justify-between rounded-lg bg-ui-page-alt px-4 py-3"><span className="text-sm text-ui-muted">{isAr ? 'إجمالي قيمة الجرد' : 'Total Count Value'}</span><span className="text-lg font-bold text-ui-text">{formatNumber(viewTotalValue, 2)}</span></div><DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} /></div>}</Modal>
