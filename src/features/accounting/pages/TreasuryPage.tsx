@@ -287,6 +287,7 @@ export function TreasuryPage() {
       </span>
     ) },
     { key: 'reference_number', header: t('entryNumber'), render: (tx) => <span className="font-mono text-xs">{tx.reference_number || '-'}</span> },
+    { key: 'notes', header: isAr ? 'البيان' : 'Details', render: (tx) => <span className="text-sm text-ui-muted">{tx.notes || '-'}</span> },
     { key: 'from', header: t('fromAccount'), render: (tx) => tx.from_account?.account_name || '-' },
     { key: 'to', header: t('toAccount'), render: (tx) => tx.to_account?.account_name || '-' },
     { key: 'amount', header: t('amount'), render: (tx) => <span className="font-semibold text-ui-text">{formatCurrency(tx.amount, currency, lang)}</span> },
