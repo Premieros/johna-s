@@ -224,11 +224,44 @@ export function StockCountsPage() {
     if (!form.branch_id || !form.warehouse_id) { show(t('required') + ': ' + t('branch') + ' / ' + t('warehouse'), 'error'); return; }
     const hasActiveForWarehouse = counts.some((c) => c.warehouse_id === form.warehouse_id && (c.status === 'draft' || c.status === 'submitted'));
     if (hasActiveForWarehouse) show(isAr ? 'توجد بالفعل جلسة جرد قيد المعالجة لهذا المستودع.' : 'An active stock count already exists for this warehouse.', 'warning');
-    const items = formItems.filter((l) => l.item_id).map((l) => ({
+
+    const selectedLines = formItems.filter((line) => line.item_id);
+    const seen = new Set<string>();
+    for (const line of selectedLines) {
+      if (seen.has(line.item_id)) {
+        const materialName = formRawMaterials.find((material) => material.id === line.item_id)?.name || line.item_id;
+        show(isAr ? `الخامة "${materialName}" مكررة في مسودة الجرد.` : `Raw material "${materialName}" is duplicated in the count draft.`, 'error');
+        return;
+      }
+      seen.add(line.item_id);
+      const quantity = Number(line.counted_quantity);
+      if (line.counted_quantity.trim() === '' || !Number.isFinite(quantity) || quantity < 0) {
+        const materialName = formRawMaterials.find((material) => material.id === line.item_id)?.name || line.item_id;
+        show(isAr ? `أدخل كمية فعلية صحيحة للخامة "${materialName}".` : `Enter a valid counted quantity for "${materialName}".`, 'error');
+        return;
+      }
+    }
+
+    if (form.count_type === 'full') {
+      const countedIds = new Set(selectedLines.map((line) => line.item_id));
+      const missing = formRawMaterials.filter((material) => !countedIds.has(material.id));
+      if (missing.length > 0) {
+        const preview = missing.slice(0, 5).map((material) => material.name).join('، ');
+        show(
+          isAr
+            ? `الجرد الكامل غير مكتمل. متبقي ${missing.length} خامة: ${preview}${missing.length > 5 ? '…' : ''}`
+            : `Full count is incomplete. Missing ${missing.length} materials: ${preview}${missing.length > 5 ? '…' : ''}`,
+          'error',
+        );
+        return;
+      }
+    }
+
+    const items = selectedLines.map((line) => ({
       product_id: null,
-      raw_material_id: l.item_id,
-      counted_quantity: l.counted_quantity === '' ? null : parseFloat(l.counted_quantity),
-      reason: l.reason || null,
+      raw_material_id: line.item_id,
+      counted_quantity: Number(line.counted_quantity),
+      reason: line.reason || null,
     }));
     const { data, error: err } = await api.inventory.createStockCount({ p_branch_id: form.branch_id, p_warehouse_id: form.warehouse_id, p_count_type: form.count_type, p_notes: form.notes || null, p_items: items.length > 0 ? items : null });
     if (err) { show(err.message, 'error'); return; }
@@ -334,7 +367,7 @@ export function StockCountsPage() {
       <DesignPanel testId="stock-counts-table-panel"><DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={counts.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('newStockCount')} size="lg"><div className="space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select></div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><Select label={t('branch')} value={form.branch_id} onChange={(e) => { const nextBranchId = e.target.value; const branchWarehouses = warehouses.filter((w) => w.branch_id === nextBranchId); setForm({ ...form, branch_id: nextBranchId, warehouse_id: branchWarehouses.length === 1 ? branchWarehouses[0].id : '' }); resetCreateLines(); }}><option value="">{t('branch')}</option>{visibleBranches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select><Select label={t('warehouse')} value={form.warehouse_id} onChange={(e) => { setForm({ ...form, warehouse_id: e.target.value }); resetCreateLines(); }}><option value="">{t('warehouse')}</option>{warehouses.filter((w) => !form.branch_id || w.branch_id === form.branch_id).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select><Select label={t('countType')} value={form.count_type} onChange={(e) => setForm({ ...form, count_type: e.target.value })}>{typeOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</Select></div>
         <p className="text-xs text-ui-subtle">{isAr ? 'الجرد يطبق على الخامة داخل المخزن المحدد، وليس على رصيد منتج جاهز.' : 'The count applies to the raw material in the selected warehouse, not to finished-product stock.'}</p>
         <div className="rounded-lg border border-ui-border bg-ui-page-alt/40 p-3">
           <div className="flex flex-wrap items-center gap-2">
