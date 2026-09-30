@@ -2,12 +2,12 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/purchase-return-link-main-treasury-movement-20260930`
+Branch: `development/main-treasury-movement-prod-safety-20260930`
 Current PR: `#417`
 Last updated: 2026-09-30
 
 ## Work status
-State: **PRODUCTION SAFETY HOTFIX ACTIVE**
+State: **BLOCKED**
 
 ## Guardrails
 - No direct write to main.
