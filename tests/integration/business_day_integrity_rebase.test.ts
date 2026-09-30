@@ -166,4 +166,21 @@ describe.skipIf(!dbUrl)('business-day integrity rebase', () => {
     );
     expect(Number(close.rows[0].c)).toBe(0);
   });
+  it('keeps business_day_state valid when an open shift has no opened_at timestamp', async () => {
+    await client.query(
+      `UPDATE public.shifts SET opened_at=NULL, closed_at=NULL, status='open' WHERE id=$1`,
+      [ids.shiftA],
+    );
+    await client.query(`DELETE FROM public.business_day_state WHERE branch_id=$1`, [ids.branchA]);
+
+    const state = await client.query<{ d: string; started_at: string | null }>(
+      `SELECT
+         (public._ensure_business_day_state($1)->>'business_date')::text AS d,
+         (SELECT started_at::text FROM public.business_day_state WHERE branch_id=$1) AS started_at`,
+      [ids.branchA],
+    );
+    expect(state.rows[0].d).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(state.rows[0].started_at).toBeTruthy();
+  });
+
 });
