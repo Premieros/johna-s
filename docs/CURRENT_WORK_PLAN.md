@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Emergency hotfix — POS line identity / repeated kitchen send and print**
+- Track: **Month-opening raw-material stock count Excel workflow**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `c1c0b4a72a8cf3a3e233a66f2d15081a931de12e`
-- Active development branch: `development/emergency-pos-line-identity-print-dedupe-20260930`
-- Mandatory active work log: `docs/POS_LINE_IDENTITY_PRINT_DEDUPE_2026-09-30.md`
+- Latest main baseline reconciled: `b9e2238cdafcd5b79d6cea73ce80fe6a6ed680fa`
+- Active development branch: `development/stock-count-excel-20260930`
+- Mandatory active work log: `docs/STOCK_COUNT_EXCEL_2026-09-30.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/emergency-pos-line-identity-print-dedupe-20260930`
+4. `development/stock-count-excel-20260930`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -50,7 +50,8 @@ The two latest Print Agent PRs remain intentionally retained outside this track:
 - #357 — Smouha V8.1.1 final
 
 The Stability Foundation PR #401 is merged/closed and is not an execution baseline.
-PR #420 is merged and is now historical for this task. The active emergency PR is the POS line-identity / repeated-send hotfix opened from the branch above.
+The emergency POS line-identity fix is already present on the current main baseline `b9e2238cdafcd5b79d6cea73ce80fe6a6ed680fa` and is historical for this stock-count task.
+The active PR is #423 for the month-opening raw-material stock-count Excel workflow.
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -67,29 +68,33 @@ PR #420 is merged and is now historical for this task. The active emergency PR i
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Stop repeated kitchen sends/prints and duplicated same-configuration order lines without weakening inventory or permission boundaries:
-1. preserve exact persisted `order_item_id` through resume -> cart -> update_order;
-2. adding the same product/configuration to a resumed order must increment the existing line, not create a second identical line;
-3. `update_order` must never silently swap identities between identical persisted rows;
-4. kitchen delta and print idempotency must continue to use the authoritative persisted line/send identity;
-5. no previously sent quantity may be emitted again because of line remapping;
-6. verify Cleopatra and Smouha with special attention to table 41 and Smouha order Johna's-01525.
+Provide a safe month-opening raw-material count flow for Smouha and Cleopatra without bypassing the canonical stock-count lifecycle:
+1. export active raw materials for the selected branch + warehouse from the Stock Counts page;
+2. include immutable identity/reference columns and a user-editable counted quantity + optional variance reason;
+3. import the same workbook back into the count draft without directly writing inventory or FIFO batches;
+4. create the stock-count document through the existing `create_stock_count` RPC only;
+5. preserve the existing Draft -> Submit -> Approve -> Apply permission split;
+6. on Apply, keep the existing warehouse-aware FIFO adjustment authority and auditability;
+7. reject or report invalid, foreign-branch, duplicate, negative, or malformed rows clearly;
+8. verify the complete UI + RPC + integration + browser-smoke path before merge;
+9. keep printing, KDS, POS, payments, shifts, and unrelated production behavior untouched.
 
 Detailed execution and verification are maintained only in:
-`docs/POS_LINE_IDENTITY_PRINT_DEDUPE_2026-09-30.md`
+`docs/STOCK_COUNT_EXCEL_2026-09-30.md`
 
 ## Definition of done
 This track is complete only when:
-- exact-head Fast Verify and Full Verify are Green;
-- Production API parity is Green;
-- critical page/RPC latency and call budgets are documented and verified;
-- priority heavy pages have bounded data orchestration behind service/domain boundaries;
-- the legacy direct-Supabase page allowlist is materially reduced and cannot grow;
-- runtime state is centralized/testable and System Health has explicit severity thresholds;
-- restore/recovery has been rehearsed on non-Production;
-- latest `main` has been reconciled into this branch;
-- no stale active work references remain;
-- Smouha and Cleopatra remain operational;
-- no unexpected printing/KDS/agent behavior changed.
+- Excel export is scoped to the selected branch and warehouse;
+- upload fills a draft count only and performs no direct stock write;
+- zero quantities are valid; negative/non-numeric values are rejected;
+- duplicate rows are handled deterministically and reported;
+- workbook identity cannot switch a row to another branch/material;
+- Draft -> Submit -> Approve -> Apply remains permission-separated;
+- apply remains warehouse-aware and FIFO-backed through the existing RPC;
+- focused stock-count Excel tests are Green;
+- exact-head Full Verify is Green, including DB integration/security and Browser Smoke;
+- latest `main` is reconciled before merge;
+- no unexpected printing/KDS/POS/payment/shift behavior changed;
+- no Production migration or manual stock rewrite is required by this feature.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
