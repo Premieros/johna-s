@@ -175,13 +175,18 @@ describe.skipIf(!dbUrl)('business-day integrity rebase', () => {
     );
     await client.query(`DELETE FROM public.business_day_state WHERE branch_id=$1`, [ids.branchA]);
 
-    const state = await client.query<{ d: string; started_at: string | null }>(
-      `SELECT
-         (public._ensure_business_day_state($1)->>'business_date')::text AS d,
-         (SELECT started_at::text FROM public.business_day_state WHERE branch_id=$1) AS started_at`,
+    const ensured = await client.query<{ d: string }>(
+      `SELECT (public._ensure_business_day_state($1)->>'business_date')::text AS d`,
       [ids.branchA],
     );
-    expect(state.rows[0].d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const state = await client.query<{ d: string; started_at: string | null }>(
+      `SELECT business_date::text AS d, started_at::text
+       FROM public.business_day_state
+       WHERE branch_id=$1`,
+      [ids.branchA],
+    );
+    expect(ensured.rows[0].d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(state.rows[0].d).toBe(ensured.rows[0].d);
     expect(state.rows[0].started_at).toBeTruthy();
   });
 
