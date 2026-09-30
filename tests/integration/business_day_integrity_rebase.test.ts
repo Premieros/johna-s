@@ -181,7 +181,7 @@ describe.skipIf(!dbUrl)('business-day integrity rebase', () => {
          (SELECT started_at::text FROM public.business_day_state WHERE branch_id=$1) AS started_at`,
       [ids.branchA],
     );
-    expect(state.rows[0].d).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(state.rows[0].d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(state.rows[0].started_at).toBeTruthy();
   });
 
