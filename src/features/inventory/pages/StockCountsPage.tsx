@@ -222,8 +222,19 @@ export function StockCountsPage() {
 
   const createCount = async () => {
     if (!form.branch_id || !form.warehouse_id) { show(t('required') + ': ' + t('branch') + ' / ' + t('warehouse'), 'error'); return; }
-    const hasActiveForWarehouse = counts.some((c) => c.warehouse_id === form.warehouse_id && (c.status === 'draft' || c.status === 'submitted'));
-    if (hasActiveForWarehouse) show(isAr ? 'توجد بالفعل جلسة جرد قيد المعالجة لهذا المستودع.' : 'An active stock count already exists for this warehouse.', 'warning');
+    const activeForWarehouse = counts.find((count) =>
+      count.warehouse_id === form.warehouse_id
+      && (count.status === 'draft' || count.status === 'submitted' || count.status === 'approved')
+    );
+    if (activeForWarehouse) {
+      show(
+        isAr
+          ? `يوجد جرد نشط بالفعل لهذا المخزن (${activeForWarehouse.count_number || activeForWarehouse.status}). يجب إنهاؤه أو رفضه قبل إنشاء جرد جديد.`
+          : `An active stock count already exists for this warehouse (${activeForWarehouse.count_number || activeForWarehouse.status}). Finish or reject it before creating another count.`,
+        'error',
+      );
+      return;
+    }
 
     const selectedLines = formItems.filter((line) => line.item_id);
     const seen = new Set<string>();
