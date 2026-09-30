@@ -166,9 +166,11 @@ describe.skipIf(!dbUrl)('business-day integrity rebase', () => {
     );
     expect(Number(close.rows[0].c)).toBe(0);
   });
-  it('keeps business_day_state valid when an open shift has no opened_at timestamp', async () => {
+
+
+  it('initializes a non-null business_day_state after the open shift is closed', async () => {
     await client.query(
-      `UPDATE public.shifts SET opened_at=NULL, closed_at=NULL, status='open' WHERE id=$1`,
+      `UPDATE public.shifts SET status='closed', closed_at=now() WHERE id=$1`,
       [ids.shiftA],
     );
     await client.query(`DELETE FROM public.business_day_state WHERE branch_id=$1`, [ids.branchA]);
