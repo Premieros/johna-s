@@ -59,6 +59,7 @@ State: **BLOCKED**
 - Verify #3529 / run `36681680172`: application gate Green; DB integration reached 874/877 passed.
 - Verify #3532 / run `36683439029`: application gate Green; DB integration 874/878 passed. The added `opened_at=NULL` fixture was invalid because `shifts.opened_at` is NOT NULL.
 - Verify #3535 / run `36684881710`: application/unit/build Green; DB integration 874/878 passed. Root cause isolated in `day_close`: after the future-date guard was refactored, `v_cutoff` was assigned only inside the rejected-future branch. Valid closes later advanced `business_day_state.started_at=v_cutoff` with NULL. Fixed by resolving `private.business_day_fixed_cutoff(...)` unconditionally before the reachability check. The date-format regression assertion also had an over-escaped regex and was corrected.
+- Verify #3538 / run `36687420644`: application/unit/build Green; DB integration improved to 877/878 passed. All existing operational suites passed, including `functional_core_cycle`, `shift_day_close_expense_gl`, rollover, auto-close, print, KDS, inventory, and permission/security suites. The only failure was in the new regression test because one SQL SELECT both invoked `_ensure_business_day_state()` and read the table in a sibling subquery; PostgreSQL may evaluate the read first. Test was corrected to execute mutation and verification as separate statements. No production code change was needed.
 - Branch remains based on `main@975fa9bfc2ee07f306f5cfd9b46cf04eb1748057`; no Production write or merge has occurred.
 
 ## Production gate
