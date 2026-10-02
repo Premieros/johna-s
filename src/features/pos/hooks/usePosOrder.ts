@@ -42,6 +42,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
+  const [settlementReceiptOrderCompleted, setSettlementReceiptOrderCompleted] = useState<boolean | null>(null);
   const [openCheckPrintLockedOrderId, setOpenCheckPrintLockedOrderId] = useState<string | null>(null);
 
   const findCartSource = useCallback((item: ItemPayload) => {
@@ -208,6 +209,14 @@ export function usePosOrder(input: UsePosOrderInput) {
     void (async () => {
       const preview = await loadSettlementPreview(false);
       if (!preview) return;
+      if (preview.unsent_quantity > 0) {
+        show(
+          isAr
+            ? `تنبيه: يوجد ${preview.unsent_quantity} من الأصناف غير المرسلة. التحصيل الحالي سيغطي الأصناف المرسلة فقط ولن يغلق الطلب.`
+            : `Warning: ${preview.unsent_quantity} unsent item(s) remain. This payment will settle sent items only and will not close the order.`,
+          'warning',
+        );
+      }
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
     })();
@@ -315,12 +324,14 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       const extended = result as typeof result & {
         order_completed?: boolean;
+        remaining_unsent_quantity?: number;
         sale_id?: string;
         payments?: Array<{ payment_method: string; amount: number }>;
       };
       const receipt = buildSettlementReceipt(preview, invoiceNumber, paidAmountToUse, extended.payments || []);
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
+      setSettlementReceiptOrderCompleted(Boolean(extended.order_completed));
       setSettlementPreview(null);
       base.setCheckoutOpen(false);
       base.setPaidAmount(0);
@@ -348,11 +359,12 @@ export function usePosOrder(input: UsePosOrderInput) {
         base.resetWorkspace();
         show(t('saleCompleted'), 'success');
       } else {
+        const remainingUnsent = Number(extended.remaining_unsent_quantity ?? preview.unsent_quantity ?? 0);
         show(
           isAr
-            ? 'تم تحصيل الأصناف المرسلة فقط. الإضافات غير المرسلة ما زالت على الطلب.'
-            : 'Only sent items were settled. Unsent additions remain on the open order.',
-          'success',
+            ? `تم تحصيل جزء من الطلب فقط ولم يتم إغلاقه. ما زال هناك ${remainingUnsent} من الأصناف غير المرسلة على الطلب.`
+            : `Only part of the order was settled; the order is still open with ${remainingUnsent} unsent item(s).`,
+          'warning',
         );
       }
       return true;
@@ -437,11 +449,13 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCheckoutOpen,
     lastReceipt: settlementReceipt || base.lastReceipt,
     receiptSaleId: settlementReceiptSaleId || base.receiptSaleId,
+    receiptOrderCompleted: settlementReceipt ? settlementReceiptOrderCompleted : true,
     openCheckPrintLocked: base.openCheckPrintLocked
       || (base.activeOrderId ? openCheckPrintLockedOrderId === base.activeOrderId : false),
     openCheckPrintStateReady: base.openCheckPrintStateReady,
     closeReceipt: () => {
       setSettlementReceiptSaleId(null);
+      setSettlementReceiptOrderCompleted(null);
       base.closeReceipt();
     },
     transferOrderToTable,
