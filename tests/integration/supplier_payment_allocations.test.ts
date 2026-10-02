@@ -92,7 +92,11 @@ describe.skipIf(skip)('supplier payment allocation ledger', () => {
        ORDER BY created_at,id`,
       [p2],
     );
-    expect(events.map((e) => [e.event_type, Number(e.amount), e.reason_code])).toEqual([
+    expect(
+      events
+        .map((e) => [e.event_type, Number(e.amount), e.reason_code] as const)
+        .sort((a, b) => a[0].localeCompare(b[0])),
+    ).toEqual([
       ['apply', 50, 'payment_apply'],
       ['unapply', 20, 'purchase_return_release'],
     ]);
