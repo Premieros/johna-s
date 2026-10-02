@@ -27,7 +27,7 @@ describe('offline sale originating-user contract', () => {
     expect(sync).toContain("'AUTH_REQUIRED_OFFLINE_SYNC'");
 
     const ownerGuard = sync.indexOf('originatingUserId !== currentUserId');
-    const processSale = sync.indexOf('await posApi.processSale(');
+    const processSale = sync.indexOf('await posApi.processSaleIdempotent(');
     const reconcile = sync.indexOf('await this.reconcileCommittedSale(item)');
     expect(ownerGuard).toBeGreaterThanOrEqual(0);
     expect(processSale).toBeGreaterThan(ownerGuard);
@@ -45,7 +45,7 @@ describe('offline sale originating-user contract', () => {
     expect(sync).toContain('p_warehouse_id: warehouseId');
 
     const resolveWarehouse = sync.indexOf('const warehouseId = await this.resolveReplayWarehouse(item)');
-    const processSale = sync.indexOf('await posApi.processSale(replayPayload)');
+    const processSale = sync.indexOf('await posApi.processSaleIdempotent(replayPayload)');
     expect(resolveWarehouse).toBeGreaterThanOrEqual(0);
     expect(processSale).toBeGreaterThan(resolveWarehouse);
   });
