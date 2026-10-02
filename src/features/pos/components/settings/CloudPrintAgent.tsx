@@ -181,15 +181,15 @@ export function CloudPrintAgent() {
         console.warn('[cloud-print-agent] poll failed', error);
       } finally {
         busy.current = false;
-        if (cancelled) return;
-
-        const delayMs = wakePending
-          ? 0
-          : (!realtimeConnected || !transportReady || claimFailed)
-            ? DISCONNECTED_POLL_INTERVAL_MS
-            : REALTIME_RECONCILE_INTERVAL_MS;
-        wakePending = false;
-        scheduleClaim(delayMs);
+        if (!cancelled) {
+          const delayMs = wakePending
+            ? 0
+            : (!realtimeConnected || !transportReady || claimFailed)
+              ? DISCONNECTED_POLL_INTERVAL_MS
+              : REALTIME_RECONCILE_INTERVAL_MS;
+          wakePending = false;
+          scheduleClaim(delayMs);
+        }
       }
     };
 
