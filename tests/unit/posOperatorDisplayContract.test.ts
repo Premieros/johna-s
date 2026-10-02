@@ -38,7 +38,7 @@ describe('POS operator display contract', () => {
 
     expect(service).toContain('const OPERATOR_LABEL_CACHE_TTL_MS = 15_000');
     expect(service).toContain('const operatorLabelCache = new Map<string, OperatorLabelCacheEntry>()');
-    expect(service).toContain("\${row.id}:\${row.cashier_id ?? ''}");
+    expect(service).toContain("${row.id}:${row.cashier_id ?? ''}");
     expect(service).toContain('cached.signature === signature');
     expect(service).toContain('now - cached.fetchedAt < OPERATOR_LABEL_CACHE_TTL_MS');
     expect(service).toContain("supabase.rpc('get_pos_order_operator_labels', { p_branch_id: branchId })");
