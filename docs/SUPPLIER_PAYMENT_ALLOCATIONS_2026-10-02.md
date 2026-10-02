@@ -46,7 +46,10 @@ State: **BLOCKED**
 - Added fail-closed protection for legacy paid invoices when a correction would otherwise require an unprovable allocation.
 - Added unit contract coverage and integration coverage for multi-invoice apply, return unapply, credit reuse, and legacy fail-closed behavior.
 - Reconciled PR #429 onto latest `main` by taking the full latest-main tree and overlaying only this track's five files.
-- No supplier Production DDL or historical data mutation has been applied.
+- Supplier Production migrations `20261002202827 supplier_payment_allocation_ledger_20261002` and `20261002202952 supplier_payment_allocation_grant_hardening_20261002` were applied with explicit approval.
+- Historical supplier financial values were preserved exactly: supplier payment rows 22 / total 234,183.94; purchase rows 198 / paid total 254,348.50; returned total 25,991.20 before and after.
+- All 22 pre-existing supplier payments were marked `legacy`; allocation event rows remain 0; no historical allocation was guessed.
+- Post-apply review found Supabase project defaults had granted mutation privileges on the new public table. The hardening migration revoked INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER from PUBLIC, anon, authenticated, and service_role; authenticated/service_role retain SELECT only.
 
 ## Verification ledger
 - Verify run #3597 failed only at the mandatory work-log gate; required headings were added.
@@ -60,21 +63,24 @@ State: **BLOCKED**
 - This documentation-only checkpoint now requires one final exact-head Full Verify before the gate can open.
 
 ## Production gate
-State: **BLOCKED**
-- Supplier allocation migration is not applied to Production.
+State: **MIGRATED / MERGE VERIFY PENDING**
+- Supplier allocation migration is applied to Production with explicit approval.
+- Grant hardening migration is applied to Production and verified read-only.
+- `supplier_payment_allocations` has RLS enabled, its SELECT policy is present, internal mutation helpers are not executable by anon/authenticated, and direct table mutation grants are removed from API roles.
 - الفريدة is not changed.
-- No historical supplier payment row is changed.
-- No merge/deploy until exact-head Full Verify is Green on the latest-main-reconciled head and the user explicitly approves merge/deploy.
+- No historical supplier payment row or purchase financial amount was changed.
+- PR merge remains blocked until the post-hardening exact-head Full Verify is Green.
 
 ## Next action
-1. Run one final exact-head Full Verify after this documentation-only checkpoint.
+1. Run exact-head Full Verify including the Production grant-hardening migration and unit contract.
 2. Re-check latest `main` and PR mergeability without changing code.
-3. If Green, present the exact supplier Production migration scope for explicit merge/deploy approval.
-4. Keep historical `الفريدة` reconciliation separate until the forward model is deployed and verified.
+3. If Green, mark PR #429 ready and merge under the already-approved Production execution sequence.
+4. Verify post-merge workflow and Production read-only integrity.
+5. Keep historical `الفريدة` reconciliation separate until the forward model is deployed and verified.
 
 ## Mandatory update protocol
 - Verify branch HEAD and latest `main` before every repository write.
 - Unexpected HEAD/divergence => **STOP_AND_RECONCILE**.
 - Repository writes are sequential only.
 - Update this log after every meaningful implementation or verification checkpoint.
-- Do not merge, deploy, apply the supplier Production migration, or settle legacy supplier data before exact-head Green and explicit approval.
+- Do not merge/deploy after any new code change without a fresh exact-head Green. Historical supplier reconciliation remains separately approval-gated.
