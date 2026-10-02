@@ -4,6 +4,7 @@ import type { RpcResult, OrderType } from '@/lib/types';
 import type { ItemPayload } from '../utils/cart';
 
 export interface ProcessSalePayload {
+  p_client_operation_key?: string;
   p_invoice_number: string;
   p_branch_id: string;
   p_shift_id: string | null;
@@ -39,6 +40,9 @@ export type ProcessSaleResult = RpcResult & {
   offline?: boolean;
   pending_sync?: boolean;
   payments?: ReceiptTender[];
+  invoice_number?: string;
+  idempotent_replay?: boolean;
+  client_operation_key?: string;
 };
 
 type OwnedOfflineSaleQueueItem = Omit<OfflineSaleQueueItem, 'status' | 'retry_count'> & {
@@ -77,6 +81,10 @@ function createOfflineToken(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+export function createSaleOperationKey(): string {
+  return `sale:${createOfflineToken()}`;
+}
+
 async function queueOfflineSale(p: ProcessSalePayload): Promise<string> {
   if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE');
 
@@ -89,13 +97,17 @@ async function queueOfflineSale(p: ProcessSalePayload): Promise<string> {
   if (sessionError || !originatingUserId) throw new Error('AUTH_REQUIRED_OFFLINE');
 
   const id = `offline_sale_${createOfflineToken()}`;
+  const operationKey = p.p_client_operation_key?.trim() || id;
   const queuedSale: OwnedOfflineSaleQueueItem = {
     id,
     client_id: id,
     created_by_user_id: originatingUserId,
     invoice_number: p.p_invoice_number,
     created_at: new Date().toISOString(),
-    payload: p as unknown as Record<string, unknown>,
+    payload: {
+      ...p,
+      p_client_operation_key: operationKey,
+    } as unknown as Record<string, unknown>,
   };
   await enqueueOfflineSale(queuedSale);
   return id;
@@ -157,7 +169,10 @@ export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ resu
   // authoritative open branch shift before either normal or split settlement.
   const resolvedShift = await resolveSharedBranchShift(p);
   if (!resolvedShift.payload) return { result: null, error: resolvedShift.error || 'SHIFT_REQUIRED' };
-  const settlementPayload = resolvedShift.payload;
+  const settlementPayload = {
+    ...resolvedShift.payload,
+    p_client_operation_key: resolvedShift.payload.p_client_operation_key?.trim() || createSaleOperationKey(),
+  };
 
   if (splitPayments) {
     const { p_paid_amount: _paidAmount, p_payment_method: _paymentMethod, ...splitBase } = settlementPayload;
@@ -173,7 +188,7 @@ export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ resu
   }
 
   try {
-    const { data, error } = await posApi.processSale(settlementPayload);
+    const { data, error } = await posApi.processSaleIdempotent(settlementPayload);
     if (!error && (data as { success?: boolean })?.success) {
       return {
         result: {
@@ -206,7 +221,11 @@ export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Prom
   }
 
   try {
-    const { data, error } = await posApi.processSaleSplit(p);
+    const payload = {
+      ...p,
+      p_client_operation_key: p.p_client_operation_key?.trim() || createSaleOperationKey(),
+    };
+    const { data, error } = await posApi.processSaleSplitIdempotent(payload);
     const result = data as (RpcResult & { split?: boolean; payment_count?: number }) | null;
     if (!error && result?.success) return { result, error: null };
 

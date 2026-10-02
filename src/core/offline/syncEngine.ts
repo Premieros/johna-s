@@ -207,7 +207,10 @@ class OfflineSyncEngine {
     });
 
     if (pendingItems.length === 0) {
-      this.pendingCount = 0;
+      // "Nothing eligible right now" is not the same as "queue empty".
+      // Backoff/blocked/dead-letter rows remain operator-visible until they are
+      // explicitly reconciled or removed.
+      this.pendingCount = await getPendingSalesCount();
       this.emit();
       return { successCount: 0, failedCount: 0 };
     }
@@ -260,12 +263,15 @@ class OfflineSyncEngine {
         const replayPayload = {
           ...item.payload,
           p_warehouse_id: warehouseId,
-        } as unknown as Parameters<typeof posApi.processSale>[0];
+          p_client_operation_key: String(
+            item.payload.p_client_operation_key || item.client_id || item.id,
+          ),
+        } as unknown as Parameters<typeof posApi.processSaleIdempotent>[0];
 
         // Call the authoritative sale RPC. A sync is confirmed only by an
         // explicit success=true plus a durable sale_id; null/undefined data is
         // never treated as success.
-        const { data, error } = await posApi.processSale(replayPayload);
+        const { data, error } = await posApi.processSaleIdempotent(replayPayload);
         const res = data as SaleSyncResponse | null;
 
         let confirmed = !error && res?.success === true && Boolean(res.sale_id);

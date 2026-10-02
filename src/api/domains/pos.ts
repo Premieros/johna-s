@@ -107,6 +107,32 @@ export const pos = {
     return rpc<RpcResult>('process_sale', p);
   },
 
+  async processSaleIdempotent(p: {
+    p_client_operation_key: string;
+    p_invoice_number: string;
+    p_branch_id: string;
+    p_shift_id: string | null;
+    p_warehouse_id: string | null;
+    p_customer_id: string | null;
+    p_salesperson_id: string | null;
+    p_subtotal: number;
+    p_discount_amount: number;
+    p_discount_type: 'percent' | 'amount';
+    p_tax_amount: number;
+    p_bonus_amount: number;
+    p_total: number;
+    p_paid_amount: number;
+    p_payment_method: string;
+    p_status: string;
+    p_items: SaleItemInput[];
+    p_order_type: OrderType;
+    p_table_id: string | null;
+    p_order_id: string | null;
+    p_guest_count: number | null;
+  }): ApiResult<RpcResult & { invoice_number?: string; idempotent_replay?: boolean; client_operation_key?: string }> {
+    return rpc('process_sale_idempotent', p);
+  },
+
   reconcileOfflineSale(p: {
     p_invoice_number: string;
     p_branch_id: string;
@@ -114,6 +140,31 @@ export const pos = {
     p_payment_method: string;
   }): ApiResult<RpcResult & { reconciled?: boolean; invoice_number?: string }> {
     return rpc('reconcile_offline_sale', p);
+  },
+
+  async processSaleSplitIdempotent(p: {
+    p_client_operation_key: string;
+    p_invoice_number: string;
+    p_branch_id: string;
+    p_shift_id: string | null;
+    p_warehouse_id: string | null;
+    p_customer_id: string | null;
+    p_salesperson_id: string | null;
+    p_subtotal: number;
+    p_discount_amount: number;
+    p_discount_type: 'percent' | 'amount';
+    p_tax_amount: number;
+    p_bonus_amount: number;
+    p_total: number;
+    p_payments: SplitTenderInput[];
+    p_status: string;
+    p_items: SaleItemInput[];
+    p_order_type: OrderType;
+    p_table_id: string | null;
+    p_order_id: string | null;
+    p_guest_count: number | null;
+  }): ApiResult<RpcResult & { split?: boolean; payment_count?: number; invoice_number?: string; idempotent_replay?: boolean; client_operation_key?: string }> {
+    return rpc('process_sale_split_idempotent', p);
   },
 
   async processSaleSplit(p: {

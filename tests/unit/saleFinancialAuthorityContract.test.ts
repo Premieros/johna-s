@@ -45,7 +45,10 @@ describe('sale financial authority contract', () => {
     expect(queueSale).toContain('const queuedSale: OwnedOfflineSaleQueueItem = {');
     expect(queueSale).toContain('client_id: id');
     expect(queueSale).toContain('created_by_user_id: originatingUserId');
-    expect(queueSale).toContain('payload: p as unknown as Record<string, unknown>');
+    expect(queueSale).toContain('const operationKey = p.p_client_operation_key?.trim() || id');
+    expect(queueSale).toContain('payload: {');
+    expect(queueSale).toContain('...p,');
+    expect(queueSale).toContain('p_client_operation_key: operationKey');
     expect(queueSale).toContain('await enqueueOfflineSale(queuedSale)');
     expect(queueSale).toContain("if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE')");
     expect(queueSale).toContain("throw new Error('AUTH_REQUIRED_OFFLINE')");
@@ -64,13 +67,14 @@ describe('sale financial authority contract', () => {
     const payment = read('src/features/pos/services/payment.ts');
     const processSale = extractFunctionBody(payment, 'processSaleForOrder');
 
-    const onlineMarker = 'const settlementPayload = resolvedShift.payload;';
+    const onlineMarker = 'const settlementPayload = {';
     const onlineMarkerStart = processSale.indexOf(onlineMarker);
     expect(onlineMarkerStart).toBeGreaterThanOrEqual(0);
     const onlineTryStart = processSale.indexOf('try {', onlineMarkerStart + onlineMarker.length);
     expect(onlineTryStart).toBeGreaterThanOrEqual(0);
     const onlineTryCatch = processSale.slice(onlineTryStart);
     expect(onlineTryCatch).not.toContain('queueOfflineSale(p)');
+    expect(onlineTryCatch).toContain('posApi.processSaleIdempotent(settlementPayload)');
     expect(onlineTryCatch).toContain('A server rejection');
     expect(onlineTryCatch).toContain('the server may have');
 
