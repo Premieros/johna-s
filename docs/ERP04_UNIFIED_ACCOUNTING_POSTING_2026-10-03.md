@@ -71,3 +71,18 @@ Run exact-head CI on the final documentation/implementation head. Inspect failur
 - Unexpected divergence => **STOP_AND_RECONCILE**.
 - Update this log after every material audit, implementation or verification checkpoint.
 - Keep State **BLOCKED** until exact-head Full Verify Green and explicit merge approval.
+
+
+## CI checkpoint — stock-count fixture correction
+- Exact-head `37f43540c008a386584ea7260b92dfc46035236c`:
+  - `verify`: **GREEN**.
+  - canonical migrations/schema: **GREEN**; ERP-04 migration applied successfully on Fresh DB.
+  - DB integration suite: **FAILED only in the new ERP-04 test fixture before either test ran**.
+  - failure: duplicate `account_mappings(branch_id, semantic_key)` for `inventory_fg`.
+- Root cause: `ensure_chart_of_accounts(rollbackBranchId)` already seeds canonical account mappings, while the test fixture attempted to insert `inventory_fg` again.
+- Correction commit `8a13a76f5460d2c15212d04c87c4aa632de56034`:
+  - no migration/runtime change;
+  - fixture now seeds canonical mappings once, then renames only the isolated rollback-branch `stock_variance` semantic key to `stock_variance_missing_probe`;
+  - this preserves a valid `inventory_fg` mapping while still exercising the intended fail-closed missing-variance-account path.
+- Production remains untouched.
+- Next gate: exact-head Full Verify on the documented final head; no merge or Production migration before Green + explicit approval.
