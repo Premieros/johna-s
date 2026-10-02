@@ -222,7 +222,7 @@ async function mockPosBackend(page: Page) {
       });
     }
     if (name === 'next_sale_document_number') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, number: 'E2E-INV-001' }) });
-    if (name === 'process_sale') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, sale_id: 'e2e-sale-id', order_completed: true }) });
+    if (name === 'process_sale_idempotent') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, sale_id: 'e2e-sale-id', invoice_number: 'E2E-INV-001', order_completed: true, idempotent_replay: false }) });
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, id: ORDER_ID, order_id: ORDER_ID, order_number: 'E2E-001', sale_id: 'e2e-sale-id' }) });
   });
 }
@@ -332,7 +332,7 @@ test.describe('POS action-level', () => {
 
     await page.getByTestId('pos-payment-method-cash').click();
     await page.getByTestId('pos-payment-confirm').click();
-    await expect.poll(() => rpcCalls.includes('process_sale'), { timeout: 10000 }).toBe(true);
+    await expect.poll(() => rpcCalls.includes('process_sale_idempotent'), { timeout: 10000 }).toBe(true);
   });
 
   test('keeps fullscreen POS inside compact, standard, and large phone widths', async ({ page }) => {
@@ -431,7 +431,7 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-action-send-kitchen')).toBeVisible();
   });
 
-  test('complete sale executes kitchen send, payment confirmation, and process_sale', async ({ page }) => {
+  test('complete sale executes kitchen send, payment confirmation, and idempotent sale RPC', async ({ page }) => {
     await page.getByTestId('pos-start-quick-order').click();
     await addProduct(page);
     await expect(page.getByTestId('pos-action-pay')).toHaveCount(0);
@@ -441,12 +441,13 @@ test.describe('POS action-level', () => {
     await page.getByTestId('pos-payment-method-cash').click();
     await page.getByTestId('pos-payment-confirm').click();
     await expect.poll(() => rpcCalls.includes('next_sale_document_number'), { timeout: 10000 }).toBe(true);
-    await expect.poll(() => rpcCalls.includes('process_sale'), { timeout: 10000 }).toBe(true);
-    const payload = (rpcPayloads.process_sale?.[0] || {}) as { p_status?: string; p_payment_method?: string; p_order_type?: string; p_shift_id?: string };
+    await expect.poll(() => rpcCalls.includes('process_sale_idempotent'), { timeout: 10000 }).toBe(true);
+    const payload = (rpcPayloads.process_sale_idempotent?.[0] || {}) as { p_client_operation_key?: string; p_status?: string; p_payment_method?: string; p_order_type?: string; p_shift_id?: string };
     expect(payload.p_status).toBe('completed');
     expect(payload.p_payment_method).toBe('cash');
     expect(payload.p_order_type).toBe('takeaway');
     expect(payload.p_shift_id).toBe(SHIFT_ID);
+    expect(payload.p_client_operation_key).toMatch(/^sale:/);
   });
 
   test('landing actions expose tables-first direct flows and back navigation', async ({ page }) => {

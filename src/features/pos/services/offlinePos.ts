@@ -62,9 +62,13 @@ export const offlinePosManager = {
 
   enqueueSale(payload: ProcessSalePayload): QueuedSale {
     const queue = this.getQueue();
+    const localId = `offline_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const queuedItem: QueuedSale = {
-      localId: `offline_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      payload,
+      localId,
+      payload: {
+        ...payload,
+        p_client_operation_key: payload.p_client_operation_key?.trim() || localId,
+      },
       queuedAt: new Date().toISOString(),
       synced: false,
     };
@@ -110,7 +114,11 @@ export const offlinePosManager = {
     for (let i = 0; i < pending.length; i++) {
       const item = pending[i];
       try {
-        const { data, error } = await posApi.processSale(item.payload);
+        const replayPayload = {
+          ...item.payload,
+          p_client_operation_key: item.payload.p_client_operation_key?.trim() || item.localId,
+        };
+        const { data, error } = await posApi.processSaleIdempotent(replayPayload as Parameters<typeof posApi.processSaleIdempotent>[0]);
         if (!error && (data as { success?: boolean })?.success) {
           item.synced = true;
           delete item.syncError;

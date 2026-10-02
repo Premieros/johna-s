@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Emergency hotfix — paid order reopen guard**
+- Track: **POS financial safety hardening**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `03efc4ccf154529cd584db20d91d231f4e30ebcc`
-- Active development branch: `hotfix/paid-order-reopen-guard-20261002`
-- Mandatory active work log: `docs/PAID_ORDER_REOPEN_GUARD_2026-10-02.md`
+- Latest main baseline reconciled: `746b0538b55de88173d0d070d9ff54ca8ea31f42`
+- Active development branch: `development/pos-financial-safety-hardening-20261002`
+- Mandatory active work log: `docs/POS_FINANCIAL_SAFETY_HARDENING_2026-10-02.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `hotfix/paid-order-reopen-guard-20261002`
+4. `development/pos-financial-safety-hardening-20261002`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -68,24 +68,25 @@ The active emergency PR is the latest-main-synced stale-client duplicate sent-li
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Contain the Cleopatra paid-order reopen incident without weakening financial or POS controls:
-1. settled kitchen quantity must be immutable through sent-item Void and must use the Refund path;
-2. successful Void of the final unresolved addition must reconcile a previously paid partial order to completed when no unsent/unsettled quantity remains;
-3. sent-only settlement remains supported, but the UI must clearly distinguish partial settlement from full order completion;
-4. no Production migration until exact-head Full Verify Green and a second explicit approval;
-5. preserve KDS routing, FIFO quantities/costs, printing, shift attribution, branch isolation, Permission-First, and RLS.
+Harden the POS financial write path against duplicate/replayed operations without changing established kitchen, FIFO, printing, shift, or accounting truth:
+1. block same-tick duplicate checkout before the first async boundary;
+2. keep the same logical operation identity across ambiguous retries;
+3. make normal and split sale retries idempotent on the server;
+4. keep offline replay owner-safe and idempotent;
+5. fix the offline pending counter so delayed/blocked rows never disappear from operator visibility;
+6. Production idempotency migration is applied and verified; merge/deploy remains blocked until fresh exact-head Full Verify Green and explicit merge approval.
 
 Detailed execution and verification are maintained only in:
-`docs/PAID_ORDER_REOPEN_GUARD_2026-10-02.md`
+`docs/POS_FINANCIAL_SAFETY_HARDENING_2026-10-02.md`
 
 ## Definition of done
 This track is complete only when:
-- paid/settled kitchen quantity cannot be voided through the sent-item Void RPC;
-- legitimate unsettled Void still restores inventory exactly once;
-- an open paid order auto-completes after its final unresolved addition is removed;
-- partial settlement receipts are visibly marked as partial/open rather than completed;
+- same-tick duplicate checkout is blocked synchronously in both direct and linked/offline flows;
+- same operation-key concurrent/retry calls create at most one Sale and one accounting effect;
+- active POS and offline replay callers use the idempotent server contract;
+- blocked/dead-letter/backoff offline rows remain included in the pending count;
 - exact-head Full Verify is Green including DB/security/RLS and Browser Smoke;
 - no Production migration is applied before explicit approval;
-- post-deploy read-only checks show no new paid open-order shells.
+- post-deploy read-only integrity checks remain at zero for duplicate invoices, duplicate kitchen sends, linked-sale shells, split-payment mismatch, and unbalanced journals.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.

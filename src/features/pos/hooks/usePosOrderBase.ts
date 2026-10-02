@@ -14,7 +14,7 @@ import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceip
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchen';
 import { enqueueCloudOpenOrderPrint, getCloudOpenOrderPrintState } from '../services/cloudPrint';
-import { processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
+import { createSaleOperationKey, processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
 import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
 
 export interface ActiveShiftInfo {
@@ -78,6 +78,8 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [activeTable, setActiveTable] = useState<DiningTable | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const saleMutationLockRef = useRef(false);
+  const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [kitchenSending, setKitchenSending] = useState(false);
   const [kitchenSentItems, setKitchenSentItems] = useState<KitchenSendItem[]>([]);
@@ -661,6 +663,10 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
       return false;
     }
+
+    // React state updates are asynchronous. Hold a synchronous mutex before the
+    // first await so a same-tick double click cannot start a second financial write.
+    saleMutationLockRef.current = true;
     setCompleting(true);
     try {
       if (activeOrderId) {
@@ -775,7 +781,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, orderNotes, t, isAr]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
-    if (cart.length === 0 || completing) return false;
+    if (saleMutationLockRef.current || cart.length === 0 || completing) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }
     if (paymentMethod === 'credit') {
@@ -820,8 +826,34 @@ export function usePosOrder(input: UsePosOrderInput) {
         tableId,
         activeTableId: activeTable?.id ?? null,
       });
+      const attemptFingerprint = JSON.stringify({
+        branchId,
+        warehouseId,
+        shiftId: activeShift.id,
+        customerId: customerId || null,
+        subtotal,
+        discountValue,
+        discountType,
+        taxAmount,
+        total,
+        paidAmountToUse,
+        paymentMethod,
+        items: itemsPayload,
+        orderType: binding.orderType,
+        tableId: binding.tableId,
+        orderId: activeOrderId,
+        guestCount,
+      });
+      if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== attemptFingerprint) {
+        saleAttemptRef.current = {
+          fingerprint: attemptFingerprint,
+          operationKey: createSaleOperationKey(),
+        };
+      }
+      const clientOperationKey = saleAttemptRef.current.operationKey;
 
       const { result, error: saleError } = await processSaleForOrder({
+        p_client_operation_key: clientOperationKey,
         p_invoice_number: invoiceNumber,
         p_branch_id: branchId,
         p_shift_id: activeShift?.id || null,
@@ -846,11 +878,12 @@ export function usePosOrder(input: UsePosOrderInput) {
       if (saleError) { show(saleError, 'error'); return false; }
       if (!result?.success) { show(result?.detail || result?.error || t('error'), 'error'); return false; }
       const saleId = result.sale_id || '';
+      const confirmedInvoiceNumber = result.invoice_number || invoiceNumber;
 
-      await logAudit('create', 'sales', saleId, { invoice: invoiceNumber, total });
+      await logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total });
 
       const receiptPayload: ReceiptData = {
-        invoice: invoiceNumber,
+        invoice: confirmedInvoiceNumber,
         branchName,
         items: cart.map((i) => ({ name: [i.product.name, i.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — '), qty: i.quantity, price: i.unit_price, total: i.quantity * i.unit_price - i.discount_amount })),
         subtotal, discount: discountValue, tax: taxAmount, total,
@@ -879,6 +912,10 @@ export function usePosOrder(input: UsePosOrderInput) {
       setTableId(null);
       setActiveTable(null);
       setGuestCount(null);
+      // Clear retry identity only after the confirmed sale has been reflected
+      // into local workspace state. Any earlier local failure must replay the
+      // same server operation instead of allocating a second sale.
+      saleAttemptRef.current = null;
       show(t('saleCompleted'), 'success');
 
       if (effSettings?.receipt_auto_print) {
@@ -904,6 +941,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return true;
     } finally {
+      saleMutationLockRef.current = false;
       setCompleting(false);
     }
   }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
@@ -978,6 +1016,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const closeReceipt = useCallback(() => setReceiptSaleId(null), []);
 
   const resetWorkspace = useCallback(() => {
+    saleAttemptRef.current = null;
     setCart(EMPTY_CART);
     setCustomerId('');
     setOrderNotes('');
