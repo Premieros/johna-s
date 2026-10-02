@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **POS financial safety hardening**
+- Track: **Web Cloud Print realtime wake hardening**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `746b0538b55de88173d0d070d9ff54ca8ea31f42`
-- Active development branch: `development/pos-financial-safety-hardening-20261002`
-- Mandatory active work log: `docs/POS_FINANCIAL_SAFETY_HARDENING_2026-10-02.md`
+- Latest main baseline reconciled: `84f4a1d78dcbe9f637f1e19d26b33de24592da73`
+- Active development branch: `hotfix/web-cloud-print-realtime-wake-20261002`
+- Mandatory active work log: `docs/WEB_CLOUD_PRINT_REALTIME_WAKE_2026-10-02.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/pos-financial-safety-hardening-20261002`
+4. `hotfix/web-cloud-print-realtime-wake-20261002`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -68,25 +68,28 @@ The active emergency PR is the latest-main-synced stale-client duplicate sent-li
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Harden the POS financial write path against duplicate/replayed operations without changing established kitchen, FIFO, printing, shift, or accounting truth:
-1. block same-tick duplicate checkout before the first async boundary;
-2. keep the same logical operation identity across ambiguous retries;
-3. make normal and split sale retries idempotent on the server;
-4. keep offline replay owner-safe and idempotent;
-5. fix the offline pending counter so delayed/blocked rows never disappear from operator visibility;
-6. Production idempotency migration is applied and verified; merge/deploy remains blocked until fresh exact-head Full Verify Green and explicit merge approval.
+Reduce historical browser Cloud Print polling/log load without touching installed restaurant Print Agent programs:
+1. replace the browser 700ms durable-queue polling loop with existing branch-filtered `cloud_print_wake_state` Realtime wake;
+2. retain immediate initial drain of already-pending jobs;
+3. reconcile every 60s while Realtime is confirmed subscribed;
+4. fall back to 5s polling only while Realtime is unavailable;
+5. preserve the existing printer transport check before every durable claim;
+6. do not modify Print Agent V8/V7 executables, queue RPCs, printer routes, payloads, or `send_to_kitchen`;
+7. require no reinstall or local configuration change at Smouha or Cleopatra.
 
 Detailed execution and verification are maintained only in:
-`docs/POS_FINANCIAL_SAFETY_HARDENING_2026-10-02.md`
+`docs/WEB_CLOUD_PRINT_REALTIME_WAKE_2026-10-02.md`
 
 ## Definition of done
 This track is complete only when:
-- same-tick duplicate checkout is blocked synchronously in both direct and linked/offline flows;
-- same operation-key concurrent/retry calls create at most one Sale and one accounting effect;
-- active POS and offline replay callers use the idempotent server contract;
-- blocked/dead-letter/backoff offline rows remain included in the pending count;
-- exact-head Full Verify is Green including DB/security/RLS and Browser Smoke;
-- no Production migration is applied before explicit approval;
-- post-deploy read-only integrity checks remain at zero for duplicate invoices, duplicate kitchen sends, linked-sale shells, split-payment mismatch, and unbalanced journals.
+- no 700ms browser Cloud Print claim loop remains;
+- browser wake is driven by `cloud_print_wake_state` Realtime events;
+- connected reconciliation is 60s and disconnected fallback is 5s;
+- same `claim_cloud_print_jobs` / `start_cloud_print_job` / `complete_cloud_print_job` contracts remain unchanged;
+- local printer availability is still checked before claiming;
+- installed Print Agents require no reinstall or configuration change;
+- exact-head Full Verify, DB/security/RLS and Browser Smoke are Green;
+- dedicated Smouha/Cleopatra agent activity remains healthy after deploy;
+- no Production migration or data rewrite is introduced by this track.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
