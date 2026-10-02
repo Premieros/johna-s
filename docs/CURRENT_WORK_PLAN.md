@@ -31,6 +31,7 @@ Current temporary active development branch:
 - No direct write to `main`.
 - No force push.
 - Unexpected branch HEAD or latest-main movement => **STOP_AND_RECONCILE**.
+- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - No Production DB migration/write/data rewrite in this track.
 - No RLS, Permission-First, branch isolation, accounting, sale/payment, offline, kitchen, KDS, printing, Print Agent, printer-routing or `send_to_kitchen` behavior change.
 - No new dependency.
