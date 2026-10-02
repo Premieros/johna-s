@@ -1190,10 +1190,19 @@ export function PosWorkspacePage() {
         {pos.lastReceipt && (
           <div className="space-y-4">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-ui-success/15 ring-2 ring-ui-border-strong flex items-center justify-center mx-auto mb-3">
-                <BarcodeIcon className="w-8 h-8 text-ui-success" />
+              <div className={`w-16 h-16 rounded-full ring-2 ring-ui-border-strong flex items-center justify-center mx-auto mb-3 ${pos.receiptOrderCompleted === false ? 'bg-ui-warning/15' : 'bg-ui-success/15'}`}>
+                <BarcodeIcon className={`w-8 h-8 ${pos.receiptOrderCompleted === false ? 'text-ui-warning' : 'text-ui-success'}`} />
               </div>
-              <p className="text-base font-semibold text-ui-text">{t('saleCompleted')}</p>
+              <p className="text-base font-semibold text-ui-text">
+                {pos.receiptOrderCompleted === false
+                  ? (isAr ? 'تم تحصيل جزء من الطلب — الطلب ما زال مفتوحًا' : 'Partial payment recorded — order is still open')
+                  : t('saleCompleted')}
+              </p>
+              {pos.receiptOrderCompleted === false && (
+                <p className="mt-1 text-xs font-bold text-ui-warning">
+                  {isAr ? 'لا تعتبر هذه العملية إغلاقًا نهائيًا للطلب.' : 'This receipt does not mean the order has been closed.'}
+                </p>
+              )}
               <p className="text-sm text-ui-muted mt-1">{pos.lastReceipt.invoice}</p>
             </div>
             {perms.canPrint && (
