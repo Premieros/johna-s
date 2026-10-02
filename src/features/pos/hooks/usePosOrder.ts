@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -39,6 +39,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const { show } = useToast();
   const perms = usePosPermissions();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
+  const saleMutationLockRef = useRef(false);
   const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
@@ -226,7 +227,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
     if (explicitlyOffline) {
-      if (base.cart.length === 0 || base.completing || offlineCompleting) return false;
+      if (saleMutationLockRef.current || base.cart.length === 0 || base.completing || offlineCompleting) return false;
       if (!input.branchId) {
         show(isAr ? 'اختر الفرع أولاً' : 'Select a branch first', 'error');
         return false;
@@ -236,6 +237,9 @@ export function usePosOrder(input: UsePosOrderInput) {
         return false;
       }
 
+      // Hold a synchronous mutex before the first await; React's completing
+      // state is not synchronous enough to stop a same-tick duplicate submit.
+      saleMutationLockRef.current = true;
       setOfflineCompleting(true);
       try {
         const invoiceNumber = await nextInvoiceNumber();
@@ -277,16 +281,19 @@ export function usePosOrder(input: UsePosOrderInput) {
         );
         return true;
       } finally {
+        saleMutationLockRef.current = false;
         setOfflineCompleting(false);
       }
     }
 
     if (!base.activeOrderId) return base.completeSale();
+    if (saleMutationLockRef.current) return false;
     if (!input.branchId || !input.activeShift?.id) {
       show(isAr ? 'يجب اختيار فرع وفتح وردية قبل التحصيل' : 'Select a branch and open a shift before settlement', 'error');
       return false;
     }
 
+    saleMutationLockRef.current = true;
     setOfflineCompleting(true);
     try {
       const preview = settlementPreview || await loadSettlementPreview(false);
@@ -369,6 +376,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return true;
     } finally {
+      saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
   }, [base, buildSettlementReceipt, input.activeShift?.id, input.branchId, input.effSettings, isAr, lang, loadSettlementPreview, offlineCompleting, settlementPreview, show, t]);
