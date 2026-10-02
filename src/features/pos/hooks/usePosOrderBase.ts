@@ -78,6 +78,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [activeTable, setActiveTable] = useState<DiningTable | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const saleMutationLockRef = useRef(false);
   const [orderLoading, setOrderLoading] = useState(false);
   const [kitchenSending, setKitchenSending] = useState(false);
   const [kitchenSentItems, setKitchenSentItems] = useState<KitchenSendItem[]>([]);
@@ -661,6 +662,10 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
       return false;
     }
+
+    // React state updates are asynchronous. Hold a synchronous mutex before the
+    // first await so a same-tick double click cannot start a second financial write.
+    saleMutationLockRef.current = true;
     setCompleting(true);
     try {
       if (activeOrderId) {
@@ -775,7 +780,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, orderNotes, t, isAr]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
-    if (cart.length === 0 || completing) return false;
+    if (saleMutationLockRef.current || cart.length === 0 || completing) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }
     if (paymentMethod === 'credit') {
@@ -904,6 +909,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return true;
     } finally {
+      saleMutationLockRef.current = false;
       setCompleting(false);
     }
   }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
