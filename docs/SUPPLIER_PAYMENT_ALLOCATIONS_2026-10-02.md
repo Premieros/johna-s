@@ -60,7 +60,10 @@ State: **BLOCKED**
 - After #3600, PR #428 merged and advanced `main` to `84f4a1d78dcbe9f637f1e19d26b33de24592da73`.
 - Reconciliation commit `7155967817c2266a1f048016b18bc8863fd79339` rebased the effective tree onto latest `main` without force push.
 - Exact-head Full Verify run #3602 completed **Green** on that reconciled head: app/unit/build Green, canonical DB migrations/schema Green, integration + Security/RLS Green, and Browser Smoke Green.
-- This documentation-only checkpoint now requires one final exact-head Full Verify before the gate can open.
+- Exact-head Full Verify run #3603 completed **Green** on documentation HEAD `8df2aa86a95bb085133783db5ea95af21c42c63c` before the approved Production migration.
+- After Production apply, Fast Verify detected a repository-only migration ordering issue: hardening version `20261002202952` sorted before the old repository filename `20261002220000`, so CI attempted hardening before table creation. Production remained healthy because the real Production allocation version is `20261002202827`.
+- Repository migration history is reconciled to Production by renaming the allocation file to `20261002202827_supplier_payment_allocation_ledger_20261002.sql`; hardening remains `20261002202952_supplier_payment_allocation_grant_hardening_20261002.sql`.
+- Fresh exact-head Full Verify is required after this migration-history reconciliation.
 
 ## Production gate
 State: **MIGRATED / MERGE VERIFY PENDING**

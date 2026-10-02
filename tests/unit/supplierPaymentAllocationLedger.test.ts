@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const migration = fs.readFileSync(
-  'supabase/migrations/20261002220000_supplier_payment_allocation_ledger.sql',
+  'supabase/migrations/20261002202827_supplier_payment_allocation_ledger_20261002.sql',
   'utf8',
 );
 
