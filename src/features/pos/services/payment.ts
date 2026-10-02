@@ -81,6 +81,10 @@ function createOfflineToken(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+export function createSaleOperationKey(): string {
+  return `sale:${createOfflineToken()}`;
+}
+
 async function queueOfflineSale(p: ProcessSalePayload): Promise<string> {
   if (!p.p_shift_id) throw new Error('SHIFT_REQUIRED_OFFLINE');
 
