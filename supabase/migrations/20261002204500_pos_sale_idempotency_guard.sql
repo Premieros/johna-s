@@ -53,7 +53,7 @@ CREATE OR REPLACE FUNCTION public.process_sale_idempotent(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'pg_catalog','public','private','pg_temp'
+SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_key text := btrim(COALESCE(p_client_operation_key,''));
@@ -233,7 +233,7 @@ CREATE OR REPLACE FUNCTION public.process_sale_split_idempotent(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'pg_catalog','public','private','pg_temp'
+SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_key text := btrim(COALESCE(p_client_operation_key,''));
