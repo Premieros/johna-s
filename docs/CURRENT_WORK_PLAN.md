@@ -1,19 +1,19 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Web Cloud Print realtime wake hardening**
+- Track: **POS product browser render performance**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `04ed847f726049f87055eafba079ce51e7cb2db4`
-- Active development branch: `hotfix/web-cloud-print-realtime-wake-20261002-r2`
-- Mandatory active work log: `docs/WEB_CLOUD_PRINT_REALTIME_WAKE_2026-10-02.md`
+- Latest main baseline reconciled: `8bbd03a1350305c0948decc1955cc7eced6ebce5`
+- Active development branch: `performance/pos-product-browser-render-20261003`
+- Mandatory active work log: `docs/POS_PRODUCT_BROWSER_RENDER_PERFORMANCE_2026-10-03.md`
 
 ## Reconciled predecessors now on main
-- PR #428 — POS financial safety hardening — is merged on `main` at `84f4a1d78dcbe9f637f1e19d26b33de24592da73`.
-- PR #429 — supplier payment allocation subledger — is merged on `main` at `04ed847f726049f87055eafba079ce51e7cb2db4`.
-- Their POS/offline/idempotency and supplier-allocation files are inherited from latest `main` unchanged by this track.
-- This print-load track must not regress POS idempotency, supplier allocations, KDS, FIFO, shifts, accounting, or installed Print Agent behavior.
+- PR #428 — POS financial safety hardening — merged at `84f4a1d78dcbe88173d0d070d9ff54ca8ea31f42`.
+- PR #429 — supplier payment allocation subledger — merged at `04ed847f726049f87055eafba079ce51e7cb2db4`.
+- PR #431 — Web Cloud Print realtime wake hardening — merged at `8bbd03a1350305c0948decc1955cc7eced6ebce5`.
+- Their financial/idempotency, supplier-allocation, print queue, Print Agent, KDS, routing, Realtime wake and offline protections are inherited unchanged by this track.
 
 ## Repository branch policy
 Long-lived branches intentionally preserved:
@@ -22,37 +22,52 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `hotfix/web-cloud-print-realtime-wake-20261002-r2`
+4. `performance/pos-product-browser-render-20261003`
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
 - CI يجب أن يفشل إذا السجل الإلزامي مفقود أو لا يطابق المسار النشط.
-- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
-- لا Merge إلى `main` إلا بعد نفس البوابة وبموافقة صريحة.
-- Single writer on the active development branch.
+- Single writer on the active branch.
 - No direct write to `main`.
 - No force push.
-- Unexpected HEAD => **STOP_AND_RECONCILE**.
-- No weakening Permission-First, branch isolation, RLS, tests, or Super Admin implicit-bypass rules.
-- No Production data rewrite/reset/reseed to make tests pass.
-- Installed Print Agent executables/configuration are frozen; no reinstall is required or permitted by this track.
+- Unexpected branch HEAD or latest-main movement => **STOP_AND_RECONCILE**.
+- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
+- No Production DB migration/write/data rewrite in this track.
+- No RLS, Permission-First, branch isolation, accounting, sale/payment, offline, kitchen, KDS, printing, Print Agent, printer-routing or `send_to_kitchen` behavior change.
+- No new dependency.
+- No pagination/hiding/reordering of POS products.
+- No merge until exact-head Full Verify Green + explicit approval.
 
 ## Current objective
-Reduce historical browser Cloud Print polling/log load without touching installed restaurant Print Agent programs:
-1. replace the browser 700ms durable-queue polling loop with existing branch-filtered `cloud_print_wake_state` Realtime wake;
-2. retain immediate initial drain of already-pending jobs;
-3. reconcile every 60s while Realtime is confirmed subscribed;
-4. fall back to 5s polling only while Realtime is unavailable;
-5. preserve the existing local printer transport check before every durable claim;
-6. keep the same `claim_cloud_print_jobs` / `start_cloud_print_job` / `complete_cloud_print_job` contracts;
-7. do not modify Print Agent V8/V7 executables, installers, local configuration, printer routes, payloads, migrations, or `send_to_kitchen`;
-8. require no reinstall at Smouha or Cleopatra.
+Reduce POS runtime render/layout work without changing behavior:
+1. keep all products/search/categories visible and functionally identical;
+2. prevent cart/order-only parent rerenders from rebuilding the entire ~250-card Product Browser when catalog-facing props are unchanged;
+3. stabilize the configure-product callback passed from `PosWorkspacePage`;
+4. evaluate `products.edit` permission once per Product Browser render instead of once per product card;
+5. normalize search text once per filtering pass;
+6. let browsers skip offscreen card layout/paint using `content-visibility: auto` while preserving the full DOM and all product actions.
 
-Detailed execution and verification are maintained only in:
-`docs/WEB_CLOUD_PRINT_REALTIME_WAKE_2026-10-02.md`
+Detailed execution and evidence are maintained only in:
+`docs/POS_PRODUCT_BROWSER_RENDER_PERFORMANCE_2026-10-03.md`
 
-## Historical reconciliation boundary
-- The supplier allocation work from PR #429 is already on latest `main` and remains untouched by this track.
-- The confirmed legacy `الفريدة` discrepancy is not mutated here.
-- No supplier payment or allocation data is changed by this print-load track.
+## Measured basis
+- Cleopatra active products: 249.
+- Smouha active products: 251.
+- Largest category in each branch: 22 products.
+- Product images already use `loading="lazy"`.
+- Latest POS route chunk: ~68.7 KB gzip; download size is not the main observed concern.
+- Current Production DB idle windows show no query/request storm.
+- Historical heavy POS availability RPCs are either already optimized/applied or legacy and unused by current POS quantity gating.
 
+## Definition of done
+This track is complete only when:
+- `ProductBrowser` is memoized with stable catalog-facing props;
+- `PosWorkspacePage` no longer passes a new configure callback every render;
+- offscreen product cards use browser-native content visibility;
+- product card IDs/actions/search/category/image behavior remain unchanged;
+- no DB/API/printing/KDS/payment/offline files are changed;
+- exact-head Fast Verify + Full Verify + DB/security/RLS + Browser Smoke are Green;
+- branch is reconciled with latest `main`;
+- merge occurs only with explicit approval.
+
+> Older work plans/logs are archival evidence only unless this file explicitly names them as active.

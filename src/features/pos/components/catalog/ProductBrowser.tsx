@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { ImagePlus, Loader2, LockKeyhole, Move, Package, Plus, ScanBarcode, Search, ShoppingCart, SlidersHorizontal, Timer, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/api';
@@ -31,7 +31,7 @@ interface ProductBrowserProps {
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
-export function ProductBrowser({ products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, shiftChecked, shiftOpen, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export const ProductBrowser = memo(function ProductBrowser({ products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, shiftChecked, shiftOpen, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -42,8 +42,10 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
   const [imageViewOverrides, setImageViewOverrides] = useState<Record<string, ProductImageView>>({});
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [savingImageView, setSavingImageView] = useState(false);
+  const canEditProducts = can('products.edit');
+  const normalizedSearch = useMemo(() => search.toLocaleLowerCase(), [search]);
 
-  const filteredProducts = useMemo(() => products.filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!search || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(search.toLocaleLowerCase())))), [products, search, selectedCategory]);
+  const filteredProducts = useMemo(() => products.filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!normalizedSearch || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)))), [products, normalizedSearch, selectedCategory]);
   const counts = useMemo(() => products.reduce<Record<string, number>>((accumulator, product) => {
     const key = product.category_id || '_none';
     accumulator[key] = (accumulator[key] || 0) + 1;
@@ -75,7 +77,7 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
   };
 
   const handleImageUpload = async (product: Product, file?: File) => {
-    if (!file || !product.branch_id || !can('products.edit') || uploadingProductId) return;
+    if (!file || !product.branch_id || !canEditProducts || uploadingProductId) return;
     setUploadingProductId(product.id);
     try {
       const { publicUrl } = await uploadProductImage(file, product.branch_id, product.id);
@@ -102,7 +104,7 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
 
   const handleImageViewSave = async (view: ProductImageView) => {
     const product = adjustingProduct;
-    if (!product || !product.branch_id || !can('products.edit') || savingImageView) return;
+    if (!product || !product.branch_id || !canEditProducts || savingImageView) return;
     setSavingImageView(true);
     try {
       const { error } = await supabase
@@ -203,11 +205,11 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
               const uploading = uploadingProductId === product.id;
               const imageView = imageViewOverrides[product.id] || { x: Number(product.image_position_x) || 0, y: Number(product.image_position_y) || 0, zoom: Number(product.image_zoom) || 1 };
               return (
-                <article key={product.id} data-testid={`pos-product-card-${product.id}`} className={`group relative flex min-h-[210px] flex-col overflow-hidden rounded-[22px] border bg-ui-surface text-start shadow-ui-sm transition sm:min-h-[190px] ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
+                <article key={product.id} data-testid={`pos-product-card-${product.id}`} style={{ contentVisibility: 'auto', containIntrinsicSize: '210px' }} className={`group relative flex min-h-[210px] flex-col overflow-hidden rounded-[22px] border bg-ui-surface text-start shadow-ui-sm transition sm:min-h-[190px] ${gated ? 'border-ui-border opacity-55' : 'border-ui-border hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-ui-md'}`}>
                   <button type="button" disabled={gated} onClick={() => selectProduct(product)} className={`relative h-32 w-full overflow-hidden bg-white text-start sm:h-28 ${gated ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <ProductImage src={imageUrl} name={productLabel} category={categoryLabel} className="h-full w-full" imgClassName="h-full w-full bg-white object-contain p-1.5" positionX={imageView.x} positionY={imageView.y} zoom={imageView.zoom} />
                   </button>
-                  {can('products.edit') && (
+                  {canEditProducts && (
                     <>
                       <label onClick={(event) => event.stopPropagation()} className="absolute start-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-ui-surface/95 text-ui-muted shadow-ui-sm backdrop-blur transition hover:text-ui-primary" title={isAr ? 'رفع صورة للمنتج' : 'Upload product photo'}>
                         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
@@ -254,4 +256,4 @@ export function ProductBrowser({ products, categories, search, selectedCategory,
       />
     </section>
   );
-}
+});
