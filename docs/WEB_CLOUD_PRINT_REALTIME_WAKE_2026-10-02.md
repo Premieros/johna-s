@@ -3,6 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/web-cloud-print-realtime-wake-20261002`
+Current PR: `#430`
 Baseline: `main@84f4a1d78dcbe9f637f1e19d26b33de24592da73`
 Last updated: 2026-10-02
 
@@ -50,8 +51,8 @@ Reduce historical Cloud Print polling/log load from the browser without requirin
 - Main baseline reconciled: complete.
 - Dedicated print accounts / current submitted jobs: verified read-only.
 - Existing wake table / RLS / both-branch trigger: verified.
-- Implementation: pending.
-- Unit contract tests: pending.
+- Implementation: complete on branch.
+- Unit contract tests: added; CI pending.
 - Fast Verify: pending.
 - Full Verify / Browser Smoke: pending.
 - Merge/deploy: pending.
@@ -68,4 +69,4 @@ Reduce historical Cloud Print polling/log load from the browser without requirin
 - Post-deploy dedicated-agent claims continue and idle `claim_cloud_print_jobs` rate stays near zero when the web fallback is not needed.
 
 ## Next action
-Implement the web-only wake/fallback change and regression tests on this branch.
+Run exact-head Fast Verify + Full Verify on PR #430, reconcile any failures on this branch only, then re-check live dedicated-agent health before merge/deploy.
