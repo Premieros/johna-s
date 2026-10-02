@@ -74,7 +74,7 @@ Harden the POS financial write path against duplicate/replayed operations withou
 3. make normal and split sale retries idempotent on the server;
 4. keep offline replay owner-safe and idempotent;
 5. fix the offline pending counter so delayed/blocked rows never disappear from operator visibility;
-6. no Production migration until exact-head Full Verify Green and a new explicit approval.
+6. Production idempotency migration is applied and verified; merge/deploy remains blocked until fresh exact-head Full Verify Green and explicit merge approval.
 
 Detailed execution and verification are maintained only in:
 `docs/POS_FINANCIAL_SAFETY_HARDENING_2026-10-02.md`
