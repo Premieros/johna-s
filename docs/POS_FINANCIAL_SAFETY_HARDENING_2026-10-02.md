@@ -74,18 +74,21 @@ Implemented server hardening, repository migration only until approved:
 - Integration + Security/RLS regressions: Green (165 files / 881 tests on the verified run after search_path fix).
 - Browser Smoke: Green on exact head `6637a5425531bc6bb872eb6b0325d177b36453b5`.
 - Exact-head Full Verify: Green on `6637a5425531bc6bb872eb6b0325d177b36453b5`; this documentation commit requires a fresh exact-head Verify before any Production gate can open.
-- Production migration: not applied.
+- Production migration `pos_sale_idempotency_guard_20261002`: applied to Production with explicit user approval and verified read-only.
 
 ## Production gate
 State: **BLOCKED**
-- No Production migration from this track has been applied.
-- Production application of any idempotency migration requires exact SQL review, exact-head Full Verify Green, impact/rollback review, and a new explicit user approval.
+- Production migration `pos_sale_idempotency_guard_20261002` was applied with explicit user approval after exact-head Full Verify Green.
+- Post-apply verification: private ledger exists with RLS enabled; anon/authenticated have no direct table access; both wrappers use `search_path=public, pg_temp`; anon has no EXECUTE; authenticated/service_role have intended EXECUTE; internal checks for auth.uid, branch access, `pos.payment.take`, operation ownership, advisory lock, and payload mismatch are present.
+- Post-apply financial integrity: duplicate branch/invoice groups 0; duplicate journal references 0; recent unbalanced journals 0; paid open empty shells 0; duplicate kitchen send rows 0.
+- PR #428 merge/deploy remains BLOCKED until a fresh exact-head Full Verify is Green after this documentation update and explicit merge approval is obtained.
+- Rollback before app deploy: drop the two wrapper RPCs and the private ledger table. Rollback after app deploy must restore the previous app release first, then remove the wrappers/table.
 
 ## Next action
 1. Run fresh exact-head Full Verify after this documentation-only commit.
 2. Re-check PR/head/main for parallel changes before any further write.
-3. If exact-head Full Verify is Green, keep Production gate BLOCKED until the exact migration scope, impact and rollback are presented and explicit Production approval is given.
-4. Do not merge PR #428 until Production sequencing and explicit merge approval are resolved.
+3. If exact-head Full Verify is Green, request explicit approval to mark PR #428 ready and merge/deploy.
+4. Do not merge PR #428 without that explicit approval.
 
 ## Mandatory update protocol
 - Before every repository write, verify latest `main` and expected branch HEAD.
