@@ -11,7 +11,6 @@ Last updated: 2026-10-03
 State: **BLOCKED**
 
 ## Guardrails
-- Audit first; no speculative migration.
 - No direct write to `main`; no force push; single writer.
 - Unexpected branch HEAD or latest-main movement => **STOP_AND_RECONCILE**.
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
@@ -21,45 +20,51 @@ State: **BLOCKED**
 - Printing / Print Agent / routing / KDS / kitchen / `send_to_kitchen` are frozen.
 
 ## Baseline
-- Latest `main` and this branch reconciled at `b44298405066e1bcf06cc8eb0e3678b1c7d21fc7`.
-- No open PR existed at branch creation or the latest reconcile.
-- Production contract parity is healthy and the prior idle performance baseline is healthy.
-- Accounting foundation exists: `journal_entries`, `journal_entry_lines`, `chart_of_accounts`, `account_mappings`, `_post_journal_entry`.
+- Latest `main` baseline: `b44298405066e1bcf06cc8eb0e3678b1c7d21fc7`.
+- Draft PR #433 is the sole active ERP-04 path.
+- Production remains healthy/read-only for this track.
+- Existing canonical accounting writer: `public._post_journal_entry`.
 
 ## Root-cause ledger
-1. ERP-04 is the next P0 roadmap item not formally closed.
-2. Sales delegate to `_process_sale_core`, which uses `_post_journal_entry`.
-3. Purchases, purchase returns, supplier treasury payments, treasury deposit/withdraw/transfer and manual journals use the central writer.
-4. Split sale/refund reuse the canonical journal and only replace collection-side cash/bank lines.
-5. Purchase delete is fail-closed once inventory/accounting postings exist; purchase edit uses reversal + replacement.
-6. `apply_stock_count` changes product/raw inventory through FIFO helpers but does not post GL.
-7. Existing manual `adjust_stock` and `adjust_raw_stock` post `inventory_fg|inventory_rm <-> stock_variance`.
-8. The required mappings exist for both active Production branches.
-9. `resolve_account_key` returns NULL when a mapping is absent, so a missing mapping can be used to verify fail-closed atomic rollback.
-10. Supabase CLI is not installed in the execution container and network package fetch timed out; migration naming will therefore follow the repository timestamp convention and this exception is recorded here.
+1. Sales, purchases, purchase returns, treasury flows and manual journals already converge on the central writer.
+2. Split sale/refund are intentional extensions of canonical journals, changing only collection-side cash/bank lines.
+3. Purchase delete is fail-closed after posting; purchase edit uses reversal + replacement.
+4. `apply_stock_count` changes product/raw inventory through FIFO helpers but previously did not post GL.
+5. Manual inventory adjustment semantics define the target accounts: `inventory_fg|inventory_rm <-> stock_variance`.
+6. Positive stock-count variance is valued from the count item's stored FIFO/average unit cost; negative variance uses the actual FIFO removal result.
+7. The required account mappings exist for both active Production branches.
+8. Supabase CLI is unavailable in the execution container and package fetch timed out; migration naming follows the existing repository timestamp convention only. Production migration history is untouched.
 
 ## Change ledger
-- Dedicated ERP-04 branch created from exact latest main.
-- Accounting-path audit completed for sale, split sale/refund, purchase correction/delete, treasury, manual journal and stock count.
-- Runtime implementation not yet committed at this checkpoint.
+Implemented on PR #433:
+- `supabase/migrations/20261003030000_erp04_stock_count_accounting_posting.sql`
+  - preserves existing permission, branch, lifecycle and FIFO paths;
+  - accumulates finished-goods and raw-material valuation deltas;
+  - posts one balanced `stock_count` journal through `_post_journal_entry`;
+  - uses `inventory_fg`, `inventory_rm`, and `stock_variance`;
+  - returns `journal_entry_id` without changing existing success/error keys.
+- `tests/integration/stock_count_accounting_posting.test.ts`
+  - mixed product increase + raw-material decrease with exact journal values;
+  - retry remains terminal and does not create a second journal;
+  - missing required mapping in an isolated test branch causes posting failure and verifies inventory/batches/status rollback.
+- No Production migration applied.
+- No printing/KDS/POS runtime file changed.
 
 ## Verification ledger
-- Production required tables: 54/54.
-- Production required RPC names: 154/154.
-- Central writer usage confirmed for canonical financial flows.
-- Stock-count accounting gap proven by live function-definition inspection and repository integration tests.
-- Existing stock-count tests cover FIFO/lifecycle/idempotent terminal state but do not assert GL posting.
-- Fast Verify: pending after implementation.
+- Branch/main reconcile before implementation: clean.
+- Draft PR: #433.
+- Migration and test re-fetched from the branch and structurally reviewed.
+- Focused DB integration: pending CI isolated PostgreSQL.
 - Full Verify / DB / Security-RLS / Browser Smoke: pending.
 - Production migration: none.
 
 ## Production gate
 State: **BLOCKED**
 - Production remains read-only.
-- Any future Production migration requires exact-head Full Verify Green, final reconcile and explicit user approval.
+- Do not apply the migration until exact-head Full Verify is Green, the PR is reconciled with latest main, and the user separately approves Production migration/merge actions.
 
 ## Next action
-Implement one additive migration that preserves the stock-count lifecycle but accumulates actual FIFO-valued product/raw variance and posts one balanced `stock_count` journal. Add DB-backed coverage for mixed positive/negative variance, one-journal idempotency and rollback on missing account mapping.
+Run exact-head CI on the final documentation/implementation head. Inspect failures narrowly. If all verify/db/browser gates are Green, perform final main/head reconcile and present the exact merge/Production migration decision for explicit approval.
 
 ## Mandatory update protocol
 - Re-read latest `main` and expected branch HEAD before every repository write.
