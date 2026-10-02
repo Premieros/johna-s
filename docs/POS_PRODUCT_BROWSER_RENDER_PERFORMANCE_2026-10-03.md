@@ -3,6 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `performance/pos-product-browser-render-20261003`
+Current PR: `#432`
 Baseline: `main@8bbd03a1350305c0948decc1955cc7eced6ebce5`
 Last updated: 2026-10-03
 
