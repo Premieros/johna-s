@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **POS operator label refresh containment**
+- Track: **Emergency hotfix — paid order reopen guard**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `e098667c1557d7e87d4b269712f89ee79344cb72`
-- Active development branch: `development/pos-operator-label-refresh-20261002`
-- Mandatory active work log: `docs/POS_OPERATOR_LABEL_REFRESH_2026-10-02.md`
+- Latest main baseline reconciled: `03efc4ccf154529cd584db20d91d231f4e30ebcc`
+- Active development branch: `hotfix/paid-order-reopen-guard-20261002`
+- Mandatory active work log: `docs/PAID_ORDER_REOPEN_GUARD_2026-10-02.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/pos-operator-label-refresh-20261002`
+4. `hotfix/paid-order-reopen-guard-20261002`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -68,24 +68,24 @@ The active emergency PR is the latest-main-synced stale-client duplicate sent-li
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Reduce avoidable POS operator-label database reads without changing operational semantics:
-1. keep `get_pos_order_operator_labels` authoritative and branch-scoped;
-2. reuse a very short-lived label snapshot only when the active order/cashier identity set is unchanged;
-3. force a refresh when that identity set changes or the short TTL expires;
-4. do not touch KDS, `send_to_kitchen`, inventory/FIFO, printing, payments, shifts, RLS, or Production DB;
-5. add regression coverage and run exact-head Full Verify before any merge.
+Contain the Cleopatra paid-order reopen incident without weakening financial or POS controls:
+1. settled kitchen quantity must be immutable through sent-item Void and must use the Refund path;
+2. successful Void of the final unresolved addition must reconcile a previously paid partial order to completed when no unsent/unsettled quantity remains;
+3. sent-only settlement remains supported, but the UI must clearly distinguish partial settlement from full order completion;
+4. no Production migration until exact-head Full Verify Green and a second explicit approval;
+5. preserve KDS routing, FIFO quantities/costs, printing, shift attribution, branch isolation, Permission-First, and RLS.
 
 Detailed execution and verification are maintained only in:
-`docs/POS_OPERATOR_LABEL_REFRESH_2026-10-02.md`
+`docs/PAID_ORDER_REOPEN_GUARD_2026-10-02.md`
 
 ## Definition of done
 This track is complete only when:
-- repeated active-order refreshes with the same active order/cashier identity reuse the bounded operator-label cache;
-- identity changes force a fresh authoritative RPC;
-- cache TTL is short and branch-scoped;
-- exact-head Full Verify is Green;
-- no Production database change is made;
-- merge happens only after explicit approval;
-- no POS/KDS/printing/inventory regression is introduced.
+- paid/settled kitchen quantity cannot be voided through the sent-item Void RPC;
+- legitimate unsettled Void still restores inventory exactly once;
+- an open paid order auto-completes after its final unresolved addition is removed;
+- partial settlement receipts are visibly marked as partial/open rather than completed;
+- exact-head Full Verify is Green including DB/security/RLS and Browser Smoke;
+- no Production migration is applied before explicit approval;
+- post-deploy read-only checks show no new paid open-order shells.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
