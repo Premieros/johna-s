@@ -207,7 +207,10 @@ class OfflineSyncEngine {
     });
 
     if (pendingItems.length === 0) {
-      this.pendingCount = 0;
+      // "Nothing eligible right now" is not the same as "queue empty".
+      // Backoff/blocked/dead-letter rows remain operator-visible until they are
+      // explicitly reconciled or removed.
+      this.pendingCount = await getPendingSalesCount();
       this.emit();
       return { successCount: 0, failedCount: 0 };
     }
