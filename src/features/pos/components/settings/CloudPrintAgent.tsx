@@ -20,6 +20,7 @@ import {
 
 const REALTIME_RECONCILE_INTERVAL_MS = 60_000;
 const DISCONNECTED_POLL_INTERVAL_MS = 5_000;
+const BUSY_RETRY_INTERVAL_MS = 250;
 const TRANSPORT_CHECK_INTERVAL_MS = 5_000;
 
 function printRouteForStation(station: string, routes: Record<string, string>): string {
@@ -147,6 +148,7 @@ export function CloudPrintAgent() {
       if (cancelled) return;
       if (busy.current) {
         wakePending = true;
+        scheduleClaim(BUSY_RETRY_INTERVAL_MS);
         return;
       }
       scheduleClaim(delayMs);
@@ -156,6 +158,7 @@ export function CloudPrintAgent() {
       if (cancelled) return;
       if (busy.current) {
         wakePending = true;
+        scheduleClaim(BUSY_RETRY_INTERVAL_MS);
         return;
       }
 
