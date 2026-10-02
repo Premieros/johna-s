@@ -95,6 +95,9 @@ export function PosWorkspacePage() {
   // Quick Modals State
   const [configProduct, setConfigProduct] = useState<Product | null>(null);
   const [configItem, setConfigItem] = useState<CartItem | null>(null);
+  const handleConfigureProduct = useCallback((product: Product) => {
+    setConfigProduct(product);
+  }, []);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [tableModalOpen, setTableModalOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
@@ -875,7 +878,7 @@ export function PosWorkspacePage() {
               onSearch={setSearch}
               onSelectCategory={setSelectedCategory}
               onAddToCart={pos.addToCart}
-              onConfigureProduct={(p) => setConfigProduct(p)}
+              onConfigureProduct={handleConfigureProduct}
               inputRef={barcodeRef}
             />
           </div>
