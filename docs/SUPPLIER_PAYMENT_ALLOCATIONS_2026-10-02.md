@@ -47,11 +47,12 @@ State: **BLOCKED**
 - No Production DDL or data mutation has been applied.
 
 ## Verification ledger
-- First PR Verify run #3597 failed only at the mandatory work-log gate before code tests.
-- Failure reason: required structural headings were missing from this active log.
-- The branch pointer in `CURRENT_WORK_PLAN.md` already matched the PR head.
-- Work-log structure is being corrected in this commit.
-- Unit, typecheck, build, DB integration, and browser smoke remain pending until the gate passes.
+- Verify run #3597 failed only at the mandatory work-log gate; the required headings were then added.
+- Verify run #3598 passed the work-log gate, locked Supabase identity check, frontend API-contract check, lint, application typecheck, test-suite typecheck, unit suite, build, canonical migration apply, and schema verification.
+- DB integration then ran 882 tests; 881 passed and the only failure was this track's new allocation test.
+- The failure was test-only: apply/unapply events created inside the same transaction can share a timestamp, while the assertion incorrectly depended on row order.
+- Commit `ffc1b279ab15024cac47c3d846e47421f63f1764` makes that assertion order-independent; allocation SQL behavior was not changed.
+- Exact-head Full Verify must now be rerun on the post-log HEAD.
 
 ## Production gate
 State: **BLOCKED**
@@ -61,7 +62,7 @@ State: **BLOCKED**
 - No merge until exact-head Full Verify is Green and the user explicitly approves merge/deploy.
 
 ## Next action
-1. Re-run exact-head Verify after this log repair.
+1. Re-run exact-head Full Verify after the order-independent integration assertion fix.
 2. Fix only proven failures on this branch.
 3. Reconcile any overlap with PR #428 before merge.
 4. Present Green evidence and the exact Production migration/data-reconciliation scope for explicit approval.
