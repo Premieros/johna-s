@@ -1,65 +1,74 @@
-# SUPPLIER PAYMENT ALLOCATIONS — WORK LOG
+# SUPPLIER PAYMENT ALLOCATIONS — ACTIVE WORK LOG
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/supplier-payment-allocations-20261002`
-Base: `main@746b0538b55de88173d0d070d9ff54ca8ea31f42`
-Date: 2026-10-02
+Current PR: `#429`
+Last updated: 2026-10-02
 
 Execution mode: **SINGLE_WRITER**
 Parallel execution: **FORBIDDEN**
 Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
-## Parallel-work isolation
-- PR #428 / `development/pos-financial-safety-hardening-20261002` is open and is treated as external parallel work.
-- This branch updates `docs/CURRENT_WORK_PLAN.md` only to satisfy the execution fence. It does not edit `supabase/api-contract.json` or any POS/offline files touched by PR #428.
-- Before every write, this branch HEAD must equal the previous expected HEAD.
-- Before merge/rebase, reconcile against latest `main` after PR #428 state is known.
-- No Production DDL/data mutation from this branch without a separate explicit approval after exact-head verification.
+## Work status
+State: **BLOCKED**
 
-## Objective
-Introduce an ERP-style supplier payment allocation subledger so that:
-1. supplier payment is the immutable cash/bank event;
-2. allocation to purchase invoices is recorded independently;
-3. invoice correction can transfer managed allocations without losing payment history;
-4. purchase returns can release excess managed allocations into unapplied supplier credit;
-5. legacy payment rows remain audit history and are not guessed into allocations;
-6. `purchases.paid_amount` remains a compatibility mirror during migration, not the long-term source of truth.
+## Guardrails
+- No direct write to `main`.
+- No force push.
+- No Production migration or historical supplier data rewrite before exact-head verification and explicit approval.
+- Preserve treasury transactions, journal posting semantics, Permission-First, branch isolation, RLS, FIFO, KDS, printing, payments, and shifts.
+- Existing supplier payment rows remain legacy audit history; do not guess historical allocations.
+- PR #428 is external parallel work. Do not edit its POS/offline files or `supabase/api-contract.json`.
+- `docs/CURRENT_WORK_PLAN.md` overlap exists only because each executable branch must declare its own active track; reconcile that file before merge.
 
-## Confirmed legacy incident
-- Supplier: الفريدة.
-- Historical payment: 12,900.
-- Current applied mirror after invoice correction: 8,600.
-- The missing 4,300 allocation was lost when the old invoice revision was reversed/replaced.
-- This track will prevent recurrence. Historical settlement of الفريدة is a separate controlled data-reconciliation step.
+## Baseline
+- Branch base: `main@746b0538b55de88173d0d070d9ff54ca8ea31f42`.
+- Production supplier payment flow already posts real treasury transactions and AP journals.
+- Production supplier balance currently relies on `purchases.paid_amount` / returns for canonical payable.
+- Historical example: الفريدة has a 12,900 payment row but only 8,600 remains applied after an invoice correction.
 
-## Implementation status
-State: **IMPLEMENTED_ON_BRANCH / VERIFICATION_PENDING**
+## Root-cause ledger
+- `supplier_payments` records the payment event, but the prior model did not persist how a general payment was distributed across multiple invoices.
+- `purchases.paid_amount` therefore acted as both compatibility mirror and allocation truth.
+- `update_purchase_invoice` reverses/replaces a purchase; for a paid credit invoice the replacement can start with zero applied payment.
+- Without a durable allocation subledger, the payment survives in treasury/journal history while its invoice allocation can be lost.
+- Paid purchase returns can also create supplier credit that the old AP presentation does not model explicitly.
 
-## Implemented
-- Add append-only `supplier_payment_allocations` event table.
-- Mark new supplier payments as allocation-managed while leaving existing rows legacy.
-- Add internal allocation/apply/unapply helpers with branch/supplier/payment/invoice validation.
-- Capture allocation events from the existing `pay_supplier_from_treasury` flow without changing its treasury or journal posting body; the managed payment id is transaction-local and purchase/opening-balance updates record exact allocation events.
-- Add safe release/transfer behavior for managed allocations during paid invoice correction and purchase returns.
-- Added unit contract coverage plus integration coverage for multi-invoice allocation, return-driven unapply, automatic reuse of released credit, and fail-closed legacy settlement.
-- Treasury and journal posting functions are unchanged.
-- Migration file: `supabase/migrations/20261002220000_supplier_payment_allocation_ledger.sql`.
-- Tests: `tests/unit/supplierPaymentAllocationLedger.test.ts` and `tests/integration/supplier_payment_allocations.test.ts`.
-- Production remains untouched.
+## Change ledger
+- Added `supplier_payments.allocation_mode`; existing rows are backfilled to `legacy`, future rows default to `managed`.
+- Added append-only `supplier_payment_allocations` apply/unapply event table with branch/supplier/payment/target identity.
+- Added transaction-local capture so the existing supplier-payment RPC records exact purchase/opening-balance allocation events without changing its treasury or journal body.
+- Added managed-allocation release when a paid credit purchase is reduced by correction/return.
+- Added automatic reuse of released managed credit on later completed credit invoices.
+- Added fail-closed protection for legacy paid invoices when a correction would otherwise require an unprovable allocation.
+- Added unit contract coverage and integration coverage for multi-invoice apply, return unapply, credit reuse, and legacy fail-closed behavior.
+- No Production DDL or data mutation has been applied.
+
+## Verification ledger
+- First PR Verify run #3597 failed only at the mandatory work-log gate before code tests.
+- Failure reason: required structural headings were missing from this active log.
+- The branch pointer in `CURRENT_WORK_PLAN.md` already matched the PR head.
+- Work-log structure is being corrected in this commit.
+- Unit, typecheck, build, DB integration, and browser smoke remain pending until the gate passes.
 
 ## Production gate
 State: **BLOCKED**
-- No Production migration.
-- No historical data rewrite.
-- No merge until exact-head verification is Green and the user explicitly approves merge/deploy.
+- Migration not applied to Production.
+- الفريدة not changed.
+- No historical payment row changed.
+- No merge until exact-head Full Verify is Green and the user explicitly approves merge/deploy.
 
+## Next action
+1. Re-run exact-head Verify after this log repair.
+2. Fix only proven failures on this branch.
+3. Reconcile any overlap with PR #428 before merge.
+4. Present Green evidence and the exact Production migration/data-reconciliation scope for explicit approval.
 
-## Verification ledger
-- Branch execution fence reconciled at HEAD `c3173fb675c39b06471c6fa882b863ca4de6eda0`.
-- Forward migration implementation: complete on branch.
-- Unit contract test: committed; CI pending.
-- Integration regression: committed; CI pending.
-- Exact-head Full Verify: pending.
-- PR #428 overlap: only `docs/CURRENT_WORK_PLAN.md` is intentionally overlapping; `supabase/api-contract.json` and POS files remain untouched.
+## Mandatory update protocol
+- Verify branch HEAD before every repository write.
+- Unexpected HEAD/divergence => **STOP_AND_RECONCILE**.
+- Repository writes are sequential only.
+- Update this log after each meaningful implementation or verification checkpoint.
+- Do not merge, deploy, apply Production migration, or settle legacy supplier data before exact-head Green and explicit approval.
