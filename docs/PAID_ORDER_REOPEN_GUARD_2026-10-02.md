@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/paid-order-reopen-guard-20261002`
-Current PR: `#0`
+Current PR: `#427`
 Last updated: 2026-10-02
 
 ## Work status
@@ -48,10 +48,10 @@ State: **BLOCKED**
 ## Verification ledger
 - Production incident read-only reconstruction: complete.
 - Targeted Production incident repair: complete.
-- Migration implementation: pending.
-- UI implementation: pending.
-- Integration regression: pending.
-- Unit/UI regression: pending.
+- Migration implementation: complete on branch.
+- UI implementation: complete on branch.
+- Integration regression: added; CI pending.
+- Unit/UI regression: added; CI pending.
 - Exact-head Full Verify: pending.
 - Production migration: not applied.
 
@@ -61,11 +61,10 @@ State: **BLOCKED**
 - Applying the hotfix migration to Production requires a new explicit approval after Green verification.
 
 ## Next action
-1. Add the forward-only migration and UI containment.
-2. Add regressions reproducing paid-item Void and paid-open-shell behavior.
-3. Open a Draft PR.
-4. Run exact-head Full Verify.
-5. Present SQL scope, impact, rollback, and Green evidence for explicit Production approval.
+1. Draft PR #427 is open.
+2. Run exact-head Full Verify.
+3. Reconcile any code/test/schema failures without touching Production.
+4. If Green, present the migration scope, impact, rollback, and evidence for explicit Production approval.
 
 ## Mandatory update protocol
 - Before every repository write, verify expected branch HEAD and latest `main`.
