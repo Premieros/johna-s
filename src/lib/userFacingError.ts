@@ -159,6 +159,10 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'تعذر إكمال إلغاء الصنف المرسل. حدّث الطلب وحاول مرة أخرى.',
     en: 'The sent-item void could not be completed. Refresh the order and retry.',
   },
+  PAID_ITEM_REFUND_REQUIRED: {
+    ar: 'لا يمكن عمل Void لصنف تم تحصيله بالفعل. استخدم المرتجع (Refund) لعكس العملية المالية.',
+    en: 'This item has already been settled. Use Refund to reverse the financial sale.',
+  },
   ORDER_OPERATOR_REQUIRED: {
     ar: 'الطلب مسجل على مستخدم آخر، والإجراء الحالي غير مسموح بصلاحياتك على هذا الطلب. استخدم الإجراء المخصص أو اطلب الصلاحية المناسبة.',
     en: 'This order belongs to another operator, and your current permission does not allow this action. Use the dedicated action or request the appropriate permission.',
