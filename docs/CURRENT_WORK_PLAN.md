@@ -1,18 +1,19 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Supplier payment allocation ledger**
+- Track: **Web Cloud Print realtime wake hardening**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `84f4a1d78dcbe9f637f1e19d26b33de24592da73`
-- Active development branch: `development/supplier-payment-allocations-20261002`
-- Mandatory active work log: `docs/SUPPLIER_PAYMENT_ALLOCATIONS_2026-10-02.md`
+- Latest main baseline reconciled: `04ed847f726049f87055eafba079ce51e7cb2db4`
+- Active development branch: `hotfix/web-cloud-print-realtime-wake-20261002-r2`
+- Mandatory active work log: `docs/WEB_CLOUD_PRINT_REALTIME_WAKE_2026-10-02.md`
 
-## Reconciled predecessor now on main
+## Reconciled predecessors now on main
 - PR #428 — POS financial safety hardening — is merged on `main` at `84f4a1d78dcbe9f637f1e19d26b33de24592da73`.
-- Its POS/offline/idempotency files and `supabase/api-contract.json` are inherited from latest `main` unchanged by this track.
-- This supplier track must not regress POS idempotency, offline replay, KDS, printing, FIFO, shift, or accounting protections.
+- PR #429 — supplier payment allocation subledger — is merged on `main` at `04ed847f726049f87055eafba079ce51e7cb2db4`.
+- Their POS/offline/idempotency and supplier-allocation files are inherited from latest `main` unchanged by this track.
+- This print-load track must not regress POS idempotency, supplier allocations, KDS, FIFO, shifts, accounting, or installed Print Agent behavior.
 
 ## Repository branch policy
 Long-lived branches intentionally preserved:
@@ -21,7 +22,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/supplier-payment-allocations-20261002`
+4. `hotfix/web-cloud-print-realtime-wake-20261002-r2`
 
 ## Safety fence
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -33,36 +34,25 @@ Current temporary active development branch:
 - No force push.
 - Unexpected HEAD => **STOP_AND_RECONCILE**.
 - No weakening Permission-First, branch isolation, RLS, tests, or Super Admin implicit-bypass rules.
-- No Production supplier-data rewrite/reset/reseed to make tests pass.
-- Historical supplier payments must not be guessed into allocations.
+- No Production data rewrite/reset/reseed to make tests pass.
+- Installed Print Agent executables/configuration are frozen; no reinstall is required or permitted by this track.
 
 ## Current objective
-Add an auditable ERP-style supplier payment allocation subledger while preserving treasury and journal truth:
-1. keep `supplier_payments` as the real cash/bank event;
-2. record allocation to purchase invoices/opening balances independently;
-3. support append-only apply/unapply history;
-4. preserve managed settlement through purchase corrections and returns;
-5. retain overpayment as unapplied supplier credit;
-6. keep historical rows legacy unless separately reconciled;
-7. keep `purchases.paid_amount` only as a compatibility mirror during transition.
+Reduce historical browser Cloud Print polling/log load without touching installed restaurant Print Agent programs:
+1. replace the browser 700ms durable-queue polling loop with existing branch-filtered `cloud_print_wake_state` Realtime wake;
+2. retain immediate initial drain of already-pending jobs;
+3. reconcile every 60s while Realtime is confirmed subscribed;
+4. fall back to 5s polling only while Realtime is unavailable;
+5. preserve the existing local printer transport check before every durable claim;
+6. keep the same `claim_cloud_print_jobs` / `start_cloud_print_job` / `complete_cloud_print_job` contracts;
+7. do not modify Print Agent V8/V7 executables, installers, local configuration, printer routes, payloads, migrations, or `send_to_kitchen`;
+8. require no reinstall at Smouha or Cleopatra.
 
 Detailed execution and verification are maintained only in:
-`docs/SUPPLIER_PAYMENT_ALLOCATIONS_2026-10-02.md`
+`docs/WEB_CLOUD_PRINT_REALTIME_WAKE_2026-10-02.md`
 
 ## Historical reconciliation boundary
-- The confirmed legacy `الفريدة` discrepancy is not mutated by the forward migration.
-- Its 12,900 historical supplier payment remains intact.
-- Any settlement of `الفريدة` is a separate controlled reconciliation after the forward model is Production-verified.
+- The supplier allocation work from PR #429 is already on latest `main` and remains untouched by this track.
+- The confirmed legacy `الفريدة` discrepancy is not mutated here.
+- No supplier payment or allocation data is changed by this print-load track.
 
-## Definition of done
-This track is complete only when:
-- every new managed supplier payment application is represented by immutable allocation events;
-- multi-invoice allocation remains auditable and branch/supplier-safe;
-- paid purchase correction/return cannot silently lose a managed settlement;
-- legacy paid invoices fail closed when a needed allocation cannot be proven;
-- released managed credit remains visible and reusable;
-- exact-head Full Verify is Green including DB/security/RLS and Browser Smoke;
-- latest `main` is reconciled without losing PR #428 protections;
-- no supplier Production migration or historical reconciliation occurs without explicit approval.
-
-> Older work plans/logs are archival evidence only unless this file explicitly names them as active.

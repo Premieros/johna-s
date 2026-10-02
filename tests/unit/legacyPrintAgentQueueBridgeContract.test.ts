@@ -12,7 +12,7 @@ describe('legacy print agent durable queue bridge', () => {
   });
 
   it('checks local print transport before claiming jobs', () => {
-    const transportAt = source.indexOf('if (!(await ensurePrintTransport())) return;');
+    const transportAt = source.indexOf('transportReady = await ensurePrintTransport();');
     const claimAt = source.indexOf('claimCloudPrintJobs(branchId, agentId, 12)');
     expect(transportAt).toBeGreaterThanOrEqual(0);
     expect(claimAt).toBeGreaterThan(transportAt);
