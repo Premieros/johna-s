@@ -164,11 +164,11 @@ describe.skipIf(skip)('ERP-04 stock-count accounting posting', () => {
     await client.query(`SELECT public.seed_account_mappings($1)`, [branchId]);
 
     await client.query(`SELECT public.ensure_chart_of_accounts($1)`, [rollbackBranchId]);
+    await client.query(`SELECT public.seed_account_mappings($1)`, [rollbackBranchId]);
     await client.query(
-      `INSERT INTO public.account_mappings(branch_id,semantic_key,account_id)
-       SELECT $1,'inventory_fg',id
-       FROM public.chart_of_accounts
-       WHERE branch_id=$1 AND code='1200'`,
+      `UPDATE public.account_mappings
+       SET semantic_key='stock_variance_missing_probe'
+       WHERE branch_id=$1 AND semantic_key='stock_variance'`,
       [rollbackBranchId],
     );
   });
