@@ -55,7 +55,9 @@ State: **BLOCKED**
 - Commit `ffc1b279ab15024cac47c3d846e47421f63f1764` made that assertion order-independent.
 - Exact-head Full Verify run #3600 then completed **Green** on pre-reconciliation HEAD `b65c15d7dc39a0bd55e3b24112bee6a8b2963896`.
 - After #3600, PR #428 merged and advanced `main` to `84f4a1d78dcbe9f637f1e19d26b33de24592da73`.
-- This merge reconciliation requires a fresh exact-head Full Verify before the gate can open.
+- Reconciliation commit `7155967817c2266a1f048016b18bc8863fd79339` rebased the effective tree onto latest `main` without force push.
+- Exact-head Full Verify run #3602 completed **Green** on that reconciled head: app/unit/build Green, canonical DB migrations/schema Green, integration + Security/RLS Green, and Browser Smoke Green.
+- This documentation-only checkpoint now requires one final exact-head Full Verify before the gate can open.
 
 ## Production gate
 State: **BLOCKED**
@@ -65,10 +67,10 @@ State: **BLOCKED**
 - No merge/deploy until exact-head Full Verify is Green on the latest-main-reconciled head and the user explicitly approves merge/deploy.
 
 ## Next action
-1. Complete latest-main reconciliation as a two-parent merge commit without force push.
-2. Run fresh exact-head Full Verify on the reconciled PR #429 head.
-3. Fix only proven failures on this branch.
-4. Present Green evidence and the exact supplier Production migration/reconciliation scope for explicit approval.
+1. Run one final exact-head Full Verify after this documentation-only checkpoint.
+2. Re-check latest `main` and PR mergeability without changing code.
+3. If Green, present the exact supplier Production migration scope for explicit merge/deploy approval.
+4. Keep historical `الفريدة` reconciliation separate until the forward model is deployed and verified.
 
 ## Mandatory update protocol
 - Verify branch HEAD and latest `main` before every repository write.
