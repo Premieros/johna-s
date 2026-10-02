@@ -12,6 +12,7 @@ describe('web cloud print realtime wake contract', () => {
     expect(source).not.toContain('setTimeout(() => void poll(), 700');
     expect(source).toContain('const REALTIME_RECONCILE_INTERVAL_MS = 60_000;');
     expect(source).toContain('const DISCONNECTED_POLL_INTERVAL_MS = 5_000;');
+    expect(source).toContain('const BUSY_RETRY_INTERVAL_MS = 250;');
   });
 
   it('wakes from the existing branch-filtered durable print Realtime state', () => {
@@ -40,6 +41,7 @@ describe('web cloud print realtime wake contract', () => {
   it('drains real work immediately and coalesces wake events while busy', () => {
     expect(source).toContain('if (busy.current) {');
     expect(source).toContain('wakePending = true;');
+    expect(source).toContain('scheduleClaim(BUSY_RETRY_INTERVAL_MS);');
     expect(source).toContain('if (jobs.length > 0) {');
     expect(source).toContain('await executeClaimedBatch(jobs, agentId);');
     expect(source).toContain('const delayMs = wakePending');
