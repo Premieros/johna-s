@@ -15,7 +15,8 @@ describe('POS shared branch shift settlement contract', () => {
 
   it('uses the resolved shift for normal and split settlement', () => {
     expect(paymentService).toContain('const settlementPayload = {');
-    expect(paymentService).toContain('processSplitSaleForOrder({ ...splitBase, p_payments: splitPayments })');\n    expect(paymentService).toContain('posApi.processSaleSplitIdempotent(payload)');
+    expect(paymentService).toContain('processSplitSaleForOrder({ ...splitBase, p_payments: splitPayments })');
+    expect(paymentService).toContain('posApi.processSaleSplitIdempotent(payload)');
     expect(paymentService).toContain('posApi.processSaleIdempotent(settlementPayload)');
   });
 });
