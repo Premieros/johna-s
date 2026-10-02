@@ -879,7 +879,6 @@ export function usePosOrder(input: UsePosOrderInput) {
       if (!result?.success) { show(result?.detail || result?.error || t('error'), 'error'); return false; }
       const saleId = result.sale_id || '';
       const confirmedInvoiceNumber = result.invoice_number || invoiceNumber;
-      saleAttemptRef.current = null;
 
       await logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total });
 
@@ -913,6 +912,10 @@ export function usePosOrder(input: UsePosOrderInput) {
       setTableId(null);
       setActiveTable(null);
       setGuestCount(null);
+      // Clear retry identity only after the confirmed sale has been reflected
+      // into local workspace state. Any earlier local failure must replay the
+      // same server operation instead of allocating a second sale.
+      saleAttemptRef.current = null;
       show(t('saleCompleted'), 'success');
 
       if (effSettings?.receipt_auto_print) {
