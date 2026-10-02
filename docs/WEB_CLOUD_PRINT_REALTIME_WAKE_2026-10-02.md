@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/web-cloud-print-realtime-wake-20261002-r2`
-Current PR: `#0`
+Current PR: `#431`
 Baseline: `main@04ed847f726049f87055eafba079ce51e7cb2db4`
 Last updated: 2026-10-02
 
@@ -13,7 +13,7 @@ State: **BLOCKED**
 ## Baseline
 - Repository baseline: `main@04ed847f726049f87055eafba079ce51e7cb2db4`.
 - Active branch: `hotfix/web-cloud-print-realtime-wake-20261002-r2`.
-- Reconciliation branch is rebased by reconstruction from latest main; replacement PR not opened yet.
+- Replacement PR #431 is open as Draft on the clean latest-main reconciliation branch.
 - No Production migration is part of this track.
 - Installed Smouha/Cleopatra Print Agent executables and local configuration are frozen.
 
@@ -101,7 +101,7 @@ State: **BLOCKED**
 - Post-deploy dedicated-agent claims continue and idle `claim_cloud_print_jobs` rate stays near zero when the web fallback is not needed.
 
 ## Next action
-Open the replacement Draft PR, run exact-head Fast Verify + Full Verify, reconcile any failures on this branch only, then re-check live dedicated-agent health before merge/deploy.
+Run exact-head Fast Verify + Full Verify on PR #431, reconcile any failures on this branch only, then re-check live dedicated-agent health before merge/deploy.
 
 ## Mandatory update protocol
 - Before every repository write, verify latest `main` and expected branch HEAD.
