@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/pos-financial-safety-hardening-20261002`
-Current PR: `#0`
+Current PR: `#428`
 Last updated: 2026-10-02
 
 ## Work status
@@ -59,13 +59,13 @@ Planned server hardening, repository migration only until approved:
 ## Verification ledger
 - Production read-only integrity audit: complete.
 - Existing main Verify/Deploy after PR #427: Green.
-- Client mutex implementation: pending.
-- Offline pending-count repair: pending.
-- Server idempotency migration implementation: pending.
-- Same-tick double-submit regression: pending.
-- Same-key two-session server concurrency regression: pending.
-- Lost-response/retry regression: pending.
-- Offline retry/reconciliation regression: pending.
+- Client mutex implementation: complete on branch.
+- Offline pending-count repair: complete on branch.
+- Server idempotency migration implementation: complete on branch; not applied to Production.
+- Same-tick double-submit contract regression: added; CI pending.
+- Same-key two-session server concurrency regression: added; CI pending.
+- Lost-response/retry behavior is covered by same-key replay returning the original response; CI pending.
+- Offline replay contract updated to stable operation keys; CI pending.
 - Exact-head Full Verify: pending.
 - Production migration: not applied.
 
