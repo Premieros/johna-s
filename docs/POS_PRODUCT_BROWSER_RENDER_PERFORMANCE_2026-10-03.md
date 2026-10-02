@@ -41,21 +41,23 @@ State: **BLOCKED**
 - Merge only after exact-head Full Verify Green and explicit merge approval.
 
 ## Change ledger
-Planned:
-- Memoize `ProductBrowser` so stable catalog props do not rerender on unrelated parent/cart state changes.
-- Stabilize `onConfigureProduct` in `PosWorkspacePage`.
-- Evaluate `products.edit` once per browser render instead of once per product card.
-- Normalize search text once per render/filter pass.
-- Add CSS `content-visibility: auto` with intrinsic card size so offscreen cards can skip layout/paint while all products remain in the DOM and behavior stays unchanged.
-- Add a contract test locking these performance properties and prohibiting pagination/behavioral gating.
+Implemented:
+- Memoized `ProductBrowser` so stable catalog props can reuse the full browser subtree during unrelated parent/cart state changes.
+- Stabilized `onConfigureProduct` in `PosWorkspacePage` with `useCallback`.
+- Evaluates `products.edit` once per browser render instead of once per product card.
+- Normalizes search text once per filter pass without trimming or changing search semantics.
+- Added `content-visibility: auto` plus intrinsic card size so offscreen cards can skip layout/paint while all products remain in the DOM.
+- Added `posProductBrowserRenderPerformanceContract.test.ts` to lock memoization, callback stability, single permission evaluation, full-product mapping, content visibility and action identity.
+- No pagination, product hiding, product reorder, API/DB call, pricing, cart, checkout, kitchen, KDS, printing or offline behavior change.
 
 ## Verification ledger
 - Production active product counts measured read-only: Cleopatra 249, Smouha 251.
 - Largest category measured read-only: 22 products in each branch.
 - Production DB idle checks: no blocked locks; no idle claim polling storm.
 - Latest build bundle reviewed.
-- Implementation: pending.
-- Unit contract: pending.
+- Implementation: complete on branch.
+- Unit contract: added; CI pending.
+- Branch diff verified against latest main: only CURRENT_WORK_PLAN, active worklog, ProductBrowser, PosWorkspacePage and the new unit contract are changed.
 - Fast Verify: pending.
 - Full Verify / DB / Browser Smoke: pending.
 - Production migration: none by design.
@@ -86,4 +88,4 @@ State: **BLOCKED**
 - Keep State **BLOCKED** until exact-head Full Verify Green and merge approval.
 
 ## Next action
-Update CURRENT_WORK_PLAN to this track, implement the frontend-only render optimization, add regression coverage, then run exact-head verification.
+Open a Draft PR, run exact-head Fast Verify + Full Verify, reconcile any failure without broadening scope, then request explicit merge approval only after every gate is Green.
