@@ -402,7 +402,6 @@ export function usePosOrder(input: UsePosOrderInput) {
         payments?: Array<{ payment_method: string; amount: number }>;
       };
       const confirmedInvoiceNumber = extended.invoice_number || invoiceNumber;
-      saleAttemptRef.current = null;
       const receipt = buildSettlementReceipt(preview, confirmedInvoiceNumber, paidAmountToUse, extended.payments || []);
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
@@ -410,6 +409,9 @@ export function usePosOrder(input: UsePosOrderInput) {
       setSettlementPreview(null);
       base.setCheckoutOpen(false);
       base.setPaidAmount(0);
+      // The sale is durable and the receipt state is now local. Only now may
+      // the next checkout allocate a fresh logical operation identity.
+      saleAttemptRef.current = null;
 
       if (input.effSettings?.receipt_auto_print) {
         const saleId = extended.sale_id || '';
