@@ -33,6 +33,23 @@ describe('POS financial safety hardening contract', () => {
     expect(wrapper).toContain('extended.invoice_number || invoiceNumber');
   });
 
+  it('keeps retry identity until confirmed sale state is reflected locally', () => {
+    const base = read('src/features/pos/hooks/usePosOrderBase.ts');
+    const wrapper = read('src/features/pos/hooks/usePosOrder.ts');
+
+    const baseConfirmed = base.indexOf('const confirmedInvoiceNumber = result.invoice_number || invoiceNumber');
+    const baseLocalReset = base.indexOf('setGuestCount(null)', baseConfirmed);
+    const baseAttemptClear = base.indexOf('saleAttemptRef.current = null', baseConfirmed);
+    expect(baseConfirmed).toBeGreaterThanOrEqual(0);
+    expect(baseAttemptClear).toBeGreaterThan(baseLocalReset);
+
+    const wrapperReceipt = wrapper.indexOf('const receipt = buildSettlementReceipt');
+    const wrapperReceiptState = wrapper.indexOf('setSettlementReceipt(receipt)', wrapperReceipt);
+    const wrapperAttemptClear = wrapper.indexOf('saleAttemptRef.current = null', wrapperReceipt);
+    expect(wrapperReceipt).toBeGreaterThanOrEqual(0);
+    expect(wrapperAttemptClear).toBeGreaterThan(wrapperReceiptState);
+  });
+
   it('routes normal, split, IndexedDB and legacy replay through idempotent RPCs', () => {
     const payment = read('src/features/pos/services/payment.ts');
     const sync = read('src/core/offline/syncEngine.ts');
