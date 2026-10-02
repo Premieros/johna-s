@@ -46,15 +46,18 @@ State: **BLOCKED**
 5. Offline sync currently sets `pendingCount = 0` when no row is eligible for the current automatic attempt, even if blocked/dead-letter/backoff rows remain stored.
 
 ## Change ledger
-Planned code-only containment:
-- Add synchronous in-hook financial mutation mutexes before the first await in both direct and linked/offline checkout paths.
-- Fix offline pendingCount to reflect all unsynced stored rows rather than only currently eligible rows.
+Implemented code-only containment:
+- Added synchronous in-hook financial mutation mutexes before the first await in direct, linked-order, and explicit-offline checkout paths.
+- Fixed offline pendingCount to reflect all unsynced stored rows, including deferred/blocked/dead-letter/backoff rows.
+- Retained the same logical sale operation identity until the confirmed Sale has been reflected into local workspace/receipt state.
 
-Planned server hardening, repository migration only until approved:
-- Add nullable `sales.client_operation_key` plus a branch-scoped unique index.
-- Add idempotent sale wrapper RPCs that take a stable client operation key, take a transaction-scoped advisory lock, return the already-created sale on retry, and delegate the first execution to the existing canonical normal/split sale RPCs.
-- Keep existing RPCs available for compatibility; switch active POS/offline replay callers to the idempotent wrappers.
-- Reuse one operation key across an ambiguous manual retry until success or the checkout context is intentionally reset.
+Implemented server hardening, repository migration only until approved:
+- Added private table `private.pos_sale_idempotency` keyed by `(branch_id, operation_key)`; no direct client access.
+- Added `process_sale_idempotent` and `process_sale_split_idempotent` wrappers using a transaction-scoped advisory lock, stable request hash, actor ownership check, and replay of the original response.
+- Same operation key + different financial payload fails closed with `IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD`.
+- Existing canonical `process_sale` / `process_sale_split` bodies remain unchanged for compatibility.
+- Active POS, IndexedDB replay, and legacy offline replay now use the idempotent wrappers.
+- Browser E2E verifies `p_client_operation_key` is sent on completed checkout.
 
 ## Verification ledger
 - Production read-only integrity audit: complete.
@@ -62,11 +65,15 @@ Planned server hardening, repository migration only until approved:
 - Client mutex implementation: complete on branch.
 - Offline pending-count repair: complete on branch.
 - Server idempotency migration implementation: complete on branch; not applied to Production.
-- Same-tick double-submit contract regression: added; CI pending.
-- Same-key two-session server concurrency regression: added; CI pending.
-- Lost-response/retry behavior is covered by same-key replay returning the original response; CI pending.
-- Offline replay contract updated to stable operation keys; CI pending.
-- Exact-head Full Verify: pending.
+- Same-tick double-submit contract regression: Green.
+- Same-key two-session server concurrency regression: Green; idempotency integration test 3/3 passed.
+- Same-key replay after an ambiguous/lost response returns the original Sale/result: Green.
+- Split-tender replay does not duplicate tenders or shift operations: Green.
+- Offline replay contract uses stable operation keys: Green.
+- Fresh DB migration/schema verification: Green.
+- Integration + Security/RLS regressions: Green (165 files / 881 tests on the verified run after search_path fix).
+- Browser Smoke: Green on exact head `6637a5425531bc6bb872eb6b0325d177b36453b5`.
+- Exact-head Full Verify: Green on `6637a5425531bc6bb872eb6b0325d177b36453b5`; this documentation commit requires a fresh exact-head Verify before any Production gate can open.
 - Production migration: not applied.
 
 ## Production gate
@@ -75,11 +82,10 @@ State: **BLOCKED**
 - Production application of any idempotency migration requires exact SQL review, exact-head Full Verify Green, impact/rollback review, and a new explicit user approval.
 
 ## Next action
-1. Add code-only client mutex and offline pending-count repair.
-2. Add the server-idempotency migration and active caller wiring on this branch only.
-3. Add concurrency/retry/offline regressions.
-4. Open Draft PR and run exact-head Full Verify.
-5. Present exact migration scope and verification evidence before any Production DB change.
+1. Run fresh exact-head Full Verify after this documentation-only commit.
+2. Re-check PR/head/main for parallel changes before any further write.
+3. If exact-head Full Verify is Green, keep Production gate BLOCKED until the exact migration scope, impact and rollback are presented and explicit Production approval is given.
+4. Do not merge PR #428 until Production sequencing and explicit merge approval are resolved.
 
 ## Mandatory update protocol
 - Before every repository write, verify latest `main` and expected branch HEAD.
