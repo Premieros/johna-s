@@ -946,10 +946,61 @@
       ]
     },
     {
+      "name": "process_sale_idempotent",
+      "params": [
+        "bonus_amount",
+        "branch_id",
+        "client_operation_key",
+        "customer_id",
+        "discount_amount",
+        "discount_type",
+        "guest_count",
+        "invoice_number",
+        "items",
+        "order_id",
+        "order_type",
+        "paid_amount",
+        "payment_method",
+        "salesperson_id",
+        "shift_id",
+        "status",
+        "subtotal",
+        "table_id",
+        "tax_amount",
+        "total",
+        "warehouse_id"
+      ]
+    },
+    {
       "name": "process_sale_split",
       "params": [
         "bonus_amount",
         "branch_id",
+        "customer_id",
+        "discount_amount",
+        "discount_type",
+        "guest_count",
+        "invoice_number",
+        "items",
+        "order_id",
+        "order_type",
+        "payments",
+        "salesperson_id",
+        "shift_id",
+        "status",
+        "subtotal",
+        "table_id",
+        "tax_amount",
+        "total",
+        "warehouse_id"
+      ]
+    },
+    {
+      "name": "process_sale_split_idempotent",
+      "params": [
+        "bonus_amount",
+        "branch_id",
+        "client_operation_key",
         "customer_id",
         "discount_amount",
         "discount_type",
