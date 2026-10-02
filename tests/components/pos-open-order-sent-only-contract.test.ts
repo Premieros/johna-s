@@ -5,6 +5,7 @@ const workspace = readFileSync('src/features/pos/pages/PosWorkspacePage.tsx', 'u
 const publicHook = readFileSync('src/features/pos/hooks/usePosOrder.ts', 'utf8');
 const previewService = readFileSync('src/features/pos/services/settlementPreview.ts', 'utf8');
 const migration = readFileSync('supabase/migrations/20260917084500_sent_only_order_settlement.sql', 'utf8');
+const paidOrderGuard = readFileSync('supabase/migrations/20261002194500_paid_order_reopen_guard.sql', 'utf8');
 
 describe('POS sent-only settlement contract', () => {
   it('derives payable and printable quantities from authoritative unsettled kitchen events', () => {
@@ -41,7 +42,19 @@ describe('POS sent-only settlement contract', () => {
     expect(migration).toContain('v_remaining_unsent <= 0.000001');
     expect(migration).toContain("SET status = 'completed'");
     expect(publicHook).toContain('if (extended.order_completed)');
-    expect(publicHook).toContain('Unsent additions remain on the open order.');
+    expect(publicHook).toContain('Only part of the order was settled; the order is still open');
+    expect(publicHook).toContain("preview.unsent_quantity > 0");
+    expect(publicHook).toContain("setSettlementReceiptOrderCompleted(Boolean(extended.order_completed))");
+    expect(workspace).toContain("pos.receiptOrderCompleted === false");
+    expect(workspace).toContain('Partial payment recorded — order is still open');
+  });
+
+  it('prevents kitchen Void from crossing the financial settlement boundary', () => {
+    expect(paidOrderGuard).toContain("'PAID_ITEM_REFUND_REQUIRED'");
+    expect(paidOrderGuard).toContain('v_unsettled_available');
+    expect(paidOrderGuard).toContain('v_settled_active');
+    expect(paidOrderGuard).toContain('private.reconcile_paid_order_after_kitchen_void');
+    expect(paidOrderGuard).toContain("SET status='completed'");
   });
 
   it('keeps the first-send UI gate in the workspace', () => {
