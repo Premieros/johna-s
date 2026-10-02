@@ -43,6 +43,15 @@ describe('offline financial truth contract', () => {
     expect(remove).toBeGreaterThan(confirmGuard);
   });
 
+  it('keeps deferred, blocked and dead-letter sales visible in the pending counter', () => {
+    const sync = read('src/core/offline/syncEngine.ts');
+    const storage = read('src/core/offline/offlineStorage.ts');
+
+    expect(sync).toContain('this.pendingCount = await getPendingSalesCount()');
+    expect(storage).toContain("items.filter((i) => i.status !== 'synced').length");
+    expect(sync).not.toContain('if (pendingItems.length === 0) {\\n      this.pendingCount = 0;');
+  });
+
   it('uses one durable IndexedDB queue and includes the branch cache required by OfflineContext', () => {
     const storage = read('src/core/offline/offlineStorage.ts');
 
