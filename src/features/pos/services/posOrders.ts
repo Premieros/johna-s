@@ -21,6 +21,38 @@ type ActiveOrderSnapshotRow = Order & {
   order_kitchen_sends?: OrderKitchenSend[] | null;
 };
 
+const OPERATOR_LABEL_CACHE_TTL_MS = 15_000;
+
+type OperatorLabelCacheEntry = {
+  signature: string;
+  fetchedAt: number;
+  labels: PosOrderOperatorLabel[];
+};
+
+const operatorLabelCache = new Map<string, OperatorLabelCacheEntry>();
+
+function activeOrderOperatorSignature(rows: ActiveOrderSnapshotRow[]): string {
+  return rows
+    .map((row) => `${row.id}:${row.cashier_id ?? ''}`)
+    .sort()
+    .join('|');
+}
+
+async function getOperatorLabels(branchId: string, rows: ActiveOrderSnapshotRow[]): Promise<PosOrderOperatorLabel[]> {
+  const signature = activeOrderOperatorSignature(rows);
+  const now = Date.now();
+  const cached = operatorLabelCache.get(branchId);
+  if (cached && cached.signature === signature && now - cached.fetchedAt < OPERATOR_LABEL_CACHE_TTL_MS) {
+    return cached.labels;
+  }
+
+  const operatorRes = await supabase.rpc('get_pos_order_operator_labels', { p_branch_id: branchId });
+  const labels = (operatorRes.data as PosOrderOperatorLabel[] | null) || [];
+  operatorLabelCache.set(branchId, { signature, fetchedAt: now, labels });
+  return labels;
+}
+
+
 type PosOrderAccessResult = {
   success?: boolean;
   error?: string;
@@ -38,21 +70,21 @@ export type MyActiveTableOrderResolution = {
 };
 
 export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeData> {
-  const [tRes, oRes, operatorRes] = await Promise.all([
+  const [tRes, oRes] = await Promise.all([
     supabase.from('dining_tables').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
     supabase.from('orders')
       .select('*, table:dining_tables(*), order_items!order_items_order_id_fkey(*), order_kitchen_sends!order_kitchen_sends_order_id_fkey(*)')
       .eq('branch_id', branchId)
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),
-    // Do not broaden public.users RLS just to show occupied-table ownership.
-    // The RPC exposes only a branch-scoped display label for active POS orders.
-    supabase.rpc('get_pos_order_operator_labels', { p_branch_id: branchId }),
   ]);
   const tables = (tRes.data as DiningTable[]) || [];
-  const operatorLabels = (operatorRes.data as PosOrderOperatorLabel[] | null) || [];
-  const operatorByOrder = new Map(operatorLabels.map((row) => [row.order_id, row]));
   const snapshotRows = (oRes.data as ActiveOrderSnapshotRow[] | null) || [];
+  // Do not broaden public.users RLS just to show occupied-table ownership.
+  // Reuse a narrowly scoped label snapshot only while the active order/cashier
+  // identity set is unchanged, and refresh it after a very short TTL.
+  const operatorLabels = await getOperatorLabels(branchId, snapshotRows);
+  const operatorByOrder = new Map(operatorLabels.map((row) => [row.order_id, row]));
   const watchedOrderIds = snapshotRows.map((order) => order.id);
 
   let orderItems = snapshotRows.flatMap((order) => order.order_items || []);

@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Raw negative known-cost fallback**
+- Track: **POS operator label refresh containment**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `729e30f4471679751220a51c6fd53f3d9a1d3dc2`
-- Active development branch: `development/raw-negative-known-cost-fallback-20260930`
-- Mandatory active work log: `docs/RAW_NEGATIVE_KNOWN_COST_FALLBACK_2026-09-30.md`
+- Latest main baseline reconciled: `e098667c1557d7e87d4b269712f89ee79344cb72`
+- Active development branch: `development/pos-operator-label-refresh-20261002`
+- Mandatory active work log: `docs/POS_OPERATOR_LABEL_REFRESH_2026-10-02.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `development/raw-negative-known-cost-fallback-20260930`
+4. `development/pos-operator-label-refresh-20261002`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -68,25 +68,24 @@ The active emergency PR is the latest-main-synced stale-client duplicate sent-li
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Correct estimated valuation for negative raw-material debt when a real known price already exists, without altering physical quantities or actual accounting:
-1. keep `inventory_ledger.total_cost`, journal COGS, sales, purchases and historical quantities unchanged;
-2. resolve estimate price from same-warehouse real FIFO issue first, then normalized positive inventory-ledger receipt/purchase price, then real batch price, then `raw_materials.default_cost`;
-3. leave price at zero only when no known price exists anywhere in that hierarchy;
-4. apply the fallback consistently to new oversold batches and estimated negative-consumption reporting;
-5. preserve branch/warehouse isolation and all POS/KDS/Print Agent behavior;
-6. verify Smouha and Cleopatra valuation changes read-only before any Production migration.
+Reduce avoidable POS operator-label database reads without changing operational semantics:
+1. keep `get_pos_order_operator_labels` authoritative and branch-scoped;
+2. reuse a very short-lived label snapshot only when the active order/cashier identity set is unchanged;
+3. force a refresh when that identity set changes or the short TTL expires;
+4. do not touch KDS, `send_to_kitchen`, inventory/FIFO, printing, payments, shifts, RLS, or Production DB;
+5. add regression coverage and run exact-head Full Verify before any merge.
 
 Detailed execution and verification are maintained only in:
-`docs/RAW_NEGATIVE_KNOWN_COST_FALLBACK_2026-09-30.md`
+`docs/POS_OPERATOR_LABEL_REFRESH_2026-10-02.md`
 
 ## Definition of done
 This track is complete only when:
-- known-price zero-cost negative debt no longer remains zero in estimate/reporting;
-- truly unpriced materials remain explicitly unpriced;
-- no physical inventory quantity is rewritten;
-- no actual FIFO ledger cost or accounting journal is rewritten;
-- exact-head Full Verify is Green including DB/security/RLS and Browser Smoke;
-- Production migration is applied only after Green verification and approval;
-- post-deploy read-only checks confirm both branches and no POS/KDS/printing regression.
+- repeated active-order refreshes with the same active order/cashier identity reuse the bounded operator-label cache;
+- identity changes force a fresh authoritative RPC;
+- cache TTL is short and branch-scoped;
+- exact-head Full Verify is Green;
+- no Production database change is made;
+- merge happens only after explicit approval;
+- no POS/KDS/printing/inventory regression is introduced.
 
 > Older work plans/logs are archival evidence only unless this file explicitly names them as active.
