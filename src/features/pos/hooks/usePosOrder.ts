@@ -4,7 +4,7 @@ import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { cartToItems, type ItemPayload } from '../utils/cart';
-import { nextInvoiceNumber, processSaleForOrder } from '../services/payment';
+import { createSaleOperationKey, nextInvoiceNumber, processSaleForOrder } from '../services/payment';
 import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/settlementPreview';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, openPrintWindow, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
@@ -40,6 +40,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const perms = usePosPermissions();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
   const saleMutationLockRef = useRef(false);
+  const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
@@ -244,7 +245,39 @@ export function usePosOrder(input: UsePosOrderInput) {
       try {
         const invoiceNumber = await nextInvoiceNumber();
         const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : base.paidAmount || base.total;
+        const itemsPayload = cartToItems(base.cart);
+        const binding = resolveOrderBindingForSave({
+          activeOrderId: base.activeOrderId,
+          orderType: base.orderType,
+          tableId: base.tableId,
+          activeTableId: base.activeTable?.id ?? null,
+        });
+        const attemptFingerprint = JSON.stringify({
+          mode: 'offline',
+          branchId: input.branchId,
+          shiftId: input.activeShift.id,
+          customerId: base.customerId || null,
+          subtotal: base.subtotal,
+          discountValue: base.discountValue,
+          discountType: base.discountType,
+          taxAmount: base.taxAmount,
+          total: base.total,
+          paidAmountToUse,
+          paymentMethod: base.paymentMethod,
+          items: itemsPayload,
+          orderType: binding.orderType,
+          tableId: binding.tableId,
+          orderId: base.activeOrderId,
+          guestCount: base.guestCount,
+        });
+        if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== attemptFingerprint) {
+          saleAttemptRef.current = {
+            fingerprint: attemptFingerprint,
+            operationKey: createSaleOperationKey(),
+          };
+        }
         const { result, error } = await processSaleForOrder({
+          p_client_operation_key: saleAttemptRef.current.operationKey,
           p_invoice_number: invoiceNumber,
           p_branch_id: input.branchId,
           p_shift_id: input.activeShift.id,
@@ -260,9 +293,9 @@ export function usePosOrder(input: UsePosOrderInput) {
           p_paid_amount: paidAmountToUse,
           p_payment_method: base.paymentMethod,
           p_status: 'completed',
-          p_items: cartToItems(base.cart),
-          p_order_type: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).orderType,
-          p_table_id: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).tableId,
+          p_items: itemsPayload,
+          p_order_type: binding.orderType,
+          p_table_id: binding.tableId,
           p_order_id: base.activeOrderId,
           p_guest_count: base.guestCount,
         });
@@ -272,6 +305,7 @@ export function usePosOrder(input: UsePosOrderInput) {
           return false;
         }
 
+        saleAttemptRef.current = null;
         base.resetWorkspace();
         show(
           isAr
@@ -301,7 +335,38 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       const invoiceNumber = await nextInvoiceNumber();
       const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : (base.paidAmount || preview.total);
+      const binding = resolveOrderBindingForSave({
+        activeOrderId: base.activeOrderId,
+        orderType: base.orderType,
+        tableId: base.tableId,
+        activeTableId: base.activeTable?.id ?? null,
+      });
+      const attemptFingerprint = JSON.stringify({
+        mode: 'linked',
+        branchId: input.branchId,
+        shiftId: input.activeShift.id,
+        warehouseId: preview.warehouse_id || null,
+        customerId: base.customerId || null,
+        subtotal: preview.subtotal,
+        discountAmount: preview.discount_amount,
+        taxAmount: preview.tax_amount,
+        total: preview.total,
+        paidAmountToUse,
+        paymentMethod: base.paymentMethod,
+        items: preview.items,
+        orderType: binding.orderType,
+        tableId: binding.tableId,
+        orderId: base.activeOrderId,
+        guestCount: base.guestCount,
+      });
+      if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== attemptFingerprint) {
+        saleAttemptRef.current = {
+          fingerprint: attemptFingerprint,
+          operationKey: createSaleOperationKey(),
+        };
+      }
       const { result, error } = await processSaleForOrder({
+        p_client_operation_key: saleAttemptRef.current.operationKey,
         p_invoice_number: invoiceNumber,
         p_branch_id: input.branchId,
         p_shift_id: input.activeShift.id,
@@ -318,8 +383,8 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_payment_method: base.paymentMethod,
         p_status: 'completed',
         p_items: preview.items,
-        p_order_type: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).orderType,
-        p_table_id: resolveOrderBindingForSave({ activeOrderId: base.activeOrderId, orderType: base.orderType, tableId: base.tableId, activeTableId: base.activeTable?.id ?? null }).tableId,
+        p_order_type: binding.orderType,
+        p_table_id: binding.tableId,
         p_order_id: base.activeOrderId,
         p_guest_count: base.guestCount,
       });
@@ -333,9 +398,12 @@ export function usePosOrder(input: UsePosOrderInput) {
         order_completed?: boolean;
         remaining_unsent_quantity?: number;
         sale_id?: string;
+        invoice_number?: string;
         payments?: Array<{ payment_method: string; amount: number }>;
       };
-      const receipt = buildSettlementReceipt(preview, invoiceNumber, paidAmountToUse, extended.payments || []);
+      const confirmedInvoiceNumber = extended.invoice_number || invoiceNumber;
+      saleAttemptRef.current = null;
+      const receipt = buildSettlementReceipt(preview, confirmedInvoiceNumber, paidAmountToUse, extended.payments || []);
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
       setSettlementReceiptOrderCompleted(Boolean(extended.order_completed));
