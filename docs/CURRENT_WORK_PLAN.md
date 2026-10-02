@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Emergency hotfix — paid order reopen guard**
+- Track: **Supplier payment allocation ledger**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `03efc4ccf154529cd584db20d91d231f4e30ebcc`
-- Active development branch: `hotfix/paid-order-reopen-guard-20261002`
-- Mandatory active work log: `docs/PAID_ORDER_REOPEN_GUARD_2026-10-02.md`
+- Latest main baseline reconciled: `746b0538b55de88173d0d070d9ff54ca8ea31f42`
+- Active development branch: `development/supplier-payment-allocations-20261002`
+- Mandatory active work log: `docs/SUPPLIER_PAYMENT_ALLOCATIONS_2026-10-02.md`
 
 ## Emergency hotfix now reconciled from main
 - PR #407 — POS duplicate persisted line identity — merged to main at `bb4cac71c3a6f57d1d75b5b5d23f6d75c319549f`.
@@ -40,7 +40,7 @@ Long-lived branches intentionally preserved:
 3. `development/smouha-v811-realtime-final`
 
 Current temporary active development branch:
-4. `hotfix/paid-order-reopen-guard-20261002`
+4. `development/supplier-payment-allocations-20261002`
 
 All other normal development branches are temporary and should be deleted after verified merge/closure.
 
@@ -68,15 +68,10 @@ The active emergency PR is the latest-main-synced stale-client duplicate sent-li
 - Runtime changes must remain safe for currently operating Smouha and Cleopatra branches.
 
 ## Current objective
-Contain the Cleopatra paid-order reopen incident without weakening financial or POS controls:
-1. settled kitchen quantity must be immutable through sent-item Void and must use the Refund path;
-2. successful Void of the final unresolved addition must reconcile a previously paid partial order to completed when no unsent/unsettled quantity remains;
-3. sent-only settlement remains supported, but the UI must clearly distinguish partial settlement from full order completion;
-4. no Production migration until exact-head Full Verify Green and a second explicit approval;
-5. preserve KDS routing, FIFO quantities/costs, printing, shift attribution, branch isolation, Permission-First, and RLS.
+Add an auditable supplier payment allocation subledger while preserving the existing treasury and journal truth. New payments must record invoice/opening-balance allocations independently; paid invoice corrections and returns must not silently lose settlement history. Historical rows remain unchanged unless separately reconciled.
 
 Detailed execution and verification are maintained only in:
-`docs/PAID_ORDER_REOPEN_GUARD_2026-10-02.md`
+`docs/SUPPLIER_PAYMENT_ALLOCATIONS_2026-10-02.md`
 
 ## Definition of done
 This track is complete only when:
