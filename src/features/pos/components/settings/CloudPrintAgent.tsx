@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCan } from '@/lib/permissions';
 import {
@@ -17,7 +18,9 @@ import {
   isSilentPrintEnabled,
 } from '../../services/localPrintAgent';
 
-const POLL_INTERVAL_MS = 700;
+const REALTIME_RECONCILE_INTERVAL_MS = 60_000;
+const DISCONNECTED_POLL_INTERVAL_MS = 5_000;
+const BUSY_RETRY_INTERVAL_MS = 250;
 const TRANSPORT_CHECK_INTERVAL_MS = 5_000;
 
 function printRouteForStation(station: string, routes: Record<string, string>): string {
@@ -115,10 +118,13 @@ export function CloudPrintAgent() {
     if (!branchId) return;
 
     const agentId = getCloudPrintAgentId();
+    const canUseRealtimeWake = can('pos.print_kitchen') || can('pos.receipt.print');
     let cancelled = false;
     let timer = 0;
     let transportAvailable = false;
     let lastTransportCheckAt = 0;
+    let realtimeConnected = false;
+    let wakePending = false;
 
     const ensurePrintTransport = async (): Promise<boolean> => {
       const now = Date.now();
@@ -132,32 +138,96 @@ export function CloudPrintAgent() {
       return transportAvailable;
     };
 
+    const scheduleClaim = (delayMs: number) => {
+      if (cancelled) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void poll(), delayMs);
+    };
+
+    const requestClaim = (delayMs = 0) => {
+      if (cancelled) return;
+      if (busy.current) {
+        wakePending = true;
+        scheduleClaim(BUSY_RETRY_INTERVAL_MS);
+        return;
+      }
+      scheduleClaim(delayMs);
+    };
+
     const poll = async () => {
       if (cancelled) return;
       if (busy.current) {
-        timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
+        wakePending = true;
+        scheduleClaim(BUSY_RETRY_INTERVAL_MS);
         return;
       }
+
       busy.current = true;
+      let transportReady = false;
+      let claimFailed = false;
       try {
         // Never claim durable jobs unless Electron or the legacy localhost print
         // service can actually see a Windows printer. This leaves jobs pending
         // instead of burning retry attempts while the local service is offline.
-        if (!(await ensurePrintTransport())) return;
+        transportReady = await ensurePrintTransport();
+        if (!transportReady) return;
+
         const jobs = await claimCloudPrintJobs(branchId, agentId, 12);
-        if (jobs.length > 0) await executeClaimedBatch(jobs, agentId);
+        if (jobs.length > 0) {
+          await executeClaimedBatch(jobs, agentId);
+          // Drain immediately while real work exists. Idle traffic is governed by
+          // Realtime wake / slow reconciliation below.
+          wakePending = true;
+        }
       } catch (error) {
+        claimFailed = true;
         console.warn('[cloud-print-agent] poll failed', error);
       } finally {
         busy.current = false;
-        if (!cancelled) timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
+        if (!cancelled) {
+          const delayMs = wakePending
+            ? 0
+            : (!realtimeConnected || !transportReady || claimFailed)
+              ? DISCONNECTED_POLL_INTERVAL_MS
+              : REALTIME_RECONCILE_INTERVAL_MS;
+          wakePending = false;
+          scheduleClaim(delayMs);
+        }
       }
     };
 
-    void poll();
+    const channel = supabase
+      .channel(`cloud-print-wake-web-${branchId}-${agentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cloud_print_wake_state',
+          filter: `branch_id=eq.${branchId}`,
+        },
+        () => requestClaim(0),
+      )
+      .subscribe((status) => {
+        realtimeConnected = canUseRealtimeWake && status === 'SUBSCRIBED';
+        if (status === 'SUBSCRIBED') {
+          // Reconcile once after every (re)subscription because Realtime does not
+          // replay rows that may have been missed during a disconnect.
+          requestClaim(0);
+          return;
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          requestClaim(DISCONNECTED_POLL_INTERVAL_MS);
+        }
+      });
+
+    // Drain any durable work that existed before the Realtime subscription joined.
+    requestClaim(0);
+
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      void supabase.removeChannel(channel);
     };
   }, [can, configVersion, user?.id]);
 
