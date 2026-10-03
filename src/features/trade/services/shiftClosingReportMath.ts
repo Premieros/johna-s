@@ -47,16 +47,50 @@ export function isDrawerExpenseOperation(operation: ShiftOperationLike): boolean
     || (operation.operation_type === 'cash_out' && operation.reference_type === 'expense');
 }
 
+export function isDrawerExpenseReversalOperation(operation: ShiftOperationLike): boolean {
+  const paymentMethod = String(operation.payment_method || 'cash').toLowerCase();
+  if (paymentMethod !== 'cash') return false;
+
+  return operation.operation_type === 'cash_in'
+    && operation.reference_type === 'expense_reversal';
+}
+
 export function summarizeExpenseSources(
   totalExpenses: number,
   operations: ShiftOperationLike[],
   explicitDrawerExpenses?: number,
 ) {
-  const drawerOperations = operations.filter(isDrawerExpenseOperation);
-  const computedDrawerExpenses = drawerOperations.reduce(
-    (sum, operation) => sum + Number(operation.amount || 0),
-    0,
-  );
+  const drawerNetByExpenseId = new Map<string, number>();
+  let unreferencedDrawerNet = 0;
+
+  for (const operation of operations) {
+    const isOutflow = isDrawerExpenseOperation(operation);
+    const isReversal = isDrawerExpenseReversalOperation(operation);
+    if (!isOutflow && !isReversal) continue;
+
+    const signedAmount = (isOutflow ? 1 : -1) * Number(operation.amount || 0);
+    const referenceId = operation.reference_id || null;
+
+    if (referenceId) {
+      drawerNetByExpenseId.set(
+        referenceId,
+        (drawerNetByExpenseId.get(referenceId) || 0) + signedAmount,
+      );
+    } else {
+      unreferencedDrawerNet += signedAmount;
+    }
+  }
+
+  const activeDrawerExpenseIds = Array.from(drawerNetByExpenseId.entries())
+    .filter(([, netAmount]) => netAmount > 0.009)
+    .map(([referenceId]) => referenceId);
+
+  const computedDrawerExpenses = Math.max(0, unreferencedDrawerNet)
+    + Array.from(drawerNetByExpenseId.values()).reduce(
+      (sum, netAmount) => sum + Math.max(0, netAmount),
+      0,
+    );
+
   const drawerExpenses = money(
     explicitDrawerExpenses === undefined ? computedDrawerExpenses : explicitDrawerExpenses,
   );
@@ -65,10 +99,6 @@ export function summarizeExpenseSources(
   return {
     drawerExpenses,
     nonDrawerExpenses: money(Math.max(0, total - drawerExpenses)),
-    drawerExpenseIds: Array.from(new Set(
-      drawerOperations
-        .map((operation) => operation.reference_id)
-        .filter((id): id is string => Boolean(id)),
-    )),
+    drawerExpenseIds: activeDrawerExpenseIds,
   };
 }

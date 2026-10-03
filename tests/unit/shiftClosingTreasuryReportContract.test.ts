@@ -56,6 +56,38 @@ describe('shift closing treasury presentation math', () => {
       drawerExpenseIds: ['drawer-expense'],
     });
   });
+
+  it('nets a reversed drawer expense back out of drawer-expense totals', () => {
+    const result = summarizeExpenseSources(250, [
+      {
+        operation_type: 'expense',
+        payment_method: 'cash',
+        reference_type: 'expense',
+        reference_id: 'reversed-expense',
+        amount: 1000,
+      },
+      {
+        operation_type: 'cash_in',
+        payment_method: 'cash',
+        reference_type: 'expense_reversal',
+        reference_id: 'reversed-expense',
+        amount: 1000,
+      },
+      {
+        operation_type: 'expense',
+        payment_method: 'cash',
+        reference_type: 'expense',
+        reference_id: 'active-expense',
+        amount: 250,
+      },
+    ]);
+
+    expect(result).toEqual({
+      drawerExpenses: 250,
+      nonDrawerExpenses: 0,
+      drawerExpenseIds: ['active-expense'],
+    });
+  });
 });
 
 describe('shift closing report integration contract', () => {

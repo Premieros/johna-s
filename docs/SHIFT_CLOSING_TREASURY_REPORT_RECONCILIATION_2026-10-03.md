@@ -37,6 +37,7 @@ State: **BLOCKED**
 5. The two 1,000 EGP Smouha expenses were posted from organization `main_cash`, not the cashier drawer; no shift expense operation exists for them.
 6. A4 labels `netSales` as “Net Revenue” while thermal text separately prints `netRevenue`, creating conflicting terminology.
 7. Expense details do not explain whether an expense affected the cashier drawer or another treasury/bank source.
+8. Expense reversal is a separate drawer edge case: `reverse_shift_expense` writes a cash `cash_in` with `reference_type='expense_reversal'` on the same expense id, so drawer-expense presentation must net the original outflow and reversal instead of counting only the original expense.
 
 ## Change ledger
 - Added pure report math helpers for:
@@ -49,7 +50,8 @@ State: **BLOCKED**
 - A4 and thermal drawer reconciliation distinguish drawer expenses from expenses outside the drawer.
 - Expense detail rows expose whether the expense affected the shift drawer.
 - Net-sales / after-expenses terminology is aligned between A4 and thermal.
-- Added regression tests using the verified Smouha figures.
+- Drawer expense math now nets `expense` / expense-linked `cash_out` against matching `cash_in + expense_reversal` by `reference_id`, so voided expenses cannot remain shown as active drawer outflows.
+- Added regression tests using the verified Smouha figures plus an explicit reversed-drawer-expense case.
 - No DB migration and no Production write.
 
 ## Verification ledger
@@ -58,12 +60,13 @@ State: **BLOCKED**
 - First CI run `37085538353` stopped at the mandatory worklog gate before lint/tests.
 - Root cause: required worklog headings and three literal plan guardrail phrases were missing.
 - Runtime/report code was not implicated in that failure.
-- Documentation-only correction is being applied before re-running exact-head CI.
-- Supabase Preview is skipped for this PR because preview-per-PR is disabled and this track has no DB migration.
+- Documentation-only correction was applied.
 - Exact-head `7013bcdb8df0f96b8d21aeb7af1391b7054dc1f3` passed worklog gate, lint, app typecheck and test-suite typecheck.
 - Unit suite result on that head: 1,339 passed; the new shift/treasury tests all passed; one pre-existing thermal readability contract failed only because it requires the literal heading `طرق الدفع / PAYMENTS`.
 - Compatibility fix `e9ddfc6e0fb71611c53e95d5d6e149ee212fac05` preserves that literal heading as `طرق الدفع / PAYMENTS (المحصلة فقط)` while keeping credit/employee-credit excluded from collected tenders.
-- No runtime financial logic changed in response to the compatibility failure.
+- Follow-up exact-head `f1e16a0503ccfcebe58c7a96cdf5cf387cc290c1` reached verify Green and DB integration/security Green while browser-smoke was still running.
+- Pre-merge audit then found the expense-reversal edge case above; merge remained blocked and a regression fix was added before final CI.
+- Supabase Preview is skipped for this PR because preview-per-PR is disabled and this track has no DB migration.
 
 ## Production gate
 State: **BLOCKED**
@@ -72,7 +75,7 @@ State: **BLOCKED**
 - Merge requires exact-head verify/db/browser-smoke Green plus final main/head reconcile and explicit user approval.
 
 ## Next action
-Re-run exact-head CI after the documentation-only gate correction. If verify, DB/security/RLS and browser smoke are Green, perform final reconcile and present PR #434 for explicit merge approval.
+Run exact-head CI after the expense-reversal regression fix. If verify, DB/security/RLS and browser smoke are Green, perform final reconcile and present PR #434 for explicit merge approval.
 
 ## Mandatory update protocol
 - Re-read latest `main` and expected branch HEAD before every repository write.
