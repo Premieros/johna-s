@@ -45,7 +45,7 @@ CREATE OR REPLACE FUNCTION public.record_user_issue(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO public, private, pg_temp
+SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_user uuid := auth.uid();
@@ -123,7 +123,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
-SET search_path TO public, private, pg_temp
+SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_user uuid := auth.uid();
@@ -199,7 +199,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
-SET search_path TO public, private, pg_temp
+SET search_path TO public, pg_temp
 AS $function$
 DECLARE
   v_user uuid := auth.uid();
@@ -271,6 +271,7 @@ BEGIN
         )::int AS sales_without_shift_count
       FROM scoped_branches sb
       LEFT JOIN public.sales s ON s.branch_id = sb.id
+        AND s.created_at >= v_from AND s.created_at < v_to
       GROUP BY sb.id
     ),
     print_stats AS (
@@ -309,6 +310,7 @@ BEGIN
         ),0)::numeric AS purchase_value
       FROM scoped_branches sb
       LEFT JOIN public.purchases p ON p.branch_id = sb.id
+        AND p.created_at >= v_from AND p.created_at < v_to
       GROUP BY sb.id
     ),
     expense_stats AS (
@@ -324,6 +326,7 @@ BEGIN
         ),0)::numeric AS expense_value
       FROM scoped_branches sb
       LEFT JOIN public.expenses e ON e.branch_id = sb.id
+        AND e.created_at >= v_from AND e.created_at < v_to
       GROUP BY sb.id
     ),
     shift_stats AS (
