@@ -38,6 +38,7 @@ State: **BLOCKED**
 6. A4 labels `netSales` as “Net Revenue” while thermal text separately prints `netRevenue`, creating conflicting terminology.
 7. Expense details do not explain whether an expense affected the cashier drawer or another treasury/bank source.
 8. Expense reversal is a separate drawer edge case: `reverse_shift_expense` writes a cash `cash_in` with `reference_type='expense_reversal'` on the same expense id, so drawer-expense presentation must net the original outflow and reversal instead of counting only the original expense.
+9. Historical closed-shift audit found 11 of 68 closed shifts where today's `_compute_shift_expected_cash` differs from the `expected_amount` captured at close. All 68/68 stored close triplets are internally consistent (`actual_amount - expected_amount = difference`). Closed-shift reporting must therefore preserve the close snapshot instead of rewriting history with today's calculator.
 
 ## Change ledger
 - Added pure report math helpers for:
@@ -52,6 +53,8 @@ State: **BLOCKED**
 - Net-sales / after-expenses terminology is aligned between A4 and thermal.
 - Drawer expense math now nets `expense` / expense-linked `cash_out` against matching `cash_in + expense_reversal` by `reference_id`, so voided expenses cannot remain shown as active drawer outflows.
 - Added regression tests using the verified Smouha figures plus an explicit reversed-drawer-expense case.
+- Closed shifts now derive expected cash from the immutable close snapshot (`actual - difference`); open shifts continue to use the live recomputed expected cash.
+- This avoids changing the meaning of 11 historical closed shifts whose stored close snapshot differs from today's helper while preserving all 68 stored shift rows unchanged.
 - No DB migration and no Production write.
 
 ## Verification ledger
@@ -66,6 +69,8 @@ State: **BLOCKED**
 - Compatibility fix `e9ddfc6e0fb71611c53e95d5d6e149ee212fac05` preserves that literal heading as `طرق الدفع / PAYMENTS (المحصلة فقط)` while keeping credit/employee-credit excluded from collected tenders.
 - Follow-up exact-head `f1e16a0503ccfcebe58c7a96cdf5cf387cc290c1` reached verify Green and DB integration/security Green while browser-smoke was still running.
 - Pre-merge audit then found the expense-reversal edge case above; merge remained blocked and a regression fix was added before final CI.
+- Historical closed-shift audit: 68 closed shifts; 68/68 stored `expected/actual/difference` snapshots internally consistent; 11 differ from today's recomputation. Expense audit: 0 posted drawer expenses missing outflow operations, 0 voided drawer expenses missing reversal operations, 0 non-drawer expenses incorrectly carrying drawer operations.
+- Added a report-only historical snapshot safeguard before final CI.
 - Supabase Preview is skipped for this PR because preview-per-PR is disabled and this track has no DB migration.
 
 ## Production gate
@@ -75,7 +80,7 @@ State: **BLOCKED**
 - Merge requires exact-head verify/db/browser-smoke Green plus final main/head reconcile and explicit user approval.
 
 ## Next action
-Run exact-head CI after the expense-reversal regression fix. If verify, DB/security/RLS and browser smoke are Green, perform final reconcile and present PR #434 for explicit merge approval.
+Run exact-head CI after the expense-reversal and historical-snapshot safeguards. If verify, DB/security/RLS and browser smoke are Green, perform final reconcile and present PR #434 for explicit merge approval.
 
 ## Mandatory update protocol
 - Re-read latest `main` and expected branch HEAD before every repository write.

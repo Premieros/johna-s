@@ -102,3 +102,14 @@ export function summarizeExpenseSources(
     drawerExpenseIds: activeDrawerExpenseIds,
   };
 }
+
+
+export function resolveShiftExpectedCash(input: {
+  closedAt?: string | null;
+  recomputedExpected: number;
+  actualAmount: number;
+  difference: number;
+}): number {
+  if (!input.closedAt) return money(input.recomputedExpected);
+  return money(Number(input.actualAmount || 0) - Number(input.difference || 0));
+}

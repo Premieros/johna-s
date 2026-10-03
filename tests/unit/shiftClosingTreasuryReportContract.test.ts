@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import {
   averageShiftTicket,
+  resolveShiftExpectedCash,
   summarizeExpenseSources,
   summarizeShiftPayments,
 } from '../../src/features/trade/services/shiftClosingReportMath';
@@ -22,6 +23,22 @@ describe('shift closing treasury presentation math', () => {
 
   it('calculates average ticket from net sales before expenses', () => {
     expect(averageShiftTicket(13421, 35)).toBeCloseTo(383.4571428571, 8);
+  });
+
+  it('preserves the historical closing snapshot for closed shifts while keeping open shifts live', () => {
+    expect(resolveShiftExpectedCash({
+      closedAt: '2026-09-29T21:56:34.519Z',
+      recomputedExpected: 2225.94,
+      actualAmount: 2235,
+      difference: 84.06,
+    })).toBe(2150.94);
+
+    expect(resolveShiftExpectedCash({
+      closedAt: null,
+      recomputedExpected: 3694,
+      actualAmount: 0,
+      difference: 0,
+    })).toBe(3694);
   });
 
   it('keeps main-treasury expenses outside the cashier drawer', () => {
@@ -98,6 +115,7 @@ describe('shift closing report integration contract', () => {
     expect(financials).toContain(".from('shift_operations')");
     expect(financials).toContain('summarizeExpenseSources(totalExpenses, shiftOperations)');
     expect(financials).toContain('avgTicket: averageShiftTicket(Number(raw.net_sales || 0)');
+    expect(financials).toContain('expectedAmount = resolveShiftExpectedCash({');
   });
 
   it('separates collected tenders, receivables and non-drawer expenses in A4 and thermal output', () => {

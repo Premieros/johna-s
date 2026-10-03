@@ -1,6 +1,6 @@
 import { supabase, shifts as shiftsApi, costing as costingApi } from '@/api';
 import type { ShiftClosingSummary } from './shiftClosingReport';
-import { averageShiftTicket, summarizeExpenseSources } from './shiftClosingReportMath';
+import { averageShiftTicket, resolveShiftExpectedCash, summarizeExpenseSources } from './shiftClosingReportMath';
 
 type ShiftOperationRow = {
   operation_type: string;
@@ -311,6 +311,13 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     }
   }
 
+  const expectedAmount = resolveShiftExpectedCash({
+    closedAt: raw.closed_at ? String(raw.closed_at) : null,
+    recomputedExpected: Number(raw.expected_cash || 0),
+    actualAmount: Number(raw.actual_cash || 0),
+    difference: Number(raw.difference || 0),
+  });
+
   return {
     shiftId,
     branchId: String(raw.branch_id || ''),
@@ -319,7 +326,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     openedAt: String(raw.opened_at || ''),
     closedAt: raw.closed_at ? String(raw.closed_at) : null,
     openingAmount: Number(raw.opening_amount || 0),
-    expectedAmount: Number(raw.expected_cash || 0),
+    expectedAmount,
     actualAmount: Number(raw.actual_cash || 0),
     difference: Number(raw.difference || 0),
     notes: raw.notes ? String(raw.notes) : null,
