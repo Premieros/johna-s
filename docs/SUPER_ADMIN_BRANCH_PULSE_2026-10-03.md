@@ -32,11 +32,14 @@ UI-only follow-up to place the existing Branch Pulse and user-issue panels direc
 3. Current BranchPulsePanel pins to the active branch through `useBranchFilter`; the Super Admin diagnostics view should request all permitted branches.
 
 ## Change ledger
-- Pending UI integration.
+- `BranchPulsePanel` now supports an explicit `allBranches` mode while preserving existing default branch pinning.
+- Super Admin → System Diagnostics now renders `<BranchPulsePanel allBranches />` below the existing self-check card.
+- Diagnostics layout width was opened so branch cards can use the available space.
+- Added `tests/unit/superAdminBranchPulseContract.test.ts` to lock the integration and preserve the standalone `settings.manage` route boundary.
 
 ## Verification ledger
 - Source route and permission inspection completed.
-- Exact-head CI: pending.
+- Exact-head CI: pending on the final implementation head.
 
 ## Production gate
 State: **BLOCKED**
