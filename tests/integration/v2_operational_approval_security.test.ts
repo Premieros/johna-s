@@ -111,6 +111,11 @@ describe.skipIf(skip)('V2 operational approval target security', () => {
       `INSERT INTO public.inventory(product_id,warehouse_id,quantity,branch_id) VALUES($1,$2,5,$3)`,
       [productB, warehouseB1, branchB],
     );
+    await client.query(
+      `INSERT INTO public.inventory_batches(product_id,warehouse_id,branch_id,quantity,unit_cost,expiry_date)
+       VALUES($1,$2,$3,5,2,CURRENT_DATE + 30)`,
+      [productB, warehouseB1, branchB],
+    );
     await client.query(`UPDATE public.waste_entries SET product_id=$1,warehouse_id=$2 WHERE id=$3`, [productB, warehouseB1, wasteB]);
     await client.query(
       `INSERT INTO public.stock_counts (id, branch_id, warehouse_id, status, count_type, submitted_by, submitted_at)
