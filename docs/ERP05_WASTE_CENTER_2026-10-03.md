@@ -3,6 +3,7 @@
 Repository: `Premieros/johna-s`  
 Production Supabase: `azzdesuowpdcoflmyezn` (`john's`)  
 Branch: `development/erp05-waste-center-20261003`  
+Current PR: `#437`  
 Baseline: `main@9f542a52fd853e34ad429195903f25c8c9d6da43`  
 Last updated: 2026-10-03
 
@@ -95,14 +96,14 @@ Migration generation note:
 - Full exact-head CI before any merge decision.
 
 ## Next action
-Implement and verify Slice A now. Keep Slice B blocked only on sanctioned migration-file generation; do not alter historical migrations and do not apply SQL to Production.
-
+Run exact-head CI for Slice A. Keep Slice B blocked only on sanctioned migration-file generation; do not alter historical migrations and do not apply SQL to Production.
 
 ## Slice A checkpoint
 - Branch/main reconcile: clean; branch ahead by 4 commits, behind by 0.
 - UI now keeps legacy `production` waste in the historical filter.
 - New operational waste creation uses `CREATABLE_WASTE_TYPES` and excludes `production`.
 - Added `tests/unit/wasteCenterLegacyProductionContract.test.ts`.
+- Draft PR: `#437`.
 - Production writes: none.
 - Production migrations: none.
 - Next gate: Draft PR exact-head CI for Slice A while database Slice B remains blocked on sanctioned migration generation.
