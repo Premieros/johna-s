@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **System Health Discoverability**
+- Track: **Super Admin Branch Pulse Integration**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `4b15cf58e0109ffde7009b8dc11e2475aa57b47e`
-- Active development branch: `development/system-health-discoverability-20261003`
-- Mandatory active work log: `docs/SYSTEM_HEALTH_DISCOVERABILITY_2026-10-03.md`
+- Latest main baseline reconciled: `cc26654353b5ffaf6b704a21aba9a707a60d7445`
+- Active development branch: `development/super-admin-branch-pulse-20261003`
+- Mandatory active work log: `docs/SUPER_ADMIN_BRANCH_PULSE_2026-10-03.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.

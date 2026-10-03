@@ -126,10 +126,15 @@ function Metric({ icon, label, value, detail }: { icon: ReactNode; label: string
   );
 }
 
-export function BranchPulsePanel() {
+type BranchPulsePanelProps = {
+  allBranches?: boolean;
+};
+
+export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps = {}) {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
-  const branchFilter = useBranchFilter();
+  const activeBranchFilter = useBranchFilter();
+  const branchFilter = allBranches ? null : activeBranchFilter;
   const initialNow = useMemo(() => new Date(), []);
   const [preset, setPreset] = useState<RangePreset>('30m');
   const [customFrom, setCustomFrom] = useState(() => localInputValue(new Date(initialNow.getTime() - 60 * 60 * 1000)));
