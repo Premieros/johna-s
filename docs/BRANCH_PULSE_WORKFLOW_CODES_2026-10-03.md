@@ -25,6 +25,12 @@ UI-only refinement requested by the user: present Branch Pulse as workflow activ
 - Current UI labels branches as `warning` / `Needs review` and exposes readable warning descriptions.
 - Current User issues section exposes error messages, error_code, screen, action and technical/expected classification.
 
+## Root-cause ledger
+1. The current panel mixes workflow monitoring with problem verdicts.
+2. Human-readable anomaly labels can be misinterpreted by non-owner users who can view administrative screens.
+3. User issue rows currently expose readable error details that the owner prefers to keep opaque.
+4. Selected-period activity is the intended primary purpose; anomaly data should remain secondary and coded.
+
 ## Change ledger
 - Branch state is now presented as neutral workflow activity: `Active / Quiet`.
 - Human-readable anomaly labels were replaced with opaque `BP-01..BP-04` follow-up codes.
@@ -35,7 +41,8 @@ UI-only refinement requested by the user: present Branch Pulse as workflow activ
 
 ## Verification ledger
 - Production logic review completed read-only.
-- Exact-head CI: pending on the final implementation head.
+- Verify #3706 / workflow `37142259981` failed at the mandatory worklog gate because `## Root-cause ledger` was missing. Runtime code/tests were not reached.
+- Exact-head CI: pending after this worklog-only fix.
 
 ## Production gate
 State: **BLOCKED**
