@@ -26,11 +26,16 @@ UI-only refinement requested by the user: present Branch Pulse as workflow activ
 - Current User issues section exposes error messages, error_code, screen, action and technical/expected classification.
 
 ## Change ledger
-- Pending UI-only implementation.
+- Branch state is now presented as neutral workflow activity: `Active / Quiet`.
+- Human-readable anomaly labels were replaced with opaque `BP-01..BP-04` follow-up codes.
+- User issue rows are now rendered as deterministic opaque `UX-XXXXXXXX` event codes.
+- Raw user message, screen/action, error kind, and readable error code are no longer rendered in the panel.
+- The filter is now `Branches with codes` instead of `Problems only`.
+- Added `tests/unit/branchPulseWorkflowCodesContract.test.ts` and updated the existing Branch Pulse contract wording.
 
 ## Verification ledger
 - Production logic review completed read-only.
-- Exact-head CI: pending.
+- Exact-head CI: pending on the final implementation head.
 
 ## Production gate
 State: **BLOCKED**
