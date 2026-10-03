@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Super Admin Branch Pulse Integration**
+- Track: **Branch Pulse Workflow Codes**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `cc26654353b5ffaf6b704a21aba9a707a60d7445`
-- Active development branch: `development/super-admin-branch-pulse-20261003`
-- Mandatory active work log: `docs/SUPER_ADMIN_BRANCH_PULSE_2026-10-03.md`
+- Latest main baseline reconciled: `74c00c9898d8c03931ffe0429b2d43c9e7c07033`
+- Active development branch: `development/branch-pulse-workflow-codes-20261003`
+- Mandatory active work log: `docs/BRANCH_PULSE_WORKFLOW_CODES_2026-10-03.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -22,7 +22,7 @@
 - Printing, Print Agent, KDS, settlement, inventory deduction, accounting posting and shift mutation logic remain frozen.
 
 ## Current objective
-Expose the already-implemented System Health / Branch Pulse feature visibly from Settings. The route and feature exist, but the Settings page has no navigation link.
+Present Branch Pulse as neutral workflow activity for the selected period. Human-readable problem labels are removed from the panel; anomalies are shown only as opaque internal codes, and user-issue groups are shown as opaque event codes without raw messages or screen/action details.
 
 ## Verified state
 - PR #439 merged to `main@4b55bb50c768a0650e99fbe7500bc95a0fda70c5`.
