@@ -344,7 +344,24 @@ export function CurrentOrderPanel({
       </div>
 
       <div className={`min-h-0 flex-1 overflow-y-auto ${empty ? 'p-3' : 'p-2.5'}`}>
-        {empty ? (
+        {orderLoading && activeOrderId && empty ? (
+          <div data-testid="pos-resume-order-loading" className="space-y-3 rounded-2xl border border-ui-border bg-ui-page-alt/60 p-4">
+            <div>
+              <p className="text-sm font-black text-ui-text">{isAr ? 'جارٍ استرجاع أصناف الطلب…' : 'Restoring order items…'}</p>
+              <p className="mt-1 text-[10px] font-bold text-ui-muted">{isAr ? 'الطلب موجود ويتم تحميل تفاصيله الآن.' : 'The order is available and its details are loading now.'}</p>
+            </div>
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="flex items-center gap-3 rounded-xl border border-ui-border bg-ui-surface p-3">
+                <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-ui-page-alt" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-2.5 w-2/3 animate-pulse rounded-full bg-ui-page-alt" />
+                  <div className="h-2 w-1/3 animate-pulse rounded-full bg-ui-page-alt" />
+                </div>
+                <div className="h-7 w-12 animate-pulse rounded-lg bg-ui-page-alt" />
+              </div>
+            ))}
+          </div>
+        ) : empty ? (
           <div data-testid="pos-empty-cart-state" className="rounded-2xl border border-dashed border-ui-border bg-ui-page-alt/60 px-4 py-5 text-center text-ui-subtle">
             <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-ui-surface"><ShoppingCart className="h-5 w-5 opacity-40" /></div>
             <p className="text-sm font-black text-ui-text">{t('emptyCart')}</p>
