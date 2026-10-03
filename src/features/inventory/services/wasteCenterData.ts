@@ -63,6 +63,10 @@ export async function createWasteEntry(params: {
   inventoryUnitId: string | null;
   warehouseId: string;
 }): Promise<void> {
+  if (params.wasteType === 'production') {
+    throw new Error('LEGACY_PRODUCTION_WASTE_READ_ONLY');
+  }
+
   const { error } = await supabase.rpc('create_waste_entry', {
     p_branch_id: params.branchId,
     p_waste_category_id: params.wasteCategoryId,
