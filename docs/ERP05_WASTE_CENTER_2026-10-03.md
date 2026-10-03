@@ -96,3 +96,13 @@ Migration generation note:
 
 ## Next action
 Implement and verify Slice A now. Keep Slice B blocked only on sanctioned migration-file generation; do not alter historical migrations and do not apply SQL to Production.
+
+
+## Slice A checkpoint
+- Branch/main reconcile: clean; branch ahead by 4 commits, behind by 0.
+- UI now keeps legacy `production` waste in the historical filter.
+- New operational waste creation uses `CREATABLE_WASTE_TYPES` and excludes `production`.
+- Added `tests/unit/wasteCenterLegacyProductionContract.test.ts`.
+- Production writes: none.
+- Production migrations: none.
+- Next gate: Draft PR exact-head CI for Slice A while database Slice B remains blocked on sanctioned migration generation.
