@@ -166,7 +166,7 @@ BEGIN
           e.error_code,
           e.screen,
           e.action,
-          e.user_message,
+          (array_agg(e.user_message ORDER BY e.created_at DESC))[1] AS user_message,
           count(*)::int AS occurrences,
           count(DISTINCT e.user_id)::int AS affected_users,
           max(e.created_at) AS latest_at
@@ -181,7 +181,7 @@ BEGIN
           )
         GROUP BY
           e.branch_id, b.name, e.issue_kind, e.error_code,
-          e.screen, e.action, e.user_message
+          e.screen, e.action
         ORDER BY max(e.created_at) DESC, count(*) DESC
         LIMIT v_limit
       ) q
@@ -279,15 +279,17 @@ BEGIN
         sb.id AS branch_id,
         count(cpj.id) FILTER (
           WHERE cpj.status = 'submitted'
-            AND cpj.created_at >= v_from AND cpj.created_at < v_to
+            AND coalesce(cpj.submitted_at, cpj.updated_at, cpj.created_at) >= v_from
+            AND coalesce(cpj.submitted_at, cpj.updated_at, cpj.created_at) < v_to
         )::int AS print_submitted_count,
         count(cpj.id) FILTER (
           WHERE cpj.status = 'printed'
-            AND cpj.created_at >= v_from AND cpj.created_at < v_to
+            AND coalesce(cpj.printed_at, cpj.updated_at, cpj.created_at) >= v_from
+            AND coalesce(cpj.printed_at, cpj.updated_at, cpj.created_at) < v_to
         )::int AS print_confirmed_count,
         count(cpj.id) FILTER (
           WHERE cpj.status = 'failed'
-            AND cpj.created_at >= v_from AND cpj.created_at < v_to
+            AND cpj.updated_at >= v_from AND cpj.updated_at < v_to
         )::int AS print_failed_count,
         count(cpj.id) FILTER (
           WHERE cpj.status IN ('pending','claimed','printing')
