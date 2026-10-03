@@ -164,7 +164,7 @@ export function WasteCenterPage() {
     } },
     { key: 'quantity', header: ar ? 'الكمية' : 'Qty', render: r => formatQuantity(Number(r.quantity || 0), 3) },
     { key: 'unit_cost', header: ar ? 'تكلفة الوحدة' : 'Unit Cost', render: r => formatNumber(Number(r.unit_cost || 0), 1) },
-    { key: 'total_cost', header: ar ? 'الإجمالي' : 'Total', render: r => formatNumber(Number(r.total_cost || 0), 1) },
+    { key: 'total_cost', header: ar ? 'الإجمالي' : 'Total', render: r => formatNumber(Number(r.approved_total_cost ?? r.total_cost ?? 0), 1) },
     { key: 'reason', header: ar ? 'السبب' : 'Reason', render: r => r.reason ?? '-' },
     { key: 'status', header: ar ? 'الحالة' : 'Status', render: r => <span className={`font-bold ${statusColor(r.status)}`}>{r.status === 'approved' ? (ar ? 'معتمد' : 'Approved') : r.status === 'rejected' ? (ar ? 'مرفوض' : 'Rejected') : (ar ? 'قيد المراجعة' : 'Pending')}</span> },
   ];
