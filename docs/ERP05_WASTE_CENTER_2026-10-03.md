@@ -9,7 +9,7 @@ Last updated: 2026-10-03
 ## Work status
 State: **BLOCKED**
 
-Blocked only on exact-head CI and the sanctioned database-migration generation path. No Production write is authorized.
+Blocked on the final exact-head CI rerun after this worklog sync, then explicit merge approval; Production application remains a separate explicit approval. No Production write is authorized.
 
 ## Guardrails
 - No direct write to `main`; no force push.
@@ -30,7 +30,8 @@ Blocked only on exact-head CI and the sanctioned database-migration generation p
   - product `inventory` vs `inventory_batches` mismatches: **0**;
   - positive product inventory rows without FIFO batches: **0**;
   - maximum aggregate-vs-batch gap: **0**;
-  - `waste_entries`: **0 approved / 0 pending / 0 total**.
+  - `waste_entries`: **0 approved / 0 pending / 0 total**;
+  - `waste_categories`: **0 rows**.
 - No Production write was executed.
 
 ## Root-cause ledger
@@ -58,12 +59,19 @@ Blocked only on exact-head CI and the sanctioned database-migration generation p
 ## Change ledger
 Implemented on PR #437:
 - activated ERP-05 as the sole current work track;
-- added this ERP-05 gap-audit log;
-- changed `WasteCenterPage` so legacy `production` remains visible/filterable historically;
-- new operational creation now uses `CREATABLE_WASTE_TYPES` and excludes `production`;
-- added `tests/unit/wasteCenterLegacyProductionContract.test.ts`.
+- kept legacy `production` waste historical/read-only in both UI and feature service;
+- made entry-time unit cost display-only and labelled as an estimate;
+- added a clear UI guard when no active waste categories exist;
+- added forward-only migration `20261003123000_erp05_waste_fifo_approval.sql`;
+- seeded/repairs operational waste categories idempotently, including Kitchen Waste;
+- made approved waste cost FIFO-authoritative for product and inventory-unit targets;
+- added fail-closed FIFO batch coverage checks;
+- defaulted omitted `employee_id` to the authenticated actor;
+- added exact `approved_total_cost` so row display and reporting preserve actual FIFO cost;
+- kept waste RPC EXECUTE closed to `PUBLIC`/anon and preserved intended authenticated/service-role access;
+- added/updated unit and integration coverage, including legacy approval-security fixtures.
 
-No database migration has been created or applied in this branch head.
+The migration exists only in the branch/PR and has **not** been applied to Production.
 No Production schema/data/history write has occurred.
 
 ## Verification ledger
@@ -74,6 +82,10 @@ No Production schema/data/history write has occurred.
 - No runtime/unit assertion failure was identified before that gate stopped the pipeline.
 - Documentation is now being corrected to satisfy the mandatory worklog contract.
 - DB and browser jobs were skipped because the verify job failed at the worklog gate.
+- Run #3657: verify Green; Fresh DB migration apply succeeded; DB exposed one stale approval-security fixture without FIFO batch coverage.
+- That fixture was corrected without weakening production logic.
+- Run #3665 / workflow `37124445180` on `d0b140c8caa0ed6210f3f85355dd71cbc0cacbcf`: **verify Green / db Green / browser-smoke Green**.
+- At that checkpoint PR #437 was open, draft, mergeable, and branch was ahead 27 / behind 0.
 
 ## Production gate
 State: **BLOCKED**
@@ -82,7 +94,7 @@ State: **BLOCKED**
 - Any future ERP-05 database migration must be forward-only, generated through the sanctioned migration workflow, pass exact-head Verify/DB/Security/RLS/Browser Smoke, and receive separate explicit approval before Production application.
 
 ## Next action
-Run exact-head CI again after this worklog-only correction. If Green, continue only with the sanctioned forward-only migration path for FIFO-authoritative waste costing and integrity guards.
+Run one final exact-head CI after this worklog-only synchronization. If Green and main remains unchanged, ERP-05 implementation is ready for explicit merge approval. Production migration application remains separately blocked until explicit approval after the merge/reconcile gate.
 
 ## Mandatory update protocol
 - Re-read latest `main` and branch HEAD before every repository write.
