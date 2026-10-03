@@ -84,6 +84,7 @@ export function CurrentOrderPanel({
   discountType,
   discountAmount,
   total,
+  orderLoading,
   orderType,
   activeOrderNumber,
   activeOrderId,
