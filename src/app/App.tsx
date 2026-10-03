@@ -44,17 +44,17 @@ function RouteScopedExtras() {
 export default function App() {
   return (
     <AppProviders>
-      <SessionProfileGuard>
-        <WorkAuthorizationAppBoundary>
-          <PageLoadProgressProvider>
+      <PageLoadProgressProvider>
+        <SessionProfileGuard>
+          <WorkAuthorizationAppBoundary>
             <>
               <AppRoutes />
               <RouteScopedExtras />
             </>
-          </PageLoadProgressProvider>
-        </WorkAuthorizationAppBoundary>
-        <CloudPrintAgent />
-      </SessionProfileGuard>
+          </WorkAuthorizationAppBoundary>
+          <CloudPrintAgent />
+        </SessionProfileGuard>
+      </PageLoadProgressProvider>
     </AppProviders>
   );
 }
