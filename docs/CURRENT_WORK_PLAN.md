@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **System Health Branch Pulse — Production Closure**
+- Track: **System Health Discoverability**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `4b55bb50c768a0650e99fbe7500bc95a0fda70c5`
-- Active development branch: `development/system-health-branch-pulse-production-closure-20261003`
-- Mandatory active work log: `docs/SYSTEM_HEALTH_BRANCH_PULSE_2026-10-03.md`
+- Latest main baseline reconciled: `4b15cf58e0109ffde7009b8dc11e2475aa57b47e`
+- Active development branch: `development/system-health-discoverability-20261003`
+- Mandatory active work log: `docs/SYSTEM_HEALTH_DISCOVERABILITY_2026-10-03.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -22,7 +22,7 @@
 - Printing, Print Agent, KDS, settlement, inventory deduction, accounting posting and shift mutation logic remain frozen.
 
 ## Current objective
-Reconcile repository documentation with the completed Branch Pulse deployment. The Branch Pulse implementation is merged, its approved Production migration is applied and post-verified, and this branch contains documentation only.
+Expose the already-implemented System Health / Branch Pulse feature visibly from Settings. The route and feature exist, but the Settings page has no navigation link.
 
 ## Verified state
 - PR #439 merged to `main@4b55bb50c768a0650e99fbe7500bc95a0fda70c5`.
