@@ -8,9 +8,9 @@ const workAuthorization = readFileSync('src/features/admin/work-authorization/Wo
 
 describe('global page progress loader contract', () => {
   it('shows a visible percentage instead of a blank screen or spinner-only fallback', () => {
-    expect(loader).toContain("data-testid="page-progress-loader"");
+    expect(loader).toContain('data-testid="page-progress-loader"');
     expect(loader).toContain('{Math.round(progress)}%');
-    expect(loader).toContain("data-testid="page-load-fallback"");
+    expect(loader).toContain('data-testid="page-load-fallback"');
     expect(routes).not.toContain('animate-spin rounded-full h-10 w-10');
   });
 
