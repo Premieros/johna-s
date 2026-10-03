@@ -40,6 +40,11 @@ describe('ERP-05 waste FIFO approval migration contract', () => {
     expect(migration).toContain('TO authenticated, service_role');
   });
 
+  it('persists exact approved cost separately from the rounded display estimate', () => {
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS approved_total_cost numeric(14,2)');
+    expect(migration).toContain('approved_total_cost = round(v_actual_cost, 2)');
+  });
+
   it('reports authoritative movement cost with historical fallback', () => {
     expect(migration).toContain("il.entry_type = 'waste'");
     expect(migration).toContain("iue.entry_type = 'waste'");
