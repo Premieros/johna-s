@@ -60,7 +60,7 @@ Implementation is isolated from Production. Merge requires exact-head Full Verif
 - Confirmed cloud print `submitted` semantics from the canonical printing migration.
 - Static safety contract added: `tests/unit/systemHealthBranchPulseContract.test.ts`.
 - Fresh DB security/ACL integration added: `tests/integration/system_health_branch_pulse.test.ts`.
-- Exact-head CI: pending.
+- Verify #3693 / workflow `37131235991` on `f0473da0d572edc397f1cdfdf9e2d4c44362601a`: **verify Green / db Green / browser-smoke Green**.
 
 ## Production gate
 State: **BLOCKED**
@@ -68,7 +68,7 @@ State: **BLOCKED**
 No Production apply is authorized. Forward-only migration may be committed and validated in CI only.
 
 ## Next action
-Run exact-head Full Verify on PR #439. Fix only proven regressions within this scope; no Production apply.
+Run one final exact-head Full Verify after this worklog-only sync. If Green and `main` is unchanged, mark PR #439 ready and merge under the user's explicit approval. Production apply remains separately blocked.
 
 ## Mandatory update protocol
 - Reconcile latest `main` and branch head before material writes.
