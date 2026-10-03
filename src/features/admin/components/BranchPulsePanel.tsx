@@ -42,6 +42,7 @@ type BranchPulseRow = {
 };
 
 type UserIssueRow = {
+  branch_id?: string | null;
   branch_name?: string | null;
   issue_kind?: 'expected' | 'technical';
   error_code?: string;
@@ -67,22 +68,38 @@ const PRESETS: Array<{ key: RangePreset; ar: string; en: string }> = [
   { key: 'custom', ar: 'مخصص', en: 'Custom' },
 ];
 
-const WARNING_LABELS: Record<string, { ar: string; en: string }> = {
-  PRINT_FAILURES: { ar: 'فشل طباعة', en: 'Print failures' },
-  STALE_OPEN_ORDERS: { ar: 'طلبات مفتوحة عالقة', en: 'Stale open orders' },
-  SALES_WITHOUT_SHIFT_COVERAGE: { ar: 'مبيعات بدون تغطية شفت مطابقة', en: 'Sales without matching shift coverage' },
-  SALES_WITHOUT_PRINT_SUBMISSION: { ar: 'مبيعات بدون إرسال طباعة', en: 'Sales without print submission' },
+const FOLLOWUP_CODES: Record<string, string> = {
+  PRINT_FAILURES: 'BP-01',
+  STALE_OPEN_ORDERS: 'BP-02',
+  SALES_WITHOUT_SHIFT_COVERAGE: 'BP-03',
+  SALES_WITHOUT_PRINT_SUBMISSION: 'BP-04',
 };
 
-const STATUS_META: Record<PulseStatus, { ar: string; en: string; className: string }> = {
-  ok: { ar: 'إشارات مستقرة', en: 'Signals stable', className: 'border-ui-success/30 bg-ui-success-soft text-ui-success' },
+const FLOW_META = {
+  active: { ar: 'نشط', en: 'Active', className: 'border-brand-500/25 bg-brand-600/10 text-brand-700' },
   quiet: { ar: 'هادئ', en: 'Quiet', className: 'border-ui-border bg-ui-page-alt text-ui-muted' },
-  warning: { ar: 'يحتاج مراجعة', en: 'Needs review', className: 'border-ui-warning/30 bg-ui-warning-soft text-ui-warning' },
-};
+} as const;
 
 function n(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function opaqueIssueCode(issue: UserIssueRow): string {
+  const source = [
+    issue.branch_id || '',
+    issue.error_code || '',
+    issue.screen || '',
+    issue.action || '',
+  ].join('|');
+
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return 'UX-' + (hash >>> 0).toString(16).toUpperCase().padStart(8, '0');
 }
 
 function localInputValue(date: Date): string {
@@ -141,7 +158,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
   const [customTo, setCustomTo] = useState(() => localInputValue(initialNow));
   const [branches, setBranches] = useState<BranchPulseRow[]>([]);
   const [issues, setIssues] = useState<UserIssueRow[]>([]);
-  const [problemsOnly, setProblemsOnly] = useState(false);
+  const [codedOnly, setCodedOnly] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
@@ -170,7 +187,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
     const issueSummary = issueResult.data as IssueEnvelope | null;
 
     if (pulseResult.error || !pulse || pulse.success === false) {
-      setError(pulseResult.error?.message || pulse?.error || (ar ? 'تعذر تنفيذ نبضة الفروع.' : 'Could not run Branch Pulse.'));
+      setError(ar ? 'تعذر تحديث بيانات سير العمل. حاول مرة أخرى.' : 'Could not refresh workflow data. Please try again.');
       setRunning(false);
       return;
     }
@@ -190,11 +207,11 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
   }, [runPulse]);
 
   const visibleBranches = useMemo(
-    () => problemsOnly ? branches.filter((row) => row.signal_status === 'warning') : branches,
-    [branches, problemsOnly],
+    () => codedOnly ? branches.filter((row) => Array.isArray(row.warnings) && row.warnings.length > 0) : branches,
+    [branches, codedOnly],
   );
-  const warningCount = useMemo(
-    () => branches.filter((row) => row.signal_status === 'warning').length,
+  const codedBranchCount = useMemo(
+    () => branches.filter((row) => Array.isArray(row.warnings) && row.warnings.length > 0).length,
     [branches],
   );
 
@@ -210,8 +227,8 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
               </div>
               <p className="mt-1 text-xs font-bold text-ui-subtle">
                 {ar
-                  ? 'قراءة سريعة لنشاط كل فرع. عدم وجود مبيعات أو طلبات وحده لا يعني وجود عطل.'
-                  : 'A quick read of branch activity. Zero sales or orders alone does not mean the branch is unhealthy.'}
+                  ? 'سير العمل لكل فرع خلال الفترة المحددة. الرموز الظاهرة هي رموز متابعة داخلية فقط.'
+                  : 'Workflow by branch for the selected period. Any displayed codes are internal follow-up codes only.'}
               </p>
               {lastRunAt ? <p className="mt-1 text-[10px] font-bold text-ui-muted">{ar ? 'آخر نبضة' : 'Last pulse'}: {lastRunAt}</p> : null}
             </div>
@@ -219,13 +236,13 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                data-testid="branch-pulse-problems-only"
-                onClick={() => setProblemsOnly((value) => !value)}
-                className={problemsOnly
-                  ? 'rounded-xl bg-ui-warning-soft px-3 py-2 text-xs font-black text-ui-warning ring-1 ring-ui-warning/30'
+                data-testid="branch-pulse-coded-only"
+                onClick={() => setCodedOnly((value) => !value)}
+                className={codedOnly
+                  ? 'rounded-xl bg-brand-600/10 px-3 py-2 text-xs font-black text-brand-700 ring-1 ring-brand-500/25'
                   : 'rounded-xl bg-ui-page-alt px-3 py-2 text-xs font-black text-ui-muted ring-1 ring-ui-border'}
               >
-                {ar ? 'عرض المشاكل فقط' : 'Problems only'}{warningCount > 0 ? ' · ' + warningCount : ''}
+                {ar ? 'عرض الفروع ذات الرموز' : 'Branches with codes'}{codedBranchCount > 0 ? ' · ' + codedBranchCount : ''}
               </button>
               <Button onClick={() => void runPulse()} disabled={running}>
                 <RefreshCw className={running ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
@@ -282,8 +299,9 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
 
         <div className="grid gap-4 p-4 xl:grid-cols-2">
           {visibleBranches.map((row) => {
-            const status = row.signal_status || 'quiet';
-            const meta = STATUS_META[status];
+            const status: PulseStatus = row.signal_status || 'quiet';
+            const flowState = status === 'quiet' ? 'quiet' : 'active';
+            const meta = FLOW_META[flowState];
             const warningCodes = Array.isArray(row.warnings) ? row.warnings : [];
             const branchName = ar ? row.branch_name : (row.branch_name_en || row.branch_name);
 
@@ -297,9 +315,9 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
                     <div className="min-w-0">
                       <div className="truncate font-black text-ui-text">{branchName}</div>
                       <div className="text-[10px] font-bold text-ui-subtle">
-                        {status === 'quiet'
-                          ? (ar ? 'لا توجد إشارات مشكلة؛ قد يكون الفرع هادئًا فقط.' : 'No problem signal; the branch may simply be quiet.')
-                          : (ar ? 'مؤشرات الفترة المحددة' : 'Signals for the selected window')}
+                        {flowState === 'quiet'
+                          ? (ar ? 'لا يوجد نشاط مسجل في الفترة المحددة.' : 'No activity recorded in the selected period.')
+                          : (ar ? 'سير العمل خلال الفترة المحددة' : 'Workflow during the selected period')}
                       </div>
                     </div>
                   </div>
@@ -314,14 +332,15 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
                   <Metric icon={<Printer className="h-3.5 w-3.5" />} label={ar ? 'الطباعة' : 'Printing'} value={formatNumber(n(row.print_submitted_count), 0) + ' / ' + formatNumber(n(row.print_failed_count), 0)} detail={ar ? 'مقبول للنظام / فشل' : 'Accepted / failed'} />
                   <Metric icon={<WalletCards className="h-3.5 w-3.5" />} label={ar ? 'المشتريات' : 'Purchases'} value={formatNumber(n(row.purchase_count), 0)} detail={formatNumber(n(row.purchase_value), 2)} />
                   <Metric icon={<WalletCards className="h-3.5 w-3.5" />} label={ar ? 'المصروفات' : 'Expenses'} value={formatNumber(n(row.expense_count), 0)} detail={formatNumber(n(row.expense_value), 2)} />
-                  <Metric icon={<UsersRound className="h-3.5 w-3.5" />} label={ar ? 'الشفتات / المشغلون' : 'Shifts / operators'} value={formatNumber(n(row.open_shift_count), 0) + ' / ' + formatNumber(n(row.open_operator_count), 0)} />
+                  <Metric icon={<UsersRound className="h-3.5 w-3.5" />} label={ar ? 'مفتوح الآن: شفتات / مشغلون' : 'Open now: shifts / operators'} value={formatNumber(n(row.open_shift_count), 0) + ' / ' + formatNumber(n(row.open_operator_count), 0)} />
                 </div>
 
                 {warningCodes.length > 0 ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold text-ui-subtle">{ar ? 'رموز متابعة' : 'Follow-up codes'}</span>
                     {warningCodes.map((code) => (
-                      <span key={code} className="rounded-full bg-ui-warning-soft px-2.5 py-1 text-[10px] font-black text-ui-warning">
-                        {WARNING_LABELS[code] ? (ar ? WARNING_LABELS[code].ar : WARNING_LABELS[code].en) : code}
+                      <span key={code} className="rounded-full bg-ui-page-alt px-2.5 py-1 font-mono text-[10px] font-black text-ui-muted ring-1 ring-ui-border">
+                        {FOLLOWUP_CODES[code] || 'BP-00'}
                       </span>
                     ))}
                   </div>
@@ -332,23 +351,23 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
 
           {!running && visibleBranches.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-ui-border p-6 text-center text-sm font-bold text-ui-muted xl:col-span-2">
-              {problemsOnly
-                ? (ar ? 'لا توجد فروع عليها إشارات مشكلة في الفترة المحددة.' : 'No branches have problem signals in this window.')
+              {codedOnly
+                ? (ar ? 'لا توجد فروع لديها رموز متابعة في الفترة المحددة.' : 'No branches have follow-up codes in this period.')
                 : (ar ? 'لا توجد فروع متاحة ضمن نطاقك الحالي.' : 'No branches are available in your current scope.')}
             </div>
           ) : null}
         </div>
       </Card>
 
-      <Card className="overflow-hidden" data-testid="system-health-user-issues">
+      <Card className="overflow-hidden" data-testid="system-health-event-codes">
         <div className="flex items-center gap-3 border-b border-ui-border p-5">
-          <AlertTriangle className="h-5 w-5 text-ui-warning" />
+          <Activity className="h-5 w-5 text-brand-600" />
           <div>
-            <h2 className="font-black text-ui-text">{ar ? 'مشاكل المستخدمين' : 'User issues'}</h2>
+            <h2 className="font-black text-ui-text">{ar ? 'رموز الأحداث' : 'Event codes'}</h2>
             <p className="text-xs font-bold text-ui-subtle">
               {ar
-                ? 'أخطاء ورسائل ظهرت للمستخدمين، مجمعة بدون كلمات مرور أو رموز دخول أو بيانات خام.'
-                : 'User-visible issues grouped without passwords, access tokens, or raw payloads.'}
+                ? 'رموز داخلية للأحداث المسجلة خلال الفترة المحددة، بدون عرض تفاصيل الخطأ للمستخدمين.'
+                : 'Internal codes for events recorded in the selected period, without exposing error details to users.'}
             </p>
           </div>
         </div>
@@ -356,23 +375,12 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
         <div className="divide-y divide-ui-border">
           {issues.map((issue, index) => (
             <div key={(issue.error_code || 'issue') + '-' + (issue.screen || '') + '-' + index} className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={issue.issue_kind === 'technical'
-                      ? 'rounded-full bg-ui-danger-soft px-2 py-1 text-[10px] font-black text-ui-danger'
-                      : 'rounded-full bg-ui-warning-soft px-2 py-1 text-[10px] font-black text-ui-warning'}>
-                      {issue.issue_kind === 'technical'
-                        ? (ar ? 'تقني' : 'Technical')
-                        : (ar ? 'تشغيلي / تحقق' : 'Operational / validation')}
-                    </span>
-                    <span className="font-mono text-[11px] font-bold text-ui-muted">{issue.error_code || 'CLIENT_ERROR'}</span>
-                    {issue.branch_name ? <span className="text-[11px] font-bold text-ui-subtle">· {issue.branch_name}</span> : null}
-                  </div>
-                  <p className="mt-2 text-sm font-bold text-ui-text">{issue.user_message || (ar ? 'تعذر إكمال العملية.' : 'The action could not be completed.')}</p>
-                  <p className="mt-1 truncate text-[10px] font-bold text-ui-subtle">
-                    {issue.screen || '/unknown'} · {issue.action || 'unknown'}
-                  </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="rounded-xl bg-ui-page-alt px-3 py-2 font-mono text-sm font-black text-ui-text ring-1 ring-ui-border">
+                    {opaqueIssueCode(issue)}
+                  </span>
+                  {issue.branch_name ? <span className="truncate text-xs font-bold text-ui-subtle">{issue.branch_name}</span> : null}
                 </div>
                 <div className="text-end">
                   <div className="text-sm font-black text-ui-text">{formatNumber(n(issue.occurrences), 0)}×</div>
@@ -390,7 +398,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
 
           {!running && issues.length === 0 ? (
             <div className="p-6 text-center text-sm font-bold text-ui-muted">
-              {ar ? 'لا توجد مشاكل مستخدمين مسجلة في الفترة المحددة.' : 'No user issues were recorded in the selected window.'}
+              {ar ? 'لا توجد رموز أحداث في الفترة المحددة.' : 'No event codes were recorded in the selected period.'}
             </div>
           ) : null}
         </div>
