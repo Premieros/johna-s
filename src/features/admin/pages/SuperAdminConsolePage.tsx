@@ -29,6 +29,7 @@ import { DesignSurface } from '@/components/design/DesignSurface';
 import { DesignSearch } from '@/components/design/DesignSearch';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/PageHeader';
+import { BranchPulsePanel } from '../components/BranchPulsePanel';
 import { Input, Textarea, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { RolesTab } from './RolesTab';
@@ -951,7 +952,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
       {/* TAB 7: صحة وتشخيص النظام (Diagnostics)                        */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'health' && (
-        <div className="space-y-5 max-w-3xl animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
           <Card className="p-6 space-y-4">
             <div className="flex justify-between items-center">
               <div>
@@ -978,6 +979,8 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
               </div>
             )}
           </Card>
+
+          <BranchPulsePanel allBranches />
         </div>
       )}
 
