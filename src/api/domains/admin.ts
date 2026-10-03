@@ -19,4 +19,27 @@ export const admin = {
   updateFinancialVisibilitySettings(p: { p_recent_days: number; p_historical_percent: number }): ApiResult<{ success: boolean; recent_days?: number; historical_percent?: number; error?: string }> { return rpc('update_financial_visibility_settings', p); },
   bootstrapInitialSuperAdmin(p: { p_email: string; p_password: string; p_full_name?: string; p_username?: string }): ApiResult<{ success: boolean; user_id?: string; email?: string; error?: string; message?: string }> { return rpc('bootstrap_initial_super_admin', p); },
   getSystemHealthSnapshot(p: { p_branch_id: string | null }): ApiResult<Record<string, unknown>> { return rpc('get_system_health_snapshot', p); },
+  getBranchActivitySnapshot(p: { p_from: string; p_to: string; p_branch_id?: string | null }): ApiResult<Record<string, unknown>> { return rpc('get_branch_activity_snapshot', { p_branch_id: null, ...p }); },
+  getUserIssueSummary(p: { p_from: string; p_to: string; p_branch_id?: string | null; p_limit?: number }): ApiResult<Record<string, unknown>> { return rpc('get_user_issue_summary', { p_branch_id: null, p_limit: 50, ...p }); },
+  recordUserIssue(p: {
+    p_branch_id: string | null;
+    p_screen: string;
+    p_action: string;
+    p_error_code: string;
+    p_user_message: string;
+    p_issue_kind?: 'expected' | 'technical';
+    p_app_version?: string | null;
+    p_correlation_id?: string | null;
+    p_entity_type?: string | null;
+    p_entity_id?: string | null;
+  }): ApiResult<{ success?: boolean; event_id?: string; error?: string }> {
+    return rpc('record_user_issue', {
+      p_issue_kind: 'technical',
+      p_app_version: null,
+      p_correlation_id: null,
+      p_entity_type: null,
+      p_entity_id: null,
+      ...p,
+    });
+  },
 };
