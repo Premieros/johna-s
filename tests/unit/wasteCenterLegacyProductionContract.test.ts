@@ -19,4 +19,10 @@ describe('ERP-05 waste center legacy-production contract', () => {
       /label=\{ar \? 'نوع الهالك' : 'Waste Type'\}[\s\S]*?\{CREATABLE_WASTE_TYPES\.map\(wt => <option key=\{wt\.value\}/,
     );
   });
+
+  it('keeps the entry-time cost display-only until approval-time FIFO costing is authoritative', () => {
+    expect(source).toContain("label={ar ? 'تكلفة الوحدة التقديرية' : 'Estimated Unit Cost'}");
+    expect(source).toContain('readOnly');
+    expect(source).toContain('Final cost must come from the actual FIFO layers consumed when waste is approved.');
+  });
 });
