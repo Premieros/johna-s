@@ -60,6 +60,10 @@ State: **BLOCKED**
 - Runtime/report code was not implicated in that failure.
 - Documentation-only correction is being applied before re-running exact-head CI.
 - Supabase Preview is skipped for this PR because preview-per-PR is disabled and this track has no DB migration.
+- Exact-head `7013bcdb8df0f96b8d21aeb7af1391b7054dc1f3` passed worklog gate, lint, app typecheck and test-suite typecheck.
+- Unit suite result on that head: 1,339 passed; the new shift/treasury tests all passed; one pre-existing thermal readability contract failed only because it requires the literal heading `طرق الدفع / PAYMENTS`.
+- Compatibility fix `e9ddfc6e0fb71611c53e95d5d6e149ee212fac05` preserves that literal heading as `طرق الدفع / PAYMENTS (المحصلة فقط)` while keeping credit/employee-credit excluded from collected tenders.
+- No runtime financial logic changed in response to the compatibility failure.
 
 ## Production gate
 State: **BLOCKED**
