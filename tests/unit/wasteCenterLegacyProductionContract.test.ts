@@ -36,4 +36,8 @@ describe('ERP-05 waste center legacy-production contract', () => {
     expect(source).toContain('disabled={loading || categories.length === 0}');
     expect(source).toContain('No active waste categories are configured. Waste entry is disabled until category setup is completed.');
   });
+
+  it('prefers authoritative approved cost in the waste table', () => {
+    expect(source).toContain('r.approved_total_cost ?? r.total_cost ?? 0');
+  });
 });
