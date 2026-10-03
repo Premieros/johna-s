@@ -4,6 +4,9 @@
 
 BEGIN;
 
+ALTER TABLE public.waste_entries
+  ADD COLUMN IF NOT EXISTS approved_total_cost numeric(14,2);
+
 -- ---------------------------------------------------------------------
 -- 1. Repair/seed operational waste categories idempotently.
 -- ---------------------------------------------------------------------
@@ -445,6 +448,7 @@ BEGIN
   UPDATE public.waste_entries
   SET status = 'approved',
       unit_cost = v_display_unit_cost,
+      approved_total_cost = round(v_actual_cost, 2),
       approved_by = auth.uid(),
       approved_at = now(),
       updated_at = now(),
