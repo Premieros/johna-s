@@ -101,7 +101,7 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
             </div>
 
             <div
-              className="mt-5 h-2.5 overflow-hidden rounded-full bg-ui-surface-muted"
+              className="mt-5 h-2.5 overflow-hidden rounded-full bg-ui-page-alt"
               aria-hidden="true"
             >
               <div
