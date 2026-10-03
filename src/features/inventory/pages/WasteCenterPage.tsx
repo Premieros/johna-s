@@ -21,6 +21,7 @@ const WASTE_TYPES = [
   { value: 'damaged', ar: 'تالف', en: 'Damaged' },
 ] as const;
 
+const CREATABLE_WASTE_TYPES = WASTE_TYPES.filter((wt) => wt.value !== 'production');
 
 interface WasteForm {
   waste_category_id: string;
@@ -188,7 +189,7 @@ export function WasteCenterPage() {
           {can('waste.report') && <Button onClick={() => setShowReport(!showReport)} variant="outline"><BarChart3 className="h-4 w-4" /> {ar ? 'التقرير' : 'Report'}</Button>}
           <Select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-40">
             <option value="">{ar ? 'كل الأنواع' : 'All Types'}</option>
-            {WASTE_TYPES.filter((wt) => wt.value !== 'production').map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
+            {WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
           </Select>
           <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-36">
             <option value="">{ar ? 'كل الحالات' : 'All Statuses'}</option>
@@ -208,7 +209,7 @@ export function WasteCenterPage() {
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
           <Select label={ar ? 'نوع الهالك' : 'Waste Type'} value={form.waste_type} onChange={e => setForm(f => ({ ...f, waste_type: e.target.value }))}>
-            {WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
+            {CREATABLE_WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
           </Select>
           <Select label={ar ? 'نوع عنصر المخزون' : 'Inventory Item Type'} value={form.target_type} onChange={e => setForm(f => ({ ...f, target_type: e.target.value as WasteForm['target_type'], product_id: '', inventory_unit_id: '', unit_cost: 0 }))}>
             <option value="product">{ar ? 'منتج نهائي' : 'Finished Product'}</option>
