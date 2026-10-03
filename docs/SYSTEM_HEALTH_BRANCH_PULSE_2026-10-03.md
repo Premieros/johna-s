@@ -2,14 +2,14 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `development/system-health-branch-pulse-20261003`
-Current PR: `#439`
+Branch: `development/system-health-branch-pulse-production-closure-20261003`
+Current PR: `#440`
 Last updated: 2026-10-03
 
 ## Work status
 State: **BLOCKED**
 
-Implementation is isolated from Production. Merge requires exact-head Full Verify Green and explicit approval. Production application is a separate approval.
+Implementation PR #439 is merged and the approved Production migration has been applied successfully. This closure branch only reconciles repository documentation with the verified Production state. No further Production mutation is authorized by this closure PR.
 
 ## Guardrails
 - No direct write to `main`; no force push.
@@ -18,60 +18,62 @@ Implementation is isolated from Production. Merge requires exact-head Full Verif
 - System Health presentation remains read-only.
 - Branch Pulse uses one bounded domain RPC for all permitted branches.
 - Zero orders or zero sales alone never classify a branch as unhealthy.
-- Printing status must distinguish accepted submission from physical print confirmation.
-- Error telemetry stores only bounded structured fields required for diagnosis.
-- Existing `audit_log` remains an operational audit trail and is not repurposed for client errors.
-- No Production schema/data/history mutation during implementation.
+- Printing status distinguishes accepted submission from physical print confirmation.
+- Existing `audit_log` remains separate from client-error telemetry.
+- No additional Production schema/data/history mutation in this closure branch.
 
 ## Baseline
-- Base: `main@7873cea47fca31b371cddf0775fbd6e589e57838`.
-- Existing System Health uses `get_system_health_snapshot(p_branch_id)`.
-- Existing System Health permission is `settings.manage`.
-- Production has no dedicated error telemetry table.
-- Branch Pulse source tables exist for branches, orders, sales, cloud print jobs, purchases, expenses, and shifts.
-- Cloud print `submitted` means the system accepted the print call; it is not proof of physical paper output.
+- Implementation merged to `main@4b55bb50c768a0650e99fbe7500bc95a0fda70c5`.
+- PR #439 merged from exact head `92730adaccbf3ce07ddcd69702fec8a5bd04a26f`.
+- Exact-head Verify #3694 / workflow `37134438863`: verify Green / db Green / browser-smoke Green.
+- Approved Production migration source: `supabase/migrations/20261003150000_system_health_branch_pulse.sql`.
+- Production migration history entry: `20261003160107 system_health_branch_pulse_20261003`.
 
 ## Root-cause ledger
-1. Current System Health shows invariants but not recent activity by branch.
-2. Quiet branches and branches with cross-signal failures are not distinguished clearly.
-3. User-facing errors are transient and cannot be safely aggregated today.
-4. Reusing `audit_log` would mix business audit evidence with telemetry.
-5. Physical print success cannot be inferred from the current print contract.
+1. System Health previously showed operational invariants but not recent activity per branch.
+2. Quiet branches and cross-signal failures were not differentiated.
+3. User-visible errors were transient and had no bounded aggregation channel.
+4. Reusing `audit_log` would have mixed business audit evidence with telemetry.
+5. Print submission is not physical-paper confirmation and must remain labelled truthfully.
 
 ## Change ledger
-- Added forward-only repository migration `20261003150000_system_health_branch_pulse.sql`:
-  - private `user_issue_events` table with direct authenticated access revoked;
-  - bounded `record_user_issue` capture RPC with auth, branch guard, rate limit, field caps, and secret-pattern rejection;
-  - read-only `get_user_issue_summary` for System Health aggregation;
-  - read-only `get_branch_activity_snapshot` for all permitted branches in one RPC.
-- Branch Pulse uses selected period activity for orders, completed sales/net value, print submissions/failures, purchases, expenses, and current open shifts/operators.
-- Quiet branches are explicitly neutral; warnings are cross-signal only.
-- Printing remains truthful: submitted means accepted by the system/OS boundary; physical confirmation remains separate.
-- Added `src/lib/userIssueTelemetry.ts` with safe redaction and fire-and-forget capture.
-- Central capture wired to error Toasts and ErrorBoundary only; no per-screen mutation fanout.
-- Added `BranchPulsePanel` inside System Health with 30m / 1h / 3h / 6h / 12h / Today / 24h / Custom, Problems only, branch cards, and user issue aggregation.
-- Added unit and Fresh DB integration coverage.
-- Updated frontend API contract for the three new RPCs.
-- Production writes/applies: **none**.
+- Added Branch Pulse with 30m / 1h / 3h / 6h / 12h / Today / 24h / Custom windows.
+- Added per-branch orders, completed sales/value, print submitted/failed status, purchases/value, expenses/value, open shifts/operators, and cross-signal warnings.
+- Added explicit neutral `quiet` branch state.
+- Added Problems only filter.
+- Added private `user_issue_events` telemetry storage with direct authenticated/anon table access revoked.
+- Added bounded `record_user_issue`, `get_user_issue_summary`, and `get_branch_activity_snapshot` RPCs.
+- Central error capture is fire-and-forget from Toast and ErrorBoundary.
+- Production migration applied only after explicit user approval.
 
 ## Verification ledger
-- Production schema/status/index inspection: read-only only.
-- Confirmed no dedicated Production error/telemetry table exists before this work.
-- Confirmed cloud print `submitted` semantics from the canonical printing migration.
-- Static safety contract added: `tests/unit/systemHealthBranchPulseContract.test.ts`.
-- Fresh DB security/ACL integration added: `tests/integration/system_health_branch_pulse.test.ts`.
-- Verify #3693 / workflow `37131235991` on `f0473da0d572edc397f1cdfdf9e2d4c44362601a`: **verify Green / db Green / browser-smoke Green**.
+- Pre-apply: new table and all three RPCs absent from Production.
+- Production apply result: success.
+- Post-apply:
+  - `private.user_issue_events` exists and RLS is enabled.
+  - authenticated/anon direct SELECT/INSERT on telemetry table are denied.
+  - anon EXECUTE on all three new RPCs is denied.
+  - authenticated EXECUTE on intended RPC surface is present.
+  - all three RPCs return `AUTH_REQUIRED` without an authenticated identity.
+  - telemetry row count remained 0 after guard verification.
+  - live read-only Super Admin Branch Pulse returned success for 2 branches.
+  - live read-only issue summary returned success with 0 issue groups.
+- Supabase advisors:
+  - private telemetry table reports RLS-with-no-policy INFO; this is intentional because direct table access is revoked.
+  - the three public guarded RPCs report the existing SECURITY DEFINER executable warning class; auth/permission/branch checks remain inside each RPC.
+  - performance advisor reports an unindexed `user_id` foreign key on telemetry; no follow-up Production mutation was made without separate approval.
+  - unused-index notices on the two new indexes are expected immediately after creation.
 
 ## Production gate
 State: **BLOCKED**
 
-No Production apply is authorized. Forward-only migration may be committed and validated in CI only.
+The approved Branch Pulse Production migration is **APPLIED AND VERIFIED**. State remains BLOCKED only because the repository worklog contract requires the literal while this documentation-only closure PR is open. Any additional Production change, including a telemetry `user_id` index, requires a separate approval.
 
 ## Next action
-Run one final exact-head Full Verify after this worklog-only sync. If Green and `main` is unchanged, mark PR #439 ready and merge under the user's explicit approval. Production apply remains separately blocked.
+Merge this documentation-only closure after exact-head CI is Green. Keep ERP-05 Production migration separate and unapplied until explicitly approved.
 
 ## Mandatory update protocol
-- Reconcile latest `main` and branch head before material writes.
+- Reconcile latest `main` and closure branch head before merge.
 - Unexpected divergence => **STOP_AND_RECONCILE**.
-- Keep this log synchronized with code and verification.
-- Keep State **BLOCKED** until exact-head Full Verify is Green and merge is explicitly approved.
+- Do not perform additional Production mutation from this closure branch.
+- Keep State **BLOCKED** while the closure PR is open to satisfy the repository gate.
