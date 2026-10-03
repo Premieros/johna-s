@@ -185,7 +185,15 @@ export function WasteCenterPage() {
       <DesignPageHeader title={ar ? 'مركز الهالك' : 'Waste Center'} subtitle={ar ? 'تسجيل ومراجعة الهالك التشغيلي مع إبقاء السجلات التاريخية قابلة للعرض' : 'Record and review operational waste while keeping historical records visible.'} />
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          {can('waste.create') && <Button onClick={() => setShowForm(true)}><Plus className="h-4 w-4" /> {ar ? 'تسجيل هالك' : 'Record Waste'}</Button>}
+          {can('waste.create') && (
+            <Button
+              onClick={() => setShowForm(true)}
+              disabled={loading || categories.length === 0}
+              title={categories.length === 0 ? (ar ? 'لا توجد فئات هالك مفعلة' : 'No active waste categories') : undefined}
+            >
+              <Plus className="h-4 w-4" /> {ar ? 'تسجيل هالك' : 'Record Waste'}
+            </Button>
+          )}
           {can('waste.report') && <Button onClick={() => setShowReport(!showReport)} variant="outline"><BarChart3 className="h-4 w-4" /> {ar ? 'التقرير' : 'Report'}</Button>}
           <Select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-40">
             <option value="">{ar ? 'كل الأنواع' : 'All Types'}</option>
@@ -198,6 +206,13 @@ export function WasteCenterPage() {
             <option value="rejected">{ar ? 'مرفوض' : 'Rejected'}</option>
           </Select>
         </div>
+        {!loading && can('waste.create') && categories.length === 0 && (
+          <div className="rounded-xl border border-ui-warning/40 bg-ui-warning-soft px-4 py-3 text-sm text-ui-text">
+            {ar
+              ? 'لا توجد فئات هالك مفعلة حاليًا. التسجيل متوقف حتى يتم استكمال إعداد فئات الهالك.'
+              : 'No active waste categories are configured. Waste entry is disabled until category setup is completed.'}
+          </div>
+        )}
         {showReport && <WasteReport ar={ar} branchFilter={branchFilter} />}
         <DataTable columns={columns} data={filtered} loading={loading} />
       </div>
