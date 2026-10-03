@@ -59,7 +59,10 @@ Implementation is in Draft PR #438. Merge remains blocked until exact-head Full 
 ## Verification ledger
 - Branch initially matched main exactly.
 - PR #438 opened as Draft.
-- Exact-head CI after worklog synchronization: pending.
+- Run #3673 failed at lint because the new progress-loader contract test had a syntax error; runtime code was not exercised.
+- Run #3674 passed lint but failed TypeScript because `orderLoading` was not destructured in `CurrentOrderPanel`; fixed without changing business logic.
+- Run #3675 / workflow `37127282050` on `1ef1d2ac03050b72b38f5e4fc39b69a11ea7a755`: **verify Green / db Green / browser-smoke Green**.
+- Windows Print Agent workflow #168 also completed Green; no Print Agent files are changed in PR #438.
 
 ## Production gate
 State: **BLOCKED**
@@ -67,7 +70,7 @@ State: **BLOCKED**
 No Production database application exists for this track. Merge requires exact-head Green CI + explicit approval.
 
 ## Next action
-Run exact-head CI, fix only proven regressions, then reconcile PR #438 against latest `main`.
+Run one final exact-head CI after this worklog-only synchronization. If Green and main remains unchanged, stop at the explicit merge-approval gate for PR #438.
 
 ## Mandatory update protocol
 - Re-read latest `main` and branch HEAD before repository writes.
