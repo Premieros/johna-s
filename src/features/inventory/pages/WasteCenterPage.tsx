@@ -21,6 +21,7 @@ const WASTE_TYPES = [
   { value: 'damaged', ar: 'تالف', en: 'Damaged' },
 ] as const;
 
+const CREATABLE_WASTE_TYPES = WASTE_TYPES.filter((wt) => wt.value !== 'production');
 
 interface WasteForm {
   waste_category_id: string;
@@ -163,7 +164,7 @@ export function WasteCenterPage() {
     } },
     { key: 'quantity', header: ar ? 'الكمية' : 'Qty', render: r => formatQuantity(Number(r.quantity || 0), 3) },
     { key: 'unit_cost', header: ar ? 'تكلفة الوحدة' : 'Unit Cost', render: r => formatNumber(Number(r.unit_cost || 0), 1) },
-    { key: 'total_cost', header: ar ? 'الإجمالي' : 'Total', render: r => formatNumber(Number(r.total_cost || 0), 1) },
+    { key: 'total_cost', header: ar ? 'الإجمالي' : 'Total', render: r => formatNumber(Number(r.approved_total_cost ?? r.total_cost ?? 0), 1) },
     { key: 'reason', header: ar ? 'السبب' : 'Reason', render: r => r.reason ?? '-' },
     { key: 'status', header: ar ? 'الحالة' : 'Status', render: r => <span className={`font-bold ${statusColor(r.status)}`}>{r.status === 'approved' ? (ar ? 'معتمد' : 'Approved') : r.status === 'rejected' ? (ar ? 'مرفوض' : 'Rejected') : (ar ? 'قيد المراجعة' : 'Pending')}</span> },
   ];
@@ -184,11 +185,19 @@ export function WasteCenterPage() {
       <DesignPageHeader title={ar ? 'مركز الهالك' : 'Waste Center'} subtitle={ar ? 'تسجيل ومراجعة الهالك التشغيلي مع إبقاء السجلات التاريخية قابلة للعرض' : 'Record and review operational waste while keeping historical records visible.'} />
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          {can('waste.create') && <Button onClick={() => setShowForm(true)}><Plus className="h-4 w-4" /> {ar ? 'تسجيل هالك' : 'Record Waste'}</Button>}
+          {can('waste.create') && (
+            <Button
+              onClick={() => setShowForm(true)}
+              disabled={loading || categories.length === 0}
+              title={categories.length === 0 ? (ar ? 'لا توجد فئات هالك مفعلة' : 'No active waste categories') : undefined}
+            >
+              <Plus className="h-4 w-4" /> {ar ? 'تسجيل هالك' : 'Record Waste'}
+            </Button>
+          )}
           {can('waste.report') && <Button onClick={() => setShowReport(!showReport)} variant="outline"><BarChart3 className="h-4 w-4" /> {ar ? 'التقرير' : 'Report'}</Button>}
           <Select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-40">
             <option value="">{ar ? 'كل الأنواع' : 'All Types'}</option>
-            {WASTE_TYPES.filter((wt) => wt.value !== 'production').map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
+            {WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
           </Select>
           <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-36">
             <option value="">{ar ? 'كل الحالات' : 'All Statuses'}</option>
@@ -197,6 +206,13 @@ export function WasteCenterPage() {
             <option value="rejected">{ar ? 'مرفوض' : 'Rejected'}</option>
           </Select>
         </div>
+        {!loading && can('waste.create') && categories.length === 0 && (
+          <div className="rounded-xl border border-ui-warning/40 bg-ui-warning-soft px-4 py-3 text-sm text-ui-text">
+            {ar
+              ? 'لا توجد فئات هالك مفعلة حاليًا. التسجيل متوقف حتى يتم استكمال إعداد فئات الهالك.'
+              : 'No active waste categories are configured. Waste entry is disabled until category setup is completed.'}
+          </div>
+        )}
         {showReport && <WasteReport ar={ar} branchFilter={branchFilter} />}
         <DataTable columns={columns} data={filtered} loading={loading} />
       </div>
@@ -208,7 +224,7 @@ export function WasteCenterPage() {
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
           <Select label={ar ? 'نوع الهالك' : 'Waste Type'} value={form.waste_type} onChange={e => setForm(f => ({ ...f, waste_type: e.target.value }))}>
-            {WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
+            {CREATABLE_WASTE_TYPES.map(wt => <option key={wt.value} value={wt.value}>{ar ? wt.ar : wt.en}</option>)}
           </Select>
           <Select label={ar ? 'نوع عنصر المخزون' : 'Inventory Item Type'} value={form.target_type} onChange={e => setForm(f => ({ ...f, target_type: e.target.value as WasteForm['target_type'], product_id: '', inventory_unit_id: '', unit_cost: 0 }))}>
             <option value="product">{ar ? 'منتج نهائي' : 'Finished Product'}</option>
@@ -236,7 +252,20 @@ export function WasteCenterPage() {
             </Select>
           )}
           <Input label={ar ? 'الكمية' : 'Quantity'} type="number" min={0.001} step="0.001" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: +e.target.value }))} />
-          <Input label={ar ? 'تكلفة الوحدة' : 'Unit Cost'} type="number" min={0} step="0.01" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: +e.target.value }))} />
+          <Input
+            label={ar ? 'تكلفة الوحدة التقديرية' : 'Estimated Unit Cost'}
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.unit_cost}
+            readOnly
+            aria-describedby="waste-unit-cost-note"
+          />
+          <p id="waste-unit-cost-note" className="text-xs text-ui-subtle">
+            {ar
+              ? 'للعرض فقط. التكلفة النهائية تعتمد تكلفة FIFO الفعلية عند اعتماد الهالك.'
+              : 'Display only. Final cost must come from the actual FIFO layers consumed when waste is approved.'}
+          </p>
           <Textarea label={ar ? 'السبب' : 'Reason'} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowForm(false)}>{ar ? 'إلغاء' : 'Cancel'}</Button>

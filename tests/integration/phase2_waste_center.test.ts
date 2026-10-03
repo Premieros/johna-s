@@ -73,6 +73,11 @@ describe.skipIf(skip)('Phase 2 — waste center', () => {
       `INSERT INTO public.inventory (product_id, warehouse_id, quantity, branch_id) VALUES ($1, $2, 20, $3)`,
       [productId, whId, branchId],
     );
+    await client.query(
+      `INSERT INTO public.inventory_batches (product_id, warehouse_id, branch_id, quantity, unit_cost, expiry_date)
+       VALUES ($1, $2, $3, 20, 10, CURRENT_DATE + 30)`,
+      [productId, whId, branchId],
+    );
     await client.query(`INSERT INTO public.waste_categories (id, name, name_en) VALUES ($1, 'Test Waste', 'Test Waste')`, [catId]);
   });
 
@@ -113,11 +118,12 @@ describe.skipIf(skip)('Phase 2 — waste center', () => {
       wasteId = result[0].create_waste_entry;
       expect(wasteId).toBeTruthy();
 
-      const rows = await q<{ status: string; waste_type: string; quantity: string }>(
-        `SELECT status, waste_type, quantity::text FROM public.waste_entries WHERE id = $1`, [wasteId]
+      const rows = await q<{ status: string; waste_type: string; quantity: string; employee_id: string }>(
+        `SELECT status, waste_type, quantity::text, employee_id::text FROM public.waste_entries WHERE id = $1`, [wasteId]
       );
       expect(rows[0].status).toBe('pending');
       expect(rows[0].waste_type).toBe('damaged');
+      expect(rows[0].employee_id).toBe(adminUser);
     });
   });
 
@@ -169,6 +175,14 @@ describe.skipIf(skip)('Phase 2 — waste center', () => {
     await asAdmin(async () => {
       await expectDbError(() =>
         client.query(`SELECT public.create_waste_entry($1,$2,$3,$4,$5,$6,NULL,NULL,$7,$8,NULL)`, [branchId, catId, 'invalid', 1, 1, null, productId, whId])
+      );
+    });
+  });
+
+  it('create_waste_entry rejects legacy production waste', async () => {
+    await asAdmin(async () => {
+      await expectDbError(() =>
+        client.query(`SELECT public.create_waste_entry($1,$2,$3,$4,$5,$6,NULL,NULL,$7,$8,NULL)`, [branchId, catId, 'production', 1, 1, null, productId, whId])
       );
     });
   });
