@@ -21,6 +21,14 @@ type ActiveOrderSnapshotRow = Order & {
   order_kitchen_sends?: OrderKitchenSend[] | null;
 };
 
+type WorkspaceOrderItemRow = OrderItem & {
+  product?: Product | null;
+};
+
+type WorkspaceOrderRow = Order & {
+  order_items?: WorkspaceOrderItemRow[] | null;
+};
+
 const OPERATOR_LABEL_CACHE_TTL_MS = 15_000;
 
 type OperatorLabelCacheEntry = {
@@ -132,22 +140,32 @@ export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: 
     throw new Error(access?.error || 'ORDER_OPERATOR_REQUIRED');
   }
 
-  const { data: o, error: orderError } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+  const { data: o, error: orderError } = await supabase
+    .from('orders')
+    .select('*, order_items!order_items_order_id_fkey(*, product:products!order_items_product_id_fkey(*))')
+    .eq('id', orderId)
+    .maybeSingle();
   if (orderError) throw orderError;
-  const order = (o as Order | null) || null;
-  if (!order) return { order: null, items: [], products: [] };
 
-  const { data: items, error: itemsError } = await supabase.from('order_items').select('*').eq('order_id', orderId);
-  if (itemsError) throw itemsError;
-  const itemRows = (items as OrderItem[]) || [];
-  const ids = itemRows.map((i) => i.product_id).filter(Boolean) as string[];
-  let products: Product[] = [];
-  if (ids.length > 0) {
-    const { data: prods, error: productsError } = await supabase.from('products').select('*').in('id', ids).eq('branch_id', order.branch_id);
-    if (productsError) throw productsError;
-    products = (prods as Product[]) || [];
-  }
-  return { order, items: itemRows, products };
+  const row = (o as WorkspaceOrderRow | null) || null;
+  if (!row) return { order: null, items: [], products: [] };
+
+  const embeddedItems = row.order_items || [];
+  const productsById = new Map<string, Product>();
+  const itemRows = embeddedItems.map((item) => {
+    if (item.product?.id) productsById.set(item.product.id, item.product);
+    const { product: _product, ...baseItem } = item;
+    void _product;
+    return baseItem as OrderItem;
+  });
+  const { order_items: _orderItems, ...baseOrder } = row;
+  void _orderItems;
+
+  return {
+    order: baseOrder as Order,
+    items: itemRows,
+    products: Array.from(productsById.values()),
+  };
 }
 
 export async function resolveMyActiveTableOrder(tableId: string): Promise<MyActiveTableOrderResolution> {

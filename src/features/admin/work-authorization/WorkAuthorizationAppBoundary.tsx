@@ -8,6 +8,7 @@ import { useCan } from '@/lib/permissions';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { WorkAuthorizationGate } from './WorkAuthorizationGate';
 import { createSupabaseWorkAuthorizationClient } from './supabaseWorkAuthorizationProvider';
+import { PageLoadFallback } from '@/components/PageProgressLoader';
 
 const WORK_AUTHORIZATION_GATE_ENABLED =
   import.meta.env.VITE_WORK_AUTHORIZATION_GATE === '1';
@@ -34,11 +35,7 @@ function EnabledWorkAuthorizationBoundary({ children }: { children: ReactNode })
   }
 
   if (branchesLoading && !branchId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-ui-page">
-        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-ui-primary" />
-      </div>
-    );
+    return <PageLoadFallback />;
   }
 
   if (!branchId) return <>{children}</>;

@@ -6,6 +6,7 @@ import { SessionProfileGuard } from '@/core/security/SessionProfileGuard';
 import { CloudPrintAgent } from '@/features/pos/components/settings/CloudPrintAgent';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { WorkAuthorizationAppBoundary } from '@/features/admin/work-authorization/WorkAuthorizationAppBoundary';
+import { PageLoadProgressProvider } from '@/components/PageProgressLoader';
 
 const FinancialVisibilityAdminControl = lazy(() =>
   import('@/features/admin/components/FinancialVisibilityAdminControl').then((module) => ({
@@ -43,15 +44,17 @@ function RouteScopedExtras() {
 export default function App() {
   return (
     <AppProviders>
-      <SessionProfileGuard>
-        <WorkAuthorizationAppBoundary>
-          <>
-            <AppRoutes />
-            <RouteScopedExtras />
-          </>
-        </WorkAuthorizationAppBoundary>
-        <CloudPrintAgent />
-      </SessionProfileGuard>
+      <PageLoadProgressProvider>
+        <SessionProfileGuard>
+          <WorkAuthorizationAppBoundary>
+            <>
+              <AppRoutes />
+              <RouteScopedExtras />
+            </>
+          </WorkAuthorizationAppBoundary>
+          <CloudPrintAgent />
+        </SessionProfileGuard>
+      </PageLoadProgressProvider>
     </AppProviders>
   );
 }
