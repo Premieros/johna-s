@@ -428,6 +428,14 @@
       ]
     },
     {
+      "name": "get_branch_activity_snapshot",
+      "params": [
+        "branch_id",
+        "from",
+        "to"
+      ]
+    },
+    {
       "name": "get_branch_treasury_day_close_reconciliation",
       "params": [
         "branch_id",
@@ -791,6 +799,15 @@
       ]
     },
     {
+      "name": "get_user_issue_summary",
+      "params": [
+        "branch_id",
+        "from",
+        "limit",
+        "to"
+      ]
+    },
+    {
       "name": "link_employee_credit_account",
       "params": [
         "branch_id",
@@ -1116,6 +1133,21 @@
         "rfq_id",
         "supplier_id",
         "valid_until"
+      ]
+    },
+    {
+      "name": "record_user_issue",
+      "params": [
+        "action",
+        "app_version",
+        "branch_id",
+        "correlation_id",
+        "entity_id",
+        "entity_type",
+        "error_code",
+        "issue_kind",
+        "screen",
+        "user_message"
       ]
     },
     {
