@@ -237,7 +237,20 @@ export function WasteCenterPage() {
             </Select>
           )}
           <Input label={ar ? 'الكمية' : 'Quantity'} type="number" min={0.001} step="0.001" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: +e.target.value }))} />
-          <Input label={ar ? 'تكلفة الوحدة' : 'Unit Cost'} type="number" min={0} step="0.01" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: +e.target.value }))} />
+          <Input
+            label={ar ? 'تكلفة الوحدة التقديرية' : 'Estimated Unit Cost'}
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.unit_cost}
+            readOnly
+            aria-describedby="waste-unit-cost-note"
+          />
+          <p id="waste-unit-cost-note" className="text-xs text-ui-subtle">
+            {ar
+              ? 'للعرض فقط. التكلفة النهائية تعتمد تكلفة FIFO الفعلية عند اعتماد الهالك.'
+              : 'Display only. Final cost must come from the actual FIFO layers consumed when waste is approved.'}
+          </p>
           <Textarea label={ar ? 'السبب' : 'Reason'} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowForm(false)}>{ar ? 'إلغاء' : 'Cancel'}</Button>
