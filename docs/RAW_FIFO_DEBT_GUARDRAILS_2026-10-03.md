@@ -3,6 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/raw-fifo-debt-guardrails-20261003`
+Current PR: `#435`
 Baseline: `main@bbc866904a05317046b738bde94b9e23dae839cf`
 Last updated: 2026-10-03
 
@@ -62,9 +63,10 @@ State: **BLOCKED**
 ## Verification ledger
 - Production audit is read-only and complete for database health, journals, shifts, raw balances, batches, FIFO debt and debt pricing.
 - No Production writes performed in this workstream.
-- Exact-head CI: pending.
-- Fresh DB/schema/integration/security/RLS: pending.
-- Browser smoke: pending.
+- Initial exact-head `63e1289a338732dec39e91c38d80ce517e24d908`: Fresh DB/schema/integration/security/RLS ✅ Green; PR scope ✅ Green.
+- `Verify main` run `37110811208` stopped before lint/typecheck/tests only because the mandatory worklog lacked the `Current PR` line; runtime/migration code was not implicated.
+- Documentation-only correction adds `Current PR: #435`; a new exact-head CI run is required.
+- Browser smoke: pending on the corrected head.
 
 ## Production gate
 State: **BLOCKED**
