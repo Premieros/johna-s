@@ -1,45 +1,43 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **ERP-04 Unified Accounting Posting**
+- Track: **Shift Closing / Treasury Report Reconciliation**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `b44298405066e1bcf06cc8eb0e3678b1c7d21fc7`
-- Active development branch: `development/erp04-unified-accounting-posting-20261003`
-- Mandatory active work log: `docs/ERP04_UNIFIED_ACCOUNTING_POSTING_2026-10-03.md`
+- Latest main baseline reconciled: `06f3045de8b47dc59fdee95a0c7e535b81ef8b8c`
+- Active development branch: `fix/shift-closing-treasury-report-20261003`
+- Mandatory active work log: `docs/SHIFT_CLOSING_TREASURY_REPORT_RECONCILIATION_2026-10-03.md`
+- Current PR: `#434`
 
-## Safety fence
+## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
-- CI يجب أن يفشل إذا السجل الإلزامي مفقود أو لا يطابق المسار النشط.
+- CI يجب أن يفشل إذا كان السجل الإلزامي مفقودًا أو لا يطابق المسار النشط.
 - Single writer on the active branch.
-- No direct write to `main`.
-- No force push.
+- No direct write to `main`; no force push.
 - Unexpected branch HEAD or latest-main movement => **STOP_AND_RECONCILE**.
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
-- No Production DB write, schema change, data rewrite, migration-history repair or journal backfill without separate explicit approval.
-- Preserve Permission-First, RLS, branch isolation, idempotency and audit history.
-- Never silently rewrite posted journal truth.
-- Printing, Print Agent, printer routing, KDS and `send_to_kitchen` are frozen.
+- No Production DB/schema/migration/data write in this reporting track.
+- Sales, payments, treasury journals, printing, Print Agent, KDS, printer routing and `send_to_kitchen` are frozen.
+- The report may explain financial truth; it must not mutate financial truth.
 
 ## Current objective
-Close ERP-04 by proving and fixing only real accounting-posting gaps. The first proven gap is stock-count application: inventory quantity changes are applied through FIFO helpers but no GL entry is posted, while manual stock adjustments already post inventory-versus-stock-variance journals.
+Correct the live shift-closing report so collected money, receivables, drawer cash and non-drawer treasury expenses are presented consistently in A4 and thermal output.
 
 ## Measured basis
-- Core sale posting reaches `_post_journal_entry` through `_process_sale_core`.
-- Purchase, purchase-return, treasury and manual journal flows already use the central journal writer.
-- Split sale/refund paths intentionally reuse the canonical journal and replace only collection-side cash/bank lines.
-- `apply_stock_count` changes product/raw stock but does not call the central journal writer.
-- Existing account mappings `inventory_fg`, `inventory_rm`, and `stock_variance` exist for both active Production branches.
-- Production remains read-only for this track until explicit approval.
+- Smouha shift `c8ff4fae-ceed-4dd3-ae8f-2f63bce55ce0`: net sales 13,421 EGP; cash 3,694; card 9,375; customer credit 352.
+- True collected amount is 13,069 EGP; the 352 EGP credit is accounts receivable, not cash/bank collection.
+- Two 1,000 EGP expenses were posted from organization `main_cash`, not the cashier drawer; expected drawer 3,694 and actual 3,695 are therefore correct.
+- Current A4 labels all 2,000 EGP as cash-drawer expenses, which is misleading.
+- Current server adapter computes average ticket from `net_revenue` after expenses; correct average ticket is `net_sales / invoice_count`.
+- Thermal text and A4 currently use different semantics for net sales/net revenue.
+- Restaurant health was verified read-only before this track: both branches closed cleanly, no open orders, no print backlog/errors, and database locks/idle-in-transaction were clean.
 
 ## Definition of done
-- Applying a stock count posts one balanced, idempotent journal tied to the stock-count document.
-- Positive/negative product and raw-material variances use the same accounting semantics as existing manual adjustment RPCs.
-- Posting failure rolls back the stock-count inventory mutation atomically.
-- Existing count lifecycle, permissions, FIFO behavior and idempotent terminal status remain unchanged.
-- Exact-head Full Verify + DB/security/RLS + Browser Smoke are Green.
-- Final branch/main reconciliation is clean.
-- Merge and any Production migration occur only with explicit approval.
-
-> Older work plans/logs are archival evidence only unless this file explicitly names them as active.
+- Credit/employee-credit appears only as uncollected receivables, not under collected payment methods.
+- Collected total equals physical tenders only.
+- Average ticket uses net sales before operating expenses.
+- Drawer reconciliation shows only expenses that actually affected the cashier drawer; other treasury/bank expenses are shown separately.
+- A4 and thermal use the same labels and financial semantics.
+- No sale/payment/treasury journal/printing behavior changes.
+- Exact-head verify + tests + build + browser smoke are Green before merge.

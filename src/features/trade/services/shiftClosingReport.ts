@@ -1,6 +1,7 @@
 import { supabase } from '@/api';
 import { formatCurrency, formatDateTime, escapeHtml } from '@/lib/format';
 import type { Language } from '@/lib/types';
+import { summarizeExpenseSources, summarizeShiftPayments } from './shiftClosingReportMath';
 
 export interface ShiftClosingSummary {
   shiftId: string;
@@ -22,6 +23,8 @@ export interface ShiftClosingSummary {
   returns: number;
   voids: number;
   expenses: number;
+  drawerExpenses?: number;
+  nonDrawerExpenses?: number;
   cashPurchases?: number;
   netRevenue: number;
   totalTaxes: number;
@@ -60,6 +63,7 @@ export interface ShiftClosingSummary {
 
   expenseDetails?: {
     expenseId: string;
+    affectsDrawer?: boolean;
     category: string;
     description: string;
     amount: number;
@@ -384,6 +388,7 @@ function zThermalPaymentLabel(method: string, fallback: string, isAr: boolean): 
     bank_transfer: ['تحويل بنكي', 'BANK TRANSFER'],
     instapay: ['إنستاباي', 'INSTAPAY'],
     credit: ['آجل', 'CREDIT'],
+    employee_credit: ['آجل موظفين', 'EMPLOYEE CREDIT'],
   };
   const label = labels[key];
   if (label) return isAr ? `${label[0]} / ${label[1]}` : label[1];
@@ -397,6 +402,8 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
   const splitTenderCount = (summary.salesDetails || []).filter(
     (sale) => (sale.payments || []).filter((payment) => Number(payment.amount) > 0).length > 1,
   ).length;
+  const paymentSummary = summarizeShiftPayments(summary.paymentMethods);
+  const expenseSummary = summarizeExpenseSources(summary.expenses, [], summary.drawerExpenses);
 
   const rows: string[] = [
     summary.branchName,
@@ -417,13 +424,26 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
     `${isAr ? 'المصروفات' : 'Expenses'}: ${money(summary.expenses)}`,
     `${isAr ? 'مشتريات كاش' : 'Cash Purchases'}: ${money(summary.cashPurchases || 0)}`,
     `${isAr ? 'صافي المبيعات' : 'Net Sales'}: ${money(summary.netSales)}`,
-    `${isAr ? 'صافي الإيراد' : 'Net Revenue'}: ${money(summary.netRevenue)}`,
+    `${isAr ? 'متوسط الفاتورة' : 'Average Ticket'}: ${money(summary.avgTicket)}`,
+    `${isAr ? 'صافي بعد المصروفات' : 'Net after expenses'}: ${money(summary.netRevenue)}`,
     line,
-    isAr ? 'طرق الدفع / PAYMENTS' : 'PAYMENTS',
-    ...summary.paymentMethods.map((pm) =>
+    isAr ? 'طرق الدفع / PAYMENTS (المحصلة فقط)' : 'COLLECTED PAYMENTS',
+    ...paymentSummary.collected.map((pm) =>
       `${zThermalPaymentLabel(pm.method, pm.label, isAr)}: ${money(pm.total)} (${zThermalNumber(pm.count, 0)})`
     ),
+    `${isAr ? 'إجمالي المحصل' : 'Collected total'}: ${money(paymentSummary.collectedTotal)}`,
   ];
+
+  if (paymentSummary.receivables.length > 0) {
+    rows.push(
+      line,
+      isAr ? 'آجل / ذمم غير محصلة' : 'UNCOLLECTED RECEIVABLES',
+      ...paymentSummary.receivables.map((pm) =>
+        `${zThermalPaymentLabel(pm.method, pm.label, isAr)}: ${money(pm.total)} (${zThermalNumber(pm.count, 0)})`
+      ),
+      `${isAr ? 'إجمالي الآجل' : 'Receivables total'}: ${money(paymentSummary.receivableTotal)}`,
+    );
+  }
 
   if (splitTenderCount > 0) {
     rows.push(`${isAr ? 'فواتير دفع مقسم' : 'Split-tender invoices'}: ${splitTenderCount}`);
@@ -433,6 +453,10 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
     line,
     isAr ? 'النقدية / CASH DRAWER' : 'CASH DRAWER',
     `${isAr ? 'رصيد الافتتاح' : 'Opening Cash'}: ${money(summary.openingAmount)}`,
+    `${isAr ? 'مصروفات من درج الوردية' : 'Drawer expenses'}: ${money(expenseSummary.drawerExpenses)}`,
+    ...(expenseSummary.nonDrawerExpenses > 0
+      ? [`${isAr ? 'مصروفات خارج الدرج' : 'Expenses outside drawer'}: ${money(expenseSummary.nonDrawerExpenses)}`]
+      : []),
     `${isAr ? 'المتوقع بالدرج' : 'Expected Cash'}: ${money(summary.expectedAmount)}`,
     `${isAr ? 'الفعلي بالدرج' : 'Actual Counted'}: ${money(summary.actualAmount)}`,
     `${isAr ? 'الفارق' : 'Difference'}: ${money(summary.difference)}`,
@@ -450,6 +474,8 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
   const dir = isAr ? 'rtl' : 'ltr';
 
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
+  const paymentSummary = summarizeShiftPayments(summary.paymentMethods);
+  const expenseSummary = summarizeExpenseSources(summary.expenses, [], summary.drawerExpenses);
 
   return `<!doctype html>
 <html dir="${dir}" lang="${isAr ? 'ar' : 'en'}">
@@ -545,15 +571,40 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     <span>${isAr ? 'صافي المبيعات:' : 'Net Sales:'}</span>
     <span>${formatCurrency(summary.netSales, currency, lang)}</span>
   </div>
+  <div class="flex justify-between py-1">
+    <span>${isAr ? 'متوسط الفاتورة:' : 'Average Ticket:'}</span>
+    <span>${formatCurrency(summary.avgTicket, currency, lang)}</span>
+  </div>
+  <div class="flex justify-between py-1">
+    <span>${isAr ? 'صافي بعد المصروفات:' : 'Net after expenses:'}</span>
+    <span>${formatCurrency(summary.netRevenue, currency, lang)}</span>
+  </div>
 
   <!-- Payment Methods Breakdown -->
-  <div class="section-title">${isAr ? 'طرق الدفع' : 'PAYMENT METHODS'}</div>
-  ${summary.paymentMethods.map((pm) => `
+  <div class="section-title">${isAr ? 'طرق الدفع المحصلة' : 'COLLECTED PAYMENTS'}</div>
+  ${paymentSummary.collected.map((pm) => `
     <div class="flex justify-between py-1">
       <span>${escapeHtml(pm.label)} (${pm.count}):</span>
       <span class="font-bold">${formatCurrency(pm.total, currency, lang)}</span>
     </div>
   `).join('')}
+  <div class="flex justify-between py-1 font-black">
+    <span>${isAr ? 'إجمالي المحصل:' : 'Collected total:'}</span>
+    <span>${formatCurrency(paymentSummary.collectedTotal, currency, lang)}</span>
+  </div>
+  ${paymentSummary.receivables.length > 0 ? `
+    <div class="section-title">${isAr ? 'آجل / ذمم غير محصلة' : 'UNCOLLECTED RECEIVABLES'}</div>
+    ${paymentSummary.receivables.map((pm) => `
+      <div class="flex justify-between py-1">
+        <span>${escapeHtml(pm.label)} (${pm.count}):</span>
+        <span class="font-bold">${formatCurrency(pm.total, currency, lang)}</span>
+      </div>
+    `).join('')}
+    <div class="flex justify-between py-1 font-black">
+      <span>${isAr ? 'إجمالي الآجل:' : 'Receivables total:'}</span>
+      <span>${formatCurrency(paymentSummary.receivableTotal, currency, lang)}</span>
+    </div>
+  ` : ''}
 
   ${(summary.salesDetails || []).length > 0 ? `
     <div class="section-title">${isAr ? 'الفواتير وطرق الدفع' : 'INVOICES & TENDERS'}</div>
@@ -575,9 +626,15 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     <span>${formatCurrency(summary.openingAmount, currency, lang)}</span>
   </div>
   <div class="flex justify-between py-1">
-    <span>${isAr ? 'المصروفات:' : 'Expenses:'}</span>
-    <span>-${formatCurrency(summary.expenses, currency, lang)}</span>
+    <span>${isAr ? 'مصروفات من درج الوردية:' : 'Drawer expenses:'}</span>
+    <span>-${formatCurrency(expenseSummary.drawerExpenses, currency, lang)}</span>
   </div>
+  ${expenseSummary.nonDrawerExpenses > 0 ? `
+    <div class="flex justify-between py-1">
+      <span>${isAr ? 'مصروفات خارج الدرج (خزنة / بنك):' : 'Expenses outside drawer (treasury / bank):'}</span>
+      <span>-${formatCurrency(expenseSummary.nonDrawerExpenses, currency, lang)}</span>
+    </div>
+  ` : ''}
   <div class="flex justify-between py-1">
     <span>${isAr ? 'مشتريات كاش:' : 'Cash Purchases:'}</span>
     <span>-${formatCurrency(summary.cashPurchases || 0, currency, lang)}</span>
@@ -697,6 +754,8 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
   const isAr = lang === 'ar';
   const dir = isAr ? 'rtl' : 'ltr';
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
+  const paymentSummary = summarizeShiftPayments(summary.paymentMethods);
+  const expenseSummary = summarizeExpenseSources(summary.expenses, [], summary.drawerExpenses);
 
   return `<!doctype html>
 <html dir="${dir}" lang="${isAr ? 'ar' : 'en'}">
@@ -820,7 +879,9 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
             <tr><td>${isAr ? 'إجمالي المبيعات (Gross):' : 'Gross Sales:'}</td><td class="text-end font-bold">${formatCurrency(summary.grossSales, currency, lang)}</td></tr>
             <tr><td>${isAr ? 'إجمالي الخصومات:' : 'Total Discounts:'}</td><td class="text-end font-bold" style="color: #dc2626;">-${formatCurrency(summary.totalDiscounts, currency, lang)}</td></tr>
             <tr><td>${isAr ? 'إجمالي الضرائب:' : 'Total Taxes:'}</td><td class="text-end font-bold">+${formatCurrency(summary.totalTaxes, currency, lang)}</td></tr>
-            <tr style="background: #f1f5f9; font-weight: 900;"><td>${isAr ? 'صافي الإيراد (Net):' : 'Net Revenue:'}</td><td class="text-end font-bold">${formatCurrency(summary.netSales, currency, lang)}</td></tr>
+            <tr style="background: #f1f5f9; font-weight: 900;"><td>${isAr ? 'صافي المبيعات:' : 'Net Sales:'}</td><td class="text-end font-bold">${formatCurrency(summary.netSales, currency, lang)}</td></tr>
+            <tr><td>${isAr ? 'إجمالي المصروفات:' : 'Total Expenses:'}</td><td class="text-end font-bold" style="color: #dc2626;">-${formatCurrency(summary.expenses, currency, lang)}</td></tr>
+            <tr style="background: #f8fafc; font-weight: 900;"><td>${isAr ? 'صافي بعد المصروفات:' : 'Net after expenses:'}</td><td class="text-end font-bold">${formatCurrency(summary.netRevenue, currency, lang)}</td></tr>
           </tbody>
         </table>
       </div>
@@ -830,7 +891,8 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
         <table>
           <tbody>
             <tr><td>${isAr ? 'رصيد الافتتاح:' : 'Opening Cash:'}</td><td class="text-end">${formatCurrency(summary.openingAmount, currency, lang)}</td></tr>
-            <tr><td>${isAr ? 'المصروفات النقدية:' : 'Cash Expenses:'}</td><td class="text-end">-${formatCurrency(summary.expenses, currency, lang)}</td></tr>
+            <tr><td>${isAr ? 'مصروفات من درج الوردية:' : 'Drawer Expenses:'}</td><td class="text-end">-${formatCurrency(expenseSummary.drawerExpenses, currency, lang)}</td></tr>
+            ${expenseSummary.nonDrawerExpenses > 0 ? `<tr><td>${isAr ? 'مصروفات خارج الدرج (خزنة / بنك):' : 'Expenses Outside Drawer (Treasury / Bank):'}</td><td class="text-end">-${formatCurrency(expenseSummary.nonDrawerExpenses, currency, lang)}</td></tr>` : ''}
             <tr><td>${isAr ? 'مشتريات الكاش:' : 'Cash Purchases:'}</td><td class="text-end">-${formatCurrency(summary.cashPurchases || 0, currency, lang)}</td></tr>
             <tr><td>${isAr ? 'المتوقع بالدرج:' : 'Expected Cash:'}</td><td class="text-end font-bold">${formatCurrency(summary.expectedAmount, currency, lang)}</td></tr>
             <tr><td>${isAr ? 'الفعلي بالدرج (العد):' : 'Actual Counted:'}</td><td class="text-end font-bold">${formatCurrency(summary.actualAmount, currency, lang)}</td></tr>
@@ -841,7 +903,7 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
     </div>
 
     <!-- Payment Methods -->
-    <h3 class="section-heading">${isAr ? 'تفصيل طرق الدفع المحصلة' : 'Payment Methods Breakdown'}</h3>
+    <h3 class="section-heading">${isAr ? 'تفصيل طرق الدفع المحصلة' : 'Collected Payment Methods'}</h3>
     <table>
       <thead>
         <tr>
@@ -851,15 +913,44 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
         </tr>
       </thead>
       <tbody>
-        ${summary.paymentMethods.map((pm) => `
+        ${paymentSummary.collected.map((pm) => `
           <tr>
             <td style="font-weight: 700;">${escapeHtml(pm.label)}</td>
             <td class="text-center">${pm.count}</td>
             <td class="text-end font-bold">${formatCurrency(pm.total, currency, lang)}</td>
           </tr>
         `).join('')}
+        <tr style="background:#f1f5f9;font-weight:900;">
+          <td>${isAr ? 'إجمالي المحصل فعليًا' : 'Collected Total'}</td>
+          <td></td>
+          <td class="text-end">${formatCurrency(paymentSummary.collectedTotal, currency, lang)}</td>
+        </tr>
       </tbody>
     </table>
+
+    ${paymentSummary.receivables.length > 0 ? `
+      <h3 class="section-heading">${isAr ? 'آجل / ذمم غير محصلة' : 'Uncollected Receivables'}</h3>
+      <table>
+        <thead><tr>
+          <th>${isAr ? 'نوع الآجل' : 'Receivable Type'}</th>
+          <th class="text-center">${isAr ? 'عدد العمليات' : 'Transactions'}</th>
+          <th class="text-end">${isAr ? 'المبلغ غير المحصل' : 'Uncollected Amount'}</th>
+        </tr></thead>
+        <tbody>
+          ${paymentSummary.receivables.map((pm) => `
+            <tr>
+              <td style="font-weight:700;">${escapeHtml(pm.label)}</td>
+              <td class="text-center">${pm.count}</td>
+              <td class="text-end font-bold">${formatCurrency(pm.total, currency, lang)}</td>
+            </tr>
+          `).join('')}
+          <tr style="background:#fff7ed;font-weight:900;">
+            <td>${isAr ? 'إجمالي الآجل' : 'Receivables Total'}</td><td></td>
+            <td class="text-end">${formatCurrency(paymentSummary.receivableTotal, currency, lang)}</td>
+          </tr>
+        </tbody>
+      </table>
+    ` : ''}
 
     ${(summary.salesDetails || []).length > 0 ? `
       <h3 class="section-heading">${isAr ? 'الفواتير ودفعات كل فاتورة' : 'Invoices & Tender Allocation'}</h3>
@@ -889,11 +980,17 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
         <thead><tr>
           <th>${isAr ? 'التصنيف' : 'Category'}</th><th>${isAr ? 'البيان' : 'Description'}</th>
           <th>${isAr ? 'المستخدم' : 'User'}</th><th>${isAr ? 'الدفع' : 'Payment'}</th>
+          <th>${isAr ? 'المصدر' : 'Source'}</th>
           <th class="text-end">${isAr ? 'المبلغ' : 'Amount'}</th>
         </tr></thead>
         <tbody>${(summary.expenseDetails || []).map((e) => `<tr>
           <td>${escapeHtml(e.category || '-')}</td><td>${escapeHtml(e.description || '-')}</td>
           <td>${escapeHtml(e.createdByName || '-')}</td><td>${escapeHtml(e.paymentMethod || '-')}</td>
+          <td>${e.affectsDrawer === true
+            ? (isAr ? 'درج الوردية' : 'Shift drawer')
+            : e.affectsDrawer === false
+              ? (isAr ? 'خزنة / بنك خارج الدرج' : 'Treasury / bank outside drawer')
+              : '-'}</td>
           <td class="text-end font-bold">${formatCurrency(e.amount, currency, lang)}</td>
         </tr>`).join('')}</tbody>
       </table>

@@ -1,5 +1,6 @@
 import { supabase, shifts as shiftsApi, costing as costingApi } from '@/api';
 import type { ShiftClosingSummary } from './shiftClosingReport';
+import { averageShiftTicket, resolveShiftExpectedCash, summarizeExpenseSources } from './shiftClosingReportMath';
 
 type ShiftOperationRow = {
   operation_type: string;
@@ -48,13 +49,23 @@ const ORDER_LABELS: Record<string, string> = {
 };
 
 export async function fetchShiftClosingReportServer(shiftId: string): Promise<ShiftClosingSummary> {
-  const [reportRes, tenderRes] = await Promise.all([
+  const [reportRes, tenderRes, shiftOpsRes] = await Promise.all([
     supabase.rpc('get_shift_closing_report', { p_shift_id: shiftId }),
     shiftsApi.getSaleTenders({ p_shift_id: shiftId }),
+    supabase
+      .from('shift_operations')
+      .select('operation_type,amount,payment_method,reference_type,reference_id')
+      .eq('shift_id', shiftId),
   ]);
   if (reportRes.error) throw new Error(reportRes.error.message);
+  if (shiftOpsRes.error) throw new Error(`SHIFT_REPORT_OPERATIONS_LOAD_FAILED: ${shiftOpsRes.error.message}`);
   const raw = reportRes.data as Record<string, unknown> | null;
   if (!raw?.success) throw new Error(String(raw?.detail || raw?.error || 'Could not load shift closing report'));
+
+  const shiftOperations = (shiftOpsRes.data || []) as ShiftOperationRow[];
+  const totalExpenses = Number(raw.expenses || 0);
+  const expenseSources = summarizeExpenseSources(totalExpenses, shiftOperations);
+  const drawerExpenseIds = new Set(expenseSources.drawerExpenseIds);
 
   const tenderRaw = (tenderRes.data as Record<string, unknown> | null) || null;
   const tenderBySale = new Map<string, Array<{ method: string; amount: number }>>();
@@ -129,6 +140,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
       const item = row as Record<string, unknown>;
       return {
         expenseId: String(item.expense_id || ''),
+        affectsDrawer: drawerExpenseIds.has(String(item.expense_id || '')),
         category: String(item.category || ''),
         description: String(item.description || ''),
         amount: Number(item.amount || 0),
@@ -299,6 +311,13 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     }
   }
 
+  const expectedAmount = resolveShiftExpectedCash({
+    closedAt: raw.closed_at ? String(raw.closed_at) : null,
+    recomputedExpected: Number(raw.expected_cash || 0),
+    actualAmount: Number(raw.actual_cash || 0),
+    difference: Number(raw.difference || 0),
+  });
+
   return {
     shiftId,
     branchId: String(raw.branch_id || ''),
@@ -307,7 +326,7 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     openedAt: String(raw.opened_at || ''),
     closedAt: raw.closed_at ? String(raw.closed_at) : null,
     openingAmount: Number(raw.opening_amount || 0),
-    expectedAmount: Number(raw.expected_cash || 0),
+    expectedAmount,
     actualAmount: Number(raw.actual_cash || 0),
     difference: Number(raw.difference || 0),
     notes: raw.notes ? String(raw.notes) : null,
@@ -316,13 +335,15 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
     totalDiscounts: Number(raw.discounts || 0),
     returns: Number(raw.returns || 0),
     voids: Number(raw.voids || 0),
-    expenses: Number(raw.expenses || 0),
+    expenses: totalExpenses,
+    drawerExpenses: expenseSources.drawerExpenses,
+    nonDrawerExpenses: expenseSources.nonDrawerExpenses,
     cashPurchases,
     cashPurchaseDetails,
     netRevenue: Number(raw.net_revenue || 0),
     totalTaxes: Number(raw.taxes || 0),
     netSales: Number(raw.net_sales || 0),
-    avgTicket: Number(raw.invoice_count || 0) > 0 ? Number(raw.net_revenue || 0) / Number(raw.invoice_count) : 0,
+    avgTicket: averageShiftTicket(Number(raw.net_sales || 0), Number(raw.invoice_count || 0)),
     orderTypes: Array.from(orderTypeMap, ([type, data]) => ({
       type,
       label: ORDER_LABELS[type] || type,
