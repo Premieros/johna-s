@@ -5,6 +5,7 @@ import { useRoles } from '../context/RolesContext';
 import { Layout } from '../components/Layout';
 import { useCan, isAdminRole, type Permission } from '../lib/permissions';
 import { APP_ROUTES } from '@/core/navigation/routes';
+import { PageLoadFallback } from '@/components/PageProgressLoader';
 
 const LoginPage = lazy(() => import('../features/auth/pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardEnhancedPage').then(m => ({ default: m.DashboardEnhancedPage })));
@@ -60,10 +61,6 @@ const SuperAdminConsolePage = lazy(() => import('../features/admin/pages/SuperAd
 const SystemHealthPage = lazy(() => import('../features/admin/pages/SystemHealthPage').then(m => ({ default: m.SystemHealthPage })));
 const ImportExportCenterPage = lazy(() => import('../features/import-export/pages/ImportExportCenterPage').then(m => ({ default: m.ImportExportCenterPage })));
 
-function PageLoader() {
-  return <div className="min-h-screen flex items-center justify-center bg-ui-page"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ui-primary" /></div>;
-}
-
 function NoAccessPage() {
   return <div className="min-h-screen flex items-center justify-center bg-ui-page p-6"><div className="max-w-md rounded-2xl border border-ui-border bg-ui-surface p-6 text-center shadow-ui-sm"><h1 className="text-lg font-bold text-ui-text">لا توجد شاشة متاحة لهذا المستخدم</h1><p className="mt-2 text-sm text-ui-muted">يرجى مراجعة صلاحيات الدور وتعيين شاشة واحدة على الأقل.</p></div></div>;
 }
@@ -90,9 +87,9 @@ function ProtectedRoute({ children, permission, permissionsAny, fullscreen, supe
   const { session, loading, user } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
-  if (loading || rolesLoading) return <PageLoader />;
+  if (loading || rolesLoading) return <PageLoadFallback />;
   if (!session) return <Navigate to={APP_ROUTES.login} replace />;
-  if (!user) return <PageLoader />;
+  if (!user) return <PageLoadFallback />;
   const landingRoute = resolveLandingRoute(can, user.role);
   if (superAdminOnly && user.role !== 'super_admin') return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (ownerOnly && !isAdminRole(user.role)) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
@@ -106,7 +103,7 @@ function PublicRoute({ children }: { children: ReactNode }) {
   const { session, loading, user } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
-  if (loading || rolesLoading) return <PageLoader />;
+  if (loading || rolesLoading) return <PageLoadFallback />;
   if (session && user) { const landingRoute = resolveLandingRoute(can, user.role); return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />; }
   return <>{children}</>;
 }
@@ -115,16 +112,16 @@ function DefaultRoute() {
   const { session, loading, user } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
-  if (loading || rolesLoading) return <PageLoader />;
+  if (loading || rolesLoading) return <PageLoadFallback />;
   if (!session) return <Navigate to={APP_ROUTES.login} replace />;
-  if (!user) return <PageLoader />;
+  if (!user) return <PageLoadFallback />;
   const landingRoute = resolveLandingRoute(can, user.role);
   return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
 }
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<PageLoader />}>
+    <Suspense fallback={<PageLoadFallback />}>
       <Routes>
         <Route path={APP_ROUTES.login} element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path={APP_ROUTES.register} element={<Navigate to={APP_ROUTES.login} replace />} />
