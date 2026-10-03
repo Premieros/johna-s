@@ -207,14 +207,15 @@ describe.skipIf(skip)('ERP-05 — FIFO-authoritative waste approval', () => {
       expect(Number(ledger[0].unit_cost)).toBeCloseTo(10.006667, 6);
       expect(Number(ledger[0].total_cost)).toBe(-30.02);
 
-      const entry = await q<{ unit_cost: string; total_cost: string; status: string }>(
-        `SELECT unit_cost::text, total_cost::text, status
+      const entry = await q<{ unit_cost: string; total_cost: string; approved_total_cost: string; status: string }>(
+        `SELECT unit_cost::text, total_cost::text, approved_total_cost::text, status
          FROM public.waste_entries WHERE id=$1`,
         [wasteId],
       );
       expect(entry[0].status).toBe('approved');
       expect(Number(entry[0].unit_cost)).toBe(10.01);
       expect(Number(entry[0].total_cost)).toBe(30.03);
+      expect(Number(entry[0].approved_total_cost)).toBe(30.02);
 
       const report = await q<{ total_cost: string }>(
         `SELECT total_cost::text
@@ -253,6 +254,12 @@ describe.skipIf(skip)('ERP-05 — FIFO-authoritative waste approval', () => {
         [-1, 4],
         [-1, 5.01],
       ]);
+
+      const approved = await q<{ approved_total_cost: string }>(
+        `SELECT approved_total_cost::text FROM public.waste_entries WHERE id=$1`,
+        [wasteId],
+      );
+      expect(Number(approved[0].approved_total_cost)).toBe(9.01);
 
       const report = await q<{ total_cost: string }>(
         `SELECT total_cost::text
