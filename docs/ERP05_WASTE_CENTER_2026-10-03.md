@@ -89,3 +89,16 @@ Run exact-head CI again after this worklog-only correction. If Green, continue o
 - Unexpected divergence => **STOP_AND_RECONCILE**.
 - Keep this log synchronized after every material audit, implementation or verification checkpoint.
 - Keep State **BLOCKED** until exact-head CI is Green and merge/Production gates are explicitly approved.
+
+
+## ERP-05 FIFO/category checkpoint
+- Production read-only inspection confirms `waste_categories` currently has **0 rows**; operational waste creation therefore has no selectable category.
+- Original seed in migration 089 contains the typo `هالك مraw`.
+- Production `approve_waste` deducts FIFO quantities but does not read batch `unit_cost`; it persists the pending/client estimate.
+- Product approval still lacks a post-loop `v_remaining = 0` integrity assertion.
+- `waste_entries.total_cost` is generated from `quantity * unit_cost`; authoritative report cost must come from actual movement rows for mixed-cost FIFO.
+- Current RPC ACLs are owner + `authenticated` + `service_role`; no `PUBLIC` or `anon` EXECUTE.
+- UI unit cost is now display-only and labelled as an estimate until approval-time FIFO costing is authoritative.
+- Feature service now rejects legacy `production` creation with `LEGACY_PRODUCTION_WASTE_READ_ONLY`.
+- Backend design is locked in `docs/ERP05_WASTE_FIFO_APPROVAL_DESIGN_2026-10-03.md`.
+- No Production write or migration was executed.
