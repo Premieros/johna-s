@@ -17,8 +17,8 @@ describe('System Health Branch Pulse contract', () => {
 
   it('keeps zero activity neutral instead of classifying a quiet branch as unhealthy', () => {
     expect(migration).toContain("THEN 'quiet'");
-    expect(panel).toContain('No problem signal; the branch may simply be quiet.');
-    expect(panel).toContain('عدم وجود مبيعات أو طلبات وحده لا يعني وجود عطل.');
+    expect(panel).toContain('No activity recorded in the selected period.');
+    expect(panel).toContain('لا يوجد نشاط مسجل في الفترة المحددة.');
   });
 
   it('uses cross-signal warnings only', () => {
