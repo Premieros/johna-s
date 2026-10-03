@@ -107,6 +107,24 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     ...row,
     [branchColumn]: branchNameById(branchId),
   });
+  const rawDebtStatusLabel = (status: unknown): string => {
+    const key = String(status || 'OK');
+    const ar: Record<string, string> = {
+      OK: 'سليم',
+      OUTSTANDING: 'دين غير مسوّى',
+      NO_RECEIPT_HISTORY: 'لا يوجد توريد شراء',
+      UNPRICED: 'دين بلا سعر',
+      UNPRICED_NO_RECEIPT: 'دين بلا سعر ولا توريد شراء',
+    };
+    const en: Record<string, string> = {
+      OK: 'OK',
+      OUTSTANDING: 'Outstanding debt',
+      NO_RECEIPT_HISTORY: 'No purchase receipt history',
+      UNPRICED: 'Unpriced debt',
+      UNPRICED_NO_RECEIPT: 'Unpriced debt / no purchase receipt',
+    };
+    return (lang === 'ar' ? ar : en)[key] || key;
+  };
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const { visibleColumns, toggleColumn, showAllColumns } = useColumnPreferences(reportType);
@@ -893,6 +911,18 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           [lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value']: Number(row.current_inventory_value || 0),
           [lang === 'ar' ? 'مصدر السعر' : 'Price Source']: row.price_source || '',
           [lang === 'ar' ? 'طبقات FIFO المفتوحة' : 'Open FIFO Batches']: Number(row.open_fifo_batches || 0),
+          [lang === 'ar' ? 'دين FIFO غير مسوّى' : 'Outstanding FIFO Debt']: Number(row.outstanding_fifo_debt_quantity || 0),
+          [lang === 'ar' ? 'عدد ديون FIFO' : 'FIFO Debt Rows']: Number(row.outstanding_fifo_debt_rows || 0),
+          [lang === 'ar' ? 'قيمة الدين التقديرية' : 'Estimated Debt Value']: Number(row.estimated_fifo_debt_value || 0),
+          [lang === 'ar' ? 'دين بلا سعر' : 'Unpriced Debt Qty']: Number(row.unpriced_fifo_debt_quantity || 0),
+          [lang === 'ar' ? 'تغطية تسعير الدين %' : 'Debt Pricing Coverage %']: Number(row.fifo_debt_pricing_coverage_pct || 0),
+          [lang === 'ar' ? 'أقدم دين' : 'Oldest Debt']: row.oldest_outstanding_debt_at
+            ? formatDate(String(row.oldest_outstanding_debt_at), lang)
+            : '',
+          [lang === 'ar' ? 'آخر توريد شراء' : 'Last Purchase Receipt']: row.last_purchase_receipt_at
+            ? formatDate(String(row.last_purchase_receipt_at), lang)
+            : '',
+          [lang === 'ar' ? 'حالة الدين' : 'Debt Status']: rawDebtStatusLabel(row.fifo_debt_status),
         })));
         setData(rows);
         setChartData([]);
