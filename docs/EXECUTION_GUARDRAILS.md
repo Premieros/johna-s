@@ -111,3 +111,16 @@ Mandatory rules:
 - see `docs/SINGLE_WRITER_EXECUTION_FENCE.md` for the full protocol.
 
 This fence is additive to all existing Production, RLS, permission-first, data-preservation, and merge gates.
+
+
+## 8. Cancelled or mistaken request fence
+
+A branch, file, prior message, old screenshot, or stale work plan is never sufficient authorization to resume a scope that the user has explicitly marked as mistaken, cancelled, or not intended.
+
+Mandatory rules:
+- branch existence alone is never authorization to execute work;
+- when the user says a request/message was wrong, mistaken, cancelled, or should not be acted on, that scope becomes **inert immediately**;
+- cancelled work must not be resumed from a stale branch, prior chat text, prior plan, or historical log;
+- reactivation requires a **new explicit user request** that clearly authorizes that exact scope;
+- permanent cancelled-scope tombstones live in `docs/CANCELLED_WORK_SCOPES.md`;
+- if a current plan conflicts with a cancelled-scope tombstone, stop and reconcile before any repository or Production write.
