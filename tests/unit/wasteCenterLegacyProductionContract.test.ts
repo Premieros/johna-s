@@ -31,4 +31,9 @@ describe('ERP-05 waste center legacy-production contract', () => {
     expect(source).toContain('readOnly');
     expect(source).toContain('Final cost must come from the actual FIFO layers consumed when waste is approved.');
   });
+
+  it('fails clearly when waste categories are unavailable', () => {
+    expect(source).toContain('disabled={loading || categories.length === 0}');
+    expect(source).toContain('No active waste categories are configured. Waste entry is disabled until category setup is completed.');
+  });
 });
