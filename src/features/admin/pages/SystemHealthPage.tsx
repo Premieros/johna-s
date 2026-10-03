@@ -9,6 +9,7 @@ import { getAllOfflineSales } from '@/core/offline/offlineStorage';
 import { ensureOperationalDeviceIdentity } from '@/core/runtime/deviceIdentity';
 import { formatNumber } from '@/lib/format';
 import { AdminDataManagementPanel } from './AdminDataManagementPanel';
+import { BranchPulsePanel } from '../components/BranchPulsePanel';
 import { blockedCountStatus, pendingCountStatus, presenceStatus, zeroCountStatus, type OperationalHealthStatus } from '../services/systemHealthSeverity';
 
 type Status = OperationalHealthStatus;
@@ -247,6 +248,8 @@ export function SystemHealthPage() {
           ))}
         </div>
       </Card>
+
+      <BranchPulsePanel />
 
       <AdminDataManagementPanel />
 
