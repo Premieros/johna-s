@@ -39,10 +39,27 @@ Implementation is isolated from Production. Merge requires exact-head Full Verif
 5. Physical print success cannot be inferred from the current print contract.
 
 ## Change ledger
-- Pending implementation.
+- Added forward-only repository migration `20261003150000_system_health_branch_pulse.sql`:
+  - private `user_issue_events` table with direct authenticated access revoked;
+  - bounded `record_user_issue` capture RPC with auth, branch guard, rate limit, field caps, and secret-pattern rejection;
+  - read-only `get_user_issue_summary` for System Health aggregation;
+  - read-only `get_branch_activity_snapshot` for all permitted branches in one RPC.
+- Branch Pulse uses selected period activity for orders, completed sales/net value, print submissions/failures, purchases, expenses, and current open shifts/operators.
+- Quiet branches are explicitly neutral; warnings are cross-signal only.
+- Printing remains truthful: submitted means accepted by the system/OS boundary; physical confirmation remains separate.
+- Added `src/lib/userIssueTelemetry.ts` with safe redaction and fire-and-forget capture.
+- Central capture wired to error Toasts and ErrorBoundary only; no per-screen mutation fanout.
+- Added `BranchPulsePanel` inside System Health with 30m / 1h / 3h / 6h / 12h / Today / 24h / Custom, Problems only, branch cards, and user issue aggregation.
+- Added unit and Fresh DB integration coverage.
+- Updated frontend API contract for the three new RPCs.
+- Production writes/applies: **none**.
 
 ## Verification ledger
-- Production inspection performed read-only.
+- Production schema/status/index inspection: read-only only.
+- Confirmed no dedicated Production error/telemetry table exists before this work.
+- Confirmed cloud print `submitted` semantics from the canonical printing migration.
+- Static safety contract added: `tests/unit/systemHealthBranchPulseContract.test.ts`.
+- Fresh DB security/ACL integration added: `tests/integration/system_health_branch_pulse.test.ts`.
 - Exact-head CI: pending.
 
 ## Production gate
@@ -51,7 +68,7 @@ State: **BLOCKED**
 No Production apply is authorized. Forward-only migration may be committed and validated in CI only.
 
 ## Next action
-Implement Branch Pulse read RPC, safe error-event capture/read path, period controls, problems-only view, and regression/security contracts.
+Run exact-head Full Verify on PR #439. Fix only proven regressions within this scope; no Production apply.
 
 ## Mandatory update protocol
 - Reconcile latest `main` and branch head before material writes.
