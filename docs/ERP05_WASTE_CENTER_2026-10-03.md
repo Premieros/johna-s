@@ -102,3 +102,15 @@ Run exact-head CI again after this worklog-only correction. If Green, continue o
 - Feature service now rejects legacy `production` creation with `LEGACY_PRODUCTION_WASTE_READ_ONLY`.
 - Backend design is locked in `docs/ERP05_WASTE_FIFO_APPROVAL_DESIGN_2026-10-03.md`.
 - No Production write or migration was executed.
+
+
+## CI checkpoint — run #3657
+- Verify job: **Green**.
+- Fresh DB migration apply: ERP-05 migration applied successfully.
+- Existing `phase2_waste_center`: **9/9 Green**.
+- New ERP-05 FIFO integration suite reached the database path successfully.
+- DB job failed only because legacy `v2_operational_approval_security` created aggregate product inventory without a matching FIFO batch, which now correctly triggers `FIFO_BATCH_COVERAGE_MISMATCH`.
+- Resolution: fixture updated to seed a matching `inventory_batches` row; production logic was not weakened.
+- Fix commit: `a1dad2fa0894754f9fd17f1ad5b24ebb39e08fdc`.
+- Exact-head CI rerun: #3658.
+- Production writes/migrations: none.
