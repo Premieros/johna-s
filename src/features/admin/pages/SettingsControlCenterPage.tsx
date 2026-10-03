@@ -12,6 +12,7 @@ import {
   Percent,
   LockKeyhole,
   Unlock,
+  Activity,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '@/context/LanguageContext';
@@ -181,6 +182,31 @@ export function SettingsControlCenterPage() {
           </div>
         ) : undefined}
       />
+
+      <Link
+        to={APP_ROUTES.systemHealth}
+        data-testid="settings-system-health-link"
+        className="group flex items-center justify-between gap-4 rounded-2xl border border-brand-500/25 bg-gradient-to-r from-brand-600/10 via-indigo-600/5 to-transparent p-4 transition hover:border-brand-500/45 hover:bg-brand-600/15"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
+            <Activity className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-black text-ui-text">
+              {isAr ? 'صحة النظام / نبضة الفروع' : 'System Health / Branch Pulse'}
+            </p>
+            <p className="mt-0.5 text-xs font-semibold text-ui-subtle">
+              {isAr
+                ? 'متابعة حالة الفروع، النشاط، الطباعة، والمشاكل التي تظهر للمستخدمين'
+                : 'Monitor branch signals, activity, printing, and user-visible issues'}
+            </p>
+          </div>
+        </div>
+        <span className="shrink-0 text-xs font-black text-brand-600">
+          {isAr ? 'فتح' : 'Open'}
+        </span>
+      </Link>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4 md:gap-6">
         <div data-testid="settings-section-rail" className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:col-span-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
