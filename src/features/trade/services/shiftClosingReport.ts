@@ -427,7 +427,7 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
     `${isAr ? 'متوسط الفاتورة' : 'Average Ticket'}: ${money(summary.avgTicket)}`,
     `${isAr ? 'صافي بعد المصروفات' : 'Net after expenses'}: ${money(summary.netRevenue)}`,
     line,
-    isAr ? 'المتحصل فعليًا / COLLECTED' : 'COLLECTED PAYMENTS',
+    isAr ? 'طرق الدفع / PAYMENTS (المحصلة فقط)' : 'COLLECTED PAYMENTS',
     ...paymentSummary.collected.map((pm) =>
       `${zThermalPaymentLabel(pm.method, pm.label, isAr)}: ${money(pm.total)} (${zThermalNumber(pm.count, 0)})`
     ),
