@@ -51,6 +51,14 @@ State: **BLOCKED**
 - No change planned to sale/KDS/auto-production deduction behavior.
 - Supabase CLI is unavailable in this execution environment; migration filename creation will follow the repository timestamp convention and this exception is recorded here.
 
+## Implementation checkpoint
+- Added forward-only migration `20261003084500_raw_fifo_debt_health_guardrails.sql`.
+- `get_current_raw_material_valuation(uuid)` keeps the same signature, auth/permission checks and grants.
+- Debt health is warehouse-aware and branch-scoped; priced debt uses `_raw_last_known_fifo_cost` only for estimate/display.
+- UI and Excel now expose outstanding debt, pricing coverage, receipt history and deterministic debt status.
+- Added unit contract and Fresh-DB integration regression tests.
+- Migration contains no INSERT/UPDATE/DELETE against business tables and does not call stock mutation helpers.
+
 ## Verification ledger
 - Production audit is read-only and complete for database health, journals, shifts, raw balances, batches, FIFO debt and debt pricing.
 - No Production writes performed in this workstream.
@@ -65,7 +73,7 @@ State: **BLOCKED**
 - Production apply is allowed only after exact-head Full Verify Green, final reconcile and explicit user approval.
 
 ## Next action
-Implement the bounded report-only migration, UI columns and regression tests on this branch; open a Draft PR and run exact-head CI.
+Open a Draft PR on the exact implementation head and run exact-head verify, Fresh DB/schema/integration/security/RLS and browser smoke. Production remains blocked until those checks are Green.
 
 ## Mandatory update protocol
 - Re-read latest `main` and expected branch HEAD before every repository write.
