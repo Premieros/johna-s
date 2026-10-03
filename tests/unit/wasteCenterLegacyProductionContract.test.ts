@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync('src/features/inventory/pages/WasteCenterPage.tsx', 'utf8');
+const service = readFileSync('src/features/inventory/services/wasteCenterData.ts', 'utf8');
 
 describe('ERP-05 waste center legacy-production contract', () => {
   it('keeps legacy production waste visible for historical review', () => {
@@ -18,6 +19,11 @@ describe('ERP-05 waste center legacy-production contract', () => {
     expect(source).toMatch(
       /label=\{ar \? 'نوع الهالك' : 'Waste Type'\}[\s\S]*?\{CREATABLE_WASTE_TYPES\.map\(wt => <option key=\{wt\.value\}/,
     );
+  });
+
+  it('rejects legacy production waste at the feature-service boundary too', () => {
+    expect(service).toContain("if (params.wasteType === 'production')");
+    expect(service).toContain("throw new Error('LEGACY_PRODUCTION_WASTE_READ_ONLY')");
   });
 
   it('keeps the entry-time cost display-only until approval-time FIFO costing is authoritative', () => {
