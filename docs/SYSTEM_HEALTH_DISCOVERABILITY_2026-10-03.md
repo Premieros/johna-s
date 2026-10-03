@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/system-health-discoverability-20261003`
-Current PR: `#0`
+Current PR: `#441`
 Last updated: 2026-10-03
 
 ## Work status
@@ -31,11 +31,13 @@ Small UI-only follow-up: System Health and Branch Pulse exist and are deployed, 
 3. Settings page omits the navigation affordance, making the feature hard to discover.
 
 ## Change ledger
-- Pending UI-only navigation fix.
+- Added a visible Settings link labeled System Health / Branch Pulse.
+- Link targets `APP_ROUTES.systemHealth` (`/system-health`).
+- Added `tests/unit/systemHealthDiscoverabilityContract.test.ts` to lock discoverability and the existing `settings.manage` permission boundary.
 
 ## Verification ledger
 - Repository route and page inspection completed.
-- Exact-head CI: pending.
+- Exact-head CI: pending on the final documentation-synchronized head.
 
 ## Production gate
 State: **BLOCKED**
