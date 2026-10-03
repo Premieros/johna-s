@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `docs/cancelled-work-scope-guard-20261003`
-Current PR: `#0`
+Current PR: `#436`
 Last updated: 2026-10-03
 
 ## Work status
@@ -50,7 +50,7 @@ State: **BLOCKED**
 - Merge requires exact-head Verify Green and explicit approval.
 
 ## Next action
-Open a Draft PR, replace the temporary PR placeholder with the actual PR number, then run exact-head CI.
+Run exact-head CI on PR #436. Do not merge until Full Verify is Green and explicit approval is recorded.
 
 ## Mandatory update protocol
 - Before every write, re-read `main`, branch HEAD, and open PR state.
