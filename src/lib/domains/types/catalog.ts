@@ -147,6 +147,7 @@ export interface WasteEntry {
   quantity: number;
   unit_cost: number;
   total_cost: number;
+  approved_total_cost: number | null;
   reason: string | null;
   warehouse_id: string | null;
   employee_id: string | null;
