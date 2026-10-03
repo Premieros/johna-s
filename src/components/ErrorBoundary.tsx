@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
+import { reportUserIssue } from '@/lib/userIssueTelemetry';
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -45,6 +46,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info);
+    void reportUserIssue(error, {
+      action: isStaleChunkError(error) ? 'stale_chunk_error' : 'render_error',
+      issueKind: 'technical',
+    });
     if (isStaleChunkError(error)) recoverFromStaleChunk();
   }
 
