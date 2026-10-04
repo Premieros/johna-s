@@ -39,6 +39,7 @@ Implementation is on a Draft PR and is not applied to Production. Exact-head Ful
 - Existing FIFO reconciliation journals retain whichever inventory account they already contain.
 - Purchase and stock-count references are not remapped.
 - Added `tests/unit/rawMaterialCogsAccountingContract.test.ts`.
+- Added `tests/integration/raw_material_cogs_accounting.test.ts` to prove sale remapping and purchase non-regression against a fresh DB.
 - Updated `docs/CURRENT_WORK_PLAN.md` to this active branch and log.
 - No historical backfill/reclassification is included.
 
@@ -46,7 +47,8 @@ Implementation is on a Draft PR and is not applied to Production. Exact-head Ful
 - Production diagnosis: read-only evidence complete.
 - Verify main #3716 / run `37205509405`: **FAILED only at mandatory active-worklog structure** before identity/API/lint/typecheck/unit/build/DB/browser checks.
 - Worklog structure correction prepared after reading `tests/unit/activeWorklogGateContract.test.ts`.
-- Exact-head rerun after this documentation correction: pending.
+- Added fresh-DB integration coverage after the worklog correction.
+- Exact-head rerun on the latest implementation head: pending.
 
 ## Production gate
 State: **BLOCKED**
