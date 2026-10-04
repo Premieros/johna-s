@@ -1,15 +1,16 @@
--- Route future restaurant sale COGS inventory accounting to raw-material
--- inventory (1210) instead of finished-goods inventory (1200).
+-- Correct future restaurant COGS inventory-account routing.
 --
--- Scope:
---   * future sale/refund journal posting
---   * future FIFO COGS reconciliation
+-- Active-model behavior:
+--   * sales without an explicit ready-product inventory effect route the COGS
+--     inventory leg from finished goods (1200) to raw materials (1210);
+--   * sales that truly consume ready-product inventory keep finished goods;
+--   * refunds reverse the exact 1200/1210 account used by the original sale;
+--   * FIFO COGS reconciliation follows the base sale journal and never changes
+--     the inventory account of an already-existing reconciliation journal.
+--
 -- Historical journal rows are intentionally untouched.
--- Existing FIFO reconciliation journals retain their already-posted inventory
--- account so a later delta cannot create a mixed/unbalanced historical entry.
---
--- No stock quantity logic, inventory deduction, POS settlement, printing, KDS,
--- shifts, or historical balances are mutated by this migration.
+-- Purchase, stock-count, physical inventory quantities, POS settlement,
+-- Printing / Print Agent, KDS / Send to Kitchen, and shifts are unchanged.
 
 BEGIN;
 
@@ -28,6 +29,7 @@ DECLARE
   v_credit numeric(14,2);
   v_account_key text;
   v_account_code text;
+  v_original_inventory_code text;
   v_total_debit numeric(14,2) := 0;
   v_total_credit numeric(14,2) := 0;
 BEGIN
@@ -72,17 +74,60 @@ BEGIN
 
     v_account_key := NULLIF(v_line->>'account_key','');
     v_account_code := NULLIF(v_line->>'account_code','');
+    v_original_inventory_code := NULL;
 
-    -- Restaurant sales consume raw materials / inventory units, not finished
-    -- goods. Keep callers stable, but route sale-side COGS inventory legs to
-    -- raw-material inventory. Purchase/stock-count/product inventory postings
-    -- remain untouched.
-    IF p_reference_type IN ('sale','refund','fifo_cogs_reconcile') THEN
+    -- Active restaurant sales normally consume raw materials and operational
+    -- inventory units. If the sale has no explicit ready-product inventory
+    -- effect, route the COGS inventory leg to raw-material inventory (1210).
+    -- A sale that actually consumed product inventory keeps finished goods.
+    IF p_reference_type = 'sale'
+       AND (
+         v_account_key = 'inventory_fg'
+         OR upper(btrim(COALESCE(v_account_code,''))) = '1200'
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM public.sale_item_inventory_effects e
+         WHERE e.sale_id = p_reference_id
+           AND e.target_type = 'product'
+       )
+    THEN
       IF v_account_key = 'inventory_fg' THEN
         v_account_key := 'inventory_rm';
       END IF;
       IF upper(btrim(COALESCE(v_account_code,''))) = '1200' THEN
         v_account_code := '1210';
+      END IF;
+    END IF;
+
+    -- Refunds must reverse the exact inventory account used by the original
+    -- sale. Historical sales therefore continue to reverse 1200, while sales
+    -- created after this repair reverse 1210.
+    IF p_reference_type = 'refund'
+       AND (
+         v_account_key = 'inventory_fg'
+         OR upper(btrim(COALESCE(v_account_code,''))) = '1200'
+       )
+    THEN
+      SELECT a.code
+      INTO v_original_inventory_code
+      FROM public.journal_entries je
+      JOIN public.journal_entry_lines jl
+        ON jl.journal_entry_id = je.id
+      JOIN public.chart_of_accounts a
+        ON a.id = jl.account_id
+      WHERE je.branch_id = p_branch_id
+        AND je.reference_type = 'sale'
+        AND je.reference_number = p_reference_number
+        AND a.code IN ('1200','1210')
+        AND jl.credit > jl.debit
+      ORDER BY je.created_at DESC,
+               CASE a.code WHEN '1210' THEN 0 ELSE 1 END
+      LIMIT 1;
+
+      IF v_original_inventory_code IS NOT NULL THEN
+        v_account_key := NULL;
+        v_account_code := v_original_inventory_code;
       END IF;
     END IF;
 
@@ -232,12 +277,25 @@ BEGIN
   FROM public.account_mappings
   WHERE branch_id=v_sale.branch_id AND semantic_key='cogs';
 
-  SELECT account_id INTO v_inventory_account
-  FROM public.account_mappings
-  WHERE branch_id=v_sale.branch_id AND semantic_key='inventory_rm';
+  -- Reconcile against the same inventory account used by the base sale.
+  -- Historical 1200 sales stay on 1200; new raw-material sales use 1210.
+  SELECT jl.account_id
+  INTO v_inventory_account
+  FROM public.journal_entries je
+  JOIN public.journal_entry_lines jl
+    ON jl.journal_entry_id=je.id
+  JOIN public.account_mappings am
+    ON am.branch_id=v_sale.branch_id
+   AND am.account_id=jl.account_id
+   AND am.semantic_key IN ('inventory_rm','inventory_fg')
+  WHERE je.branch_id=v_sale.branch_id
+    AND je.reference_id=v_sale.id
+    AND je.reference_type='sale'
+    AND jl.credit > jl.debit
+  ORDER BY CASE am.semantic_key WHEN 'inventory_rm' THEN 0 ELSE 1 END
+  LIMIT 1;
 
-  -- Preserve the account already used by an existing historical reconcile
-  -- journal. New reconciliation journals use raw-material inventory.
+  -- If this reconciliation journal already exists, never switch its account.
   IF v_entry_id IS NOT NULL THEN
     SELECT jl.account_id
     INTO v_existing_inventory_account
@@ -395,9 +453,19 @@ BEGIN
   FROM public.account_mappings
   WHERE branch_id=p_branch_id AND semantic_key='cogs';
 
-  SELECT account_id INTO v_inventory_account
-  FROM public.account_mappings
-  WHERE branch_id=p_branch_id AND semantic_key='inventory_rm';
+  -- The orphan still has its original sale journal, so derive the exact
+  -- inventory account from that journal instead of imposing a new mapping.
+  SELECT jl.account_id
+  INTO v_inventory_account
+  FROM public.journal_entry_lines jl
+  JOIN public.account_mappings am
+    ON am.branch_id=p_branch_id
+   AND am.account_id=jl.account_id
+   AND am.semantic_key IN ('inventory_rm','inventory_fg')
+  WHERE jl.journal_entry_id=v_base_entry.id
+    AND jl.credit > jl.debit
+  ORDER BY CASE am.semantic_key WHEN 'inventory_rm' THEN 0 ELSE 1 END
+  LIMIT 1;
 
   IF v_cogs_account IS NULL OR v_inventory_account IS NULL THEN
     RETURN jsonb_build_object(
@@ -441,25 +509,6 @@ BEGIN
   IF v_target_posted=0 THEN
     v_entry_id:=v_row.journal_entry_id;
 
-  -- Existing historical reconcile journals stay on whichever inventory account
-  -- they already use; only newly-created journals switch to raw materials.
-  IF v_entry_id IS NOT NULL THEN
-    SELECT jl.account_id
-    INTO v_existing_inventory_account
-    FROM public.journal_entry_lines jl
-    JOIN public.account_mappings am
-      ON am.branch_id=p_branch_id
-     AND am.account_id=jl.account_id
-     AND am.semantic_key IN ('inventory_rm','inventory_fg')
-    WHERE jl.journal_entry_id=v_entry_id
-    ORDER BY CASE am.semantic_key WHEN 'inventory_rm' THEN 0 ELSE 1 END
-    LIMIT 1;
-
-    IF v_existing_inventory_account IS NOT NULL THEN
-      v_inventory_account:=v_existing_inventory_account;
-    END IF;
-  END IF;
-
     IF v_entry_id IS NOT NULL THEN
       DELETE FROM public.journal_entries
       WHERE id=v_entry_id
@@ -490,6 +539,24 @@ BEGIN
   END IF;
 
   v_entry_id:=v_row.journal_entry_id;
+
+  -- If this reconciliation journal already exists, never switch its account.
+  IF v_entry_id IS NOT NULL THEN
+    SELECT jl.account_id
+    INTO v_existing_inventory_account
+    FROM public.journal_entry_lines jl
+    JOIN public.account_mappings am
+      ON am.branch_id=p_branch_id
+     AND am.account_id=jl.account_id
+     AND am.semantic_key IN ('inventory_rm','inventory_fg')
+    WHERE jl.journal_entry_id=v_entry_id
+    ORDER BY CASE am.semantic_key WHEN 'inventory_rm' THEN 0 ELSE 1 END
+    LIMIT 1;
+
+    IF v_existing_inventory_account IS NOT NULL THEN
+      v_inventory_account:=v_existing_inventory_account;
+    END IF;
+  END IF;
 
   IF v_entry_id IS NULL THEN
     IF EXISTS (
