@@ -21,18 +21,20 @@
 - Preserve branch isolation, Permission-First, Financial Visibility, POS settlement, Printing / Print Agent, KDS / Send to Kitchen, inventory quantities, and shifts.
 
 ## Current objective
-Stop future restaurant sale COGS and FIFO sale-cost reconciliation from crediting finished-goods inventory (1200) when operational consumption is raw materials. Route future sale-side inventory accounting to raw-material inventory (1210) without changing purchase/product-inventory semantics or rewriting historical journals.
+Stop future restaurant sale COGS from crediting finished-goods inventory (1200) when the sale actually consumes raw materials / operational inventory units. Preserve true ready-product accounting, make refunds reverse the exact inventory account used by the original sale, and make FIFO COGS reconciliation follow the base sale journal without rewriting history.
 
 ## Verified state
 - Production diagnosis remains read-only for this repair.
 - Recent sale `Johna's-02118` deducted raw-material inventory effects while its journal credited account 1200.
 - Last-30-day sale inventory effects are raw-material/inventory-unit based; no product-target sale effect was observed in the read-only scan.
 - Account 1200 has accumulated negative balances in both active branches from sale/FIFO postings.
+- Manual/auto inventory-unit production does not create a finished-goods GL posting, so active restaurant unit consumption belongs with the raw-material value pool unless a sale has an explicit ready-product effect.
+- Historical refunds must reverse the same 1200/1210 account used by their original sale.
 - PR #445 is Draft.
-- Verify main #3716 failed only at the mandatory active-worklog structure gate before runtime checks.
+- Verify main #3716 failed only at the mandatory active-worklog structure gate before runtime checks; later CI heads were superseded by the accounting-lineage refinement.
 
 ## Remaining gated work
-- Correct the mandatory worklog structure and rerun exact-head CI.
-- Review migration diff and integration implications.
+- Run exact-head Full Verify on the refined migration and integration tests.
+- Review final migration diff, refund lineage, FIFO lineage, and rollback.
 - Do not apply to Production until explicitly approved after CI/review.
 - Historical 1200→1210 reclassification remains a separate later phase with its own reconciliation proof.
