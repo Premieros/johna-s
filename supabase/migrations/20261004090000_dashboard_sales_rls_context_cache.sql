@@ -168,14 +168,21 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.sales s
-    WHERE s.id = sale_payments.sale_id
-  )
+  CASE
+    WHEN (
+      (SELECT public.is_platform_admin())
+      OR (SELECT public.can_permission('sales.view'))
+    )
+    THEN EXISTS (
+      SELECT 1
+      FROM public.sales s
+      WHERE s.id = sale_payments.sale_id
+    )
+    ELSE private.sale_read_visible_by_id(sale_id)
+  END
 );
 
 COMMENT ON POLICY sale_payments_financial_visibility_select ON public.sale_payments IS
-  'RESTRICTIVE payment visibility inherited from the parent sale RLS without per-row sale_read_visible_by_id re-entry.';
+  'RESTRICTIVE payment visibility: parent-sale RLS fast path for sales readers, legacy sale_read_visible_by_id fallback for callers without sales.view.';
 
 COMMIT;
