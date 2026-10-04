@@ -61,9 +61,9 @@ describe('Dashboard sales RLS context-cache contract', () => {
     expect(migration).not.toContain('FOR UPDATE');
     expect(migration).not.toContain('FOR DELETE');
 
-    expect(migration).not.toMatch(/public\\.(cloud_print_jobs|inventory_ledger|journal_entries|shift_operations)/i);
-    expect(migration).not.toMatch(/\\bsend_to_kitchen\\s*\\(/i);
-    expect(migration).not.toMatch(/\\bsettle(?:ment)?\\w*\\s*\\(/i);
+    expect(migration).not.toMatch(/public\.(cloud_print_jobs|inventory_ledger|journal_entries|shift_operations)/i);
+    expect(migration).not.toMatch(/\bsend_to_kitchen\s*\(/i);
+    expect(migration).not.toMatch(/\bsettle(?:ment)?\w*\s*\(/i);
   });
 
   it('ships an explicit rollback to the prior policy contract', () => {
