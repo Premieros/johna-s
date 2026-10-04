@@ -62,7 +62,13 @@ Implementation is on a Draft PR and is not applied to Production. Exact-head Ful
 - Refined migration and refund/FIFO lineage integration coverage are now committed.
 - Verify main #3726 / run `37206832792`: verify job **GREEN** (worklog, project identity, API contract, lint, typecheck, unit, build); DB job failed while applying canonical migrations before schema/integration because the generated PL/pgSQL function definitions were missing statement terminators between definitions.
 - Migration and rollback scripts were corrected to terminate all three function definitions explicitly.
-- Exact-head Full Verify after the SQL syntax correction: pending.
+- Verify main #3729 / run `37207181937`: verify job **GREEN**; canonical migrations + schema **GREEN**; DB regression reached integration and failed only in legacy FIFO expectations.
+- Root cause of the FIFO failures was split:
+  - normal sale FIFO can settle before the base sale journal exists, so account lineage needs a narrow pre-journal fallback;
+  - orphan-sale test still asserted `inventory_fg` even though its base sale is now created through the new routing and therefore uses `inventory_rm`.
+- Added pre-journal FIFO account inference: explicit product effect -> `inventory_fg`, otherwise `inventory_rm`.
+- Updated the orphan FIFO test to assert the new base-sale account lineage and added a unit contract for the pre-journal fallback.
+- Exact-head Full Verify after these FIFO compatibility fixes: pending.
 
 ## Production gate
 State: **BLOCKED**
