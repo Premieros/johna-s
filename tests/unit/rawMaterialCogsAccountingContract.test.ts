@@ -7,32 +7,46 @@ const migration = readFileSync(
 );
 
 describe('raw-material COGS accounting contract', () => {
-  it('routes future sale-side finished-goods keys/codes to raw inventory', () => {
-    expect(migration).toContain("p_reference_type IN ('sale','refund','fifo_cogs_reconcile')");
+  it('routes restaurant sale COGS to raw inventory only when no ready-product effect exists', () => {
+    expect(migration).toContain("p_reference_type = 'sale'");
+    expect(migration).toContain("e.target_type = 'product'");
     expect(migration).toContain("v_account_key = 'inventory_fg'");
     expect(migration).toContain("v_account_key := 'inventory_rm'");
-    expect(migration).toContain("= '1200'");
     expect(migration).toContain("v_account_code := '1210'");
+    expect(migration).toContain('AND NOT EXISTS');
   });
 
-  it('uses raw-material inventory for new FIFO COGS reconciliation journals', () => {
-    expect(migration.match(/semantic_key='inventory_rm'/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(migration).not.toContain("WHERE branch_id=v_sale.branch_id AND semantic_key='inventory_fg';");
-    expect(migration).not.toContain("WHERE branch_id=p_branch_id AND semantic_key='inventory_fg';");
+  it('keeps true ready-product sales eligible for finished-goods accounting', () => {
+    expect(migration).toContain(
+      'A sale that actually consumed product inventory keeps finished goods',
+    );
+    expect(migration).not.toContain(
+      "p_reference_type IN ('sale','refund','fifo_cogs_reconcile')",
+    );
   });
 
-  it('preserves the account of an existing historical FIFO reconcile journal', () => {
-    expect(migration.match(/v_existing_inventory_account/g)?.length).toBeGreaterThanOrEqual(6);
+  it('makes refunds follow the exact inventory account used by the original sale', () => {
+    expect(migration).toContain("p_reference_type = 'refund'");
+    expect(migration).toContain("je.reference_type = 'sale'");
+    expect(migration).toContain("je.reference_number = p_reference_number");
+    expect(migration).toContain("a.code IN ('1200','1210')");
+    expect(migration).toContain('v_original_inventory_code');
+  });
+
+  it('makes FIFO reconciliation follow the base sale and preserve an existing reconcile account', () => {
+    expect(migration).toContain('Historical 1200 sales stay on 1200');
+    expect(migration).toContain("je.reference_type='sale'");
     expect(migration).toContain("am.semantic_key IN ('inventory_rm','inventory_fg')");
-    expect(migration).toContain("only newly-created journals switch to raw materials");
+    expect(migration.match(/v_existing_inventory_account/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(migration).toContain('never switch its account');
   });
 
-  it('does not rewrite purchase or stock-count reference types', () => {
-    expect(migration).not.toContain("p_reference_type IN ('purchase'");
-    expect(migration).not.toContain("p_reference_type IN ('stock_count'");
+  it('does not remap purchase or stock-count reference types', () => {
+    expect(migration).not.toContain("p_reference_type = 'purchase'");
+    expect(migration).not.toContain("p_reference_type = 'stock_count'");
   });
 
-  it('does not backfill or mutate historical journal rows', () => {
+  it('does not backfill or move historical journal lines between accounts', () => {
     expect(migration).not.toMatch(/UPDATE\s+public\.journal_entry_lines\s+SET\s+account_id/i);
     expect(migration).not.toMatch(/DELETE\s+FROM\s+public\.journal_entry_lines/i);
   });
