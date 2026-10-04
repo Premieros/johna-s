@@ -41,6 +41,14 @@ describe('raw-material COGS accounting contract', () => {
     expect(migration).toContain('never switch its account');
   });
 
+  it('covers FIFO settlement that occurs before the base sale journal exists', () => {
+    expect(migration).toContain('FIFO settlement can occur before the sale journal exists');
+    expect(migration).toContain('IF v_inventory_account IS NULL THEN');
+    expect(migration).toContain("e.target_type='product'");
+    expect(migration).toContain("THEN 'inventory_fg'");
+    expect(migration).toContain("ELSE 'inventory_rm'");
+  });
+
   it('does not remap purchase or stock-count reference types', () => {
     expect(migration).not.toContain("p_reference_type = 'purchase'");
     expect(migration).not.toContain("p_reference_type = 'stock_count'");
