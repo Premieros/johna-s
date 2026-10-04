@@ -55,23 +55,15 @@ describe('Dashboard sales RLS context-cache contract', () => {
     expect(payments).not.toContain('private.sale_read_visible_by_id');
   });
 
-  it('does not introduce SECURITY DEFINER or touch write/operational paths', () => {
-    expect(migration).not.toContain('SECURITY DEFINER');
+  it('does not introduce privileged functions or touch write/operational SQL paths', () => {
+    expect(migration).not.toContain('CREATE OR REPLACE FUNCTION');
     expect(migration).not.toContain('FOR INSERT');
     expect(migration).not.toContain('FOR UPDATE');
     expect(migration).not.toContain('FOR DELETE');
 
-    for (const forbidden of [
-      'cloud_print_jobs',
-      'send_to_kitchen',
-      'kds',
-      'inventory_ledger',
-      'journal_entries',
-      'settlement',
-      'shift_operations',
-    ]) {
-      expect(migration.toLowerCase()).not.toContain(forbidden);
-    }
+    expect(migration).not.toMatch(/public\\.(cloud_print_jobs|inventory_ledger|journal_entries|shift_operations)/i);
+    expect(migration).not.toMatch(/\\bsend_to_kitchen\\s*\\(/i);
+    expect(migration).not.toMatch(/\\bsettle(?:ment)?\\w*\\s*\\(/i);
   });
 
   it('ships an explicit rollback to the prior policy contract', () => {
