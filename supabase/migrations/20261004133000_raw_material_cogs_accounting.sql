@@ -295,6 +295,26 @@ BEGIN
   ORDER BY CASE am.semantic_key WHEN 'inventory_rm' THEN 0 ELSE 1 END
   LIMIT 1;
 
+  -- FIFO settlement can occur before the sale journal exists in the same
+  -- lifecycle. In that narrow case, infer the account from the actual sale
+  -- inventory effect: true ready-product consumption uses finished goods;
+  -- otherwise use raw-material inventory.
+  IF v_inventory_account IS NULL THEN
+    SELECT account_id
+    INTO v_inventory_account
+    FROM public.account_mappings
+    WHERE branch_id=v_sale.branch_id
+      AND semantic_key = CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM public.sale_item_inventory_effects e
+          WHERE e.sale_id=v_sale.id
+            AND e.target_type='product'
+        ) THEN 'inventory_fg'
+        ELSE 'inventory_rm'
+      END;
+  END IF;
+
   -- If this reconciliation journal already exists, never switch its account.
   IF v_entry_id IS NOT NULL THEN
     SELECT jl.account_id
