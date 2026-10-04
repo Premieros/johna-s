@@ -40,6 +40,7 @@ Implementation is on a Draft PR and is not applied to Production. Exact-head Ful
 - Purchase and stock-count references are not remapped.
 - Added `tests/unit/rawMaterialCogsAccountingContract.test.ts`.
 - Added `tests/integration/raw_material_cogs_accounting.test.ts` to prove sale remapping and purchase non-regression against a fresh DB.
+- Added `scripts/accounting/rollback_raw_material_cogs_accounting.sql` from the pre-change Production function definitions; rollback changes function routing only and never rewrites journal history.
 - Updated `docs/CURRENT_WORK_PLAN.md` to this active branch and log.
 - No historical backfill/reclassification is included.
 
@@ -56,11 +57,10 @@ State: **BLOCKED**
 No Production mutation is authorized by this worklog. A Production apply requires exact-head Full Verify Green, review of the final migration diff, and a separate explicit user approval.
 
 ## Next action
-1. Commit this worklog gate correction.
-2. Wait for exact-head Verify main.
-3. If Green, review the migration and regression evidence.
-4. Stop before Production and request explicit approval.
-5. Keep historical 1200→1210 reclassification as a separate later task.
+1. Wait for exact-head Verify main on the latest head.
+2. If Green, review the migration, integration regression evidence, and rollback.
+3. Stop before Production and request explicit approval.
+4. Keep historical 1200→1210 reclassification as a separate later task.
 
 ## Mandatory update protocol
 - Before every repository write, verify the active branch HEAD and current `main`.
