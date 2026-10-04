@@ -60,7 +60,9 @@ Implementation is on a Draft PR and is not applied to Production. Exact-head Ful
 - Mandatory active-worklog structure was corrected.
 - Initial broad remap was reviewed and rejected before Production because it would have changed historical-refund lineage and ignored true ready-product accounting.
 - Refined migration and refund/FIFO lineage integration coverage are now committed.
-- Exact-head Full Verify on the refined implementation: pending.
+- Verify main #3726 / run `37206832792`: verify job **GREEN** (worklog, project identity, API contract, lint, typecheck, unit, build); DB job failed while applying canonical migrations before schema/integration because the generated PL/pgSQL function definitions were missing statement terminators between definitions.
+- Migration and rollback scripts were corrected to terminate all three function definitions explicitly.
+- Exact-head Full Verify after the SQL syntax correction: pending.
 
 ## Production gate
 State: **BLOCKED**
