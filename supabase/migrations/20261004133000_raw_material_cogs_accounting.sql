@@ -155,7 +155,7 @@ BEGIN
 
   RETURN v_entry_id;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public._fifo_adjust_sale_cogs_delta(p_sale_id uuid, p_delta numeric)
@@ -377,7 +377,7 @@ BEGIN
     'journal_entry_id',v_entry_id
   );
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public._fifo_adjust_orphan_sale_cogs_delta(p_sale_id uuid, p_branch_id uuid, p_delta numeric)
@@ -658,7 +658,7 @@ BEGIN
     'orphan_sale',true
   );
 END;
-$function$
+$function$;
 
 
 COMMIT;
