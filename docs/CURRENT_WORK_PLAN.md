@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Branch Pulse Workflow Codes**
+- Track: **Dashboard / Sales RLS performance**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `74c00c9898d8c03931ffe0429b2d43c9e7c07033`
-- Active development branch: `development/branch-pulse-workflow-codes-20261003`
-- Mandatory active work log: `docs/BRANCH_PULSE_WORKFLOW_CODES_2026-10-03.md`
+- Latest main baseline reconciled: `3c9e3cf1f2bac05dab346a33b7af53b0adeef77a`
+- Active development branch: `perf/dashboard-sales-snapshot-rls`
+- Mandatory active work log: `docs/DASHBOARD_SALES_RLS_PERFORMANCE_2026-10-04.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -16,22 +16,23 @@
 - No direct write to `main`; no force push.
 - Unexpected branch HEAD or latest-main movement => **STOP_AND_RECONCILE**.
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
-- Any additional Production apply requires separate explicit approval.
-- No Dashboard changes.
-- Preserve Permission-First, branch isolation and current operational truth.
-- Printing, Print Agent, KDS, settlement, inventory deduction, accounting posting and shift mutation logic remain frozen.
+- Any Production apply requires separate explicit approval.
+- Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
+- Printing, Print Agent, KDS, Send to Kitchen, Inventory, Accounting, Settlement and Shifts remain frozen.
 
 ## Current objective
-Present Branch Pulse as neutral workflow activity for the selected period. Human-readable problem labels are removed from the panel; anomalies are shown only as opaque internal codes, and user-issue groups are shown as opaque event codes without raw messages or screen/action details.
+Remove repeated row-level authorization work from Dashboard/Sales reads while preserving exactly the existing Financial Visibility result set for every authenticated user.
 
 ## Verified state
-- PR #439 merged to `main@4b55bb50c768a0650e99fbe7500bc95a0fda70c5`.
-- Exact-head Verify #3694 was fully Green.
-- Production migration `system_health_branch_pulse_20261003` is recorded as version `20261003160107`.
-- Branch Pulse and user-issue summary both return success in a live read-only Super Admin check.
-- No telemetry test rows were inserted.
-- No Dashboard, Print Agent, KDS, settlement, inventory, accounting, or shift mutation path was changed.
+- Production was used only for read-only diagnostics.
+- Current wide-range Dashboard baseline for a branch manager is approximately 3.73 s with ~93k shared buffer hits.
+- Current isolated sale visibility predicate is approximately 455 ms / 10,849 shared hits.
+- Equivalent statement-context predicate is approximately 120 ms / 3,886 shared hits.
+- Row-by-row comparison over 1,854 Production sales produced 0 visibility mismatches for branch_manager, super_admin and cashier personas.
+- No Production DDL or migration has been applied.
 
 ## Remaining gated work
-- Advisor follow-up: telemetry `user_id` FK has no covering index. This is a performance-only follow-up and is not applied without separate approval.
-- ERP-05 Waste Center Production migration remains a separate pending Production gate and is not authorized by the Branch Pulse approval.
+- Exact-head CI must be fully green.
+- Supabase Preview/Staging validation is required before any Production proposal.
+- Preview branch cost must be explicitly accepted before creation.
+- Full after-migration Dashboard, sale_items and sale_payments benchmarks plus 57014/HTTP 500 verification are still required.
