@@ -32,7 +32,7 @@ Performance-only work on Dashboard/Sales read paths. Production remains read-onl
 ## Change ledger
 - Added `20261004090000_dashboard_sales_rls_context_cache.sql`.
 - Statement-constant checks are expressed as scalar SELECTs so PostgreSQL can plan them as initPlans.
-- Child Financial Visibility remains RESTRICTIVE and is inherited through parent `sales` RLS instead of per-child `sale_read_visible_by_id()` re-entry.
+- Child Financial Visibility remains RESTRICTIVE. For callers with sales access it uses parent `sales` RLS as the fast path; callers without `sales.view` retain the legacy `sale_read_visible_by_id()` path so cashier/item visibility is not reduced.
 - Added explicit rollback SQL.
 - Added unit contract covering Permission-First, Financial Visibility, child inheritance, rollback and operational-path isolation.
 - No Production apply has occurred.
@@ -44,7 +44,7 @@ Performance-only work on Dashboard/Sales read paths. Production remains read-onl
   - cashier: 0 mismatches
 - Equivalent isolated predicate benchmark: ~120 ms / 3,886 shared hits versus ~455 ms / 10,849 before.
 - PR #444 first CI run failed only because the mandatory worklog still referenced the previous branch; runtime checks were not reached.
-- Exact-head CI: pending after worklog reconciliation.
+- Exact-head CI run #3711 was Green before the limited-user fallback hardening; a new exact-head run is required after this change.
 - Full after-migration RPC and child-table verification: pending Preview/Staging.
 
 ## Production gate
@@ -60,7 +60,7 @@ No Production migration is authorized. Required evidence before any Production p
 7. tested rollback.
 
 ## Next action
-Obtain exact-head Full Verify Green. After explicit acceptance of the Supabase Preview branch cost, create Preview/Staging, apply the migration there, and run equivalence plus before/after performance verification.
+Obtain exact-head Full Verify Green after the limited-user fallback hardening. Preview/Staging was declined due to cost, so Production remains read-only and no migration is authorized until read-only equivalence evidence is complete and explicit approval is given.
 
 ## Mandatory update protocol
 - Reconcile latest `main` before merge.
