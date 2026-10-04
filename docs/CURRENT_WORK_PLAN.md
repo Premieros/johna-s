@@ -1,38 +1,40 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Dashboard / Sales RLS performance**
+- Track: **Raw-material COGS accounting correction**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3c9e3cf1f2bac05dab346a33b7af53b0adeef77a`
-- Active development branch: `perf/dashboard-sales-snapshot-rls`
-- Mandatory active work log: `docs/DASHBOARD_SALES_RLS_PERFORMANCE_2026-10-04.md`
+- Latest main baseline reconciled: `08035a784d3c3f43abe68b428c636abb26c004d1`
+- Active development branch: `fix/raw-material-cogs-accounting`
+- Mandatory active work log: `docs/RAW_MATERIAL_COGS_ACCOUNTING_2026-10-04.md`
 
 ## Operational rules
-- السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
-- CI يجب أن يفشل إذا كان السجل الإلزامي مفقودًا أو لا يطابق المسار النشط.
-- Single writer on the active branch.
-- No direct write to `main`; no force push.
+- Single writer on the active branch; no direct write to `main`; no force push.
 - Unexpected branch HEAD or latest-main movement => **STOP_AND_RECONCILE**.
-- لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
-- Any Production apply requires separate explicit approval.
-- Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
-- Printing, Print Agent, KDS, Send to Kitchen, Inventory, Accounting, Settlement and Shifts remain frozen.
+- No merge and no Production migration before exact-head verification and explicit approval.
+- Historical journal balances are out of scope for this phase.
+- Preserve branch isolation, Permission-First, Financial Visibility, POS settlement, Printing / Print Agent, KDS / Send to Kitchen, inventory quantities, and shifts.
 
 ## Current objective
-Remove repeated row-level authorization work from Dashboard/Sales reads while preserving exactly the existing Financial Visibility result set for every authenticated user.
+Stop future restaurant sale COGS and FIFO sale-cost reconciliation from crediting finished-goods inventory (1200) when the actual operational consumption is raw materials. Route future sale-side inventory accounting to raw-material inventory (1210) without changing purchase/product-inventory semantics or rewriting historical journals.
 
-## Verified state
-- Production was used only for read-only diagnostics.
-- Current wide-range Dashboard baseline for a branch manager is approximately 3.73 s with ~93k shared buffer hits.
-- Current isolated sale visibility predicate is approximately 455 ms / 10,849 shared hits.
-- Equivalent statement-context predicate is approximately 120 ms / 3,886 shared hits.
-- Row-by-row comparison over 1,854 Production sales produced 0 visibility mismatches for branch_manager, super_admin and cashier personas.
-- No Production DDL or migration has been applied.
+## Verified Production evidence
+- Recent sale `Johna's-02118` deducted only raw-material inventory effects.
+- The same sale journal debited COGS (5000) and credited finished-goods inventory (1200).
+- Last-30-day sale inventory effects are dominated by raw materials; no sale product-target effects were observed in the read-only check.
+- Account 1200 has accumulated credit balances in both active branches from sale/FIFO postings.
+- No Production changes have been made for this repair.
+
+## Current implementation
+- New migration routes sale/refund/fifo COGS inventory legs from `inventory_fg/1200` to `inventory_rm/1210` at journal-post resolution.
+- New FIFO reconciliation journals use raw-material inventory.
+- Existing historical FIFO reconciliation journals retain whichever inventory account they already use, preventing mixed-account updates.
+- Purchase and stock-count reference types are not remapped.
+- No historical backfill/reclassification is included.
 
 ## Remaining gated work
-- Exact-head CI must be fully green.
-- Supabase Preview/Staging validation is required before any Production proposal.
-- Preview branch cost must be explicitly accepted before creation.
-- Full after-migration Dashboard, sale_items and sale_payments benchmarks plus 57014/HTTP 500 verification are still required.
+- Run exact-head CI.
+- Review migration diff and integration implications.
+- Do not apply to Production until explicitly approved after CI/review.
+- Historical 1200→1210 reclassification remains a separate later phase with its own reconciliation proof.
