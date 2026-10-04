@@ -42,13 +42,14 @@ describe('Dashboard sales RLS context-cache contract', () => {
     expect(migration).toContain("(SELECT public.get_branch_id())");
   });
 
-  it('keeps child visibility restrictive while removing per-child by-id authorization helpers', () => {
+  it('keeps child visibility restrictive and preserves the limited-user fallback', () => {
     const items = policyBody('financial_visibility_sale_items');
     const payments = policyBody('sale_payments_financial_visibility_select');
 
     expect(items).toContain('AS RESTRICTIVE');
     expect(items).toContain('FROM public.sales s');
-    expect(items).not.toContain('private.sale_read_visible_by_id');
+    expect(items).toContain("public.can_permission('sales.view')");
+    expect(items).toContain('private.sale_read_visible_by_id(sale_id)');
 
     expect(payments).toContain('AS RESTRICTIVE');
     expect(payments).toContain('FROM public.sales s');
