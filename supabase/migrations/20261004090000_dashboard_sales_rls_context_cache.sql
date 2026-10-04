@@ -96,10 +96,11 @@ COMMENT ON POLICY financial_visibility_sales ON public.sales IS
 
 -- SALE ITEMS ----------------------------------------------------------------
 --
--- The parent sale is already the source of truth for financial visibility.
--- Keep the child policy RESTRICTIVE, but ask PostgreSQL whether the parent sale
--- is visible under the parent table RLS instead of calling
--- private.sale_read_visible_by_id() again for every item row.
+-- Preserve the legacy child contract exactly for users who do not have sales.read
+-- permission. For callers who can read sales, reuse the parent sale RLS as the
+-- fast path; otherwise fall back to the existing authoritative by-id helper.
+-- This avoids reducing cashier/item visibility while still removing the hot
+-- per-child helper path from dashboard/reporting callers.
 
 DROP POLICY IF EXISTS auth_select_sale_items ON public.sale_items;
 CREATE POLICY auth_select_sale_items
@@ -126,15 +127,22 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.sales s
-    WHERE s.id = sale_items.sale_id
-  )
+  CASE
+    WHEN (
+      (SELECT public.is_platform_admin())
+      OR (SELECT public.can_permission('sales.view'))
+    )
+    THEN EXISTS (
+      SELECT 1
+      FROM public.sales s
+      WHERE s.id = sale_items.sale_id
+    )
+    ELSE private.sale_read_visible_by_id(sale_id)
+  END
 );
 
 COMMENT ON POLICY financial_visibility_sale_items ON public.sale_items IS
-  'RESTRICTIVE child visibility inherited from the parent sale RLS without per-row sale_read_visible_by_id re-entry.';
+  'RESTRICTIVE child visibility: parent-sale RLS fast path for sales readers, legacy sale_read_visible_by_id fallback for callers without sales.view.';
 
 -- SALE PAYMENTS --------------------------------------------------------------
 
