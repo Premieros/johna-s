@@ -32,7 +32,7 @@ Performance-only work on Dashboard/Sales read paths. Production remains read-onl
 ## Change ledger
 - Added `20261004090000_dashboard_sales_rls_context_cache.sql`.
 - Statement-constant checks are expressed as scalar SELECTs so PostgreSQL can plan them as initPlans.
-- Child Financial Visibility remains RESTRICTIVE. For callers with sales access it uses parent `sales` RLS as the fast path; callers without `sales.view` retain the legacy `sale_read_visible_by_id()` path so cashier/item visibility is not reduced.
+- Child Financial Visibility remains RESTRICTIVE for both `sale_items` and `sale_payments`. Callers with sales access use parent `sales` RLS as the fast path; callers without `sales.view` retain the legacy `sale_read_visible_by_id()` fallback so limited-user behavior is preserved exactly.
 - Added explicit rollback SQL.
 - Added unit contract covering Permission-First, Financial Visibility, child inheritance, rollback and operational-path isolation.
 - No Production apply has occurred.
@@ -45,7 +45,8 @@ Performance-only work on Dashboard/Sales read paths. Production remains read-onl
 - Equivalent isolated predicate benchmark: ~120 ms / 3,886 shared hits versus ~455 ms / 10,849 before.
 - PR #444 first CI run failed only because the mandatory worklog still referenced the previous branch; runtime checks were not reached.
 - Exact-head CI run #3711 was Green before the limited-user fallback hardening; a new exact-head run is required after this change.
-- Full after-migration RPC and child-table verification: pending Preview/Staging.
+- Read-only child-predicate comparison before the payment fallback hardening found 0 item mismatches for all personas, and 4 payment predicate mismatches for the cashier persona; those payment differences were blocked by the existing permissive policy but the patch was hardened anyway to preserve the old restrictive predicate via fallback.
+- Full after-migration RPC and child-table verification: pending because Preview/Staging was declined.
 
 ## Production gate
 State: **BLOCKED**
