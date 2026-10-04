@@ -53,7 +53,8 @@ describe('Dashboard sales RLS context-cache contract', () => {
 
     expect(payments).toContain('AS RESTRICTIVE');
     expect(payments).toContain('FROM public.sales s');
-    expect(payments).not.toContain('private.sale_read_visible_by_id');
+    expect(payments).toContain("public.can_permission('sales.view')");
+    expect(payments).toContain('private.sale_read_visible_by_id(sale_id)');
   });
 
   it('does not introduce privileged functions or touch write/operational SQL paths', () => {
