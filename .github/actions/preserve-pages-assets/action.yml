@@ -22,15 +22,28 @@ runs:
         github-token: ${{ inputs.github-token }}
         script: |
           const { owner, repo } = context.repo;
-          const { data } = await github.rest.actions.listWorkflowRuns({
-            owner, repo, workflow_id: 'deploy.yml', branch: process.env.DEPLOYMENT_BRANCH,
-            status: 'success', per_page: 20,
-          });
-          const previous = data.workflow_runs.find(run => run.id !== context.runId);
+          // Avoid the conclusion-filtered index: it can omit recent successful reruns.
+          // Walk the latest workflow runs and evaluate completion locally.
+          let previous;
+          let exhausted = false;
+          for (let page = 1; page <= 10; page++) {
+            const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner, repo, branch: process.env.DEPLOYMENT_BRANCH,
+              per_page: 100, page,
+            });
+            previous = data.workflow_runs.find(run =>
+              run.id !== context.runId && run.path === '.github/workflows/deploy.yml' &&
+              run.head_branch === process.env.DEPLOYMENT_BRANCH &&
+              run.status === 'completed' && run.conclusion === 'success');
+            if (previous) break;
+            if (data.workflow_runs.length < 100) { exhausted = true; break; }
+          }
           if (!previous) {
+            if (!exhausted) throw new Error('Previous deployment search limit reached; stop deployment to preserve active sessions');
             core.setOutput('found', 'false');
             return;
           }
+          core.info(`Previous successful Pages deployment: ${previous.id}`);
           const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: previous.id });
           const pages = artifacts.data.artifacts.find(artifact => artifact.name === 'github-pages' && !artifact.expired);
           if (!pages) throw new Error('Previous deployed Pages artifact is unavailable; stop deployment to preserve active sessions');
