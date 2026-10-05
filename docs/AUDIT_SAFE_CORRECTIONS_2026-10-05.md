@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/audit-safe-read-display-20261005`
-Current PR: `0` (pending creation)
+Current PR: `#446`
 Last updated: 2026-10-05
 
 Execution mode: **SINGLE_WRITER**
@@ -63,7 +63,8 @@ No Production migration included in the display patch. Permission hardening is
 separate and not applied until dependency regression evidence is complete.
 
 ## Next action
-Implement focused fixes and regression coverage, then Full Verify on the PR.
+Wait for exact-head Full Verify on PR #446; merge only if all jobs are Green.
+Permission policy hardening and FIFO debt costing review remain separate.
 
 ## Mandatory update protocol
 Verify branch HEAD before sequential remote writes. Reconcile interruptions.
