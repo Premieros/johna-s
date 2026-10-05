@@ -7,6 +7,8 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 const BRANCHES_CHANGED_EVENT = 'premier:branches-changed';
 const branchCacheByUser = new Map<string, Branch[]>();
 const branchRequestByUser = new Map<string, Promise<Branch[]>>();
+const branchFetchedAtByUser = new Map<string, number>();
+const RESUME_REFRESH_INTERVAL_MS = 30_000;
 
 async function fetchBranchesForUser(userId: string, force = false): Promise<Branch[]> {
   const cached = branchCacheByUser.get(userId);
@@ -18,8 +20,13 @@ async function fetchBranchesForUser(userId: string, force = false): Promise<Bran
   const pending = (async () => {
     const { data, error } = await supabase.from('branches').select('*').order('name');
     if (error) throw error;
-    const next = (data as Branch[]) || [];
+    const rows = (data as Branch[]) || [];
+    // Preserve identity when nothing changed: consumers must not reload reports
+    // or operational data just because the window regained focus.
+    const previous = branchCacheByUser.get(userId);
+    const next = previous && JSON.stringify(previous) === JSON.stringify(rows) ? previous : rows;
     branchCacheByUser.set(userId, next);
+    branchFetchedAtByUser.set(userId, Date.now());
     return next;
   })().finally(() => {
     branchRequestByUser.delete(userId);
@@ -31,6 +38,7 @@ async function fetchBranchesForUser(userId: string, force = false): Promise<Bran
 
 export function notifyBranchesChanged(): void {
   branchCacheByUser.clear();
+  branchFetchedAtByUser.clear();
   branchRequestByUser.clear();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(BRANCHES_CHANGED_EVENT));
@@ -59,7 +67,9 @@ export function useBranches() {
       setBranches(next);
       setError(null);
     } catch (error) {
-      setBranches([]);
+      // A temporary background network error must not switch an active POS
+      // branch or clear a user's current work. RLS remains authoritative.
+      setBranches(branchCacheByUser.get(userId) ?? []);
       setError(userFacingErrorMessage(error));
     } finally {
       setLoading(false);
@@ -89,7 +99,18 @@ export function useBranches() {
       void refresh();
     };
     window.addEventListener(BRANCHES_CHANGED_EVENT, onBranchesChanged);
-    return () => window.removeEventListener(BRANCHES_CHANGED_EVENT, onBranchesChanged);
+    const onResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (Date.now() - (branchFetchedAtByUser.get(userId) ?? 0) < RESUME_REFRESH_INTERVAL_MS) return;
+      void refresh();
+    };
+    window.addEventListener('focus', onResume);
+    document.addEventListener('visibilitychange', onResume);
+    return () => {
+      window.removeEventListener(BRANCHES_CHANGED_EVENT, onBranchesChanged);
+      window.removeEventListener('focus', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+    };
   }, [refresh, userId]);
 
   return { branches, loading, error, refresh };

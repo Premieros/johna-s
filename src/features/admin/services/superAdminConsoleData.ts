@@ -75,19 +75,30 @@ export async function fetchUserCreationControl(): Promise<{
 }
 
 export async function fetchTenantStats(): Promise<SuperAdminTenantStats[]> {
-  const [orgsRes, brRes, memRes] = await Promise.all([
+  const [orgsRes, brRes, memRes, usersRes] = await Promise.all([
     supabase.from('organizations').select('id, name, slug, is_active, created_at').order('created_at', { ascending: false }),
     supabase.from('branches').select('id, is_active, organization_id'),
     supabase.from('organization_members').select('organization_id, user_id, is_active'),
+    supabase.from('users').select('id, branch_id'),
   ]);
+
+  for (const result of [orgsRes, brRes, memRes, usersRes]) {
+    if (result.error) throw result.error;
+  }
 
   const orgs = orgsRes.data || [];
   const branches = brRes.data || [];
   const members = memRes.data || [];
+  const branchMap = new Map(branches.map((branch) => [branch.id, branch]));
+  const memberMap = new Map(members.filter((member) => member.is_active).map((member) => [member.user_id, member.organization_id]));
+  // Match the Users tab: active membership first, primary branch fallback.
+  // Count existing users once, including disabled accounts; this is Total Users.
+  const userOrganizations = (usersRes.data || []).map((user) =>
+    memberMap.get(user.id) || (user.branch_id ? branchMap.get(user.branch_id)?.organization_id : null) || null,
+  );
 
   return orgs.map((organization) => {
     const orgBranches = branches.filter((branch) => branch.organization_id === organization.id);
-    const orgMembers = members.filter((member) => member.organization_id === organization.id && member.is_active);
 
     return {
       organization_id: organization.id,
@@ -96,7 +107,7 @@ export async function fetchTenantStats(): Promise<SuperAdminTenantStats[]> {
       is_active: organization.is_active ?? true,
       created_at: organization.created_at,
       branch_count: orgBranches.length,
-      user_count: orgMembers.length,
+      user_count: userOrganizations.filter((orgId) => orgId === organization.id).length,
       total_branches: orgBranches.length,
       active_branches: orgBranches.filter((branch) => branch.is_active).length,
     };

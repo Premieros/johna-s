@@ -242,7 +242,7 @@ export function RawMaterialBranchStockPanel() {
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${quantity <= 0 ? 'bg-ui-danger-soft text-ui-danger' : low ? 'bg-ui-warning-soft text-ui-warning' : 'bg-ui-success-soft text-ui-success'}`}>
                           {low && <AlertTriangle className="h-3.5 w-3.5" />}
-                          {quantity <= 0 ? (isAr ? 'رصيد صفر' : 'Zero balance') : low ? (isAr ? 'منخفض' : 'Low') : (isAr ? 'متوفر' : 'Available')}
+                          {quantity < 0 ? (isAr ? 'رصيد سالب' : 'Negative balance') : quantity === 0 ? (isAr ? 'رصيد صفر' : 'Zero balance') : low ? (isAr ? 'منخفض' : 'Low') : (isAr ? 'متوفر' : 'Available')}
                         </span>
                       </td>
                     </tr>
