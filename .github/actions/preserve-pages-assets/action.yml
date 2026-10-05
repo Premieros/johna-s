@@ -1,0 +1,55 @@
+name: Preserve Pages assets for active sessions
+description: Merge bounded previous immutable assets without replacing current HTML
+inputs:
+  github-token:
+    description: Read-only Actions token for previous deployment artifacts
+    required: true
+  output-directory:
+    description: Directory containing the new build
+    default: dist
+  deployment-branch:
+    description: Production deployment branch
+    default: main
+runs:
+  using: composite
+  steps:
+    - name: Locate last successful Pages artifact
+      id: previous-pages
+      uses: actions/github-script@v7
+      env:
+        DEPLOYMENT_BRANCH: ${{ inputs.deployment-branch }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { owner, repo } = context.repo;
+          const { data } = await github.rest.actions.listWorkflowRuns({
+            owner, repo, workflow_id: 'deploy.yml', branch: process.env.DEPLOYMENT_BRANCH,
+            status: 'success', per_page: 20,
+          });
+          const previous = data.workflow_runs.find(run => run.id !== context.runId);
+          if (!previous) {
+            core.setOutput('found', 'false');
+            return;
+          }
+          const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: previous.id });
+          const pages = artifacts.data.artifacts.find(artifact => artifact.name === 'github-pages' && !artifact.expired);
+          if (!pages) throw new Error('Previous deployed Pages artifact is unavailable; stop deployment to preserve active sessions');
+          core.setOutput('found', 'true');
+          core.setOutput('run_id', String(previous.id));
+
+    - name: Download previous deployed assets
+      if: steps.previous-pages.outputs.found == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: github-pages
+        path: .previous-pages
+        github-token: ${{ inputs.github-token }}
+        run-id: ${{ steps.previous-pages.outputs.run_id }}
+
+    - name: Preserve immutable assets for active sessions
+      if: steps.previous-pages.outputs.found == 'true'
+      shell: bash
+      env:
+        OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
+      run: python3 scripts/ci/retain-pages-assets.py --output "$OUTPUT_DIRECTORY" --previous-archive .previous-pages/artifact.tar
+

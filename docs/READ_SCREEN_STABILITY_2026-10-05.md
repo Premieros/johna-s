@@ -17,7 +17,8 @@ Production SQL, schema/policy changes, transaction posting, POS, KDS, Print Agen
 No merge before exact-head Full Verify Green and explicit approval. Keep Financial Visibility.
 
 ## Baseline
-Main `b961c6e9f7457f1431ea4594e002de41a6a542a8`, PR #448 merged/deployed.
+Main `d464c8dcc948b62c86fea591a48c475894e5a2db`, #448, #450, #451 and #452 merged/deployed.
+#452 post-merge Full Verify 37301694946 and Pages deployment 37301694889 passed.
 Exact-head Full Verify passed: run 37283975068. Deployment/API parity passed: run 37285120532.
 Live login renders after reload; authenticated screens require sign-in. No Production writes.
 
@@ -78,7 +79,10 @@ Live login renders after reload; authenticated screens require sign-in. No Produ
 - Typecheck:all, production build, changed-file lint, DB identity and API contract passed.
 - Branch-matching worklog/performance contracts: 9 tests passed.
 - Public post-#448 login visible with no new site JavaScript errors; no authenticated transactions performed.
-- Third patch remote exact-head CI pending; no deployment yet.
+- Original #449 exact-head Full Verify 37289183189 passed. Reconciled-head verification pending; no #449 deployment yet.
+
+- Reconciled with #452 main: 296 unit/component files / 1444 tests passed.
+- Reconciled typecheck:all, production build, diff checks and changed-file lint passed.
 
 ## Production gate
 State: **BLOCKED**
