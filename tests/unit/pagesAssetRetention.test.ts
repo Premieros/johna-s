@@ -11,7 +11,8 @@ describe('Pages asset continuity across deployments', () => {
     const workflow = readFileSync('.github/actions/preserve-pages-assets/action.yml', 'utf8');
     const verify = readFileSync('.github/workflows/verify-main.yml', 'utf8');
     expect(workflow).toContain("workflow_id: 'deploy.yml'");
-    expect(workflow).toContain("status: 'success'");
+    expect(workflow).toContain("run.conclusion === 'success'");
+    expect(workflow).not.toContain("status: 'success'");
     expect(workflow).toContain("artifact.name === 'github-pages' && !artifact.expired");
     expect(deploy).toContain('actions: read');
     expect(deploy).toContain('retention-days: 30');

@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `a2710f03ec23f7b5711e85cfe045c020e175a44a`
-- Current active branch: `fix/journal-cursor-ui-20261005`
-- Mandatory active work log: `docs/JOURNAL_CURSOR_UI_2026-10-05.md`
+- Latest main baseline reconciled: `e47108f32fd0cd8a928447c55f470dbbe2db64c0`
+- Current active branch: `fix/journal-server-pagination-20261005`
+- Mandatory active work log: `docs/JOURNAL_SERVER_PAGINATION_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,11 +18,11 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Connect Journal to the approved/deployed read-only paging API. Return bounded
+Prepare an additive, read-only journal paging contract outside Production. Return bounded
 nested detail with complete authorized filter totals. Preserve legacy get_journals, all
 posting functions, policies, table/index definitions, POS, KDS, Print Agent and shifts.
-Database PR #453 merged/applied with explicit approval at 17:18 Cairo. This frontend patch
-requires exact-head Full Verify; no further Production schema/function/policy changes.
+The existing frontend remains on the legacy API until the database proposal is approved
+and deployed, followed by a separately verified frontend patch.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -31,8 +31,8 @@ requires exact-head Full Verify; no further Production schema/function/policy ch
 - No real sales, kitchen sends or printing tests were performed by the agent.
 
 ## Remaining gated work
-- #453 approved/applied; catalog function/policy hashes unchanged. Deployment 37323787272 passed.
-- Journal frontend paging: bounded rows, full totals and scoped cursor reset; exact-head CI gate.
+- Additive journal read API: isolated database tests and exact-head CI; explicit Production approval.
+- Journal frontend pagination: only after confirmed API availability, with scoped cursor reset.
 - Server aggregation for heavy reports; retain complete print/export and financial formulas.
 - Supplier/purchase permission dependencies, costing, period controls and recovery evidence
   remain separate review work.
