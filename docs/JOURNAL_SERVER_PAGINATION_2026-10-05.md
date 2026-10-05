@@ -50,6 +50,12 @@ The remaining assertion incorrectly assumed the superseded seven-day history cap
 Canonical 20260923184500 keeps older dates selectable and enforces row visibility.
 Corrected the test to require current legacy parity plus explicit date/reference filtering;
 no function or Production behavior changed. Fresh exact-head CI is required.
+Full suite then exposed a 30s timeout in the historical-filter test; its unfinished
+runAs query contaminated the following fixture's role. Bound each isolated statement
+to 8s (before the 30s test timeout). Historical parity now reads its dedicated old entry,
+while date/reference summary probes request one detail row. The separate 205-entry
+full parity, totals and three-page coverage remain unchanged. No timeout was increased
+and no application SQL or Production operation was changed. Fresh Full Verify required.
 
 ## Production gate
 State: **BLOCKED**

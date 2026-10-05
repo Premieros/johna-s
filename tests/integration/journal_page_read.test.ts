@@ -25,6 +25,9 @@ describe.skipIf(!dbUrl)('bounded journal read with complete caller-visible total
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    // Cancel a slow statement before Vitest's test timeout can leave runAs
+    // still holding authenticated role while the next fixture starts.
+    await client.query("SET LOCAL statement_timeout = '8s'");
     imp = await canImpersonate(client);
     // Never create fixtures unless the connection is the isolated CI auth stub.
     if (!imp) throw new Error('Journal pagination tests require isolated CI auth stub');
@@ -119,7 +122,7 @@ describe.skipIf(!dbUrl)('bounded journal read with complete caller-visible total
       const result = await runAs(client, userId,
         `SELECT public.get_journals($1, CURRENT_DATE - 40, CURRENT_DATE, 'manual', $2) AS legacy,
                 public.get_journals_page($1, CURRENT_DATE - 40, CURRENT_DATE, 'manual', $2, 200) AS page`,
-        [ids.branchA, prefix]);
+        [ids.branchA, `${prefix}OLD`]);
       expect(result.error).toBeUndefined();
       const old = result.rows[0].legacy as Journal[];
       const paged = result.rows[0].page as Page;
@@ -127,13 +130,15 @@ describe.skipIf(!dbUrl)('bounded journal read with complete caller-visible total
       expect(paged.rows).toEqual(old.slice(0, 200));
       // Canonical 20260923184500 keeps older requested dates selectable;
       // restrictive Financial Visibility controls rows, not a seven-day date cap.
-      expect(old.length).toBe(206);
+      expect(old.length).toBe(1);
     }
     const dated = await runAs(client, ids.users.cashier,
-      `SELECT public.get_journals_page($1, CURRENT_DATE, CURRENT_DATE, 'manual', 'PAGE-REFERENCE') AS page`,
-      [ids.branchA]);
+      `SELECT public.get_journals_page($1, CURRENT_DATE, CURRENT_DATE, 'manual', $2, 1) AS page`,
+      [ids.branchA, prefix]);
     expect(dated.error).toBeUndefined();
     expect((dated.rows[0].page as Page).summary.total_count).toBe(205);
+    const reference = await page(ids.users.cashier, ids.branchA, null, 1, 'PAGE-REFERENCE');
+    expect(reference.summary.total_count).toBe(205);
     const noMatch = await runAs(client, ids.users.cashier,
       `SELECT public.get_journals_page($1, p_reference_type => 'sale', p_search => $2) AS page`, [ids.branchA, prefix]);
     expect((noMatch.rows[0].page as Page).summary.total_count).toBe(0);
