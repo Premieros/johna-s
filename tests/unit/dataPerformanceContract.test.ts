@@ -33,12 +33,12 @@ describe('data performance contracts', () => {
   });
 
   it('loads only metadata dimensions needed by the active report', () => {
-    const reports = src('src/features/reporting/pages/ReportsPage.tsx');
+    const reports = src('src/features/reporting/useReportFilterOptions.ts');
     expect(reports).toContain('const dims = new Set(REPORT_FILTER_DIMS[reportType])');
-    expect(reports).toContain("const needsSupplier = dims.has('supplier')");
-    expect(reports).toContain("const needsProduct = dims.has('product')");
-    expect(reports).toContain("const needsTable = dims.has('table')");
-    expect(reports).toContain('[reportType, effectiveBranchFilter]');
+    expect(reports).toContain("supplier: dims.has('supplier')");
+    expect(reports).toContain("product: dims.has('product')");
+    expect(reports).toContain("table: dims.has('table')");
+    expect(reports).toContain('[reportType, branchId, userId]');
   });
 
   it('keeps DataTable full export pluggable from an authoritative provider', () => {

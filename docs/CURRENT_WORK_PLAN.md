@@ -5,8 +5,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `d7e62ecd5b2a95c6239cf2c1dd6aa5ea983e06b0`
-- Current active branch: `fix/stability-reports-20261005`
+- Latest main baseline reconciled: `b961c6e9f7457f1431ea4594e002de41a6a542a8`
+- Current active branch: `fix/stability-report-options-20261005`
 - Mandatory active work log: `docs/READ_SCREEN_STABILITY_2026-10-05.md`
 
 ## Operational rules
@@ -21,13 +21,12 @@
 - Printing, Print Agent, POS transactions, KDS, Send to Kitchen, stock posting, Accounting, Settlement and Shifts remain frozen. Inventory status wording is approved.
 
 ## Current objective
-User authorized incremental stability work on 2026-10-05. First reviewable patch:
-Report read failures, atomic row/summary snapshots, superseded requests and bounded screen rows.
+User authorized incremental stability work on 2026-10-05. Third reviewable patch: report filter options publish one scoped snapshot, clear on scope change, and expose load failures with Retry.
 Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
-- PR #447 merged after exact-head Full Verify and explicit user approval.
-- GitHub Pages build, Production API parity and deploy for #447 succeeded.
+- PR #447 and #448 merged after exact-head Full Verify and user authorization.
+- GitHub Pages build, Production API parity and deploy for #448 succeeded (37287871740).
 - Current read work preserves the full report printing/export datasets.
 - Earlier audit findings are retained in the historical audit worklog, not marked as pending fixes.
 - All Production activity in this track is read-only; no new migration is included.

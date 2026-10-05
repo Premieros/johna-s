@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const page = readFileSync('src/features/reporting/pages/ReportsPage.tsx', 'utf8');
 const domain = readFileSync('src/api/domains/reporting.ts', 'utf8');
 const filters = readFileSync('src/features/reporting/services/reportFilterOptions.ts', 'utf8');
+const optionsHook = readFileSync('src/features/reporting/useReportFilterOptions.ts', 'utf8');
 const coreLoaders = readFileSync('src/features/reporting/services/reportCoreLoaders.ts', 'utf8');
 const salesLoaders = readFileSync('src/features/reporting/services/reportSalesLoaders.ts', 'utf8');
 const inventoryLoaders = readFileSync('src/features/reporting/services/reportInventoryLoaders.ts', 'utf8');
@@ -39,8 +40,9 @@ describe('reports domain boundary', () => {
       expect(filters).toContain(`.from('${table}')`);
       expect(filters).toContain(select);
     }
-    expect(page).toContain('loadReportFilterOptions');
-    expect(page).toContain('loadExpenseCategoryOptions');
+    expect(page).toContain('useReportFilterOptions');
+    expect(optionsHook).toContain('loadReportFilterOptions');
+    expect(optionsHook).toContain('loadExpenseCategoryOptions');
     expect(page).not.toContain("supabase.from('warehouses').select('id, name')");
     expect(page).not.toContain("supabase.from('users').select('id, full_name, email')");
     expect(page).not.toContain("supabase.from('products').select('id, name, name_en')");

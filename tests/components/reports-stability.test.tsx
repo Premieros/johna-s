@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   branch: 'a',
   branches: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
   loadSales: vi.fn(),
+  loadOptions: vi.fn(),
   print: vi.fn(),
   excel: vi.fn(),
 }));
@@ -24,7 +25,7 @@ vi.mock('@/features/reporting/ColumnPicker', () => ({ ColumnPicker: () => null }
 vi.mock('@/features/reporting/CustomReportBar', () => ({ CustomReportBar: () => null }));
 vi.mock('@/features/reporting/services/reportCoreLoaders', () => ({ loadSalesReportRows: mocks.loadSales, loadPurchaseReportRows: vi.fn(), loadExpenseReportRows: vi.fn() }));
 vi.mock('@/features/reporting/services/reportFilterOptions', () => ({
-  loadReportFilterOptions: async () => ({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }),
+  loadReportFilterOptions: mocks.loadOptions,
   loadExpenseCategoryOptions: async () => [],
 }));
 vi.mock('@/lib/reportExport', () => ({ openPrintWindow: mocks.print, downloadCSV: vi.fn() }));
@@ -41,9 +42,21 @@ function deferred() {
   return { promise, resolve };
 }
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); mocks.branch = 'a'; });
+beforeEach(() => { vi.clearAllMocks(); mocks.branch = 'a'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it('shows filter-specific failures and retries options without rerunning a successful report', async () => {
+    mocks.loadSales.mockResolvedValue([sale('sale')]);
+    mocks.loadOptions.mockRejectedValueOnce(new Error('NETWORK_ERROR'));
+    render(page());
+    await screen.findByRole('alert', { name: 'Filter loading error' });
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry filters' }));
+    await waitFor(() => expect(screen.queryByRole('alert', { name: 'Filter loading error' })).toBeNull());
+    expect(mocks.loadOptions).toHaveBeenCalledTimes(2);
+    expect(mocks.loadSales).toHaveBeenCalledTimes(1);
+  });
+
   it('bounds screen rows but prints/exports full rows and retains full totals', async () => {
     mocks.loadSales.mockResolvedValue(Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`)));
     render(page());

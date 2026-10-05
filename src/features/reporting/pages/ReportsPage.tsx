@@ -22,7 +22,7 @@ import { getReportExcelProfile } from '../reportExcelProfiles';
 import type { SavedReportConfig } from '../useCustomReports';
 import { CustomReportBar } from '../CustomReportBar';
 import { ReportFilterBar } from '../ReportFilterBar';
-import { loadExpenseCategoryOptions, loadReportFilterOptions } from '../services/reportFilterOptions';
+import { EMPTY_REPORT_FILTER_OPTIONS, useReportFilterOptions } from '../useReportFilterOptions';
 import { loadExpenseReportRows, loadPurchaseReportRows, loadSalesReportRows } from '../services/reportCoreLoaders';
 import { loadCashierPerformanceRows, loadDetailedInvoiceRows, loadReturnRows, loadSalesByEmployeeRows } from '../services/reportSalesLoaders';
 import { loadComponentConsumptionRows, loadInventoryBatchRows, loadLowStockSources, loadProductBranchRows, loadSalesByProductItems, loadTopConsumedComponentRows, loadTopConsumedProductItems, loadWasteRows } from '../services/reportInventoryLoaders';
@@ -74,16 +74,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const [filters, setFilters] = useState<ReportFilters>({});
   const [filtersDirty, setFiltersDirty] = useState(false);
   const [queryVersion, setQueryVersion] = useState(0);
-  const [options, setOptions] = useState<{
-    warehouses: { id: string; name: string }[];
-    cashiers: { id: string; full_name: string | null; email: string | null }[];
-    customers: { id: string; name: string; name_en: string | null }[];
-    suppliers: { id: string; name: string; name_en: string | null }[];
-    products: { id: string; name: string; name_en: string | null }[];
-    categories: { id: string; name: string; name_en: string | null }[];
-    tables: { id: string; name: string }[];
-    expenseCategories: string[];
-  }>({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [] });
 
   useEffect(() => {
     if (controlledReportType) {
@@ -101,6 +91,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const effectiveBranchFilter = branchFilter;
   const { branches } = useBranches();
+  const { data: scopedOptions, error: optionsError, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id);
+  const options = scopedOptions || EMPTY_REPORT_FILTER_OPTIONS;
   const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch';
   const branchNameById = (branchId: unknown): string => {
     const id = typeof branchId === 'string' ? branchId : '';
@@ -206,48 +198,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     setTo(allowed.to);
     setFiltersDirty(true);
   }
-
-  useEffect(() => {
-    if (!effectiveBranchFilter) {
-      setOptions({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [] });
-      return;
-    }
-
-    let cancelled = false;
-    (async () => {
-      const dims = new Set(REPORT_FILTER_DIMS[reportType]);
-      const needsWarehouse = dims.has('warehouse');
-      const needsCashier = dims.has('cashier') || dims.has('buyer');
-      const needsCustomer = dims.has('customer');
-      const needsSupplier = dims.has('supplier');
-      const needsProduct = dims.has('product');
-      const needsCategory = dims.has('category') && reportType !== 'expenses';
-      const needsTable = dims.has('table');
-
-      const options = await loadReportFilterOptions(effectiveBranchFilter, {
-        warehouse: needsWarehouse,
-        cashier: needsCashier,
-        customer: needsCustomer,
-        supplier: needsSupplier,
-        product: needsProduct,
-        category: needsCategory,
-        table: needsTable,
-      });
-
-      if (cancelled) return;
-      setOptions({ ...options, expenseCategories: [] });
-    })();
-
-    return () => { cancelled = true; };
-  }, [reportType, effectiveBranchFilter]);
-
-  useEffect(() => {
-    if (reportType !== 'expenses' || !effectiveBranchFilter) return;
-    (async () => {
-      const unique = await loadExpenseCategoryOptions(effectiveBranchFilter);
-      setOptions((prev) => ({ ...prev, expenseCategories: unique }));
-    })();
-  }, [reportType, effectiveBranchFilter]);
 
   // Capture draft filters only on Run report or an automatic report/scope change.
   const readReport = useMemo(() => loadReport,
@@ -1288,6 +1238,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         lang={lang}
       />
 
+      {!!optionsError && (
+        <div role="alert" aria-label={lang === 'ar' ? 'خطأ تحميل الفلاتر' : 'Filter loading error'} className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft p-3">
+          <p>{lang === 'ar' ? 'تعذر تحميل خيارات الفلاتر.' : 'Filter options could not be loaded.'} {userFacingErrorMessage(optionsError, lang)}</p>
+          <Button size="sm" variant="outline" onClick={() => { void retryOptions(); }}>{lang === 'ar' ? 'إعادة تحميل الفلاتر' : 'Retry filters'}</Button>
+        </div>
+      )}
       <ReportFilterBar
         reportType={reportType}
         filters={filters}
