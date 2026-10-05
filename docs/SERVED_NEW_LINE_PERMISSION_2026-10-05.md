@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/served-new-line-permission-20261005`
-Current PR: `0` (allocation pending)
+Current PR: `#450`
 Last updated: 2026-10-05
 
 ## Work status
