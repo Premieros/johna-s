@@ -5,9 +5,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `d7e62ecd5b2a95c6239cf2c1dd6aa5ea983e06b0`
-- Current active branch: `fix/served-new-line-permission-20261005`
-- Mandatory active work log: `docs/SERVED_NEW_LINE_PERMISSION_2026-10-05.md`
+- Latest main baseline reconciled: `b4929aa06a5c5b2d8734750f2fad42c30af9d464`
+- Current active branch: `fix/settlement-preview-scope-20261005`
+- Mandatory active work log: `docs/SETTLEMENT_PREVIEW_SCOPE_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,15 +18,15 @@
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Any Production apply requires separate explicit approval.
 - Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
-- Only the served-resend permission guard is in authorized review scope. Print Agent, sale/payment, send core, stock posting, Accounting, Settlement and Shifts remain frozen. Production apply requires explicit approval.
+- Authorized scope: frontend settlement-preview read consistency only. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
 
 ## Current objective
-User authorized incremental stability work on 2026-10-05. First reviewable patch:
-Fix permission-first served-to-sent reopening for a brand-new kitchen line; no role-name authorization.
+User authorized incremental stability work and the served-resend Production repair on 2026-10-05. First reviewable patch:
+Isolate checkout preview by order/branch and refresh the pinned warehouse at confirmation.
 Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
-- PR #447 merged after exact-head Full Verify and explicit user approval.
+- #450 merged and approved Production guard patch applied; exact replacement, grants/policy and other function checks passed.
 - GitHub Pages build, Production API parity and deploy for #447 succeeded.
 - Current read work preserves the full report printing/export datasets.
 - Earlier audit findings are retained in the historical audit worklog, not marked as pending fixes.
