@@ -14,6 +14,7 @@ type Rpc = {
   order_id?: string;
   sale_id?: string;
   items_sent_count?: number;
+  sent?: { order_item_id: string }[];
   job_id?: string;
   station_code?: string;
   cashier_id?: string;
@@ -337,6 +338,47 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
       cashier_id: ids.users.cashier,
       sent_by: ids.users.branch_manager,
     });
+  });
+
+  it('sends a brand-new line after served with send permission only, without duplicate stock or broad KDS writes', async (ctx) => {
+    if (!impersonationAvailable) return ctx.skip();
+    const tableId = await newTable();
+    const orderId = await createOwnedOrder(tableId);
+    const first = await rpc(ids.users.cashier, `SELECT public.send_to_kitchen($1) AS r`, [orderId]);
+    expect(first.success, JSON.stringify(first)).toBe(true);
+    await client.query(`SET LOCAL ROLE service_role`);
+    await client.query(`SELECT public.set_kitchen_status($1,'served')`, [orderId]);
+    await client.query(`RESET ROLE`);
+    await setActorPermissions(['pos.view','pos.send_kitchen']);
+    const unchanged = await rpc(ids.users.branch_manager,`SELECT public.send_to_kitchen($1) AS r`,[orderId]);
+    expect(unchanged).toMatchObject({success:true,items_sent_count:0});
+    expect((await client.query(`SELECT kitchen_status FROM public.orders WHERE id=$1`,[orderId])).rows[0].kitchen_status).toBe('served');
+    const itemId = randomUUID();
+    await client.query(`INSERT INTO public.order_items(id,order_id,product_id,unit_name,quantity,unit_price,total,notes)
+      VALUES($1,$2,$3,'piece',1,20,20,'new line after served')`, [itemId,orderId,productId]);
+    await setActorPermissions(['pos.view','pos.send_kitchen']);
+    const permissions = await asUser(ids.users.branch_manager,
+      `SELECT public.can_permission('pos.send_kitchen') AS send,public.can_permission('pos.kds_update') AS kds`);
+    expect(permissions[0]).toMatchObject({send:true,kds:false});
+    const before = await rawQtyForUnit(client,unitId,ids.branchA,ids.whA);
+    const reopened = await rpc(ids.users.branch_manager, `SELECT public.send_to_kitchen($1) AS r`, [orderId]);
+    expect(reopened.success,JSON.stringify(reopened)).toBe(true);
+    expect(reopened.items_sent_count).toBe(1);
+    expect(reopened.sent).toHaveLength(1);
+    expect(reopened.sent?.[0].order_item_id).toBe(itemId);
+    expect(await rawQtyForUnit(client,unitId,ids.branchA,ids.whA)).toBe(before-1);
+    expect((await client.query(`SELECT kitchen_status,cashier_id FROM public.orders WHERE id=$1`,[orderId])).rows[0])
+      .toMatchObject({kitchen_status:'sent',cashier_id:ids.users.cashier});
+    await client.query(`SET LOCAL ROLE service_role`);
+    const queue = await client.query(`SELECT items FROM public.get_kitchen_queue(NULL,$1) WHERE order_id=$2`,[ids.branchA,orderId]);
+    await client.query(`RESET ROLE`);
+    expect(queue.rows[0].items).toHaveLength(1);
+    expect(queue.rows[0].items[0].order_item_id).toBe(itemId);
+    const repeated = await rpc(ids.users.branch_manager, `SELECT public.send_to_kitchen($1) AS r`,[orderId]);
+    expect(repeated).toMatchObject({success:true,items_sent_count:0});
+    expect(await rawQtyForUnit(client,unitId,ids.branchA,ids.whA)).toBe(before-1);
+    const blocked = await runAs(client,ids.users.branch_manager,`SELECT public.set_kitchen_status($1,'cooking')`,[orderId]);
+    expect(blocked.error).toContain('PERMISSION_DENIED:pos.kds_update');
   });
 
   it('lets cancel permission cancel another operator unsent order but does not grant edit', async (ctx) => {
