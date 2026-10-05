@@ -119,4 +119,41 @@ describe('useBranches', () => {
     expect(result.current.error).toBeNull();
     expect(result.current.branches).toHaveLength(1);
   });
+
+  it('refreshes a revoked branch on resume and coalesces mounted consumers', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    try {
+      mockState.data = [{ id: 'b1', name: 'Main', is_active: true }, { id: 'b2', name: 'Other', is_active: true }];
+      const useBranches = await loadUseBranches();
+      const first = renderHook(() => useBranches());
+      const second = renderHook(() => useBranches());
+      await waitFor(() => expect(first.result.current.branches).toHaveLength(2));
+      await waitFor(() => expect(second.result.current.branches).toHaveLength(2));
+      mockState.data = [{ id: 'b1', name: 'Main', is_active: true }];
+      now.mockReturnValue(131_000);
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      await waitFor(() => expect(first.result.current.branches).toHaveLength(1));
+      expect(second.result.current.branches).toHaveLength(1);
+      expect(mockState.calls).toBe(2);
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      expect(mockState.calls).toBe(2);
+      first.unmount();
+      second.unmount();
+    } finally { now.mockRestore(); }
+  });
+
+  it('preserves branch identity on unchanged refresh and active context on network failure', async () => {
+    mockState.data = [{ id: 'b1', name: 'Main', is_active: true }];
+    const useBranches = await loadUseBranches();
+    const hook = renderHook(() => useBranches());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    const branches = hook.result.current.branches;
+    mockState.data = [{ id: 'b1', name: 'Main', is_active: true }];
+    await act(async () => { await hook.result.current.refresh(); });
+    expect(hook.result.current.branches).toBe(branches);
+    mockState.error = 'connection refused';
+    await act(async () => { await hook.result.current.refresh(); });
+    expect(hook.result.current.branches).toBe(branches);
+    expect(hook.result.current.error).toBeTruthy();
+  });
 });

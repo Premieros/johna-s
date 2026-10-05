@@ -10,6 +10,14 @@ import {
 } from '../../src/features/reporting/numericIntegrity';
 
 describe('report numeric integrity', () => {
+  it('distinguishes sales value from collection for unpaid and partially paid invoices', () => {
+    const unpaid = { total: 110, paid_amount: 0, refunded_amount: 0 };
+    expect(netSaleAmount(unpaid)).toBe(110);
+    expect(netSalePayment(unpaid)).toBe(0);
+    const partial = { total: 200, paid_amount: 80, refunded_amount: 20 };
+    expect(netSaleAmount(partial)).toBe(180);
+    expect(netSalePayment(partial)).toBe(60);
+  });
   it('nets sales, purchases and sale items without going below zero', () => {
     expect(netSaleAmount({ total: 420, refunded_amount: 420 })).toBe(0);
     expect(netSaleAmount({ total: 420, refunded_amount: 120 })).toBe(300);

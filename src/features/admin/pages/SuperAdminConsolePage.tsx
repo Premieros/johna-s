@@ -73,6 +73,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   // Tenants state
   const [tenants, setTenants] = useState<TenantStats[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(false);
+  const [tenantLoadFailed, setTenantLoadFailed] = useState(false);
 
   // System Controls state (Allow New User Creation)
   const [allowNewUserCreation, setAllowNewUserCreation] = useState<boolean>(true);
@@ -147,8 +148,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     setLoadingTenants(true);
     try {
       setTenants(await fetchTenantStats());
+      setTenantLoadFailed(false);
     } catch {
-      // Ignored
+      setTenantLoadFailed(true);
     } finally {
       setLoadingTenants(false);
     }
@@ -432,11 +434,20 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 <div className="p-2.5 rounded-xl bg-ui-page-alt shrink-0">{st.icon}</div>
                 <div>
                   <p className="text-xs text-ui-subtle">{st.label}</p>
-                  <p className="text-xl font-black text-ui-text">{st.value}</p>
+                  <p className="text-xl font-black text-ui-text">{loadingTenants || tenantLoadFailed ? '—' : st.value}</p>
                 </div>
               </Card>
             ))}
           </div>
+
+          {tenantLoadFailed && (
+            <div role="alert" className="rounded-xl bg-ui-warning-soft p-3 text-sm text-ui-warning">
+              {ar ? 'تعذر تحميل إحصاءات المنظمات. أعد المحاولة.' : 'Could not load organization statistics. Please retry.'}
+              <button type="button" className="ms-3 underline" onClick={() => void loadTenants()}>
+                {ar ? 'إعادة المحاولة' : 'Retry'}
+              </button>
+            </div>
+          )}
 
           <Card className="overflow-hidden">
             <div className="p-4 border-b border-ui-border flex justify-between items-center">

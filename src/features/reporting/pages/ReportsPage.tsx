@@ -268,7 +268,6 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           filters,
         });
         const rows = sales.map((sale: Record<string, unknown>) => {
-          const net = netSaleAmount(sale);
           const cashier = sale.cashier as { full_name?: string; email?: string } | null;
           const warehouse = sale.warehouse as { name?: string } | null;
           return withBranch(sale.branch_id, {
@@ -286,7 +285,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
             [lang === 'ar' ? 'إجمالي الفاتورة' : 'Invoice Total']: Number(sale.total || 0),
             [lang === 'ar' ? 'المدفوع' : 'Paid']: Number(sale.paid_amount || 0),
             [lang === 'ar' ? 'المرتجع' : 'Refunded']: Number(sale.refunded_amount || 0),
-            [lang === 'ar' ? 'صافي التحصيل' : 'Net Collection']: net,
+            [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: netSaleAmount(sale),
+            [lang === 'ar' ? 'صافي التحصيل' : 'Net Collection']: netSalePayment(sale),
           });
         });
         setData(rows);
