@@ -1,13 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Track: **Approved audit corrections with live-branch continuity**
+- Track: **Incremental read-screen stability with live-branch continuity**
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `08035a784d3c3f43abe68b428c636abb26c004d1`
-- Current active branch: `fix/audit-safe-read-display-20261005`
-- Mandatory active work log: `docs/AUDIT_SAFE_CORRECTIONS_2026-10-05.md`
+- Latest main baseline reconciled: `f0b87cb384415b8b3e92f49637c3877003dfdf3c`
+- Current active branch: `fix/stability-journal-20261005`
+- Mandatory active work log: `docs/READ_SCREEN_STABILITY_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -21,19 +21,17 @@
 - Printing, Print Agent, POS transactions, KDS, Send to Kitchen, stock posting, Accounting, Settlement and Shifts remain frozen. Inventory status wording is approved.
 
 ## Current objective
-Correct sales report collection columns, tenant user counts and negative stock labels; verify branch refresh separately. User approved these corrections on 2026-10-05 and requires continuity of live branch operations. Permission policy hardening is isolated until dependent operational reads have safe replacement paths.
+User authorized incremental stability work on 2026-10-05. First reviewable patch:
+Journal read failures, superseded requests, search delay and opt-in bounded row rendering.
+Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
-- PR #444 is merged at the reconciled main baseline above.
-- Read-only Production migration-history inspection confirms `20261004104251 / dashboard_sales_rls_context_cache` was applied. The prior worklog's pre-apply BLOCKED state is historical.
-- Current audit/fix work uses Production for read-only diagnostics.
-- Current wide-range Dashboard baseline for a branch manager is approximately 3.73 s with ~93k shared buffer hits.
-- Current isolated sale visibility predicate is approximately 455 ms / 10,849 shared hits.
-- Equivalent statement-context predicate is approximately 120 ms / 3,886 shared hits.
-- Row-by-row comparison over 1,854 Production sales produced 0 visibility mismatches for branch_manager, super_admin and cashier personas.
-- No Production DDL or migration has been applied by this audit/fix work.
+- PR #446 merged and deployed at the reconciled main baseline above; exact-main Verify succeeded.
+- Earlier audit findings are retained in the historical audit worklog, not marked as pending fixes.
+- All Production activity in this track is read-only; no new migration is included.
 
 ## Remaining gated work
-- Exact-head CI must be fully green.
-- This display patch includes no database migration.
-- Permission changes require dependency tests before Production application.
+- Exact-head Full Verify and explicit merge approval before deployment.
+- Server-side Journal pagination requires a separate API/DB contract with complete summary totals.
+- Supplier/purchase policy hardening requires safe operational read dependencies first.
+- FIFO costing, period controls and production recovery evidence remain separate review work.
