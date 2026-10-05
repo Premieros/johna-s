@@ -18,7 +18,7 @@
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Any Production apply requires separate explicit approval.
 - Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
-- Authorized scope: safe frontend error classification and POS operation context only. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
+- Authorized scope: safe frontend error classification, POS operation context and immutable Pages asset continuity. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
 
 ## Current objective
 User authorized incremental stability work and the served-resend Production repair on 2026-10-05. Next reviewable patch:

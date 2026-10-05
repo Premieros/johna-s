@@ -43,6 +43,28 @@ jobs:
       - run: npm run test:unit
       - run: npm run build
 
+  pages-continuity:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build current app without publishing
+        run: npm run build
+      - name: Verify retention against the actual previous deployed artifact
+        uses: ./.github/actions/preserve-pages-assets
+        with:
+          github-token: ${{ github.token }}
+          deployment-branch: main
+
   db:
     needs: verify
     runs-on: ubuntu-latest

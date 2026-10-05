@@ -7,7 +7,7 @@ Last updated: 2026-10-05
 
 ## Work status
 State: **BLOCKED**
-Isolated frontend diagnostic patch under verification. Not deployed.
+Frontend diagnostics and Pages asset continuity patch under verification. Not deployed.
 
 ## Guardrails
 Preserve permission-first authorization, branch isolation, financial visibility and operational truth.
@@ -27,7 +27,7 @@ Payment error flattening drops Supabase codes and JavaScript error types.
 Identifier extraction discarded numeric SQLSTATE and PGRST codes and missed business codes after ordinary words.
 New Production reads show three stale_chunk_error events on kitchen-display, shifts and dashboard.
 Dynamic-import failure was classified as NETWORK_ERROR because generic fetch matching preceded chunk matching.
-Deployment currently uploads only the new dist; previous asset retention needs separate operational review.
+Deployment uploads only new dist, dropping old hashed chunks. This is a proven session-continuity defect; exact cause of the three recorded requests remains unproven.
 
 ## Change ledger
 Keep original failure in memory as optional diagnostic on rejected payments; success and write contracts unchanged.
@@ -36,13 +36,18 @@ Capture PGRST codes, SQLSTATE identifiers, standard JavaScript names and existin
 Prioritize dynamic-import/chunk failures over generic network text; do not change automatic reload behavior.
 Add settlement submission/read action, branch and order identifiers through existing bounded telemetry RPC.
 Never send raw error objects, request payloads, details or stacks to telemetry.
+Before publication, read the last successful Pages artifact and retain previous immutable assets for seven days.
+Keep new index.html and current assets; reject different-content path collisions, unsafe paths/links and oversized unions.
+Missing/expired previous artifact fails deployment before publication; artifact retention increased to 30 days.
+Existing sessions from older already-removed builds may still need refresh; do not force reload or modify Print Agent.
 
 ## Verification ledger
 Focused behavioral tests cover payment single-attempt rejection, no ambiguous offline enqueue, split rejection,
 original toast source with unchanged visible message, safe telemetry payload and telemetry failure isolation.
 Final unit/component suite: 293 files / 1434 tests passed before the additional chunk classification regression; focused final tests passed.
 Typecheck:all, production build and changed-file lint passed; zero lint errors, two pre-existing hook warnings.
-Exact-head remote CI pending.
+Eight executable Python archive tests passed; current HTML, expiry, collisions, traversal, links and size limits covered.
+Focused final frontend/retention tests passed. Final full suite and exact-head remote CI pending.
 
 ## Production gate
 State: **BLOCKED**
@@ -50,6 +55,7 @@ Frontend review only; no Production database apply included.
 
 ## Next action
 Complete final unit/component and exact-head Full Verify checks; request approval for the concrete reviewed frontend patch.
+Verify deployed asset retention separately from application/DB CI; no physical print confirmation is claimed.
 Do not mark historical sosy errors resolved or infer absence of new telemetry proves all live workflows healthy.
 
 ## Mandatory update protocol
