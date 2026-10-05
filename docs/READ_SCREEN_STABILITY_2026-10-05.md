@@ -3,13 +3,13 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/stability-reports-20261005`
-Current PR: `#0` (new report patch not yet opened)
+Current PR: `#448`
 Last updated: 2026-10-05
 Execution mode: **SINGLE_WRITER**
 
 ## Work status
 State: **BLOCKED**
-PR #447 merged/deployed; the second report patch is implemented locally and not deployed.
+PR #447 merged/deployed; the second report patch is uploaded as draft PR #448 and not deployed.
 
 ## Guardrails
 User authorized incremental repairs with live branch continuity. No business-data writes,
@@ -68,7 +68,7 @@ State: **BLOCKED**
 No Production DB apply included. #447 deployed with approval; the report patch is not deployed.
 
 ## Next action
-Finish report validation, open a separate draft PR and verify its exact-head CI before deployment.
+Verify exact-head CI for draft PR #448 before review and deployment.
 Follow with incremental report/dashboard and permission dependency patches.
 
 ## Mandatory update protocol
