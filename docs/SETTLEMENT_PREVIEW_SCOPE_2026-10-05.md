@@ -28,13 +28,14 @@ Generic CLIENT_ERROR events lack sufficient evidence to attribute sosy errors to
 ## Change ledger
 Scoped preview hook clears before paint, validates server order/branch and discards superseded/closed reads.
 Confirmation reads current authoritative sent-only preview instead of the cached warehouse.
+Revalidate snapshot after invoice allocation; changed/closed scope cancels before process_sale.
 Preserve manual unsent-item warning and the existing server-bound totals/payload/printing.
 One additional read per linked online confirmation; no polling or extra write.
 
 ## Verification ledger
-Focused hooks and sent-only contract: 3 files / 12 tests passed.
+Focused hooks and sent-only contract: 3 files / 13 tests passed (including scope change during invoice allocation).
 Actual payment-hook tests assert fresh warehouse forwarding and foreign preview never reaches process_sale.
-Full unit/component suite: 290 files / 1418 tests passed.
+Final full unit/component suite: 290 files / 1419 tests passed.
 Typecheck:all, production build and API contract passed; changed-file lint has zero errors and two pre-existing warnings.
 Remote exact-head CI pending.
 

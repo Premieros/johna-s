@@ -42,7 +42,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [offlineCompleting, setOfflineCompleting] = useState(false);
   const saleMutationLockRef = useRef(false);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
-  const { preview: settlementPreview, load: loadScopedSettlementPreview, clear: clearSettlementPreview } = useScopedSettlementPreview(base.activeOrderId, input.branchId);
+  const { preview: settlementPreview, load: loadScopedSettlementPreview, clear: clearSettlementPreview, isCurrent: isCurrentSettlementPreview } = useScopedSettlementPreview(base.activeOrderId, input.branchId);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
   const [settlementReceiptOrderCompleted, setSettlementReceiptOrderCompleted] = useState<boolean | null>(null);
@@ -337,6 +337,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       if (!preview) return false;
 
       const invoiceNumber = await nextInvoiceNumber();
+      if (!isCurrentSettlementPreview(preview)) return false;
       const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : (base.paidAmount || preview.total);
       const binding = resolveOrderBindingForSave({
         activeOrderId: base.activeOrderId,
@@ -452,7 +453,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
-  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, lang, loadSettlementPreview, offlineCompleting, show, t]);
+  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadSettlementPreview, offlineCompleting, show, t]);
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
