@@ -14,6 +14,7 @@ describe('safe structured issue diagnostics', () => {
     [{ code: 'STOCK_INSUFFICIENT', message: 'Not enough stock' }, 'STOCK_INSUFFICIENT'],
     [new TypeError('Cannot read properties of undefined'), 'JS_TYPEERROR'],
     [new TypeError('Failed to fetch'), 'NETWORK_ERROR'],
+    [new TypeError('Failed to fetch dynamically imported module: https://example.com/assets/page.js'), 'CHUNK_LOAD_ERROR'],
   ])('retains a useful identifier for %o', (source, code) => {
     expect(deriveUserIssueCode(source)).toBe(code);
   });

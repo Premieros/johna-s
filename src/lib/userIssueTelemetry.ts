@@ -75,9 +75,10 @@ export function deriveUserIssueCode(input: unknown): string {
   if (typeof input === 'object' && input !== null && 'code' in input && /^[0-9A-Z]{5}$/.test(raw)) {
     return `SQLSTATE_${raw}`;
   }
+  // Dynamic-import failures also say 'failed to fetch'; classify the specific failure first.
+  if (/CHUNKLOAD|DYNAMICALLY IMPORTED MODULE|MODULE SCRIPT FAILED|LOADING CHUNK .* FAILED/.test(message)) return 'CHUNK_LOAD_ERROR';
   if (/FAILED TO FETCH|NETWORK|CONNECTION/.test(message)) return 'NETWORK_ERROR';
   if (/TIMEOUT|TIMED OUT/.test(message)) return 'TIMEOUT_ERROR';
-  if (/CHUNKLOAD|DYNAMICALLY IMPORTED MODULE|MODULE SCRIPT FAILED/.test(message)) return 'CHUNK_LOAD_ERROR';
   if (input instanceof Error && ['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(input.name)) {
     return `JS_${input.name.toUpperCase()}`;
   }

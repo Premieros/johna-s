@@ -25,18 +25,22 @@ Historical sosy CLIENT_ERROR events retain only the generic message, screen and 
 Their exact original failure is unrecoverable from the existing event fields; warehouse causality remains unproven.
 Payment error flattening drops Supabase codes and JavaScript error types.
 Identifier extraction discarded numeric SQLSTATE and PGRST codes and missed business codes after ordinary words.
+New Production reads show three stale_chunk_error events on kitchen-display, shifts and dashboard.
+Dynamic-import failure was classified as NETWORK_ERROR because generic fetch matching preceded chunk matching.
+Deployment currently uploads only the new dist; previous asset retention needs separate operational review.
 
 ## Change ledger
 Keep original failure in memory as optional diagnostic on rejected payments; success and write contracts unchanged.
 Toast keeps its visible message and optionally passes source/context to classification; source is excluded from RPC options.
 Capture PGRST codes, SQLSTATE identifiers, standard JavaScript names and existing business rejection codes.
+Prioritize dynamic-import/chunk failures over generic network text; do not change automatic reload behavior.
 Add settlement submission/read action, branch and order identifiers through existing bounded telemetry RPC.
 Never send raw error objects, request payloads, details or stacks to telemetry.
 
 ## Verification ledger
 Focused behavioral tests cover payment single-attempt rejection, no ambiguous offline enqueue, split rejection,
 original toast source with unchanged visible message, safe telemetry payload and telemetry failure isolation.
-Final unit/component suite: 293 files / 1434 tests passed.
+Final unit/component suite: 293 files / 1434 tests passed before the additional chunk classification regression; focused final tests passed.
 Typecheck:all, production build and changed-file lint passed; zero lint errors, two pre-existing hook warnings.
 Exact-head remote CI pending.
 
