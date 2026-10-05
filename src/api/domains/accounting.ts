@@ -1,5 +1,5 @@
 import type { ApiResult, JournalLineInput } from '../types';
-import type { RpcResult, TreasuryBalance, TreasurySource, TrialBalanceRow, JournalDto, ArAgingRow, ApAgingRow, ReconciliationDetail } from '@/lib/types';
+import type { RpcResult, TreasuryBalance, TreasurySource, TrialBalanceRow, JournalDto, JournalPageDto, ArAgingRow, ApAgingRow, ReconciliationDetail } from '@/lib/types';
 import { rpc } from '../rpc';
 
 export const accounting = {
@@ -63,6 +63,7 @@ export const accounting = {
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p); },
   seedOpeningBalances(p: { p_branch_id: string | null }): ApiResult<RpcResult> { return rpc('seed_opening_balances', p); },
   getJournals(p: { p_branch_id: string | null; p_from_date: string | null; p_to_date: string | null; p_reference_type: string | null; p_search: string | null }): ApiResult<JournalDto[]> { return rpc('get_journals', p); },
+  getJournalsPage(p: { p_branch_id: string | null; p_from_date: string | null; p_to_date: string | null; p_reference_type: string | null; p_search: string | null; p_page_size: number; p_after_entry_date: string | null; p_after_entry_number: string | null; p_after_id: string | null }): ApiResult<JournalPageDto> { return rpc('get_journals_page', p); },
   postManualJournal(p: { p_branch_id: string | null; p_description: string; p_lines: JournalLineInput[] }): ApiResult<RpcResult> { return rpc('post_manual_journal', p); },
   getArAging(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<ArAgingRow[]> { return rpc('get_ar_aging', p); },
   getApAging(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<ApAgingRow[]> { return rpc('get_ap_aging', p); },

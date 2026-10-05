@@ -363,6 +363,20 @@ export interface JournalLineDto {
   supplier_id: string | null;
 }
 
+export interface JournalCursor {
+  entry_date: string;
+  entry_number: string;
+  id: string;
+}
+
+export interface JournalPageDto {
+  rows: JournalDto[];
+  summary: { total_count: number; debit_total: number; credit_total: number; balance: number };
+  page_size: number;
+  has_more: boolean;
+  next_cursor: JournalCursor | null;
+}
+
 export interface JournalDto {
   id: string;
   entry_number: string;

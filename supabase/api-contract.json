@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-28T18:05:24.000Z",
+  "generated_at": "2026-10-05T14:23:50.113Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -571,6 +571,20 @@
       "params": [
         "branch_id",
         "from_date",
+        "reference_type",
+        "search",
+        "to_date"
+      ]
+    },
+    {
+      "name": "get_journals_page",
+      "params": [
+        "after_entry_date",
+        "after_entry_number",
+        "after_id",
+        "branch_id",
+        "from_date",
+        "page_size",
         "reference_type",
         "search",
         "to_date"

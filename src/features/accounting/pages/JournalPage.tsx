@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useLayoutEffect } from 'react';
 import { Eye, Scale, Plus, Trash2 } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -18,7 +18,7 @@ import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import type { JournalDto, ChartOfAccount } from '@/lib/types';
-import { useLatestRead } from '@/hooks/useLatestRead';
+import { useJournalPageRead } from '../useJournalPageRead';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { fetchActiveJournalAccounts } from '../services/journalAccounts';
 
@@ -66,7 +66,8 @@ export function JournalPage() {
   const primaryBranchId = user?.branch_id && branches.some((branch) => branch.id === user.branch_id)
     ? user.branch_id
     : null;
-  const effectiveBranchFilter = selectedBranchFilter
+  const selectedIsAccessible = branches.some(branch => branch.id === selectedBranchFilter);
+  const effectiveBranchFilter = (selectedIsAccessible ? selectedBranchFilter : null)
     || branchFilter
     || primaryBranchId
     || (branches.length === 1 ? branches[0].id : null);
@@ -79,21 +80,13 @@ export function JournalPage() {
   const [manualLines, setManualLines] = useState<ManualLine[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const readJournals = useCallback(async () => {
-    if (!effectiveBranchFilter || !user?.id) return [] as JournalDto[];
-    const allowed = history.clampRange(from, to);
-    const { data, error } = await api.accounting.getJournals({
-      p_branch_id: effectiveBranchFilter,
-      p_from_date: allowed.from || null,
-      p_to_date: allowed.to || null,
-      p_reference_type: refType || null,
-      p_search: search || null,
-    });
-    if (error) throw error;
-    return (data as JournalDto[]) || [];
-  }, [effectiveBranchFilter, from, to, refType, search, history, user?.id]);
-  const { data: journalRows, error: loadError, loading, reload: load } = useLatestRead(readJournals, search ? 300 : 0);
-  const items = journalRows || [];
+  const allowed = history.clampRange(from, to);
+  const journal = useJournalPageRead({ branchId: effectiveBranchFilter, userId: user?.id,
+    from: allowed.from, to: allowed.to, referenceType: refType, search, unlimited: history.unlimited });
+  const { error: loadError, loading, refresh: load } = journal;
+  const items = journal.data?.rows || [];
+  const summary = journal.data?.summary;
+  useLayoutEffect(() => { setViewing(null); }, [journal.scope]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,10 +182,10 @@ export function JournalPage() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title={t('journalEntries')} value={loading || loadError ? '—' : String(items.length)} icon={<Scale className="w-5 h-5" />} color="brand" />
-        <StatCard title={t('totalDebit')} value={loading || loadError ? '—' : formatCurrency(items.reduce((s, e) => s + Number(e.debit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="blue" />
-        <StatCard title={t('totalCredit')} value={loading || loadError ? '—' : formatCurrency(items.reduce((s, e) => s + Number(e.credit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="amber" />
-        <StatCard title={t('balance')} value={loading || loadError ? '—' : formatCurrency(items.reduce((s, e) => s + Number(e.debit_total) - Number(e.credit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="green" />
+        <StatCard title={t('journalEntries')} value={loading || loadError ? '—' : String(summary?.total_count ?? 0)} icon={<Scale className="w-5 h-5" />} color="brand" />
+        <StatCard title={t('totalDebit')} value={loading || loadError ? '—' : formatCurrency(summary?.debit_total ?? 0, currency, lang)} icon={<Scale className="w-5 h-5" />} color="blue" />
+        <StatCard title={t('totalCredit')} value={loading || loadError ? '—' : formatCurrency(summary?.credit_total ?? 0, currency, lang)} icon={<Scale className="w-5 h-5" />} color="amber" />
+        <StatCard title={t('balance')} value={loading || loadError ? '—' : formatCurrency(summary?.balance ?? 0, currency, lang)} icon={<Scale className="w-5 h-5" />} color="green" />
       </div>
 
       <DesignPanel testId="journal-search-panel">
@@ -208,7 +201,7 @@ export function JournalPage() {
             {branches.length > 1 && (
               <div>
                 <label className="block text-sm font-medium text-ui-muted mb-1">{t('filterByBranch')}</label>
-                <select value={selectedBranchFilter || effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                <select value={effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
                   className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
                   {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
                 </select>
@@ -219,8 +212,16 @@ export function JournalPage() {
       </DesignPanel>
 
       <DesignPanel testId="journal-table-panel">
-        <DataTable columns={columns} data={items} loading={loading} error={loadError ? userFacingErrorMessage(loadError, lang) : null} pageSize={100} emptyMessage={t('noData')} />
-        {!!loadError && <Button variant="outline" onClick={() => { void load(); }}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button>}
+        <DataTable columns={columns} data={items} loading={loading} error={loadError ? userFacingErrorMessage(loadError, lang) : null} emptyMessage={t('noData')} />
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-3" aria-label={isAr ? 'صفحات القيود' : 'Journal pages'}>
+          <span className="text-sm text-ui-muted">{isAr ? 'الصفحة' : 'Page'} {journal.index + 1}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={loading || journal.index === 0} onClick={journal.previous}>{isAr ? 'السابق' : 'Previous'}</Button>
+            <Button variant="outline" disabled={loading || !!loadError || !journal.data?.has_more} onClick={journal.next}>{isAr ? 'التالي' : 'Next'}</Button>
+          </div>
+        </div>
+        <p className="text-xs text-ui-muted mt-2">{isAr ? 'فلاتر الأعمدة وترتيبها تخص الصفحة المعروضة؛ إجماليات الفترة تتبع الفلاتر أعلاه.' : 'Column filters and sorting apply to this page; period totals follow the filters above.'}</p>
+        {!!loadError && <Button variant="outline" onClick={() => { void journal.reload(); }}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button>}
       </DesignPanel>
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `${viewing.entry_number} - ${viewing.description || ''}` : ''} size="lg">
