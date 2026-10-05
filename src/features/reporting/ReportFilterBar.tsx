@@ -42,6 +42,7 @@ export interface ReportFilterBarProps {
   onReportTypeChange?: (key: string) => void;
   onRunReport?: () => void;
   loading?: boolean;
+  unavailable?: boolean;
   pendingChanges?: boolean;
 }
 
@@ -75,6 +76,7 @@ export function ReportFilterBar({
   onReportTypeChange,
   onRunReport,
   loading = false,
+  unavailable = false,
   pendingChanges = false,
 }: ReportFilterBarProps) {
   const { t } = useLanguage();
@@ -196,11 +198,11 @@ export function ReportFilterBar({
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
               <span className="text-ui-muted">{t('total')}: </span>
-              <span className="font-extrabold tabular-nums text-ui-accent">{formatCurrency(total, currency, lang)}</span>
+              <span className="font-extrabold tabular-nums text-ui-accent">{loading || unavailable ? '—' : formatCurrency(total, currency, lang)}</span>
             </div>
             <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
               <span className="text-ui-muted">{t('count')}: </span>
-              <span className="font-extrabold tabular-nums text-ui-text">{count}</span>
+              <span className="font-extrabold tabular-nums text-ui-text">{loading || unavailable ? '—' : count}</span>
             </div>
             {pendingChanges && (
               <span className="rounded-lg border border-ui-warning/30 bg-ui-warning-soft px-3 py-1.5 font-semibold text-ui-warning">

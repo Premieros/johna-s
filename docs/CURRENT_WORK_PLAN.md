@@ -5,8 +5,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `f0b87cb384415b8b3e92f49637c3877003dfdf3c`
-- Current active branch: `fix/stability-journal-20261005`
+- Latest main baseline reconciled: `d7e62ecd5b2a95c6239cf2c1dd6aa5ea983e06b0`
+- Current active branch: `fix/stability-reports-20261005`
 - Mandatory active work log: `docs/READ_SCREEN_STABILITY_2026-10-05.md`
 
 ## Operational rules
@@ -22,11 +22,13 @@
 
 ## Current objective
 User authorized incremental stability work on 2026-10-05. First reviewable patch:
-Journal read failures, superseded requests, search delay and opt-in bounded row rendering.
+Report read failures, atomic row/summary snapshots, superseded requests and bounded screen rows.
 Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
-- PR #446 merged and deployed at the reconciled main baseline above; exact-main Verify succeeded.
+- PR #447 merged after exact-head Full Verify and explicit user approval.
+- GitHub Pages build, Production API parity and deploy for #447 succeeded.
+- Current read work preserves the full report printing/export datasets.
 - Earlier audit findings are retained in the historical audit worklog, not marked as pending fixes.
 - All Production activity in this track is read-only; no new migration is included.
 
