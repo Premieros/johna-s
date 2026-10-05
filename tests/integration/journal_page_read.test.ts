@@ -111,7 +111,7 @@ describe.skipIf(!dbUrl)('bounded journal read with complete caller-visible total
     expect((await page(ids.users.cashier, ids.branchA, null, 200)).rows).toHaveLength(200);
   });
 
-  it('retains historical range clamping and reference/search filter semantics', async () => {
+  it('retains selectable historical ranges and reference/search/date filter semantics', async () => {
     await client.query(
       `INSERT INTO public.journal_entries (entry_number, branch_id, entry_date, reference_type)
        VALUES ($1, $2, CURRENT_DATE - 30, 'manual')`, [`${prefix}OLD`, ids.branchA]);
@@ -125,8 +125,15 @@ describe.skipIf(!dbUrl)('bounded journal read with complete caller-visible total
       const paged = result.rows[0].page as Page;
       expect(paged.summary.total_count).toBe(old.length);
       expect(paged.rows).toEqual(old.slice(0, 200));
-      expect(old.length).toBe(userId === ids.users.cashier ? 205 : 206);
+      // Canonical 20260923184500 keeps older requested dates selectable;
+      // restrictive Financial Visibility controls rows, not a seven-day date cap.
+      expect(old.length).toBe(206);
     }
+    const dated = await runAs(client, ids.users.cashier,
+      `SELECT public.get_journals_page($1, CURRENT_DATE, CURRENT_DATE, 'manual', 'PAGE-REFERENCE') AS page`,
+      [ids.branchA]);
+    expect(dated.error).toBeUndefined();
+    expect((dated.rows[0].page as Page).summary.total_count).toBe(205);
     const noMatch = await runAs(client, ids.users.cashier,
       `SELECT public.get_journals_page($1, p_reference_type => 'sale', p_search => $2) AS page`, [ids.branchA, prefix]);
     expect((noMatch.rows[0].page as Page).summary.total_count).toBe(0);

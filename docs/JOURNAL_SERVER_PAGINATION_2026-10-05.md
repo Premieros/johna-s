@@ -45,6 +45,11 @@ semantics, restrictive linked-sale visibility and function security. Local datab
 are not counted as passed when no database is configured. Full isolated CI is required.
 Typecheck:all, frontend API contract (157 RPCs/54 tables), changed-file lint, diff check
 and branch-bound worklog gate (4 tests) passed locally. Exact-head Full Verify pending.
+First isolated Fast Verify: migration applied successfully; 6/7 database tests passed.
+The remaining assertion incorrectly assumed the superseded seven-day history cap.
+Canonical 20260923184500 keeps older dates selectable and enforces row visibility.
+Corrected the test to require current legacy parity plus explicit date/reference filtering;
+no function or Production behavior changed. Fresh exact-head CI is required.
 
 ## Production gate
 State: **BLOCKED**
