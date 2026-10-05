@@ -28,7 +28,7 @@ runs:
           let exhausted = false;
           for (let page = 1; page <= 10; page++) {
             const { data } = await github.rest.actions.listWorkflowRunsForRepo({
-              owner, repo, branch: process.env.DEPLOYMENT_BRANCH,
+              owner, repo,
               per_page: 100, page,
             });
             previous = data.workflow_runs.find(run =>

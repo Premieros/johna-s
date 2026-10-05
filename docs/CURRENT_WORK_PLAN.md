@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `996b860a40ac3ee5cba47f53467c68b4ccaf40dd`
-- Current active branch: `fix/pages-artifact-selection-20261005`
-- Mandatory active work log: `docs/PAGES_ARTIFACT_SELECTION_2026-10-05.md`
+- Latest main baseline reconciled: `db46b301d69599010c9da97e967240c363997b37`
+- Current active branch: `fix/pages-unfiltered-history-20261005`
+- Mandatory active work log: `docs/PAGES_UNFILTERED_HISTORY_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
