@@ -5,7 +5,8 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { cartToItems, type ItemPayload } from '../utils/cart';
 import { createSaleOperationKey, nextInvoiceNumber, processSaleForOrder } from '../services/payment';
-import { fetchOrderSettlementPreview, type OrderSettlementPreview } from '../services/settlementPreview';
+import type { OrderSettlementPreview } from '../services/settlementPreview';
+import { useScopedSettlementPreview } from './useScopedSettlementPreview';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, openPrintWindow, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
@@ -41,7 +42,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [offlineCompleting, setOfflineCompleting] = useState(false);
   const saleMutationLockRef = useRef(false);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
-  const [settlementPreview, setSettlementPreview] = useState<OrderSettlementPreview | null>(null);
+  const { preview: settlementPreview, load: loadScopedSettlementPreview, clear: clearSettlementPreview, isCurrent: isCurrentSettlementPreview } = useScopedSettlementPreview(base.activeOrderId, input.branchId);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
   const [settlementReceiptOrderCompleted, setSettlementReceiptOrderCompleted] = useState<boolean | null>(null);
@@ -152,15 +153,16 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (!base.activeOrderId) return null;
     if (saveSnapshot && !(await saveOpenOrderSnapshot())) return null;
 
-    const { preview, error } = await fetchOrderSettlementPreview(base.activeOrderId);
+    const { preview, error } = await loadScopedSettlementPreview();
+    // A superseded or closed checkout read must not open another order checkout.
+    if (!preview && !error) return null;
     if (error || !preview?.has_payable_items) {
       show(error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for settlement'), 'error');
       return null;
     }
 
-    setSettlementPreview(preview);
     return preview;
-  }, [base.activeOrderId, isAr, saveOpenOrderSnapshot, show]);
+  }, [base.activeOrderId, isAr, loadScopedSettlementPreview, saveOpenOrderSnapshot, show]);
 
   const transferOrderToTable = useCallback(async (
     targetOrderId: string,
@@ -198,7 +200,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   const setCheckoutOpen = useCallback((open: boolean) => {
     if (!open) {
-      setSettlementPreview(null);
+      clearSettlementPreview();
       base.setCheckoutOpen(false);
       return;
     }
@@ -222,7 +224,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
     })();
-  }, [base, loadSettlementPreview]);
+  }, [base, clearSettlementPreview, isAr, loadSettlementPreview, show]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -330,10 +332,12 @@ export function usePosOrder(input: UsePosOrderInput) {
     saleMutationLockRef.current = true;
     setOfflineCompleting(true);
     try {
-      const preview = settlementPreview || await loadSettlementPreview(false);
+      // Re-read authoritative sent items and pinned warehouse at confirmation.
+      const preview = await loadSettlementPreview(false);
       if (!preview) return false;
 
       const invoiceNumber = await nextInvoiceNumber();
+      if (!isCurrentSettlementPreview(preview)) return false;
       const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : (base.paidAmount || preview.total);
       const binding = resolveOrderBindingForSave({
         activeOrderId: base.activeOrderId,
@@ -406,7 +410,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
       setSettlementReceiptOrderCompleted(Boolean(extended.order_completed));
-      setSettlementPreview(null);
+      clearSettlementPreview();
       base.setCheckoutOpen(false);
       base.setPaidAmount(0);
       // The sale is durable and the receipt state is now local. Only now may
@@ -449,7 +453,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
-  }, [base, buildSettlementReceipt, input.activeShift?.id, input.branchId, input.effSettings, isAr, lang, loadSettlementPreview, offlineCompleting, settlementPreview, show, t]);
+  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadSettlementPreview, offlineCompleting, show, t]);
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;

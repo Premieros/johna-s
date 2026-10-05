@@ -19,7 +19,8 @@ describe('POS sent-only settlement contract', () => {
     expect(publicHook).toContain('const saveOpenOrderSnapshot = useCallback');
     expect(publicHook).toContain('api.floorPlan.updateOrder');
     expect(publicHook).toContain('const preview = await loadSettlementPreview(false)');
-    expect(publicHook).toContain('settlementPreview || await loadSettlementPreview(false)');
+    expect(publicHook).not.toContain('settlementPreview || await loadSettlementPreview(false)');
+    expect(publicHook).toContain('useScopedSettlementPreview(base.activeOrderId, input.branchId)');
     expect(publicHook).not.toContain('const preview = await loadSettlementPreview(true)');
     expect(publicHook).not.toContain('settlementPreview || await loadSettlementPreview(true)');
   });
