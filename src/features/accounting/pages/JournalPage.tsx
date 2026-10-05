@@ -18,6 +18,8 @@ import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import type { JournalDto, ChartOfAccount } from '@/lib/types';
+import { useLatestRead } from '@/hooks/useLatestRead';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { fetchActiveJournalAccounts } from '../services/journalAccounts';
 
 interface ManualLine {
@@ -55,8 +57,6 @@ export function JournalPage() {
   const history = useHistoryAccess();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
-  const [items, setItems] = useState<JournalDto[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [refType, setRefType] = useState('');
   const [viewing, setViewing] = useState<JournalDto | null>(null);
@@ -79,30 +79,21 @@ export function JournalPage() {
   const [manualLines, setManualLines] = useState<ManualLine[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (effectiveBranchFilter) {
-        const allowed = history.clampRange(from, to);
-        if (allowed.from !== from) setFrom(allowed.from);
-        if (allowed.to !== to) setTo(allowed.to);
-        const { data } = await api.accounting.getJournals({
-          p_branch_id: effectiveBranchFilter,
-          p_from_date: allowed.from || null,
-          p_to_date: allowed.to || null,
-          p_reference_type: refType || null,
-          p_search: search || null,
-        });
-        setItems((data as JournalDto[]) || []);
-      } else {
-        setItems([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [effectiveBranchFilter, from, to, refType, search, history.unlimited]);
-
-  useEffect(() => { load(); }, [load]);
+  const readJournals = useCallback(async () => {
+    if (!effectiveBranchFilter || !user?.id) return [] as JournalDto[];
+    const allowed = history.clampRange(from, to);
+    const { data, error } = await api.accounting.getJournals({
+      p_branch_id: effectiveBranchFilter,
+      p_from_date: allowed.from || null,
+      p_to_date: allowed.to || null,
+      p_reference_type: refType || null,
+      p_search: search || null,
+    });
+    if (error) throw error;
+    return (data as JournalDto[]) || [];
+  }, [effectiveBranchFilter, from, to, refType, search, history, user?.id]);
+  const { data: journalRows, error: loadError, loading, reload: load } = useLatestRead(readJournals, search ? 300 : 0);
+  const items = journalRows || [];
 
   useEffect(() => {
     let cancelled = false;
@@ -198,10 +189,10 @@ export function JournalPage() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title={t('journalEntries')} value={String(items.length)} icon={<Scale className="w-5 h-5" />} color="brand" />
-        <StatCard title={t('totalDebit')} value={formatCurrency(items.reduce((s, e) => s + Number(e.debit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="blue" />
-        <StatCard title={t('totalCredit')} value={formatCurrency(items.reduce((s, e) => s + Number(e.credit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="amber" />
-        <StatCard title={t('balance')} value={formatCurrency(items.reduce((s, e) => s + Number(e.debit_total) - Number(e.credit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="green" />
+        <StatCard title={t('journalEntries')} value={loading || loadError ? '—' : String(items.length)} icon={<Scale className="w-5 h-5" />} color="brand" />
+        <StatCard title={t('totalDebit')} value={loading || loadError ? '—' : formatCurrency(items.reduce((s, e) => s + Number(e.debit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="blue" />
+        <StatCard title={t('totalCredit')} value={loading || loadError ? '—' : formatCurrency(items.reduce((s, e) => s + Number(e.credit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="amber" />
+        <StatCard title={t('balance')} value={loading || loadError ? '—' : formatCurrency(items.reduce((s, e) => s + Number(e.debit_total) - Number(e.credit_total), 0), currency, lang)} icon={<Scale className="w-5 h-5" />} color="green" />
       </div>
 
       <DesignPanel testId="journal-search-panel">
@@ -228,7 +219,8 @@ export function JournalPage() {
       </DesignPanel>
 
       <DesignPanel testId="journal-table-panel">
-        <DataTable columns={columns} data={items} loading={loading} emptyMessage={t('noData')} />
+        <DataTable columns={columns} data={items} loading={loading} error={loadError ? userFacingErrorMessage(loadError, lang) : null} pageSize={100} emptyMessage={t('noData')} />
+        {!!loadError && <Button variant="outline" onClick={() => { void load(); }}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button>}
       </DesignPanel>
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `${viewing.entry_number} - ${viewing.description || ''}` : ''} size="lg">

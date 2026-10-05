@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, isValidElement, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, type ReactNode, isValidElement, useEffect, useMemo, useRef, useState } from 'react';
 import { downloadTemplate, exportToExcel } from '@/lib/excel';
 
 export interface Column<T> {
@@ -18,6 +18,8 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   loading?: boolean;
+  /** Bound rendered rows only; filtering, selection and export retain the full dataset. */
+  pageSize?: number;
   error?: ReactNode | null;
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
@@ -81,6 +83,7 @@ export function DataTable<T extends { id?: string }>({
   columns,
   data,
   loading,
+  pageSize,
   error,
   emptyMessage,
   onRowClick,
@@ -98,6 +101,7 @@ export function DataTable<T extends { id?: string }>({
   onImportFile,
   importAccept = '.xlsx,.xls,.csv',
 }: DataTableProps<T>) {
+  const [page, setPage] = useState(0);
   const storageKey = tableId ? `datatable:${tableId}:hidden-columns` : null;
   const [filters, setFilters] = useState<Record<string, ColumnFilterState>>({});
   const [filterSearches, setFilterSearches] = useState<Record<string, string>>({});
@@ -172,6 +176,14 @@ export function DataTable<T extends { id?: string }>({
       return sortState.direction === 'asc' ? comparison : -comparison;
     });
   }, [columns, filteredData, sortState]);
+
+  const boundedPageSize = pageSize && pageSize > 0 ? Math.max(1, Math.floor(pageSize)) : null;
+  const pageCount = boundedPageSize ? Math.max(1, Math.ceil(displayData.length / boundedPageSize)) : 1;
+  const currentPage = Math.min(page, pageCount - 1);
+  const renderedData = boundedPageSize
+    ? displayData.slice(currentPage * boundedPageSize, (currentPage + 1) * boundedPageSize)
+    : displayData;
+  useEffect(() => { setPage(0); }, [data, filters, sortState, boundedPageSize]);
 
   const exportColumns = useMemo(
     () => visibleColumns.filter((col) => col.key !== 'actions'),
@@ -576,7 +588,7 @@ export function DataTable<T extends { id?: string }>({
           <div data-testid="table-empty" className="flex flex-col items-center justify-center py-12 text-ui-muted">
             <p className="text-sm font-medium text-ui-text">{hasActiveFilters ? labels.noData : (emptyMessage || 'No data')}</p>
           </div>
-        ) : displayData.map((row, i) => (
+        ) : renderedData.map((row, i) => (
           <div
             key={row.id || i}
             onClick={(e) => {
@@ -670,7 +682,7 @@ export function DataTable<T extends { id?: string }>({
                   </div>
                 </td>
               </tr>
-            ) : displayData.map((row, i) => (
+            ) : renderedData.map((row, i) => (
               <tr
                 key={row.id || i}
                 onClick={(e) => {
@@ -696,6 +708,13 @@ export function DataTable<T extends { id?: string }>({
           </tbody>
         </table>
       </div>
+      {boundedPageSize && displayData.length > 0 && (
+        <nav aria-label={isRtl ? 'صفحات الجدول' : 'Table pages'} className="mt-3 flex items-center justify-center gap-3 print:hidden">
+          <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>{isRtl ? 'السابق' : 'Previous'}</button>
+          <span>{currentPage + 1} / {pageCount} · {displayData.length}</span>
+          <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>{isRtl ? 'التالي' : 'Next'}</button>
+        </nav>
+      )}
     </div>
   );
 }
