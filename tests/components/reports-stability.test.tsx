@@ -5,13 +5,15 @@ import type { ComponentProps } from 'react';
 
 const mocks = vi.hoisted(() => ({
   branch: 'a',
+  userId: 'reader',
   branches: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
   loadSales: vi.fn(),
+  loadOptions: vi.fn(),
   print: vi.fn(),
   excel: vi.fn(),
 }));
 vi.mock('@/api', () => ({ supabase: {}, costing: {}, reporting: {} }));
-vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'reader' } }) }));
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: mocks.userId } }) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
 vi.mock('@/lib/permissions', () => ({ useCan: () => () => true }));
@@ -24,13 +26,13 @@ vi.mock('@/features/reporting/ColumnPicker', () => ({ ColumnPicker: () => null }
 vi.mock('@/features/reporting/CustomReportBar', () => ({ CustomReportBar: () => null }));
 vi.mock('@/features/reporting/services/reportCoreLoaders', () => ({ loadSalesReportRows: mocks.loadSales, loadPurchaseReportRows: vi.fn(), loadExpenseReportRows: vi.fn() }));
 vi.mock('@/features/reporting/services/reportFilterOptions', () => ({
-  loadReportFilterOptions: async () => ({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }),
+  loadReportFilterOptions: mocks.loadOptions,
   loadExpenseCategoryOptions: async () => [],
 }));
 vi.mock('@/lib/reportExport', () => ({ openPrintWindow: mocks.print, downloadCSV: vi.fn() }));
 vi.mock('@/lib/excel', () => ({ exportToExcelAdvanced: mocks.excel }));
-vi.mock('@/features/reporting/ReportFilterBar', () => ({ ReportFilterBar: (props: { total: number; count: number; from: string; onFromChange: (s: string) => void; onRunReport: () => void }) => (
-  <div><output data-testid="report-summary">{props.total}:{props.count}</output><input aria-label="From" value={props.from} onChange={e => props.onFromChange(e.target.value)} /><button onClick={props.onRunReport}>Run report</button></div>
+vi.mock('@/features/reporting/ReportFilterBar', () => ({ ReportFilterBar: (props: { total: number; count: number; from: string; onFromChange: (s: string) => void; onRunReport: () => void; filters: { warehouse?: string; customer?: string; payment_method?: string }; onFilterChange: (key: 'warehouse' | 'customer' | 'payment_method', value: string) => void }) => (
+  <div><output data-testid="report-summary">{props.total}:{props.count}</output><input aria-label="From" value={props.from} onChange={e => props.onFromChange(e.target.value)} /><input aria-label="Warehouse filter" value={props.filters.warehouse || ''} onChange={e => props.onFilterChange('warehouse', e.target.value)} /><input aria-label="Customer filter" value={props.filters.customer || ''} onChange={e => props.onFilterChange('customer', e.target.value)} /><input aria-label="Payment filter" value={props.filters.payment_method || ''} onChange={e => props.onFilterChange('payment_method', e.target.value)} /><button onClick={props.onRunReport}>Run report</button></div>
 ) }));
 import { ReportsPage } from '@/features/reporting/pages/ReportsPage';
 function page(props: ComponentProps<typeof ReportsPage> = {}) { return <MemoryRouter><ReportsPage {...props} /></MemoryRouter>; }
@@ -41,9 +43,21 @@ function deferred() {
   return { promise, resolve };
 }
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); mocks.branch = 'a'; });
+beforeEach(() => { vi.clearAllMocks(); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it('shows filter-specific failures and retries options without rerunning a successful report', async () => {
+    mocks.loadSales.mockResolvedValue([sale('sale')]);
+    mocks.loadOptions.mockRejectedValueOnce(new Error('NETWORK_ERROR'));
+    render(page());
+    await screen.findByRole('alert', { name: 'Filter loading error' });
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry filters' }));
+    await waitFor(() => expect(screen.queryByRole('alert', { name: 'Filter loading error' })).toBeNull());
+    expect(mocks.loadOptions).toHaveBeenCalledTimes(2);
+    expect(mocks.loadSales).toHaveBeenCalledTimes(1);
+  });
+
   it('bounds screen rows but prints/exports full rows and retains full totals', async () => {
     mocks.loadSales.mockResolvedValue(Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`)));
     render(page());
@@ -71,6 +85,27 @@ describe('report read stability', () => {
     await act(async () => { first.resolve([sale('A-sale', 'a', 999)]); });
     expect(screen.getByTestId('report-summary').textContent).toBe('20:1');
     expect(screen.queryByText('A-sale')).toBeNull();
+  });
+
+  it.each(['branch', 'user'])('clears scoped selections on %s change without querying the new scope with old identifiers', async (scope) => {
+    mocks.loadSales.mockResolvedValue([sale('sale')]);
+    const { rerender } = render(page());
+    await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText('Warehouse filter'), { target: { value: 'warehouse-a' } });
+    fireEvent.change(screen.getByLabelText('Customer filter'), { target: { value: 'customer-a' } });
+    fireEvent.change(screen.getByLabelText('Payment filter'), { target: { value: 'cash' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
+    await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(2));
+    expect(mocks.loadSales.mock.calls[1][0].filters).toMatchObject({ warehouse: 'warehouse-a', customer: 'customer-a', payment_method: 'cash' });
+    if (scope === 'branch') mocks.branch = 'b'; else mocks.userId = 'new-reader';
+    rerender(page());
+    expect(screen.getByLabelText('Warehouse filter')).toHaveValue('');
+    expect(screen.getByLabelText('Customer filter')).toHaveValue('');
+    expect(screen.getByLabelText('Payment filter')).toHaveValue('cash');
+    await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(3));
+    expect(mocks.loadSales.mock.calls[2][0]).toMatchObject({ branchId: mocks.branch, filters: { payment_method: 'cash' } });
+    expect(mocks.loadSales.mock.calls[2][0].filters.warehouse).toBeUndefined();
+    expect(mocks.loadSales.mock.calls[2][0].filters.customer).toBeUndefined();
   });
 
   it('shows a read failure, prevents empty printing, and retries successfully', async () => {

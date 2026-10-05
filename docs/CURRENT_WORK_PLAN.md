@@ -5,9 +5,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `7ad2b318ab5dde120e9f125b249afd5f8b6fc04c`
-- Current active branch: `fix/pos-error-diagnostics-20261005`
-- Mandatory active work log: `docs/POS_ERROR_DIAGNOSTICS_2026-10-05.md`
+- Latest main baseline reconciled: `d464c8dcc948b62c86fea591a48c475894e5a2db`
+- Current active branch: `fix/stability-report-options-20261005`
+- Mandatory active work log: `docs/READ_SCREEN_STABILITY_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,11 +18,11 @@
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Any Production apply requires separate explicit approval.
 - Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
-- Authorized scope: safe frontend error classification, POS operation context and immutable Pages asset continuity. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
+- Authorized scope: scoped report-filter options and read stability only. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
 
 ## Current objective
 User authorized incremental stability work and the served-resend Production repair on 2026-10-05. Next reviewable patch:
-Preserve original error identifiers and scoped POS context without recording raw errors or changing payment behavior.
+Publish filter options atomically for the current user/branch/report and surface retryable read failures.
 Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
@@ -34,8 +34,9 @@ Journal posting, POS, KDS, printing, shift logic and Production database remain 
 
 ## Remaining gated work
 - #451 merged/deployed at 7ad2b318; post-merge Full Verify 37297455824 passed.
-- #449 filter-option stability remains draft and requires reconciliation.
-- Diagnostics: exact-head Full Verify and explicit merge approval before deployment.
+- #452 merged/deployed; post-merge Full Verify 37301694946 and Pages deployment 37301694889 passed.
+- #449 reconciled with current main; fresh exact-head CI required.
+- Filter options: exact-head Full Verify and explicit merge approval before deployment.
 - Server-side Journal pagination requires a separate API/DB contract with complete summary totals.
 - Supplier/purchase policy hardening requires safe operational read dependencies first.
 - FIFO costing, period controls and production recovery evidence remain separate review work.
