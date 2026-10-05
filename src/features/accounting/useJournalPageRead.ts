@@ -10,14 +10,15 @@ interface Scope {
   to: string;
   referenceType: string;
   search: string;
+  unlimited?: boolean;
 }
 const empty: JournalPageDto = {
   rows: [], summary: { total_count: 0, debit_total: 0, credit_total: 0, balance: 0 },
   page_size: 100, has_more: false, next_cursor: null,
 };
 
-export function useJournalPageRead({ branchId, userId, from, to, referenceType, search }: Scope) {
-  const scope = JSON.stringify([branchId, userId, from, to, referenceType, search]);
+export function useJournalPageRead({ branchId, userId, from, to, referenceType, search, unlimited = false }: Scope) {
+  const scope = JSON.stringify([branchId, userId, from, to, referenceType, search, unlimited]);
   const [navigation, setNavigation] = useState<{ scope: string; cursors: (JournalCursor | null)[]; index: number }>({ scope, cursors: [null], index: 0 });
   // Derive the first page immediately for a new scope; never issue a new-branch
   // request with an old branch's cursor before an effect has reset state.
@@ -27,7 +28,7 @@ export function useJournalPageRead({ branchId, userId, from, to, referenceType, 
     setNavigation(current => current.scope === scope ? current : { scope, cursors: [null], index: 0 });
   }, [scope]);
   const read = useCallback(async () => {
-    if (!branchId || !userId) return empty;
+    if (!branchId || !userId) return { scope, page: empty };
     const { data, error } = await accounting.getJournalsPage({
       p_branch_id: branchId, p_from_date: from || null, p_to_date: to || null,
       p_reference_type: referenceType || null, p_search: search || null, p_page_size: 100,
@@ -39,12 +40,13 @@ export function useJournalPageRead({ branchId, userId, from, to, referenceType, 
       || ![data.summary.total_count, data.summary.debit_total, data.summary.credit_total, data.summary.balance].every(Number.isFinite)) {
       throw new Error('JOURNAL_PAGE_RESPONSE_INVALID');
     }
-    return data;
-  }, [branchId, userId, from, to, referenceType, search, cursor]);
+    return { scope, page: data };
+  }, [branchId, userId, from, to, referenceType, search, cursor, scope]);
   const latest = useLatestRead(read, search ? 300 : 0);
+  const data = latest.data?.scope === scope ? latest.data.page : null;
   const next = () => {
-    if (latest.loading || latest.error || !latest.data?.has_more || !latest.data.next_cursor) return;
-    const nextCursor = latest.data.next_cursor;
+    if (latest.loading || latest.error || !data?.has_more || !data.next_cursor) return;
+    const nextCursor = data.next_cursor;
     setNavigation(current => {
       const currentIndex = current.scope === scope ? current.index : 0;
       if (currentIndex !== index) return current;
@@ -61,5 +63,5 @@ export function useJournalPageRead({ branchId, userId, from, to, referenceType, 
     if (index > 0) setNavigation({ scope, cursors: [null], index: 0 });
     else void latest.reload();
   };
-  return { ...latest, scope, index, next, previous, refresh };
+  return { ...latest, data, scope, index, next, previous, refresh };
 }

@@ -36,13 +36,17 @@ on scope changes. No print/export flow exists on this Journal screen; reports un
 One Previous/Next pager; do not show a second client pager for already bounded rows.
 Column filters/sorting now concern the current page; retain them and explain this in-screen.
 Main search/date/reference/branch filters and totals concern the complete authorized period.
+History permission changes are part of the read scope, preserving invalidation when
+history.unlimited changes. A selected branch removed from the accessible branch list is
+replaced by the permitted active branch before any read; old modal/totals clear immediately.
+Actual screen regression covers branch-access revocation; hook covers history capability changes.
 No new SQL or dependency changes. API contract includes the already deployed function.
 
 ## Verification ledger
 Actual hook regressions: bounded RPC and complete totals, cursor changes, scope reset including
 return to an old branch, delayed read discard, errors/retry/invalid response, refresh and logout.
 Actual screen regressions: full period cards after navigation, entry detail and immediate user
-scope invalidation. Focused hook/screen suite passed: 2 files / 8 tests. Page/design/worklog
+scope invalidation. Focused hook/screen suite passed: 2 files / 9 tests. Page/design/worklog
 smoke passed: 3 files / 58 tests. Typecheck:all, changed-file lint, build, API contract (158
 RPCs/54 tables) and diff checks passed. Exact-head Full Verify required.
 

@@ -66,7 +66,8 @@ export function JournalPage() {
   const primaryBranchId = user?.branch_id && branches.some((branch) => branch.id === user.branch_id)
     ? user.branch_id
     : null;
-  const effectiveBranchFilter = selectedBranchFilter
+  const selectedIsAccessible = branches.some(branch => branch.id === selectedBranchFilter);
+  const effectiveBranchFilter = (selectedIsAccessible ? selectedBranchFilter : null)
     || branchFilter
     || primaryBranchId
     || (branches.length === 1 ? branches[0].id : null);
@@ -81,7 +82,7 @@ export function JournalPage() {
 
   const allowed = history.clampRange(from, to);
   const journal = useJournalPageRead({ branchId: effectiveBranchFilter, userId: user?.id,
-    from: allowed.from, to: allowed.to, referenceType: refType, search });
+    from: allowed.from, to: allowed.to, referenceType: refType, search, unlimited: history.unlimited });
   const { error: loadError, loading, refresh: load } = journal;
   const items = journal.data?.rows || [];
   const summary = journal.data?.summary;
@@ -200,7 +201,7 @@ export function JournalPage() {
             {branches.length > 1 && (
               <div>
                 <label className="block text-sm font-medium text-ui-muted mb-1">{t('filterByBranch')}</label>
-                <select value={selectedBranchFilter || effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                <select value={effectiveBranchFilter || ''} onChange={(e) => setSelectedBranchFilter(e.target.value)}
                   className="px-3 py-2 rounded-lg text-sm border border-ui-border bg-ui-surface text-ui-text">
                   {branches.map((b) => <option key={b.id} value={b.id}>{isAr ? b.name : (b.name_en || b.name)}</option>)}
                 </select>

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { JournalPage } from '@/features/accounting/pages/JournalPage';
 import type { JournalDto, JournalPageDto } from '@/lib/types';
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), userId: 'u', branch: 'a' }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), userId: 'u', branch: 'a', accessB: true }));
 vi.mock('@/api', () => ({ accounting: { postManualJournal: vi.fn() } }));
 vi.mock('@/api/domains/accounting', () => ({ accounting: { getJournalsPage: mocks.read } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
@@ -14,13 +14,13 @@ vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch })
 vi.mock('@/lib/permissions', () => ({ useCan: () => () => false }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ minDate: undefined, clampRange: (from: string, to: string) => ({ from, to }) }) }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
-vi.mock('@/hooks/useBranches', () => ({ useBranches: () => ({ branches: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] }) }));
+vi.mock('@/hooks/useBranches', () => ({ useBranches: () => ({ branches: mocks.accessB ? [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] : [{ id: 'a', name: 'A' }] }) }));
 vi.mock('@/features/accounting/services/journalAccounts', () => ({ fetchActiveJournalAccounts: async () => [] }));
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 
 const row: JournalDto = { id: 'j', entry_number: 'JE-FIRST', entry_date: '2026-10-05', reference_type: 'manual', reference_id: null, reference_number: null, description: 'entry', created_at: '2026-10-05', debit_total: 10, credit_total: 10, lines: [] };
 const snapshot = (more: boolean, name = 'JE-FIRST'): JournalPageDto => ({ rows: [{ ...row, entry_number: name }], summary: { total_count: 205, debit_total: 2529.7, credit_total: 2529.7, balance: 0 }, page_size: 100, has_more: more, next_cursor: more ? { entry_date: row.entry_date, entry_number: name, id: row.id } : null });
-beforeEach(() => { mocks.read.mockReset(); mocks.userId = 'u'; mocks.branch = 'a'; });
+beforeEach(() => { mocks.read.mockReset(); mocks.userId = 'u'; mocks.branch = 'a'; mocks.accessB = true; });
 
 describe('journal server paging screen', () => {
   it('keeps period totals when moving pages and preserves entry detail viewing', async () => {
@@ -49,5 +49,20 @@ describe('journal server paging screen', () => {
     rerender(<MemoryRouter><JournalPage /></MemoryRouter>);
     expect(screen.queryByTestId('modal-body')).not.toBeInTheDocument();
     expect(screen.queryByText('205')).not.toBeInTheDocument();
+  });
+
+  it('drops an inaccessible selected branch before fetching again and clears its open detail', async () => {
+    mocks.read.mockImplementation((params: { p_branch_id: string }) => Promise.resolve({ data: snapshot(false, params.p_branch_id === 'b' ? 'BRANCH-B' : 'BRANCH-A'), error: null }));
+    const { rerender } = render(<MemoryRouter><JournalPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('205')).toBeInTheDocument());
+    fireEvent.change(screen.getByDisplayValue('A'), { target: { value: 'b' } });
+    await waitFor(() => expect(screen.getAllByText('BRANCH-B').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole('button', { name: 'view' })[0]);
+    mocks.accessB = false;
+    mocks.read.mockReturnValue(new Promise(() => {}));
+    rerender(<MemoryRouter><JournalPage /></MemoryRouter>);
+    expect(screen.queryByTestId('modal-body')).not.toBeInTheDocument();
+    expect(screen.queryByText('205')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.read.mock.lastCall?.[0]).toMatchObject({ p_branch_id: 'a', p_after_id: null }));
   });
 });

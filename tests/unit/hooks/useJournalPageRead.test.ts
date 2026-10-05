@@ -5,7 +5,7 @@ import type { JournalPageDto } from '@/lib/types';
 
 const read = vi.hoisted(() => vi.fn());
 vi.mock('@/api/domains/accounting', () => ({ accounting: { getJournalsPage: read } }));
-const scope = { branchId: 'a', userId: 'u', from: '', to: '', referenceType: '', search: '' };
+const scope = { branchId: 'a', userId: 'u', from: '', to: '', referenceType: '', search: '', unlimited: false };
 const page = (more = false): JournalPageDto => ({
   rows: [], summary: { total_count: 205, debit_total: 2529.7, credit_total: 2529.7, balance: 0 },
   page_size: 100, has_more: more,
@@ -40,7 +40,7 @@ describe('journal server page scope and navigation', () => {
     act(() => result.current.next());
     await waitFor(() => expect(result.current.index).toBe(1));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    for (const nextScope of [{ ...scope, branchId: 'b' }, scope, { ...scope, userId: 'other' }, { ...scope, from: '2026-10-01' }]) {
+    for (const nextScope of [{ ...scope, branchId: 'b' }, scope, { ...scope, userId: 'other' }, { ...scope, from: '2026-10-01' }, { ...scope, unlimited: true }]) {
       rerender(nextScope);
       expect(result.current.index).toBe(0);
       expect(result.current.data).toBeNull();
