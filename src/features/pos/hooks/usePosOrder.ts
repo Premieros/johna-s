@@ -108,7 +108,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       .maybeSingle();
 
     if (currentOrderError) {
-      show(currentOrderError.message, 'error');
+      show(currentOrderError.message, 'error', { source: currentOrderError, action: 'pos_settlement_order_read', branchId: input.branchId, entityType: 'order', entityId: base.activeOrderId });
       return false;
     }
 
@@ -278,7 +278,7 @@ export function usePosOrder(input: UsePosOrderInput) {
             operationKey: createSaleOperationKey(),
           };
         }
-        const { result, error } = await processSaleForOrder({
+        const { result, error, diagnostic } = await processSaleForOrder({
           p_client_operation_key: saleAttemptRef.current.operationKey,
           p_invoice_number: invoiceNumber,
           p_branch_id: input.branchId,
@@ -303,7 +303,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         });
 
         if (error || !result?.success || !result.offline || !result.pending_sync) {
-          show(error || result?.detail || result?.error || (isAr ? 'تعذر حفظ البيع دون اتصال بأمان' : 'Could not safely queue the offline sale'), 'error');
+          show(error || result?.detail || result?.error || (isAr ? 'تعذر حفظ البيع دون اتصال بأمان' : 'Could not safely queue the offline sale'), 'error', { source: diagnostic, action: 'pos_sale_submit', branchId: input.branchId });
           return false;
         }
 
@@ -369,7 +369,7 @@ export function usePosOrder(input: UsePosOrderInput) {
           operationKey: createSaleOperationKey(),
         };
       }
-      const { result, error } = await processSaleForOrder({
+      const { result, error, diagnostic } = await processSaleForOrder({
         p_client_operation_key: saleAttemptRef.current.operationKey,
         p_invoice_number: invoiceNumber,
         p_branch_id: input.branchId,
@@ -394,7 +394,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       });
 
       if (error || !result?.success) {
-        show(error || result?.detail || result?.error || (isAr ? 'تعذر تحصيل الأصناف المرسلة' : 'Could not settle sent items'), 'error');
+        show(error || result?.detail || result?.error || (isAr ? 'تعذر تحصيل الأصناف المرسلة' : 'Could not settle sent items'), 'error', { source: diagnostic, action: 'pos_settlement_submit', branchId: input.branchId, entityType: 'order', entityId: base.activeOrderId });
         return false;
       }
 

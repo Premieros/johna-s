@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
-import { reportUserIssue } from '@/lib/userIssueTelemetry';
+import { reportUserIssue, type ReportUserIssueOptions } from '@/lib/userIssueTelemetry';
+
+type ToastErrorContext = ReportUserIssueOptions & { source?: unknown };
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -12,7 +14,7 @@ interface Toast {
 }
 
 interface ToastContextValue {
-  show: (message: string, type?: ToastType) => void;
+  show: (message: string, type?: ToastType, context?: ToastErrorContext) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
@@ -25,11 +27,16 @@ function normalizeToastMessage(message: string, type: ToastType): string {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const show = useCallback((message: string, type: ToastType = 'success') => {
+  const show = useCallback((message: string, type: ToastType = 'success', context?: ToastErrorContext) => {
     const id = Date.now() + Math.random();
     const normalizedMessage = normalizeToastMessage(message, type);
     if (type === 'error') {
-      void reportUserIssue(message, { action: 'toast_error' });
+      if (context) {
+        const { source, ...options } = context;
+        void reportUserIssue(source ?? message, { action: 'toast_error', ...options });
+      } else {
+        void reportUserIssue(message, { action: 'toast_error' });
+      }
     }
     setToasts((prev) => [...prev, { id, message: normalizedMessage, type }]);
     setTimeout(() => {

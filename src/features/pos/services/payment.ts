@@ -130,7 +130,7 @@ async function resolveSharedBranchShift(p: ProcessSalePayload): Promise<{ payloa
   }
 }
 
-export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ result: ProcessSaleResult | null; error: string | null }> {
+export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ result: ProcessSaleResult | null; error: string | null; diagnostic?: unknown }> {
   const splitPayments = consumeArmedSplitTender();
 
   // Split tender is intentionally online-only. It must never degrade into an
@@ -205,15 +205,15 @@ export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ resu
     // A server rejection (approval, stock, subscription, validation, etc.) is
     // authoritative and must never be converted into a successful offline sale.
     const result = data as RpcResult | null;
-    return { result, error: error?.message || result?.detail || result?.error || 'Sale processing failed' };
+    return { result, error: error?.message || result?.detail || result?.error || 'Sale processing failed', diagnostic: error ?? result?.error ?? result?.detail };
   } catch (err) {
     // Do not enqueue after an ambiguous online failure: the server may have
     // committed before the response was lost, which would create a duplicate.
-    return { result: null, error: err instanceof Error ? err.message : 'Network error while processing sale' };
+    return { result: null, error: err instanceof Error ? err.message : 'Network error while processing sale', diagnostic: err };
   }
 }
 
-export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Promise<{ result: (RpcResult & { split?: boolean; payment_count?: number }) | null; error: string | null }> {
+export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Promise<{ result: (RpcResult & { split?: boolean; payment_count?: number }) | null; error: string | null; diagnostic?: unknown }> {
   // Do not queue split tender offline until the offline outbox has a dedicated
   // idempotent split contract. A partial local recreation would be financially unsafe.
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -231,10 +231,10 @@ export async function processSplitSaleForOrder(p: ProcessSplitSalePayload): Prom
 
     // A server rejection from process_sale_split is authoritative too; never
     // degrade it into the normal offline queue or a second financial attempt.
-    return { result, error: error?.message || result?.detail || result?.error || 'Split sale processing failed' };
+    return { result, error: error?.message || result?.detail || result?.error || 'Split sale processing failed', diagnostic: error ?? result?.error ?? result?.detail };
   } catch (err) {
     // The server may have committed before the network response disappeared.
-    return { result: null, error: err instanceof Error ? err.message : 'Network error while processing split sale' };
+    return { result: null, error: err instanceof Error ? err.message : 'Network error while processing split sale', diagnostic: err };
   }
 }
 

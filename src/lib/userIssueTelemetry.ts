@@ -4,7 +4,7 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 export type UserIssueKind = 'expected' | 'technical';
 
-type ReportUserIssueOptions = {
+export type ReportUserIssueOptions = {
   action?: string;
   issueKind?: UserIssueKind;
   branchId?: string | null;
@@ -41,6 +41,9 @@ const TECHNICAL_MARKERS = [
   'CHUNK',
   'INTERNAL',
   'TECHNICAL',
+  'JS_',
+  'DATABASE_ERROR',
+  'DATA_API_ERROR',
 ];
 
 function extractRawText(input: unknown): string {
@@ -57,10 +60,27 @@ function extractRawText(input: unknown): string {
 }
 
 export function deriveUserIssueCode(input: unknown): string {
+  // Store a bounded identifier only; never persist the original error or stack.
   const raw = extractRawText(input).toUpperCase();
-  const explicit = raw.match(/\b[A-Z][A-Z0-9_]{2,79}\b/);
-  if (explicit && /[_]/.test(explicit[0])) return explicit[0];
-
+  const sourceMessage = typeof input === 'object' && input !== null && 'message' in input
+    ? String((input as { message?: unknown }).message || '')
+    : extractRawText(input);
+  const message = sourceMessage.toUpperCase();
+  // Business codes in the message take precedence over generic SQLSTATE P0001.
+  const explicit = sourceMessage.match(/\b[A-Z][A-Z0-9]*_[A-Z0-9_]{1,77}\b/);
+  if (explicit) return explicit[0];
+  if (/^[A-Z][A-Z0-9]*_[A-Z0-9_]{1,77}$/.test(raw)) return raw;
+  const apiCode = raw.match(/^PGRST\d{3}$/);
+  if (apiCode) return apiCode[0];
+  if (typeof input === 'object' && input !== null && 'code' in input && /^[0-9A-Z]{5}$/.test(raw)) {
+    return `SQLSTATE_${raw}`;
+  }
+  if (/FAILED TO FETCH|NETWORK|CONNECTION/.test(message)) return 'NETWORK_ERROR';
+  if (/TIMEOUT|TIMED OUT/.test(message)) return 'TIMEOUT_ERROR';
+  if (/CHUNKLOAD|DYNAMICALLY IMPORTED MODULE|MODULE SCRIPT FAILED/.test(message)) return 'CHUNK_LOAD_ERROR';
+  if (input instanceof Error && ['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(input.name)) {
+    return `JS_${input.name.toUpperCase()}`;
+  }
   if (/FAILED TO FETCH|NETWORK|CONNECTION/.test(raw)) return 'NETWORK_ERROR';
   if (/TIMEOUT|TIMED OUT/.test(raw)) return 'TIMEOUT_ERROR';
   if (/CHUNKLOAD|DYNAMICALLY IMPORTED MODULE|MODULE SCRIPT FAILED/.test(raw)) return 'CHUNK_LOAD_ERROR';

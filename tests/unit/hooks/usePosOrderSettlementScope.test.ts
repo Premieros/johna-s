@@ -22,6 +22,15 @@ describe('payment confirmation warehouse source',()=>{
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
     expect(mocks.pay.mock.calls[0][0]).toMatchObject({p_order_id:'a',p_branch_id:'branch-a',p_warehouse_id:'pinned-warehouse'});
   });
+  it('preserves original rejection diagnostics without changing payment submission',async()=>{
+    const diagnostic={code:'PGRST116',message:'raw API failure'};
+    mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+    mocks.pay.mockResolvedValue({result:null,error:'Friendly failure',diagnostic});
+    const {result}=renderHook(()=>usePosOrder(input));
+    await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+    expect(mocks.pay).toHaveBeenCalledTimes(1);
+    expect(mocks.show).toHaveBeenCalledWith('Friendly failure','error',{source:diagnostic,action:'pos_settlement_submit',branchId:'branch-a',entityType:'order',entityId:'a'});
+  });
   it('stops before payment if the branch/order changes while invoice allocation is pending',async()=>{
     let resolve!: (value:string)=>void;
     mocks.invoice.mockReturnValue(new Promise<string>(yes=>{resolve=yes;}));

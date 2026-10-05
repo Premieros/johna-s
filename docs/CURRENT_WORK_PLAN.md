@@ -5,9 +5,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `b4929aa06a5c5b2d8734750f2fad42c30af9d464`
-- Current active branch: `fix/settlement-preview-scope-20261005`
-- Mandatory active work log: `docs/SETTLEMENT_PREVIEW_SCOPE_2026-10-05.md`
+- Latest main baseline reconciled: `7ad2b318ab5dde120e9f125b249afd5f8b6fc04c`
+- Current active branch: `fix/pos-error-diagnostics-20261005`
+- Mandatory active work log: `docs/POS_ERROR_DIAGNOSTICS_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,11 +18,11 @@
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Any Production apply requires separate explicit approval.
 - Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
-- Authorized scope: frontend settlement-preview read consistency only. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
+- Authorized scope: safe frontend error classification and POS operation context only. Payment RPC contract, Print Agent, stock posting, KDS and shifts remain frozen. No Production database changes.
 
 ## Current objective
-User authorized incremental stability work and the served-resend Production repair on 2026-10-05. First reviewable patch:
-Isolate checkout preview by order/branch and refresh the pinned warehouse at confirmation.
+User authorized incremental stability work and the served-resend Production repair on 2026-10-05. Next reviewable patch:
+Preserve original error identifiers and scoped POS context without recording raw errors or changing payment behavior.
 Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
@@ -33,7 +33,9 @@ Journal posting, POS, KDS, printing, shift logic and Production database remain 
 - All Production activity in this track is read-only; no new migration is included.
 
 ## Remaining gated work
-- Exact-head Full Verify and explicit merge approval before deployment.
+- #451 merged/deployed at 7ad2b318; post-merge Full Verify 37297455824 passed.
+- #449 filter-option stability remains draft and requires reconciliation.
+- Diagnostics: exact-head Full Verify and explicit merge approval before deployment.
 - Server-side Journal pagination requires a separate API/DB contract with complete summary totals.
 - Supplier/purchase policy hardening requires safe operational read dependencies first.
 - FIFO costing, period controls and production recovery evidence remain separate review work.
