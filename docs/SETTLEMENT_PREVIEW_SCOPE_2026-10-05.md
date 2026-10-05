@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/settlement-preview-scope-20261005`
-Current PR: `0` (allocation pending)
+Current PR: `#451`
 Last updated: 2026-10-05
 
 ## Work status
