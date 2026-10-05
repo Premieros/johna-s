@@ -478,6 +478,7 @@ test.describe('POS action-level', () => {
           actionHeights: actions.map(r => r.height), actionTops: actions.map(r => r.top),
           viewport: window.innerWidth, scroll: document.documentElement.scrollWidth };
       });
+      console.info('PHONE_TABLE_GEOMETRY', width, JSON.stringify(geometry));
       expect(geometry.offset).toBeLessThanOrEqual(170);
       expect(geometry.tableWidth).toBeGreaterThanOrEqual(130);
       expect(geometry.tableHeight).toBeGreaterThanOrEqual(132);

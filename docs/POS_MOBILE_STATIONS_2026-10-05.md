@@ -17,9 +17,12 @@ process_sale, send_to_kitchen, KDS, stock, accounting, Print Agent or printing c
 No real sales, orders, kitchen sends or print tests. Use simulated data in tests.
 
 ## Baseline
-Main db46b301d69599010c9da97e967240c363997b37. #454 journal paging and #455 asset discovery
+Main 1a15bc6ad3176c6fed77bfb9298de235652c546f. #454 journal paging and #455 asset discovery
 merged. Deployment 37332715772 succeeded, including asset retention and production parity.
 Unexpected main/head movement STOP_AND_RECONCILE.
+
+#457 unfiltered deployment discovery merged; deployment 37337384679 succeeded with parity
+and preserved predecessor assets. Merge this known CI-only main advance into the phone branch.
 
 ## Root-cause ledger
 Actual tables landing is PosTablesSidebar, not the legacy wizard. Phone headings,
@@ -27,6 +30,11 @@ two-row shortcuts and vertical spacing obscure the grid; desktop must stay uncha
 ProductBrowser currently exposes all categories in one strip. Assignment RPC requires
 settings.manage; POS readers can read branch kitchen_stations through existing RLS.
 The assignment RPC constructs category_ids from categories.kitchen_station_id.
+
+Initial exact-head browser run passed 117 cases, including station/category/back/global-search
+and unchanged desktop category UI. Table geometry remained 227.78px because legacy
+mobile-layer-fix.css !important rules forced two shortcut rows and larger padding/buttons.
+Scoped phone-only overrides must beat those rules; keep the <=170px test bound unchanged.
 
 ## Change ledger
 Below 640px only: hide landing intro, four shortcuts in one row, tighter padding/search/filter

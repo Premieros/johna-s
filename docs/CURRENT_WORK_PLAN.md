@@ -4,7 +4,7 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `db46b301d69599010c9da97e967240c363997b37`
+- Latest main baseline reconciled: `1a15bc6ad3176c6fed77bfb9298de235652c546f`
 - Current active branch: `fix/pos-mobile-stations-20261005`
 - Mandatory active work log: `docs/POS_MOBILE_STATIONS_2026-10-05.md`
 

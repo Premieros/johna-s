@@ -19,6 +19,7 @@ describe('actual Pages artifact locator', () => {
     const t = setup([[run(999), run(998, 'failure'), run(997, '', 'in_progress'), { ...run(994), path: '.github/workflows/verify-main.yml' }, { ...run(993), head_branch: 'other' }, run(996), run(900)]]);
     await t.execute();
     expect(t.listWorkflowRunsForRepo.mock.calls[0][0]).not.toHaveProperty('status');
+    expect(t.listWorkflowRunsForRepo.mock.calls[0][0]).not.toHaveProperty('branch');
     expect(t.listWorkflowRunArtifacts).toHaveBeenCalledWith({ owner: 'Premieros', repo: 'johna-s', run_id: 996 });
     expect(t.setOutput).toHaveBeenCalledWith('run_id', '996');
   });
