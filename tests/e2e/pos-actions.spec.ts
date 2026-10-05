@@ -464,4 +464,103 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-tables-landing-actions')).toBeVisible();
     await expect(tableButton(page)).toBeVisible();
   });
+
+  test('phone table landing is compact without shrinking table touch targets or desktop controls', async ({ page }) => {
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(page.getByTestId('pos-table-picker-intro')).toBeHidden();
+      const geometry = await page.evaluate(() => {
+        const header = document.querySelector('[data-testid="pos-table-picker-header"]')!.getBoundingClientRect();
+        const grid = document.querySelector('[data-testid="pos-table-grid"]')!.getBoundingClientRect();
+        const table = document.querySelector('[data-testid="pos-table-grid"]')!.firstElementChild!.getBoundingClientRect();
+        const actions = [...document.querySelectorAll('[data-testid="pos-tables-landing-actions"] button')].map(el => el.getBoundingClientRect());
+        return { offset: grid.top - header.top, tableWidth: table.width, tableHeight: table.height,
+          actionHeights: actions.map(r => r.height), actionTops: actions.map(r => r.top),
+          viewport: window.innerWidth, scroll: document.documentElement.scrollWidth };
+      });
+      console.info('PHONE_TABLE_GEOMETRY', width, JSON.stringify(geometry));
+      expect(geometry.offset).toBeLessThanOrEqual(170);
+      expect(geometry.tableWidth).toBeGreaterThanOrEqual(130);
+      expect(geometry.tableHeight).toBeGreaterThanOrEqual(132);
+      expect(new Set(geometry.actionTops).size).toBe(1);
+      expect(geometry.actionHeights.every(h => h >= 44)).toBe(true);
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport + 1);
+      await expect(page.getByTestId('pos-table-picker-search')).toHaveCSS('height', '40px');
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByTestId('pos-table-picker-intro')).toBeVisible();
+    await expect(page.getByTestId('pos-table-picker-search')).toHaveCSS('height', '44px');
+    await expect(page.getByTestId('pos-table-picker-header')).toHaveCSS('padding-top', '12px');
+    await expect(page.getByTestId('pos-table-picker-header')).toHaveCSS('padding-left', '16px');
+    await expect(page.getByTestId('pos-start-quick-order')).toHaveCSS('flex-direction', 'row');
+    await expect(page.getByTestId('pos-start-quick-order')).toHaveCSS('height', '44px');
+    await expect(page.getByTestId('pos-start-quick-order')).toHaveCSS('font-size', '12px');
+    await expect(page.getByTestId('pos-table-grid')).toHaveCSS('gap', '12px');
+  });
+
+  test('phone stations use branch assignments, filter categories, allow Back and global search while desktop stays flat', async ({ page }) => {
+    const kitchen = '00000000-0000-0000-0000-000000000080';
+    const bar = '00000000-0000-0000-0000-000000000081';
+    const food = '00000000-0000-0000-0000-000000000082';
+    const drink = '00000000-0000-0000-0000-000000000083';
+    const other = '00000000-0000-0000-0000-000000000084';
+    const coffeeId = '00000000-0000-0000-0000-000000000085';
+    const reads: string[] = [];
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/kitchen_stations**`, async r => {
+      reads.push(r.request().url());
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+        { id: kitchen, branch_id: BRANCH_ID, name_ar: 'المطبخ', name_en: 'Kitchen', is_active: true, sort_order: 1 },
+        { id: bar, branch_id: BRANCH_ID, name_ar: 'البارستا', name_en: 'Barista', is_active: true, sort_order: 2 },
+      ]) });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/categories**`, async r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { id: food, branch_id: BRANCH_ID, name: 'Food', name_en: 'Food', kitchen_station_id: kitchen },
+      { id: drink, branch_id: BRANCH_ID, name: 'Drink', name_en: 'Drink', kitchen_station_id: bar },
+      { id: other, branch_id: BRANCH_ID, name: 'Other', name_en: 'Other', kitchen_station_id: null },
+    ]) }));
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/products**`, async r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { ...product, category_id: food },
+      { ...product, id: coffeeId, category_id: drink, name: 'Coffee', name_en: 'Coffee', sku: 'COFFEE02', barcode: '202', sale_price: 30 },
+    ]) }));
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.reload();
+    await expect(page.getByTestId('pos-start-quick-order')).toBeVisible();
+    await page.getByTestId('pos-start-quick-order').click();
+    const flat = page.locator('[data-testid="pos-category-strip"]:visible');
+    await expect(flat.getByRole('button', { name: /Food/ })).toBeVisible();
+    await expect(flat.getByRole('button', { name: /Drink/ })).toBeVisible();
+    expect(reads).toHaveLength(0);
+    await expect(page.getByTestId('pos-mobile-station-navigation')).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId(`pos-station-${kitchen}`)).toBeVisible();
+    expect(reads.every(url => url.includes(`branch_id=eq.${BRANCH_ID}`) && url.includes('is_active=eq.true'))).toBe(true);
+    await page.getByTestId(`pos-station-${kitchen}`).click();
+    await expect(page.getByTestId(`pos-station-category-${food}`)).toBeVisible();
+    await expect(page.getByTestId(`pos-station-category-${drink}`)).toHaveCount(0);
+    await page.getByTestId(`pos-station-category-${food}`).click();
+    await expect(page.getByTestId(`pos-product-card-${PRODUCT_ID}`)).toBeVisible();
+    await expect(page.getByTestId(`pos-product-card-${coffeeId}`)).toHaveCount(0);
+    const search = page.getByTestId('pos-mobile-catalog-header').getByRole('textbox');
+    for (const term of ['Coffee', '202', 'COFFEE02']) {
+      await search.fill(term);
+      await expect(page.getByTestId(`pos-product-card-${coffeeId}`)).toBeVisible();
+      await expect(page.getByTestId(`pos-product-card-${PRODUCT_ID}`)).toHaveCount(0);
+    }
+    await search.fill('');
+    await expect(page.getByTestId(`pos-product-card-${PRODUCT_ID}`)).toBeVisible();
+    await page.getByTestId('pos-station-back').click();
+    await page.getByTestId(`pos-station-${bar}`).click();
+    await expect(page.getByTestId(`pos-station-category-${drink}`)).toBeVisible();
+    await expect(page.getByTestId(`pos-station-category-${food}`)).toHaveCount(0);
+    await page.getByTestId(`pos-station-category-${drink}`).click();
+    await expect(page.getByTestId(`pos-product-card-${coffeeId}`)).toBeVisible();
+    await expect(page.getByTestId(`pos-product-card-${PRODUCT_ID}`)).toHaveCount(0);
+    await page.getByTestId('pos-station-back').click();
+    await page.getByTestId('pos-station-all').click();
+    await expect(page.getByTestId(`pos-station-category-${other}`)).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByTestId('pos-mobile-station-navigation')).toHaveCount(0);
+    await expect(flat.getByRole('button', { name: /Food/ })).toBeVisible();
+    await expect(flat.getByRole('button', { name: /Drink/ })).toBeVisible();
+  });
 });

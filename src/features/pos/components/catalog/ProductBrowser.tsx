@@ -13,8 +13,12 @@ import { ProductImageAdjustModal, type ProductImageView } from '@/features/catal
 import { uploadProductImage } from '@/features/catalog/services/productImages';
 import { invalidatePosCatalogCache } from '@/core/offline/invalidatePosCatalogCache';
 import type { Category, Product } from '@/lib/types';
+import { usePhoneViewport } from '../../hooks/usePhoneViewport';
+import { MobileStationCategories } from './MobileStationCategories';
 
 interface ProductBrowserProps {
+  branchId?: string | null;
+  userId?: string | null;
   products: Product[];
   categories: Category[];
   search: string;
@@ -31,7 +35,7 @@ interface ProductBrowserProps {
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
-export const ProductBrowser = memo(function ProductBrowser({ products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, shiftChecked, shiftOpen, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
+export const ProductBrowser = memo(function ProductBrowser({ branchId = null, userId = null, products, categories, search, selectedCategory, currency, hasBranch, canModifyOrder, shiftChecked, shiftOpen, onSearch, onSelectCategory, onAddToCart, onConfigureProduct, inputRef }: ProductBrowserProps) {
   const { t, lang } = useLanguage();
   const { show } = useToast();
   const isAr = lang === 'ar';
@@ -44,8 +48,9 @@ export const ProductBrowser = memo(function ProductBrowser({ products, categorie
   const [savingImageView, setSavingImageView] = useState(false);
   const canEditProducts = can('products.edit');
   const normalizedSearch = useMemo(() => search.toLocaleLowerCase(), [search]);
+  const isPhone = usePhoneViewport();
 
-  const filteredProducts = useMemo(() => products.filter((product) => (!selectedCategory || product.category_id === selectedCategory) && (!normalizedSearch || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)))), [products, normalizedSearch, selectedCategory]);
+  const filteredProducts = useMemo(() => products.filter((product) => (!isPhone || !branchId || product.branch_id === branchId) && ((isPhone && !!normalizedSearch) || !selectedCategory || product.category_id === selectedCategory) && (!normalizedSearch || [product.name, product.name_en, product.barcode, product.sku].some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)))), [products, normalizedSearch, selectedCategory, isPhone, branchId]);
   const counts = useMemo(() => products.reduce<Record<string, number>>((accumulator, product) => {
     const key = product.category_id || '_none';
     accumulator[key] = (accumulator[key] || 0) + 1;
@@ -177,7 +182,9 @@ export const ProductBrowser = memo(function ProductBrowser({ products, categorie
           </div>
         )}
         {renderSearch(true)}
-        <div className="mt-3">{renderCategories(true)}</div>
+        <div className="mt-3">
+          {isPhone ? <MobileStationCategories key={`${branchId}:${userId}`} branchId={branchId} userId={userId} categories={categories} selectedCategory={selectedCategory} onSelectCategory={onSelectCategory} /> : renderCategories(true)}
+        </div>
       </div>
 
       <div className="hidden lg:block z-10 flex-shrink-0 border-b border-ui-border bg-ui-surface/95 px-4 py-3 backdrop-blur">

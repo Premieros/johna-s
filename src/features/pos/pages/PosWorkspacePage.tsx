@@ -866,6 +866,8 @@ export function PosWorkspacePage() {
 
           <div className="flex-1 min-h-0">
             <ProductBrowser
+              branchId={effectiveBranch || null}
+              userId={user?.id || null}
               products={products}
               categories={categories}
               search={search}

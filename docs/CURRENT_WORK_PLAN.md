@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `db46b301d69599010c9da97e967240c363997b37`
-- Current active branch: `fix/pages-unfiltered-history-20261005`
-- Mandatory active work log: `docs/PAGES_UNFILTERED_HISTORY_2026-10-05.md`
+- Latest main baseline reconciled: `1a15bc6ad3176c6fed77bfb9298de235652c546f`
+- Current active branch: `fix/pos-mobile-stations-20261005`
+- Mandatory active work log: `docs/POS_MOBILE_STATIONS_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,11 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Connect Journal to the approved/deployed read-only paging API. Return bounded
-nested detail with complete authorized filter totals. Preserve legacy get_journals, all
-posting functions, policies, table/index definitions, POS, KDS, Print Agent and shifts.
-Database PR #453 merged/applied with explicit approval at 17:18 Cairo. This frontend patch
-requires exact-head Full Verify; no further Production schema/function/policy changes.
+Implement the explicitly requested phone-only POS tables and station/category browsing UI.
+Use existing branch station/category reads; preserve desktop layout, sale/kitchen RPCs,
+printing, permissions/RLS, stock and accounting. No migrations or Production data writes.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -31,6 +29,7 @@ requires exact-head Full Verify; no further Production schema/function/policy ch
 - No real sales, kitchen sends or printing tests were performed by the agent.
 
 ## Remaining gated work
+- Phone POS UI requires exact-head Full Verify and protected Pages deployment.
 - #453 approved/applied; catalog function/policy hashes unchanged. Deployment 37323787272 passed.
 - Journal frontend paging: bounded rows, full totals and scoped cursor reset; exact-head CI gate.
 - Server aggregation for heavy reports; retain complete print/export and financial formulas.
