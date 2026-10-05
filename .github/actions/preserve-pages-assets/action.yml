@@ -27,12 +27,14 @@ runs:
           let previous;
           let exhausted = false;
           for (let page = 1; page <= 10; page++) {
-            const { data } = await github.rest.actions.listWorkflowRuns({
-              owner, repo, workflow_id: 'deploy.yml', branch: process.env.DEPLOYMENT_BRANCH,
+            const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner, repo, branch: process.env.DEPLOYMENT_BRANCH,
               per_page: 100, page,
             });
             previous = data.workflow_runs.find(run =>
-              run.id !== context.runId && run.status === 'completed' && run.conclusion === 'success');
+              run.id !== context.runId && run.path === '.github/workflows/deploy.yml' &&
+              run.head_branch === process.env.DEPLOYMENT_BRANCH &&
+              run.status === 'completed' && run.conclusion === 'success');
             if (previous) break;
             if (data.workflow_runs.length < 100) { exhausted = true; break; }
           }

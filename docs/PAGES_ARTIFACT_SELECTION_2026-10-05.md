@@ -23,9 +23,11 @@ Last successful deployment 37323787272 has an unexpired github-pages artifact 11
 Conclusion-filtered run listings returned older runs while unfiltered main listings
 returned the actual latest successful deployment. Missing old artifacts caused a safe stop.
 The underlying GitHub index inconsistency is inferred from these differing responses.
+CI also selected an old run from the workflow-specific index; repository-wide history
+returns the current deployments. Select workflow path and branch locally as well.
 
 ## Change ledger
-List latest deploy.yml runs without a conclusion filter. Locally require completed success,
+Read repository-wide latest workflow history and filter deploy.yml/main locally. Locally require completed success,
 exclude current run, and paginate up to 1000 runs. Log the chosen run ID. Exhausted first
 deployment may proceed; search-limit exhaustion fails closed. Missing/expired latest-success
 artifact still stops deployment; never fall back to an older success. Retention unchanged.
