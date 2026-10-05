@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLatestRead } from '@/hooks/useLatestRead';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useAuth } from '@/context/AuthContext';
@@ -90,6 +90,16 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }, [controlledReportType, onReportTypeChange]);
 
   const effectiveBranchFilter = branchFilter;
+  // UUID/category selections belong to the old branch/user scope. Clear them
+  // before paint and before the deferred report read; keep semantic filters.
+  const filterScope = useRef({ branchId: effectiveBranchFilter, userId: user?.id });
+  useLayoutEffect(() => {
+    if (filterScope.current.branchId === effectiveBranchFilter && filterScope.current.userId === user?.id) return;
+    filterScope.current = { branchId: effectiveBranchFilter, userId: user?.id };
+    setFilters(({ order_type, payment_method, status }) => ({ order_type, payment_method, status }));
+    setFiltersDirty(false);
+    setQueryVersion((version) => version + 1);
+  }, [effectiveBranchFilter, user?.id]);
   const { branches } = useBranches();
   const { data: scopedOptions, error: optionsError, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id);
   const options = scopedOptions || EMPTY_REPORT_FILTER_OPTIONS;

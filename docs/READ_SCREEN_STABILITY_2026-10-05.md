@@ -33,6 +33,7 @@ Live login renders after reload; authenticated screens require sign-in. No Produ
 
 - Filter options retained previous branch values until the next request finished.
 - Expense category requests could publish after switching branch; query failures looked like empty options.
+- Selected warehouse/customer and other scoped filter identifiers survived branch/user changes and could produce a misleading empty report.
 
 ## Change ledger
 - Scoped read hook clears data before paint and rejects old request/reload results.
@@ -57,6 +58,7 @@ Live login renders after reload; authenticated screens require sign-in. No Produ
 
 ### Third patch: filter options
 - One user/branch/report scoped snapshot includes dimension options and expense categories.
+- Clear branch/user-specific filter identifiers before paint and before the deferred report read; preserve semantic order type, payment method and status.
 - Clear before paint on scope change; superseded results and logged-out reads cannot publish.
 - Propagate Supabase option errors to a translated filter-specific Retry UI.
 - No report formulas, Run report semantics, query dimensions, print/export payloads or SQL changes.
@@ -81,7 +83,9 @@ Live login renders after reload; authenticated screens require sign-in. No Produ
 - Public post-#448 login visible with no new site JavaScript errors; no authenticated transactions performed.
 - Original #449 exact-head Full Verify 37289183189 passed. Reconciled-head verification pending; no #449 deployment yet.
 
-- Reconciled with #452 main: 296 unit/component files / 1444 tests passed.
+- Reconciled with #452 main: 296 unit/component files / 1444 tests passed before the final scoped-selection regression.
+- Final focused suite: 5 files / 24 tests passed, including branch and user selection invalidation without an extra old-identifier query.
+- Final full suite and exact-head CI pending.
 - Reconciled typecheck:all, production build, diff checks and changed-file lint passed.
 
 ## Production gate
