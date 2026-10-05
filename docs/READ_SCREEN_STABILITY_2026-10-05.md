@@ -3,13 +3,13 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/stability-report-options-20261005`
-Current PR: `0` (new filter-options PR allocation pending)
+Current PR: `#449`
 Last updated: 2026-10-05
 Execution mode: **SINGLE_WRITER**
 
 ## Work status
 State: **BLOCKED**
-PR #447 and #448 merged/deployed. Third filter-options patch is under isolated verification.
+PR #447 and #448 merged/deployed. Third filter-options patch is uploaded as draft PR #449; exact-head Full Verify is pending.
 
 ## Guardrails
 User authorized incremental repairs with live branch continuity. No business-data writes,
