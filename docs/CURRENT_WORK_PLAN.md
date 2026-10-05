@@ -6,8 +6,8 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `d7e62ecd5b2a95c6239cf2c1dd6aa5ea983e06b0`
-- Current active branch: `fix/stability-reports-20261005`
-- Mandatory active work log: `docs/READ_SCREEN_STABILITY_2026-10-05.md`
+- Current active branch: `fix/served-new-line-permission-20261005`
+- Mandatory active work log: `docs/SERVED_NEW_LINE_PERMISSION_2026-10-05.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,11 +18,11 @@
 - لا Merge ولا Production migration قبل exact-head Full Verify Green + موافقة صريحة.
 - Any Production apply requires separate explicit approval.
 - Preserve Permission-First, branch isolation, Financial Visibility and current operational truth.
-- Printing, Print Agent, POS transactions, KDS, Send to Kitchen, stock posting, Accounting, Settlement and Shifts remain frozen. Inventory status wording is approved.
+- Only the served-resend permission guard is in authorized review scope. Print Agent, sale/payment, send core, stock posting, Accounting, Settlement and Shifts remain frozen. Production apply requires explicit approval.
 
 ## Current objective
 User authorized incremental stability work on 2026-10-05. First reviewable patch:
-Report read failures, atomic row/summary snapshots, superseded requests and bounded screen rows.
+Fix permission-first served-to-sent reopening for a brand-new kitchen line; no role-name authorization.
 Journal posting, POS, KDS, printing, shift logic and Production database remain unchanged.
 
 ## Verified state
