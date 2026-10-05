@@ -86,7 +86,7 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportsSource).toContain('const [queryVersion, setQueryVersion]');
     expect(reportsSource).toContain('const [filtersDirty, setFiltersDirty]');
     expect(reportsSource).toContain('setQueryVersion((version) => version + 1)');
-    expect(reportsSource).toContain('[reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion]');
+    expect(reportsSource).toContain('[reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang]');
   });
 
   it('provides a contextual period filter that drives from/to', () => {
