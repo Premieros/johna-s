@@ -2,6 +2,7 @@ export type ProductType = 'ready' | 'manufactured';
 
 export interface Category {
   id: string;
+  kitchen_station_id?: string | null;
   name: string;
   name_en: string | null;
   description: string | null;

@@ -212,20 +212,20 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
 
   return (
     <aside data-testid="pos-tables-workspace" className="flex h-full min-h-0 w-screen min-w-0 max-w-full shrink-0 flex-col border-e border-ui-border bg-ui-surface lg:w-[calc(100vw-380px)] xl:w-[calc(100vw-410px)] 2xl:w-[calc(100vw-440px)]">
-      <div className="shrink-0 border-b border-ui-border px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+      <div data-testid="pos-table-picker-header" className="shrink-0 border-b border-ui-border px-3 py-2 sm:px-4 sm:py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div data-testid="pos-table-picker-intro" className="hidden sm:block">
             <h2 className="text-lg font-black text-ui-text">{isAr ? 'الطاولات' : 'Tables'}</h2>
             <p className="mt-0.5 text-[11px] font-bold text-ui-subtle">{isAr ? 'اختر طاولة أو ابدأ نوع طلب من الاختصارات' : 'Choose a table or start an order from the shortcuts'}</p>
           </div>
 
-          <div data-testid="pos-tables-landing-actions" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div data-testid="pos-tables-landing-actions" className="grid w-full grid-cols-4 gap-1 sm:w-auto sm:gap-2">
             {(onStartQuick || onSelectTakeaway) && (
               <button
                 type="button"
                 data-testid="pos-start-quick-order"
                 onClick={startQuick}
-                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-ui-primary px-3 text-xs font-black text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary-hover active:scale-[0.98]"
+                className="flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl sm:flex-row sm:gap-2 bg-ui-primary px-1 text-[10px] leading-tight font-black sm:px-3 sm:text-xs sm:leading-4 text-ui-primary-fg shadow-ui-sm transition hover:bg-ui-primary-hover active:scale-[0.98]"
               >
                 <ShoppingBag className="h-4 w-4" />
                 {isAr ? 'طلب سريع' : 'Quick order'}
@@ -236,7 +236,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
                 type="button"
                 data-testid="pos-tables-start-delivery"
                 onClick={startDelivery}
-                className="flex h-11 items-center justify-center gap-2 rounded-xl border border-ui-border bg-ui-page px-3 text-xs font-black text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98]"
+                className="flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl sm:flex-row sm:gap-2 border border-ui-border bg-ui-page px-1 text-[10px] leading-tight font-black sm:px-3 sm:text-xs sm:leading-4 text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98]"
               >
                 <Bike className="h-4 w-4" />
                 {isAr ? 'دليفري' : 'Delivery'}
@@ -247,7 +247,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
                 type="button"
                 data-testid="pos-tables-start-drive-thru"
                 onClick={onStartDriveThru}
-                className="flex h-11 items-center justify-center gap-2 rounded-xl border border-ui-border bg-ui-page px-3 text-xs font-black text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98]"
+                className="flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl sm:flex-row sm:gap-2 border border-ui-border bg-ui-page px-1 text-[10px] leading-tight font-black sm:px-3 sm:text-xs sm:leading-4 text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98]"
               >
                 <Car className="h-4 w-4" />
                 {isAr ? 'درايف ثرو' : 'Drive thru'}
@@ -258,7 +258,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
                 type="button"
                 data-testid="pos-tables-active-orders"
                 onClick={onOpenActiveOrders}
-                className="flex h-11 items-center justify-center gap-2 rounded-xl border border-ui-border bg-ui-page px-3 text-xs font-black text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98]"
+                className="flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl sm:flex-row sm:gap-2 border border-ui-border bg-ui-page px-1 text-[10px] leading-tight font-black sm:px-3 sm:text-xs sm:leading-4 text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98]"
               >
                 <ListOrdered className="h-4 w-4" />
                 {isAr ? 'الطلبات النشطة' : 'Active orders'}
@@ -268,7 +268,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
         </div>
 
         {orderedAreas.length > 0 && (
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-1.5 sm:mt-3 sm:gap-2">
             <div data-testid="pos-table-area-tabs" className="flex min-w-0 flex-1 gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {orderedAreas.map((area) => {
                 const count = tables.filter((table) => table.area_id === area.id).length;
@@ -279,7 +279,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
                     type="button"
                     data-testid={`pos-table-area-${area.id}`}
                     onClick={() => setSelectedAreaId(area.id)}
-                    className={`flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-xs font-black transition ${active ? 'border-ui-primary bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}
+                    className={`flex min-h-9 shrink-0 items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:min-h-10 sm:px-4 sm:py-2 font-black transition ${active ? 'border-ui-primary bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary hover:text-ui-text'}`}
                   >
                     <span>{area.name}</span>
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20' : 'bg-ui-surface'}`}>{count}</span>
@@ -301,15 +301,15 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
           </div>
         )}
 
-        <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="mt-2 flex flex-col gap-1.5 sm:mt-3 sm:gap-2 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted" />
-            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={isAr ? 'ابحث برقم الطاولة أو الطلب...' : 'Search table or order...'} className="h-11 w-full rounded-xl border border-ui-border bg-ui-page ps-10 pe-3 text-sm font-bold text-ui-text outline-none focus:border-ui-primary" />
+            <input data-testid="pos-table-picker-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={isAr ? 'ابحث برقم الطاولة أو الطلب...' : 'Search table or order...'} className="h-10 w-full rounded-xl sm:h-11 border border-ui-border bg-ui-page ps-10 pe-3 text-sm font-bold text-ui-text outline-none focus:border-ui-primary" />
           </div>
 
-          <div className="grid min-w-[310px] grid-cols-3 gap-1.5" data-testid="pos-table-filters">
+          <div className="grid min-w-0 grid-cols-3 gap-1 sm:min-w-[310px] sm:gap-1.5" data-testid="pos-table-filters">
             {filters.map((item) => (
-              <button key={item.id} type="button" onClick={() => setFilter(item.id)} className={`rounded-lg border px-3 py-2.5 text-[11px] font-black transition ${filter === item.id ? 'border-ui-primary bg-ui-primary text-ui-primary-fg' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary'}`}>
+              <button key={item.id} type="button" onClick={() => setFilter(item.id)} className={`min-h-9 rounded-lg border px-2 py-1.5 text-[11px] sm:px-3 sm:py-2.5 font-black transition ${filter === item.id ? 'border-ui-primary bg-ui-primary text-ui-primary-fg' : 'border-ui-border bg-ui-page text-ui-muted hover:border-ui-primary'}`}>
                 {isAr ? item.ar : item.en} <span className="ms-1 opacity-70">{item.count}</span>
               </button>
             ))}
@@ -317,9 +317,9 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
         {filteredTables.length > 0 ? (
-          <div data-testid="pos-table-grid" className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+          <div data-testid="pos-table-grid" className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] sm:gap-3">
             {filteredTables.map((table) => (
               <TableCard
                 key={table.id}
