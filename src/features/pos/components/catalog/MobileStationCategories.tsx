@@ -2,11 +2,13 @@ import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Grid2X2 } from 'lucide-react';
 import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
+import { useOffline } from '@/context/OfflineContext';
 import { useLatestRead } from '@/hooks/useLatestRead';
 import type { Category } from '@/lib/types';
 
 interface StationRow {
   id: string;
+  code?: string;
   branch_id: string;
   name_ar: string;
   name_en: string;
@@ -25,22 +27,23 @@ const button = 'min-h-11 rounded-xl border px-3 py-2 text-xs font-black transiti
 export function MobileStationCategories({ branchId, userId, categories, selectedCategory, onSelectCategory }: Props) {
   const { lang } = useLanguage();
   const isAr = lang === 'ar';
+  const { isOnline } = useOffline();
   const [selection, setSelection] = useState<string | null>(null);
   useLayoutEffect(() => { onSelectCategory(''); }, [branchId, userId, onSelectCategory]);
   const read = useCallback(async () => {
-    if (!branchId || !userId || !navigator.onLine) return [] as StationRow[];
+    if (!branchId || !userId || !isOnline) return [] as StationRow[];
     const { data, error } = await supabase.from('kitchen_stations')
-      .select('id,branch_id,name_ar,name_en,is_active,sort_order')
+      .select('id,branch_id,code,name_ar,name_en,is_active,sort_order')
       .eq('branch_id', branchId).eq('is_active', true).order('sort_order');
     if (error) throw error;
-    return ((data || []) as StationRow[]).filter((station) => station.branch_id === branchId && station.is_active);
-  }, [branchId, userId]);
+    return ((data || []) as StationRow[]).filter((station) => station.branch_id === branchId && station.is_active && station.code?.trim().toLowerCase() !== 'cashier');
+  }, [branchId, userId, isOnline]);
   const stationsRead = useLatestRead(read);
   const branchCategories = useMemo(() => categories.filter((category) => category.branch_id === branchId), [categories, branchId]);
   const stations = useMemo(() => (stationsRead.data || []).map((station) => ({
     ...station,
     category_ids: branchCategories.filter((category) => category.kitchen_station_id === station.id).map((category) => category.id),
-  })).filter((station) => station.category_ids.length > 0), [stationsRead.data, branchCategories]);
+  })), [stationsRead.data, branchCategories]);
   const selectedStation = stations.find((station) => station.id === selection);
   const allCategories = selection === 'all';
   const showCategories = allCategories || !!selectedStation || stations.length === 0;
@@ -88,6 +91,7 @@ export function MobileStationCategories({ branchId, userId, categories, selected
               </button>
             ))}
           </div>
+          {selectedStation && visibleCategories.length === 0 && <p className="text-xs text-ui-muted">{isAr ? 'لا توجد فئات مرتبطة بهذه المحطة' : 'No categories assigned to this station'}</p>}
         </>
       )}
     </div>

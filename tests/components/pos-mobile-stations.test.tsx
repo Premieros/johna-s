@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductBrowser } from '@/features/pos/components/catalog/ProductBrowser';
 import type { Category, Product } from '@/lib/types';
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), eq: vi.fn(), select: vi.fn(), from: vi.fn(), phone: true }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), eq: vi.fn(), select: vi.fn(), from: vi.fn(), phone: true, online: true }));
 vi.mock('@/api', () => ({ supabase: { from: mocks.from } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
+vi.mock('@/context/OfflineContext', () => ({ useOffline: () => ({ isOnline: mocks.online }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: vi.fn() }) }));
 vi.mock('@/lib/permissions', () => ({ useCan: () => () => false }));
 vi.mock('@/features/pos/hooks/usePhoneViewport', () => ({ usePhoneViewport: () => mocks.phone }));
@@ -32,6 +33,7 @@ function Browser({ branch = 'a', user = 'u', cats = categories, prods = products
 }
 beforeEach(() => {
   mocks.phone = true;
+  mocks.online = true;
   mocks.read.mockReset().mockResolvedValue({ data: stations, error: null });
   const query = { select: mocks.select, eq: mocks.eq, order: mocks.read };
   mocks.from.mockReset().mockReturnValue(query);
@@ -149,5 +151,20 @@ describe('phone POS station categories and product browsing', () => {
     rerender(<Browser branch="b" user="other-user" cats={newCategories} prods={[]} />);
     expect(screen.queryByTestId('pos-station-back')).not.toBeInTheDocument();
     expect(screen.queryByTestId('pos-station-new-kitchen')).not.toBeInTheDocument();
+  });
+  it('shows active empty stations, excludes the existing cashier station and keeps offline categories usable', async () => {
+    mocks.read.mockResolvedValue({ data: [...stations,
+      { ...stations[0], id: 'empty', name_en: 'Empty Station' },
+      { ...stations[0], id: 'cashier', code: ' cashier ' }], error: null });
+    const { rerender } = render(<Browser />);
+    fireEvent.click(await screen.findByTestId('pos-station-empty'));
+    expect(screen.getByText('No categories assigned to this station')).toBeInTheDocument();
+    expect(screen.queryByTestId('pos-station-cashier')).not.toBeInTheDocument();
+    const count = mocks.read.mock.calls.length;
+    mocks.online = false;
+    rerender(<Browser />);
+    await waitFor(() => expect(screen.queryByTestId('pos-station-back')).not.toBeInTheDocument());
+    expect(screen.getByTestId('pos-station-category-food')).toBeInTheDocument();
+    expect(mocks.read.mock.calls.length).toBe(count);
   });
 });

@@ -33,15 +33,19 @@ Below 640px only: hide landing intro, four shortcuts in one row, tighter padding
 and grid spacing. TableCard untouched; min height 132px and touch targets retained.
 Use sm overrides to preserve existing tablet/desktop dimensions.
 Read only active branch stations and derive category_ids from the existing categories FK.
-Render populated station cards from actual localized names; All exposes every branch category,
+Render active station cards from actual localized names; All exposes every branch category,
 including categories with no station, and Back resets to cards. No hardcoded station/category
 mapping and no settings permission/RPC change. Unavailable/offline stations fall back to categories.
-New station read runs only on phones; scope changes remount/reset navigation and discard late
+Exclude the existing cashier protocol code, matching the assignment reader; empty active
+stations show an explicit no-assigned-categories message. Connectivity uses existing useOffline,
+without introducing a direct navigator.onLine boundary. Read-only Production metadata confirmed
+the FK and branch-select RLS predicate. New station read runs only on phones; scope changes remount/reset navigation and discard late
 reads. Phone product rows match the selected branch; search spans products across selected
 station/category. Desktop search/category rendering and product actions remain unchanged.
 
 ## Verification ledger
-Focused actual component suite passed: 9 regressions (plus 6 existing render contracts).
+Focused actual component suite passed: 10 regressions (plus existing render/connectivity contracts).
+Complete local unit/component suite passed: 300 files / 1470 tests.
 Typecheck:all, changed-file lint and production build passed. Browser checks await CI.
 Required: actual component navigation/category products/back/global search/unmapped category,
 read failure/retry, scoped delayed reads, no desktop station request; viewport table spacing,
