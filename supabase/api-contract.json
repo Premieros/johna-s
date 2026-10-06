@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T14:23:50.113Z",
+  "generated_at": "2026-10-06T08:02:03.777Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -621,6 +621,18 @@
       "name": "get_open_order_print_state",
       "params": [
         "order_id"
+      ]
+    },
+    {
+      "name": "get_operational_report_page",
+      "params": [
+        "branch_id",
+        "filters",
+        "from_date",
+        "page",
+        "page_size",
+        "report_type",
+        "to_date"
       ]
     },
     {
