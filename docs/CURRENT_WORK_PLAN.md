@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `8bb7f48b8bbed93e2721600a0e134ea81d3748a0`
-- Current active branch: `fix/kds-40-minute-archive-20261006`
-- Mandatory active work log: `docs/KDS_ARCHIVE_2026-10-06.md`
+- Latest main baseline reconciled: `70f25fe3c5e0411792ab9d7eb559424c9df047ad`
+- Current active branch: `perf/visible-read-coalescing-20261006`
+- Mandatory active work log: `docs/VISIBLE_READS_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Prepare KDS active/40-minute/completed views and explicit administrative closure
-of empty paid/voided kitchen work under caller RLS. Production remains read-only
-until a new exact-head Full Verify and explicit user approval.
+Prepare frontend-only hidden display read suppression and scoped kitchen refresh
+coalescing. No new database/schema/API changes. Production remains unchanged
+until exact-head Full Verify green and fresh explicit merge/deploy approval.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -38,3 +38,6 @@ until a new exact-head Full Verify and explicit user approval.
   post-merge Verify 37441343533 and Pages 37441343568 succeeded.
 - Supplier/purchase permission dependencies, costing, period controls and recovery evidence
   remain separate review work.
+
+- #460 completed at 70f25fe3: KDS archive/empty finish applied and deployed;
+  postmerge Verify 37450491227 and Pages 37450491020 green.
