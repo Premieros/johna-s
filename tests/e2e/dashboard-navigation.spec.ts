@@ -198,6 +198,8 @@ test.describe('dashboard and navigation actions', () => {
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/#/reports');
+      // Same-hash navigation keeps the prior page; start each viewport from a fresh document.
+      await page.reload();
       const results = width < 640 ? page.getByTestId('reports-mobile-results') : page.getByRole('table');
       await expect(results.getByText('PAGE-0', { exact: true })).toBeVisible();
       expect(reads[reads.length - 1]?.p_page_size).toBe(100);
