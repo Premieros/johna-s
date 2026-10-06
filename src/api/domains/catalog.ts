@@ -46,12 +46,16 @@ export type ProductDirectRawComposition = {
   items: DirectRawComponentInput[];
 };
 export type KitchenOrderContextRow = { order_id: string; table_name: string | null; operator_name: string | null };
+export type KitchenHistoryRow = { order_id: string; order_number: string; kitchen_status: string; updated_at: string; kitchen_sent_at: string | null; table_name: string | null };
+export type KitchenHistoryPage = { rows: KitchenHistoryRow[]; count: number };
 
 export const catalog = {
   replaceProductUnits(p: { p_product_id: string; p_units: unknown }): ApiResult<null> { return rpc('replace_product_units', p); },
   createRawMaterial(p: CreateRawMaterialInput): ApiResult<CreateRawMaterialResult> { return rpc('create_raw_material', p); },
   createProduct(p: CreateProductInput): ApiResult<CreateProductResult> { return rpc('create_product', p); },
   getKitchenOrderContext(p: { p_order_ids: string[]; p_branch_id: string }): ApiResult<KitchenOrderContextRow[]> { return rpc('get_kitchen_order_context', p); },
+  getKitchenCompletedHistory(p: { p_branch_id: string; p_from_ts: string; p_to_ts: string; p_station: string | null; p_page: number }): ApiResult<KitchenHistoryPage> { return rpc('get_kitchen_completed_history', p); },
+  finishEmptyKitchenOrder(p: { p_order_id: string; p_branch_id: string }): ApiResult<{ success: boolean; changed: boolean }> { return rpc('finish_empty_kitchen_order', p); },
   getProductModifiers(p_product_id: string): ApiResult<unknown> { return rpc('get_product_modifiers', { p_product_id }); },
   getProductModifiersAdmin(p_product_id: string) {
     return supabase.rpc('get_product_modifiers_admin', { p_product_id });
