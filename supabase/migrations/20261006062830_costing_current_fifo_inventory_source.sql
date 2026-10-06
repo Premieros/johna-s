@@ -55,6 +55,20 @@ END;$body$;
   ),
 $cte$;
   EXECUTE replace(definition, original, replacement);
+
+  -- Current negative-stock exposure remains an estimate, using the same last
+  -- actual FIFO valuation rather than a manual/purchase/count reference price.
+  SELECT pg_get_functiondef('public.get_raw_material_cost_valuation_overview(uuid)'::regprocedure) INTO definition;
+  original := 'COALESCE(NULLIF(pr.latest_cost, 0), NULLIF(b.unit_cost, 0), 0)';
+  IF (length(definition)-length(replace(definition,original,''))) / length(original) <> 2
+     OR position('public.can_permission(''reports.costing'')' IN definition) = 0 THEN
+    RAISE EXCEPTION 'RAW_VALUATION_BASELINE_CHANGED';
+  END IF;
+  definition := replace(definition, original, 'COALESCE(NULLIF(fi.avg_cost, 0), 0)');
+  original := '    GROUP BY b.raw_material_id, b.branch_id';
+  IF position(original IN definition) = 0 THEN RAISE EXCEPTION 'RAW_VALUATION_GROUP_CHANGED'; END IF;
+  replacement := E'    LEFT JOIN public.raw_material_inventory fi\n      ON fi.raw_material_id = b.raw_material_id AND fi.branch_id = b.branch_id\n' || original;
+  EXECUTE replace(definition, original, replacement);
 END;
 $patch$;
 COMMIT;
