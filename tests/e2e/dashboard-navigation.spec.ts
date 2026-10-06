@@ -213,4 +213,60 @@ test.describe('dashboard and navigation actions', () => {
     }
   });
 
+  test('KDS separates 40-minute work and completed history and finishes only an empty voided order on phone and desktop', async ({ page }) => {
+    const branch = '00000000-0000-0000-0000-000000000010';
+    let finished = false;
+    const historyReads: Record<string, unknown>[] = [];
+    const finishReads: Record<string, unknown>[] = [];
+    let ordinaryStatusWrites = 0;
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/branches**`, async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: branch, name: 'KDS Test', is_active: true }]) });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_my_kitchen_stations**`, async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: branch, code: 'main', name_ar: 'مطبخ', name_en: 'Kitchen', is_active: true }]) });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_kitchen_queue**`, async route => {
+      const rows = [{ order_id: 'recent', order_number: 'RECENT-KDS', station: 'main', kitchen_status: 'sent', created_at: new Date(Date.now() - 60000).toISOString(), elapsed_seconds: 60, items: [{ product_name: 'Meal', quantity: 1 }] }];
+      if (!finished) rows.push({ order_id: 'empty', order_number: 'VOIDED-KDS', station: 'main', kitchen_status: 'cooking', created_at: new Date(Date.now() - 3000000).toISOString(), elapsed_seconds: 3000, items: [], notes: '- Kitchen void: 1x Product' } as typeof rows[number]);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_kitchen_completed_history**`, async route => {
+      const args = route.request().postDataJSON(); historyReads.push(args);
+      const start = Number(args.p_page) * 100;
+      const rows = Array.from({ length: Math.min(100, 205 - start) }, (_, i) => ({ order_id: `h-${start + i}`, order_number: `DONE-${start + i}`, kitchen_status: 'served', updated_at: new Date().toISOString() }));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, count: 205 }) });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/finish_empty_kitchen_order**`, async route => {
+      finishReads.push(route.request().postDataJSON()); finished = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, changed: true }) });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/set_kitchen_status**`, async route => {
+      ordinaryStatusWrites += 1;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+    });
+    for (const width of [390, 1280]) {
+      finished = false;
+      const historyCount = historyReads.length;
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/#/kitchen-display');
+      await page.reload();
+      await expect(page.getByText('#RECENT-KDS', { exact: true })).toBeVisible();
+      await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
+      expect(historyReads.length).toBe(historyCount);
+      await page.getByRole('tab', { name: /تجاوزت 40 دقيقة|Over 40 minutes/ }).click();
+      await expect(page.getByText('#VOIDED-KDS', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: /إنهاء الطلب الملغي الخالي من الأصناف|Finish empty voided order/ }).click();
+      await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
+      expect(finishReads[finishReads.length - 1]).toEqual({ p_order_id: 'empty', p_branch_id: branch });
+      expect(ordinaryStatusWrites).toBe(0);
+      await page.getByRole('tab', { name: /منتهية|Completed/ }).click();
+      await expect(page.getByText('#DONE-0', { exact: true })).toBeVisible();
+      const pager = page.getByRole('navigation', { name: /صفحات الطلبات المنتهية|Completed order pages/ });
+      await expect(pager).toContainText('205');
+      await pager.getByRole('button', { name: /التالي|Next/ }).click();
+      await expect(page.getByText('#DONE-100', { exact: true })).toBeVisible();
+      expect(historyReads[historyReads.length - 1]?.p_page).toBe(1);
+    }
+  });
+
 });
