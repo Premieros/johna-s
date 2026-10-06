@@ -1,5 +1,18 @@
 import { supabase } from '@/api';
 
+// A failed read is unavailable, never a successful empty dataset.
+async function readRows(query: PromiseLike<{ data: unknown[] | null; error: unknown }>) {
+  try {
+    const result = await query;
+    const failed = Boolean(result.error);
+    return { data: failed ? [] : result.data || [], failed,
+      errorMessage: failed ? (result.error as { message?: string }).message || 'READ_FAILED' : null };
+  } catch {
+    return { data: [], failed: true, errorMessage: 'READ_FAILED' };
+  }
+}
+
+
 export async function loadDashboardFallbackSales(params: {
   branchId: string | null;
   currentFrom: string;
@@ -11,6 +24,8 @@ export async function loadDashboardFallbackSales(params: {
   previousRows: unknown[];
   itemRows: unknown[];
   currentErrorMessage: string | null;
+  previousErrorMessage: string | null;
+  itemErrorMessage: string | null;
 }> {
   const fields = 'id,invoice_number,total,paid_amount,payment_method,status,branch_id,created_at,order_type,refunded_amount,discount_amount,branch:branches(name,name_en)';
   const previousFields = 'id,total,paid_amount,payment_method,branch_id,created_at,refunded_amount,discount_amount';
@@ -35,11 +50,12 @@ export async function loadDashboardFallbackSales(params: {
     previousQuery = previousQuery.eq('branch_id', params.branchId);
   }
 
-  const [currentResult, previousResult] = await Promise.all([currentQuery, previousQuery]);
-  const currentRows = currentResult.error ? [] : (currentResult.data || []);
-  const previousRows = previousResult.error ? [] : (previousResult.data || []);
+  const [currentResult, previousResult] = await Promise.all([readRows(currentQuery), readRows(previousQuery)]);
+  const currentRows = currentResult.data;
+  const previousRows = previousResult.data;
 
   let itemRows: unknown[] = [];
+  let itemErrorMessage: string | null = null;
   if (currentRows.length) {
     let itemQuery = supabase
       .from('sale_items')
@@ -48,15 +64,18 @@ export async function loadDashboardFallbackSales(params: {
       .lte('sale.created_at', params.currentTo)
       .limit(5000);
     if (params.branchId) itemQuery = itemQuery.eq('sale.branch_id', params.branchId);
-    const itemResult = await itemQuery;
-    itemRows = itemResult.error ? [] : (itemResult.data || []);
+    const itemResult = await readRows(itemQuery);
+    itemRows = itemResult.data;
+    itemErrorMessage = itemResult.errorMessage;
   }
 
   return {
     currentRows,
     previousRows,
     itemRows,
-    currentErrorMessage: currentResult.error?.message || null,
+    currentErrorMessage: currentResult.errorMessage,
+    previousErrorMessage: previousResult.errorMessage,
+    itemErrorMessage,
   };
 }
 
@@ -87,10 +106,10 @@ export async function loadDashboardStockRows(params: {
   }
 
   const [rawMastersResult, rawBalancesResult, unitMastersResult, unitBatchesResult] = await Promise.all([
-    rawMasterQuery,
-    rawBalanceQuery,
-    unitMasterQuery,
-    unitBatchQuery,
+    readRows(rawMasterQuery),
+    readRows(rawBalanceQuery),
+    readRows(unitMasterQuery),
+    readRows(unitBatchQuery),
   ]);
 
   return {
@@ -98,7 +117,7 @@ export async function loadDashboardStockRows(params: {
     rawBalances: rawBalancesResult.data || [],
     unitMasters: unitMastersResult.data || [],
     unitBatches: unitBatchesResult.data || [],
-    failed: Boolean(rawMastersResult.error || rawBalancesResult.error || unitMastersResult.error || unitBatchesResult.error),
+    failed: Boolean(rawMastersResult.failed || rawBalancesResult.failed || unitMastersResult.failed || unitBatchesResult.failed),
   };
 }
 
@@ -113,6 +132,9 @@ export async function loadDashboardOpsRows(params: {
   includeExpenses: boolean;
 }): Promise<{
   orders: unknown[];
+  ordersFailed: boolean;
+  purchasesFailed: boolean;
+  expensesFailed: boolean;
   purchases: Record<string, unknown>[];
   expenses: Record<string, unknown>[];
 }> {
@@ -154,13 +176,16 @@ export async function loadDashboardOpsRows(params: {
     : Promise.resolve({ data: [], error: null });
 
   const [ordersResult, purchasesResult, expensesResult] = await Promise.all([
-    orderPromise,
-    purchasePromise,
-    expensePromise,
+    readRows(orderPromise),
+    readRows(purchasePromise),
+    readRows(expensePromise),
   ]);
 
   return {
     orders: ordersResult.data || [],
+    ordersFailed: ordersResult.failed,
+    purchasesFailed: purchasesResult.failed,
+    expensesFailed: expensesResult.failed,
     purchases: (purchasesResult.data || []) as Record<string, unknown>[],
     expenses: (expensesResult.data || []) as Record<string, unknown>[],
   };
