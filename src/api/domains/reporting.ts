@@ -8,7 +8,7 @@ export type OperationalReportPage = {
 };
 
 export const reporting = {
-  getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number }): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p); },
+  getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number; p_from_ts: string; p_to_exclusive_ts: string }): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p); },
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p); },
   getTrialBalanceSummary(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceSummary> { return rpc('get_trial_balance_summary', p); },
   getGeneralLedger(p: { p_branch_id: string | null; p_account_id: string | null; p_from_date: string | null; p_to_date: string | null }): ApiResult<GeneralLedgerRow[]> { return rpc('get_general_ledger', p); },
