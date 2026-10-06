@@ -55,6 +55,22 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
 };
 
 const messages: Record<string, { ar: string; en: string }> = {
+  EMPTY_KDS_ADMIN_REQUIRED: {
+    ar: 'إنهاء الطلب الملغي الخالي من الأصناف يحتاج صلاحية إدارة الإعدادات وتحديث المطبخ.',
+    en: 'Finishing an empty voided order requires settings management and kitchen update permissions.',
+  },
+  EMPTY_KDS_ORDER_NOT_FINAL: {
+    ar: 'هذا الطلب غير مغلق أو لا يوجد به إلغاء مسجل. راجع الطلب في شاشة البيع أولًا.',
+    en: 'This order is not closed or has no recorded void. Review it in POS first.',
+  },
+  EMPTY_KDS_ORDER_HAS_ITEMS: {
+    ar: 'ما زالت هناك أصناف أو إرسالات مرتبطة بالطلب. لا يمكن إنهاؤه كطلب خالٍ من الأصناف.',
+    en: 'This order still has items or kitchen sends and cannot be finished as an empty order.',
+  },
+  KDS_STATION_ACCESS_DENIED: {
+    ar: 'لا يمكنك تغيير حالة هذا الطلب لأنه خارج نطاق محطات المطبخ المرتبطة بحسابك. راجع إسناد المحطات مع المسؤول.',
+    en: 'You cannot change this order status because it is outside your assigned kitchen stations. Ask an administrator to review station assignments.',
+  },
   AUTH_REQUIRED: {
     ar: 'انتهت جلسة الدخول أو لم يتم تسجيل الدخول. سجّل الدخول مرة أخرى ثم حاول.',
     en: 'Your session is missing or expired. Sign in again and retry.',
