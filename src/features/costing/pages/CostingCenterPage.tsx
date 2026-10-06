@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { businessDateISO, reportDateRangeUtc } from '@/lib/businessTime';
+import type { RawConsumptionCostBreakdownRow } from '@/api/domains/costing';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, History } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -20,7 +22,7 @@ import type {
 } from '@/lib/types';
 import { loadCostingBranches, loadCostingSuppliers, loadRawMaterialUnitDisplayMap } from '../services/costingSelectors';
 
-type Tab = 'overview' | 'raw_prices' | 'orders' | 'supplier';
+type Tab = 'overview' | 'raw_prices' | 'orders' | 'supplier' | 'period';
 type SalesCostSummary = { sales_count: number; net_sales: number; cogs: number; ratio: number };
 
 export function CostingCenterPage() {
@@ -46,8 +48,12 @@ export function CostingCenterPage() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [supplierId, setSupplierId] = useState('');
-  const [fromDate, setFromDate] = useState(() => history.minDate || '');
-  const [toDate, setToDate] = useState('');
+  const [fromDate, setFromDate] = useState(() => `${businessDateISO().slice(0, 7)}-01`);
+  const [toDate, setToDate] = useState(() => businessDateISO());
+  const [draftFrom, setDraftFrom] = useState(fromDate);
+  const [draftTo, setDraftTo] = useState(toDate);
+  const [periodRows, setPeriodRows] = useState<RawConsumptionCostBreakdownRow[]>([]);
+  const request = useRef(0);
   const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -79,13 +85,15 @@ export function CostingCenterPage() {
   const effBranch = useMemo(() => branchId || null, [branchId]);
 
   const loadOverview = useCallback(async () => {
+    const requestId = ++request.current;
     setLoading(true);
     setError(null);
     const [res, summaryRes, rawValuationRes] = await Promise.all([
       api.costing.getOverview({ p_branch_id: effBranch }),
-      api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: history.minDate || null, p_to: null }),
+      api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
       api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
     ]);
+    if (requestId !== request.current) return;
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     setOverview(res.data || []);
     if (!summaryRes.error && summaryRes.data) {
@@ -100,34 +108,37 @@ export function CostingCenterPage() {
     }
     if (!rawValuationRes.error) setRawCosts(rawValuationRes.data || []);
     setLoading(false);
-  }, [effBranch, show, history.minDate]);
+  }, [effBranch, show, fromDate, toDate]);
 
   const loadOrders = useCallback(async () => {
+    const requestId = ++request.current;
     setLoading(true);
     setError(null);
-    const allowed = history.clampRange(fromDate, toDate);
-    if (allowed.from !== fromDate) setFromDate(allowed.from);
-    if (allowed.to !== toDate) setToDate(allowed.to);
-    const res = await api.costing.getOrderMargin({ p_branch_id: effBranch, p_from: allowed.from || null, p_to: allowed.to || null });
+    const res = await api.costing.getOrderMargin({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+    if (requestId !== request.current) return;
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     setOrders(res.data || []);
     setLoading(false);
-  }, [effBranch, fromDate, toDate, show, history.unlimited]);
+  }, [effBranch, fromDate, toDate, show]);
 
   const loadSupplierImpact = useCallback(async () => {
     if (!supplierId) { setSupplierImpact([]); return; }
+    const requestId = ++request.current;
     setLoading(true);
     setError(null);
     const res = await api.costing.getSupplierPriceImpact({ p_supplier_id: supplierId });
+    if (requestId !== request.current) return;
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     setSupplierImpact(res.data || []);
     setLoading(false);
   }, [supplierId, show]);
 
   const loadRawCosts = useCallback(async () => {
+    const requestId = ++request.current;
     setLoading(true);
     setError(null);
     const res = await api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch });
+    if (requestId !== request.current) return;
     if (res.error) {
       setError(res.error.message);
       setLoading(false);
@@ -137,6 +148,29 @@ export function CostingCenterPage() {
     setRawCosts(res.data || []);
     setLoading(false);
   }, [effBranch, show]);
+
+  const loadPeriod = useCallback(async () => {
+    const requestId = ++request.current;
+    setLoading(true); setError(null); setPeriodRows([]);
+    const targetBranches = effBranch ? branches.filter((branch) => branch.id === effBranch) : branches;
+    const dates = reportDateRangeUtc(fromDate, toDate);
+    const results = await Promise.all(targetBranches.map((branch) => api.costing.getRawConsumptionCostBreakdown({
+      p_branch_id: branch.id, p_from: dates.startIso, p_to: new Date(Date.parse(dates.endExclusiveIso) - 1).toISOString(),
+    })));
+    if (requestId !== request.current) return;
+    const failed = results.find((result) => result.error);
+    if (failed?.error) setError(failed.error.message);
+    else {
+      const rows = new Map<string, RawConsumptionCostBreakdownRow>();
+      results.flatMap((result) => result.data || []).forEach((row) => {
+        const value = rows.get(row.raw_material_id) || { ...row, consumed_quantity: 0, actual_quantity: 0, estimated_quantity: 0, actual_cost: 0, estimated_cost: 0, displayed_cost: 0 };
+        for (const field of ['consumed_quantity', 'actual_quantity', 'estimated_quantity', 'actual_cost', 'estimated_cost', 'displayed_cost'] as const) value[field] += Number(row[field] || 0);
+        rows.set(row.raw_material_id, value);
+      });
+      setPeriodRows([...rows.values()]);
+    }
+    setLoading(false);
+  }, [effBranch, branches, fromDate, toDate]);
 
   const openRawHistory = useCallback(async (row: RawMaterialCostOverviewRow) => {
     setRawHistoryTarget(row);
@@ -162,8 +196,10 @@ export function CostingCenterPage() {
     if (tab === 'overview') void loadOverview();
     else if (tab === 'raw_prices') void loadRawCosts();
     else if (tab === 'orders') void loadOrders();
+    else if (tab === 'period') void loadPeriod();
     else void loadSupplierImpact();
-  }, [tab, loadOverview, loadRawCosts, loadOrders, loadSupplierImpact]);
+    return () => { request.current += 1; };
+  }, [tab, loadOverview, loadRawCosts, loadOrders, loadSupplierImpact, loadPeriod]);
 
   const openDetail = async (productId: string) => {
     setDetailLoading(true);
@@ -312,14 +348,42 @@ export function CostingCenterPage() {
 
   return (
     <DesignSurface testId="costing-center-page">
-      <DesignPageHeader title={t('costingCenter')} subtitle={isAr ? 'تكلفة المنتجات وربحية المبيعات وآخر أسعار الخامات' : 'Product costing, sales margin and latest raw-material prices'} actions={<Button variant="outline" size="sm" onClick={() => { if (tab === 'overview') handleExportOverview(); else if (tab === 'raw_prices') handleExportRawCosts(); else if (tab === 'orders') handleExportOrders(); else handleExportSupplier(); }}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+      <DesignPageHeader title={t('costingCenter')} subtitle={isAr ? 'تكلفة المنتجات وربحية المبيعات وآخر أسعار الخامات' : 'Product costing, sales margin and latest raw-material prices'} actions={<Button variant="outline" size="sm" onClick={() => { if (tab === 'overview') handleExportOverview(); else if (tab === 'raw_prices') handleExportRawCosts(); else if (tab === 'orders') handleExportOrders(); else if (tab === 'period') exportToExcel(periodRows.map((row) => ({ RawMaterial: row.raw_material_name, Unit: row.unit_name, ConsumedQuantity: row.consumed_quantity, ActualCost: row.actual_cost, EstimatedCost: row.estimated_cost, TotalCost: row.displayed_cost, From: fromDate, To: toDate })), 'costing-period'); else handleExportSupplier(); }}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
 
-      <div className="flex gap-1.5 liquid-glass rounded-2xl p-1.5 w-fit mb-4" role="tablist">
+      <div className="flex gap-1.5 liquid-glass rounded-2xl p-1.5 w-full flex-wrap mb-4" role="tablist">
+        {tabBtn('period', isAr ? 'تكلفة فترة' : 'Period cost')}
         {tabBtn('overview', t('costingOverview'))}
         {tabBtn('raw_prices', isAr ? 'أسعار الخامات' : 'Raw Material Prices')}
         {tabBtn('orders', t('orderMargin'))}
         {tabBtn('supplier', t('supplierImpact'))}
       </div>
+
+      {(tab === 'overview' || tab === 'orders' || tab === 'period') && <DesignPanel testId="costing-period-filter">
+        <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
+          event.preventDefault();
+          if (!draftFrom || !draftTo || draftFrom > draftTo) { show(isAr ? 'أدخل فترة صحيحة' : 'Enter a valid period', 'error'); return; }
+          const allowed = history.clampRange(draftFrom, draftTo);
+          setFromDate(allowed.from); setToDate(allowed.to);
+        }}>
+          <label className="text-sm text-ui-text">{isAr ? 'من تاريخ' : 'From date'}<input data-testid="costing-from" type="date" required value={draftFrom} onChange={(event) => setDraftFrom(event.target.value)} className="block rounded-lg border border-ui-border bg-ui-page px-3 py-2" /></label>
+          <label className="text-sm text-ui-text">{isAr ? 'إلى تاريخ' : 'To date'}<input data-testid="costing-to" type="date" required min={draftFrom} value={draftTo} onChange={(event) => setDraftTo(event.target.value)} className="block rounded-lg border border-ui-border bg-ui-page px-3 py-2" /></label>
+          <Select label={t('branch')} value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="">{t('allBranches')}</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select>
+          <Button type="submit">{isAr ? 'تطبيق الفترة' : 'Apply period'}</Button>
+        </form>
+        <p className="mt-2 text-sm text-ui-muted">{fromDate} — {toDate}</p>
+      </DesignPanel>}
+      {tab === 'period' && <DesignPanel testId="costing-period-report">
+        <p className="mb-3 text-sm text-ui-muted">{isAr ? 'تكلفة استهلاك الخامات خلال الفترة، مع فصل التكلفة الفعلية عن التقديرية.' : 'Raw-material consumption cost during the period, separating actual and estimated cost.'}</p>
+        <DataTable columns={[
+          { key: 'raw_material_name', header: t('rawMaterial') },
+          { key: 'unit_name', header: isAr ? 'الوحدة' : 'Unit' },
+          { key: 'consumed_quantity', header: isAr ? 'الكمية المستهلكة' : 'Consumed quantity', render: (row: RawConsumptionCostBreakdownRow) => formatNumber(row.consumed_quantity, 4) },
+          { key: 'actual_cost', header: isAr ? 'التكلفة الفعلية' : 'Actual cost', render: (row: RawConsumptionCostBreakdownRow) => money(row.actual_cost) },
+          { key: 'estimated_cost', header: isAr ? 'التكلفة التقديرية' : 'Estimated cost', render: (row: RawConsumptionCostBreakdownRow) => money(row.estimated_cost) },
+          { key: 'displayed_cost', header: isAr ? 'الإجمالي' : 'Total', render: (row: RawConsumptionCostBreakdownRow) => money(row.displayed_cost) },
+        ]} data={periodRows.map((row) => ({ ...row, id: row.raw_material_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
+        <p className="mt-3 font-bold text-ui-text">{isAr ? 'إجمالي تكلفة الفترة: ' : 'Total period cost: '}{money(periodRows.reduce((total, row) => total + Number(row.displayed_cost), 0))}</p>
+      </DesignPanel>}
 
       {tab === 'overview' && <>
         <DesignPanel testId="costing-summary-panel">
@@ -327,12 +391,12 @@ export function CostingCenterPage() {
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{t('product')}</p><p className="mt-1 text-2xl font-bold text-ui-primary">{stats.count}</p></div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'متوسط تكلفة المنتجات' : 'Average product cost'}</p><p className="mt-1 text-2xl font-bold text-ui-text">{formatNumber(stats.avg, 1)}%</p></div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'التكلفة الفعلية من المبيعات' : 'Actual COGS / Net Sales'}</p><p className="mt-1 text-2xl font-bold text-ui-text">{formatNumber(salesCostSummary.ratio, 1)}%</p><p className="mt-1 text-[11px] text-ui-subtle">{money(salesCostSummary.cogs)} / {money(salesCostSummary.net_sales)}</p></div>
-            <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'التكلفة التقديرية مع السالب' : 'Estimated COGS incl. negative'}</p><p className="mt-1 text-2xl font-bold text-ui-warning">{formatNumber(estimatedCostSummary.estimatedRatio, 1)}%</p><p className="mt-1 text-[11px] text-ui-subtle">{money(estimatedCostSummary.estimatedCogs)} / {money(salesCostSummary.net_sales)}</p><p className="mt-1 text-[11px] text-ui-warning">{isAr ? 'فرق السالب:' : 'Negative gap:'} {money(estimatedCostSummary.estimatedNegativeCost)}</p>{estimatedCostSummary.unpricedNegativeQuantity > 0 && <p className="mt-1 text-[10px] text-ui-danger">{isAr ? 'يوجد عجز سالب غير مسعّر بالكامل' : 'Some negative stock is still unpriced'}</p>}</div>
+            <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'عجز المخزون الحالي (تقديري)' : 'Current stock shortage (estimated)'}</p><p className="mt-1 text-2xl font-bold text-ui-warning">{money(estimatedCostSummary.estimatedNegativeCost)}</p><p className="mt-1 text-[11px] text-ui-subtle">{isAr ? 'لقطة المخزون الحالية، لا تكلفة الفترة' : 'Current stock snapshot; separate from period cost'}</p><p className="mt-1 text-[11px] text-ui-warning">{isAr ? 'فرق السالب:' : 'Negative gap:'} {money(estimatedCostSummary.estimatedNegativeCost)}</p>{estimatedCostSummary.unpricedNegativeQuantity > 0 && <p className="mt-1 text-[10px] text-ui-danger">{isAr ? 'يوجد عجز سالب غير مسعّر بالكامل' : 'Some negative stock is still unpriced'}</p>}</div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'أعلى تكلفة نسبة' : 'Highest cost ratio'}</p><p className="mt-1 truncate font-semibold text-ui-text">{stats.worst ? stats.worst.product_name : '-'}</p></div>
           </div>
         </DesignPanel>
         <DesignPanel testId="costing-search-panel"><div className="flex flex-col sm:flex-row gap-3"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="costing-search" /><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44"><option value="">{t('allBranches')}</option>{visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></div></DesignPanel>
-        <DesignPanel testId="costing-table-panel"><DataTable columns={overviewColumns} data={filteredOverview.map((r) => ({ ...r, id: r.product_id }))} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={(r) => void openDetail(r.product_id)} /></DesignPanel>
+        <DesignPanel testId="costing-table-panel"><p className="mb-2 text-sm text-ui-muted">{isAr ? 'أسعار وتكاليف الوصفات الحالية؛ ملخص المبيعات أعلاه يتبع الفترة المختارة.' : 'Current recipe prices and costs; the sales summary above follows the selected period.'}</p><DataTable columns={overviewColumns} data={filteredOverview.map((r) => ({ ...r, id: r.product_id }))} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={(r) => void openDetail(r.product_id)} /></DesignPanel>
       </>}
 
       {tab === 'raw_prices' && <>
@@ -358,7 +422,7 @@ export function CostingCenterPage() {
       </>}
 
       {tab === 'orders' && <DesignPanel testId="order-margin-panel">
-        <div className="flex flex-col sm:flex-row gap-3 mb-4"><input type="date" value={fromDate} min={history.minDate} onChange={(e) => setFromDate(history.clampRange(e.target.value, toDate).from)} className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm" /><input type="date" value={toDate} onChange={(e) => { const allowed = history.clampRange(fromDate, e.target.value); setFromDate(allowed.from); setToDate(allowed.to); }} className="border border-ui-border rounded-lg px-3 py-2 bg-ui-page text-sm" /><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44"><option value="">{t('allBranches')}</option>{visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select><Button size="sm" onClick={() => void loadOrders()}>{t('search')}</Button></div>
+
         <DataTable columns={orderColumns} data={orders.map((r) => ({ ...r, id: r.sale_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
       </DesignPanel>}
 
