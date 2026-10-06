@@ -157,4 +157,26 @@ test.describe('dashboard and navigation actions', () => {
     await signOut.click();
     await expect(page).toHaveURL(/#\/login$/);
   });
+  test('dashboard opens Today and applies complete custom Cairo dates on phone and desktop', async ({ page }) => {
+    const reads: Record<string, unknown>[] = [];
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_dashboard_sales_snapshot**`, async (route) => {
+      reads.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ current: {}, previous: {} }) });
+    });
+    await expect(page.getByTestId('dashboard-range-today')).toHaveAttribute('aria-pressed', 'true');
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByTestId('dashboard-range-custom').click();
+      await page.getByTestId('dashboard-custom-from').fill('2026-09-01');
+      await page.getByTestId('dashboard-custom-to').fill('2026-09-30');
+      await page.getByTestId('dashboard-custom-period').getByRole('button', { name: /تطبيق|Apply/ }).click();
+      await expect(page.getByTestId('dashboard-selected-dates')).toHaveText('2026-09-01 — 2026-09-30');
+      await expect.poll(() => reads.at(-1)?.p_current_to).toBe('2026-09-30T20:59:59.999Z');
+      expect(reads.at(-1)?.p_current_from).toBe('2026-08-31T21:00:00.000Z');
+      await expect(page.getByTestId('dashboard-custom-period')).toHaveCount(0);
+      await page.getByTestId('dashboard-range-previous_month').click();
+      await expect(page.getByTestId('dashboard-range-previous_month')).toHaveAttribute('aria-pressed', 'true');
+    }
+  });
+
 });
