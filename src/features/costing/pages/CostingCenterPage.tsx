@@ -55,6 +55,7 @@ export function CostingCenterPage() {
   const [draftTo, setDraftTo] = useState(toDate);
   const [periodRows, setPeriodRows] = useState<RawConsumptionCostBreakdownRow[]>([]);
   const request = useRef(0);
+  const supplierRequest = useRef(0);
   const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -72,11 +73,15 @@ export function CostingCenterPage() {
   const effBranch = useMemo(() => branchId || null, [branchId]);
 
   const loadSuppliers = useCallback(async () => {
+    const requestId = ++supplierRequest.current;
+    setSuppliers([]); setSupplierId(''); setSupplierImpact([]);
     try {
       const s = await loadCostingSuppliers(effBranch);
+      if (requestId !== supplierRequest.current) return;
       setSuppliers(s);
       setSupplierId((current) => s.some((row) => row.id === current) ? current : s[0]?.id || '');
     } catch (error) {
+      if (requestId !== supplierRequest.current) return;
       show(error instanceof Error ? error.message : t('error'), 'error');
     }
   }, [effBranch, show, t]);
@@ -189,7 +194,11 @@ export function CostingCenterPage() {
   }, [show]);
 
   useEffect(() => { void loadBranches(); }, [loadBranches]);
-  useEffect(() => { if (tab === 'supplier') void loadSuppliers(); }, [tab, loadSuppliers]);
+  useEffect(() => {
+    if (tab !== 'supplier') return;
+    void loadSuppliers();
+    return () => { supplierRequest.current += 1; };
+  }, [tab, loadSuppliers]);
   const needsRawUnits = tab === 'raw_prices' || detail !== null || rawHistoryTarget !== null;
   useEffect(() => {
     if (!needsRawUnits) return;
