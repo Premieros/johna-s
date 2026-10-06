@@ -21,7 +21,7 @@ describe.skipIf(!dbUrl)('operational pages retain direct caller RLS totals', () 
     await client.query(`INSERT INTO public.expenses
       (branch_id,category,description,amount,expense_date,payment_method,status,account_id)
       VALUES ($1,$2,'page expense',12.34,CURRENT_DATE,'cash','posted',$3),
-             ($1,$2,'unposted excluded',999,CURRENT_DATE,'cash','draft',$3)`,
+             ($1,$2,'voided excluded',999,CURRENT_DATE,'cash','voided',$3)`,
       [ids.branchA,prefix,ids.coaCashA]);
   });
   afterAll(async () => { if (client) { await client.query('ROLLBACK').catch(() => {}); await client.end(); } });
