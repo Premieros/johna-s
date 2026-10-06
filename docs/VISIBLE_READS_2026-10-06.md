@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/visible-read-coalescing-20261006`
-Current PR: `#0`
+Current PR: `#461`
 Last updated: 2026-10-06
 
 ## Work status
@@ -43,7 +43,7 @@ this frontend patch targets downstream display reads rather than claiming to rem
 ## Verification ledger
 Local targeted 13 tests passed, including visibility callbacks/cleanup, coalescing,
 scope invalidation/retry, ten hidden polls and current KDS archive flows. Local
-application/test type checks and changed-source lint passed; build pending.
+application/test type checks and changed-source lint and build passed.
 Required exact-head Full Verify including full unit/DB/browser and Pages continuity.
 Measured fixture reductions: ten overlapping requests -> two serialized reads;
 ten hidden 30-second polls -> zero queue reads, one refresh on return. No live
