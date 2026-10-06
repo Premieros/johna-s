@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { afterAll,beforeAll,describe,expect,it } from 'vitest';
 import type pg from 'pg';
 import { getDbUrl,openDb } from './db';
-import { canImpersonate,runAs,seedRlsFixture,type RlsIds } from './rls';
+import { canImpersonate,runAs,runAsPersist,seedRlsFixture,type RlsIds } from './rls';
 const dbUrl=getDbUrl();
 describe.skipIf(!dbUrl)('explicit administrative empty voided kitchen finish',()=>{
  let client:pg.Client;let ids:RlsIds;let empty:string;let hasItems:string;let nonFinal:string;let notVoid:string;
  beforeAll(async()=>{
   client=openDb(dbUrl!);await client.connect();await client.query('BEGIN');
   if(!await canImpersonate(client))throw new Error('Isolated CI auth stub required');ids=await seedRlsFixture(client);
+  await client.query(`UPDATE public.roles SET permissions=permissions || '["settings.manage","pos.kds_view","pos.kds_update"]'::jsonb WHERE role='branch_manager'`);
   const prefix='EMPTY-KDS-'+randomUUID().slice(0,8);
   const orders=await client.query(`INSERT INTO public.orders(order_number,branch_id,cashier_id,order_type,status,kitchen_status,station,notes,total)
     VALUES($1||'-empty',$2,$3,'takeaway','completed','cooking','main','- Kitchen void: 1x Test',40),
@@ -23,18 +24,18 @@ describe.skipIf(!dbUrl)('explicit administrative empty voided kitchen finish',()
     SELECT $1,$2,id,$1 FROM public.kitchen_stations WHERE branch_id=$2 AND code='grill'`,[ids.users.super_admin,ids.branchA]);
  });
  afterAll(async()=>{if(client){await client.query('ROLLBACK').catch(()=>{});await client.end();}});
- async function finish(order=empty,user=ids.users.super_admin,branch=ids.branchA){return runAs(client,user,'SELECT public.finish_empty_kitchen_order($1,$2) AS result',[order,branch]);}
+ async function finish(order=empty,user=ids.users.super_admin,branch=ids.branchA,persist=false){return (persist?runAsPersist:runAs)(client,user,'SELECT public.finish_empty_kitchen_order($1,$2) AS result',[order,branch]);}
  it('finishes only kitchen state and audit while retaining financial, stock, served and print records',async()=>{
   const before=await client.query(`SELECT to_jsonb(o)-ARRAY['kitchen_status','updated_at'] AS data FROM public.orders o WHERE id=$1`,[empty]);
   const snapshot=async()=> (await client.query(`SELECT (SELECT count(*) FROM public.cloud_print_jobs) AS prints,(SELECT count(*) FROM public.order_kitchen_inventory_events) AS kitchen_inventory,(SELECT count(*) FROM public.raw_material_movements) AS raw_consumption,(SELECT count(*) FROM public.order_kitchen_served_quantities) AS served_baselines,(SELECT count(*) FROM public.sales) AS sales,(SELECT count(*) FROM public.journal_entries) AS journals,(SELECT md5(coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.id)::text,'[]')) FROM public.raw_material_inventory r) AS stock_digest`)).rows[0];
-  const counts=await snapshot();const result=await finish();expect(result.error).toBeUndefined();expect(result.rows[0].result).toEqual({success:true,changed:true});
+  const counts=await snapshot();const result=await finish(empty,ids.users.super_admin,ids.branchA,true);expect(result.error).toBeUndefined();expect(result.rows[0].result).toEqual({success:true,changed:true});
   const after=await client.query(`SELECT kitchen_status,to_jsonb(o)-ARRAY['kitchen_status','updated_at'] AS data FROM public.orders o WHERE id=$1`,[empty]);
   expect(after.rows[0].kitchen_status).toBe('cancelled');expect(after.rows[0].data).toEqual(before.rows[0].data);expect(await snapshot()).toEqual(counts);
   const audit=await client.query(`SELECT user_id,details FROM public.audit_log WHERE entity_id=$1 AND action='kitchen_empty_finish'`,[empty]);expect(audit.rows).toHaveLength(1);expect(audit.rows[0].user_id).toBe(ids.users.super_admin);
   const queue=await runAs(client,ids.users.super_admin,`SELECT order_id FROM public.get_kitchen_queue(NULL,$1) WHERE order_id=$2`,[ids.branchA,empty]);expect(queue.error).toBeUndefined();expect(queue.rows).toHaveLength(0);
   const history=await runAs(client,ids.users.super_admin,`SELECT public.get_kitchen_completed_history($1,now()-interval '1 hour',now()+interval '1 hour',NULL,0) AS result`,[ids.branchA]);expect(history.error).toBeUndefined();expect((history.rows[0].result as {rows:{order_id:string}[]}).rows.some(r=>r.order_id===empty)).toBe(true);
  });
- it('is idempotent and cannot add duplicate audit records',async()=>{const result=await finish();expect(result.error).toBeUndefined();expect(result.rows[0].result).toEqual({success:true,changed:false});const audit=await client.query(`SELECT count(*)::integer AS count FROM public.audit_log WHERE entity_id=$1 AND action='kitchen_empty_finish'`,[empty]);expect(audit.rows[0].count).toBe(1);});
+ it('is idempotent and cannot add duplicate audit records',async()=>{const result=await finish(empty,ids.users.super_admin,ids.branchA,true);expect(result.error).toBeUndefined();expect(result.rows[0].result).toEqual({success:true,changed:false});const audit=await client.query(`SELECT count(*)::integer AS count FROM public.audit_log WHERE entity_id=$1 AND action='kitchen_empty_finish'`,[empty]);expect(audit.rows[0].count).toBe(1);});
  it('blocks remaining items, non-final orders and closed orders with no void evidence',async()=>{
   expect((await finish(hasItems)).error).toContain('EMPTY_KDS_ORDER_HAS_ITEMS');
   expect((await finish(nonFinal)).error).toContain('EMPTY_KDS_ORDER_NOT_FINAL');
