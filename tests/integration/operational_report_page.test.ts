@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
+import { reportDateRangeUtc } from '../../src/lib/businessTime';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAs, seedRlsFixture, type RlsIds } from './rls';
 
@@ -76,11 +77,29 @@ describe.skipIf(!dbUrl)('operational pages retain direct caller RLS totals', () 
       expect(result.rows.length).toBe(Math.min(100,result.summary.count));
     }
   });
+  it('uses the same explicit UTC bounds as full reads across Cairo DST transitions', async () => {
+    for (const date of ['2026-04-24','2026-10-30']) {
+      const bounds=reportDateRangeUtc(date,date);
+      await client.query(`INSERT INTO public.sales
+        (invoice_number,branch_id,warehouse_id,cashier_id,subtotal,total,paid_amount,payment_method,status,created_at)
+        VALUES ($1,$2,$3,$4,7,7,7,'cash','completed',$5::timestamptz+interval '1 second'),
+               ($1||'-outside',$2,$3,$4,99,99,99,'cash','completed',$5::timestamptz-interval '1 second')`,
+        [`${prefix}-${date}`,ids.branchA,ids.whA,ids.users.cashier,bounds.startIso]);
+      const result=await runAs(client,ids.users.super_admin,
+        `SELECT public.get_operational_report_page('sales',$1,$2,$2,$3,0,100,$4,$5) AS page,
+          (SELECT jsonb_build_object('count',count(*),'total',coalesce(sum(greatest(coalesce(total,0)-coalesce(refunded_amount,0),0)),0))
+           FROM public.sales WHERE branch_id=$1 AND cashier_id=$6 AND created_at>=$4::timestamptz AND created_at<$5::timestamptz) AS direct`,
+        [ids.branchA,date,{cashier:ids.users.cashier},bounds.startIso,bounds.endExclusiveIso,ids.users.cashier]);
+      expect(result.error).toBeUndefined(); expect((result.rows[0].page as Page).summary).toEqual(result.rows[0].direct);
+      expect((result.rows[0].page as Page).summary).toEqual({count:1,total:7});
+    }
+  });
+
   it('is an authenticated invoker API and rejects invalid paging/date/type inputs', async () => {
     const fn=await client.query(`SELECT prosecdef,provolatile,
       has_function_privilege('anon',oid,'EXECUTE') AS anon_execute,
       has_function_privilege('authenticated',oid,'EXECUTE') AS auth_execute
-      FROM pg_proc WHERE oid='public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer)'::regprocedure`);
+      FROM pg_proc WHERE oid='public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer,timestamptz,timestamptz)'::regprocedure`);
     expect(fn.rows).toEqual([{prosecdef:false,provolatile:'s',anon_execute:false,auth_execute:true}]);
     for (const args of [['other',0,100],['sales',-1,100],['sales',0,201],['sales',null,100]]) {
       const result=await runAs(client,ids.users.cashier,
