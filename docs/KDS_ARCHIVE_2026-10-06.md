@@ -46,6 +46,11 @@ Local 309 files / 1496 unit/component tests, application/test type checks, chang
 cleanup state/permission/non-empty/idempotence/stock/print/accounting checks, browser.
 
 ## Production gate
+First exact-head run 37447355194 passed verify and Pages continuity; DB had 922
+passing tests and five skipped cleanup tests because its isolated admin fixture
+lacked explicit branch access for a station assignment. Fixed fixture access only;
+the production branch-assignment guard remains unchanged. A fresh full run is required.
+
 State: **BLOCKED**
 No migration applied, merge or publishing authorized for this new scope. Requires
 exact-head Full Verify Green plus explicit approval for the two additive functions.
