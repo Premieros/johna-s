@@ -171,8 +171,8 @@ test.describe('dashboard and navigation actions', () => {
       await page.getByTestId('dashboard-custom-to').fill('2026-09-30');
       await page.getByTestId('dashboard-custom-period').getByRole('button', { name: /تطبيق|Apply/ }).click();
       await expect(page.getByTestId('dashboard-selected-dates')).toHaveText('2026-09-01 — 2026-09-30');
-      await expect.poll(() => reads.at(-1)?.p_current_to).toBe('2026-09-30T20:59:59.999Z');
-      expect(reads.at(-1)?.p_current_from).toBe('2026-08-31T21:00:00.000Z');
+      await expect.poll(() => reads[reads.length - 1]?.p_current_to).toBe('2026-09-30T20:59:59.999Z');
+      expect(reads[reads.length - 1]?.p_current_from).toBe('2026-08-31T21:00:00.000Z');
       await expect(page.getByTestId('dashboard-custom-period')).toHaveCount(0);
       await page.getByTestId('dashboard-range-previous_month').click();
       await expect(page.getByTestId('dashboard-range-previous_month')).toHaveAttribute('aria-pressed', 'true');
