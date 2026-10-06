@@ -132,6 +132,20 @@ describe('report read stability', () => {
     expect(mocks.excel.mock.calls[0][0].filename).not.toContain('2026-01-01');
   });
 
+  it('cancels an obsolete full export and discards its data after a scope change', async () => {
+    const full = deferred();
+    mocks.loadSales.mockResolvedValue([sale('sale')]); mocks.fullSales.mockReturnValue(full.promise);
+    const { rerender } = render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
+    await waitFor(() => expect(mocks.fullSales).toHaveBeenCalled());
+    const signal = mocks.fullSales.mock.calls[0][0].signal as AbortSignal;
+    mocks.branch = 'b'; rerender(page());
+    expect(signal.aborted).toBe(true);
+    await act(async () => { full.resolve([sale('obsolete','a',999)]); });
+    expect(mocks.excel).not.toHaveBeenCalled();
+  });
+
   it('does not export a partial report after a full-data read fails', async () => {
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     mocks.fullSales.mockRejectedValue(new Error('NETWORK_ERROR'));
