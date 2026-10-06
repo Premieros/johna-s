@@ -23,6 +23,8 @@ describe('dashboard read failures never masquerade as successful zeros', () => {
     const query = mocks.from.mock.results[0].value;
     expect(query.eq).toHaveBeenCalledWith('branch_id', 'smouha');
     expect(query.in).toHaveBeenCalledWith('status', ['open', 'held']);
+    // Production rejects the unqualified relationship with HTTP 300.
+    expect(query.select).toHaveBeenCalledWith('id,status,order_type,table_id,branch_id,total,order_items!order_items_order_id_fkey(quantity)');
   });
   it('does not query sections without their permission', async () => {
     const result = await loadDashboardOpsRows({ ...args, includePos: false, includePurchases: false, includeExpenses: false });
