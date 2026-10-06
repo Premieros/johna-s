@@ -19,12 +19,12 @@ const fetchRows = <T,>(query: unknown, signal?: AbortSignal): Promise<T[]> =>
 
 export async function loadOperationalReportPage(args: {
   reportType: 'sales' | 'purchases' | 'expenses'; branchId: string | null;
-  from: string; to: string; filters: ReportFilters; page: number;
+  from: string; to: string; fromTs: string; toExclusiveTs: string; filters: ReportFilters; page: number;
 }) {
   const result = await reporting.getOperationalReportPage({
     p_report_type: args.reportType, p_branch_id: args.branchId,
     p_from_date: args.from, p_to_date: args.to, p_filters: { ...args.filters },
-    p_page: args.page, p_page_size: 100,
+    p_page: args.page, p_page_size: 100, p_from_ts: args.fromTs, p_to_exclusive_ts: args.toExclusiveTs,
   });
   if (result.error) throw new Error(result.error.message || 'REPORT_PAGE_LOAD_FAILED');
   if (!result.data || !Array.isArray(result.data.rows) || !result.data.summary) throw new Error('REPORT_PAGE_INVALID');
