@@ -59,9 +59,9 @@ type ActiveOrderRow = {
   order_items?: Array<{ quantity: number | null }> | null;
 };
 type DashboardOps = {
-  openOrderValue: number;
-  purchases: number;
-  expenses: number;
+  openOrderValue: number | null;
+  purchases: number | null;
+  expenses: number | null;
 };
 
 const rangeLabels: Record<Range, [string, string]> = {
@@ -149,10 +149,14 @@ function Empty({ ar }: { ar: boolean }) {
   return <div className="flex min-h-[120px] items-center justify-center text-sm text-ui-subtle">{ar ? 'لا توجد بيانات فعلية للفترة المحددة' : 'No actual data for the selected period'}</div>;
 }
 
+function Unavailable({ ar }: { ar: boolean }) {
+  return <div className="flex min-h-[120px] items-center justify-center text-sm text-ui-subtle">{ar ? 'تعذر تحميل البيانات. أعد التحديث.' : 'Data unavailable. Refresh to retry.'}</div>;
+}
+
 function Metric({ testId, icon: Icon, title, value, display, previous, href, ar, detail }: {
-  testId: string; icon: typeof Wallet; title: string; value: number; display: string; previous: number; href?: string; ar: boolean; detail?: ReactNode;
+  testId: string; icon: typeof Wallet; title: string; value: number | null; display: string; previous: number | null; href?: string; ar: boolean; detail?: ReactNode;
 }) {
-  const change = previous > 0 ? ((value - previous) / previous) * 100 : null;
+  const change = value !== null && previous !== null && previous > 0 ? ((value - previous) / previous) * 100 : null;
   const positive = (change ?? 0) >= 0;
   const content = <>
     <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{href && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
@@ -187,12 +191,21 @@ export function DashboardDataPage() {
   const canViewSettings = can('settings.manage');
   const canViewTreasury = can('accounts.view');
   const [range, setRange] = useState<Range>('today');
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [sectionBusy, setSectionBusy] = useState({ stock: true, finance: true, ops: true });
+  const [sectionErrors, setSectionErrors] = useState({ stock: false, finance: false, ops: false });
+  const [salesUnavailable, setSalesUnavailable] = useState(false);
+  const [comparisonUnavailable, setComparisonUnavailable] = useState(false);
+  const [paymentsUnavailable, setPaymentsUnavailable] = useState(false);
+  const [itemsUnavailable, setItemsUnavailable] = useState(false);
   const [customDates, setCustomDates] = useState(() => ({ from: businessDateISO(), to: businessDateISO() }));
   const [draftDates, setDraftDates] = useState(customDates);
   const [customOpen, setCustomOpen] = useState(false);
   const [dateError, setDateError] = useState(false);
   const loadId = useRef(0);
-  const window = useMemo(() => dashboardPeriod(range, customDates), [range, customDates]);
+  // Explicit refresh re-evaluates Today after midnight, even when the preset is unchanged.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const window = useMemo(() => dashboardPeriod(range, customDates), [range, customDates, refreshVersion]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,9 +218,9 @@ export function DashboardDataPage() {
   const [items, setItems] = useState<SaleItem[]>([]);
   const [quickStats, setQuickStats] = useState<QuickStats>({ expenses: null, profit: null, lowStockCount: null });
   const [ops, setOps] = useState<DashboardOps>({
-    openOrderValue: 0,
-    purchases: 0,
-    expenses: 0,
+    openOrderValue: null,
+    purchases: null,
+    expenses: null,
   });
   const settings = effectiveSettings(branchFilter);
   const money = useCallback((value: number) => formatFinancialCurrency(value, settings?.currency || 'EGP', lang), [settings?.currency, lang]);
@@ -217,86 +230,113 @@ export function DashboardDataPage() {
     setRefreshing(true);
     setLoading(true);
     setError(null);
-    if (!canViewSales) {
-      setSnapshot(null);
-      setSales([]);
-      setPreviousSales([]);
-      setPaymentAggregates([]);
-      setPreviousPaymentAggregates([]);
-      setItems([]);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    const effectiveRange: Range = range;
-    const boundedSnapshot = await loadDashboardSalesSnapshot({
-      branchId: branchFilter || null,
-      currentFrom: window.start.toISOString(),
-      currentTo: window.end.toISOString(),
-      previousFrom: window.previousStart.toISOString(),
-      previousTo: window.previousEnd.toISOString(),
-      granularity: effectiveRange === 'today' ? 'hour' : effectiveRange === 'year' ? 'month' : 'day',
-      timezone: 'Africa/Cairo',
-    }).catch(() => null);
-
-    if (requestId !== loadId.current) return;
-    if (boundedSnapshot) {
-      setSnapshot(boundedSnapshot);
-      setSales([]);
-      setPreviousSales([]);
-      setItems([]);
-      setPaymentAggregates(boundedSnapshot.paymentMethods);
-      setPreviousPaymentAggregates(boundedSnapshot.previousPaymentMethods);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
+    setSalesUnavailable(false);
+    setComparisonUnavailable(false);
+    setPaymentsUnavailable(false);
+    setItemsUnavailable(false);
     setSnapshot(null);
-    const fallback = await loadDashboardFallbackSales({
-      branchId: branchFilter || null,
-      currentFrom: window.start.toISOString(),
-      currentTo: window.end.toISOString(),
-      previousFrom: window.previousStart.toISOString(),
-      previousTo: window.previousEnd.toISOString(),
-    });
-    if (requestId !== loadId.current) return;
-    const currentRows = fallback.currentRows as Sale[];
-    const previousRows = fallback.previousRows as Sale[];
-    setSales(currentRows);
-    setPreviousSales(previousRows);
-    if (fallback.currentErrorMessage) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
+    setSales([]);
+    setPreviousSales([]);
+    setItems([]);
+    setPaymentAggregates([]);
+    setPreviousPaymentAggregates([]);
+    try {
+      if (!canViewSales) {
+        setSnapshot(null);
+        setSales([]);
+        setPreviousSales([]);
+        setPaymentAggregates([]);
+        setPreviousPaymentAggregates([]);
+        setItems([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      const effectiveRange: Range = range;
+      const boundedSnapshot = await loadDashboardSalesSnapshot({
+        branchId: branchFilter || null,
+        currentFrom: window.start.toISOString(),
+        currentTo: window.end.toISOString(),
+        previousFrom: window.previousStart.toISOString(),
+        previousTo: window.previousEnd.toISOString(),
+        granularity: effectiveRange === 'today' ? 'hour' : effectiveRange === 'year' ? 'month' : 'day',
+        timezone: 'Africa/Cairo',
+      }).catch(() => null);
 
-    const paymentResults = await Promise.allSettled([
-      loadDashboardPaymentAggregates({
-        sales: currentRows,
-        from: window.start.toISOString(),
-        to: window.end.toISOString(),
-      }),
-      loadDashboardPaymentAggregates({
-        sales: previousRows,
-        from: window.previousStart.toISOString(),
-        to: window.previousEnd.toISOString(),
-      }),
-    ]);
-    if (requestId !== loadId.current) return;
-    const currentPaymentResult = paymentResults[0];
-    const previousPaymentResult = paymentResults[1];
-    setPaymentAggregates(currentPaymentResult.status === 'fulfilled' ? currentPaymentResult.value : []);
-    setPreviousPaymentAggregates(previousPaymentResult.status === 'fulfilled' ? previousPaymentResult.value : []);
-    if (paymentResults.some((result) => result.status === 'rejected')) {
-      setError(ar ? 'تعذر تحميل تفاصيل طرق الدفع. أعد المحاولة.' : 'Payment-method details could not be loaded. Please retry.');
+      if (requestId !== loadId.current) return;
+      if (boundedSnapshot) {
+        setSnapshot(boundedSnapshot);
+        setSales([]);
+        setPreviousSales([]);
+        setItems([]);
+        setPaymentAggregates(boundedSnapshot.paymentMethods);
+        setPreviousPaymentAggregates(boundedSnapshot.previousPaymentMethods);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      setSnapshot(null);
+      const fallback = await loadDashboardFallbackSales({
+        branchId: branchFilter || null,
+        currentFrom: window.start.toISOString(),
+        currentTo: window.end.toISOString(),
+        previousFrom: window.previousStart.toISOString(),
+        previousTo: window.previousEnd.toISOString(),
+      });
+      if (requestId !== loadId.current) return;
+      const currentRows = fallback.currentRows as Sale[];
+      const previousRows = fallback.previousRows as Sale[];
+      setSalesUnavailable(Boolean(fallback.currentErrorMessage));
+      setComparisonUnavailable(Boolean(fallback.previousErrorMessage));
+      setSales(currentRows);
+      setPreviousSales(previousRows);
+      if (fallback.currentErrorMessage || fallback.previousErrorMessage || fallback.itemErrorMessage) setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
+
+      const paymentResults = await Promise.allSettled([
+        loadDashboardPaymentAggregates({
+          sales: currentRows,
+          from: window.start.toISOString(),
+          to: window.end.toISOString(),
+        }),
+        loadDashboardPaymentAggregates({
+          sales: previousRows,
+          from: window.previousStart.toISOString(),
+          to: window.previousEnd.toISOString(),
+        }),
+      ]);
+      if (requestId !== loadId.current) return;
+      const currentPaymentResult = paymentResults[0];
+      const previousPaymentResult = paymentResults[1];
+      setPaymentAggregates(currentPaymentResult.status === 'fulfilled' ? currentPaymentResult.value : []);
+      setPreviousPaymentAggregates(previousPaymentResult.status === 'fulfilled' ? previousPaymentResult.value : []);
+      if (paymentResults.some((result) => result.status === 'rejected')) {
+        setError(ar ? 'تعذر تحميل تفاصيل طرق الدفع. أعد المحاولة.' : 'Payment-method details could not be loaded. Please retry.');
+      }
+      setPaymentsUnavailable(currentPaymentResult.status === 'rejected');
+      if (previousPaymentResult.status === 'rejected') setComparisonUnavailable(true);
+      setItemsUnavailable(Boolean(fallback.itemErrorMessage));
+      setItems(fallback.itemRows as SaleItem[]);
+
+      setLoading(false);
+      setRefreshing(false);
+    } catch {
+      if (requestId !== loadId.current) return;
+      setSalesUnavailable(true);
+      setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
+    } finally {
+      if (requestId === loadId.current) { setLoading(false); setRefreshing(false); }
     }
-    setItems(fallback.itemRows as SaleItem[]);
-
-    setLoading(false);
-    setRefreshing(false);
   }, [ar, branchFilter, range, window, canViewSales]);
 
   useEffect(() => { void load(); return () => { loadId.current += 1; }; }, [load]);
 
   useEffect(() => {
     let cancelled = false;
+    setStockAlerts([]);
+    setQuickStats((current) => ({ ...current, lowStockCount: null }));
+    setSectionBusy((current) => ({ ...current, stock: true }));
+    setSectionErrors((current) => ({ ...current, stock: false }));
     void (async () => {
       const stock = await loadDashboardStockRows({ enabled: canViewInventory, branchId: branchFilter || null });
       if (cancelled) return;
@@ -307,13 +347,20 @@ export function DashboardDataPage() {
       );
       setStockAlerts(alerts);
       setQuickStats((current) => ({ ...current, lowStockCount: stock.failed ? null : alerts.length }));
-    })();
+      setSectionErrors((current) => ({ ...current, stock: canViewInventory && stock.failed }));
+    })().catch(() => {
+      if (!cancelled) setSectionErrors((current) => ({ ...current, stock: canViewInventory }));
+    }).finally(() => {
+      if (!cancelled) setSectionBusy((current) => ({ ...current, stock: false }));
+    });
     return () => { cancelled = true; };
-  }, [branchFilter, settings?.low_stock_threshold, canViewInventory]);
+  }, [branchFilter, settings?.low_stock_threshold, canViewInventory, refreshVersion]);
 
   useEffect(() => {
     let cancelled = false;
     setQuickStats((current) => ({ ...current, expenses: null, profit: null }));
+    setSectionBusy((current) => ({ ...current, finance: true }));
+    setSectionErrors((current) => ({ ...current, finance: false }));
     void (async () => {
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
       const statements = canViewFinancial
@@ -324,14 +371,22 @@ export function DashboardDataPage() {
       const expenses = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.expenses || 0), 0) : null;
       const profit = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
       setQuickStats((current) => ({ ...current, expenses, profit }));
-    })();
+      setSectionErrors((current) => ({ ...current, finance: canViewFinancial && Boolean(targetBranches.length) && validStatements.length !== targetBranches.length }));
+    })().catch(() => {
+      if (!cancelled) setSectionErrors((current) => ({ ...current, finance: canViewFinancial }));
+    }).finally(() => {
+      if (!cancelled) setSectionBusy((current) => ({ ...current, finance: false }));
+    });
     return () => { cancelled = true; };
   }, [branchFilter, branches, window, canViewFinancial]);
 
   useEffect(() => {
     let cancelled = false;
+    setOps({ openOrderValue: null, purchases: null, expenses: null });
+    setSectionBusy((current) => ({ ...current, ops: true }));
+    setSectionErrors((current) => ({ ...current, ops: false }));
     void (async () => {
-        const fromIso = window.start.toISOString();
+      const fromIso = window.start.toISOString();
       const fromDate = window.from;
 
       const data = await loadDashboardOpsRows({
@@ -350,11 +405,16 @@ export function DashboardDataPage() {
         (order.order_items || []).some((item) => Number(item.quantity || 0) > 0),
       );
       setOps({
-        openOrderValue: activeOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
-        purchases: data.purchases.reduce((sum, row) => sum + Math.max(0, Number(row.total || 0) - Number(row.returned_amount || 0)), 0),
-        expenses: data.expenses.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+        openOrderValue: data.ordersFailed ? null : activeOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
+        purchases: data.purchasesFailed ? null : data.purchases.reduce((sum, row) => sum + Math.max(0, Number(row.total || 0) - Number(row.returned_amount || 0)), 0),
+        expenses: data.expensesFailed ? null : data.expenses.reduce((sum, row) => sum + Number(row.amount || 0), 0),
       });
-    })();
+      setSectionErrors((current) => ({ ...current, ops: Boolean(data.ordersFailed || data.purchasesFailed || data.expensesFailed) }));
+    })().catch(() => {
+      if (!cancelled) setSectionErrors((current) => ({ ...current, ops: true }));
+    }).finally(() => {
+      if (!cancelled) setSectionBusy((current) => ({ ...current, ops: false }));
+    });
 
     return () => { cancelled = true; };
   }, [
@@ -448,13 +508,14 @@ export function DashboardDataPage() {
     });
   }, [ar, previousSales, range, window, sales, snapshot]);
 
+  const refreshBusy = loading || refreshing || Object.values(sectionBusy).some(Boolean);
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
   const recent = snapshot ? snapshot.recentSales : sales.slice(0, 5);
 
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] w-full min-w-0 bg-ui-page py-3 sm:py-4" data-testid="dashboard-surface"><div className="w-full min-w-0 space-y-5">
     <DashboardStandbyBar canCreateSale={canCreateSale} />
 
-    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'عرض كامل للتاريخ حسب الصلاحية' : 'Full historical access enabled') : (ar ? 'آخر 7 أيام كاملة، وما قبلها حسب سياسة العرض' : 'Last 7 days are complete; older periods follow the visibility policy')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} data-testid={`dashboard-range-${item}`} aria-pressed={range === item} onClick={() => { if (item === 'custom') { setDraftDates(customDates); setDateError(false); setCustomOpen(true); } else { setRange(item); setCustomOpen(false); } }} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button onClick={() => void load()} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button></div></div></section>
+    <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'عرض كامل للتاريخ حسب الصلاحية' : 'Full historical access enabled') : (ar ? 'آخر 7 أيام كاملة، وما قبلها حسب سياسة العرض' : 'Last 7 days are complete; older periods follow the visibility policy')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} data-testid={`dashboard-range-${item}`} aria-pressed={range === item} onClick={() => { if (item === 'custom') { setDraftDates(customDates); setDateError(false); setCustomOpen(true); } else { setRange(item); setCustomOpen(false); } }} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button disabled={refreshBusy} onClick={() => { setLoading(true); setRefreshing(true); setRefreshVersion((version) => version + 1); }} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshBusy ? 'animate-spin' : ''}`} /></button></div></div></section>
 
     {customOpen && <section data-testid="dashboard-custom-period" className="rounded-2xl border border-ui-border bg-ui-surface p-4">
       <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
@@ -472,6 +533,7 @@ export function DashboardDataPage() {
     </section>}
     <p data-testid="dashboard-selected-dates" className="text-sm font-bold text-ui-muted">{window.from} — {window.to}</p>
 
+    {Object.values(sectionErrors).some(Boolean) && <div role="status" className="rounded-2xl border border-ui-warning/30 bg-ui-warning-soft p-4 text-sm font-bold text-ui-warning">{ar ? 'تعذر تحديث بعض البطاقات. القيمة غير المتاحة تظهر بعلامة —. اضغط تحديث للمحاولة مجددًا.' : 'Some cards could not be refreshed. Unavailable values show —. Refresh to retry.'}</div>}
     {error && <div className="rounded-2xl border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm font-bold text-ui-danger">{error}</div>}
 
     {(canViewSales || canViewFinancial || canViewInventory) && <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{ar ? `ملخص ${rangeLabels[range][0]}` : `${rangeLabels[range][1]} summary`}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -482,23 +544,23 @@ export function DashboardDataPage() {
 
     {loading ? <div className="flex h-64 items-center justify-center rounded-3xl border border-ui-border bg-ui-surface"><RefreshCw className="h-7 w-7 animate-spin text-ui-primary" /></div> : <>
       <section data-testid="dashboard-permission-kpis" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {canViewPos && <Metric testId="kpi-open-order-value" icon={Wallet} title={ar ? 'قيمة الطلبات المفتوحة' : 'Open order value'} value={ops.openOrderValue} display={money(ops.openOrderValue)} previous={0} href={canViewFloorPlan ? '/floor-plan' : undefined} ar={ar} />}
-        {canViewSales && <Metric testId="kpi-orders" icon={ReceiptText} title={ar ? 'إجمالي الطلبات' : 'Total orders'} value={current.orders} display={formatNumber(current.orders, 0)} previous={previous.orders} href={canViewReports ? '/reports?reportType=detailed_invoices' : undefined} ar={ar} />}
-        {canViewSales && <Metric testId="kpi-average-order" icon={Calculator} title={ar ? 'متوسط قيمة الطلب' : 'Average order'} value={current.orders ? current.sales / current.orders : 0} display={money(current.orders ? current.sales / current.orders : 0)} previous={previous.orders ? previous.sales / previous.orders : 0} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
-        {canViewSales && <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={current.payments} display={money(current.payments)} previous={previous.payments} href={canViewReports ? '/reports?reportType=sales_by_payment' : undefined} ar={ar} />}
-        {canViewSales && <Metric testId="kpi-discounts" icon={Calculator} title={ar ? 'الخصومات' : 'Discounts'} value={current.discounts} display={money(current.discounts)} previous={previous.discounts} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
-        {canViewSales && <Metric testId="kpi-returns" icon={ReceiptText} title={ar ? 'المرتجعات' : 'Returns'} value={current.returns} display={money(current.returns)} previous={previous.returns} href={canViewReports ? '/reports?reportType=returns' : undefined} ar={ar} />}
-        {canViewPurchases && <Metric testId="kpi-purchases" icon={ShoppingCart} title={ar ? 'المشتريات' : 'Purchases'} value={ops.purchases} display={money(ops.purchases)} previous={0} href="/purchases" ar={ar} />}
-        {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={money(ops.expenses)} previous={0} href="/expenses" ar={ar} />}
+        {canViewPos && <Metric testId="kpi-open-order-value" icon={Wallet} title={ar ? 'قيمة الطلبات المفتوحة' : 'Open order value'} value={ops.openOrderValue} display={quick(ops.openOrderValue, money)} previous={0} href={canViewFloorPlan ? '/floor-plan' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-orders" icon={ReceiptText} title={ar ? 'عدد فواتير البيع' : 'Sales invoices'} value={salesUnavailable ? null : current.orders} display={quick(salesUnavailable ? null : current.orders, (value) => formatNumber(value, 0))} previous={comparisonUnavailable ? null : previous.orders} href={canViewReports ? '/reports?reportType=detailed_invoices' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-average-order" icon={Calculator} title={ar ? 'متوسط فاتورة البيع' : 'Average sales invoice'} value={salesUnavailable ? null : current.orders ? current.sales / current.orders : 0} display={quick(salesUnavailable ? null : current.orders ? current.sales / current.orders : 0, money)} previous={comparisonUnavailable ? null : previous.orders ? previous.sales / previous.orders : 0} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-net-payments" icon={CreditCard} title={ar ? 'صافي المدفوعات' : 'Net payments'} value={salesUnavailable || paymentsUnavailable ? null : current.payments} display={quick(salesUnavailable || paymentsUnavailable ? null : current.payments, money)} previous={comparisonUnavailable ? null : previous.payments} href={canViewReports ? '/reports?reportType=sales_by_payment' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-discounts" icon={Calculator} title={ar ? 'الخصومات' : 'Discounts'} value={salesUnavailable ? null : current.discounts} display={quick(salesUnavailable ? null : current.discounts, money)} previous={comparisonUnavailable ? null : previous.discounts} href={canViewReports ? '/reports?reportType=sales' : undefined} ar={ar} />}
+        {canViewSales && <Metric testId="kpi-returns" icon={ReceiptText} title={ar ? 'المرتجعات' : 'Returns'} value={salesUnavailable ? null : current.returns} display={quick(salesUnavailable ? null : current.returns, money)} previous={comparisonUnavailable ? null : previous.returns} href={canViewReports ? '/reports?reportType=returns' : undefined} ar={ar} />}
+        {canViewPurchases && <Metric testId="kpi-purchases" icon={ShoppingCart} title={ar ? 'المشتريات' : 'Purchases'} value={ops.purchases} display={quick(ops.purchases, money)} previous={0} href="/purchases" ar={ar} />}
+        {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={quick(ops.expenses, money)} previous={0} href="/expenses" ar={ar} />}
       </section>
 
-      {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{current.orders > 0 ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
-      <div className="grid gap-5"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
-      <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>}
+      {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{salesUnavailable ? <Unavailable ar={ar} /> : current.orders > 0 ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
+      <div className="grid gap-5"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{salesUnavailable ? <Unavailable ar={ar} /> : orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
+      <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{salesUnavailable || paymentsUnavailable ? <Unavailable ar={ar} /> : paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>}
 
-      {canViewSales && <section className="grid gap-5 xl:grid-cols-3">{can('branches.manage') && <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'الفروع حسب صافي المبيعات' : 'Branches by net sales'}</h2>{branchRows.length ? branchRows.map(([name, row]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(row.orders, 0)} · {money(row.sales)}</span></div>) : <Empty ar={ar} />}</Card>}
-      <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أكثر الأصناف مبيعًا' : 'Top selling items'}</h2>{productRows.length ? productRows.map(([name, qty]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(qty, 2)}</span></div>) : <Empty ar={ar} />}</Card>
-      <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أحدث الطلبات' : 'Recent orders'}</h2>{recent.length ? recent.map((sale) => <div key={sale.id} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{sale.invoice_number || '—'}</span><span className="text-ui-muted">{money(netSaleAmount(sale))}</span></div>) : <Empty ar={ar} />}</Card></section>}
+      {canViewSales && <section className="grid gap-5 xl:grid-cols-3">{can('branches.manage') && <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'الفروع حسب صافي المبيعات' : 'Branches by net sales'}</h2>{salesUnavailable ? <Unavailable ar={ar} /> : branchRows.length ? branchRows.map(([name, row]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(row.orders, 0)} · {money(row.sales)}</span></div>) : <Empty ar={ar} />}</Card>}
+      <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أكثر الأصناف مبيعًا' : 'Top selling items'}</h2>{salesUnavailable || itemsUnavailable ? <Unavailable ar={ar} /> : productRows.length ? productRows.map(([name, qty]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(qty, 2)}</span></div>) : <Empty ar={ar} />}</Card>
+      <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أحدث فواتير البيع' : 'Recent sales invoices'}</h2>{salesUnavailable ? <Unavailable ar={ar} /> : recent.length ? recent.map((sale) => <div key={sale.id} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{sale.invoice_number || '—'}</span><span className="text-ui-muted">{money(netSaleAmount(sale))}</span></div>) : <Empty ar={ar} />}</Card></section>}
 
       {(canViewKds || canViewTreasury || canViewAudit || canViewSettings) && (
         <section data-testid="dashboard-permission-shortcuts" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
