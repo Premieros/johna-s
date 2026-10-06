@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/dashboard-periods-count-pricing-20261006`
-Current PR: `0`
+Current PR: `#458`
 Last updated: 2026-10-06
 
 ## Work status
@@ -44,7 +44,7 @@ Unchanged quantities do not revalue old FIFO batches. Old discarded Excel prices
 from database alone: any historical correction must be reconciled separately from the original file.
 
 ## Verification ledger
-Pending local full checks and exact-head CI. New component tests verify shared period parameters;
+Local typecheck:all and build passed; full unit/component suite and exact-head CI pending. New component tests verify shared period parameters;
 unit tests cover Cairo/DST/end-date/leap-year/invalid inputs and account identity. Isolated DB lifecycle
 test verifies explicit price, draft invisibility, normal apply, zero-variance cost event, no batch repricing.
 No Production queries or writes are performed by these tests.
