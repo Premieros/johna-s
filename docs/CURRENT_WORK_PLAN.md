@@ -23,6 +23,8 @@ Combine the user's complaints and reporting requests in one sequential work plan
 - Expense account code/name in the complete expense report/print/export.
 - Selected-period costing summary/order margins and raw consumption-cost report.
 - Optional Excel stock-unit cost retained in new raw-material stock-count drafts.
+- Current/last retained actual FIFO inventory cost displayed consistently; manual reference
+  price history and historical operation cost remain distinct.
 No Production write/apply/publishing is authorized by this implementation step.
 
 ## Verified state
