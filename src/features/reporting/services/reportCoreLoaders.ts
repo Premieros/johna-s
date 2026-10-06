@@ -59,7 +59,7 @@ export async function loadExpenseReportRows(args: {
 }): Promise<Record<string, unknown>[]> {
   let q = supabase
     .from('expenses')
-    .select('id, branch_id, category, description, amount, expense_date')
+    .select('id, branch_id, category, description, amount, expense_date, account_id, expense_account:chart_of_accounts!account_id(code,name,name_en)')
     .eq('status', 'posted')
     .gte('expense_date', args.from)
     .lte('expense_date', args.to)
