@@ -18,6 +18,7 @@ describe.skipIf(!dbUrl)('explicit administrative empty voided kitchen finish',()
   empty=orders.rows.find(r=>r.order_number.endsWith('-empty')).id;hasItems=orders.rows.find(r=>r.order_number.endsWith('-items')).id;
   nonFinal=orders.rows.find(r=>r.order_number.endsWith('-open')).id;notVoid=orders.rows.find(r=>r.order_number.endsWith('-no-void')).id;
   await client.query(`INSERT INTO public.order_items(order_id,product_id,quantity,unit_price,total) VALUES($1,$2,1,40,40)`,[hasItems,ids.prodA]);
+  await client.query(`INSERT INTO public.user_branch_access(user_id,branch_id) VALUES($1,$2) ON CONFLICT DO NOTHING`,[ids.users.super_admin,ids.branchA]);
   await client.query(`INSERT INTO public.user_kitchen_station_assignments(user_id,branch_id,station_id,created_by)
     SELECT $1,$2,id,$1 FROM public.kitchen_stations WHERE branch_id=$2 AND code='grill'`,[ids.users.super_admin,ids.branchA]);
  });
