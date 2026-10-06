@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `a6a54802f77b773e4822ffbb430dabf18087bf68`
-- Current active branch: `perf/metadata-parity-20261006`
-- Mandatory active work log: `docs/METADATA_PARITY_2026-10-06.md`
+- Latest main baseline reconciled: `247e65de5c0c8b6c6be7a8855b174469fbfab4e1`
+- Current active branch: `fix/dashboard-refresh-20261006`
+- Mandatory active work log: `docs/DASHBOARD_REFRESH_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Prepare a bounded, read-only catalog parity endpoint and fail-closed deployment
-checker. No operational RPC/table reads during parity. One additive invoker API
-requires separate explicit Production approval after exact-head Full Verify green.
+Repair complete manual dashboard refresh, unavailable/error presentation and
+scope isolation. Review related dashboard reads and labels; no DB/API/schema
+or permission changes. Full Verify and explicit publish approval remain required.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -44,3 +44,6 @@ requires separate explicit Production approval after exact-head Full Verify gree
 
 - #461 completed at a6a54802: hidden display reads/coalescing deployed;
   postmerge Verify 37454652097 and Pages 37454651969 green.
+
+- #462 completed at 247e65de: metadata parity API applied as 20261006120006;
+  postmerge Verify 37460567653 and Pages 37460567637 green; parity 216 -> 2 requests.
