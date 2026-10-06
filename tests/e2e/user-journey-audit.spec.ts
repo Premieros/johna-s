@@ -90,6 +90,10 @@ async function mockAuthenticatedApp(page: Page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
 
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_page**`, async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows: [], summary: { total: 0, count: 0 } }) });
+  });
+
   page.on('dialog', async (dialog) => { await dialog.dismiss(); });
 }
 
