@@ -68,6 +68,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await client.query(`INSERT INTO public.recipes (id, product_id, branch_id, name, yield_quantity, is_active) VALUES ($1, $2, $3, 'Recipe', 2, true)`, [recipeId, prodId, branchA]);
     await client.query(`INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 1, 10)`, [recipeId, rmId]);
     await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, quantity, unit_cost, source_type) VALUES ($1, $2, 10, 20, 'purchase')`, [rmId, branchA]);
+    // Real receipt flows maintain the inventory valuation row alongside FIFO layers.
+    await client.query(`INSERT INTO public.raw_material_inventory (raw_material_id, branch_id, quantity, avg_cost) VALUES ($1,$2,10,20)`, [rmId, branchA]);
     await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, is_active) VALUES ($1, $2, 'Cost Component Group', 'manufactured', $3, true)`, [componentUnitId, `CG-${componentUnitId.slice(0, 8)}`, branchA]);
     await client.query(`INSERT INTO public.inventory_unit_recipes (unit_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 0.5, 0)`, [componentUnitId, rmId]);
     await client.query(`INSERT INTO public.product_unit_links (id, product_id, unit_id, quantity) VALUES ($1, $2, $3, 2)`, [randomUUID(), prodId, componentUnitId]);
@@ -197,7 +199,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(missing[0].r.error).toBe('PRODUCT_NOT_FOUND');
   });
 
-  it('costing uses latest purchase/count raw price and exposes dated history without changing inventory WAVG', async () => {
+  it('costing uses actual FIFO inventory valuation while purchase/count reference history stays separately auditable', async () => {
     const purchaseId = randomUUID();
     const countId = randomUUID();
 
@@ -230,7 +232,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       `SELECT public._raw_cost_for_costing($1, $2) AS cost`,
       [rmId, branchA],
     );
-    expect(Number(purchaseCost.rows[0].cost)).toBe(24);
+    expect(Number(purchaseCost.rows[0].cost)).toBe(20);
 
     await client.query(
       `INSERT INTO public.stock_counts
@@ -249,7 +251,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       `SELECT public._raw_cost_for_costing($1, $2) AS cost`,
       [rmId, branchA],
     );
-    expect(Number(latestCost.rows[0].cost)).toBe(28);
+    expect(Number(latestCost.rows[0].cost)).toBe(20);
 
     const wavgAfterCount = await client.query<{ cost: string }>(
       `SELECT public._raw_wavg_cost($1, $2) AS cost`,
@@ -292,15 +294,15 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
         [prodId, branchA],
       ),
     );
-    expect(Number(detail[0].r.actual_cost)).toBe(58.8); // direct 30.8 + group 28
+    expect(Number(detail[0].r.actual_cost)).toBe(42); // actual FIFO: direct 22 + group 20
     const pricedDirectLine = detail[0].r.recipe_items.find((line) => !line.component_group_id)!;
     const pricedGroupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId)!;
-    expect(Number(pricedDirectLine.unit_cost)).toBe(28);
-    expect(Number(pricedDirectLine.line_cost)).toBe(30.8);
-    expect(pricedDirectLine.cost_source).toBe('stock_count');
-    expect(pricedDirectLine.cost_reference).toBe('RAW-COST-SC');
-    expect(Number(pricedGroupLine.unit_cost)).toBe(28);
-    expect(Number(pricedGroupLine.line_cost)).toBe(28);
+    expect(Number(pricedDirectLine.unit_cost)).toBe(20);
+    expect(Number(pricedDirectLine.line_cost)).toBe(22);
+    expect(pricedDirectLine.cost_source).toBe('inventory_average');
+    expect(pricedDirectLine.cost_reference).toBeNull();
+    expect(Number(pricedGroupLine.unit_cost)).toBe(20);
+    expect(Number(pricedGroupLine.line_cost)).toBe(20);
 
     const branchBOverview = await asUser(managerBId, async () =>
       rows<{ raw_material_id: string }>(
