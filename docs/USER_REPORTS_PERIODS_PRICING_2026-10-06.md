@@ -44,7 +44,7 @@ Unchanged quantities do not revalue old FIFO batches. Old discarded Excel prices
 from database alone: any historical correction must be reconciled separately from the original file.
 
 ## Verification ledger
-Local typecheck:all and build passed; full unit/component suite and exact-head CI pending. New component tests verify shared period parameters;
+Local full unit/component suite passed: 304 files / 1480 tests. Application typecheck and initial build passed; final test typecheck/build and exact-head CI pending. New component tests verify shared period parameters;
 unit tests cover Cairo/DST/end-date/leap-year/invalid inputs and account identity. Isolated DB lifecycle
 test verifies explicit price, draft invisibility, normal apply, zero-variance cost event, no batch repricing.
 No Production queries or writes are performed by these tests.
