@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/heavy-report-loads-20261006`
-Current PR: `#0`
+Current PR: `#459`
 Last updated: 2026-10-06
 
 ## Work status
@@ -33,14 +33,14 @@ routes include dashboard snapshot, POS availability/order items and print-relate
 reads. Operational and printing paths stay frozen; no monitoring automation enabled.
 
 ## Change ledger
-Planned: new invoker bounded sales/purchase/expense page plus complete filtered
+Implemented: new invoker bounded sales/purchase/expense page plus complete filtered
 totals, joined metadata only for page rows; existing full loaders used on demand
 for export/print. Applied date/filter snapshots retained across page navigation.
-Planned: independent active-tab Costing Center reads and lazy supplier/unit selectors.
+Implemented: independent active-tab Costing Center reads and lazy supplier/unit selectors.
 No existing policy or function definition changed by the proposed page API.
 
 ## Verification ledger
-Pending implementation and exact-head verification. Required: empty/late/foreign
+Local targeted 26 tests, typecheck:all and build passed. Initial full unit run: 1485 passed / 1 stale subtitle-string contract failed; updated it to require applied export dates while retaining branch labels. Full exact-head CI pending. Required: empty/late/foreign
 scope reads, >100 rows, identical direct-RLS totals/filters/history, export beyond
 first page, applied-filter stability and no extra Costing Center reloads.
 
