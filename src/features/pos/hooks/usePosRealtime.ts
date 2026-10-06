@@ -22,7 +22,7 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
   const eventRefreshTimerRef = useRef<number | null>(null);
 
   const load = useCallback((requestedBranch: string): Promise<void> => {
-    if (!requestedBranch) return Promise.resolve();
+    if (!requestedBranch || (typeof document !== 'undefined' && document.hidden)) return Promise.resolve();
 
     // A kitchen send/order update can emit several Realtime events together.
     // Return the same in-flight promise when coalescing so branch-change loading
@@ -52,7 +52,7 @@ export function usePosRealtime(branchId: string): UsePosRealtimeResult {
             }
           }
 
-          if (!trailingRefreshRef.current || !activeBranchRef.current) break;
+          if (!trailingRefreshRef.current || !activeBranchRef.current || document.hidden) break;
           targetBranch = activeBranchRef.current;
         }
       } finally {
