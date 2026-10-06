@@ -255,7 +255,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
     const corePage = !full && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')
       ? await loadOperationalReportPage({ reportType, branchId: effectiveBranchFilter || null,
-        from: allowed.from, to: allowed.to, filters, page }) : null;
+        from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, page }) : null;
 
     if (reportType === 'sales') {
       const sales = corePage?.rows ?? await loadSalesReportRows({
