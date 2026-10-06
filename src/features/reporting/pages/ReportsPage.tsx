@@ -230,15 +230,17 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<unknown>(null);
   const exportGeneration = useRef(0);
+  const exportController = useRef<AbortController | null>(null);
   const exportingRef = useRef(false);
   useLayoutEffect(() => {
+    exportController.current?.abort();
     const generation = ++exportGeneration.current;
     exportingRef.current = false;
     setExporting(false); setExportError(null);
-    return () => { exportGeneration.current = generation + 1; };
+    return () => { exportGeneration.current = generation + 1; exportController.current?.abort(); };
   }, [reportReader]);
 
-  async function loadReport(page = 0, full = false): Promise<ReportSnapshot> {
+  async function loadReport(page = 0, full = false, signal?: AbortSignal): Promise<ReportSnapshot> {
     let resultRows: Record<string, unknown>[] = [];
     let resultSummary = { total: 0, count: 0 };
     const setData = (rows: Record<string, unknown>[]) => { resultRows = rows; };
@@ -260,7 +262,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         branchId: effectiveBranchFilter || null,
         fromTs,
         toExclusiveTs,
-        filters,
+        filters, signal,
       });
       const rows = sales.map((sale: Record<string, unknown>) => {
         const cashier = sale.cashier as { full_name?: string; email?: string } | null;
@@ -292,7 +294,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         branchId: effectiveBranchFilter || null,
         fromTs,
         toExclusiveTs,
-        filters,
+        filters, signal,
       });
       const rows = purchases.map((purchase: Record<string, unknown>) => withBranch(purchase.branch_id, {
         [lang === 'ar' ? 'الفاتورة' : 'Invoice']: purchase.invoice_number,
@@ -310,7 +312,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         branchId: effectiveBranchFilter || null,
         from: allowed.from,
         to: allowed.to,
-        filters,
+        filters, signal,
       });
       const rows = expenses.map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
         [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(expense.expense_date as string, lang),
@@ -1242,10 +1244,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       return;
     }
     const generation = exportGeneration.current;
+    const controller = new AbortController(); exportController.current = controller;
     exportingRef.current = true; setExporting(true); setExportError(null);
     try {
       // This reader captures applied filters/dates, never the edited draft.
-      const complete = snapshot?.serverPaged ? await reportReader(0, true) : snapshot;
+      const complete = snapshot?.serverPaged ? await reportReader(0, true, controller.signal) : snapshot;
       if (generation !== exportGeneration.current || !complete) { reservedWindow?.close(); return; }
       if (kind === 'excel') await handleExportExcel(complete);
       else if (kind === 'csv') handleExportCSV(complete);
@@ -1254,7 +1257,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       reservedWindow?.close();
       if (generation === exportGeneration.current) setExportError(failure);
     } finally {
-      if (generation === exportGeneration.current) { exportingRef.current = false; setExporting(false); }
+      if (generation === exportGeneration.current) { exportController.current = null; exportingRef.current = false; setExporting(false); }
     }
   };
 
