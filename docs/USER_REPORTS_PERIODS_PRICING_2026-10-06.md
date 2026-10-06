@@ -43,6 +43,21 @@ preserving its guards/privileges. Normal submit/approve/apply required for count
 Unchanged quantities do not revalue old FIFO batches. Old discarded Excel prices are unrecoverable
 from database alone: any historical correction must be reconciled separately from the original file.
 
+## FIFO display extension (user request 2026-10-06)
+Use the current/last retained actual FIFO-layer inventory valuation maintained in
+raw_material_inventory.avg_cost by the existing actual-average guard. This is the
+inventory valuation unit cost, not a newly selected first-layer quote or the latest
+manual/purchase/count reference price. FIFO dispatch remains the existing expiry_date,
+created_at,id order per warehouse. Historical operation cost remains its ledger cost.
+Catalog, pricing (separate manual-reference field), recipe previews, reorder estimates,
+shift ingredient estimates and import recipe validation use that existing actual source.
+Costing Center shows FIFO inventory cost separately from reference price history.
+Proposed migration 20261006062830 changes only reporting recipe-cost context/overview,
+preserving current scope/privileges; no deduction/production/printing function is touched.
+No Production apply/merge/deploy is authorized. Previous Full Verify a4c5ab9f / run
+37422051836 passed 1480 unit, 910 DB/security and 119 browser tests; the expanded head
+requires fresh full verification and captures for both reporting functions.
+
 ## Verification ledger
 Local full unit/component suite passed: 304 files / 1480 tests. Application typecheck and initial build passed; final test typecheck/build and exact-head CI pending. New component tests verify shared period parameters;
 unit tests cover Cairo/DST/end-date/leap-year/invalid inputs and account identity. Isolated DB lifecycle
