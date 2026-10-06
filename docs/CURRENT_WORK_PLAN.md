@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `a656caf2c497aacb4c703ea9555a8acfe0dc4730`
-- Current active branch: `perf/heavy-report-loads-20261006`
-- Mandatory active work log: `docs/HEAVY_REPORT_LOADS_2026-10-06.md`
+- Latest main baseline reconciled: `8bb7f48b8bbed93e2721600a0e134ea81d3748a0`
+- Current active branch: `fix/kds-40-minute-archive-20261006`
+- Mandatory active work log: `docs/KDS_ARCHIVE_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,10 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Continue heavy-page/resource repairs sequentially: bounded operational report reads
-with caller-visible server totals and full on-demand export/print; remove unrelated
-Costing Center reads and effect amplification. Inspect Production read-only.
-No Production apply/merge/publishing is authorized for this new scope.
+Prepare KDS active/40-minute/completed views and explicit administrative closure
+of empty paid/voided kitchen work under caller RLS. Production remains read-only
+until a new exact-head Full Verify and explicit user approval.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -35,6 +34,7 @@ No Production apply/merge/publishing is authorized for this new scope.
 - #456 phone UI merged/deployed at 589cb22e; Verify 37341254404 and Pages 37341254396 passed.
 - #453 approved/applied; catalog function/policy hashes unchanged. Deployment 37323787272 passed.
 - #454 journal frontend paging completed and deployed.
-- Server aggregation for heavy reports; retain complete print/export and financial formulas.
+- #459 completed at 8bb7f48b: bounded report reads/deferred costing deployed;
+  post-merge Verify 37441343533 and Pages 37441343568 succeeded.
 - Supplier/purchase permission dependencies, costing, period controls and recovery evidence
   remain separate review work.
