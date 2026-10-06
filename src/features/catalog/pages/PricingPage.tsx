@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BadgeDollarSign, Boxes, Package, RefreshCw, Save } from 'lucide-react';
 import { costing } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -83,6 +83,7 @@ export function PricingPage() {
   const [manufacturedDrafts, setManufacturedDrafts] = useState<Record<string, ManufacturedDraft>>({});
   const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({});
   const [loading, setLoading] = useState(false);
+  const loadRequest = useRef(0);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const branchName = branches.find((branch) => branch.id === branchId)?.name || (ar ? 'الفرع الحالي' : 'Current branch');
@@ -93,6 +94,7 @@ export function PricingPage() {
   }, [tab, visibleTabs]);
 
   async function load() {
+    const requestId = ++loadRequest.current;
     if (!branchId) {
       setRawRows([]);
       setManufacturedRows([]);
@@ -108,6 +110,7 @@ export function PricingPage() {
         includeProducts: canProductsView,
       });
 
+      if (requestId !== loadRequest.current) return;
       const nextRaw = data.rawRows as RawPriceRow[];
       const nextManufactured = data.manufacturedRows as ManufacturedPriceRow[];
       const nextProducts = data.productRows as ProductPriceRow[];
@@ -126,7 +129,7 @@ export function PricingPage() {
         wholesale_price: safePrice(row.wholesale_price),
       }])));
     } finally {
-      setLoading(false);
+      if (requestId === loadRequest.current) setLoading(false);
     }
   }
 
@@ -135,6 +138,7 @@ export function PricingPage() {
     // Permission state may hydrate after the branch context. Re-run when the
     // view permissions become available so authorized product/raw rows cannot
     // remain stuck as an empty initial result.
+    return () => { loadRequest.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, canRawView, canProductsView]);
 
