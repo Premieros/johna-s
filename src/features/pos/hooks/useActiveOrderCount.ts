@@ -68,6 +68,7 @@ export function useActiveOrderCount(branchId: string, enabled = true): number {
 
   const refresh = useCallback(async (force = false) => {
     if (!enabled) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     if (!branchId) {
       watchedOrderIdsRef.current = new Set();
       visibleItemIdsRef.current = new Set();

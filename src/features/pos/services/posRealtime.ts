@@ -31,6 +31,7 @@ interface SharedChannel {
   pendingListeners: Set<() => void>;
   timer: ReturnType<typeof setTimeout> | null;
   debounceMs: number;
+  onVisibilityChange: () => void;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -92,9 +93,11 @@ function getSharedChannel(branchId: string, debounceMs: number): SharedChannel {
     pendingListeners: new Set(),
     timer: null,
     debounceMs,
+    onVisibilityChange: () => {},
   };
 
   const trigger = (event: PosRealtimeEvent) => {
+    if (typeof document !== 'undefined' && document.hidden) return;
     for (const listener of entry.listeners) {
       if (!listener.shouldRefresh || listener.shouldRefresh(event)) {
         entry.pendingListeners.add(listener.onEvent);
@@ -107,9 +110,22 @@ function getSharedChannel(branchId: string, debounceMs: number): SharedChannel {
       entry.timer = null;
       const pending = [...entry.pendingListeners];
       entry.pendingListeners.clear();
+      if (typeof document !== 'undefined' && document.hidden) return;
       pending.forEach((listener) => listener());
     }, entry.debounceMs);
   };
+
+  entry.onVisibilityChange = () => {
+    if (document.hidden) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.timer = null;
+      entry.pendingListeners.clear();
+      return;
+    }
+    // Read current state once on return, even if events were missed while hidden.
+    for (const listener of entry.listeners) listener.onEvent();
+  };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', entry.onVisibilityChange);
 
   entry.channel = supabase
     .channel(`pos-realtime-${branchId}`)
@@ -155,6 +171,7 @@ export function subscribePosRealtime({
     if (entry.listeners.size === 0) {
       if (entry.timer) clearTimeout(entry.timer);
       entry.pendingListeners.clear();
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', entry.onVisibilityChange);
       void supabase.removeChannel(entry.channel);
       sharedChannels.delete(branchId);
     }
