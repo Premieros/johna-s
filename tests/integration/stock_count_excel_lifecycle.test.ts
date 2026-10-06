@@ -197,7 +197,7 @@ describe.skipIf(skip)('raw-material stock count lifecycle', () => {
     expect(Number(oldBatch.rows[0].unit_cost)).toBe(4);
     const currentCost = await client.query<{ cost: string }>("SELECT public._raw_cost_context_for_costing($1,$2)->>'unit_cost' AS cost", [rawMaterialId, branchId]);
     expect(Number(currentCost.rows[0].cost)).toBe(4); // count reference price 22.75 cannot reprice existing FIFO layers
-    await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES ($1,$2,$3,'FIFO-NEW',5,10,'opening')", [rawMaterialId, branchId, warehouseId]);
+    await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) VALUES ($1,$2,$3,'FIFO-NEW',5,10,'opening',clock_timestamp())", [rawMaterialId, branchId, warehouseId]);
     await client.query('UPDATE public.raw_material_inventory SET avg_cost=avg_cost WHERE raw_material_id=$1 AND branch_id=$2', [rawMaterialId, branchId]);
     const beforeIssue = await client.query<{ cost: string }>("SELECT public._raw_cost_context_for_costing($1,$2)->>'unit_cost' AS cost", [rawMaterialId, branchId]);
     expect(Number(beforeIssue.rows[0].cost)).toBe(6.4); // 7.5@4 + 5@10, actual layer valuation
