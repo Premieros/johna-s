@@ -4,6 +4,7 @@ export type StockCountExcelLine = {
   item_id: string;
   counted_quantity: string;
   reason: string;
+  unit_cost?: string;
 };
 
 export type StockCountExcelParseResult = {
@@ -22,6 +23,8 @@ export function stockCountExcelColumns(isAr: boolean) {
     systemQuantity: isAr ? 'رصيد النظام' : 'System Quantity',
     countedQuantity: isAr ? 'الكمية الفعلية' : 'Counted Quantity',
     reason: isAr ? 'سبب الفرق' : 'Variance Reason',
+    unitCost: isAr ? 'سعر وحدة التخزين' : 'Stock Unit Cost',
+    unitName: isAr ? 'وحدة التخزين' : 'Stock Unit',
   } as const;
 }
 
@@ -47,6 +50,8 @@ export function buildStockCountExcelRows(params: {
     [columns.systemQuantity]: snapshot[material.id] || 0,
     [columns.countedQuantity]: '',
     [columns.reason]: '',
+    [columns.unitCost]: '',
+    [columns.unitName]: material.unit?.name || '',
   }));
 }
 
@@ -93,6 +98,9 @@ export function parseStockCountExcelRows(params: {
 
     const rawQuantity = readEither(row, 'الكمية الفعلية', 'Counted Quantity');
     if (rawQuantity == null || String(rawQuantity).trim() === '') {
+      if (['سعر وحدة التخزين', 'Stock Unit Cost', 'سعر الوحدة', 'Unit Cost', 'unit_cost', 'السعر', 'Price'].some((key) => row[key] != null && String(row[key]).trim() !== '')) {
+        errors.push(isAr ? `الصف ${rowNo}: أدخل الكمية الفعلية مع سعر الخامة.` : `Row ${rowNo}: enter counted quantity with the material price.`);
+      }
       blankCount += 1;
       continue;
     }
@@ -103,8 +111,16 @@ export function parseStockCountExcelRows(params: {
       continue;
     }
 
+    const priceValues = ['سعر وحدة التخزين', 'Stock Unit Cost', 'سعر الوحدة', 'Unit Cost', 'unit_cost', 'السعر', 'Price']
+      .map((key) => row[key]).filter((value) => value != null && String(value).trim() !== '');
+    const prices = priceValues.map(Number);
+    if (prices.some((value) => !Number.isFinite(value) || value < 0.0001 || value >= 100000000) || new Set(prices).size > 1) {
+      errors.push(isAr ? `الصف ${rowNo}: سعر وحدة التخزين غير صالح أو متعارض للخامة "${material.name}".` : `Row ${rowNo}: invalid or conflicting stock-unit cost for "${material.name}".`);
+      continue;
+    }
     lines.push({
       item_id: material.id,
+      ...(prices.length ? { unit_cost: String(prices[0]) } : {}),
       counted_quantity: String(quantity),
       reason: String(readEither(row, 'سبب الفرق', 'Variance Reason') ?? '').trim(),
     });
