@@ -184,13 +184,13 @@ describe.skipIf(skip)('raw-material stock count lifecycle', () => {
     const item = await client.query<{ unit_cost: string }>('SELECT unit_cost::text FROM public.stock_count_items WHERE stock_count_id=$1', [id]);
     expect(Number(item.rows[0].unit_cost)).toBe(22.75);
     expect(await warehouseQty()).toBe(before);
-    const draftEvents = await asAdmin(() => client.query('SELECT * FROM public._raw_cost_events_for_costing($1,$2) WHERE reference_number=$3', [rawMaterialId, branchId, result.count_number]));
+    const draftEvents = await asAdmin(() => client.query('SELECT * FROM public.get_raw_material_cost_history($1,$2,100) WHERE reference_number=$3', [rawMaterialId, branchId, result.count_number]));
     expect(draftEvents.rows).toHaveLength(0);
     for (const action of ['submit_stock_count', 'approve_stock_count', 'apply_stock_count']) {
       const applied = await asAdmin(() => client.query<{ result: string }>(`SELECT public.${action}($1)::text AS result`, [id]));
       expect(JSON.parse(applied.rows[0].result).success).toBe(true);
     }
-    const events = await asAdmin(() => client.query<{ unit_cost: string }>('SELECT unit_cost::text FROM public._raw_cost_events_for_costing($1,$2) WHERE reference_number=$3', [rawMaterialId, branchId, result.count_number]));
+    const events = await asAdmin(() => client.query<{ unit_cost: string }>('SELECT unit_cost::text FROM public.get_raw_material_cost_history($1,$2,100) WHERE reference_number=$3', [rawMaterialId, branchId, result.count_number]));
     expect(Number(events.rows[0].unit_cost)).toBe(22.75);
     expect(await warehouseQty()).toBe(before);
     const oldBatch = await client.query<{ unit_cost: string }>("SELECT unit_cost::text FROM public.raw_material_batches WHERE raw_material_id=$1 AND batch_number='COUNT-OPEN'", [rawMaterialId]);
