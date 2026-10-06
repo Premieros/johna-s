@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
+import { createRefreshCoalescer } from '@/lib/coalescedRefresh';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Input';
@@ -71,6 +72,7 @@ export function KitchenDisplayPage() {
   const scopeRef = useRef(scopeKey);
   const queueRead = useRef(0);
   const stationRead = useRef(0);
+  const coalesceQueue = useRef(createRefreshCoalescer());
   useLayoutEffect(() => {
     scopeRef.current = scopeKey;
     ++queueRead.current;
@@ -109,7 +111,7 @@ export function KitchenDisplayPage() {
     }
   }, [branchFilter, canViewKds, ar, scopeKey]);
 
-  const load = useCallback(async () => {
+  const readQueue = useCallback(async () => {
     if (scopeRef.current !== scopeKey) return;
     const token = ++queueRead.current;
     setLoading(true);
@@ -166,6 +168,12 @@ export function KitchenDisplayPage() {
       if (token === queueRead.current && scopeRef.current === scopeKey) setLoading(false);
     }
   }, [branchFilter, station, soundEnabled, canViewKds, ar, scopeKey]);
+
+  const load = useCallback(() => coalesceQueue.current(
+    `${scopeKey}:${station}:${ar}:${soundEnabled}`,
+    readQueue,
+    () => !document.hidden && scopeRef.current === scopeKey,
+  ), [readQueue, scopeKey, station, ar, soundEnabled]);
 
   const playBeep = () => {
     try {
