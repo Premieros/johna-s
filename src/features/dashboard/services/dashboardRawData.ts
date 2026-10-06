@@ -142,7 +142,7 @@ export async function loadDashboardOpsRows(params: {
     ? (() => {
         let query = supabase
           .from('orders')
-          .select('id,status,order_type,table_id,branch_id,total,order_items(quantity)')
+          .select('id,status,order_type,table_id,branch_id,total,order_items!order_items_order_id_fkey(quantity)')
           .in('status', ['open', 'held'])
           .limit(5000);
         if (params.branchId) query = query.eq('branch_id', params.branchId);

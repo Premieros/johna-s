@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `247e65de5c0c8b6c6be7a8855b174469fbfab4e1`
-- Current active branch: `fix/dashboard-refresh-20261006`
-- Mandatory active work log: `docs/DASHBOARD_REFRESH_2026-10-06.md`
+- Latest main baseline reconciled: `a6e838ae477fcd1c1e55812bcc5cc3c7b7063d7e`
+- Current active branch: `fix/dashboard-open-order-read-20261006`
+- Mandatory active work log: `docs/DASHBOARD_OPEN_ORDER_READ_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Repair complete manual dashboard refresh, unavailable/error presentation and
-scope isolation. Review related dashboard reads and labels; no DB/API/schema
-or permission changes. Full Verify and explicit publish approval remain required.
+Repair the confirmed HTTP 300 dashboard orders embed by naming the existing
+order_items_order_id_fkey relationship. Preserve existing reads, totals, permissions
+and filters. Frontend only; Full Verify and explicit publication approval required.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -47,3 +47,6 @@ or permission changes. Full Verify and explicit publish approval remain required
 
 - #462 completed at 247e65de: metadata parity API applied as 20261006120006;
   postmerge Verify 37460567653 and Pages 37460567637 green; parity 216 -> 2 requests.
+
+- #463 completed at a6e838ae: all-section refresh/error visibility deployed;
+  postmerge Verify 37478093699 and Pages 37478093744 green.
