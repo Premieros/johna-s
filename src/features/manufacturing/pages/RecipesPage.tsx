@@ -277,7 +277,8 @@ export function RecipesPage() {
     const sellPrice = Number(selectedProduct?.sale_price || 0);
     const foodCostRatio = sellPrice > 0 ? (costPerUnit / sellPrice) * 100 : 0;
     const margin = sellPrice > 0 ? ((sellPrice - costPerUnit) / sellPrice) * 100 : 0;
-    return { rawCost: totalComponentCost, costPerUnit, sellPrice, foodCostRatio, margin };
+    const unpriced = items.some((item) => item.raw_material_id && Number(item.quantity) > 0 && !(materialCosts[item.raw_material_id] > 0));
+    return { rawCost: totalComponentCost, costPerUnit, sellPrice, foodCostRatio, margin, unpriced };
   }, [form.product_id, form.yield_quantity, items, manufacturedItems, manufacturedUnits, materialCosts, products]);
 
   const columns: Column<Recipe>[] = [
@@ -382,6 +383,7 @@ export function RecipesPage() {
           <div className="rounded-xl p-4 border border-ui-border bg-ui-surface shadow-sm">
             <div className="flex items-center gap-2 mb-3"><div className="p-1.5 rounded-lg bg-ui-primary-soft text-ui-primary"><Calculator className="w-4 h-4" /></div><p className="text-sm font-bold text-ui-text">{isAr ? 'التحليل المالي المباشر للوصفة (Live Costing)' : 'Live Recipe Costing & Profitability'}</p></div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-center">
+              {calculatedCost.unpriced && <p role="status" className="text-sm text-ui-warning sm:col-span-2">{isAr ? 'التكلفة غير مكتملة: توجد خامات بلا تكلفة FIFO متاحة.' : 'Incomplete cost: some raw materials have no available FIFO cost.'}</p>}
               <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'إجمالي تكلفة المواد' : 'Material cost'}</p><p className="font-bold">{formatCurrency(calculatedCost.rawCost, 'EGP', lang)}</p></div>
               <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تكلفة الوحدة الواحدة' : 'Unit cost'}</p><p className="font-bold text-ui-primary">{formatCurrency(calculatedCost.costPerUnit, 'EGP', lang)}</p></div>
               <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'نسبة تكلفة الطعام' : 'Food cost %'}</p><p className="font-bold">{calculatedCost.sellPrice > 0 ? `${formatNumber(calculatedCost.foodCostRatio, 1)}%` : '-'}</p></div>

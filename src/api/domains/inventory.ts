@@ -7,6 +7,7 @@ type StockCountInputItem = {
   raw_material_id?: string | null;
   counted_quantity: number | null;
   reason: string | null;
+  unit_cost?: number;
 };
 
 export const inventory = {

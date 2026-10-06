@@ -182,7 +182,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
       [rawA, branchA, warehouseA, `OV-PRICE-${randomUUID().slice(0, 8)}`],
     );
     const v = await valuation();
-    expect(Number(v.estimated_negative_value)).toBe(40);
+    expect(Number(v.estimated_negative_value)).toBe(14); // retained actual FIFO valuation 7 x shortage 2
     expect(Number(v.unpriced_negative_quantity)).toBe(0);
   });
 
@@ -207,7 +207,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(30);
     expect(current.price_source).toBe('purchase');
     expect(current.reference_number).toBe(invoice);
-    expect(Number((await valuation()).estimated_negative_value)).toBe(60);
+    expect(Number((await valuation()).estimated_negative_value)).toBe(14); // new reference price cannot revalue actual FIFO stock
   });
 
   it('a newer applied stock count replaces the purchase price', async () => {
@@ -231,7 +231,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(40);
     expect(current.price_source).toBe('stock_count');
     expect(current.reference_number).toBe(countNumber);
-    expect(Number((await valuation()).estimated_negative_value)).toBe(80);
+    expect(Number((await valuation()).estimated_negative_value)).toBe(14); // count reference cannot revalue old layers
   });
 
   it('a newer manual pricing event becomes authoritative again and history contains all sources', async () => {
@@ -248,7 +248,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     const current = await latest();
     expect(Number(current.latest_cost)).toBe(50);
     expect(current.price_source).toBe('pricing');
-    expect(Number((await valuation()).estimated_negative_value)).toBe(100);
+    expect(Number((await valuation()).estimated_negative_value)).toBe(14); // manual reference remains separate
 
     const history = await asUser(managerUser, async () => {
       const r = await client.query(

@@ -10,6 +10,7 @@ export type RawMaterialReorderRow = {
   raw_material_id: string;
   quantity: number;
   min_stock: number;
+  avg_cost: number;
   raw_material: {
     id: string;
     name: string;
@@ -44,7 +45,7 @@ export async function loadLowStockOptions(): Promise<{
 export async function loadRawMaterialReorderRows(branchId: string): Promise<RawMaterialReorderRow[]> {
   const { data } = await supabase
     .from('raw_material_inventory')
-    .select('raw_material_id, quantity, min_stock, raw_material:raw_materials(id, name, code, min_stock, default_cost, is_active, unit:units(name))')
+    .select('raw_material_id, quantity, min_stock, avg_cost, raw_material:raw_materials(id, name, code, min_stock, default_cost, is_active, unit:units(name))')
     .eq('branch_id', branchId);
 
   return ((data || []) as unknown as RawMaterialReorderRow[]);

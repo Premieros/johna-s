@@ -167,4 +167,46 @@ describe.skipIf(skip)('raw-material stock count lifecycle', () => {
     expect(secondResult.status).toBe('applied');
     expect(await warehouseQty()).toBe(7.5);
   });
+  it('stores explicit Excel unit cost and exposes it only after the normal approval/apply lifecycle', async () => {
+    const before = await warehouseQty();
+    const make = async (unit_cost: unknown) => asAdmin(() => client.query<{ result: string }>(
+      `SELECT public.create_stock_count($1,$2,'cycle','priced Excel',$3::jsonb)::text AS result`,
+      [branchId, warehouseId, JSON.stringify([{ raw_material_id: rawMaterialId, counted_quantity: before, unit_cost }])],
+    ));
+    for (const bad of [-1, 0, 'NaN', 100000000]) {
+      const result = await make(bad);
+      expect(JSON.parse(result.rows[0].result).success).toBe(false);
+      expect(await warehouseQty()).toBe(before);
+    }
+    const result = JSON.parse((await make(22.75)).rows[0].result);
+    expect(result.success).toBe(true);
+    const id = result.stock_count_id;
+    const item = await client.query<{ unit_cost: string }>('SELECT unit_cost::text FROM public.stock_count_items WHERE stock_count_id=$1', [id]);
+    expect(Number(item.rows[0].unit_cost)).toBe(22.75);
+    expect(await warehouseQty()).toBe(before);
+    const draftEvents = await asAdmin(() => client.query('SELECT * FROM public.get_raw_material_cost_history($1,$2,100) WHERE reference_number=$3', [rawMaterialId, branchId, result.count_number]));
+    expect(draftEvents.rows).toHaveLength(0);
+    for (const action of ['submit_stock_count', 'approve_stock_count', 'apply_stock_count']) {
+      const applied = await asAdmin(() => client.query<{ result: string }>(`SELECT public.${action}($1)::text AS result`, [id]));
+      expect(JSON.parse(applied.rows[0].result).success).toBe(true);
+    }
+    const events = await asAdmin(() => client.query<{ unit_cost: string }>('SELECT unit_cost::text FROM public.get_raw_material_cost_history($1,$2,100) WHERE reference_number=$3', [rawMaterialId, branchId, result.count_number]));
+    expect(Number(events.rows[0].unit_cost)).toBe(22.75);
+    expect(await warehouseQty()).toBe(before);
+    const oldBatch = await client.query<{ unit_cost: string }>("SELECT unit_cost::text FROM public.raw_material_batches WHERE raw_material_id=$1 AND batch_number='COUNT-OPEN'", [rawMaterialId]);
+    expect(Number(oldBatch.rows[0].unit_cost)).toBe(4);
+    const currentCost = await client.query<{ cost: string }>("SELECT public._raw_cost_context_for_costing($1,$2)->>'unit_cost' AS cost", [rawMaterialId, branchId]);
+    expect(Number(currentCost.rows[0].cost)).toBe(4); // count reference price 22.75 cannot reprice existing FIFO layers
+    await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) VALUES ($1,$2,$3,'FIFO-NEW',5,10,'opening',clock_timestamp())", [rawMaterialId, branchId, warehouseId]);
+    await client.query('UPDATE public.raw_material_inventory SET avg_cost=avg_cost WHERE raw_material_id=$1 AND branch_id=$2', [rawMaterialId, branchId]);
+    const beforeIssue = await client.query<{ cost: string }>("SELECT public._raw_cost_context_for_costing($1,$2)->>'unit_cost' AS cost", [rawMaterialId, branchId]);
+    expect(Number(beforeIssue.rows[0].cost)).toBe(6.4); // 7.5@4 + 5@10, actual layer valuation
+    const issued = await client.query<{ result: { success: boolean; total_cost: number } }>("SELECT public._raw_remove_fifo($1,$2,$3,3,'production',NULL,NULL,NULL,$4,false) AS result", [rawMaterialId, branchId, warehouseId, adminId]);
+    expect(issued.rows[0].result.success).toBe(true);
+    expect(Number(issued.rows[0].result.total_cost)).toBe(12); // original FIFO layer remains 4 per unit
+    const afterIssue = await client.query<{ cost: string }>("SELECT public._raw_cost_context_for_costing($1,$2)->>'unit_cost' AS cost", [rawMaterialId, branchId]);
+    expect(Number(afterIssue.rows[0].cost)).toBe(7.16); // current/last actual inventory valuation refreshes after FIFO
+
+  });
+
 });

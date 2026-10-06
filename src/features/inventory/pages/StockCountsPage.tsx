@@ -26,7 +26,7 @@ interface EditLine {
   reason: string;
 }
 
-type CreateLine = { item_id: string; counted_quantity: string; reason: string };
+type CreateLine = { item_id: string; counted_quantity: string; reason: string; unit_cost?: string };
 type StockCountItemWithCost = StockCountItem & { unit_cost?: number | string | null };
 
 export function StockCountsPage() {
@@ -245,6 +245,9 @@ export function StockCountsPage() {
         return;
       }
       seen.add(line.item_id);
+      if (line.unit_cost?.trim() && (!Number.isFinite(Number(line.unit_cost)) || Number(line.unit_cost) < 0.0001 || Number(line.unit_cost) >= 100000000)) {
+        show(isAr ? 'أدخل سعرًا موجبًا صحيحًا لوحدة التخزين.' : 'Enter a valid positive stock-unit cost.', 'error'); return;
+      }
       const quantity = Number(line.counted_quantity);
       if (line.counted_quantity.trim() === '' || !Number.isFinite(quantity) || quantity < 0) {
         const materialName = formRawMaterials.find((material) => material.id === line.item_id)?.name || line.item_id;
@@ -273,6 +276,7 @@ export function StockCountsPage() {
       raw_material_id: line.item_id,
       counted_quantity: Number(line.counted_quantity),
       reason: line.reason || null,
+      ...(line.unit_cost?.trim() ? { unit_cost: Number(line.unit_cost) } : {}),
     }));
     const { data, error: err } = await api.inventory.createStockCount({ p_branch_id: form.branch_id, p_warehouse_id: form.warehouse_id, p_count_type: form.count_type, p_notes: form.notes || null, p_items: items.length > 0 ? items : null });
     if (err) { show(err.message, 'error'); return; }
@@ -392,12 +396,12 @@ export function StockCountsPage() {
           </div>
           <p className="mt-2 text-xs text-ui-subtle">
             {isAr
-              ? 'اسحب الملف بعد اختيار الفرع والمخزن، اكتب الكمية الفعلية فقط ثم ارفع نفس الملف. الرفع يملأ مسودة الجرد ولا يغيّر الرصيد حتى الإرسال ثم الاعتماد ثم التطبيق.'
-              : 'Export after selecting branch and warehouse, fill only Counted Quantity, then upload the same file. Upload only fills the draft; stock changes only after submit, approval, and apply.'}
+              ? 'اسحب الملف بعد اختيار الفرع والمخزن، اكتب الكمية الفعلية وسعر وحدة التخزين اختياريًا ثم ارفع نفس الملف. الرفع يملأ مسودة الجرد ولا يغيّر الرصيد حتى الإرسال ثم الاعتماد ثم التطبيق.'
+              : 'Export after selecting branch and warehouse, fill Counted Quantity and optionally Stock Unit Cost, then upload the same file. Upload only fills the draft; stock changes only after submit, approval, and apply.'}
           </p>
         </div>
         <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={isAr ? 'ملاحظات اختيارية' : 'Optional notes'} />
-        <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? (isAr ? 'الخامة' : 'Raw material') : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{isAr ? 'اختر الخامة' : 'Choose raw material'}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
+        <div><div className="flex items-center justify-between mb-2"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addFormItem}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{formItems.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-4"><Select label={idx === 0 ? (isAr ? 'الخامة' : 'Raw material') : undefined} value={l.item_id} onChange={(e) => updateFormItem(idx, 'item_id', e.target.value)}><option value="">{isAr ? 'اختر الخامة' : 'Choose raw material'}</option>{createChoices.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateFormItem(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? (isAr ? 'سعر وحدة التخزين' : 'Stock unit cost') : undefined} type="number" min="0.0001" step="0.0001" value={l.unit_cost || ''} onChange={(e) => updateFormItem(idx, 'unit_cost', e.target.value)} placeholder={isAr ? 'اختياري' : 'Optional'} /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateFormItem(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeFormItem(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div></div>
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{isAr ? 'حفظ المسودة' : 'Save Draft'}</Button></div>
       </div></Modal>
 

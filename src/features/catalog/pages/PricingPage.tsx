@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BadgeDollarSign, Boxes, Package, RefreshCw, Save } from 'lucide-react';
 import { costing } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -20,6 +20,7 @@ type RawPriceRow = {
   name: string;
   branch_id: string | null;
   default_cost: number | null;
+  fifo_cost?: number | null;
   is_active: boolean;
 };
 
@@ -82,6 +83,7 @@ export function PricingPage() {
   const [manufacturedDrafts, setManufacturedDrafts] = useState<Record<string, ManufacturedDraft>>({});
   const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({});
   const [loading, setLoading] = useState(false);
+  const loadRequest = useRef(0);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const branchName = branches.find((branch) => branch.id === branchId)?.name || (ar ? 'الفرع الحالي' : 'Current branch');
@@ -92,6 +94,7 @@ export function PricingPage() {
   }, [tab, visibleTabs]);
 
   async function load() {
+    const requestId = ++loadRequest.current;
     if (!branchId) {
       setRawRows([]);
       setManufacturedRows([]);
@@ -107,6 +110,7 @@ export function PricingPage() {
         includeProducts: canProductsView,
       });
 
+      if (requestId !== loadRequest.current) return;
       const nextRaw = data.rawRows as RawPriceRow[];
       const nextManufactured = data.manufacturedRows as ManufacturedPriceRow[];
       const nextProducts = data.productRows as ProductPriceRow[];
@@ -125,7 +129,7 @@ export function PricingPage() {
         wholesale_price: safePrice(row.wholesale_price),
       }])));
     } finally {
-      setLoading(false);
+      if (requestId === loadRequest.current) setLoading(false);
     }
   }
 
@@ -134,6 +138,7 @@ export function PricingPage() {
     // Permission state may hydrate after the branch context. Re-run when the
     // view permissions become available so authorized product/raw rows cannot
     // remain stuck as an empty initial result.
+    return () => { loadRequest.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, canRawView, canProductsView]);
 
@@ -280,8 +285,8 @@ export function PricingPage() {
       <DesignPageHeader
         title={ar ? 'التسعير' : 'Pricing'}
         subtitle={ar
-          ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. تسعير الخامة يدخل تاريخ مركز التكلفة ويصبح السعر المعتمد حتى حدث أحدث، بدون تغيير متوسط المخزون.`
-          : `Manage pricing for ${branchName}. Raw-material pricing enters Costing Center history and stays authoritative until a newer pricing, purchase, or stock-count event, without changing inventory average cost.`}
+          ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. تكلفة FIFO من المخزون الفعلي، والسعر اليدوي مرجع منفصل محفوظ في سجل الأسعار.`
+          : `Manage pricing for ${branchName}. FIFO cost comes from actual inventory. Manual reference prices are kept separately in price history.`}
         actions={(
           <Button size="sm" variant="secondary" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -333,7 +338,7 @@ export function PricingPage() {
                   <th className="px-4 py-3 text-start">{ar ? 'الصنف' : 'Item'}</th>
                   <th className="px-4 py-3 text-start">{ar ? 'الكود' : 'Code'}</th>
                   {tab === 'raw' ? (
-                    <th className="px-4 py-3 text-end">{ar ? 'سعر التسعير' : 'Pricing cost'}</th>
+                    <><th className="px-4 py-3 text-end">{ar ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)'}</th><th className="px-4 py-3 text-end">{ar ? 'سعر مرجعي يدوي' : 'Manual reference price'}</th></>
                   ) : (
                     <>
                       <th className="px-4 py-3 text-end">{ar ? 'التكلفة' : 'Cost'}</th>
@@ -352,6 +357,7 @@ export function PricingPage() {
                     <tr key={row.id} className="hover:bg-ui-page-alt/70">
                       <td className="px-4 py-3 font-semibold text-ui-text">{row.name}</td>
                       <td className="px-4 py-3 font-mono text-xs text-ui-muted">{row.code || '-'}</td>
+                      <td className="px-4 py-3 text-end">{row.fifo_cost == null ? '-' : formatNumber(row.fifo_cost, 2)}</td>
                       <td className="px-4 py-3 text-end">
                         {priceInput(draft.default_cost, (value) => setRawDrafts((state) => ({ ...state, [row.id]: { default_cost: value } })), !canRawEdit, `${row.name} ${ar ? 'سعر الخامة' : 'raw price'}`)}
                       </td>
@@ -420,8 +426,8 @@ export function PricingPage() {
 
         <p className="mt-3 text-xs text-ui-subtle">
           {ar
-            ? `ملاحظة: حفظ سعر الخامة يسجل حدث «تسعير» في تاريخ مركز التكلفة ويصبح آخر سعر معتمد حتى شراء أو جرد أو تسعير أحدث. كمية المخزون ومتوسط التكلفة الفعلي لا يتغيران. مثال عرض: ${formatNumber(0, 2)}`
-            : `Note: saving a raw-material price records a Pricing event in Costing Center history and remains the latest costing price until a newer purchase, stock count, or pricing event. Inventory quantity and calculated average cost are unchanged. Example: ${formatNumber(0, 2)}`}
+            ? `ملاحظة: حفظ سعر الخامة يسجل حدث «تسعير» في تاريخ مركز التكلفة كمرجع منفصل. تكلفة FIFO المعروضة تُحسب من المخزون الفعلي ولا تتغير بتعديل السعر المرجعي. مثال عرض: ${formatNumber(0, 2)}`
+            : `Note: saving a raw-material price records a Pricing event in Costing Center history as a separate reference price. The displayed FIFO cost comes from actual inventory layers; the manual reference does not revalue them. Example: ${formatNumber(0, 2)}`}
         </p>
       </DesignPanel>
     </DesignSurface>

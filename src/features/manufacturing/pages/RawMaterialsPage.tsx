@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { rawFifoCost } from '@/features/costing/services/rawFifoCostData';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Boxes, Layers, Trash2 } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -82,6 +83,7 @@ export function RawMaterialsPage() {
   }
   useEffect(() => { loadMeta(); }, []);
 
+  const fifoCosts = useMemo(() => new Map(inventory.map((row) => [row.raw_material_id, rawFifoCost(row)])), [inventory]);
   const branchLabel = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
   const unitForId = (id: string | null | undefined) => units.find((u) => u.id === id);
   const unitForMaterial = (material: RawMaterial | null | undefined) => unitForId(material?.unit_id);
@@ -201,7 +203,7 @@ export function RawMaterialsPage() {
     { key: 'category', header: t('category'), render: (m) => m.category || '-' },
     { key: 'branch', header: t('branch'), render: (m) => <BranchBadge name={branchLabel(m.branch_id)} /> },
     { key: 'min_stock', header: t('minStock'), render: (m) => formatRawMaterialQuantity(Number(m.min_stock), unitForMaterial(m), { lang }) },
-    { key: 'default_cost', header: t('defaultCost'), render: (m) => formatNumber(Number(m.default_cost), 2) },
+    { key: 'fifo_cost', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (m) => { const cost = fifoCosts.get(m.id) ?? null; return cost === null ? '-' : formatNumber(cost, 2); } },
     { key: 'is_active', header: t('status'), render: (m) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-subtle dark:text-ui-subtle'}`}>{m.is_active ? t('active') : t('inactive')}</span> },
     { key: 'actions', header: t('actions'), render: (m) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
       {can('raw_materials.manage') && <button onClick={() => openEdit(m)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>}
@@ -213,7 +215,7 @@ export function RawMaterialsPage() {
     { key: 'material', header: t('rawMaterial'), render: (i) => <div><p>{i.raw_material?.name || '-'}</p><p className="text-xs text-ui-subtle">{unitLabel(i.raw_material?.unit_id)}</p></div> },
     { key: 'branch', header: t('branch'), render: (i) => branchLabel(i.branch_id) },
     { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(Number(i.quantity), unitForMaterial(i.raw_material), { lang })}</span> },
-    { key: 'avg_cost', header: t('avgCost'), render: (i) => formatNumber(Number(i.avg_cost), 2) },
+    { key: 'avg_cost', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (i) => rawFifoCost(i) === null ? '-' : formatNumber(Number(i.avg_cost), 2) },
     { key: 'actions', header: t('actions'), render: (i) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('raw_materials.manage') && <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}><Edit2 className="w-4 h-4" /></button>}</div> },
   ];
 
@@ -263,7 +265,7 @@ export function RawMaterialsPage() {
           <Input label={t('category')} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
           {branchFilter ? <div><label className="block text-sm font-medium text-ui-muted mb-1">{t('branch')}</label><div className="min-h-11 flex items-center"><BranchBadge name={branchLabel(form.branch_id || branchFilter)} /></div></div> : <Select label={t('branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })}><option value="">--</option>{branches.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}</Select>}
           <Input label={`${t('minStock')} (${unitLabel(form.unit_id)})`} type="number" step="0.0001" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: parseFloat(e.target.value) || 0 })} />
-          <Input label={t('defaultCost')} type="number" step="0.01" value={form.default_cost} onChange={(e) => setForm({ ...form, default_cost: parseFloat(e.target.value) || 0 })} />
+          <Input label={isAr ? 'سعر مرجعي يدوي' : 'Manual reference price'} type="number" step="0.01" value={form.default_cost} onChange={(e) => setForm({ ...form, default_cost: parseFloat(e.target.value) || 0 })} />
           <div className="sm:col-span-2"><Input label={t('description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <label className="flex items-center gap-2 text-sm text-ui-muted"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded border-ui-border text-brand-600 focus:ring-brand-500" />{t('active')}</label>
         </div>

@@ -106,6 +106,8 @@ export async function loadDashboardOpsRows(params: {
   branchId: string | null;
   fromIso: string;
   fromDate: string;
+  toIso: string;
+  toDate: string;
   includePos: boolean;
   includePurchases: boolean;
   includeExpenses: boolean;
@@ -131,7 +133,8 @@ export async function loadDashboardOpsRows(params: {
         let query = supabase
           .from('purchases')
           .select('total,returned_amount,branch_id,created_at')
-          .gte('created_at', params.fromIso);
+          .gte('created_at', params.fromIso)
+          .lte('created_at', params.toIso);
         if (params.branchId) query = query.eq('branch_id', params.branchId);
         return query;
       })()
@@ -143,6 +146,7 @@ export async function loadDashboardOpsRows(params: {
           .from('expenses')
           .select('amount,branch_id,expense_date,status')
           .gte('expense_date', params.fromDate)
+          .lte('expense_date', params.toDate)
           .neq('status', 'voided');
         if (params.branchId) query = query.eq('branch_id', params.branchId);
         return query;
