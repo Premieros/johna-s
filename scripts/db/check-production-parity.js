@@ -1,155 +1,63 @@
 #!/usr/bin/env node
-// ============================================================================
-// Production schema-parity gate.
-//
-// RPC/table routes are checked through PostgREST with the anon key. A 401/403
-// can still prove that an exact route exists. Structural DB requirements are
-// verified through a narrow, data-free schema sentinel RPC instead of guessing
-// from table SELECT permissions/RLS.
-// ============================================================================
-
+// Catalog parity, with no operational RPC calls or table reads. A fresh migration
+// reloads PostgREST's schema cache. This gate checks live definitions and sentinel
+// routes; it does not individually exercise operational routes or their ACLs.
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const __dirname = resolve(fileURLToPath(import.meta.url), '..');
-const ROOT = resolve(__dirname, '..', '..');
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 const SCHEMA_SENTINEL_RPC = '_production_schema_contract_kitchen_v1';
+const METADATA_RPC = '_production_api_contract_v1';
 
-if (!SUPABASE_URL || !ANON_KEY) {
-  console.error('ERROR: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set (as in the build job).');
-  process.exit(1);
-}
-
-function loadContract() {
-  const file = join(ROOT, 'supabase', 'api-contract.json');
-  try {
-    const c = JSON.parse(readFileSync(file, 'utf8'));
-    const rpcs = new Map(c.rpcs.map(({ name, params }) => [name, params]));
-    return { rpcs, tables: c.tables };
-  } catch (err) {
-    console.error(`ERROR: cannot read ${file} (${err.message}). Run \`node scripts/db/gen-contract.js\` first.`);
-    process.exit(1);
+function validateResults(results, expected, kind) {
+  if (!Array.isArray(results) || results.length !== expected.length) {
+    throw new Error(`Incomplete ${kind} metadata`);
   }
-}
-
-async function readResponse(res) {
-  const text = await res.text();
-  let code = '';
-  let json = null;
-  try {
-    json = JSON.parse(text);
-    code = json?.code || '';
-  } catch {
-    // Non-JSON responses are classified by HTTP status below.
+  const names = new Set(expected.map((item) => typeof item === 'string' ? item : item.name));
+  if (names.size !== expected.length) throw new Error(`Duplicate ${kind} contract`);
+  const missing = [];
+  for (const result of results) {
+    if (!result || !names.delete(result.name) || typeof result.present !== 'boolean') {
+      throw new Error(`Invalid ${kind} metadata`);
+    }
+    if (!result.present) missing.push(`${kind} ${result.name}`);
   }
-  return { text, code, json };
+  return missing;
 }
 
-async function probeRpc(name, params, headers) {
-  const body = Object.fromEntries(params.map((p) => [`p_${p}`, null]));
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const { text, code } = await readResponse(res);
-
-  if (res.status === 404 && (code === 'PGRST202' || text.includes('PGRST202'))) return 'missing';
-  if (res.ok || res.status === 400 || res.status === 401 || res.status === 403 || res.status >= 500) return 'present';
-  return 'unverifiable';
-}
-
-async function probeTable(name, headers) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${name}?select=id&limit=1`, {
-    method: 'GET',
-    headers,
-  });
-  const { text, code } = await readResponse(res);
-
-  if (res.status === 404 && (code === 'PGRST205' || text.includes('PGRST205'))) return 'missing';
-  // 400 can mean the table exists but does not expose an `id` column. The
-  // exact PostgREST table route has still resolved, so it proves presence.
-  if (res.ok || res.status === 400 || res.status === 401 || res.status === 403) return 'present';
-  return 'unverifiable';
-}
-
-async function probeSchemaSentinel(headers) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${SCHEMA_SENTINEL_RPC}`, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  const { text, code, json } = await readResponse(res);
-
-  if (res.status === 404 && (code === 'PGRST202' || text.includes('PGRST202'))) return 'missing';
-  if (!res.ok) return 'unverifiable';
-  return json === true ? 'present' : 'missing';
+export async function runParity({ url, key, contract, fetchImpl = fetch }) {
+  if (!url || !key) throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+  async function call(name, body) {
+    const res = await fetchImpl(`${url}/rest/v1/rpc/${name}`, {
+      method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(30000),
+    });
+    // A denied, missing, failed or non-JSON endpoint cannot authorize publishing.
+    if (res.status !== 200) throw new Error(`Unverifiable ${name}: HTTP ${res.status}`);
+    return res.json();
+  }
+  const metadata = await call(METADATA_RPC, { p_contract: { rpcs: contract.rpcs, tables: contract.tables } });
+  if (metadata?.version !== 1 || metadata.valid !== true) throw new Error('Invalid metadata contract');
+  const missing = [
+    ...validateResults(metadata.rpcs, contract.rpcs, 'rpc'),
+    ...validateResults(metadata.tables, contract.tables, 'table'),
+  ];
+  if (missing.length) throw new Error(`Missing or ambiguous database contract: ${missing.join(', ')}`);
+  const schema = await call(SCHEMA_SENTINEL_RPC, {});
+  if (schema !== true) throw new Error(`Missing/failed schema contract: ${SCHEMA_SENTINEL_RPC}`);
+  return { rpcs: contract.rpcs.length, tables: contract.tables.length, requests: 2 };
 }
 
 async function main() {
-  const headers = { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` };
-  const { rpcs, tables } = loadContract();
-
-  console.log(`PRODUCTION PARITY CHECK  ${SUPABASE_URL}`);
-  console.log(`RPC functions to verify : ${rpcs.size}`);
-  console.log(`Tables to verify       : ${tables.length}`);
-  console.log(`Schema sentinel        : ${SCHEMA_SENTINEL_RPC}`);
-  console.log('');
-
-  const missingRpc = [];
-  const missingTables = [];
-  const unverifiable = [];
-
-  for (const [name, params] of rpcs) {
-    const status = await probeRpc(name, params, headers);
-    const signature = `${name}(${params.map((p) => `p_${p}`).join(', ')})`;
-    if (status === 'missing') missingRpc.push(signature);
-    if (status === 'unverifiable') unverifiable.push(`rpc ${signature}`);
-    process.stdout.write(`  ${status === 'present' ? 'ok ' : status === 'missing' ? 'FAIL' : '????'} rpc ${name}\n`);
+  try {
+    const contract = JSON.parse(readFileSync(resolve(ROOT, 'supabase/api-contract.json'), 'utf8'));
+    const result = await runParity({ url: process.env.VITE_SUPABASE_URL, key: process.env.VITE_SUPABASE_ANON_KEY, contract });
+    console.log(`PARITY OK: ${result.rpcs} RPC definitions, ${result.tables} relations and kitchen sentinel verified (${result.requests} requests).`);
+  } catch (err) {
+    console.error(`PARITY FAILED: ${err.message}`);
+    console.error('Do NOT publish until the database contract is verified. No operational probe fallback.');
+    process.exitCode = 1;
   }
-
-  for (const name of tables) {
-    const status = await probeTable(name, headers);
-    if (status === 'missing') missingTables.push(name);
-    if (status === 'unverifiable') unverifiable.push(`table ${name}`);
-    process.stdout.write(`  ${status === 'present' ? 'ok ' : status === 'missing' ? 'FAIL' : '????'} table ${name}\n`);
-  }
-
-  const schemaStatus = await probeSchemaSentinel(headers);
-  if (schemaStatus === 'unverifiable') unverifiable.push(`schema sentinel ${SCHEMA_SENTINEL_RPC}`);
-  process.stdout.write(`  ${schemaStatus === 'present' ? 'ok ' : schemaStatus === 'missing' ? 'FAIL' : '????'} schema kitchen_inventory_v1\n`);
-
-  console.log('');
-  if (missingRpc.length === 0 && missingTables.length === 0 && schemaStatus === 'present' && unverifiable.length === 0) {
-    console.log('PARITY OK: frontend API routes and the required Production schema sentinel are verified.');
-    process.exit(0);
-  }
-
-  console.error('PARITY FAILED: production schema is missing required objects or could not be verified.');
-  console.error('Do NOT publish until the database contract is verified.');
-  if (missingRpc.length) {
-    console.error(`\nMissing RPC functions (${missingRpc.length}):`);
-    missingRpc.forEach((f) => console.error(`  - ${f}`));
-  }
-  if (missingTables.length) {
-    console.error(`\nMissing tables (${missingTables.length}):`);
-    missingTables.forEach((t) => console.error(`  - ${t}`));
-  }
-  if (schemaStatus === 'missing') {
-    console.error(`\nMissing/failed schema contract: ${SCHEMA_SENTINEL_RPC}`);
-  }
-  if (unverifiable.length) {
-    console.error(`\nUnverifiable schema probes (${unverifiable.length}):`);
-    unverifiable.forEach((item) => console.error(`  - ${item}`));
-  }
-  process.exit(1);
 }
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();

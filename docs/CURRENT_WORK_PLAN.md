@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `70f25fe3c5e0411792ab9d7eb559424c9df047ad`
-- Current active branch: `perf/visible-read-coalescing-20261006`
-- Mandatory active work log: `docs/VISIBLE_READS_2026-10-06.md`
+- Latest main baseline reconciled: `a6a54802f77b773e4822ffbb430dabf18087bf68`
+- Current active branch: `perf/metadata-parity-20261006`
+- Mandatory active work log: `docs/METADATA_PARITY_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Prepare frontend-only hidden display read suppression and scoped kitchen refresh
-coalescing. No new database/schema/API changes. Production remains unchanged
-until exact-head Full Verify green and fresh explicit merge/deploy approval.
+Prepare a bounded, read-only catalog parity endpoint and fail-closed deployment
+checker. No operational RPC/table reads during parity. One additive invoker API
+requires separate explicit Production approval after exact-head Full Verify green.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -41,3 +41,6 @@ until exact-head Full Verify green and fresh explicit merge/deploy approval.
 
 - #460 completed at 70f25fe3: KDS archive/empty finish applied and deployed;
   postmerge Verify 37450491227 and Pages 37450491020 green.
+
+- #461 completed at a6a54802: hidden display reads/coalescing deployed;
+  postmerge Verify 37454652097 and Pages 37454651969 green.
