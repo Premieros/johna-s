@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06T08:02:03.777Z",
+  "generated_at": "2026-10-06T08:27:08.009Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -629,10 +629,12 @@
         "branch_id",
         "filters",
         "from_date",
+        "from_ts",
         "page",
         "page_size",
         "report_type",
-        "to_date"
+        "to_date",
+        "to_exclusive_ts"
       ]
     },
     {
