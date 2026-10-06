@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { catalog } from '@/api/domains/catalog';
 import { useAuth } from '@/context/AuthContext';
 import { useLatestRead } from '@/hooks/useLatestRead';
@@ -8,7 +8,7 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 
-export function KitchenCompletedHistory({ branchId, station, ar }: { branchId: string; station: string; ar: boolean }) {
+export const KitchenCompletedHistory = memo(function KitchenCompletedHistory({ branchId, station, ar }: { branchId: string; station: string; ar: boolean }) {
   const { user } = useAuth();
   const history = useHistoryAccess();
   const [from, setFrom] = useState(businessDateISO);
@@ -53,4 +53,4 @@ export function KitchenCompletedHistory({ branchId, station, ar }: { branchId: s
       {!result.data.rows.length && <p className="py-8 text-center text-ui-muted">{ar ? 'لا توجد طلبات منتهية متاحة في هذه الفترة والمحطة' : 'No completed orders available for this period and station'}</p>}
     </>}
   </div>;
-}
+});
