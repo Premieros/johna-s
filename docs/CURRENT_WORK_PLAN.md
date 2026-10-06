@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `589cb22e50aa2cc4069c49f4d12cb35b5bbabe3d`
-- Current active branch: `fix/dashboard-periods-count-pricing-20261006`
-- Mandatory active work log: `docs/USER_REPORTS_PERIODS_PRICING_2026-10-06.md`
+- Latest main baseline reconciled: `a656caf2c497aacb4c703ea9555a8acfe0dc4730`
+- Current active branch: `perf/heavy-report-loads-20261006`
+- Mandatory active work log: `docs/HEAVY_REPORT_LOADS_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,14 +18,10 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Combine the user's complaints and reporting requests in one sequential work plan:
-- Today-default dashboard; this month, previous month and custom inclusive Cairo dates.
-- Expense account code/name in the complete expense report/print/export.
-- Selected-period costing summary/order margins and raw consumption-cost report.
-- Optional Excel stock-unit cost retained in new raw-material stock-count drafts.
-- Current/last retained actual FIFO inventory cost displayed consistently; manual reference
-  price history and historical operation cost remain distinct.
-No Production write/apply/publishing is authorized by this implementation step.
+Continue heavy-page/resource repairs sequentially: bounded operational report reads
+with caller-visible server totals and full on-demand export/print; remove unrelated
+Costing Center reads and effect amplification. Inspect Production read-only.
+No Production apply/merge/publishing is authorized for this new scope.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -34,6 +30,8 @@ No Production write/apply/publishing is authorized by this implementation step.
 - No real sales, kitchen sends or printing tests were performed by the agent.
 
 ## Remaining gated work
+- #458 completed at a656caf2: approved count/FIFO reporting migrations applied;
+  Verify 37428702085 and Pages 37428702093 passed. All five requested features deployed.
 - #456 phone UI merged/deployed at 589cb22e; Verify 37341254404 and Pages 37341254396 passed.
 - #453 approved/applied; catalog function/policy hashes unchanged. Deployment 37323787272 passed.
 - #454 journal frontend paging completed and deployed.
