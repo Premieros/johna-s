@@ -31,9 +31,8 @@ describe('UI and production database drift guards', () => {
     const sentinel = read('supabase/migrations/20260905103000_production_schema_contract_sentinel.sql');
 
     expect(source).toContain("const SCHEMA_SENTINEL_RPC = '_production_schema_contract_kitchen_v1'");
-    expect(source).toContain("return json === true ? 'present' : 'missing'");
-    expect(source).toContain("schemaStatus === 'present'");
-    expect(source).toContain("text.includes('PGRST202')");
+    expect(source).toContain("if (schema !== true) throw new Error");
+    expect(source).toContain('No operational probe fallback');
 
     expect(sentinel).toContain("a.attname = 'inventory_warehouse_id'");
     expect(sentinel).toContain("to_regclass('public.order_kitchen_inventory_events') IS NOT NULL");
