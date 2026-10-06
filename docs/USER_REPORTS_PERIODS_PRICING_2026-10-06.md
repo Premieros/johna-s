@@ -50,13 +50,13 @@ inventory valuation unit cost, not a newly selected first-layer quote or the lat
 manual/purchase/count reference price. FIFO dispatch remains the existing expiry_date,
 created_at,id order per warehouse. Historical operation cost remains its ledger cost.
 Catalog, pricing (separate manual-reference field), recipe previews, reorder estimates,
-shift ingredient estimates and import recipe validation use that existing actual source.
+shift ingredient estimates, raw-material Excel exports and import recipe validation use that existing actual source.
 Costing Center shows FIFO inventory cost separately from reference price history.
-Proposed migration 20261006062830 changes only reporting recipe-cost context/overview,
+Proposed migration 20261006062830 changes only reporting recipe-cost context/overview and current negative-exposure estimates,
 preserving current scope/privileges; no deduction/production/printing function is touched.
 No Production apply/merge/deploy is authorized. Previous Full Verify a4c5ab9f / run
 37422051836 passed 1480 unit, 910 DB/security and 119 browser tests; the expanded head
-requires fresh full verification and captures for both reporting functions.
+requires fresh full verification and captures for the three reporting functions.
 
 ## Verification ledger
 Local full unit/component suite passed: 304 files / 1480 tests. Application typecheck and initial build passed; final test typecheck/build and exact-head CI pending. New component tests verify shared period parameters;
