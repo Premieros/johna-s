@@ -5,14 +5,15 @@ SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '10s';
 CREATE FUNCTION public.get_operational_report_page(
   p_report_type text, p_branch_id uuid, p_from_date date, p_to_date date,
-  p_filters jsonb DEFAULT '{}'::jsonb, p_page integer DEFAULT 0, p_page_size integer DEFAULT 100
+  p_filters jsonb DEFAULT '{}'::jsonb, p_page integer DEFAULT 0, p_page_size integer DEFAULT 100,
+  p_from_ts timestamptz DEFAULT NULL, p_to_exclusive_ts timestamptz DEFAULT NULL
 ) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_result jsonb;
-  v_from timestamptz := p_from_date::timestamp AT TIME ZONE 'Africa/Cairo';
-  v_to timestamptz := (p_to_date + 1)::timestamp AT TIME ZONE 'Africa/Cairo';
+  v_from timestamptz := COALESCE(p_from_ts, p_from_date::timestamp AT TIME ZONE 'Africa/Cairo');
+  v_to timestamptz := COALESCE(p_to_exclusive_ts, (p_to_date + 1)::timestamp AT TIME ZONE 'Africa/Cairo');
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
   IF p_report_type IS NULL OR p_report_type NOT IN ('sales','purchases','expenses') THEN
@@ -23,6 +24,9 @@ BEGIN
   END IF;
   IF p_page IS NULL OR p_page < 0 OR p_page > 1000000 OR p_page_size IS NULL OR p_page_size < 1 OR p_page_size > 200 THEN
     RAISE EXCEPTION 'REPORT_PAGE_INVALID';
+  END IF;
+  IF (p_from_ts IS NULL) <> (p_to_exclusive_ts IS NULL) OR v_from >= v_to THEN
+    RAISE EXCEPTION 'REPORT_TIMESTAMP_BOUNDS_INVALID';
   END IF;
   IF p_filters IS NULL OR jsonb_typeof(p_filters) <> 'object' THEN RAISE EXCEPTION 'REPORT_FILTERS_INVALID'; END IF;
   IF p_report_type = 'sales' THEN
@@ -98,8 +102,8 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-REVOKE ALL ON FUNCTION public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer) TO authenticated,service_role;
-COMMENT ON FUNCTION public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer)
-IS 'Bounded operational report details and complete filtered totals under existing caller RLS; Cairo calendar dates. No authorization bypass.';
+REVOKE ALL ON FUNCTION public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer,timestamptz,timestamptz) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer,timestamptz,timestamptz) TO authenticated,service_role;
+COMMENT ON FUNCTION public.get_operational_report_page(text,uuid,date,date,jsonb,integer,integer,timestamptz,timestamptz)
+IS 'Bounded operational report details and complete filtered totals under existing caller RLS; Cairo calendar dates with optional explicit UTC bounds shared by screen/export. No authorization bypass.';
 COMMIT;
