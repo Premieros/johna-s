@@ -1,14 +1,14 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { KitchenDisplayPage } from '@/features/inventory/pages/KitchenDisplayPage';
-const mocks=vi.hoisted(()=>({ rpc:vi.fn(), history:vi.fn(), setStatus:vi.fn(), context:vi.fn(), finishEmpty:vi.fn(), branch:'a',user:{id:'u'},can:vi.fn(()=>true) }));
+const mocks=vi.hoisted(()=>({ rpc:vi.fn(), history:vi.fn(), setStatus:vi.fn(), context:vi.fn(), finishEmpty:vi.fn(), branch:'a',user:{id:'u'},can:vi.fn(()=>true), refresh:()=>{} }));
 vi.mock('@/api',()=>({supabase:{rpc:mocks.rpc}}));
 vi.mock('@/api/domains/catalog',()=>({catalog:{getKitchenOrderContext:mocks.context,getKitchenCompletedHistory:mocks.history,setKitchenStatus:mocks.setStatus,finishEmptyKitchenOrder:mocks.finishEmpty}}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:mocks.user})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/lib/useBranchFilter',()=>({useBranchFilter:()=>mocks.branch}));
 vi.mock('@/lib/permissions',()=>({useCan:()=>mocks.can}));
-vi.mock('@/features/pos/services/posRealtime',()=>({subscribePosRealtime:()=>()=>{}}));
+vi.mock('@/features/pos/services/posRealtime',()=>({subscribePosRealtime:({onEvent}:{onEvent:()=>void})=>{mocks.refresh=onEvent;return ()=>{};}}));
 vi.mock('@/components/design/DesignSurface',()=>({DesignSurface:({children}:{children:React.ReactNode})=><div>{children}</div>,DesignPageHeader:()=>null}));
 const queueRow=(id:string, seconds:number)=>({order_id:id,order_number:id,station:'main',kitchen_status:'sent',created_at:new Date(Date.now()-seconds*1000).toISOString(),elapsed_seconds:seconds,items:[]});
 beforeEach(()=>{
@@ -19,8 +19,18 @@ beforeEach(()=>{
  mocks.setStatus.mockReset().mockResolvedValue(undefined);
  mocks.finishEmpty.mockReset().mockResolvedValue({data:{success:true,changed:true},error:null});
 });
-afterEach(()=>vi.useRealTimers());
+afterEach(()=>{delete (document as unknown as {hidden?:boolean}).hidden;vi.useRealTimers();});
 describe('KDS 40-minute display archive',()=>{
+ it('stops ten background polls and refreshes current state on return',async()=>{
+  vi.useFakeTimers();let hidden=false;Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
+  render(<KitchenDisplayPage/>);await act(async()=>{await Promise.resolve();await Promise.resolve();});
+  expect(screen.getByText('#RECENT')).toBeVisible();const calls=mocks.rpc.mock.calls.filter(([name])=>name==='get_kitchen_queue').length;
+  hidden=true;await act(async()=>{vi.advanceTimersByTime(300000);});
+  expect(mocks.rpc.mock.calls.filter(([name])=>name==='get_kitchen_queue')).toHaveLength(calls);
+  hidden=false;await act(async()=>{mocks.refresh();await Promise.resolve();await Promise.resolve();});
+  expect(mocks.rpc.mock.calls.filter(([name])=>name==='get_kitchen_queue')).toHaveLength(calls+1);
+  expect(mocks.setStatus).not.toHaveBeenCalled();
+ });
  it('separates active and expired cards without changing statuses and reads completed history lazily',async()=>{
   render(<KitchenDisplayPage/>);
   expect(await screen.findByText('#RECENT')).toBeVisible();
