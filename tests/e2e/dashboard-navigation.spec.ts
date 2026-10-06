@@ -198,12 +198,13 @@ test.describe('dashboard and navigation actions', () => {
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/#/reports');
-      await expect(page.getByText('PAGE-0', { exact: true }).first()).toBeVisible();
+      const results = width < 640 ? page.getByTestId('reports-mobile-results') : page.getByRole('table');
+      await expect(results.getByText('PAGE-0', { exact: true })).toBeVisible();
       expect(reads[reads.length - 1]?.p_page_size).toBe(100);
       const pager = page.getByRole('navigation', { name: /صفحات التقرير|Report pages/ });
       await expect(pager).toContainText('205');
       await pager.getByRole('button', { name: /التالي|Next/ }).click();
-      await expect(page.getByText('PAGE-100', { exact: true }).first()).toBeVisible();
+      await expect(results.getByText('PAGE-100', { exact: true })).toBeVisible();
       expect(reads[reads.length - 1]?.p_page).toBe(1);
       await expect(pager).toContainText('205');
       expect(fullSalesReads).toBe(0);
