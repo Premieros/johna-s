@@ -1,3 +1,4 @@
+import { expenseAccountLabel } from '../utils/expenseAccountLabel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLatestRead } from '@/hooks/useLatestRead';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
@@ -294,6 +295,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const rows = expenses.map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
         [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(expense.expense_date as string, lang),
         [lang === 'ar' ? 'الفئة' : 'Category']: expense.category || '',
+        [lang === 'ar' ? 'حساب المصروف' : 'Expense account']: expenseAccountLabel(expense, lang),
         [lang === 'ar' ? 'الوصف' : 'Description']: expense.description || '',
         [lang === 'ar' ? 'المبلغ' : 'Amount']: Number(expense.amount || 0),
       }));
