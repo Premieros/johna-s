@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `1a15bc6ad3176c6fed77bfb9298de235652c546f`
-- Current active branch: `fix/pos-mobile-stations-20261005`
-- Mandatory active work log: `docs/POS_MOBILE_STATIONS_2026-10-05.md`
+- Latest main baseline reconciled: `589cb22e50aa2cc4069c49f4d12cb35b5bbabe3d`
+- Current active branch: `fix/dashboard-periods-count-pricing-20261006`
+- Mandatory active work log: `docs/USER_REPORTS_PERIODS_PRICING_2026-10-06.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,12 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Implement the explicitly requested phone-only POS tables and station/category browsing UI.
-Use existing branch station/category reads; preserve desktop layout, sale/kitchen RPCs,
-printing, permissions/RLS, stock and accounting. No migrations or Production data writes.
+Combine the user's complaints and reporting requests in one sequential work plan:
+- Today-default dashboard; this month, previous month and custom inclusive Cairo dates.
+- Expense account code/name in the complete expense report/print/export.
+- Selected-period costing summary/order margins and raw consumption-cost report.
+- Optional Excel stock-unit cost retained in new raw-material stock-count drafts.
+No Production write/apply/publishing is authorized by this implementation step.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -29,9 +32,9 @@ printing, permissions/RLS, stock and accounting. No migrations or Production dat
 - No real sales, kitchen sends or printing tests were performed by the agent.
 
 ## Remaining gated work
-- Phone POS UI requires exact-head Full Verify and protected Pages deployment.
+- #456 phone UI merged/deployed at 589cb22e; Verify 37341254404 and Pages 37341254396 passed.
 - #453 approved/applied; catalog function/policy hashes unchanged. Deployment 37323787272 passed.
-- Journal frontend paging: bounded rows, full totals and scoped cursor reset; exact-head CI gate.
+- #454 journal frontend paging completed and deployed.
 - Server aggregation for heavy reports; retain complete print/export and financial formulas.
 - Supplier/purchase permission dependencies, costing, period controls and recovery evidence
   remain separate review work.
