@@ -37,12 +37,14 @@ Implemented: new invoker bounded sales/purchase/expense page plus complete filte
 totals, joined metadata only for page rows; existing full loaders used on demand
 for export/print. Applied date/filter snapshots retained across page navigation.
 Implemented: independent active-tab Costing Center reads and lazy supplier/unit selectors.
+Explicit UTC bounds from the existing report date helper are shared with full
+exports (including Cairo DST boundaries); no business-clock helper is changed.
 No existing policy or function definition changed by the proposed page API.
 Obsolete full exports abort HTTP/pagination on reader-scope changes; late supplier
 selectors are discarded. Optional measurement-unit reads are branch-scoped.
 
 ## Verification ledger
-Local targeted 26 tests, typecheck:all and build passed; full 306 files / 1486 tests passed after the subtitle assertion update. Added cancellation tests require a final verification head. Initial full unit run: 1485 passed / 1 stale subtitle-string contract failed; updated it to require applied export dates while retaining branch labels. Exact-head 2a6c1d06 / Full Verify 37434650041: lint/types/1489 unit tests/build and Pages continuity passed; DB failed during the new fixture setup (invalid expense status draft). Existing 910 DB/security tests passed, new 6 skipped due to that setup failure; browser skipped. Fixture corrected to the existing valid voided status; no production constraint weakened. Fresh full verification required. Required: empty/late/foreign
+Local targeted 26 tests, typecheck:all and build passed; full 306 files / 1486 tests passed after the subtitle assertion update. Added cancellation tests require a final verification head. Initial full unit run: 1485 passed / 1 stale subtitle-string contract failed; updated it to require applied export dates while retaining branch labels. Exact-head 2a6c1d06 / Full Verify 37434650041: lint/types/1489 unit tests/build and Pages continuity passed; DB failed during the new fixture setup (invalid expense status draft). Existing 910 DB/security tests passed, new 6 skipped due to that setup failure; browser skipped. Fixture corrected to the existing valid voided status; no production constraint weakened. Subsequent 495a642a / run 37435559986 passed all 916 DB/security tests (172 files), confirming page/RLS equivalence; this is superseded for final certification by the added explicit UTC-bound contract/DST fixture. Fresh full verification required. Required: empty/late/foreign
 scope reads, >100 rows, identical direct-RLS totals/filters/history, export beyond
 first page, applied-filter stability and no extra Costing Center reloads.
 
