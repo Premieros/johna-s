@@ -14,8 +14,8 @@ const filterQ = <T,>(
   applier: (builder: EqBuilder, filters: ReportFilters) => EqBuilder,
 ): T => applier(q as unknown as EqBuilder, filters) as unknown as T;
 
-const fetchRows = <T,>(query: unknown): Promise<T[]> =>
-  fetchAllReportRows(query as RangePageQuery<T>);
+const fetchRows = <T,>(query: unknown, signal?: AbortSignal): Promise<T[]> =>
+  fetchAllReportRows(query as RangePageQuery<T>, 1000, signal);
 
 export async function loadOperationalReportPage(args: {
   reportType: 'sales' | 'purchases' | 'expenses'; branchId: string | null;
@@ -36,6 +36,7 @@ export async function loadSalesReportRows(args: {
   fromTs: string;
   toExclusiveTs: string;
   filters: ReportFilters;
+  signal?: AbortSignal;
 }): Promise<Record<string, unknown>[]> {
   let q = supabase
     .from('sales')
@@ -45,7 +46,7 @@ export async function loadSalesReportRows(args: {
     .order('created_at', { ascending: false }).order('id', { ascending: false });
   if (args.branchId) q = q.eq('branch_id', args.branchId);
   q = filterQ(q, args.filters, applySalesFilters);
-  return fetchRows<Record<string, unknown>>(q);
+  return fetchRows<Record<string, unknown>>(q, args.signal);
 }
 
 export async function loadPurchaseReportRows(args: {
@@ -53,6 +54,7 @@ export async function loadPurchaseReportRows(args: {
   fromTs: string;
   toExclusiveTs: string;
   filters: ReportFilters;
+  signal?: AbortSignal;
 }): Promise<Record<string, unknown>[]> {
   let q = supabase
     .from('purchases')
@@ -62,7 +64,7 @@ export async function loadPurchaseReportRows(args: {
     .order('created_at', { ascending: false }).order('id', { ascending: false });
   if (args.branchId) q = q.eq('branch_id', args.branchId);
   q = filterQ(q, args.filters, applyPurchaseFilters);
-  return fetchRows<Record<string, unknown>>(q);
+  return fetchRows<Record<string, unknown>>(q, args.signal);
 }
 
 export async function loadExpenseReportRows(args: {
@@ -70,6 +72,7 @@ export async function loadExpenseReportRows(args: {
   from: string;
   to: string;
   filters: ReportFilters;
+  signal?: AbortSignal;
 }): Promise<Record<string, unknown>[]> {
   let q = supabase
     .from('expenses')
@@ -80,5 +83,5 @@ export async function loadExpenseReportRows(args: {
     .order('expense_date', { ascending: false }).order('id', { ascending: false });
   if (args.branchId) q = q.eq('branch_id', args.branchId);
   q = filterQ(q, args.filters, applyExpenseFilters);
-  return fetchRows<Record<string, unknown>>(q);
+  return fetchRows<Record<string, unknown>>(q, args.signal);
 }
