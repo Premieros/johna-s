@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/kds-40-minute-archive-20261006`
-Current PR: `0`
+Current PR: `#460`
 Last updated: 2026-10-06
 
 ## Work status
@@ -42,8 +42,7 @@ No ordinary status/station/dispatch function is changed. No automatic cleanup pe
 Scoped reads discard obsolete branch/user results; message mapping explains station denial.
 
 ## Verification ledger
-Local component boundary/archiving/lazy/error/scope tests and integration fixtures
-prepared. Required: exact-head full unit/types/build, isolated history RLS/paging and
+Local 309 files / 1496 unit/component tests, application/test type checks, changed-source ESLint and build passed. Component tests cover exact 40-minute boundary without new reads/writes, lazy history, failure/retry, scope discard and explicit empty cleanup. Isolated integration fixtures prepared. Required: exact-head full unit/types/build, isolated history RLS/paging and
 cleanup state/permission/non-empty/idempotence/stock/print/accounting checks, browser.
 
 ## Production gate
