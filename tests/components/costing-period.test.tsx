@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CostingCenterPage } from '@/features/costing/pages/CostingCenterPage';
 const mocks = vi.hoisted(() => ({ summary: vi.fn(), consumption: vi.fn(), orders: vi.fn(), branches: [{ id: 'a', name: 'A' }], show: vi.fn(), t: (key: string) => key }));
+vi.mock('@/features/costing/services/rawFifoCostData', () => ({ loadRawFifoCosts: async () => [], rawFifoCostMap: () => ({}) }));
 vi.mock('@/api', () => ({ costing: {
   getOverview: async () => ({ data: [] }), getRawMaterialCostOverview: async () => ({ data: [] }),
   getSalesSummary: mocks.summary, getRawConsumptionCostBreakdown: mocks.consumption, getOrderMargin: mocks.orders,
