@@ -55,6 +55,7 @@ export function CostingCenterPage() {
   const [draftTo, setDraftTo] = useState(toDate);
   const [periodRows, setPeriodRows] = useState<RawConsumptionCostBreakdownRow[]>([]);
   const request = useRef(0);
+  const supplierRequest = useRef(0);
   const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -63,27 +64,27 @@ export function CostingCenterPage() {
     try {
       const b = await loadCostingBranches();
       setBranches(b);
-      if (!branchId && b.length === 1) setBranchId(b[0].id);
-    } catch (error) {
-      show(error instanceof Error ? error.message : t('error'), 'error');
-    }
-  }, [branchId, show, t]);
-
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const s = await loadCostingSuppliers();
-      setSuppliers(s);
-      if (s.length > 0) setSupplierId(s[0].id);
+      if (b.length === 1) setBranchId((current) => current || b[0].id);
     } catch (error) {
       show(error instanceof Error ? error.message : t('error'), 'error');
     }
   }, [show, t]);
 
-  const loadRawMaterialUnits = useCallback(async () => {
-    setRawMaterialUnits(await loadRawMaterialUnitDisplayMap());
-  }, []);
-
   const effBranch = useMemo(() => branchId || null, [branchId]);
+
+  const loadSuppliers = useCallback(async () => {
+    const requestId = ++supplierRequest.current;
+    setSuppliers([]); setSupplierId(''); setSupplierImpact([]);
+    try {
+      const s = await loadCostingSuppliers(effBranch);
+      if (requestId !== supplierRequest.current) return;
+      setSuppliers(s);
+      setSupplierId((current) => s.some((row) => row.id === current) ? current : s[0]?.id || '');
+    } catch (error) {
+      if (requestId !== supplierRequest.current) return;
+      show(error instanceof Error ? error.message : t('error'), 'error');
+    }
+  }, [effBranch, show, t]);
 
   const loadOverview = useCallback(async () => {
     const requestId = ++request.current;
@@ -193,16 +194,40 @@ export function CostingCenterPage() {
   }, [show]);
 
   useEffect(() => { void loadBranches(); }, [loadBranches]);
-  useEffect(() => { void loadSuppliers(); }, [loadSuppliers]);
-  useEffect(() => { void loadRawMaterialUnits(); }, [loadRawMaterialUnits]);
   useEffect(() => {
-    if (tab === 'overview') void loadOverview();
-    else if (tab === 'raw_prices') void loadRawCosts();
-    else if (tab === 'orders') void loadOrders();
-    else if (tab === 'period') void loadPeriod();
-    else void loadSupplierImpact();
-    return () => { request.current += 1; };
-  }, [tab, loadOverview, loadRawCosts, loadOrders, loadSupplierImpact, loadPeriod]);
+    if (tab !== 'supplier') return;
+    void loadSuppliers();
+    return () => { supplierRequest.current += 1; };
+  }, [tab, loadSuppliers]);
+  const needsRawUnits = tab === 'raw_prices' || detail !== null || rawHistoryTarget !== null;
+  useEffect(() => {
+    if (!needsRawUnits) return;
+    let active = true;
+    void loadRawMaterialUnitDisplayMap(effBranch).then((units) => { if (active) setRawMaterialUnits(units); });
+    return () => { active = false; };
+  }, [needsRawUnits, effBranch]);
+  // Dependencies belong to their tab: supplier/branch-list completion must not
+  // restart a product overview or an unrelated dated report.
+  useEffect(() => {
+    if (tab !== 'overview') return;
+    void loadOverview(); return () => { request.current += 1; };
+  }, [tab, loadOverview]);
+  useEffect(() => {
+    if (tab !== 'raw_prices') return;
+    void loadRawCosts(); return () => { request.current += 1; };
+  }, [tab, loadRawCosts]);
+  useEffect(() => {
+    if (tab !== 'orders') return;
+    void loadOrders(); return () => { request.current += 1; };
+  }, [tab, loadOrders]);
+  useEffect(() => {
+    if (tab !== 'period') return;
+    void loadPeriod(); return () => { request.current += 1; };
+  }, [tab, loadPeriod]);
+  useEffect(() => {
+    if (tab !== 'supplier') return;
+    void loadSupplierImpact(); return () => { request.current += 1; };
+  }, [tab, loadSupplierImpact]);
 
   const openDetail = async (productId: string) => {
     setDetailLoading(true);

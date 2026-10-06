@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   userId: 'reader',
   branches: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
   loadSales: vi.fn(),
+  fullSales: vi.fn(),
   loadOptions: vi.fn(),
   print: vi.fn(),
   excel: vi.fn(),
@@ -24,7 +25,10 @@ vi.mock('@/features/reporting/useColumnPreferences', () => ({ useColumnPreferenc
 vi.mock('@/features/reporting/useCustomReports', () => ({ useCustomReports: () => ({ savedReports: [], saveReport: vi.fn(), deleteReport: vi.fn() }) }));
 vi.mock('@/features/reporting/ColumnPicker', () => ({ ColumnPicker: () => null }));
 vi.mock('@/features/reporting/CustomReportBar', () => ({ CustomReportBar: () => null }));
-vi.mock('@/features/reporting/services/reportCoreLoaders', () => ({ loadSalesReportRows: mocks.loadSales, loadPurchaseReportRows: vi.fn(), loadExpenseReportRows: vi.fn() }));
+vi.mock('@/features/reporting/services/reportCoreLoaders', () => ({ loadOperationalReportPage: async (args: { page: number }) => {
+  const rows = await mocks.loadSales(args) as Record<string, unknown>[];
+  return { rows: rows.slice(args.page * 100, args.page * 100 + 100), summary: { count: rows.length, total: rows.reduce((sum, row) => sum + Math.max(0, Number(row.total || 0) - Number(row.refunded_amount || 0)), 0) } };
+}, loadSalesReportRows: mocks.fullSales, loadPurchaseReportRows: vi.fn(), loadExpenseReportRows: vi.fn() }));
 vi.mock('@/features/reporting/services/reportFilterOptions', () => ({
   loadReportFilterOptions: mocks.loadOptions,
   loadExpenseCategoryOptions: async () => [],
@@ -43,7 +47,7 @@ function deferred() {
   return { promise, resolve };
 }
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
+beforeEach(() => { vi.clearAllMocks(); vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
   it('shows filter-specific failures and retries options without rerunning a successful report', async () => {
@@ -59,18 +63,21 @@ describe('report read stability', () => {
   });
 
   it('bounds screen rows but prints/exports full rows and retains full totals', async () => {
-    mocks.loadSales.mockResolvedValue(Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`)));
+    const all = Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`));
+    mocks.loadSales.mockResolvedValue(all); mocks.fullSales.mockResolvedValue(all);
     render(page());
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
     const body = () => within(screen.getByRole('table').querySelector('tbody')!);
     expect(body().queryByText('invoice-204')).toBeNull();
+    expect(mocks.fullSales).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(body().getByText('invoice-100')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(body().getByText('invoice-204')).toBeTruthy();
+    await waitFor(() => expect(body().getByText('invoice-204')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'print' }));
-    expect(mocks.print.mock.calls[0][0].rows).toHaveLength(205);
+    await waitFor(() => expect(mocks.print.mock.calls[0][0].rows).toHaveLength(205));
     fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
-    expect(mocks.excel.mock.calls[0][0].data).toHaveLength(205);
+    await waitFor(() => expect(mocks.excel.mock.calls[0][0].data).toHaveLength(205));
   });
 
   it('discards old branch results including old summary and clears scope before paint', async () => {
@@ -108,6 +115,47 @@ describe('report read stability', () => {
     expect(mocks.loadSales.mock.calls[2][0].filters.customer).toBeUndefined();
   });
 
+  it('keeps applied dates on Next and full export even if drafts have changed', async () => {
+    const all = Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`));
+    mocks.loadSales.mockResolvedValue(all); mocks.fullSales.mockResolvedValue(all);
+    render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
+    const appliedFrom = mocks.loadSales.mock.calls[0][0].from;
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(2));
+    expect(mocks.loadSales.mock.calls[1][0]).toMatchObject({ from: appliedFrom, page: 1 });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'exportExcel' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
+    await waitFor(() => expect(mocks.excel).toHaveBeenCalled());
+    expect(mocks.excel.mock.calls[0][0].filename).toContain(appliedFrom);
+    expect(mocks.excel.mock.calls[0][0].filename).not.toContain('2026-01-01');
+  });
+
+  it('cancels an obsolete full export and discards its data after a scope change', async () => {
+    const full = deferred();
+    mocks.loadSales.mockResolvedValue([sale('sale')]); mocks.fullSales.mockReturnValue(full.promise);
+    const { rerender } = render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
+    await waitFor(() => expect(mocks.fullSales).toHaveBeenCalled());
+    const signal = mocks.fullSales.mock.calls[0][0].signal as AbortSignal;
+    mocks.branch = 'b'; rerender(page());
+    expect(signal.aborted).toBe(true);
+    await act(async () => { full.resolve([sale('obsolete','a',999)]); });
+    expect(mocks.excel).not.toHaveBeenCalled();
+  });
+
+  it('does not export a partial report after a full-data read fails', async () => {
+    mocks.loadSales.mockResolvedValue([sale('sale')]);
+    mocks.fullSales.mockRejectedValue(new Error('NETWORK_ERROR'));
+    render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
+    await screen.findByRole('alert');
+    expect(mocks.excel).not.toHaveBeenCalled();
+  });
+
   it('shows a read failure, prevents empty printing, and retries successfully', async () => {
     mocks.loadSales.mockRejectedValueOnce(new Error('NETWORK_ERROR')).mockResolvedValueOnce([sale('retry-sale')]);
     render(page());
@@ -127,6 +175,6 @@ describe('report read stability', () => {
     expect(mocks.loadSales).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(2));
-    expect(mocks.loadSales.mock.calls[1][0].fromTs).toContain('2026-09-30');
+    expect(mocks.loadSales.mock.calls[1][0].from).toBe('2026-10-01');
   });
 });

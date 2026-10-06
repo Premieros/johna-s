@@ -41,13 +41,15 @@ export interface PrintReportOptions {
   lang?: 'ar' | 'en';
 }
 
-export function openPrintWindow(options: PrintReportOptions): void {
+export function openPrintWindow(options: PrintReportOptions, reservedWindow?: Window | null): void {
   const dir = options.lang === 'ar' ? 'rtl' : 'ltr';
   const title = escapeHtml(options.title);
   const subtitle = options.subtitle ? `<p class="subtitle">${escapeHtml(options.subtitle)}</p>` : '';
   const head = options.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
   const body = options.rows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
-  const win = window.open('', '_blank', 'width=960,height=680');
+  // A caller loading a complete report asynchronously reserves this during the
+  // click gesture so popup blockers cannot discard its print window.
+  const win = reservedWindow === undefined ? window.open('', '_blank', 'width=960,height=680') : reservedWindow;
   if (!win) return;
   win.document.write(
     `<!doctype html>

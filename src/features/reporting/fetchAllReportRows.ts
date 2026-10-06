@@ -5,6 +5,7 @@ export interface PagedResult<T> {
 
 export interface RangePageQuery<T> {
   range(from: number, to: number): PromiseLike<PagedResult<T>>;
+  abortSignal?(signal: AbortSignal): RangePageQuery<T>;
 }
 
 /**
@@ -15,9 +16,12 @@ export interface RangePageQuery<T> {
 export async function fetchAllReportRows<T>(
   query: RangePageQuery<T>,
   pageSize = 1000,
+  signal?: AbortSignal,
 ): Promise<T[]> {
+  if (signal && query.abortSignal) query = query.abortSignal(signal);
   const rows: T[] = [];
   for (let from = 0; ; from += pageSize) {
+    signal?.throwIfAborted();
     const { data, error } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message || 'REPORT_PAGE_LOAD_FAILED');
     const page = data || [];

@@ -179,4 +179,38 @@ test.describe('dashboard and navigation actions', () => {
     }
   });
 
+  test('operational reports request 100-row pages with full totals on phone and desktop', async ({ page }) => {
+    const reads: Record<string, unknown>[] = [];
+    let fullSalesReads = 0;
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/sales**`, async route => {
+      fullSalesReads += 1;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_page**`, async route => {
+      const args = route.request().postDataJSON(); reads.push(args);
+      const start = Number(args.p_page) * 100;
+      const rows = Array.from({ length: Math.min(100, 205 - start) }, (_, i) => ({
+        id: `p-${start + i}`, invoice_number: `PAGE-${start + i}`, created_at: '2026-10-06T08:00:00Z',
+        total: 10, paid_amount: 10, refunded_amount: 0, status: 'completed',
+      }));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { total: 2050, count: 205 } }) });
+    });
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/#/reports');
+      // Same-hash navigation keeps the prior page; start each viewport from a fresh document.
+      await page.reload();
+      const results = width < 640 ? page.getByTestId('reports-mobile-results') : page.getByRole('table');
+      await expect(results.getByText('PAGE-0', { exact: true })).toBeVisible();
+      expect(reads[reads.length - 1]?.p_page_size).toBe(100);
+      const pager = page.getByRole('navigation', { name: /صفحات التقرير|Report pages/ });
+      await expect(pager).toContainText('205');
+      await pager.getByRole('button', { name: /التالي|Next/ }).click();
+      await expect(results.getByText('PAGE-100', { exact: true })).toBeVisible();
+      expect(reads[reads.length - 1]?.p_page).toBe(1);
+      await expect(pager).toContainText('205');
+      expect(fullSalesReads).toBe(0);
+    }
+  });
+
 });
