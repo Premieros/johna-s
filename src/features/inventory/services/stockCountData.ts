@@ -11,7 +11,7 @@ export async function loadStockCountMetadata(): Promise<{
     supabase.from('branches').select('*').eq('is_active', true).order('name'),
     supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
     supabase.from('products').select('*').eq('is_active', true).order('name'),
-    supabase.from('raw_materials').select('*').eq('is_active', true).order('name'),
+    supabase.from('raw_materials').select('*, unit:measurement_units!raw_materials_unit_id_fkey(*)').eq('is_active', true).order('name'),
   ]);
 
   return {
