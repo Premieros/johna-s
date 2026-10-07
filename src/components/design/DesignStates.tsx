@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
+import { BrandLoading } from '@/components/BrandLoading';
 import { Button } from '@/components/Button';
 
 /**
@@ -21,7 +22,7 @@ export function DesignLoadingState({
   return (
     <div data-testid={testId} className={clsx('flex items-center justify-center py-12', className)}>
       <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-ui-primary border-t-transparent" />
+        <BrandLoading size={48} />
         {message ? <p className="text-sm text-ui-muted">{message}</p> : null}
       </div>
     </div>

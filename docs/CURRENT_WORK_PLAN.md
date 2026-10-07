@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `a6e838ae477fcd1c1e55812bcc5cc3c7b7063d7e`
-- Current active branch: `fix/dashboard-open-order-read-20261006`
-- Mandatory active work log: `docs/DASHBOARD_OPEN_ORDER_READ_2026-10-06.md`
+- Latest main baseline reconciled: `632ab8fa8b86fcf2ee168a0ade358eddc4f28e31`
+- Current active branch: `codex/premier-brand-20261007`
+- Mandatory active work log: `docs/PREMIER_BRAND_2026-10-07.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,10 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Repair the confirmed HTTP 300 dashboard orders embed by naming the existing
-order_items_order_id_fkey relationship. Preserve existing reads, totals, permissions
-and filters. Frontend only; Full Verify and explicit publication approval required.
+Apply supplied premier.os ivory P / violet identity to shared logo, default UI
+tokens/presets, login and browser icons. Follow warm ivory light reference and deep
+violet dark identity. Visual frontend changes only; publication requires explicit
+approval after exact-head Full Verify green.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

@@ -11,9 +11,9 @@ const standby = fs.readFileSync('src/features/dashboard/components/DashboardStan
 
 describe('dark POS contrast contract', () => {
   it('uses charcoal page hierarchy while reserving true black for StandBy', () => {
-    expect(css).toContain('--ui-page: 17 19 24;');
-    expect(css).toContain('--ui-surface: 24 27 33;');
-    expect(css).toContain('--ui-surface-raised: 32 36 44;');
+    expect(css).toContain('--ui-page: 18 19 24;');
+    expect(css).toContain('--ui-surface: 25 27 33;');
+    expect(css).toContain('--ui-surface-raised: 33 36 44;');
     expect(css).toContain('--ui-text: 248 250 252;');
     expect(css).toContain('--ui-muted: 203 213 225;');
     expect(css).toContain('--ui-accent: var(--brand-400);');

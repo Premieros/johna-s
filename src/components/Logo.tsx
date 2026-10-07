@@ -1,8 +1,5 @@
 import { type ReactNode } from 'react';
-
-const NAVY = '#0F172A';
-const GOLD = '#D4AF37';
-const WHITE = '#FFFFFF';
+import premierLogo from '../assets/brand/premier-os-logo.webp';
 
 export type LogoTone = 'navy' | 'white' | 'mono' | 'auto';
 export type LogoVariant = 'mark' | 'horizontal' | 'vertical';
@@ -16,24 +13,12 @@ interface LogoProps {
   className?: string;
 }
 
-function Mark({ stem, bowl, arrow, size }: { stem: string; bowl: string; arrow: string; size: number }) {
+/** Display the supplied artwork unchanged, framing only its geometric P mark. */
+function Mark({ size }: { size: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect x="4.75" y="3" width="4.5" height="18" rx="2.25" fill={stem} />
-      <path
-        d="M9.25 4.5 A 6 6 0 0 1 9.25 16.5"
-        stroke={bowl}
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
-      <path d="M14.6 2.8 L17.4 2.8 L16 6.6 Z" fill={arrow} />
+    <svg width={size} height={size} viewBox="350 255 600 640"
+      xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="shrink-0 rounded-lg">
+      <image href={premierLogo} width="1254" height="1254" />
     </svg>
   );
 }
@@ -42,21 +27,18 @@ export function Logo({
   size = 32,
   variant = 'mark',
   showTagline = true,
-  tone = 'navy',
+  tone = 'auto',
   tagline = 'Business Management Platform',
   className = '',
 }: LogoProps) {
-  const stem = tone === 'navy' ? NAVY : tone === 'white' ? WHITE : 'currentColor';
-  const bowl = tone === 'mono' ? 'currentColor' : GOLD;
-  const arrow = tone === 'mono' ? 'currentColor' : GOLD;
   const textCls =
     tone === 'white'
-      ? 'text-white'
+      ? 'text-[#F6F3ED]'
       : tone === 'mono'
         ? 'text-current'
         : 'text-ui-text';
 
-  const mark = <Mark stem={stem} bowl={bowl} arrow={arrow} size={size} />;
+  const mark = <Mark size={size} />;
 
   const textBlock = (
     <div className="flex flex-col" dir="ltr">
@@ -64,7 +46,7 @@ export function Logo({
         className={`font-bold tracking-tight leading-none ${textCls}`}
         style={{ fontSize: Math.round(size * 0.42) }}
       >
-        Premier
+        premier<span className="text-[#7545EF]">.</span>os
       </span>
       {showTagline && (
         <span
@@ -79,7 +61,7 @@ export function Logo({
 
   let content: ReactNode;
   if (variant === 'mark') {
-    content = <div className={className}>{mark}</div>;
+    content = <div className={className} role="img" aria-label="premier.os">{mark}</div>;
   } else if (variant === 'horizontal') {
     content = (
       <div className={`flex items-center gap-3 ${className}`} dir="ltr">

@@ -3,7 +3,7 @@ import type { Language } from './types';
 export const translations = {
   ar: {
     // App
-    appName: 'Premier',
+    appName: 'premier.os',
     appShortName: 'Premier',
     // Auth
     login: 'تسجيل الدخول',
@@ -902,7 +902,7 @@ export const translations = {
     refresh: 'تحديث',
   },
   en: {
-    appName: 'Premier',
+    appName: 'premier.os',
     appShortName: 'Premier',
     login: 'Login',
     logout: 'Logout',
