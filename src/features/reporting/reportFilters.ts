@@ -6,6 +6,7 @@ export type ReportType =
   | 'inventory'
   | 'sales_by_payment'
   | 'sales_by_employee'
+  | 'sales_by_station'
   | 'sales_by_product'
   | 'detailed_invoices'
   | 'component_consumption'
@@ -24,6 +25,7 @@ export type ReportType =
   | 'financial_reconciliation';
 
 export type ReportFilterKey =
+  | 'station'
   | 'warehouse'
   | 'cashier'
   | 'customer'
@@ -37,6 +39,7 @@ export type ReportFilterKey =
   | 'status';
 
 export interface ReportFilters {
+  station?: string;
   warehouse?: string;
   cashier?: string;
   customer?: string;
@@ -51,6 +54,7 @@ export interface ReportFilters {
 }
 
 export const REPORT_FILTER_KEYS: ReportFilterKey[] = [
+  'station',
   'warehouse',
   'cashier',
   'customer',
@@ -65,13 +69,14 @@ export const REPORT_FILTER_KEYS: ReportFilterKey[] = [
 ];
 
 export const ALL_REPORT_TYPES: ReportType[] = [
-  'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
+  'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
   'top_consumed_components', 'top_consumed_products', 'low_stock',
   'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption', 'raw_material_current_cost', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ];
 
 export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
+  sales_by_station: ['station', 'category', 'product', 'order_type', 'cashier', 'customer', 'payment_method'],
   sales: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
   sales_by_payment: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
   sales_by_employee: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
@@ -103,7 +108,7 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
 };
 
 export const DATE_DRIVEN_REPORTS = new Set<ReportType>([
-  'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
+  'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'component_consumption', 'top_consumed_components', 'top_consumed_products',
   'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ]);

@@ -5,7 +5,7 @@ import { loadExpenseCategoryOptions, loadReportFilterOptions, type ReportFilterO
 
 type PageFilterOptions = ReportFilterOptions & { expenseCategories: string[] };
 export const EMPTY_REPORT_FILTER_OPTIONS: PageFilterOptions = {
-  warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [],
+  stations: [], warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [],
 };
 
 /** Filter options share one scoped snapshot; partial failures and old categories never publish. */
@@ -15,6 +15,7 @@ export function useReportFilterOptions(reportType: ReportType, branchId: string 
     const dims = new Set(REPORT_FILTER_DIMS[reportType]);
     const [options, expenseCategories] = await Promise.all([
       loadReportFilterOptions(branchId, {
+        station: dims.has('station'),
         warehouse: dims.has('warehouse'),
         cashier: dims.has('cashier') || dims.has('buyer'),
         customer: dims.has('customer'),

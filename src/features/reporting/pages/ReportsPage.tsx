@@ -1,3 +1,4 @@
+import { loadStationSalesLines } from '../services/stationSalesReport';
 import { expenseAccountLabel } from '../utils/expenseAccountLabel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLatestRead } from '@/hooks/useLatestRead';
@@ -213,7 +214,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   // Capture draft filters only on Run report or an automatic report/scope change.
   const reportReader = useMemo(() => loadReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang]);
+    [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang, can]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);
@@ -257,7 +258,41 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       ? await loadOperationalReportPage({ reportType, branchId: effectiveBranchFilter || null,
         from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, page }) : null;
 
-    if (reportType === 'sales') {
+    if (reportType === 'sales_by_station') {
+      if (!can('reports.view')) throw new Error('PERMISSION_DENIED:reports.view');
+      const includeCost = can('reports.costing');
+      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
+      const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
+      setData(lines.map(line => withBranch(line.sale.branch_id, {
+        [label('الفاتورة', 'Invoice')]: line.sale.invoice_number,
+        [label('التاريخ', 'Date')]: formatDate(line.sale.created_at),
+        [label('المحطة', 'Station')]: line.station,
+        [label('التصنيف', 'Category')]: line.category,
+        [label('المنتج', 'Product')]: line.item.product?.name || label('منتج غير متاح', 'Unavailable product'),
+        [label('الوحدة', 'Unit')]: line.item.unit_name,
+        [label('نوع الطلب', 'Order Type')]: line.sale.order_type,
+        [label('أمين الصندوق', 'Cashier')]: line.sale.cashier?.full_name || '',
+        [label('العميل', 'Customer')]: line.sale.customer?.name || '',
+        [label('طريقة الدفع', 'Payment Method')]: line.sale.payment_method,
+        [label('الكمية المباعة', 'Sold Quantity')]: Number(line.item.quantity),
+        [label('الكمية المرتجعة', 'Returned Quantity')]: Number(line.item.refunded_quantity || 0),
+        [label('صافي الكمية', 'Net Quantity')]: line.netQuantity,
+        [label('سعر الوحدة', 'Unit Price')]: Number(line.item.unit_price),
+        [label('المبيعات قبل الخصم', 'Gross Sales')]: line.gross,
+        [label('الخصم الموزع', 'Allocated Discount')]: line.discount,
+        [label('الضريبة الموزعة', 'Allocated Tax')]: line.tax,
+        [label('الإجمالي الأصلي', 'Original Total')]: line.original,
+        [label('قيمة المرتجع', 'Return Value')]: line.refunded,
+        [label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax')]: line.netBeforeTax,
+        [label('صافي المبيعات', 'Net Sales')]: line.net,
+        ...(includeCost ? {
+          [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
+          [label('مجمل الربح', 'Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
+          [label('هامش الربح %', 'Profit Margin %')]: line.cost === null || !line.netBeforeTax ? label('غير متاح', 'Unavailable') : (line.netBeforeTax - line.cost) / line.netBeforeTax * 100,
+        } : {}),
+      })));
+      setSummary({ total: lines.reduce((sum, line) => sum + line.net, 0), count: lines.length });
+    } else if (reportType === 'sales') {
       const sales = corePage?.rows ?? await loadSalesReportRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
@@ -1067,7 +1102,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const handleExportExcel = async (complete: ReportSnapshot) => {
     const excelProfile = getReportExcelProfile(reportType, lang as 'ar' | 'en');
-    const totalRow = reportType === 'financial_reconciliation'
+    const totalRow = reportType === 'sales_by_station'
+      ? stationTotals(complete.rows)
+      : reportType === 'financial_reconciliation'
       ? {
         [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: complete.summary.total,
         [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: complete.summary.count,
@@ -1085,7 +1122,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       totalRow,
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
-      columns: excelProfile.columns,
+      columns: reportType === 'sales_by_station' ? columns : excelProfile.columns,
       columnWidths: excelProfile.columnWidths,
       sourceNote: excelProfile.sourceNote,
       lang,
@@ -1097,6 +1134,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     { key: 'sales', label: t('salesReport'), icon: <TrendingUp className="w-4 h-4" /> },
     { key: 'sales_by_payment', label: t('salesByPayment'), icon: <CreditCard className="w-4 h-4" /> },
     { key: 'sales_by_employee', label: t('salesByEmployee'), icon: <Users className="w-4 h-4" /> },
+    { key: 'sales_by_station', label: lang === 'ar' ? 'المبيعات حسب المحطة والتصنيف' : 'Sales by Station & Category', icon: <Package className="w-4 h-4" /> },
     { key: 'sales_by_product', label: t('salesByProduct'), icon: <Package className="w-4 h-4" /> },
     { key: 'detailed_invoices', label: t('detailedInvoices'), icon: <List className="w-4 h-4" /> },
     { key: 'purchases', label: t('purchasesReport'), icon: <ShoppingCart className="w-4 h-4" /> },
@@ -1134,6 +1172,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }
 
   const moneyKeys = [
+    'سعر الوحدة', 'Unit Price', 'المبيعات قبل الخصم', 'Gross Sales', 'الخصم الموزع', 'Allocated Discount', 'الضريبة الموزعة', 'Allocated Tax', 'قيمة المرتجع', 'Return Value', 'صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax', 'التكلفة المسجلة', 'Recorded Cost',
     lang === 'ar' ? 'الإجمالي' : 'Total', lang === 'ar' ? 'المبلغ' : 'Amount',
     lang === 'ar' ? 'الإجمالي الأصلي' : 'Original Total', lang === 'ar' ? 'المرتجع' : 'Refunded',
     lang === 'ar' ? 'صافي المبيعات' : 'Net Sales', lang === 'ar' ? 'مرتجع المشتريات' : 'Returned',
@@ -1189,6 +1228,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const filterLabel = (dim: ReportFilterKey): string => {
     const labels: Record<ReportFilterKey, string> = {
       warehouse: t('filterByWarehouse'), cashier: t('filterByCashier'), customer: t('filterByCustomer'),
+      station: lang === 'ar' ? 'المحطة' : 'Station',
       supplier: t('filterBySupplier'), buyer: t('filterByBuyer'), product: t('filterByProduct'),
       category: t('filterByCategory'), order_type: t('filterByOrderType'), payment_method: t('filterByPaymentMethod'),
       table: t('filterByTable'), status: t('filterByStatus'),
@@ -1198,6 +1238,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const allLabel = (dim: ReportFilterKey): string => {
     const labels: Partial<Record<ReportFilterKey, string>> = {
+      station: lang === 'ar' ? 'كل المحطات' : 'All stations',
       warehouse: t('allWarehouses'), customer: t('allCustomers'), supplier: t('allSuppliers'), product: t('allProducts'),
       category: t('allCategories'), order_type: t('allOrderTypes'), payment_method: t('allPaymentMethods'),
       status: t('allStatuses'), table: t('allTables'),
@@ -1208,6 +1249,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const filterOptions = (dim: ReportFilterKey): { value: string; label: string }[] => {
     const name = (value: string, english: string | null) => (lang === 'ar' ? value : (english || value));
     switch (dim) {
+      case 'station': return [...options.stations.map(station => ({ value: station.id, label: lang === 'ar' ? station.name_ar : station.name_en || station.name_ar })), { value: 'unassigned', label: lang === 'ar' ? 'غير محدد' : 'Unassigned' }];
       case 'order_type': return ORDER_TYPE_OPTIONS.map((value) => ({ value, label: orderTypeLabels[value] || value }));
       case 'payment_method': return PAYMENT_METHOD_OPTIONS.map((value) => ({ value, label: paymentMethodLabels[value] || value }));
       case 'status': return SALE_STATUS_OPTIONS.map((value) => ({ value, label: statusLabels[value] || value }));
@@ -1224,14 +1266,26 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     }
   };
 
+  const stationTotals = (rows: Record<string, unknown>[]): Record<string, unknown> => {
+    const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
+    const keys = [label('الكمية المباعة', 'Sold Quantity'), label('الكمية المرتجعة', 'Returned Quantity'), label('صافي الكمية', 'Net Quantity'), label('المبيعات قبل الخصم', 'Gross Sales'), label('الخصم الموزع', 'Allocated Discount'), label('الضريبة الموزعة', 'Allocated Tax'), label('الإجمالي الأصلي', 'Original Total'), label('قيمة المرتجع', 'Return Value'), label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax'), label('صافي المبيعات', 'Net Sales')];
+    const totals: Record<string, unknown> = { [label('الفاتورة', 'Invoice')]: label('الإجمالي', 'Total') };
+    for (const key of keys) totals[key] = rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
+    for (const key of [label('التكلفة المسجلة', 'Recorded Cost'), label('مجمل الربح', 'Gross Profit')]) {
+      if (rows.length && key in rows[0]) totals[key] = rows.every(row => typeof row[key] === 'number') ? rows.reduce((sum, row) => sum + Number(row[key]), 0) : label('غير مكتمل', 'Incomplete');
+    }
+    return totals;
+  };
+
   const handlePrint = (complete: ReportSnapshot, reservedWindow?: Window | null) => {
     const reportLabel = reportTypes.find((row) => row.key === reportType)?.label ?? reportType;
-    const headers = complete.rows.length > 0 ? Object.keys(complete.rows[0]) : [];
+    const headers = reportType === 'sales_by_station' ? columns : complete.rows.length > 0 ? Object.keys(complete.rows[0]) : [];
     const rows = complete.rows.map((row) => headers.map((header) => {
       const value = row[header];
       if (typeof value === 'number' && moneyKeys.includes(header)) return formatFinancialCurrency(value, currency, lang);
       return String(value ?? '');
     }));
+    if (reportType === 'sales_by_station') { const totals = stationTotals(complete.rows); rows.push(headers.map(header => String(totals[header] ?? ''))); }
     openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}`, headers, rows, lang: lang as 'ar' | 'en' }, reservedWindow);
   };
 
@@ -1343,6 +1397,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         pendingChanges={filtersDirty}
       />
 
+      {reportType === 'sales_by_station' && <p data-testid="station-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
       <Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
@@ -1416,6 +1471,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
                     </tr>
                   ))}
                 </tbody>
+                {reportType === 'sales_by_station' && <tfoot><tr className="border-t border-ui-border font-bold">{columns.map(key => <td key={key} className="px-4 py-3">{String(stationTotals(data)[key] ?? '')}</td>)}</tr></tfoot>}
               </table>
             </div>
           </div>
