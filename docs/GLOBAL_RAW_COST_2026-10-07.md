@@ -34,7 +34,9 @@ Explicit Financial Visibility guards also protect nested existing costing define
 Final review corrected explicit SQL event column aliases and preserved the exact
 existing overview access guard. Positive-cost oversold ledger rows remain
 unverified because settlement coverage is private; current estimates are shown
-separately. Raw current unit prices retain six decimal places. Re-verification pending.
+separately. Raw current unit prices retain six decimal places. Purchase mutations revalidate
+raw prices once before the next purchase, without polling or per-render reads.
+Re-verification pending.
 
 ## Verification ledger
 Local application/test typechecks, build and lint pass. New unit scenarios cover
