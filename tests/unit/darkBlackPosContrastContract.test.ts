@@ -10,20 +10,20 @@ const statusStyles = fs.readFileSync('src/features/pos/utils/orderTypes.ts', 'ut
 const standby = fs.readFileSync('src/features/dashboard/components/DashboardStandbyBar.tsx', 'utf8');
 
 describe('dark POS contrast contract', () => {
-  it('uses charcoal page hierarchy while reserving true black for StandBy', () => {
-    expect(css).toContain('--ui-page: 17 19 24;');
-    expect(css).toContain('--ui-surface: 24 27 33;');
-    expect(css).toContain('--ui-surface-raised: 32 36 44;');
-    expect(css).toContain('--ui-text: 248 250 252;');
-    expect(css).toContain('--ui-muted: 203 213 225;');
+  it('uses deep-violet page hierarchy while reserving true black for StandBy', () => {
+    expect(css).toContain('--ui-page: 22 16 38;');
+    expect(css).toContain('--ui-surface: 30 23 48;');
+    expect(css).toContain('--ui-surface-raised: 39 30 60;');
+    expect(css).toContain('--ui-text: 246 243 237;');
+    expect(css).toContain('--ui-muted: 215 207 225;');
     expect(css).toContain('--ui-accent: var(--brand-400);');
     expect(css).not.toContain('--ui-page: 0 0 0;');
     expect(standby).toContain('bg-black');
   });
 
   it('also strengthens light-mode secondary text contrast', () => {
-    expect(css).toContain('--ui-muted: 55 65 81;');
-    expect(css).toContain('--ui-subtle: 100 116 139;');
+    expect(css).toContain('--ui-muted: 68 55 85;');
+    expect(css).toContain('--ui-subtle: 110 96 124;');
   });
 
   it('makes table state and operator/order data visually explicit', () => {

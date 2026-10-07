@@ -60,7 +60,7 @@ test.describe('public application smoke', () => {
     await mockUnauthenticatedBackend(page);
   });
 
-  test('login page renders without browser console errors', async ({ page }) => {
+  test('login page renders without browser console errors', async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') consoleErrors.push(message.text());
@@ -76,6 +76,22 @@ test.describe('public application smoke', () => {
     await expect(page.locator('form button[type="submit"]')).toHaveText(/Sign in/i);
 
     expect(consoleErrors).toEqual([]);
+
+    // Native review captures of the supplied identity in both existing modes.
+    for (const mode of ['light', 'dark']) {
+      await page.evaluate((theme) => {
+        localStorage.setItem('pos_theme', theme);
+        localStorage.setItem('pos_lang', 'ar');
+      }, mode);
+      await page.reload();
+      await expect(page.getByTestId('login-panel')).toBeVisible();
+      for (const [name, width, height] of [['desktop', 1366, 900], ['mobile', 390, 844]] as const) {
+        await page.setViewportSize({ width, height });
+        await testInfo.attach(`premier-${mode}-${name}`, {
+          body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+        });
+      }
+    }
   });
 
   test('login validation blocks invalid PIN without leaving login', async ({ page }) => {

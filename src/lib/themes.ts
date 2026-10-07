@@ -17,8 +17,8 @@ export const UI_THEME_STORAGE_KEY = 'pos_ui_theme';
 export const DEFAULT_UI_THEME = 'premier-dark';
 
 export const UI_THEMES: UiThemePreset[] = [
-  { key: 'premier-dark', ar: 'بريمير داكنة', en: 'Premier Dark', mode: 'dark', brandHue: 222, brandSat: 72, surfaceHue: 222, surfaceSat: 50 },
-  { key: 'premier-light', ar: 'بريمير فاتحة', en: 'Premier Light', mode: 'light', brandHue: 222, brandSat: 72, surfaceHue: 222, surfaceSat: 50 },
+  { key: 'premier-dark', ar: 'بريمير داكنة', en: 'Premier Dark', mode: 'dark', brandHue: 257, brandSat: 85, surfaceHue: 262, surfaceSat: 40 },
+  { key: 'premier-light', ar: 'بريمير فاتحة', en: 'Premier Light', mode: 'light', brandHue: 257, brandSat: 85, surfaceHue: 262, surfaceSat: 40 },
   { key: 'ocean', ar: 'المحيط', en: 'Ocean', mode: 'dark', brandHue: 205, brandSat: 85, surfaceHue: 210, surfaceSat: 55 },
   { key: 'midnight', ar: 'منتصف الليل', en: 'Midnight', mode: 'dark', brandHue: 198, brandSat: 85, surfaceHue: 205, surfaceSat: 60 },
   { key: 'emerald', ar: 'الزمرد', en: 'Emerald', mode: 'dark', brandHue: 160, brandSat: 72, surfaceHue: 165, surfaceSat: 55 },

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { BrandLoading } from '@/components/BrandLoading';
 import { useLanguage } from '@/context/LanguageContext';
 
 type ProgressContextValue = {
@@ -15,7 +16,6 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
   const [progress, setProgress] = useState(0);
   const activeLoads = useRef(0);
   const tickTimer = useRef<number | null>(null);
-  const hideTimer = useRef<number | null>(null);
 
   const clearTick = useCallback(() => {
     if (tickTimer.current !== null) {
@@ -24,18 +24,10 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
     }
   }, []);
 
-  const clearHide = useCallback(() => {
-    if (hideTimer.current !== null) {
-      window.clearTimeout(hideTimer.current);
-      hideTimer.current = null;
-    }
-  }, []);
-
   const begin = useCallback(() => {
     activeLoads.current += 1;
     if (activeLoads.current > 1) return;
 
-    clearHide();
     clearTick();
     setVisible(true);
     setProgress(0);
@@ -52,7 +44,7 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
         return Math.min(92, next);
       });
     }, 85);
-  }, [clearHide, clearTick]);
+  }, [clearTick]);
 
   const complete = useCallback(() => {
     activeLoads.current = Math.max(0, activeLoads.current - 1);
@@ -60,17 +52,12 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
 
     clearTick();
     setProgress(100);
-    clearHide();
-    hideTimer.current = window.setTimeout(() => {
-      setVisible(false);
-      setProgress(0);
-    }, 180);
-  }, [clearHide, clearTick]);
+    setVisible(false);
+  }, [clearTick]);
 
   useEffect(() => () => {
     clearTick();
-    clearHide();
-  }, [clearHide, clearTick]);
+  }, [clearTick]);
 
   const value = useMemo(() => ({ begin, complete }), [begin, complete]);
 
@@ -86,6 +73,7 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
           data-testid="page-progress-loader"
         >
           <div className="w-full max-w-md rounded-3xl border border-ui-border bg-ui-surface p-6 shadow-ui-lg">
+            <div className="mb-5 flex justify-center"><BrandLoading size={72} /></div>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-base font-black text-ui-text">
@@ -105,7 +93,7 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
               aria-hidden="true"
             >
               <div
-                className="h-full rounded-full bg-ui-primary transition-[width] duration-150 ease-out"
+                className="h-full rounded-full bg-ui-primary transition-[width] duration-150 ease-out motion-reduce:transition-none"
                 style={{ width: `${progress}%` }}
               />
             </div>

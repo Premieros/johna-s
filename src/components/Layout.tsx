@@ -298,7 +298,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <aside data-testid="app-sidebar" className={`fixed top-0 bottom-0 start-0 z-50 w-[260px] liquid-glass border-e border-ui-border shadow-ui-md transition-transform duration-200 ease-[var(--ui-ease)] ${mobileOpen ? 'translate-x-0' : ar ? 'translate-x-full' : '-translate-x-full'} ${desktopSidebarHidden ? (ar ? 'lg:translate-x-full' : 'lg:-translate-x-full') : 'lg:translate-x-0'}`}>
         <div className="flex h-14 items-center justify-between border-b border-ui-border px-5">
-          <Logo variant="horizontal" size={28} tone="mono" showTagline={false} className="text-ui-primary" />
+          <Logo variant="horizontal" size={28} tone="auto" showTagline={false} />
           <button data-testid="sidebar-close" type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-ui-muted hover:bg-ui-page-alt lg:hidden" aria-label={ar ? 'إغلاق القائمة' : 'Close sidebar'}><X className="h-5 w-5" /></button>
           <button
             data-testid="desktop-sidebar-hide"

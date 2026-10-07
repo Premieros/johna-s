@@ -7,6 +7,7 @@ export interface BrandPreset {
 }
 
 export const BRAND_PRESETS: BrandPreset[] = [
+  { key: 'premier', ar: 'بنفسجي premier.os', en: 'premier.os Violet', hue: 257, sat: 85 },
   { key: 'royal', ar: 'أزرق ملكي', en: 'Royal Blue', hue: 222, sat: 72 },
   { key: 'navy', ar: 'كحلي', en: 'Navy', hue: 222, sat: 66 },
   { key: 'gold', ar: 'ذهبي', en: 'Gold', hue: 46, sat: 74 },
@@ -20,7 +21,7 @@ export const BRAND_PRESETS: BrandPreset[] = [
   { key: 'red', ar: 'أحمر', en: 'Red', hue: 0, sat: 72 },
 ];
 
-export const DEFAULT_BRAND = { hue: 222, sat: 72 };
+export const DEFAULT_BRAND = { hue: 257, sat: 85 };
 
 const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
 const LADDER: Record<number, { l: number; s: number }> = {
@@ -101,7 +102,7 @@ export function applyBrandHex(hex: string): void {
   applyBrandColor(h, Math.min(85, Math.max(55, s)));
 }
 
-export const DEFAULT_SURFACE = { hue: 222, sat: 50 };
+export const DEFAULT_SURFACE = { hue: 262, sat: 40 };
 
 const SURFACE_SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
 const SURFACE_LADDER: Record<number, { l: number; s: number }> = {

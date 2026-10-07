@@ -1,0 +1,62 @@
+# PREMIER.OS BRAND — ACTIVE WORK LOG
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `codex/premier-brand-20261007`
+Current PR: `#0`
+Last updated: 2026-10-07
+Execution mode: **SINGLE_WRITER**
+Parallel execution: **FORBIDDEN**
+Unexpected HEAD policy: **STOP_AND_RECONCILE**
+Write mode: **SEQUENTIAL_ONLY**
+
+## Work status
+State: **BLOCKED**
+User requested applying supplied premier.os logo and theme. Letter P is ivory,
+not white. Second reference confirms warm ivory light surfaces, dark purple text
+and violet accents. Implementation prepared; publication awaits review and CI.
+
+## Guardrails
+Frontend visual identity only. Preserve organization branding choices, saved
+light/dark preferences, semantic status colors and all layout/control behavior.
+No DB/settings writes, migrations, RLS, Financial Visibility, sales, FIFO, KDS,
+printing, shift or automation changes. No real sale/send/print tests.
+
+## Baseline
+Main 632ab8fa8b86fcf2ee168a0ade358eddc4f28e31 (#464).
+Separate clean worktree. Existing dirty worktrees retained untouched.
+
+## Root-cause ledger
+Shared Logo still displays the old gold/blue mark and Premier wordmark.
+Primary button/focus colors were hardcoded blue independently of brand presets.
+Premier default presets are blue and dark surfaces are charcoal. Browser metadata
+still references older icons and brand spelling.
+
+## Change ledger
+Use supplied logo artwork (WebP sized for UI; supplied colors/shape retained) in shared
+mark; premier.os wordmark with violet dot. PNG derivative of original artwork as browser icon.
+Premier default accent/presets switch to violet; light surfaces become warm ivory;
+dark surfaces become deep violet with ivory text. Link primary/focus tokens to
+brand shades; keep success/warning/danger/info meanings and alternate presets.
+Update login palette and browser metadata. Add CSS-only logo breathing/orbit to
+existing global progress, shared list loading and sign-in busy feedback. Retain
+0–100% progress logic and loading messages. Honor prefers-reduced-motion.
+No new loading delays, timers, queries, or business logic changes. User explicitly
+requires zero added wait: remove old 180ms overlay-hide timeout; hide immediately
+when all active loads finish. Never wait for the logo animation cycle.
+
+## Verification ledger
+Typecheck, changed-file lint, existing brand/preference tests and production build.
+Public/login and responsive-shell browser suites use mocked backend only.
+Exact-head Full Verify green required before publication.
+
+## Production gate
+State: **BLOCKED**
+No production changes made. Existing explicit publication approval gate remains.
+No DB apply. Ordinary frontend rollback restores old identity; data unchanged.
+
+## Next action
+Inspect responsive previews, open PR, verify exact head, present publication gate.
+
+## Mandatory update protocol
+Check expected main and branch before writes. Reconcile drift. Freeze tested head
+once CI starts; record results/approval in PR metadata.

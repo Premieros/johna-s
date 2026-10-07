@@ -40,7 +40,7 @@ describe('surfaceShades', () => {
 
 describe('brandFromSettingsValue', () => {
   it('returns default for empty value', () => {
-    expect(brandFromSettingsValue(null)).toEqual({ hue: 222, sat: 72 });
+    expect(brandFromSettingsValue(null)).toEqual({ hue: 257, sat: 85 });
   });
 
   it('resolves preset keys', () => {
@@ -54,7 +54,7 @@ describe('brandFromSettingsValue', () => {
   });
 
   it('falls back to default for garbage', () => {
-    expect(brandFromSettingsValue('not-a-color')).toEqual({ hue: 222, sat: 72 });
+    expect(brandFromSettingsValue('not-a-color')).toEqual({ hue: 257, sat: 85 });
   });
 });
 

@@ -9,10 +9,10 @@ describe('UI surface accent and typography contract', () => {
   it('uses comfortable neutral page/surface tokens instead of pure white or pure black', () => {
     const css = read('src/index.css');
 
-    expect(css).toContain('--ui-surface: 252 252 253;');
-    expect(css).toContain('--ui-page: 245 247 250;');
-    expect(css).toContain('--ui-surface: 24 27 33;');
-    expect(css).toContain('--ui-page: 17 19 24;');
+    expect(css).toContain('--ui-surface: 252 250 247;');
+    expect(css).toContain('--ui-page: 245 242 238;');
+    expect(css).toContain('--ui-surface: 30 23 48;');
+    expect(css).toContain('--ui-page: 22 16 38;');
 
     expect(css).not.toContain('--ui-surface: 255 255 255;');
     expect(css).not.toContain('--ui-page: 0 0 0;');
