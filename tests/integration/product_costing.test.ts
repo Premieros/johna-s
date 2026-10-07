@@ -232,7 +232,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       `SELECT public._raw_cost_for_costing($1, $2) AS cost`,
       [rmId, branchA],
     );
-    expect(Number(purchaseCost.rows[0].cost)).toBe(20);
+    expect(Number(purchaseCost.rows[0].cost)).toBe(24);
 
     await client.query(
       `INSERT INTO public.stock_counts
@@ -251,7 +251,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       `SELECT public._raw_cost_for_costing($1, $2) AS cost`,
       [rmId, branchA],
     );
-    expect(Number(latestCost.rows[0].cost)).toBe(20);
+    expect(Number(latestCost.rows[0].cost)).toBe(28);
 
     const wavgAfterCount = await client.query<{ cost: string }>(
       `SELECT public._raw_wavg_cost($1, $2) AS cost`,
@@ -294,15 +294,15 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
         [prodId, branchA],
       ),
     );
-    expect(Number(detail[0].r.actual_cost)).toBe(42); // actual FIFO: direct 22 + group 20
+    expect(Number(detail[0].r.actual_cost)).toBe(58.8); // latest count: direct 30.8 + group 28
     const pricedDirectLine = detail[0].r.recipe_items.find((line) => !line.component_group_id)!;
     const pricedGroupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId)!;
-    expect(Number(pricedDirectLine.unit_cost)).toBe(20);
-    expect(Number(pricedDirectLine.line_cost)).toBe(22);
-    expect(pricedDirectLine.cost_source).toBe('inventory_average');
-    expect(pricedDirectLine.cost_reference).toBeNull();
-    expect(Number(pricedGroupLine.unit_cost)).toBe(20);
-    expect(Number(pricedGroupLine.line_cost)).toBe(20);
+    expect(Number(pricedDirectLine.unit_cost)).toBe(28);
+    expect(Number(pricedDirectLine.line_cost)).toBe(30.8);
+    expect(pricedDirectLine.cost_source).toBe('stock_count');
+    expect(pricedDirectLine.cost_reference).toBe('RAW-COST-SC');
+    expect(Number(pricedGroupLine.unit_cost)).toBe(28);
+    expect(Number(pricedGroupLine.line_cost)).toBe(28);
 
     const branchBOverview = await asUser(managerBId, async () =>
       rows<{ raw_material_id: string }>(
@@ -388,4 +388,18 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(Number(impact[0].avg_cost)).toBe(18);
     expect(Number(impact[0].purchase_count)).toBe(1);
   });
+  it('does not present a partial recipe cost as a complete estimate', async () => {
+    const missingRaw=randomUUID();
+    const unit=await client.query(`SELECT unit_id FROM public.raw_materials WHERE id=$1`,[rmId]);
+    await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Unpriced component',$3,$4,0,true)`,[missingRaw,`UNP-${missingRaw.slice(0,8)}`,unit.rows[0].unit_id,branchA]);
+    await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,0.01,0)`,[recipeId,missingRaw]);
+    const overview=await asUser(managerId,async()=>await client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+    expect(overview.rows[0].actual_cost).toBeNull();
+    const detail=await asUser(managerId,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
+    expect(detail.rows[0].r.actual_cost).toBeNull();
+    const price=await client.query(`SELECT unit_cost,price_source FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,missingRaw]);
+    expect(price.rows[0].unit_cost).toBeNull();
+    expect(price.rows[0].price_source).toBe('unpriced');
+  });
+
 });

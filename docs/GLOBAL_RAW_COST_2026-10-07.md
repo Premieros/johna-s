@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `codex/global-raw-cost-20261007`
-Current PR: pending
+Current PR: `#467`
 Last updated: 2026-10-07
 Execution mode: **SINGLE_WRITER**
 Parallel execution: **FORBIDDEN**
@@ -27,16 +27,20 @@ Depleted raw materials can have avg_cost zero despite recorded positive prices.
 Invoice Johna's-02525 snapshot contains unpriced components; 37.8694 is partial.
 
 ## Change ledger
-Pending implementation. Latest positive authoritative event by date, deterministic
+Implemented latest-price resolver and consumers. Latest positive authoritative event by date, deterministic
 source/reference/id ties, then positive inventory/batch/catalog fallback.
 Read paths retain existing RLS; restricted users see only accessible price sources.
 
 ## Verification ledger
-Pending local checks, isolated database integration and exact-head Full Verify.
+Local application/test typechecks, build and lint pass. New unit scenarios cover
+missing component cost, negative ledger signs, latest estimates, void/refund
+proration and purchase unit scaling. Full suite and isolated CI database pending.
 
 ## Production gate
 State: **BLOCKED**
-Separate approval required for migration; merge requires exact-head green and approval.
+User approved completion through publication at 22:41 Cairo on 2026-10-07.
+Publication remains blocked until exact-head Full Verify is green.
+No production write has occurred.
 
 ## Next action
 Implement unified price resolver, current-price consumers and incomplete cost checks.

@@ -8,7 +8,7 @@ export interface CostingOverviewRow {
   sale_price: number;
   unit_cost: number;
   theoretical_cost: number;
-  actual_cost: number;
+  actual_cost: number | null;
   component_count: number;
   recipe_item_count: number;
 }
@@ -103,7 +103,7 @@ export interface ProductCostingDetail {
   sale_price?: number;
   unit_cost?: number;
   theoretical_cost?: number;
-  actual_cost?: number;
+  actual_cost?: number | null;
   component_count?: number;
   recipe_item_count?: number;
   components?: CostingComponentLine[];

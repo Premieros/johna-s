@@ -271,7 +271,7 @@ export function CostingCenterPage() {
 
   const stats = useMemo(() => {
     const count = filteredOverview.length;
-    const costedRows = filteredOverview.filter((r) => Number(r.actual_cost || r.theoretical_cost || r.unit_cost || 0) > 0);
+    const costedRows = filteredOverview.filter((r) => r.actual_cost !== null && Number(r.actual_cost || r.theoretical_cost || r.unit_cost || 0) > 0);
     const fc = costedRows.map((r) => foodCostPct(r.actual_cost || r.theoretical_cost || r.unit_cost, r.sale_price));
     const avg = safeDiv(fc.reduce((s, v) => s + v, 0), fc.length);
     const worst = costedRows.reduce<CostingOverviewRow | null>((acc, r) => {
@@ -334,9 +334,9 @@ export function CostingCenterPage() {
     { key: 'sale', header: t('salePrice'), render: (r) => money(r.sale_price) },
     { key: 'unitCost', header: t('unitCost'), render: (r) => money(r.unit_cost) },
     { key: 'theoretical', header: t('theoreticalCost'), render: (r) => money(r.theoretical_cost) },
-    { key: 'actual', header: t('actualCost'), render: (r) => money(r.actual_cost) },
-    { key: 'margin', header: t('marginPct'), render: (r) => marginPill(marginPct(r.actual_cost || r.theoretical_cost || r.unit_cost, r.sale_price)) },
-    { key: 'variance', header: t('variance'), render: (r) => !r.theoretical_cost && !r.actual_cost ? '-' : <span className="text-xs">{formatNumber(variancePct(r.actual_cost, r.theoretical_cost), 1)}%</span> },
+    { key: 'actual', header: isAr ? 'تكلفة الوصفة بآخر سعر (تقديرية)' : 'Recipe cost at latest prices (estimated)', render: (r) => r.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(r.actual_cost) },
+    { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null ? '-' : marginPill(marginPct(r.actual_cost || r.theoretical_cost || r.unit_cost, r.sale_price)) },
+    { key: 'variance', header: t('variance'), render: (r) => r.actual_cost == null || (!r.theoretical_cost && !r.actual_cost) ? '-' : <span className="text-xs">{formatNumber(variancePct(r.actual_cost, r.theoretical_cost), 1)}%</span> },
   ];
 
   const orderColumns: Column<OrderMarginRow & { id: string }>[] = [
@@ -385,7 +385,7 @@ export function CostingCenterPage() {
 
   const tabBtn = (key: Tab, label: string) => <button onClick={() => setTab(key)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${tab === key ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]' : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'}`}>{label}</button>;
 
-  const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, UnitCost: r.unit_cost, TheoreticalCost: r.theoretical_cost, ActualCost: r.actual_cost })), 'costing-overview');
+  const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, UnitCost: r.unit_cost, TheoreticalCost: r.theoretical_cost, LatestPriceRecipeCostEstimate: r.actual_cost ?? (isAr ? 'غير مكتملة' : 'Incomplete') })), 'costing-overview');
   const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, CurrentFifoUnitCost: r.fifo_cost ?? '', LatestKnownUnitPrice: r.current_price ?? '', LatestReferenceUnitCost: r.latest_cost, ActualPositiveStockValue: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
   const handleExportOrders = () => exportToExcel(orders.map((r) => ({ Invoice: r.invoice_number, Date: r.sale_date, Total: r.total, Discount: r.discount_amount, COGS: r.cogs, GrossMargin: r.gross_margin })), 'order-margin');
   const handleExportSupplier = () => exportToExcel(supplierImpact.map((r) => ({ Item: r.item_name, Type: r.item_type, FirstCost: r.first_cost, LastCost: r.last_cost, AvgCost: r.avg_cost, ChangePct: r.change_pct, PurchaseCount: r.purchase_count })), 'supplier-price-impact');
@@ -494,9 +494,9 @@ export function CostingCenterPage() {
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('salePrice')}</p><p className="text-lg font-bold text-ui-text">{money(detail.sale_price)}</p></div>
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('unitCost')}</p><p className="text-lg font-bold text-ui-text">{money(detail.unit_cost)}</p></div>
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('theoreticalCost')}</p><p className="text-lg font-bold text-ui-text">{money(detail.theoretical_cost)}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('actualCost')}</p><p className="text-lg font-bold text-ui-text">{money(detail.actual_cost)}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{formatNumber(foodCostPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{formatNumber(marginPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تكلفة الوصفة بآخر سعر (تقديرية)' : 'Recipe cost at latest prices (estimated)'}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(detail.actual_cost)}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(foodCostPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%`}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(marginPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%`}</p></div>
           </div>
 
           {(detail.components?.length || 0) > 0 && <div>

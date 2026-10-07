@@ -124,12 +124,12 @@ AS $function$
       e.source_rank,e.reference_number DESC NULLS LAST,e.event_id DESC
   )
   SELECT s.id,s.branch_id,
-    COALESCE(e.unit_cost,i.unit_cost,b.unit_cost,NULLIF(GREATEST(s.default_cost,0),0)),
+    COALESCE(e.unit_cost,b.unit_cost,i.unit_cost,NULLIF(GREATEST(s.default_cost,0),0)),
     CASE WHEN e.unit_cost IS NOT NULL THEN e.source
-      WHEN i.unit_cost IS NOT NULL THEN 'inventory_average'
       WHEN b.unit_cost IS NOT NULL THEN 'last_batch'
+      WHEN i.unit_cost IS NOT NULL THEN 'inventory_average'
       WHEN s.default_cost > 0 THEN 'default_cost' ELSE 'unpriced' END,
-    COALESCE(e.priced_at,i.priced_at,b.priced_at),e.reference_number
+    COALESCE(e.priced_at,b.priced_at,i.priced_at),e.reference_number
   FROM scoped s
   LEFT JOIN latest e ON e.raw_material_id=s.id AND e.branch_id=s.branch_id
   LEFT JOIN LATERAL (
@@ -142,9 +142,9 @@ AS $function$
     SELECT rb.unit_cost,rb.created_at AS priced_at
     FROM public.raw_material_batches rb
     WHERE rb.raw_material_id=s.id AND rb.branch_id=s.branch_id AND rb.unit_cost>0
-      AND rb.source_type NOT LIKE '%oversold%'
+      AND COALESCE(rb.source_type,'') NOT LIKE '%oversold%'
     ORDER BY rb.created_at DESC NULLS LAST,rb.id DESC LIMIT 1
-  ) b ON e.unit_cost IS NULL AND i.unit_cost IS NULL;
+  ) b ON e.unit_cost IS NULL;
 $function$;
 REVOKE ALL ON FUNCTION public.get_raw_material_current_prices(uuid,uuid[]) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_raw_material_current_prices(uuid,uuid[]) TO authenticated,service_role;
@@ -221,6 +221,43 @@ $cte$;
   original:='      FROM debt_by_warehouse d';
   IF position(original IN definition)=0 THEN RAISE EXCEPTION 'RAW_DEBT_JOIN_CHANGED'; END IF;
   EXECUTE replace(definition,original,original||E'\n      LEFT JOIN public.get_raw_material_current_prices(p_branch_id) cp\n        ON cp.raw_material_id=d.raw_material_id AND cp.branch_id=p_branch_id');
+
+  -- A partial recipe sum is not a complete current estimate.
+  SELECT pg_get_functiondef('public._product_recipe_cost(uuid,uuid)'::regprocedure) INTO definition;
+  start_at:=position('  SELECT COALESCE(round(SUM(' IN definition);
+  end_at:=position(E'\n$function$' IN definition);
+  IF start_at=0 OR end_at<=start_at THEN RAISE EXCEPTION 'PRODUCT_RECIPE_BASELINE_CHANGED'; END IF;
+  original:=substring(definition FROM start_at FOR end_at-start_at);
+  replacement:=$recipe$  SELECT CASE
+    WHEN bool_or(rl.quantity > 0 AND COALESCE(public._raw_cost_for_costing(rl.raw_material_id,p_branch_id),0)<=0)
+      THEN NULL
+    ELSE COALESCE(round(SUM(rl.quantity*(1+rl.wastage_percent/100.0)
+      * COALESCE(public._raw_cost_for_costing(rl.raw_material_id,p_branch_id),0)),2),0)
+    END
+  FROM raw_lines rl
+$recipe$;
+  EXECUTE replace(definition,original,replacement);
+
+  SELECT pg_get_functiondef('public.get_costing_overview(uuid)'::regprocedure) INTO definition;
+  original:=$old$      round(SUM(
+        rl.quantity
+        * (1 + rl.wastage_percent / 100.0)
+        * COALESCE(rc.unit_cost, 0)
+      ), 2)::numeric AS cost$old$;
+  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'OVERVIEW_RECIPE_AGGREGATE_CHANGED'; END IF;
+  replacement:=$new$      CASE WHEN bool_or(rl.quantity>0 AND COALESCE(rc.unit_cost,0)<=0) THEN NULL
+      ELSE round(SUM(rl.quantity*(1+rl.wastage_percent/100.0)*COALESCE(rc.unit_cost,0)),2)
+      END::numeric AS cost$new$;
+  definition:=replace(definition,original,replacement);
+  original:='COALESCE(rc.cost, 0)::numeric(12,2)';
+  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'OVERVIEW_RECIPE_RESULT_CHANGED'; END IF;
+  EXECUTE replace(definition,original,'CASE WHEN COALESCE(rct.recipe_item_count,0)>0 THEN rc.cost ELSE 0 END::numeric(12,2)');
+
+  SELECT pg_get_functiondef('public.get_product_costing_detail(uuid,uuid)'::regprocedure) INTO definition;
+  original:='COALESCE(public._product_recipe_cost(p.id, p.branch_id), 0) AS actual_cost';
+  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'COSTING_DETAIL_RECIPE_CHANGED'; END IF;
+  EXECUTE replace(definition,original,'public._product_recipe_cost(p.id, p.branch_id) AS actual_cost');
 END;
 $patch$;
+NOTIFY pgrst, 'reload schema';
 COMMIT;

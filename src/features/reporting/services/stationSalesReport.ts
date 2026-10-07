@@ -67,12 +67,12 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
     let movementCost = 0;
     for (const movement of movements) {
       actual.set(movement.raw_material_id, (actual.get(movement.raw_material_id) || 0) - n(movement.quantity));
-      movementCost += n(movement.total_cost);
+      movementCost += Math.abs(n(movement.total_cost));
     }
     // Missing RLS-visible movement coverage and unpriced negative debt are incomplete.
     previous.complete &&= snapshot.length > 0 && expected.size === actual.size
       && [...expected].every(([id, qty]) => qty > 0 && Math.abs(qty - (actual.get(id) || 0)) < 0.000001)
-      && movements.every(row => n(row.total_cost) > 0)
+      && movements.every(row => Math.abs(n(row.total_cost)) > 0)
       && Math.abs(movementCost - n(event.total_cost)) < 0.0001;
     previous.estimateAvailable &&= snapshot.length > 0 && n(event.sent_quantity) > 0;
     for (const component of snapshot) {
