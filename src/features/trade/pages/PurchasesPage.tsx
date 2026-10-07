@@ -427,7 +427,7 @@ export function PurchasesPage() {
   async function refreshRawPrices() {
     try {
       const prices = rawCurrentPriceMap(await loadRawCurrentPrices(branchFilter || null));
-      setRawMaterials(current => current.map(raw => ({ ...raw, default_cost: prices[raw.id] ?? 0 })));
+      setRawMaterials(current => current.map(raw => branchFilter && raw.branch_id !== branchFilter ? raw : ({ ...raw, default_cost: prices[raw.id] ?? 0 })));
     } catch (error) {
       show(error instanceof Error ? error.message : String(error), 'error');
     }
