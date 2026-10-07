@@ -182,7 +182,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
       [rawA, branchA, warehouseA, `OV-PRICE-${randomUUID().slice(0, 8)}`],
     );
     const v = await valuation();
-    expect(Number(v.estimated_negative_value)).toBe(14); // retained actual FIFO valuation 7 x shortage 2
+    expect(Number(v.estimated_negative_value)).toBe(40); // latest price estimate 20 x shortage 2
     expect(Number(v.unpriced_negative_quantity)).toBe(0);
   });
 
@@ -207,7 +207,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(30);
     expect(current.price_source).toBe('purchase');
     expect(current.reference_number).toBe(invoice);
-    expect(Number((await valuation()).estimated_negative_value)).toBe(14); // new reference price cannot revalue actual FIFO stock
+    expect(Number((await valuation()).estimated_negative_value)).toBe(60); // latest purchase estimate; actual positive stock is unchanged
   });
 
   it('a newer applied stock count replaces the purchase price', async () => {
@@ -231,7 +231,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(Number(current.latest_cost)).toBe(40);
     expect(current.price_source).toBe('stock_count');
     expect(current.reference_number).toBe(countNumber);
-    expect(Number((await valuation()).estimated_negative_value)).toBe(14); // count reference cannot revalue old layers
+    expect(Number((await valuation()).estimated_negative_value)).toBe(80); // latest count estimate; actual layers are unchanged
   });
 
   it('a newer manual pricing event becomes authoritative again and history contains all sources', async () => {
@@ -248,7 +248,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     const current = await latest();
     expect(Number(current.latest_cost)).toBe(50);
     expect(current.price_source).toBe('pricing');
-    expect(Number((await valuation()).estimated_negative_value)).toBe(14); // manual reference remains separate
+    expect(Number((await valuation()).estimated_negative_value)).toBe(100); // latest pricing estimate; immutable actual FIFO remains separate
 
     const history = await asUser(managerUser, async () => {
       const r = await client.query(
@@ -289,4 +289,43 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(wrongBranch.success).toBe(false);
     expect(wrongBranch.error).toBe('BRANCH_MISMATCH');
   });
+  it('uses one latest-price source for current costing while leaving inventory valuation unchanged', async () => {
+    const r = await client.query(`SELECT unit_cost,price_source FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`, [branchA,rawA]);
+    expect(Number(r.rows[0].unit_cost)).toBe(50);
+    expect(r.rows[0].price_source).toBe('pricing');
+    const c = await client.query(`SELECT public._raw_cost_context_for_costing($1,$2) AS c`, [rawA,branchA]);
+    expect(Number(c.rows[0].c.unit_cost)).toBe(50);
+    const i = await client.query(`SELECT avg_cost FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2`,[rawA,branchA]);
+    expect(Number(i.rows[0].avg_cost)).toBe(7);
+    const mode = await client.query(`SELECT prosecdef FROM pg_proc WHERE oid='public.get_raw_material_current_prices(uuid,uuid[])'::regprocedure`);
+    expect(mode.rows[0].prosecdef).toBe(false);
+  });
+  it('preserves RLS branch isolation on the new invoker price path', async () => {
+    const rows = await asUser(viewerUser, async () => (await client.query(`SELECT * FROM public.get_raw_material_current_prices($1)`,[branchB])).rows);
+    expect(rows).toEqual([]);
+  });
+
+  it('keeps hidden historical purchases hidden even inside existing costing definers', async () => {
+    const raw=randomUUID(); const product=randomUUID(); const recipe=randomUUID();
+    let purchase='';
+    for(let i=0;i<30;i++) {
+      const candidate=randomUUID();
+      const check=await asUser(viewerUser,async()=>await client.query(`SELECT private.financial_row_visible($1,$2,now()-interval '365 days') AS visible`,[candidate,branchA]));
+      if(!check.rows[0].visible) { purchase=candidate; break; }
+    }
+    expect(purchase).toBeTruthy();
+    await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Hidden price raw',$3,$4,0,true)`,[raw,`HID-${raw.slice(0,8)}`,kgUnit,branchA]);
+    await client.query(`INSERT INTO public.purchases(id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at,approved_at) VALUES($1,$2,$3,999,999,999,'completed',now()-interval '365 days',now()-interval '365 days')`,[purchase,`HID-${purchase.slice(0,8)}`,branchA]);
+    await client.query(`INSERT INTO public.purchase_items(purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at) VALUES($1,$2,'kg',1,999,999,now()-interval '365 days')`,[purchase,raw]);
+    await client.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Hidden price product',$2,2000,0,true)`,[product,branchA]);
+    await client.query(`INSERT INTO public.recipes(id,name,product_id,branch_id,yield_quantity,is_active) VALUES($1,'Hidden price recipe',$2,$3,1,true)`,[recipe,product,branchA]);
+    await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,raw]);
+    const prices=await asUser(viewerUser,async()=>await client.query(`SELECT unit_cost FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,raw]));
+    expect(prices.rows[0].unit_cost).toBeNull();
+    const overview=await asUser(viewerUser,async()=>await client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,product]));
+    expect(overview.rows[0].actual_cost).toBeNull();
+    const detail=await asUser(viewerUser,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[product,branchA]));
+    expect(detail.rows[0].r.actual_cost).toBeNull();
+  });
+
 });

@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Category, InventoryUnit } from '@/lib/types';
 
@@ -17,7 +18,7 @@ export async function loadProductSetupChoices(branchId: string): Promise<{
   rawMaterials: ProductSetupRawMaterial[];
   errors: string[];
 }> {
-  const [categoriesResult, manufacturedResult, rawMaterialsResult] = await Promise.all([
+  const [categoriesResult, manufacturedResult, rawMaterialsResult, prices] = await Promise.all([
     supabase.from('categories').select('*').eq('branch_id', branchId).order('name'),
     supabase.from('inventory_units').select('*').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
     supabase.from('raw_materials')
@@ -25,12 +26,14 @@ export async function loadProductSetupChoices(branchId: string): Promise<{
       .eq('branch_id', branchId)
       .eq('is_active', true)
       .order('name'),
+    loadRawCurrentPrices(branchId),
   ]);
 
+  const costs = rawCurrentPriceMap(prices);
   return {
     categories: (categoriesResult.data as Category[]) || [],
     manufacturedItems: (manufacturedResult.data as InventoryUnit[]) || [],
-    rawMaterials: (rawMaterialsResult.data as unknown as ProductSetupRawMaterial[]) || [],
+    rawMaterials: ((rawMaterialsResult.data as unknown as ProductSetupRawMaterial[]) || []).map(raw => ({ ...raw, default_cost: costs[raw.id] ?? 0 })),
     errors: [categoriesResult.error?.message, manufacturedResult.error?.message, rawMaterialsResult.error?.message].filter(Boolean) as string[],
   };
 }

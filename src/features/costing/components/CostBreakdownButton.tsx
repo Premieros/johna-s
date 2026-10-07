@@ -77,6 +77,7 @@ export function CostBreakdownButton({ kind, itemId, itemName, lineQuantity, used
 
       <Modal open={open} onClose={() => setOpen(false)} title={`${isAr ? 'توضيح التكلفة' : 'Cost explanation'} — ${itemName}`} size="2xl">
         <div className="space-y-4" data-testid={`cost-breakdown-${kind}-${itemId}`}>
+          {kind === 'raw_material' && <p className="text-sm text-ui-muted">{isAr ? 'تكلفة الوصفة تقدير بآخر سعر معروف. الدفعات أدناه تعرض تكلفة المخزون الفعلية وقد تختلف عن سعر التقدير.' : 'Recipe cost estimates use the latest known price. The batches below retain actual inventory costs and may differ from the estimate.'}</p>}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3">
               <p className="text-xs text-ui-subtle">{isAr ? 'كمية المكوّن' : 'Component quantity'}</p>

@@ -290,7 +290,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         ...(includeCost ? {
           [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
           [label('مجمل الربح', 'Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
-          [label('هامش الربح %', 'Profit Margin %')]: line.cost === null || !line.netBeforeTax ? label('غير متاح', 'Unavailable') : (line.netBeforeTax - line.cost) / line.netBeforeTax * 100,
+          [label('هامش الربح %', 'Profit Margin %')]: line.cost === null || !line.netBeforeTax ? label('غير متاح', 'Unavailable') : Number(((line.netBeforeTax - line.cost) / line.netBeforeTax * 100).toFixed(2)),
+          [label('تكلفة بآخر سعر (تقديرية)', 'Latest Price Cost (Estimated)')]: line.estimatedCost ?? label('غير مكتملة', 'Incomplete'),
+          [label('تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)')]: line.knownEstimatedCost ?? label('غير متاحة', 'Unavailable'),
+          [label('خامات غير مسعرة', 'Unpriced Materials')]: line.unpricedMaterials.join('، '),
         } : {}),
       })));
       setSummary({ total: lines.reduce((sum, line) => sum + line.net, 0), count: lines.length });
@@ -1174,7 +1177,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }
 
   const moneyKeys = [
-    'سعر الوحدة', 'Unit Price', 'المبيعات قبل الخصم', 'Gross Sales', 'الخصم الموزع', 'Allocated Discount', 'الضريبة الموزعة', 'Allocated Tax', 'قيمة المرتجع', 'Return Value', 'صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax', 'التكلفة المسجلة', 'Recorded Cost',
+    'سعر الوحدة', 'Unit Price', 'المبيعات قبل الخصم', 'Gross Sales', 'الخصم الموزع', 'Allocated Discount', 'الضريبة الموزعة', 'Allocated Tax', 'قيمة المرتجع', 'Return Value', 'صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax', 'التكلفة المسجلة', 'Recorded Cost', 'تكلفة بآخر سعر (تقديرية)', 'Latest Price Cost (Estimated)', 'تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)',
     lang === 'ar' ? 'الإجمالي' : 'Total', lang === 'ar' ? 'المبلغ' : 'Amount',
     lang === 'ar' ? 'الإجمالي الأصلي' : 'Original Total', lang === 'ar' ? 'المرتجع' : 'Refunded',
     lang === 'ar' ? 'صافي المبيعات' : 'Net Sales', lang === 'ar' ? 'مرتجع المشتريات' : 'Returned',
@@ -1273,7 +1276,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     const keys = [label('الكمية المباعة', 'Sold Quantity'), label('الكمية المرتجعة', 'Returned Quantity'), label('صافي الكمية', 'Net Quantity'), label('المبيعات قبل الخصم', 'Gross Sales'), label('الخصم الموزع', 'Allocated Discount'), label('الضريبة الموزعة', 'Allocated Tax'), label('الإجمالي الأصلي', 'Original Total'), label('قيمة المرتجع', 'Return Value'), label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax'), label('صافي المبيعات', 'Net Sales')];
     const totals: Record<string, unknown> = { [label('الفاتورة', 'Invoice')]: label('الإجمالي', 'Total') };
     for (const key of keys) totals[key] = rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
-    for (const key of [label('التكلفة المسجلة', 'Recorded Cost'), label('مجمل الربح', 'Gross Profit')]) {
+    for (const key of [label('التكلفة المسجلة', 'Recorded Cost'), label('مجمل الربح', 'Gross Profit'), label('تكلفة بآخر سعر (تقديرية)', 'Latest Price Cost (Estimated)'), label('تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)')]) {
       if (rows.length && key in rows[0]) totals[key] = rows.every(row => typeof row[key] === 'number') ? rows.reduce((sum, row) => sum + Number(row[key]), 0) : label('غير مكتمل', 'Incomplete');
     }
     return totals;

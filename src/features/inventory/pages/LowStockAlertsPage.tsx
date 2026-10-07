@@ -125,7 +125,7 @@ export function LowStockAlertsPage() {
       unit_name: r.raw_material!.unit?.name || null,
       quantity: Number(r.quantity) || 0,
       min_stock: Number(r.raw_material!.min_stock) || Number(r.min_stock) || 0,
-      default_cost: Number(r.avg_cost) || 0,
+      default_cost: r.latest_cost ?? 0,
     }));
     const rawLines = buildRawReorderLines(rawRows);
     const lines = [...productLines, ...rawLines];

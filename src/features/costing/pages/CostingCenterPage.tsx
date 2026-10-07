@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '../services/rawCurrentPriceData';
 import { loadRawFifoCosts, rawFifoCostMap } from '../services/rawFifoCostData';
 import { businessDateISO, reportDateRangeUtc } from '@/lib/businessTime';
 import type { RawConsumptionCostBreakdownRow } from '@/api/domains/costing';
@@ -37,7 +38,7 @@ export function CostingCenterPage() {
   const [overview, setOverview] = useState<CostingOverviewRow[]>([]);
   const [orders, setOrders] = useState<OrderMarginRow[]>([]);
   const [supplierImpact, setSupplierImpact] = useState<SupplierPriceImpactRow[]>([]);
-  const [rawCosts, setRawCosts] = useState<(RawMaterialCostOverviewRow & { fifo_cost?: number | null })[]>([]);
+  const [rawCosts, setRawCosts] = useState<(RawMaterialCostOverviewRow & { fifo_cost?: number | null; current_price?: number | null })[]>([]);
   const [rawHistory, setRawHistory] = useState<RawMaterialCostHistoryRow[]>([]);
   const [rawHistoryTarget, setRawHistoryTarget] = useState<RawMaterialCostOverviewRow | null>(null);
   const [rawHistoryLoading, setRawHistoryLoading] = useState(false);
@@ -90,27 +91,34 @@ export function CostingCenterPage() {
     const requestId = ++request.current;
     setLoading(true);
     setError(null);
-    const [res, summaryRes, rawValuationRes, fifoRows] = await Promise.all([
-      api.costing.getOverview({ p_branch_id: effBranch }),
-      api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
-      api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
-      loadRawFifoCosts(effBranch).catch(() => []),
-    ]);
-    if (requestId !== request.current) return;
-    if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-    setOverview(res.data || []);
-    if (!summaryRes.error && summaryRes.data) {
-      setSalesCostSummary({
-        sales_count: Number(summaryRes.data.sales_count || 0),
-        net_sales: Number(summaryRes.data.net_sales || 0),
-        cogs: Number(summaryRes.data.cogs || 0),
-        ratio: Number(summaryRes.data.ratio || 0),
-      });
-    } else {
-      setSalesCostSummary({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
+    try {
+      const [res, summaryRes, rawValuationRes, fifoRows, priceRows] = await Promise.all([
+        api.costing.getOverview({ p_branch_id: effBranch }),
+        api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
+        api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
+        loadRawFifoCosts(effBranch),
+        loadRawCurrentPrices(effBranch),
+      ]);
+      if (requestId !== request.current) return;
+      if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
+      setOverview(res.data || []);
+      if (!summaryRes.error && summaryRes.data) {
+        setSalesCostSummary({
+          sales_count: Number(summaryRes.data.sales_count || 0),
+          net_sales: Number(summaryRes.data.net_sales || 0),
+          cogs: Number(summaryRes.data.cogs || 0),
+          ratio: Number(summaryRes.data.ratio || 0),
+        });
+      } else {
+        setSalesCostSummary({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
+      }
+      if (!rawValuationRes.error) { const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows); setRawCosts((rawValuationRes.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null }))); }
+      setLoading(false);
+    } catch (error) {
+      if (requestId !== request.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setError(message); setLoading(false); show(message, 'error');
     }
-    if (!rawValuationRes.error) { const costs = rawFifoCostMap(fifoRows); setRawCosts((rawValuationRes.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null }))); }
-    setLoading(false);
   }, [effBranch, show, fromDate, toDate]);
 
   const loadOrders = useCallback(async () => {
@@ -140,17 +148,23 @@ export function CostingCenterPage() {
     const requestId = ++request.current;
     setLoading(true);
     setError(null);
-    const [res, fifoRows] = await Promise.all([api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }), loadRawFifoCosts(effBranch).catch(() => [])]);
-    if (requestId !== request.current) return;
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      const [res, fifoRows, priceRows] = await Promise.all([api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }), loadRawFifoCosts(effBranch), loadRawCurrentPrices(effBranch)]);
+      if (requestId !== request.current) return;
+      if (res.error) {
+        setError(res.error.message);
+        setLoading(false);
+        show(res.error.message, 'error');
+        return;
+      }
+      const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows);
+      setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null })));
       setLoading(false);
-      show(res.error.message, 'error');
-      return;
+    } catch (error) {
+      if (requestId !== request.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setError(message); setLoading(false); show(message, 'error');
     }
-    const costs = rawFifoCostMap(fifoRows);
-    setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null })));
-    setLoading(false);
   }, [effBranch, show]);
 
   const loadPeriod = useCallback(async () => {
@@ -257,7 +271,7 @@ export function CostingCenterPage() {
 
   const stats = useMemo(() => {
     const count = filteredOverview.length;
-    const costedRows = filteredOverview.filter((r) => Number(r.actual_cost || r.theoretical_cost || r.unit_cost || 0) > 0);
+    const costedRows = filteredOverview.filter((r) => r.actual_cost !== null && Number(r.actual_cost || r.theoretical_cost || r.unit_cost || 0) > 0);
     const fc = costedRows.map((r) => foodCostPct(r.actual_cost || r.theoretical_cost || r.unit_cost, r.sale_price));
     const avg = safeDiv(fc.reduce((s, v) => s + v, 0), fc.length);
     const worst = costedRows.reduce<CostingOverviewRow | null>((acc, r) => {
@@ -300,6 +314,8 @@ export function CostingCenterPage() {
     if (source === 'stock_count') return isAr ? 'جرد' : 'Stock count';
     if (source === 'pricing') return isAr ? 'تسعير' : 'Pricing';
     if (source === 'inventory_average') return isAr ? 'متوسط المخزون' : 'Inventory average';
+    if (source === 'last_batch') return isAr ? 'آخر دفعة مسعرة' : 'Last priced batch';
+    if (source === 'unpriced') return isAr ? 'غير مسعرة' : 'Unpriced';
     if (source === 'batch_average') return isAr ? 'متوسط الدفعات' : 'Batch average';
     return isAr ? 'تكلفة افتراضية' : 'Default cost';
   };
@@ -320,9 +336,9 @@ export function CostingCenterPage() {
     { key: 'sale', header: t('salePrice'), render: (r) => money(r.sale_price) },
     { key: 'unitCost', header: t('unitCost'), render: (r) => money(r.unit_cost) },
     { key: 'theoretical', header: t('theoreticalCost'), render: (r) => money(r.theoretical_cost) },
-    { key: 'actual', header: t('actualCost'), render: (r) => money(r.actual_cost) },
-    { key: 'margin', header: t('marginPct'), render: (r) => marginPill(marginPct(r.actual_cost || r.theoretical_cost || r.unit_cost, r.sale_price)) },
-    { key: 'variance', header: t('variance'), render: (r) => !r.theoretical_cost && !r.actual_cost ? '-' : <span className="text-xs">{formatNumber(variancePct(r.actual_cost, r.theoretical_cost), 1)}%</span> },
+    { key: 'actual', header: isAr ? 'تكلفة الوصفة بآخر سعر (تقديرية)' : 'Recipe cost at latest prices (estimated)', render: (r) => r.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(r.actual_cost) },
+    { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null ? '-' : marginPill(marginPct(r.actual_cost || r.theoretical_cost || r.unit_cost, r.sale_price)) },
+    { key: 'variance', header: t('variance'), render: (r) => r.actual_cost == null || (!r.theoretical_cost && !r.actual_cost) ? '-' : <span className="text-xs">{formatNumber(variancePct(r.actual_cost, r.theoretical_cost), 1)}%</span> },
   ];
 
   const orderColumns: Column<OrderMarginRow & { id: string }>[] = [
@@ -345,9 +361,10 @@ export function CostingCenterPage() {
     { key: 'lastDate', header: t('lastUpdated'), render: (r) => r.last_purchased_at ? formatDate(r.last_purchased_at, lang) : '-' },
   ];
 
-  const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string; fifo_cost?: number | null }>[] = [
+  const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string; fifo_cost?: number | null; current_price?: number | null }>[] = [
     { key: 'raw', header: t('rawMaterial'), render: (r) => <div><p className="font-semibold text-ui-text">{r.raw_material_name}</p><p className="text-xs text-ui-subtle">{r.raw_material_code || '-'}</p></div> },
     { key: 'stock', header: isAr ? 'الرصيد' : 'Stock', render: (r) => <span className={`font-semibold ${Number(r.stock_quantity) < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(r.stock_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang })}</span> },
+    { key: 'current_price', header: isAr ? 'آخر سعر معروف / وحدة' : 'Latest known price / unit', render: (r) => r.current_price == null ? '-' : rawUnitMoney(r.current_price) },
     { key: 'fifo', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (r) => r.fifo_cost == null ? '-' : rawUnitMoney(r.fifo_cost) },
     { key: 'latest', header: isAr ? 'آخر سعر مرجعي / وحدة' : 'Latest reference / unit', render: (r) => <div><span className="font-bold text-ui-text">{rawUnitMoney(r.latest_cost)}</span>{rawUnitLabel(r.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(r.raw_material_id)}</p>}</div> },
     { key: 'actualValue', header: isAr ? 'القيمة الفعلية' : 'Actual value', render: (r) => <div><span className="font-bold text-ui-text">{money(r.actual_stock_value)}</span><p className="text-[10px] text-ui-subtle">{isAr ? 'المخزون الموجب فقط' : 'Positive stock only'}</p></div> },
@@ -370,8 +387,8 @@ export function CostingCenterPage() {
 
   const tabBtn = (key: Tab, label: string) => <button onClick={() => setTab(key)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${tab === key ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]' : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'}`}>{label}</button>;
 
-  const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, UnitCost: r.unit_cost, TheoreticalCost: r.theoretical_cost, ActualCost: r.actual_cost })), 'costing-overview');
-  const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, CurrentFifoUnitCost: r.fifo_cost ?? '', LatestReferenceUnitCost: r.latest_cost, ActualPositiveStockValue: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
+  const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, UnitCost: r.unit_cost, TheoreticalCost: r.theoretical_cost, LatestPriceRecipeCostEstimate: r.actual_cost ?? (isAr ? 'غير مكتملة' : 'Incomplete') })), 'costing-overview');
+  const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, CurrentFifoUnitCost: r.fifo_cost ?? '', LatestKnownUnitPrice: r.current_price ?? '', LatestReferenceUnitCost: r.latest_cost, ActualPositiveStockValue: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
   const handleExportOrders = () => exportToExcel(orders.map((r) => ({ Invoice: r.invoice_number, Date: r.sale_date, Total: r.total, Discount: r.discount_amount, COGS: r.cogs, GrossMargin: r.gross_margin })), 'order-margin');
   const handleExportSupplier = () => exportToExcel(supplierImpact.map((r) => ({ Item: r.item_name, Type: r.item_type, FirstCost: r.first_cost, LastCost: r.last_cost, AvgCost: r.avg_cost, ChangePct: r.change_pct, PurchaseCount: r.purchase_count })), 'supplier-price-impact');
 
@@ -434,8 +451,8 @@ export function CostingCenterPage() {
             <p className="font-semibold text-ui-text">{isAr ? 'قاعدة احتساب تكلفة الخامة' : 'Raw-material costing rule'}</p>
             <p className="mt-1">
               {isAr
-                ? 'التكلفة الفعلية تُحسب من الرصيد الموجب وFIFO الحقيقي فقط ولا تتأثر بالسالب. عند نفاد الخامة يُسعّر الرصيد السالب مؤقتًا بآخر تكلفة FIFO معروفة ويظهر منفصلًا كتقدير حتى تصل المشتريات الفعلية وتتم تسوية FIFO.'
-                : 'Actual cost uses positive stock and settled FIFO only and is never changed by negative stock. When stock is exhausted, the negative balance is temporarily valued at the last known FIFO cost and shown separately as an estimate until a real purchase settles FIFO.'}
+                ? 'التكلفة الفعلية تُحسب من الرصيد الموجب وFIFO الحقيقي فقط ولا تتأثر بالسالب. عند نفاد الخامة يُسعّر الرصيد السالب مؤقتًا بآخر سعر معروف ويظهر منفصلًا كتقدير حتى تصل المشتريات الفعلية وتتم تسوية FIFO.'
+                : 'Actual cost uses positive stock and settled FIFO only and is never changed by negative stock. When stock is exhausted, the negative balance is temporarily valued at the latest known price and shown separately as an estimate until a real purchase settles FIFO.'}
             </p>
           </div>
         </DesignPanel>
@@ -479,9 +496,9 @@ export function CostingCenterPage() {
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('salePrice')}</p><p className="text-lg font-bold text-ui-text">{money(detail.sale_price)}</p></div>
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('unitCost')}</p><p className="text-lg font-bold text-ui-text">{money(detail.unit_cost)}</p></div>
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('theoreticalCost')}</p><p className="text-lg font-bold text-ui-text">{money(detail.theoretical_cost)}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('actualCost')}</p><p className="text-lg font-bold text-ui-text">{money(detail.actual_cost)}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{formatNumber(foodCostPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{formatNumber(marginPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تكلفة الوصفة بآخر سعر (تقديرية)' : 'Recipe cost at latest prices (estimated)'}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(detail.actual_cost)}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(foodCostPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%`}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(marginPct(detail.actual_cost || detail.theoretical_cost || detail.unit_cost || 0, detail.sale_price || 0), 1)}%`}</p></div>
           </div>
 
           {(detail.components?.length || 0) > 0 && <div>

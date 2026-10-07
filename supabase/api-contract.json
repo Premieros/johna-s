@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07T18:45:50.653Z",
+  "generated_at": "2026-10-07T19:59:06.541Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -1439,6 +1439,7 @@
     "dining_tables",
     "expenses",
     "inventory",
+    "inventory_ledger",
     "inventory_movements",
     "inventory_unit_batches",
     "inventory_unit_recipes",

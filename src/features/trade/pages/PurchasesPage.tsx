@@ -1,3 +1,5 @@
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { convertPurchaseUnitPrice } from '../services/purchasePriceUnits';
 import { useEffect, useState, useMemo } from 'react';
 import { Plus, Trash2, Eye, Download, Send, Check, X, PackageOpen, RotateCcw, Edit2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -180,7 +182,11 @@ export function PurchasesPage() {
   };
 
   const addLine = () => setLineItems([...lineItems, { ...EMPTY_LINE }]);
-  const updateLine = (i: number, field: keyof PurchaseFormItem, value: string | number) => setLineItems(lineItems.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
+  const updateLine = (i: number, field: keyof PurchaseFormItem, value: string | number) => setLineItems(current => current.map((line, idx) => {
+    if (idx !== i) return line;
+    if (line.line_type === 'raw' && field === 'unit_name') return { ...line, unit_name: String(value), unit_cost: convertPurchaseUnitPrice(line.unit_cost, line.unit_name, String(value)) ?? 0 };
+    return { ...line, [field]: value };
+  }));
   const removeLine = (i: number) => setLineItems(lineItems.filter((_, idx) => idx !== i));
 
   const rawUnitName = (id: string) => {
@@ -227,7 +233,7 @@ export function PurchasesPage() {
   const updateRawMaterial = (index: number, rawMaterialId: string) => {
     const defaultUnit = purchaseUnitOptions(rawMaterialId)[0]?.value || rawUnitName(rawMaterialId);
     setLineItems((current) => current.map((line, idx) => (
-      idx === index ? { ...line, raw_material_id: rawMaterialId, unit_name: defaultUnit } : line
+      idx === index ? { ...line, raw_material_id: rawMaterialId, unit_name: defaultUnit, unit_cost: Number(rawMaterials.find(raw => raw.id === rawMaterialId)?.default_cost || 0) } : line
     )));
   };
 
@@ -334,6 +340,7 @@ export function PurchasesPage() {
         show(result?.detail || result?.error || t('error'), 'error');
         return;
       }
+      await refreshRawPrices();
       await logAudit('update', 'purchases', result.purchase_id || editingPurchase.id, { previous_purchase_id: editingPurchase.id, total: totalValue });
       show(lang === 'ar' ? 'تم تعديل فاتورة المشتريات بأمان' : 'Purchase invoice updated safely', 'success');
       setEditingPurchase(null);
@@ -383,6 +390,7 @@ export function PurchasesPage() {
       return;
     }
 
+    await refreshRawPrices();
     await logAudit('create', 'purchases', result.purchase_id || '', { invoice: invoiceNumber, total: totalValue });
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
@@ -416,6 +424,15 @@ export function PurchasesPage() {
     })), 'purchases');
   };
 
+  async function refreshRawPrices() {
+    try {
+      const prices = rawCurrentPriceMap(await loadRawCurrentPrices(branchFilter || null));
+      setRawMaterials(current => current.map(raw => branchFilter && raw.branch_id !== branchFilter ? raw : ({ ...raw, default_cost: prices[raw.id] ?? 0 })));
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    }
+  }
+
   const changeOrderStatus = async (p: Purchase, status: string) => {
     const { data, error: err } = await api.procurement.updatePurchaseOrderStatus({ p_purchase_id: p.id, p_status: status });
     if (err) { show(err.message, 'error'); return; }
@@ -445,6 +462,7 @@ export function PurchasesPage() {
       if (!result?.success) { show(result?.detail || result?.error || t('error'), 'error'); return; }
     }
 
+    await refreshRawPrices();
     show(lang === 'ar' ? 'تم حذف فاتورة الشراء' : 'Purchase invoice deleted', 'success');
     if (viewModal?.id === p.id) setViewModal(null);
     reloadPurchases();
@@ -473,6 +491,7 @@ export function PurchasesPage() {
     const result = data as RpcResult | null;
     if (!result?.success) { show(result?.detail || result?.error || t('error'), 'error'); return; }
 
+    await refreshRawPrices();
     show(lang === 'ar' ? 'تم عكس فاتورة الشراء بالكامل' : 'Purchase invoice fully reversed', 'success');
     if (viewModal?.id === p.id) setViewModal(null);
     reloadPurchases();

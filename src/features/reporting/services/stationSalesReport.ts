@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
 import { applySalesFilters, type ReportFilters, type EqBuilder } from '../reportFilters';
@@ -20,8 +21,16 @@ export interface StationLine {
   gross: number; discount: number; tax: number; original: number; refunded: number;
   net: number; netBeforeTax: number; netQuantity: number;
   cost: number | null;
+  estimatedCost: number | null;
+  knownEstimatedCost: number | null;
+  unpricedMaterials: string[];
 }
-interface CostEvent { settled_sale_id: string; order_item_id: string; sent_quantity: number; voided_quantity: number; total_cost: number }
+export interface CostLedgerLine { reference_id: string; raw_material_id: string; quantity: number; total_cost: number; batch_number?: string | null }
+export interface CostEvent {
+  id: string; settled_sale_id: string; order_item_id: string;
+  sent_quantity: number; voided_quantity: number; total_cost: number;
+  component_snapshot: { raw_material_id: string; raw_name?: string; quantity: number }[];
+}
 const n = (v: unknown) => Number(v || 0);
 
 /** Invoice-level cent allocation with a deterministic residual, BEFORE dimension filters. */
@@ -37,13 +46,43 @@ function allocate(amount: number, weights: number[]): number[] {
   return allocated.map(value => value / 100);
 }
 
-export function buildStationSalesLines(sales: StationSale[], filters: ReportFilters, lang: 'ar' | 'en', costs: CostEvent[] = []): StationLine[] {
-  const costMap = new Map<string, { quantity: number; cost: number }>();
+export function buildStationSalesLines(sales: StationSale[], filters: ReportFilters, lang: 'ar' | 'en', costs: CostEvent[] = [], currentPrices: Record<string, number | null> = {}, ledger: CostLedgerLine[] = []): StationLine[] {
+  const costMap = new Map<string, { quantity: number; cost: number; complete: boolean; estimate: number; estimateAvailable: boolean; missing: Set<string> }>();
+  const ledgerMap = new Map<string, CostLedgerLine[]>();
+  for (const row of ledger) {
+    const rows = ledgerMap.get(row.reference_id) || [];
+    rows.push(row); ledgerMap.set(row.reference_id, rows);
+  }
   for (const event of costs) {
     const key = `${event.settled_sale_id}:${event.order_item_id}`;
-    const previous = costMap.get(key) || { quantity: 0, cost: 0 };
+    const previous = costMap.get(key) || { quantity: 0, cost: 0, complete: true, estimate: 0, estimateAvailable: true, missing: new Set<string>() };
     // event total_cost is the original send snapshot; voided units restore that cost proportionally.
     const quantity = Math.max(0, n(event.sent_quantity) - n(event.voided_quantity));
+    if (quantity === 0) continue;
+    const snapshot = event.component_snapshot || [];
+    const movements = (ledgerMap.get(event.id) || []).filter(row => n(row.quantity) < 0);
+    const expected = new Map<string, number>();
+    for (const component of snapshot) expected.set(component.raw_material_id, (expected.get(component.raw_material_id) || 0) + n(component.quantity));
+    const actual = new Map<string, number>();
+    let movementCost = 0;
+    for (const movement of movements) {
+      actual.set(movement.raw_material_id, (actual.get(movement.raw_material_id) || 0) - n(movement.quantity));
+      movementCost += Math.abs(n(movement.total_cost));
+    }
+    // Missing RLS-visible movement coverage and unpriced negative debt are incomplete.
+    previous.complete &&= snapshot.length > 0 && expected.size === actual.size
+      && [...expected].every(([id, qty]) => qty > 0 && Math.abs(qty - (actual.get(id) || 0)) < 0.000001)
+      && movements.every(row => Math.abs(n(row.total_cost)) > 0 && !row.batch_number?.startsWith('OV-'))
+      && Math.abs(movementCost - n(event.total_cost)) < 0.0001;
+    previous.estimateAvailable &&= snapshot.length > 0 && n(event.sent_quantity) > 0;
+    for (const component of snapshot) {
+      const price = currentPrices[component.raw_material_id];
+      if (price == null || !Number.isFinite(price) || price <= 0 || n(component.quantity) <= 0) {
+        previous.missing.add(component.raw_name || component.raw_material_id);
+      } else {
+        previous.estimate += n(component.quantity) * price * quantity / n(event.sent_quantity);
+      }
+    }
     previous.quantity += quantity;
     previous.cost += n(event.sent_quantity) > 0 ? n(event.total_cost) * quantity / n(event.sent_quantity) : 0;
     costMap.set(key, previous);
@@ -75,7 +114,10 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
         original: original[i], refunded, net,
         netBeforeTax: original[i] > 0 ? net * (original[i] - taxes[i]) / original[i] : 0,
         netQuantity,
-        cost: exactCost && n(item.quantity) > 0 ? costSource.cost * netQuantity / n(item.quantity) : null,
+        cost: exactCost && costSource.complete && n(item.quantity) > 0 ? costSource.cost * netQuantity / n(item.quantity) : null,
+        estimatedCost: exactCost && costSource.estimateAvailable && !costSource.missing.size && n(item.quantity) > 0 ? costSource.estimate * netQuantity / n(item.quantity) : null,
+        knownEstimatedCost: exactCost && costSource.estimateAvailable && n(item.quantity) > 0 ? costSource.estimate * netQuantity / n(item.quantity) : null,
+        unpricedMaterials: costSource ? [...costSource.missing].sort() : [],
       };
     });
   }).filter(line => (!filters.station || line.stationId === filters.station)
@@ -98,10 +140,25 @@ export async function loadStationSalesLines(args: { branchId: string | null; fro
   if (args.includeCost) {
     const ids = sales.filter(sale => sale.items.some(item => item.source_order_item_id)).map(sale => sale.id);
     for (let i = 0; i < ids.length; i += 100) {
-      let costQuery = supabase.from('order_kitchen_inventory_events').select('settled_sale_id,order_item_id,sent_quantity,voided_quantity,total_cost').in('settled_sale_id', ids.slice(i, i + 100)).order('id');
+      let costQuery = supabase.from('order_kitchen_inventory_events').select('id,settled_sale_id,order_item_id,sent_quantity,voided_quantity,total_cost,component_snapshot').in('settled_sale_id', ids.slice(i, i + 100)).order('id');
       if (args.branchId) costQuery = costQuery.eq('branch_id', args.branchId);
       events.push(...await fetchAllReportRows(costQuery as unknown as RangePageQuery<CostEvent>, 1000, args.signal));
     }
   }
-  return buildStationSalesLines(sales, args.filters, args.lang, events);
+  const ledger: CostLedgerLine[] = [];
+  let prices: Record<string, number | null> = {};
+  if (args.includeCost && events.length) {
+    const rawIds = [...new Set(events.flatMap(event => (event.component_snapshot || []).map(component => component.raw_material_id)))];
+    prices = rawCurrentPriceMap(await loadRawCurrentPrices(args.branchId, rawIds));
+    const eventIds = events.map(event => event.id);
+    for (let i = 0; i < eventIds.length; i += 100) {
+      let ledgerQuery = supabase.from('inventory_ledger')
+        .select('reference_id,raw_material_id,quantity,total_cost,batch_number')
+        .eq('reference_type', 'kitchen_send').lt('quantity', 0)
+        .in('reference_id', eventIds.slice(i, i + 100)).order('id');
+      if (args.branchId) ledgerQuery = ledgerQuery.eq('branch_id', args.branchId);
+      ledger.push(...await fetchAllReportRows(ledgerQuery as unknown as RangePageQuery<CostLedgerLine>, 1000, args.signal));
+    }
+  }
+  return buildStationSalesLines(sales, args.filters, args.lang, events, prices, ledger);
 }

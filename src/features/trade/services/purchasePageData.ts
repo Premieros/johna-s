@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Product, RawMaterial, Supplier, Warehouse } from '@/lib/types';
 
@@ -28,18 +29,22 @@ export async function fetchPurchaseMeta(branchId?: string | null): Promise<Purch
     warehouseQuery = warehouseQuery.eq('branch_id', branchId);
   }
 
-  const [suppliersRes, productsRes, rawMaterialsRes, warehousesRes, unitsRes] = await Promise.all([
+  const [suppliersRes, productsRes, rawMaterialsRes, warehousesRes, unitsRes, prices] = await Promise.all([
     supplierQuery,
     productQuery,
     rawMaterialQuery,
     warehouseQuery,
     supabase.from('measurement_units').select('id,name,symbol').eq('is_active', true).order('name'),
+    loadRawCurrentPrices(branchId || null),
   ]);
 
+  const error = suppliersRes.error || productsRes.error || rawMaterialsRes.error || warehousesRes.error || unitsRes.error;
+  if (error) throw error;
+  const costs = rawCurrentPriceMap(prices);
   return {
     suppliers: (suppliersRes.data as Supplier[]) || [],
     products: (productsRes.data as Product[]) || [],
-    rawMaterials: (rawMaterialsRes.data as RawMaterial[]) || [],
+    rawMaterials: ((rawMaterialsRes.data as RawMaterial[]) || []).map(raw => ({ ...raw, default_cost: costs[raw.id] ?? 0 })),
     warehouses: (warehousesRes.data as Warehouse[]) || [],
     rawUnits: (unitsRes.data as PurchaseRawUnit[]) || [],
   };

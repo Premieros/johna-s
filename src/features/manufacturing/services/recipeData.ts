@@ -1,4 +1,4 @@
-import { rawFifoCostMap, type RawFifoCostRow } from '@/features/costing/services/rawFifoCostData';
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Branch, Product, RawMaterial, Recipe, RecipeItem, RecipeItemInput, Unit } from '@/lib/types';
 
@@ -46,17 +46,17 @@ export async function loadRecipeComponents(branchId: string): Promise<{
   materialCosts: Record<string, number>;
   manufacturedUnits: RecipeManufacturedUnitOption[];
 }> {
-  const [materialsResult, inventoryResult, manufacturedResult] = await Promise.all([
+  const [materialsResult, priceRows, manufacturedResult] = await Promise.all([
     supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
-    supabase.from('raw_material_inventory').select('raw_material_id,branch_id,avg_cost').eq('branch_id', branchId),
+    loadRawCurrentPrices(branchId),
     supabase.from('inventory_units').select('id,name,branch_id,cost_price').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
   ]);
 
-  const error = materialsResult.error || inventoryResult.error || manufacturedResult.error;
+  const error = materialsResult.error || manufacturedResult.error;
   if (error) throw error;
 
   const materials = (materialsResult.data as RawMaterial[]) || [];
-  const costs = rawFifoCostMap((inventoryResult.data || []) as RawFifoCostRow[]);
+  const costs = rawCurrentPriceMap(priceRows);
   const materialCosts = Object.fromEntries(materials.map((material) => [material.id, costs[material.id] ?? 0]));
 
   return {
