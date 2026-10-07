@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Supplier, Warehouse } from '@/lib/types';
 
@@ -11,6 +12,7 @@ export type RawMaterialReorderRow = {
   quantity: number;
   min_stock: number;
   avg_cost: number;
+  latest_cost: number | null;
   raw_material: {
     id: string;
     name: string;
@@ -43,12 +45,13 @@ export async function loadLowStockOptions(): Promise<{
 }
 
 export async function loadRawMaterialReorderRows(branchId: string): Promise<RawMaterialReorderRow[]> {
-  const { data } = await supabase
+  const [result, prices] = await Promise.all([supabase
     .from('raw_material_inventory')
     .select('raw_material_id, quantity, min_stock, avg_cost, raw_material:raw_materials(id, name, code, min_stock, default_cost, is_active, unit:units(name))')
-    .eq('branch_id', branchId);
-
-  return ((data || []) as unknown as RawMaterialReorderRow[]);
+    .eq('branch_id', branchId), loadRawCurrentPrices(branchId)]);
+  if (result.error) throw result.error;
+  const costs = rawCurrentPriceMap(prices);
+  return ((result.data || []) as unknown as RawMaterialReorderRow[]).map(row => ({ ...row, latest_cost: costs[row.raw_material_id] ?? null }));
 }
 
 export async function loadProductCostMap(productIds: string[]): Promise<Record<string, number>> {

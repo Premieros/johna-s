@@ -1,3 +1,4 @@
+import { convertPurchaseUnitPrice } from '../services/purchasePriceUnits';
 import { useEffect, useState, useMemo } from 'react';
 import { Plus, Trash2, Eye, Download, Send, Check, X, PackageOpen, RotateCcw, Edit2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -180,7 +181,11 @@ export function PurchasesPage() {
   };
 
   const addLine = () => setLineItems([...lineItems, { ...EMPTY_LINE }]);
-  const updateLine = (i: number, field: keyof PurchaseFormItem, value: string | number) => setLineItems(lineItems.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
+  const updateLine = (i: number, field: keyof PurchaseFormItem, value: string | number) => setLineItems(current => current.map((line, idx) => {
+    if (idx !== i) return line;
+    if (line.line_type === 'raw' && field === 'unit_name') return { ...line, unit_name: String(value), unit_cost: convertPurchaseUnitPrice(line.unit_cost, line.unit_name, String(value)) ?? 0 };
+    return { ...line, [field]: value };
+  }));
   const removeLine = (i: number) => setLineItems(lineItems.filter((_, idx) => idx !== i));
 
   const rawUnitName = (id: string) => {
@@ -227,7 +232,7 @@ export function PurchasesPage() {
   const updateRawMaterial = (index: number, rawMaterialId: string) => {
     const defaultUnit = purchaseUnitOptions(rawMaterialId)[0]?.value || rawUnitName(rawMaterialId);
     setLineItems((current) => current.map((line, idx) => (
-      idx === index ? { ...line, raw_material_id: rawMaterialId, unit_name: defaultUnit } : line
+      idx === index ? { ...line, raw_material_id: rawMaterialId, unit_name: defaultUnit, unit_cost: Number(rawMaterials.find(raw => raw.id === rawMaterialId)?.default_cost || 0) } : line
     )));
   };
 

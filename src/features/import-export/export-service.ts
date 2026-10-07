@@ -1,4 +1,4 @@
-import { loadRawFifoCosts, rawFifoCostMap } from '@/features/costing/services/rawFifoCostData';
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { ImportExportEntity, ExportFilters, ExportFormat } from './types';
 import { ENTITY_CONFIGS } from './entity-configs';
@@ -122,7 +122,7 @@ export class ExportService {
       }
 
       case 'components': {
-        const fifoCosts = rawFifoCostMap(await loadRawFifoCosts(filters.branchId || null));
+        const currentPrices = rawCurrentPriceMap(await loadRawCurrentPrices(filters.branchId || null));
         let query = supabase.from('raw_materials').select('*');
         if (filters.branchId) query = query.eq('branch_id', filters.branchId);
         if (filters.status === 'active') query = query.eq('is_active', true);
@@ -135,7 +135,7 @@ export class ExportService {
           [isAr ? 'كود المكون (SKU)' : 'Component SKU']: m.sku || '',
           [isAr ? 'اسم المكون' : 'Component Name']: m.name || '',
           [isAr ? 'وحدة القياس' : 'Unit']: m.unit || '',
-          [isAr ? 'سعر التكلفة' : 'Cost']: fifoCosts[m.id] ?? '',
+          [isAr ? 'سعر التكلفة' : 'Cost']: currentPrices[m.id] ?? '',
           [isAr ? 'حد الطلب الأدنى' : 'Min Stock']: Number(m.min_stock || 0),
           [isAr ? 'نشط' : 'Active']: m.is_active ? (isAr ? 'نعم' : 'Yes') : (isAr ? 'لا' : 'No'),
         }));

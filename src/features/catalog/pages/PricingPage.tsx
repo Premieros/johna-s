@@ -20,7 +20,7 @@ type RawPriceRow = {
   name: string;
   branch_id: string | null;
   default_cost: number | null;
-  fifo_cost?: number | null;
+  latest_cost?: number | null;
   is_active: boolean;
 };
 
@@ -285,8 +285,8 @@ export function PricingPage() {
       <DesignPageHeader
         title={ar ? 'التسعير' : 'Pricing'}
         subtitle={ar
-          ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. تكلفة FIFO من المخزون الفعلي، والسعر اليدوي مرجع منفصل محفوظ في سجل الأسعار.`
-          : `Manage pricing for ${branchName}. FIFO cost comes from actual inventory. Manual reference prices are kept separately in price history.`}
+          ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. التكلفة الحالية بآخر سعر معروف من الشراء أو الجرد أو التسعير، مع حفظ تكلفة FIFO الفعلية للحركات.`
+          : `Manage pricing for ${branchName}. Current estimates use the latest known purchase, count or pricing price. Actual FIFO movements retain their recorded costs.`}
         actions={(
           <Button size="sm" variant="secondary" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -338,7 +338,7 @@ export function PricingPage() {
                   <th className="px-4 py-3 text-start">{ar ? 'الصنف' : 'Item'}</th>
                   <th className="px-4 py-3 text-start">{ar ? 'الكود' : 'Code'}</th>
                   {tab === 'raw' ? (
-                    <><th className="px-4 py-3 text-end">{ar ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)'}</th><th className="px-4 py-3 text-end">{ar ? 'سعر مرجعي يدوي' : 'Manual reference price'}</th></>
+                    <><th className="px-4 py-3 text-end">{ar ? 'آخر سعر معروف / وحدة' : 'Latest known price / unit'}</th><th className="px-4 py-3 text-end">{ar ? 'سعر مرجعي يدوي' : 'Manual reference price'}</th></>
                   ) : (
                     <>
                       <th className="px-4 py-3 text-end">{ar ? 'التكلفة' : 'Cost'}</th>
@@ -357,7 +357,7 @@ export function PricingPage() {
                     <tr key={row.id} className="hover:bg-ui-page-alt/70">
                       <td className="px-4 py-3 font-semibold text-ui-text">{row.name}</td>
                       <td className="px-4 py-3 font-mono text-xs text-ui-muted">{row.code || '-'}</td>
-                      <td className="px-4 py-3 text-end">{row.fifo_cost == null ? '-' : formatNumber(row.fifo_cost, 2)}</td>
+                      <td className="px-4 py-3 text-end">{row.latest_cost == null ? '-' : formatNumber(row.latest_cost, 2)}</td>
                       <td className="px-4 py-3 text-end">
                         {priceInput(draft.default_cost, (value) => setRawDrafts((state) => ({ ...state, [row.id]: { default_cost: value } })), !canRawEdit, `${row.name} ${ar ? 'سعر الخامة' : 'raw price'}`)}
                       </td>
@@ -426,8 +426,8 @@ export function PricingPage() {
 
         <p className="mt-3 text-xs text-ui-subtle">
           {ar
-            ? `ملاحظة: حفظ سعر الخامة يسجل حدث «تسعير» في تاريخ مركز التكلفة كمرجع منفصل. تكلفة FIFO المعروضة تُحسب من المخزون الفعلي ولا تتغير بتعديل السعر المرجعي. مثال عرض: ${formatNumber(0, 2)}`
-            : `Note: saving a raw-material price records a Pricing event in Costing Center history as a separate reference price. The displayed FIFO cost comes from actual inventory layers; the manual reference does not revalue them. Example: ${formatNumber(0, 2)}`}
+            ? `ملاحظة: حفظ سعر الخامة يسجل حدث «تسعير» في تاريخ مركز التكلفة ويُستخدم آخر سعر معروف في حساب التكلفة الحالية. تكلفة مخزون FIFO الفعلية محفوظة. مثال عرض: ${formatNumber(0, 2)}`
+            : `Note: saving a raw-material price records a Pricing event in Costing Center history and updates current costing estimates. Actual FIFO inventory layers retain their recorded valuation. Example: ${formatNumber(0, 2)}`}
         </p>
       </DesignPanel>
     </DesignSurface>

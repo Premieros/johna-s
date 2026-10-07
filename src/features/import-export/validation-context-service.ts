@@ -1,4 +1,4 @@
-import { loadRawFifoCosts, rawFifoCostMap } from '@/features/costing/services/rawFifoCostData';
+import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { ValidationContext } from './validation-engine';
 
@@ -19,7 +19,7 @@ export async function loadImportExportValidationContext(
     whsRes,
     brsRes,
     usersRes,
-    fifoRows,
+    priceRows,
   ] = await Promise.all([
     Promise.resolve(supabase.from('products').select('*')).catch(() => ({ data: [], error: null })),
     Promise.resolve(supabase.from('categories').select('*')).catch(() => ({ data: [], error: null })),
@@ -29,7 +29,7 @@ export async function loadImportExportValidationContext(
     Promise.resolve(supabase.from('warehouses').select('*')).catch(() => ({ data: [], error: null })),
     Promise.resolve(supabase.from('branches').select('*')).catch(() => ({ data: [], error: null })),
     Promise.resolve(supabase.from('users').select('*')).catch(() => ({ data: [], error: null })),
-    loadRawFifoCosts(scope.branchId || null),
+    loadRawCurrentPrices(scope.branchId || null),
   ]);
 
   const isSuperAdmin = scope.role === 'super_admin';
@@ -56,7 +56,7 @@ export async function loadImportExportValidationContext(
   const customers = ((custsRes as { data: Record<string, unknown>[] })?.data || []);
   const users = ((usersRes as { data: Record<string, unknown>[] })?.data || []);
 
-  const fifoCosts = rawFifoCostMap(fifoRows);
+  const currentPrices = rawCurrentPriceMap(priceRows);
   return {
     existingProducts: products.map((product) => ({
       id: String(product.id || ''),
@@ -76,7 +76,7 @@ export async function loadImportExportValidationContext(
       sku: String(component.code || component.sku || component.name || ''),
       name: String(component.name || ''),
       unit: String(component.unit || component.description || 'قطعة'),
-      cost: fifoCosts[String(component.id || '')] ?? 0,
+      cost: currentPrices[String(component.id || '')] ?? 0,
     })),
     existingSuppliers: suppliers.map((supplier) => ({
       id: String(supplier.id || ''),

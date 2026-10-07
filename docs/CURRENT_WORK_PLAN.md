@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `0e81c8c79dd4b1009888eb0c6c23db07278ae960`
-- Current active branch: `codex/station-sales-20261007`
-- Mandatory active work log: `docs/STATION_SALES_2026-10-07.md`
+- Latest main baseline reconciled: `627b379b073cb06e4be071303676af293172c8ce`
+- Current active branch: `codex/global-raw-cost-20261007`
+- Mandatory active work log: `docs/GLOBAL_RAW_COST_2026-10-07.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,8 +18,10 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Add sales line report by station/category with date and branch filters, selectable
-columns, export and print. Read-only frontend; preserve live financial visibility.
+Unify latest known positive raw-material prices across current costing, purchasing,
+recipes, pricing, exports and estimates. Keep immutable actual FIFO accounting;
+reject incomplete costs in the station sales report. Preserve existing RLS and
+Financial Visibility. Prepare a reviewed migration; no production application.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -49,3 +51,5 @@ columns, export and print. Read-only frontend; preserve live financial visibilit
 
 - #463 completed at a6e838ae: all-section refresh/error visibility deployed;
   postmerge Verify 37478093699 and Pages 37478093744 green.
+
+- #466 completed at 627b379b: station sales report deployed; Full Verify 37670195057 and Pages 37671923579 green.
