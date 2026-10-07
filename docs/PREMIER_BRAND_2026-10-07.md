@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `codex/premier-brand-20261007`
-Current PR: `#0`
+Current PR: `#465`
 Last updated: 2026-10-07
 Execution mode: **SINGLE_WRITER**
 Parallel execution: **FORBIDDEN**
@@ -45,7 +45,10 @@ requires zero added wait: remove old 180ms overlay-hide timeout; hide immediatel
 when all active loads finish. Never wait for the logo animation cycle.
 
 ## Verification ledger
-Typecheck, changed-file lint, existing brand/preference tests and production build.
+typecheck:all, changed-file lint, 1,536 unit/component tests and production build
+passed locally. Existing navigation progress contract: 5/5 pass after zero-delay
+change. Local browser runner could not launch (Chromium binary unavailable);
+Full Verify CI supplies Chromium and native review screenshots.
 Public/login and responsive-shell browser suites use mocked backend only.
 Exact-head Full Verify green required before publication.
 
@@ -60,3 +63,4 @@ Inspect responsive previews, open PR, verify exact head, present publication gat
 ## Mandatory update protocol
 Check expected main and branch before writes. Reconcile drift. Freeze tested head
 once CI starts; record results/approval in PR metadata.
+
