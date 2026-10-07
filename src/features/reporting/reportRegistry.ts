@@ -56,6 +56,15 @@ export const REPORT_REGISTRY: ReportDefinition[] = [
     deepLinkKey: 'sales',
   },
   {
+    key: 'sales_by_station', category: 'sales',
+    title: 'المبيعات حسب المحطة والتصنيف', titleEn: 'Sales by Station & Category',
+    description: 'بنود الفواتير والخصومات والمرتجعات للمطبخ والباريستا أو أي تصنيف',
+    descriptionEn: 'Invoice lines, discounts and returns by station or category',
+    icon: 'ShoppingBag', permissions: ['reports.view'],
+    filterDimensions: ['station', 'category', 'product', 'order_type', 'cashier', 'customer', 'payment_method'],
+    dateDriven: true, deepLinkKey: 'sales_by_station',
+  },
+  {
     key: 'sales_by_payment',
     category: 'analytics',
     title: 'المبيعات حسب طريقة الدفع',

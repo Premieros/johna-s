@@ -1,6 +1,7 @@
 import { supabase } from '@/api';
 
 type ReportFilterOptionFlags = {
+  station?: boolean;
   warehouse: boolean;
   cashier: boolean;
   customer: boolean;
@@ -11,6 +12,7 @@ type ReportFilterOptionFlags = {
 };
 
 export type ReportFilterOptions = {
+  stations: { id: string; name_ar: string; name_en: string | null }[];
   warehouses: { id: string; name: string }[];
   cashiers: { id: string; full_name: string | null; email: string | null }[];
   customers: { id: string; name: string; name_en: string | null }[];
@@ -21,7 +23,7 @@ export type ReportFilterOptions = {
 };
 
 export async function loadReportFilterOptions(branchId: string, flags: ReportFilterOptionFlags): Promise<ReportFilterOptions> {
-  const [warehouses, cashiers, customers, suppliers, products, categories, tables] = await Promise.all([
+  const [warehouses, cashiers, customers, suppliers, products, categories, tables, stations] = await Promise.all([
     flags.warehouse
       ? supabase.from('warehouses').select('id, name').eq('branch_id', branchId)
       : Promise.resolve({ data: [], error: null }),
@@ -43,13 +45,17 @@ export async function loadReportFilterOptions(branchId: string, flags: ReportFil
     flags.table
       ? supabase.from('dining_tables').select('id, name').eq('branch_id', branchId)
       : Promise.resolve({ data: [], error: null }),
+    flags.station
+      ? supabase.from('kitchen_stations').select('id,name_ar,name_en').eq('branch_id', branchId).order('sort_order')
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
-  for (const result of [warehouses, cashiers, customers, suppliers, products, categories, tables]) {
+  for (const result of [warehouses, cashiers, customers, suppliers, products, categories, tables, stations]) {
     if (result.error) throw result.error;
   }
 
   return {
+    stations: (stations.data || []) as ReportFilterOptions['stations'],
     warehouses: (warehouses.data || []) as ReportFilterOptions['warehouses'],
     cashiers: (cashiers.data || []) as ReportFilterOptions['cashiers'],
     customers: (customers.data || []) as ReportFilterOptions['customers'],

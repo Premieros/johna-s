@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06T09:52:24.253Z",
+  "generated_at": "2026-10-07T18:45:50.653Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -1446,6 +1446,7 @@
     "kitchen_stations",
     "measurement_units",
     "order_items",
+    "order_kitchen_inventory_events",
     "order_kitchen_sends",
     "orders",
     "organization_members",

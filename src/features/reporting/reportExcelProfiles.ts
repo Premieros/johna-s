@@ -12,6 +12,7 @@ const pick = (lang: 'ar' | 'en', ar: string, en: string) => lang === 'ar' ? ar :
 export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en'): ReportExcelProfile {
   const branch = pick(lang, 'الفرع', 'Branch');
   const profiles: Record<ReportType, Omit<ReportExcelProfile, 'sourceNote'>> = {
+    sales_by_station: { columns: [], columnWidths: { [branch]: 24 }, integerColumns: [] },
     sales: {
       columns: [branch, pick(lang, 'الفاتورة', 'Invoice'), pick(lang, 'التاريخ', 'Date'), pick(lang, 'العميل', 'Customer'), pick(lang, 'الإجمالي الأصلي', 'Original Total'), pick(lang, 'المرتجع', 'Refunded'), pick(lang, 'صافي المبيعات', 'Net Sales')],
       columnWidths: { [branch]: 24, [pick(lang, 'الفاتورة', 'Invoice')]: 18, [pick(lang, 'التاريخ', 'Date')]: 18, [pick(lang, 'العميل', 'Customer')]: 24 },
@@ -189,7 +190,9 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
   };
 
   const profile = profiles[reportType];
-  const sourceNote = reportType === 'financial_reconciliation'
+  const sourceNote = reportType === 'sales_by_station'
+    ? pick(lang, 'المحطة والتصنيف من الربط الحالي. الخصم والضريبة موزعان على كامل الفاتورة قبل الفلترة. المرتجعات حتى وقت العرض لفواتير الفترة. التكلفة غير القابلة للتتبع تظهر غير متاحة؛ الربح دون الضريبة.', 'Current station/category mapping. Invoice discount/tax allocated before filtering. Lifetime returns on invoices in the selected period. Untraceable cost is unavailable; profit excludes tax.')
+    : reportType === 'financial_reconciliation'
     ? pick(lang, 'تفاصيل الدفع + قيود الخزنة والبنك، مع إظهار أي فرق دون إخفائه.', 'Payment detail + treasury/bank journal entries; mismatches are shown explicitly.')
     : reportType === 'sales_component_reconciliation'
       ? pick(lang, 'الاستهلاك النظري = الكميات المباعة × المكونات الحالية المعتمدة؛ الفعلي = inventory_ledger المرتبط بنفس المبيعات وإرسال المطبخ المسوّى. أي بنود بلا منتج أو بلا مكونات تظهر في ملخص المطابقة ولا تُخفى.', 'Theoretical consumption = sold quantities × current canonical components; actual = inventory_ledger tied to the same sales and settled kitchen sends. Unmatched/componentless items are surfaced in the reconciliation summary.')
