@@ -31,7 +31,9 @@ source costs where traceable; unavailable cost never becomes zero profit.
 
 ## Verification ledger
 Application/test typechecks, changed-file lint and build passed.
-1,540 tests passed; initial documentation gate needed the newly assigned PR number.
+All 1,541 unit/component tests pass.
+Report stability uses primitive permission changes, avoiding callback identity reads.
+Initial documentation gate updated with assigned PR #466.
 Exact-head Full Verify pending.
 
 ## Production gate

@@ -64,6 +64,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   /* REPORT-BRANCH-AUDIT-2026 */
   const { t, lang } = useLanguage();
   const can = useCan();
+  const canStationCost = can('reports.costing');
+  const canStationView = can('reports.view');
   const { user } = useAuth();
   const history = useHistoryAccess();
   const navigate = useNavigate();
@@ -94,14 +96,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const effectiveBranchFilter = branchFilter;
   // UUID/category selections belong to the old branch/user scope. Clear them
   // before paint and before the deferred report read; keep semantic filters.
-  const filterScope = useRef({ branchId: effectiveBranchFilter, userId: user?.id });
+  const filterScope = useRef({ branchId: effectiveBranchFilter, userId: user?.id, canStationCost, canStationView });
   useLayoutEffect(() => {
-    if (filterScope.current.branchId === effectiveBranchFilter && filterScope.current.userId === user?.id) return;
-    filterScope.current = { branchId: effectiveBranchFilter, userId: user?.id };
+    if (filterScope.current.branchId === effectiveBranchFilter && filterScope.current.userId === user?.id && filterScope.current.canStationCost === canStationCost && filterScope.current.canStationView === canStationView) return;
+    filterScope.current = { branchId: effectiveBranchFilter, userId: user?.id, canStationCost, canStationView };
     setFilters(({ order_type, payment_method, status }) => ({ order_type, payment_method, status }));
     setFiltersDirty(false);
     setQueryVersion((version) => version + 1);
-  }, [effectiveBranchFilter, user?.id]);
+  }, [effectiveBranchFilter, user?.id, canStationCost, canStationView]);
   const { branches } = useBranches();
   const { data: scopedOptions, error: optionsError, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id);
   const options = scopedOptions || EMPTY_REPORT_FILTER_OPTIONS;
@@ -214,7 +216,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   // Capture draft filters only on Run report or an automatic report/scope change.
   const reportReader = useMemo(() => loadReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang, can]);
+    [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);
@@ -259,8 +261,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, page }) : null;
 
     if (reportType === 'sales_by_station') {
-      if (!can('reports.view')) throw new Error('PERMISSION_DENIED:reports.view');
-      const includeCost = can('reports.costing');
+      if (!canStationView) throw new Error('PERMISSION_DENIED:reports.view');
+      const includeCost = canStationCost;
       const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
       setData(lines.map(line => withBranch(line.sale.branch_id, {
