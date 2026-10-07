@@ -51,21 +51,21 @@ export function LoginPage() {
   return (
     <DesignSurface testId="login-surface">
       <div className="min-h-screen flex">
-        <div className="hidden lg:flex lg:w-1/2 bg-[#171122] text-[#F6F3ED] relative overflow-hidden">
+        <div className="hidden lg:flex lg:w-1/2 bg-[#151820] text-white relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-brand-500" />
           <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
             <div className="mb-6"><Logo variant="vertical" size={72} tone="white" tagline={isAr ? 'منصة إدارة الأعمال' : 'Business Management Platform'} /></div>
-            <h1 className="text-3xl font-bold text-[#F6F3ED] text-center mb-3">{t('appName')}</h1>
-            <p className="text-navy-100 text-center text-lg max-w-sm">{isAr ? 'منصة إدارة الأعمال المتكاملة لإدارة متجرك وفروعه بكفاءة' : 'The complete business management platform for your store and branches'}</p>
+            <h1 className="text-3xl font-bold text-white text-center mb-3">{t('appName')}</h1>
+            <p className="text-slate-300 text-center text-lg max-w-sm">{isAr ? 'منصة إدارة الأعمال المتكاملة لإدارة متجرك وفروعه بكفاءة' : 'The complete business management platform for your store and branches'}</p>
             <div className="grid grid-cols-3 gap-4 mt-10 w-full max-w-md">
               {[
                 { label: isAr ? 'فواتير يومية' : 'Daily Invoices', value: '100+' },
                 { label: isAr ? 'منتجات' : 'Products', value: '500+' },
                 { label: isAr ? 'تقارير' : 'Reports', value: '15+' },
               ].map((stat) => (
-                <div key={stat.label} className="text-center bg-navy-800/90 rounded-xl px-4 py-3 border border-navy-700">
-                  <p className="text-2xl font-bold text-[#F6F3ED]">{stat.value}</p>
-                  <p className="text-xs text-navy-200 mt-0.5">{stat.label}</p>
+                <div key={stat.label} className="text-center bg-slate-800/90 rounded-xl px-4 py-3 border border-slate-700">
+                  <p className="text-2xl font-bold text-white">{stat.value}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{stat.label}</p>
                 </div>
               ))}
             </div>
@@ -80,10 +80,10 @@ export function LoginPage() {
           <div data-testid="login-panel" className="w-full max-w-md animate-fade-in">
             <div className="lg:hidden mb-8 flex justify-center"><Logo variant="horizontal" size={40} tone="navy" tagline={isAr ? 'منصة إدارة الأعمال' : 'Business Management Platform'} /></div>
             <div className="bg-ui-surface dark:bg-navy-900 rounded-3xl shadow-xl border border-ui-border dark:border-navy-800 p-8">
-              <div className="mb-6"><h2 className="text-2xl font-bold text-ui-text dark:text-[#F6F3ED]">{isAr ? 'مرحباً بك' : 'Welcome back'}</h2><p className="text-sm text-ui-subtle dark:text-ui-subtle mt-1">{isAr ? 'سجّل دخولك للوصول إلى منصة premier.os' : 'Sign in to access premier.os'}</p></div>
+              <div className="mb-6"><h2 className="text-2xl font-bold text-ui-text dark:text-white">{isAr ? 'مرحباً بك' : 'Welcome back'}</h2><p className="text-sm text-ui-subtle dark:text-ui-subtle mt-1">{isAr ? 'سجّل دخولك للوصول إلى منصة premier.os' : 'Sign in to access premier.os'}</p></div>
               <div data-testid="login-mode-toggle" className="flex rounded-xl bg-ui-page-alt dark:bg-navy-800 p-1 mb-5">
-                <button type="button" onClick={() => setMode('pin')} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${mode === 'pin' ? 'bg-ui-surface dark:bg-navy-700 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-ui-subtle dark:text-ui-subtle hover:text-ui-text dark:hover:text-ui-text'}`}>{t('loginWithPin')}</button>
-                <button type="button" onClick={() => setMode('password')} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${mode === 'password' ? 'bg-ui-surface dark:bg-navy-700 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-ui-subtle dark:text-ui-subtle hover:text-ui-text dark:hover:text-ui-text'}`}>{t('loginWithEmail')}</button>
+                <button type="button" onClick={() => setMode('pin')} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${mode === 'pin' ? 'bg-ui-surface dark:bg-navy-700 text-brand-700 dark:text-gold-400 shadow-sm' : 'text-ui-subtle dark:text-ui-subtle hover:text-ui-text dark:hover:text-ui-text'}`}>{t('loginWithPin')}</button>
+                <button type="button" onClick={() => setMode('password')} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${mode === 'password' ? 'bg-ui-surface dark:bg-navy-700 text-brand-700 dark:text-gold-400 shadow-sm' : 'text-ui-subtle dark:text-ui-subtle hover:text-ui-text dark:hover:text-ui-text'}`}>{t('loginWithEmail')}</button>
               </div>
               <form data-testid="login-form" onSubmit={handleSubmit} className="space-y-4">
                 {mode === 'pin' ? <>

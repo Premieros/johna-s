@@ -87,6 +87,7 @@ test.describe('public application smoke', () => {
       await expect(page.getByTestId('login-panel')).toBeVisible();
       for (const [name, width, height] of [['desktop', 1366, 900], ['mobile', 390, 844]] as const) {
         await page.setViewportSize({ width, height });
+        await expect(page.getByTestId('login-panel')).toHaveCSS('opacity', '1');
         await testInfo.attach(`premier-${mode}-${name}`, {
           body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
         });

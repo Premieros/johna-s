@@ -12,8 +12,9 @@ Write mode: **SEQUENTIAL_ONLY**
 ## Work status
 State: **BLOCKED**
 User requested applying supplied premier.os logo and theme. Letter P is ivory,
-not white. Second reference confirms warm ivory light surfaces, dark purple text
-and violet accents. Implementation prepared; publication awaits review and CI.
+not white. User rejected the saturated preview: keep original typography, primary
+actions, focus, brand/surface presets and semantic colors. Only near-neutral
+background tints and small logo details may change. Publication awaits updated CI/review.
 
 ## Guardrails
 Frontend visual identity only. Preserve organization branding choices, saved
@@ -34,10 +35,11 @@ still references older icons and brand spelling.
 ## Change ledger
 Use supplied logo artwork (WebP sized for UI; supplied colors/shape retained) in shared
 mark; premier.os wordmark with violet dot. PNG derivative of original artwork as browser icon.
-Premier default accent/presets switch to violet; light surfaces become warm ivory;
-dark surfaces become deep violet with ivory text. Link primary/focus tokens to
-brand shades; keep success/warning/danger/info meanings and alternate presets.
-Update login palette and browser metadata. Add CSS-only logo breathing/orbit to
+Restore baseline brand/surface presets, text, buttons, focus, borders and semantic
+colors. Light backgrounds gain a very subtle warm-neutral tint; dark backgrounds
+stay charcoal with a one-point RGB tint. Login text/actions keep original colors;
+its decorative side background is neutral. Logo orbit is a small low-opacity violet
+detail. Browser metadata retains the supplied icon. Add CSS-only logo breathing/orbit to
 existing global progress, shared list loading and sign-in busy feedback. Retain
 0–100% progress logic and loading messages. Honor prefers-reduced-motion.
 No new loading delays, timers, queries, or business logic changes. User explicitly
@@ -50,7 +52,10 @@ passed locally. Existing navigation progress contract: 5/5 pass after zero-delay
 change. Local browser runner could not launch (Chromium binary unavailable);
 Full Verify CI supplies Chromium and native review screenshots.
 Public/login and responsive-shell browser suites use mocked backend only.
-Exact-head Full Verify green required before publication.
+Previous saturated head passed Full Verify (including 121 browser tests).
+Updated muted head requires fresh exact-head Full Verify before publication.
+Review screenshots wait only in CI for the existing entrance animation to settle;
+this does not add any application wait.
 
 ## Production gate
 State: **BLOCKED**
@@ -63,4 +68,3 @@ Inspect responsive previews, open PR, verify exact head, present publication gat
 ## Mandatory update protocol
 Check expected main and branch before writes. Reconcile drift. Freeze tested head
 once CI starts; record results/approval in PR metadata.
-

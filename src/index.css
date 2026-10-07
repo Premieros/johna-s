@@ -3,28 +3,28 @@
 @tailwind utilities;
 
 :root {
-  --brand-50: 245 241 254;
-  --brand-100: 234 227 253;
-  --brand-200: 213 198 250;
-  --brand-300: 178 151 247;
-  --brand-400: 136 95 242;
-  --brand-500: 88 29 237;
-  --brand-600: 68 16 198;
-  --brand-700: 55 13 160;
-  --brand-800: 43 10 127;
-  --brand-900: 34 8 99;
+  --brand-50: 242 245 253;
+  --brand-100: 229 235 251;
+  --brand-200: 201 215 248;
+  --brand-300: 156 182 242;
+  --brand-400: 102 142 234;
+  --brand-500: 42 96 223;
+  --brand-600: 30 76 184;
+  --brand-700: 26 62 147;
+  --brand-800: 22 50 116;
+  --brand-900: 18 39 89;
 
-  --navy-50: 244 241 249;
-  --navy-100: 226 216 243;
-  --navy-200: 202 183 235;
-  --navy-300: 168 139 218;
-  --navy-400: 129 90 196;
-  --navy-500: 100 59 171;
-  --navy-600: 81 45 143;
-  --navy-700: 66 36 117;
-  --navy-800: 48 26 86;
-  --navy-900: 25 15 41;
-  --navy-950: 11 5 20;
+  --navy-50: 240 243 250;
+  --navy-100: 219 227 243;
+  --navy-200: 185 200 232;
+  --navy-300: 138 163 216;
+  --navy-400: 90 121 194;
+  --navy-500: 58 91 171;
+  --navy-600: 45 71 144;
+  --navy-700: 36 58 118;
+  --navy-800: 26 42 88;
+  --navy-900: 15 23 42;
+  --navy-950: 2 6 23;
 
   --gold-50: 251 248 239;
   --gold-100: 245 238 216;
@@ -39,18 +39,18 @@
 
   /* Premier unified solid design tokens (Enterprise ERP & Touch POS) */
   /* === Identity === */
-  --ui-primary: var(--brand-600);
-  --ui-primary-hover: var(--brand-700);
-  --ui-primary-active: var(--brand-800);
-  --ui-primary-soft: var(--brand-50);
-  --ui-primary-fg: 246 243 237;
+  --ui-primary: 37 99 235;
+  --ui-primary-hover: 29 78 216;
+  --ui-primary-active: 30 64 175;
+  --ui-primary-soft: 239 246 255;
+  --ui-primary-fg: 255 255 255;
   --ui-accent: var(--brand-600);
 
   /* === Surfaces (Comfort-neutral, layered, opaque) === */
-  --ui-surface: 252 250 247;
-  --ui-surface-raised: 248 245 241;
-  --ui-page: 245 242 238;
-  --ui-page-alt: 238 234 229;
+  --ui-surface: 252 251 250;
+  --ui-surface-raised: 249 248 247;
+  --ui-page: 247 246 244;
+  --ui-page-alt: 241 240 238;
 
   /* === Accent strips / section identity === */
   --ui-strip-blue: 59 130 246;
@@ -62,13 +62,13 @@
   --ui-strip-neutral: 100 116 139;
 
   /* === Borders === */
-  --ui-border: 223 216 228;
-  --ui-border-strong: 195 183 207;
+  --ui-border: 218 225 234;
+  --ui-border-strong: 190 201 214;
 
   /* === Text === */
-  --ui-text: 22 16 38;
-  --ui-muted: 68 55 85;
-  --ui-subtle: 110 96 124;
+  --ui-text: 15 23 42;
+  --ui-muted: 55 65 81;
+  --ui-subtle: 100 116 139;
 
   /* === Semantic === */
   --ui-success: 16 185 129;
@@ -103,7 +103,7 @@
   --ui-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
 
   /* === Focus ring === */
-  --ui-ring: var(--brand-500);
+  --ui-ring: 37 99 235;
 
   /* === Spacing scale (logical) === */
   --ui-space-1: 4px;
@@ -141,33 +141,29 @@
 }
 
 .dark {
-  --ui-primary: var(--brand-300);
-  --ui-primary-hover: var(--brand-200);
-  --ui-primary-active: var(--brand-300);
-  --ui-primary-fg: 22 16 38;
-  /* premier.os: deep violet surfaces with ivory typography. */
-  --ui-surface: 30 23 48;
-  --ui-surface-raised: 39 30 60;
-  --ui-page: 22 16 38;
-  --ui-page-alt: 27 20 45;
+  /* Charcoal dark mode: avoids crushed black while keeping clear hierarchy. */
+  --ui-surface: 25 27 33;
+  --ui-surface-raised: 33 36 44;
+  --ui-page: 18 19 24;
+  --ui-page-alt: 22 24 32;
 
-  /* Distinct borders between layered surfaces. */
-  --ui-border: 66 54 87;
-  --ui-border-strong: 94 78 121;
+  /* Separation tuned for charcoal rather than pure black. */
+  --ui-border: 55 60 72;
+  --ui-border-strong: 78 85 101;
 
   /* High-contrast typography without harsh pure-white glare. */
-  --ui-text: 246 243 237;
-  --ui-muted: 215 207 225;
-  --ui-subtle: 173 159 191;
+  --ui-text: 248 250 252;
+  --ui-muted: 203 213 225;
+  --ui-subtle: 148 163 184;
 
   /* Accent is intentionally brighter in dark mode for prices/actions. */
   --ui-accent: var(--brand-400);
-  --ui-primary-soft: var(--brand-900);
+  --ui-primary-soft: 23 37 84;
   --ui-success-soft: 5 46 34;
   --ui-warning-soft: 73 38 7;
   --ui-danger-soft: 69 20 20;
   --ui-info-soft: 19 42 91;
-  --ui-ring: var(--brand-400);
+  --ui-ring: 147 197 253;
 
   --ui-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.03);
   --ui-shadow: 0 3px 12px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -453,8 +449,8 @@
 .premier-wait-orbit {
   position: absolute;
   inset: -6px;
-  border: 2px solid rgb(var(--brand-400) / 0.18);
-  border-top-color: rgb(var(--brand-400));
+  border: 2px solid rgb(117 69 239 / 0.08);
+  border-top-color: rgb(117 69 239 / 0.45);
   border-radius: 50%;
   animation: premier-orbit 1.8s linear infinite;
 }
