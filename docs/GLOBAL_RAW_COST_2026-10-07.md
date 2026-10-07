@@ -41,7 +41,10 @@ Re-verification pending.
 ## Verification ledger
 Local application/test typechecks, build and lint pass. New unit scenarios cover
 missing component cost, negative ledger signs, latest estimates, void/refund
-proration and purchase unit scaling. Full suite and isolated CI database pending.
+proration and purchase unit scaling. Initial database regression: 943 passed; two test issues corrected (recipe fixture
+used a nonexistent column and count-price expectations still assumed the old
+inventory-only current costing rule). Existing FIFO issue cost and inventory
+valuation assertions remain in place. Exact-head Full Verify pending.
 
 ## Production gate
 State: **BLOCKED**

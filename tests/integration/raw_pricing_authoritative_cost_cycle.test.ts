@@ -318,7 +318,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     await client.query(`INSERT INTO public.purchases(id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at,approved_at) VALUES($1,$2,$3,999,999,999,'completed',now()-interval '365 days',now()-interval '365 days')`,[purchase,`HID-${purchase.slice(0,8)}`,branchA]);
     await client.query(`INSERT INTO public.purchase_items(purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at) VALUES($1,$2,'kg',1,999,999,now()-interval '365 days')`,[purchase,raw]);
     await client.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Hidden price product',$2,2000,0,true)`,[product,branchA]);
-    await client.query(`INSERT INTO public.recipes(id,code,name,product_id,branch_id,yield_quantity,is_active) VALUES($1,$2,'Hidden price recipe',$3,$4,1,true)`,[recipe,`HID-${recipe.slice(0,8)}`,product,branchA]);
+    await client.query(`INSERT INTO public.recipes(id,name,product_id,branch_id,yield_quantity,is_active) VALUES($1,'Hidden price recipe',$2,$3,1,true)`,[recipe,product,branchA]);
     await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,raw]);
     const prices=await asUser(viewerUser,async()=>await client.query(`SELECT unit_cost FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,raw]));
     expect(prices.rows[0].unit_cost).toBeNull();
