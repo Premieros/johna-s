@@ -25,7 +25,7 @@ export interface StationLine {
   knownEstimatedCost: number | null;
   unpricedMaterials: string[];
 }
-export interface CostLedgerLine { reference_id: string; raw_material_id: string; quantity: number; total_cost: number }
+export interface CostLedgerLine { reference_id: string; raw_material_id: string; quantity: number; total_cost: number; batch_number?: string | null }
 export interface CostEvent {
   id: string; settled_sale_id: string; order_item_id: string;
   sent_quantity: number; voided_quantity: number; total_cost: number;
@@ -72,7 +72,7 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
     // Missing RLS-visible movement coverage and unpriced negative debt are incomplete.
     previous.complete &&= snapshot.length > 0 && expected.size === actual.size
       && [...expected].every(([id, qty]) => qty > 0 && Math.abs(qty - (actual.get(id) || 0)) < 0.000001)
-      && movements.every(row => Math.abs(n(row.total_cost)) > 0)
+      && movements.every(row => Math.abs(n(row.total_cost)) > 0 && !row.batch_number?.startsWith('OV-'))
       && Math.abs(movementCost - n(event.total_cost)) < 0.0001;
     previous.estimateAvailable &&= snapshot.length > 0 && n(event.sent_quantity) > 0;
     for (const component of snapshot) {
@@ -153,7 +153,7 @@ export async function loadStationSalesLines(args: { branchId: string | null; fro
     const eventIds = events.map(event => event.id);
     for (let i = 0; i < eventIds.length; i += 100) {
       let ledgerQuery = supabase.from('inventory_ledger')
-        .select('reference_id,raw_material_id,quantity,total_cost')
+        .select('reference_id,raw_material_id,quantity,total_cost,batch_number')
         .eq('reference_type', 'kitchen_send').lt('quantity', 0)
         .in('reference_id', eventIds.slice(i, i + 100)).order('id');
       if (args.branchId) ledgerQuery = ledgerQuery.eq('branch_id', args.branchId);

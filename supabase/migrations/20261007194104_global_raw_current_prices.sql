@@ -176,7 +176,7 @@ END;$body$;
 
   SELECT pg_get_functiondef('public.get_costing_overview(uuid)'::regprocedure) INTO definition;
   IF position('COALESCE(rmi.avg_cost, 0)::numeric AS unit_cost' IN definition)=0
-     OR position('public.can_permission(''reports.costing'')' IN definition)=0 THEN
+     OR position('IF NOT public.is_pos_admin() THEN' IN definition)=0 THEN
     RAISE EXCEPTION 'COSTING_OVERVIEW_BASELINE_CHANGED';
   END IF;
   start_at:=position('  raw_costs AS MATERIALIZED (' IN definition);

@@ -73,4 +73,14 @@ describe('station sales accounting', () => {
     expect(row.estimatedCost).toBe(30);
   });
 
+  it('keeps partially settled oversold FIFO unverified even if its ledger cost is positive', () => {
+    const s = sale([item('food', 275, 'kitchen')]);
+    const events = [{ id: 'e', settled_sale_id: 'sale', order_item_id: 'food', sent_quantity: 1, voided_quantity: 0, total_cost: 30,
+      component_snapshot: [{ raw_material_id: 'raw', quantity: 5 }] }];
+    const ledger = [{ reference_id: 'e', raw_material_id: 'raw', quantity: -5, total_cost: -30, batch_number: 'OV-debt' }];
+    const row = buildStationSalesLines([s], {}, 'en', events, { raw: 10 }, ledger)[0];
+    expect(row.cost).toBeNull();
+    expect(row.estimatedCost).toBe(50);
+  });
+
 });

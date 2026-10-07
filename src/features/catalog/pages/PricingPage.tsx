@@ -357,7 +357,7 @@ export function PricingPage() {
                     <tr key={row.id} className="hover:bg-ui-page-alt/70">
                       <td className="px-4 py-3 font-semibold text-ui-text">{row.name}</td>
                       <td className="px-4 py-3 font-mono text-xs text-ui-muted">{row.code || '-'}</td>
-                      <td className="px-4 py-3 text-end">{row.latest_cost == null ? '-' : formatNumber(row.latest_cost, 2)}</td>
+                      <td className="px-4 py-3 text-end">{row.latest_cost == null ? '-' : formatNumber(row.latest_cost, 6)}</td>
                       <td className="px-4 py-3 text-end">
                         {priceInput(draft.default_cost, (value) => setRawDrafts((state) => ({ ...state, [row.id]: { default_cost: value } })), !canRawEdit, `${row.name} ${ar ? 'سعر الخامة' : 'raw price'}`)}
                       </td>

@@ -31,7 +31,10 @@ Implemented latest-price resolver and consumers. Latest positive authoritative e
 source/reference/id ties, then positive inventory/batch/catalog fallback.
 Read paths retain existing RLS; restricted users see only accessible price sources.
 Explicit Financial Visibility guards also protect nested existing costing definers.
-Final review corrected explicit SQL event column aliases; re-verification required.
+Final review corrected explicit SQL event column aliases and preserved the exact
+existing overview access guard. Positive-cost oversold ledger rows remain
+unverified because settlement coverage is private; current estimates are shown
+separately. Raw current unit prices retain six decimal places. Re-verification pending.
 
 ## Verification ledger
 Local application/test typechecks, build and lint pass. New unit scenarios cover
