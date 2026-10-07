@@ -1128,7 +1128,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       lang,
     });
   };
-  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV(complete.rows, `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
+  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV(reportType === 'sales_by_station' ? complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))) : complete.rows, `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
 
   const reportTypes: { key: ReportType; label: string; icon: React.ReactNode }[] = [
     { key: 'sales', label: t('salesReport'), icon: <TrendingUp className="w-4 h-4" /> },
@@ -1471,7 +1471,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
                     </tr>
                   ))}
                 </tbody>
-                {reportType === 'sales_by_station' && <tfoot><tr className="border-t border-ui-border font-bold">{columns.map(key => <td key={key} className="px-4 py-3">{String(stationTotals(data)[key] ?? '')}</td>)}</tr></tfoot>}
+                {reportType === 'sales_by_station' && <tfoot><tr className="border-t border-ui-border font-bold">{columns.map(key => <td key={key} className="px-4 py-3">{typeof stationTotals(data)[key] === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(Number(stationTotals(data)[key]), currency, lang) : String(stationTotals(data)[key] ?? '')}</td>)}</tr></tfoot>}
               </table>
             </div>
           </div>

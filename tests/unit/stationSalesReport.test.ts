@@ -21,10 +21,10 @@ describe('station sales accounting', () => {
     s.items[0].refunded_amount = 50;
     s.items[0].refunded_quantity = 0.5;
     const rows = buildStationSalesLines([s], {}, 'ar');
-    expect(rows[0].refunded).toBeCloseTo(51.3);
-    expect(rows[1].refunded).toBe(0);
+    expect(rows.find(row => row.item.id === 'food')?.refunded).toBeCloseTo(51.3);
+    expect(rows.find(row => row.item.id === 'drink')?.refunded).toBe(0);
     expect(rows.reduce((sum, row) => sum + row.net, 0)).toBeCloseTo(256.5);
-    expect(rows[0].netQuantity).toBe(0.5);
+    expect(rows.find(row => row.item.id === 'food')?.netQuantity).toBe(0.5);
   });
   it('uses exact kitchen FIFO snapshot and rejects ambiguous/missing item ownership', () => {
     const s = sale([item('food', 100, 'kitchen')]);

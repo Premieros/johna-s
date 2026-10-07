@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `codex/station-sales-20261007`
-Current PR: pending
+Current PR: `#466`
 Last updated: 2026-10-07
 Execution mode: **SINGLE_WRITER**
 Parallel execution: **FORBIDDEN**
@@ -30,7 +30,9 @@ Current catalog station/category labels explicitly disclosed. Exact kitchen
 source costs where traceable; unavailable cost never becomes zero profit.
 
 ## Verification ledger
-Pending local and exact-head Full Verify.
+Application/test typechecks, changed-file lint and build passed.
+1,540 tests passed; initial documentation gate needed the newly assigned PR number.
+Exact-head Full Verify pending.
 
 ## Production gate
 State: **BLOCKED**
