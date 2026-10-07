@@ -17,7 +17,7 @@ AS $function$
     SELECT rm.* FROM public.raw_materials rm
     WHERE (p_branch_id IS NULL OR rm.branch_id = p_branch_id)
       AND (p_raw_material_ids IS NULL OR rm.id = ANY(p_raw_material_ids))
-  ), events AS (
+  ), events(event_id,raw_material_id,branch_id,unit_cost,source,priced_at,reference_number,detail,source_rank) AS (
   SELECT
     il.id::text AS event_id,
     il.raw_material_id,
@@ -36,6 +36,8 @@ AS $function$
   WHERE il.raw_material_id IS NOT NULL
     AND il.entry_type = 'purchase'
     AND p.status = 'completed'
+    AND ((auth.uid() IS NULL AND current_user IN ('postgres','service_role'))
+      OR private.financial_row_visible(p.id,p.branch_id,p.created_at))
     AND COALESCE(il.unit_cost, 0) > 0
     AND (p_raw_material_ids IS NULL OR il.raw_material_id = ANY(p_raw_material_ids))
     AND (p_branch_id IS NULL OR il.branch_id = p_branch_id)
@@ -66,6 +68,8 @@ AS $function$
   ) norm
   WHERE pi.raw_material_id IS NOT NULL
     AND p.status = 'completed'
+    AND ((auth.uid() IS NULL AND current_user IN ('postgres','service_role'))
+      OR private.financial_row_visible(p.id,p.branch_id,p.created_at))
     AND COALESCE(pi.unit_cost, 0) > 0
     AND COALESCE((norm.value->>'success')::boolean, false)
     AND COALESCE((norm.value->>'stock_unit_cost')::numeric, 0) > 0

@@ -30,6 +30,8 @@ Invoice Johna's-02525 snapshot contains unpriced components; 37.8694 is partial.
 Implemented latest-price resolver and consumers. Latest positive authoritative event by date, deterministic
 source/reference/id ties, then positive inventory/batch/catalog fallback.
 Read paths retain existing RLS; restricted users see only accessible price sources.
+Explicit Financial Visibility guards also protect nested existing costing definers.
+Final review corrected explicit SQL event column aliases; re-verification required.
 
 ## Verification ledger
 Local application/test typechecks, build and lint pass. New unit scenarios cover

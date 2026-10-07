@@ -305,4 +305,27 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(rows).toEqual([]);
   });
 
+  it('keeps hidden historical purchases hidden even inside existing costing definers', async () => {
+    const raw=randomUUID(); const product=randomUUID(); const recipe=randomUUID();
+    let purchase='';
+    for(let i=0;i<30;i++) {
+      const candidate=randomUUID();
+      const check=await asUser(viewerUser,async()=>await client.query(`SELECT private.financial_row_visible($1,$2,now()-interval '365 days') AS visible`,[candidate,branchA]));
+      if(!check.rows[0].visible) { purchase=candidate; break; }
+    }
+    expect(purchase).toBeTruthy();
+    await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Hidden price raw',$3,$4,0,true)`,[raw,`HID-${raw.slice(0,8)}`,kgUnit,branchA]);
+    await client.query(`INSERT INTO public.purchases(id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at,approved_at) VALUES($1,$2,$3,999,999,999,'completed',now()-interval '365 days',now()-interval '365 days')`,[purchase,`HID-${purchase.slice(0,8)}`,branchA]);
+    await client.query(`INSERT INTO public.purchase_items(purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at) VALUES($1,$2,'kg',1,999,999,now()-interval '365 days')`,[purchase,raw]);
+    await client.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Hidden price product',$2,2000,0,true)`,[product,branchA]);
+    await client.query(`INSERT INTO public.recipes(id,code,name,product_id,branch_id,yield_quantity,is_active) VALUES($1,$2,'Hidden price recipe',$3,$4,1,true)`,[recipe,`HID-${recipe.slice(0,8)}`,product,branchA]);
+    await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,raw]);
+    const prices=await asUser(viewerUser,async()=>await client.query(`SELECT unit_cost FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,raw]));
+    expect(prices.rows[0].unit_cost).toBeNull();
+    const overview=await asUser(viewerUser,async()=>await client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,product]));
+    expect(overview.rows[0].actual_cost).toBeNull();
+    const detail=await asUser(viewerUser,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[product,branchA]));
+    expect(detail.rows[0].r.actual_cost).toBeNull();
+  });
+
 });

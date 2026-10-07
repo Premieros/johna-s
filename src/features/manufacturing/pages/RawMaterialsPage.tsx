@@ -80,6 +80,8 @@ export function RawMaterialsPage() {
       setBatches(meta.batches);
       setUnits(meta.units);
       setBranches(meta.branches);
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setLoading(false);
     }

@@ -92,28 +92,28 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     try {
-    const [res, summaryRes, rawValuationRes, fifoRows, priceRows] = await Promise.all([
-      api.costing.getOverview({ p_branch_id: effBranch }),
-      api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
-      api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
-      loadRawFifoCosts(effBranch),
-      loadRawCurrentPrices(effBranch),
-    ]);
-    if (requestId !== request.current) return;
-    if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-    setOverview(res.data || []);
-    if (!summaryRes.error && summaryRes.data) {
-      setSalesCostSummary({
-        sales_count: Number(summaryRes.data.sales_count || 0),
-        net_sales: Number(summaryRes.data.net_sales || 0),
-        cogs: Number(summaryRes.data.cogs || 0),
-        ratio: Number(summaryRes.data.ratio || 0),
-      });
-    } else {
-      setSalesCostSummary({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
-    }
-    if (!rawValuationRes.error) { const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows); setRawCosts((rawValuationRes.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null }))); }
-    setLoading(false);
+      const [res, summaryRes, rawValuationRes, fifoRows, priceRows] = await Promise.all([
+        api.costing.getOverview({ p_branch_id: effBranch }),
+        api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
+        api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
+        loadRawFifoCosts(effBranch),
+        loadRawCurrentPrices(effBranch),
+      ]);
+      if (requestId !== request.current) return;
+      if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
+      setOverview(res.data || []);
+      if (!summaryRes.error && summaryRes.data) {
+        setSalesCostSummary({
+          sales_count: Number(summaryRes.data.sales_count || 0),
+          net_sales: Number(summaryRes.data.net_sales || 0),
+          cogs: Number(summaryRes.data.cogs || 0),
+          ratio: Number(summaryRes.data.ratio || 0),
+        });
+      } else {
+        setSalesCostSummary({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
+      }
+      if (!rawValuationRes.error) { const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows); setRawCosts((rawValuationRes.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null }))); }
+      setLoading(false);
     } catch (error) {
       if (requestId !== request.current) return;
       const message = error instanceof Error ? error.message : String(error);
@@ -149,17 +149,17 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     try {
-    const [res, fifoRows, priceRows] = await Promise.all([api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }), loadRawFifoCosts(effBranch), loadRawCurrentPrices(effBranch)]);
-    if (requestId !== request.current) return;
-    if (res.error) {
-      setError(res.error.message);
+      const [res, fifoRows, priceRows] = await Promise.all([api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }), loadRawFifoCosts(effBranch), loadRawCurrentPrices(effBranch)]);
+      if (requestId !== request.current) return;
+      if (res.error) {
+        setError(res.error.message);
+        setLoading(false);
+        show(res.error.message, 'error');
+        return;
+      }
+      const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows);
+      setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null })));
       setLoading(false);
-      show(res.error.message, 'error');
-      return;
-    }
-    const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows);
-    setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null })));
-    setLoading(false);
     } catch (error) {
       if (requestId !== request.current) return;
       const message = error instanceof Error ? error.message : String(error);
@@ -314,6 +314,8 @@ export function CostingCenterPage() {
     if (source === 'stock_count') return isAr ? 'جرد' : 'Stock count';
     if (source === 'pricing') return isAr ? 'تسعير' : 'Pricing';
     if (source === 'inventory_average') return isAr ? 'متوسط المخزون' : 'Inventory average';
+    if (source === 'last_batch') return isAr ? 'آخر دفعة مسعرة' : 'Last priced batch';
+    if (source === 'unpriced') return isAr ? 'غير مسعرة' : 'Unpriced';
     if (source === 'batch_average') return isAr ? 'متوسط الدفعات' : 'Batch average';
     return isAr ? 'تكلفة افتراضية' : 'Default cost';
   };

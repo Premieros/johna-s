@@ -43,7 +43,9 @@ export type RawMaterialPriceSource =
   | 'pricing'
   | 'inventory_average'
   | 'batch_average'
-  | 'default_cost';
+  | 'default_cost'
+  | 'last_batch'
+  | 'unpriced';
 
 export interface RawMaterialCostOverviewRow {
   raw_material_id: string;
