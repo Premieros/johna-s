@@ -141,9 +141,9 @@
 }
 
 .dark {
-  --ui-primary: var(--brand-400);
-  --ui-primary-hover: var(--brand-300);
-  --ui-primary-active: var(--brand-400);
+  --ui-primary: var(--brand-300);
+  --ui-primary-hover: var(--brand-200);
+  --ui-primary-active: var(--brand-300);
   --ui-primary-fg: 22 16 38;
   /* premier.os: deep violet surfaces with ivory typography. */
   --ui-surface: 30 23 48;
