@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
 import { FinancialReportsPage } from '@/features/accounting/pages/FinancialReportsPage';
 import { useCan, type Permission } from '@/lib/permissions';
@@ -41,6 +41,13 @@ export function ReportsCenterPage() {
   }, [reports, select]);
 
   if (!report || !view) return <p role="status">{ar ? 'لا توجد تقارير متاحة لصلاحياتك.' : 'No reports are available for your permissions.'}</p>;
+  if (view.key !== requested) {
+    const fallback = new URLSearchParams();
+    for (const key of ['from', 'to']) { const value = params.get(key); if (value) fallback.set(key, value); }
+    if (view.financial) { fallback.set('section', 'financial'); fallback.set('view', view.financial); }
+    else if (view.type) fallback.set('type', view.type);
+    return <Navigate to={`/reports?${fallback}`} replace />;
+  }
   return <div data-testid="unified-reports-center" className="space-y-3">
     <div className="grid min-w-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
       <aside className="space-y-3 lg:sticky lg:top-2 lg:self-start" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>

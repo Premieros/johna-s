@@ -39,6 +39,13 @@ describe('basic report navigation', () => {
     fireEvent.click(navigation().getByRole('button', { name: 'Trial balance as of date' }));
     expect(screen.getByTestId('financial-report')).toBeTruthy();
   });
+  it('resolves a financial-only fallback before mounting its report', () => {
+    permissions.clear(); permissions.add('reports.financial');
+    open('/reports?type=sales_costs');
+    expect(screen.getByTestId('financial-report')).toBeTruthy();
+    expect((screen.getByRole('combobox', { name: 'Report view' }) as HTMLSelectElement).value).toBe('financial:inventory_movement');
+    expect(screen.queryByTestId('operational-report')).toBeNull();
+  });
   it.each([['detailed_invoices', 'sales'], ['sales_by_employee', 'cashier_performance'], ['top_consumed_products', 'sales_by_product']])('resolves legacy %s to %s', (legacy, current) => {
     open('/reports?type=' + legacy);
     expect(screen.getByTestId('operational-report').textContent).toBe(current);
