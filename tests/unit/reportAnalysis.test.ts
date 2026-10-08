@@ -44,4 +44,11 @@ describe('report contracts and analysis', () => {
     expect(comparisonPeriod({ from: '2026-10-01', to: '2026-10-08' }, 'previous')).toEqual({ from: '2026-09-23', to: '2026-09-30' });
     expect(comparisonPeriod({ from: '2024-02-29', to: '2024-02-29' }, 'year')).toEqual({ from: '2023-02-28', to: '2023-02-28' });
   });
+  it('keeps all core sales money metrics additive and stable across Arabic and English', () => {
+    const en=analysisColumns('sales',[{Subtotal:10,Discount:1,Tax:2,'Invoice Total':11,Paid:11,'Net Collection':9}]);
+    const ar=analysisColumns('sales',[{'قبل الخصم والضريبة':10,'الخصم':1,'الضريبة':2,'إجمالي الفاتورة':11,'المدفوع':11,'صافي التحصيل':9}]);
+    expect(ar.map(column=>column.id)).toEqual(en.map(column=>column.id));
+    expect(en.every(column=>column.aggregation==='sum')).toBe(true);
+  });
+
 });

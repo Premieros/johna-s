@@ -41,6 +41,8 @@ BEGIN
         AND (NULLIF(p_filters->>'payment_method','') IS NULL OR t.payment_method=NULLIF(p_filters->>'payment_method',''))
         AND (NULLIF(p_filters->>'status','') IS NULL OR t.status=NULLIF(p_filters->>'status',''))
         AND (NULLIF(p_filters->>'table','') IS NULL OR t.table_id=NULLIF(p_filters->>'table','')::uuid)
+      -- Full export preflight stops scanning after the first disallowed record.
+      LIMIT CASE WHEN p_page_size=5001 THEN 5001 ELSE NULL END
     ), page AS MATERIALIZED (
       SELECT * FROM filtered ORDER BY created_at DESC,id DESC
       LIMIT p_page_size OFFSET (p_page::bigint * p_page_size)
@@ -66,6 +68,8 @@ BEGIN
         AND (NULLIF(p_filters->>'buyer','') IS NULL OR t.buyer_id=NULLIF(p_filters->>'buyer','')::uuid)
         AND (NULLIF(p_filters->>'warehouse','') IS NULL OR t.warehouse_id=NULLIF(p_filters->>'warehouse','')::uuid)
         AND (NULLIF(p_filters->>'status','') IS NULL OR t.status=NULLIF(p_filters->>'status',''))
+      -- Full export preflight stops scanning after the first disallowed record.
+      LIMIT CASE WHEN p_page_size=5001 THEN 5001 ELSE NULL END
     ), page AS MATERIALIZED (
       SELECT * FROM filtered ORDER BY created_at DESC,id DESC
       LIMIT p_page_size OFFSET (p_page::bigint * p_page_size)
@@ -87,6 +91,8 @@ BEGIN
         AND t.status='posted' AND t.expense_date>=p_from_date AND t.expense_date<=p_to_date
         AND (NULLIF(p_filters->>'payment_method','') IS NULL OR t.payment_method=NULLIF(p_filters->>'payment_method',''))
         AND (NULLIF(p_filters->>'category','') IS NULL OR t.category=NULLIF(p_filters->>'category',''))
+      -- Full export preflight stops scanning after the first disallowed record.
+      LIMIT CASE WHEN p_page_size=5001 THEN 5001 ELSE NULL END
     ), page AS MATERIALIZED (
       SELECT * FROM filtered ORDER BY expense_date DESC,id DESC
       LIMIT p_page_size OFFSET (p_page::bigint * p_page_size)
@@ -101,6 +107,7 @@ BEGIN
       'metrics', (SELECT jsonb_build_object('Amount',coalesce(sum(coalesce(amount,0)),0)) FROM filtered)
     ) INTO v_result;
   END IF;
+  IF p_page_size=5001 AND (v_result->'summary'->>'count')::bigint > 5000 THEN RAISE EXCEPTION 'REPORT_SOURCE_LIMIT'; END IF;
   RETURN v_result;
 END;
 $function$;

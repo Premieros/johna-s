@@ -213,6 +213,37 @@ test.describe('dashboard and navigation actions', () => {
     }
   });
 
+  test('report tools share the canonical dataset and compare compact server totals', async ({ page }) => {
+    const rows=Array.from({length:205},(_,index)=>({id:`tool-${index}`,invoice_number:`TOOL-${index}`,created_at:'2026-10-06T08:00:00Z',subtotal:10,total:10,paid_amount:10,refunded_amount:0,status:'completed'}));
+    let datasetReads=0; let metricReads=0; let directSalesReads=0;
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/sales**`,async route=>{directSalesReads++;await route.fulfill({status:200,contentType:'application/json',body:'[]'});});
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_page**`,async route=>{
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({rows:rows.slice(0,100),summary:{total:2050,count:205}})});
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_dataset**`,async route=>{
+      datasetReads++; await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({rows,summary:{total:2050,count:205}})});
+    });
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_metrics**`,async route=>{
+      metricReads++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({'Subtotal':1000,'Discount':0,'Tax':0,'Invoice Total':1000,'Paid':1000,'Refunded':0,'Net Sales':1000,'Net Collection':1000})});
+    });
+    await page.goto('/#/reports');
+    await expect(page.getByRole('table').getByText('TOOL-0',{exact:true})).toBeVisible();
+    expect(datasetReads).toBe(0);
+    const tools=page.getByTestId('report-workbench');
+    await tools.getByRole('button',{name:/أدوات الجدول والتحليل الكامل|Table tools & full analysis/}).click();
+    await expect(tools.getByText(/205 (صف|rows) \/ 205/)).toBeVisible();
+    await tools.getByRole('button',{name:/مقارنة بالفترة السابقة|Compare previous period/}).click();
+    await expect(tools.getByText(/الفترة المقارنة:|Comparison period:/)).toBeVisible();
+    expect(metricReads).toBe(1); expect(datasetReads).toBe(1);
+    await tools.locator('summary').click();
+    await tools.getByRole('textbox',{name:/الفاتورة فلتر|Invoice filter/}).fill('TOOL-204');
+    await expect(tools.getByRole('button',{name:'TOOL-204',exact:true})).toBeVisible();
+    const download=page.waitForEvent('download');
+    await tools.getByRole('button',{name:'CSV',exact:true}).click();
+    await download;
+    expect(datasetReads).toBe(1); expect(directSalesReads).toBe(0);
+  });
+
   test('KDS separates 40-minute work and completed history and finishes only an empty voided order on phone and desktop', async ({ page }) => {
     const branch = '00000000-0000-0000-0000-000000000010';
     let finished = false;

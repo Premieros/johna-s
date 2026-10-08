@@ -35,6 +35,11 @@ export interface AnalysisColumn {
 }
 
 const aliases: [string, string][] = [
+  ['قبل الخصم والضريبة', 'Subtotal'], ['الخصم', 'Discount'], ['الضريبة', 'Tax'],
+  ['إجمالي الفاتورة', 'Invoice Total'], ['المدفوع', 'Paid'], ['صافي التحصيل', 'Net Collection'],
+  ['المستخدم', 'User'], ['المخزن', 'Warehouse'], ['نوع الطلب', 'Order Type'],
+  ['طريقة الدفع', 'Payment Method'], ['الحالة', 'Status'], ['حساب المصروف', 'Expense account'],
+  ['سعر الوحدة', 'Unit Price'], ['تكلفة الوحدة', 'Unit Cost'],
   ['الفرع', 'Branch'], ['الفاتورة', 'Invoice'], ['رقم الفاتورة', 'Invoice'],
   ['المنتج', 'Product'], ['معرف المنتج', 'Product ID'], ['الوحدة', 'Unit'],
   ['المحطة', 'Station'], ['التصنيف', 'Category'], ['الكمية المباعة', 'Sold Quantity'],
