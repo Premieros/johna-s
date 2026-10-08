@@ -143,6 +143,8 @@ describe.skipIf(!dbUrl)('operational pages retain direct caller RLS totals', () 
   it('shares invoice identity, complete lines and server return/dimension filters', async () => {
     await client.query('SAVEPOINT secondary_source');
     try {
+      // Isolate this fixture from the preceding financial-history scenario.
+      await client.query(`UPDATE public.sales SET created_at=now() WHERE invoice_number LIKE $1 || '%' AND refunded_amount>0`,[prefix]);
       await client.query('UPDATE public.products SET category_id=$1 WHERE id=$2',[ids.catA,ids.prodA]);
       const lines=await runAs(client,ids.users.cashier,
         `SELECT public.get_operational_report_dataset('sales',$1,CURRENT_DATE-60,CURRENT_DATE+1,$2) AS value`,
