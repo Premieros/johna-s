@@ -140,4 +140,52 @@ describe.skipIf(!dbUrl)('operational pages retain direct caller RLS totals', () 
       `SELECT public.get_operational_report_page('sales',$1,CURRENT_DATE,CURRENT_DATE-1)`,[ids.branchA]);
     expect(reversed.error).toContain('REPORT_PERIOD_INVALID');
   });
+  it('shares invoice identity, complete lines and server return/dimension filters', async () => {
+    await client.query('SAVEPOINT secondary_source');
+    try {
+      await client.query('UPDATE public.products SET category_id=$1 WHERE id=$2',[ids.catA,ids.prodA]);
+      const lines=await runAs(client,ids.users.cashier,
+        `SELECT public.get_operational_report_dataset('sales',$1,CURRENT_DATE-60,CURRENT_DATE+1,$2) AS value`,
+        [ids.branchA,{product:ids.prodA,category:ids.catA,include_items:'true',settled_only:'true'}]);
+      expect(lines.error).toBeUndefined();
+      const source=lines.rows[0].value as Page;
+      expect(source.rows).toHaveLength(1);
+      expect(source.rows[0].id).toBe(ids.saleA);
+      expect(source.rows[0].items).toEqual([expect.objectContaining({product_id:ids.prodA,unit_name:'piece',quantity:1})]);
+      expect(((source.rows[0].items as Record<string,unknown>[])[0].product as Record<string,unknown>).category_id).toBe(ids.catA);
+      const foreign=await runAs(client,ids.users.cashier_b,
+        `SELECT public.get_operational_report_dataset('sales',$1,CURRENT_DATE-60,CURRENT_DATE+1,$2) AS value`,
+        [ids.branchA,{product:ids.prodA,include_items:'true'}]);
+      expect((foreign.rows[0].value as Page).rows).toEqual([]);
+      const returns=await page('sales',ids.users.cashier,ids.branchA,0,{cashier:ids.users.cashier,returns_only:'true'});
+      expect(returns.summary.count).toBe(205);
+      expect(returns.rows.every(row=>row.cashier_id===ids.users.cashier)).toBe(true);
+    } finally { await client.query('ROLLBACK TO SAVEPOINT secondary_source'); }
+  });
+
+  it('uses shared stock aggregates for balances and low-stock, retaining negative quantities and branch RLS', async () => {
+    await client.query('SAVEPOINT stock_source');
+    try {
+      await client.query(`INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,source_type)
+        VALUES($1,$2,$3,-3,10,'opening')`,[ids.rm,ids.branchA,ids.whA]);
+      const result=await runAs(client,ids.users.cashier,
+        `SELECT public.get_operational_stock_source($1,NULL,false) AS detail,
+          public.get_operational_stock_source($1,NULL,true) AS low`,[ids.branchA]);
+      expect(result.error).toBeUndefined();
+      const detail=result.rows[0].detail as Record<string,Record<string,unknown>[]>;
+      const low=result.rows[0].low as Record<string,Record<string,unknown>[]>;
+      const direct=await runAs(client,ids.users.cashier,
+        'SELECT coalesce(sum(quantity),0)::float AS qty FROM public.raw_material_batches WHERE branch_id=$1',[ids.branchA]);
+      expect(detail.rawRows.reduce((sum,row)=>sum+Number(row.quantity),0)).toBe(direct.rows[0].qty);
+      expect(low.rawBalances.reduce((sum,row)=>sum+Number(row.quantity),0)).toBe(direct.rows[0].qty);
+      expect(detail.rawRows.some(row=>Number(row.quantity)<0)).toBe(true);
+      const foreign=await runAs(client,ids.users.cashier_b,
+        'SELECT public.get_operational_stock_source($1,NULL,false) AS value',[ids.branchA]);
+      expect((foreign.rows[0].value as typeof detail).rawRows).toEqual([]);
+      const acl=await client.query(`SELECT prosecdef,has_function_privilege('anon',oid,'EXECUTE') AS anon_execute
+        FROM pg_proc WHERE proname='get_operational_stock_source'`);
+      expect(acl.rows).toEqual([{prosecdef:false,anon_execute:false}]);
+    } finally { await client.query('ROLLBACK TO SAVEPOINT stock_source'); }
+  });
+
 });

@@ -1,3 +1,4 @@
+import { requireReportData } from '../services/reportResult';
 import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
 import { createReportSourceCache } from '../reportSourceCache';
 import { ReportWorkbench } from '../ReportWorkbench';
@@ -281,7 +282,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     if (reportType === 'sales_by_station') {
       if (!canStationView) throw new Error('PERMISSION_DENIED:reports.view');
       const includeCost = canStationCost;
-      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
+      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
       setData(lines.map(line => withBranch(line.sale.branch_id, {
         [label('الفاتورة', 'Invoice')]: line.sale.invoice_number,
@@ -411,7 +412,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'inventory') {
       const { rawRows, unitRows } = await loadInventoryBatchRows({
         branchId: effectiveBranchFilter || null,
-        warehouseId: filters.warehouse,
+        warehouseId: filters.warehouse, signal,
       });
       const stockMap = new Map<string, { branchId: string; warehouse: string; item: string; code: string; type: string; quantity: number }>();
       rawRows.forEach((row: Record<string, unknown>) => {
@@ -419,7 +420,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const warehouse = row.warehouse as { name?: string } | null;
         const branchId = String(row.branch_id || '');
         const warehouseId = String(row.warehouse_id || '');
-        const itemId = String(material?.id || '');
+        const itemId = String(material?.id || row.raw_material_id || '');
         const key = `raw:${branchId}:${warehouseId}:${itemId}`;
         const current = stockMap.get(key) || {
           branchId,
@@ -437,7 +438,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const warehouse = row.warehouse as { name?: string } | null;
         const branchId = String(row.branch_id || '');
         const warehouseId = String(row.warehouse_id || '');
-        const itemId = String(unit?.id || '');
+        const itemId = String(unit?.id || row.unit_id || '');
         const key = `unit:${branchId}:${warehouseId}:${itemId}`;
         const current = stockMap.get(key) || {
           branchId,
@@ -488,8 +489,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       let paymentSummaryTotal = 0;
       let paymentInvoiceCount = 0;
       const methodRows = results.flatMap((result, index) => {
-        const raw = (result.data as Record<string, unknown> | null) || {};
-        if (result.error || raw.success === false || !Array.isArray(raw.rows)) return [];
+        const raw = requireReportData(result, signal);
+        if (!Array.isArray(raw.rows)) throw new Error('REPORT_SOURCE_INVALID');
         const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
         paymentSummaryTotal += Number(summaryRow.sales_total || 0);
         paymentInvoiceCount += Number(summaryRow.invoice_count || 0);
@@ -528,6 +529,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'sales_by_employee') {
       const sales = await loadSalesByEmployeeRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
         filters,
@@ -554,7 +556,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
     } else if (reportType === 'sales_by_product') {
       const products = await loadProductSalesSummary({
-        branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters,
+        branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, signal,
         lang: lang as 'ar' | 'en', includeCost: false,
       });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
@@ -578,6 +580,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'detailed_invoices') {
       const sales = await loadDetailedInvoiceRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
         filters,
@@ -605,7 +608,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const tx = await loadComponentConsumptionRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
-        toExclusiveTs,
+        toExclusiveTs, signal,
         filters,
       });
       const map = new Map<string, { branchId: string; name: string; qty: number; cost: number; count: number }>();
@@ -613,7 +616,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const product = row.product as { name?: string } | null;
         const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
         const branchId = String(row.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
+        const key = `${branchId}\u0000${String(row.product_id || name)}`;
         const current = map.get(key) || { branchId, name, qty: 0, cost: 0, count: 0 };
         const qty = -Number(row.quantity || 0);
         current.qty += qty;
@@ -634,7 +637,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const tx = await loadTopConsumedComponentRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
-        toExclusiveTs,
+        toExclusiveTs, signal,
         filters,
       });
       const map = new Map<string, { branchId: string; name: string; qty: number }>();
@@ -642,7 +645,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const product = row.product as { name?: string } | null;
         const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
         const branchId = String(row.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
+        const key = `${branchId}\u0000${String(row.product_id || name)}`;
         const current = map.get(key) || { branchId, name, qty: 0 };
         current.qty += -Number(row.quantity || 0);
         map.set(key, current);
@@ -657,27 +660,19 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'top_consumed_products') {
       const items = await loadTopConsumedProductItems({
         branchId: effectiveBranchFilter || null,
-        filters,
+        filters, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, lang, includeCost: false, signal,
       });
-      const filtered = items.filter((item: Record<string, unknown>) => {
-        const sale = item.sale as { created_at: string } | null;
-        return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
-      });
-      const prodMap = new Map<string, { branchId: string; name: string; quantity: number }>();
-      filtered.forEach((item: Record<string, unknown>) => {
-        const product = item.product as { name: string } | null;
+      // Source rows already keep branch/product identity and sale units separate.
+      const rows = [...items].sort((a, b) => netSaleItemQuantity(b) - netSaleItemQuantity(a)).map(item => {
+        const product = item.product as { name?: string } | null;
         const sale = item.sale as { branch_id?: string } | null;
-        const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
-        const branchId = String(sale?.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
-        const existing = prodMap.get(key) || { branchId, name, quantity: 0 };
-        existing.quantity += netSaleItemQuantity(item);
-        prodMap.set(key, existing);
+        return withBranch(sale?.branch_id, {
+          [lang === 'ar' ? 'المنتج' : 'Product']: product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown'),
+          [lang === 'ar' ? 'معرف المنتج' : 'Product ID']: item.product_id || '-',
+          [lang === 'ar' ? 'الوحدة' : 'Unit']: item.unit_name || '',
+          [lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']: netSaleItemQuantity(item),
+        });
       });
-      const rows = Array.from(prodMap.values()).sort((a, b) => b.quantity - a.quantity).map((product) => withBranch(product.branchId, {
-        [lang === 'ar' ? 'المنتج' : 'Product']: product.name,
-        [lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']: product.quantity,
-      }));
       setData(rows);
       setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']) })));
       setSummary({ total: rows.length, count: rows.length });
@@ -686,7 +681,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       if (result.error) throw result.error;
       const catName = filters.category ? options.categories.find((category) => category.id === filters.category)?.name ?? filters.category : '';
       const productIds = (result.data || []).map((row) => row.product_id);
-      const productBranchRows = await loadProductBranchRows(productIds);
+      const productBranchRows = await loadProductBranchRows(productIds, signal);
       const productBranches = new Map(productBranchRows.map((product) => [product.id, product.branch_id]));
       const rows = (result.data || [])
         .filter((row) => row.recipe_item_count > 0)
@@ -703,7 +698,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost'] || 0), 0), count: rows.length });
     } else if (reportType === 'low_stock') {
       const { rawMasters, rawBalances, unitMasters, unitBatches } = await loadLowStockSources(
-        effectiveBranchFilter || null,
+        effectiveBranchFilter || null, signal,
       );
       const rawQty = new Map<string, number>();
       rawBalances.forEach((row: Record<string, unknown>) => {
@@ -756,13 +751,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'cashier_performance') {
       const sales = await loadCashierPerformanceRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
+        filters,
       });
       const empMap = new Map<string, { branchId: string; name: string; total: number; count: number; refundCount: number }>();
       sales.forEach((sale: Record<string, unknown>) => {
-        if (filters.cashier && sale.cashier_id !== filters.cashier) return;
-        if (filters.warehouse && sale.warehouse_id !== filters.warehouse) return;
         const cashier = sale.users as { full_name?: string; email?: string } | null;
         const name = cashier?.full_name || cashier?.email || (lang === 'ar' ? 'غير معروف' : 'Unknown');
         const branchId = String(sale.branch_id || '');
@@ -787,8 +782,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'returns') {
       const returns = await loadReturnRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
+        filters,
       });
       const statusLabels: Record<string, string> = {
         returned: lang === 'ar' ? 'مرتجع' : 'Returned', refunded: t('refunded'), cancelled: t('statusCancelled'),
@@ -822,13 +819,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       let totalNetSales = 0;
       let mismatchCount = 0;
       results.forEach((result, index) => {
-        const raw = (result.data as Record<string, unknown> | null) || {};
-        if (result.error || raw.success === false) return;
+        const raw = requireReportData(result, signal);
         const branchId = targetBranchIds[index];
         const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
         totalNetSales += Number(summaryRow.net_sales || 0);
         mismatchCount += Number(summaryRow.mismatch_count || 0);
-        if (!Array.isArray(raw.rows)) return;
+        if (!Array.isArray(raw.rows)) throw new Error('REPORT_SOURCE_INVALID');
         raw.rows.forEach((item) => {
           const row = item as Record<string, unknown>;
           const status = String(row.reconciliation_status || 'matched');
@@ -1089,7 +1085,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const waste = await loadWasteRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
-        toExclusiveTs,
+        toExclusiveTs, signal,
+        filters,
       });
       const rows = waste.map((row: Record<string, unknown>) => {
         const product = row.product as { name?: string } | null;

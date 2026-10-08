@@ -39,8 +39,7 @@ New integration tests: full/partial split closure metadata, split success, perce
 Approved checkout_discount_failure_atomicity migration applied successfully; normal hash03a148288dcf37f250e7a49f5afc0cd4,split hash6d372a7806ef0f698b95b8184287a35a. Original ACL/security modes preserved; guard_sale_discount and set_order_checkout_discount unchanged. Table48 remains completed/paid,invoice02608,discount40,total/paid150. User approved fixing checkout; exact-head Full Verify Green required before concrete guarded apply. No real sales or prints executed by agent. Historical closed invoices are audit-only until evidence and correction approval.
 
 ## Next action
-#473 approved at2026-10-08 16:08 Cairo, merged856bc493, Pages37782100338 succeeded; postmerge Verify37782100371 Green. #474 approved2026-10-08 16:33 Cairo, mergedc86116d3, Pages37785343543 and postmerge Verify37785343690 monitored. Prepare independent column-layout draft against published main and run exact-head Full Verify before separate production approval.
-Run exact-head CI on the column-layout draft, then obtain separate production approval. #473 approval/merge/deployment/verification is complete; do not request it again. No database migration. Continue canonical column definitions, typed aggregation and grouping under the backlog.
+Freeze the consolidated #475 source/configurable-report package, publish one review commit on the existing draft, and run exact-head Full Verify. Prepared migration `20261008141141_unified_operational_report_source.sql` remains UNAPPLIED. After all checks are Green, request one concrete approval covering that migration and the same PR merge/deployment. No additional PR or production operation before that gate.
 
 ## Mandatory update protocol
 Record verification transitions and exact head. Reconcile unexpected main movement. Update this log before every mutation scope change.
@@ -83,3 +82,20 @@ Full Verify37793693299 passed1,608 frontend and968 database/RLS tests; browser s
 
 ### Browser locator correction — 2026-10-08
 Exact headf0c97c94 Full Verify37796662455 passed1,609 frontend and968 database tests. The new browser flow confirmed205-row loading, one canonical dataset read and cached compact comparisons. Its later invoice-filter locator matched both Invoice and Invoice Total in Arabic. Anchored the accessible-name match to the exact Invoice filter; assertions and application behavior retained. Fresh exact-head verification required; no production apply.
+
+
+### Remaining-source consolidation — 2026-10-08 18:44 Cairo
+User authorizes continuing all remaining source review inside #475, with one production delivery after completion. Prior head0dc7b4d Full Verify37798296102 Green (1609 frontend/968 database/122 browser); no apply/merge/deploy. Next scope consolidates secondary invoice/employee/cashier/return reads into the canonical sales source, preserves cashier identity, enforces returns and product/category filters before source limits, unifies product consumption with allocated product rows, and removes duplicate component-consumption builders. Review stock/accounting sources individually without replacing their authoritative grains. Prepared migration may be edited while unapplied; no production schema/RLS/operation change. CLI telemetry rejection remains in force; no further CLI invocation.
+
+Stock-source scope: read-only production parity found535 raw material/branch pairs with zero differences between batch sums and cached branch quantities;15678 raw batches and zero nonzero legacy batches without warehouse IDs. Prepare one invoker stock RPC to aggregate raw and unit batches before returning inventory/low-stock projections. No new view, table, RLS policy or stock write routine. Negative quantities and zero-stock active masters retained.
+
+
+### Consolidated source review — 2026-10-08 19:17 Cairo
+Invoice, employee, cashier and returns loaders now share the canonical dataset, preserving cashier IDs and applying dimension filters before limits. Station/product/top-consumed views request complete invoice items through that source; whole-invoice allocation precedes product filtering. Both invoice/item bounds reject incomplete data. Cost-event/ledger chunks enforce a cumulative5,000-row limit.
+Inventory/low-stock use one SECURITY INVOKER stock RPC, aggregating permitted batches before returning projections. Warehouse aggregation precedes low-stock limits; negative balances, zero-stock active masters and unavailable metadata identities remain visible. Component ranking reuses its source; category filters use an inner embedded join and product branch lookups are bounded/chunked. No stock writes or accounting formulas changed.
+Financial views retain eleven authoritative accounting RPCs. Failures now block partial totals/exports and offer retry. Scope changes abort/discard obsolete responses. The API-contract generator recognizes optional AbortSignal:166 RPCs/57 tables.
+Local checks:1,617 frontend tests passed before the final new contract test; final focused40 tests, typechecks and contract check pass. Final full local run and exact-head database/browser verification pending. Previous Green0dc7b4d does not certify these edits.
+Read-only authenticated Smoha stock EXPLAIN:1,479.464ms;278 raw groups from9,696 batch rows and6 unit groups. The projection reduces transfer/client joins; per-row RLS still consumes database work. No percentage speedup or eliminated database cost is claimed. Migration remains UNAPPLIED; production baselinec86116d3.
+Scope boundary: configurable basic reports and source consolidation are this package. Shared views, pivots/charts, complete document/item/journal navigation, YTD executive templates and background export jobs remain backlog. The entire fifteen-item roadmap is not complete.
+
+Final local verification:1,618 tests/334 files passed; production build, application/test typechecks, contract166/57 and diff whitespace check passed. Exact-head Full Verify still required.

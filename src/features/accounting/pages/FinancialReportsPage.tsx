@@ -1,4 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { requireReportData } from '@/features/reporting/services/reportResult';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
+import { useAuth } from '@/context/AuthContext';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, BadgeAlert, Landmark, ArrowLeftRight, Receipt, WalletCards, PackageSearch } from 'lucide-react';
 import * as api from '@/api';
@@ -65,6 +68,12 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
   const [loadedSelectorContextKey, setLoadedSelectorContextKey] = useState('');
+  const { user } = useAuth();
+  const readController = useRef<AbortController | null>(null);
+  const readGeneration = useRef(0);
+  const [reportError, setReportError] = useState<unknown>(null);
+  const [loadedReportScope, setLoadedReportScope] = useState('');
+  const reportScope = JSON.stringify([user?.id, branchFilter, view, from, to, accountId, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited]);
   const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const selectorContextKey = `${effectiveBranchFilter || ''}|${view}|${partySide}|${inventoryItemType}`;
@@ -144,9 +153,19 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey]);
 
   const load = useCallback(async () => {
+    const generation = ++readGeneration.current;
+    readController.current?.abort();
+    const controller = new AbortController(); readController.current = controller;
+    const signal = controller.signal;
+    const read = <T,>(result: { data: T | null; error: { message?: string } | null }) => {
+      if (generation !== readGeneration.current) throw new DOMException('Stale report', 'AbortError');
+      return requireReportData(result, signal);
+    };
+    setReportError(null);
     if (!effectiveBranchFilter) {
       setTb([]); setTbSummary(null); setGl([]); setIncome(null); setSheet(null);
       setArAging([]); setApAging([]); setAgingSummary(null); setCashFlow([]); setPartyStmt(null); setTreasuryStmt(null); setInventoryStmt(null);
+      setLoadedReportScope(reportScope); setLoading(false);
       return;
     }
 
@@ -167,10 +186,10 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       const safeFrom = allowed.from;
       const safeTo = allowed.to;
       if (view === 'trial_balance') {
-        const { data } = await api.reporting.getTrialBalance({
+        const data = read(await api.reporting.getTrialBalance({
           p_branch_id: effectiveBranchFilter,
           p_to_date: safeTo,
-        });
+        }, signal));
         const rows = (data as TrialBalanceRow[]) || [];
         const totals = rows.reduce(
           (acc, row) => ({
@@ -189,67 +208,70 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
           balanced: totalDebit === totalCredit,
         });
       } else if (view === 'ledger') {
-        const { data } = await api.reporting.getGeneralLedger( {
+        const data = read(await api.reporting.getGeneralLedger( {
           p_branch_id: effectiveBranchFilter,
           p_account_id: accountId || null,
           p_from_date: safeFrom,
           p_to_date: safeTo,
-        });
+        }, signal));
         setGl((data as GeneralLedgerRow[]) || []);
       } else if (view === 'treasury_statement') {
         if (!treasuryId) { setTreasuryStmt(null); return; }
-        const { data } = await api.reporting.getTreasuryAccountStatement({
+        const data = read(await api.reporting.getTreasuryAccountStatement({
           p_branch_id: effectiveBranchFilter,
           p_treasury_account_id: treasuryId,
           p_from_date: safeFrom,
           p_to_date: safeTo,
-        });
+        }, signal));
         setTreasuryStmt((data as TreasuryStatementResult) || null);
       } else if (view === 'inventory_movement') {
         if (!inventoryItemId) { setInventoryStmt(null); return; }
-        const { data } = await api.reporting.getInventoryItemStatement({
+        const data = read(await api.reporting.getInventoryItemStatement({
           p_branch_id: effectiveBranchFilter,
           p_item_type: inventoryItemType,
           p_item_id: inventoryItemId,
           p_warehouse_id: warehouseId || null,
           p_from_date: safeFrom || null,
           p_to_date: safeTo || null,
-        });
+        }, signal));
         setInventoryStmt((data as InventoryItemStatementResult) || null);
       } else if (view === 'income') {
-        const { data } = await api.reporting.getIncomeStatement( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo });
+        const data = read(await api.reporting.getIncomeStatement( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo }, signal));
         setIncome((data as IncomeStatementResult) || null);
       } else if (view === 'balance_sheet') {
-        const { data } = await api.reporting.getBalanceSheet( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
+        const data = read(await api.reporting.getBalanceSheet( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo }, signal));
         setSheet((data as BalanceSheetResult) || null);
       } else if (view === 'ar_aging') {
-        const { data } = await api.reporting.getArAging( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
+        const data = read(await api.reporting.getArAging( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo }, signal));
         setArAging((data as ArAgingRow[]) || []);
       } else if (view === 'ap_aging') {
-        const { data } = await api.reporting.getApAging( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
+        const data = read(await api.reporting.getApAging( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo }, signal));
         setApAging((data as ApAgingRow[]) || []);
       } else if (view === 'aging_summary') {
-        const { data } = await api.reporting.getAgingSummary( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo });
+        const data = read(await api.reporting.getAgingSummary( { p_branch_id: effectiveBranchFilter, p_as_of: safeTo }, signal));
         setAgingSummary((data as AgingSummaryResult) || null);
       } else if (view === 'cash_flow') {
-        const { data } = await api.reporting.getCashFlow( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo });
+        const data = read(await api.reporting.getCashFlow( { p_branch_id: effectiveBranchFilter, p_from_date: safeFrom, p_to_date: safeTo }, signal));
         setCashFlow((data as CashFlowRow[]) || []);
       } else if (view === 'party_statement') {
-        const { data } = await api.reporting.getPartyStatement( {
+        const data = read(await api.reporting.getPartyStatement( {
           p_branch_id: effectiveBranchFilter,
           p_side: partySide,
           p_party_id: partyId || null,
           p_from_date: safeFrom || null,
           p_to_date: safeTo || null,
-        });
+        }, signal));
         setPartyStmt((data as PartyStatementResult) || null);
       }
+    } catch (failure) {
+      if (!signal.aborted && generation === readGeneration.current) setReportError(failure);
     } finally {
-      setLoading(false);
+      if (generation === readGeneration.current) { setLoadedReportScope(reportScope); setLoading(false); }
     }
-  }, [effectiveBranchFilter, view, to, accountId, from, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited, loadedSelectorContextKey, selectorContextKey]);
+  }, [reportScope, effectiveBranchFilter, view, to, accountId, from, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited, loadedSelectorContextKey, selectorContextKey]);
 
-  useEffect(() => { load(); }, [load]);
+  const cancelRead = useCallback(() => { readGeneration.current++; readController.current?.abort(); }, []);
+  useEffect(() => { void load(); return cancelRead; }, [load, cancelRead]);
 
   const views: { key: View; label: string; icon: React.ReactNode }[] = [
     { key: 'trial_balance', label: t('trialBalance'), icon: <Scale className="w-4 h-4" /> },
@@ -463,7 +485,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
 
   return (
     <DesignSurface testId="financial-reports-page">
-      <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+      <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" disabled={loading || !!reportError || loadedReportScope !== reportScope} onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
 
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
@@ -532,7 +554,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </div>
       </DesignPanel>
 
-      {loading ? (
+      {!!reportError && <div role="alert" className="rounded border border-ui-border p-3">{userFacingErrorMessage(reportError, lang)} <Button size="sm" onClick={() => void load()}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button></div>}
+      {reportError ? null : (loading || loadedReportScope !== reportScope) ? (
         <DesignPanel testId="financial-reports-loading"><div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div></DesignPanel>
       ) : !effectiveBranchFilter ? (
         <DesignPanel testId="financial-reports-placeholder"><div className="text-center py-12 text-ui-subtle text-sm">{t('filterByBranch')}</div></DesignPanel>

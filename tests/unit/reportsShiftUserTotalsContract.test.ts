@@ -10,7 +10,10 @@ describe('shift and user sales reporting contract', () => {
     const loaders = read('src/features/reporting/services/reportSalesLoaders.ts');
 
     expect(reports).toContain("reportType === 'sales_by_employee'");
-    expect(loaders).toContain("select('branch_id, cashier_id, total, refunded_amount, users:users!fk_sales_cashier(full_name, email)')");
+    expect(loaders).toContain('loadSalesReportRows(args)');
+    const canonical = read('supabase/migrations/20261008141141_unified_operational_report_source.sql');
+    expect(canonical).toContain('t.customer_id,t.cashier_id,t.warehouse_id');
+    expect(canonical).not.toContain("ARRAY['customer_id','cashier_id','warehouse_id']");
     expect(reports).toContain('String(sale.cashier_id || name)');
     expect(reports).toContain('existing.total += netSaleAmount(sale)');
   });

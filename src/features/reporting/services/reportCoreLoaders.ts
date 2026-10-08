@@ -16,14 +16,14 @@ export async function loadOperationalReportPage(args: {
 }
 
 
-interface DatasetArgs {
+export interface DatasetArgs {
  branchId: string | null; from: string; to: string; fromTs: string; toExclusiveTs: string;
- filters: ReportFilters; signal?: AbortSignal;
+ filters: ReportFilters; signal?: AbortSignal; returnsOnly?: boolean; includeItems?: boolean; settledOnly?: boolean;
 }
 async function loadDataset(type: 'sales' | 'purchases' | 'expenses', args: DatasetArgs): Promise<Record<string, unknown>[]> {
  args.signal?.throwIfAborted();
  const result = await reporting.getOperationalReportDataset({ p_report_type: type, p_branch_id: args.branchId,
-  p_from_date: args.from, p_to_date: args.to, p_filters: { ...args.filters },
+  p_from_date: args.from, p_to_date: args.to, p_filters: { ...args.filters, ...(args.returnsOnly ? { returns_only: 'true' } : {}), ...(args.includeItems ? { include_items: 'true' } : {}), ...(args.settledOnly ? { settled_only: 'true' } : {}) },
   p_from_ts: args.fromTs, p_to_exclusive_ts: args.toExclusiveTs }, args.signal);
  args.signal?.throwIfAborted();
  if (result.error) throw new Error(result.error.message || 'REPORT_DATASET_LOAD_FAILED');

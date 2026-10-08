@@ -79,7 +79,7 @@ function extractRpcCalls() {
   const calls = new Map();
   for (const file of walk(join(ROOT, 'src', 'api', 'domains'))) {
     const content = readFileSync(file, 'utf8');
-    const rpcMatches = [...content.matchAll(/rpc(?:<[^>]*>)?\('([\w_]+)',\s*p\)/g)];
+    const rpcMatches = [...content.matchAll(/rpc(?:<[^>]*>)?\('([\w_]+)',\s*p(?:,\s*signal)?\)/g)];
     for (const match of rpcMatches) {
       const fn = match[1];
       const paramBlock = resolveMethodParamBlock(content, match.index);

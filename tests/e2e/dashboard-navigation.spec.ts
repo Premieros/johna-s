@@ -247,6 +247,43 @@ test.describe('dashboard and navigation actions', () => {
     expect(datasetReads).toBe(1); expect(directSalesReads).toBe(0);
   });
 
+  test('inventory and low-stock use aggregate source results without reading batches in the browser', async ({ page }) => {
+    let stockReads=0; let batchReads=0;
+    for (const table of ['raw_material_batches','inventory_unit_batches','raw_material_inventory']) {
+      await page.route(`${SUPABASE_ORIGIN}/rest/v1/${table}**`,async route=>{ batchReads++; await route.fulfill({status:200,contentType:'application/json',body:'[]'}); });
+    }
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_stock_source**`,async route=>{
+      stockReads++;
+      const low=route.request().postDataJSON().p_low_stock;
+      const data={rawRows:low?[]:[{branch_id:'branch',warehouse_id:'warehouse',raw_material_id:'material',quantity:5,raw_material:{id:'material',name:'CANONICAL-STOCK',code:'RAW'},warehouse:{name:'Warehouse'}}],unitRows:[],
+        rawMasters:low?[{id:'material',branch_id:'branch',name:'CANONICAL-STOCK',code:'RAW',min_stock:10}]:[],
+        rawBalances:low?[{raw_material_id:'material',branch_id:'branch',quantity:5}]:[],unitMasters:[],unitBatches:[]};
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+    });
+    await page.goto('/#/reports?type=inventory');
+    await expect(page.getByRole('table').getByText('CANONICAL-STOCK',{exact:true})).toBeVisible();
+    const tools=page.getByTestId('report-workbench');
+    await tools.getByRole('button',{name:/أدوات الجدول والتحليل الكامل|Table tools & full analysis/}).click();
+    await expect(tools.getByText(/1 (صف|rows) \/ 1/)).toBeVisible();
+    expect(stockReads).toBe(1);
+    await page.goto('/#/reports?type=low_stock');
+    await expect(page.getByRole('table').getByText('CANONICAL-STOCK',{exact:true})).toBeVisible();
+    expect(stockReads).toBe(2); expect(batchReads).toBe(0);
+  });
+
+  test('employee reports retain distinct cashier identities through the canonical sales dataset', async ({ page }) => {
+    let directReads=0; let datasetReads=0;
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/sales**`,async route=>{directReads++;await route.fulfill({status:200,contentType:'application/json',body:'[]'});});
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_dataset**`,async route=>{
+      datasetReads++;
+      const rows=['first','second'].map(cashier_id=>({id:cashier_id,branch_id:'branch',cashier_id,cashier:{full_name:'SAME-CASHIER-NAME'},total:10,refunded_amount:0}));
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({rows,summary:{count:2,total:20}})});
+    });
+    await page.goto('/#/reports?type=sales_by_employee');
+    await expect(page.getByRole('table').getByText('SAME-CASHIER-NAME',{exact:true})).toHaveCount(2);
+    expect(datasetReads).toBe(1);expect(directReads).toBe(0);
+  });
+
   test('KDS separates 40-minute work and completed history and finishes only an empty voided order on phone and desktop', async ({ page }) => {
     const branch = '00000000-0000-0000-0000-000000000010';
     let finished = false;

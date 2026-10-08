@@ -41,19 +41,47 @@ BEGIN
         AND (NULLIF(p_filters->>'payment_method','') IS NULL OR t.payment_method=NULLIF(p_filters->>'payment_method',''))
         AND (NULLIF(p_filters->>'status','') IS NULL OR t.status=NULLIF(p_filters->>'status',''))
         AND (NULLIF(p_filters->>'table','') IS NULL OR t.table_id=NULLIF(p_filters->>'table','')::uuid)
+        AND (COALESCE(p_filters->>'settled_only','') <> 'true' OR t.status IN ('completed','returned','refunded'))
+        AND (COALESCE(p_filters->>'returns_only','') <> 'true'
+          OR COALESCE(t.refunded_amount,0)>0 OR t.status IN ('returned','refunded','cancelled'))
+        AND ((NULLIF(p_filters->>'product','') IS NULL AND NULLIF(p_filters->>'category','') IS NULL)
+          OR EXISTS (SELECT 1 FROM public.sale_items si
+            LEFT JOIN public.products prod ON prod.id=si.product_id
+            WHERE si.sale_id=t.id
+              AND (NULLIF(p_filters->>'product','') IS NULL OR si.product_id=NULLIF(p_filters->>'product','')::uuid)
+              AND (NULLIF(p_filters->>'category','') IS NULL OR prod.category_id=NULLIF(p_filters->>'category','')::uuid)))
       -- Full export preflight stops scanning after the first disallowed record.
       LIMIT CASE WHEN p_page_size=5001 THEN 5001 ELSE NULL END
     ), page AS MATERIALIZED (
       SELECT * FROM filtered ORDER BY created_at DESC,id DESC
       LIMIT p_page_size OFFSET (p_page::bigint * p_page_size)
+    ), line_scope AS MATERIALIZED (
+      SELECT si.id,si.sale_id,si.product_id,si.unit_name,si.quantity,si.unit_price,si.discount_amount,
+        si.total,si.refunded_quantity,si.refunded_amount,si.source_order_item_id
+      FROM public.sale_items si JOIN page p ON p.id=si.sale_id
+      WHERE COALESCE(p_filters->>'include_items','')='true'
+      LIMIT 5001
+    ), line_details AS (
+      SELECT si.sale_id,jsonb_agg(to_jsonb(si)-'sale_id' || jsonb_build_object('product',
+        CASE WHEN prod.id IS NULL THEN NULL ELSE jsonb_build_object('name',prod.name,'category_id',prod.category_id,
+          'category',CASE WHEN cat.id IS NULL THEN NULL ELSE jsonb_build_object('name',cat.name,'kitchen_station_id',cat.kitchen_station_id,
+            'station',CASE WHEN ks.id IS NULL THEN NULL ELSE jsonb_build_object('id',ks.id,'name_ar',ks.name_ar,'name_en',ks.name_en) END) END) END)
+        ORDER BY si.id) AS items
+      FROM line_scope si LEFT JOIN public.products prod ON prod.id=si.product_id
+      LEFT JOIN public.categories cat ON cat.id=prod.category_id
+      LEFT JOIN public.kitchen_stations ks ON ks.id=cat.kitchen_station_id
+      GROUP BY si.sale_id
     ), details AS (
-      SELECT to_jsonb(p) - ARRAY['customer_id','cashier_id','warehouse_id'] || jsonb_build_object('customer', CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object('name',c.name) END, 'cashier', CASE WHEN u.id IS NULL THEN NULL ELSE jsonb_build_object('full_name',u.full_name,'email',u.email) END, 'warehouse', CASE WHEN w.id IS NULL THEN NULL ELSE jsonb_build_object('name',w.name) END) AS row, p.created_at AS sort_date,p.id
+      SELECT to_jsonb(p) - ARRAY['customer_id','warehouse_id'] || jsonb_build_object('customer', CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object('name',c.name) END, 'cashier', CASE WHEN u.id IS NULL THEN NULL ELSE jsonb_build_object('full_name',u.full_name,'email',u.email) END, 'warehouse', CASE WHEN w.id IS NULL THEN NULL ELSE jsonb_build_object('name',w.name) END)
+        || CASE WHEN COALESCE(p_filters->>'include_items','')='true' THEN jsonb_build_object('items',COALESCE(li.items,'[]'::jsonb)) ELSE '{}'::jsonb END AS row, p.created_at AS sort_date,p.id
       FROM page p
       LEFT JOIN public.customers c ON c.id=p.customer_id
       LEFT JOIN public.users u ON u.id=p.cashier_id
       LEFT JOIN public.warehouses w ON w.id=p.warehouse_id
+      LEFT JOIN line_details li ON li.sale_id=p.id
     )
     SELECT jsonb_build_object(
+      'line_count', (SELECT COUNT(*) FROM line_scope),
       'rows', COALESCE((SELECT jsonb_agg(row ORDER BY sort_date DESC,id DESC) FROM details),'[]'::jsonb),
       'summary', (SELECT jsonb_build_object('count',COUNT(*),'total',COALESCE(SUM(GREATEST(COALESCE(total,0)-COALESCE(refunded_amount,0),0)),0)) FROM filtered),
       'metrics', (SELECT jsonb_build_object('Subtotal',coalesce(sum(coalesce(subtotal,0)),0),'Discount',coalesce(sum(coalesce(discount_amount,0)),0),'Tax',coalesce(sum(coalesce(tax_amount,0)),0),'Invoice Total',coalesce(sum(coalesce(total,0)),0),'Paid',coalesce(sum(coalesce(paid_amount,0)),0),'Refunded',coalesce(sum(coalesce(refunded_amount,0)),0),'Net Sales',coalesce(sum(greatest(coalesce(total,0)-coalesce(refunded_amount,0),0)),0),'Net Collection',coalesce(sum(greatest(coalesce(paid_amount,0)-coalesce(refunded_amount,0),0)),0)) FROM filtered)
@@ -107,6 +135,7 @@ BEGIN
       'metrics', (SELECT jsonb_build_object('Amount',coalesce(sum(coalesce(amount,0)),0)) FROM filtered)
     ) INTO v_result;
   END IF;
+  IF COALESCE((v_result->>'line_count')::bigint,0)>5000 THEN RAISE EXCEPTION 'REPORT_SOURCE_LIMIT'; END IF;
   IF p_page_size=5001 AND (v_result->'summary'->>'count')::bigint > 5000 THEN RAISE EXCEPTION 'REPORT_SOURCE_LIMIT'; END IF;
   RETURN v_result;
 END;
@@ -145,4 +174,61 @@ CREATE FUNCTION public.get_operational_report_metrics(
 $metrics$;
 REVOKE ALL ON FUNCTION public.get_operational_report_metrics(text,uuid,date,date,jsonb,timestamptz,timestamptz) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_operational_report_metrics(text,uuid,date,date,jsonb,timestamptz,timestamptz) TO authenticated,service_role;
+
+-- Warehouse stock and low-stock projections share batch truth, aggregated before transfer.
+CREATE FUNCTION public.get_operational_stock_source(
+ p_branch_id uuid DEFAULT NULL,p_warehouse_id uuid DEFAULT NULL,p_low_stock boolean DEFAULT false
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=public,pg_temp AS $stock$
+DECLARE v_result jsonb; v_count bigint;
+BEGIN
+ IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+ IF p_low_stock IS NULL OR (p_low_stock AND p_warehouse_id IS NOT NULL) THEN RAISE EXCEPTION 'REPORT_FILTERS_INVALID'; END IF;
+ WITH raw_balances AS MATERIALIZED (
+   SELECT raw_material_id,branch_id,CASE WHEN p_low_stock THEN NULL::uuid ELSE warehouse_id END AS warehouse_id,coalesce(sum(quantity),0) AS quantity
+   FROM public.raw_material_batches
+   WHERE (p_branch_id IS NULL OR branch_id=p_branch_id)
+     AND (p_warehouse_id IS NULL OR warehouse_id=p_warehouse_id)
+   GROUP BY raw_material_id,branch_id,CASE WHEN p_low_stock THEN NULL::uuid ELSE warehouse_id END
+   LIMIT 5001
+ ), unit_balances AS MATERIALIZED (
+   SELECT unit_id,branch_id,CASE WHEN p_low_stock THEN NULL::uuid ELSE warehouse_id END AS warehouse_id,coalesce(sum(quantity),0) AS quantity
+   FROM public.inventory_unit_batches
+   WHERE (p_branch_id IS NULL OR branch_id=p_branch_id)
+     AND (p_warehouse_id IS NULL OR warehouse_id=p_warehouse_id)
+   GROUP BY unit_id,branch_id,CASE WHEN p_low_stock THEN NULL::uuid ELSE warehouse_id END
+   LIMIT 5001
+ )
+ SELECT jsonb_build_object(
+   'rawRows', CASE WHEN p_low_stock THEN '[]'::jsonb ELSE coalesce((
+     SELECT jsonb_agg(jsonb_build_object('raw_material_id',b.raw_material_id,'branch_id',b.branch_id,'warehouse_id',b.warehouse_id,'quantity',b.quantity,
+       'raw_material',CASE WHEN rm.id IS NULL THEN NULL ELSE jsonb_build_object('id',rm.id,'name',rm.name,'code',rm.code,'min_stock',rm.min_stock) END,
+       'warehouse',CASE WHEN w.id IS NULL THEN NULL ELSE jsonb_build_object('name',w.name) END) ORDER BY b.branch_id,b.warehouse_id,b.raw_material_id)
+     FROM raw_balances b LEFT JOIN public.raw_materials rm ON rm.id=b.raw_material_id
+     LEFT JOIN public.warehouses w ON w.id=b.warehouse_id),'[]'::jsonb) END,
+   'unitRows', CASE WHEN p_low_stock THEN '[]'::jsonb ELSE coalesce((
+     SELECT jsonb_agg(jsonb_build_object('unit_id',b.unit_id,'branch_id',b.branch_id,'warehouse_id',b.warehouse_id,'quantity',b.quantity,
+       'unit',CASE WHEN u.id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'name',u.name,'barcode',u.barcode,'min_stock',u.min_stock,'low_stock_threshold',u.low_stock_threshold) END,
+       'warehouse',CASE WHEN w.id IS NULL THEN NULL ELSE jsonb_build_object('name',w.name) END) ORDER BY b.branch_id,b.warehouse_id,b.unit_id)
+     FROM unit_balances b LEFT JOIN public.inventory_units u ON u.id=b.unit_id
+     LEFT JOIN public.warehouses w ON w.id=b.warehouse_id),'[]'::jsonb) END,
+   'rawMasters', CASE WHEN NOT p_low_stock THEN '[]'::jsonb ELSE coalesce((
+     SELECT jsonb_agg(jsonb_build_object('id',id,'branch_id',branch_id,'name',name,'code',code,'min_stock',min_stock,'is_active',is_active) ORDER BY branch_id,id)
+     FROM (SELECT * FROM public.raw_materials WHERE is_active AND (p_branch_id IS NULL OR branch_id=p_branch_id) LIMIT 5001) rm),'[]'::jsonb) END,
+   'rawBalances', CASE WHEN NOT p_low_stock THEN '[]'::jsonb ELSE coalesce((
+     SELECT jsonb_agg(to_jsonb(b) ORDER BY b.branch_id,b.raw_material_id)
+     FROM (SELECT raw_material_id,branch_id,sum(quantity) AS quantity FROM raw_balances GROUP BY raw_material_id,branch_id) b),'[]'::jsonb) END,
+   'unitMasters', CASE WHEN NOT p_low_stock THEN '[]'::jsonb ELSE coalesce((
+     SELECT jsonb_agg(jsonb_build_object('id',id,'branch_id',branch_id,'name',name,'barcode',barcode,'min_stock',min_stock,'low_stock_threshold',low_stock_threshold,'is_active',is_active) ORDER BY branch_id,id)
+     FROM (SELECT * FROM public.inventory_units WHERE is_active AND (p_branch_id IS NULL OR branch_id=p_branch_id) LIMIT 5001) u),'[]'::jsonb) END,
+   'unitBatches', CASE WHEN NOT p_low_stock THEN '[]'::jsonb ELSE coalesce((
+     SELECT jsonb_agg(to_jsonb(b) ORDER BY b.branch_id,b.unit_id)
+     FROM (SELECT unit_id,branch_id,sum(quantity) AS quantity FROM unit_balances GROUP BY unit_id,branch_id) b),'[]'::jsonb) END
+ ) INTO v_result;
+ SELECT sum(jsonb_array_length(value)) INTO v_count FROM jsonb_each(v_result);
+ IF v_count>5000 THEN RAISE EXCEPTION 'REPORT_SOURCE_LIMIT'; END IF;
+ RETURN v_result;
+END;
+$stock$;
+REVOKE ALL ON FUNCTION public.get_operational_stock_source(uuid,uuid,boolean) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_operational_stock_source(uuid,uuid,boolean) TO authenticated,service_role;
 COMMIT;

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T11:02:50.732Z",
+  "generated_at": "2026-10-08T16:07:13.250Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -649,6 +649,30 @@
       ]
     },
     {
+      "name": "get_operational_report_dataset",
+      "params": [
+        "branch_id",
+        "filters",
+        "from_date",
+        "from_ts",
+        "report_type",
+        "to_date",
+        "to_exclusive_ts"
+      ]
+    },
+    {
+      "name": "get_operational_report_metrics",
+      "params": [
+        "branch_id",
+        "filters",
+        "from_date",
+        "from_ts",
+        "report_type",
+        "to_date",
+        "to_exclusive_ts"
+      ]
+    },
+    {
       "name": "get_operational_report_page",
       "params": [
         "branch_id",
@@ -660,6 +684,14 @@
         "report_type",
         "to_date",
         "to_exclusive_ts"
+      ]
+    },
+    {
+      "name": "get_operational_stock_source",
+      "params": [
+        "branch_id",
+        "low_stock",
+        "warehouse_id"
       ]
     },
     {
