@@ -4,7 +4,7 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `fcb2c25d`
+- Latest main baseline reconciled: `856bc493`
 - Current active branch: `feat/reporting-families-20261008`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
@@ -60,4 +60,4 @@ with shared definitions, accurate allocation, configurable tables and source tra
 
 - #472 approved checkout migration applied, exact live function hashes verified, merged at fcb2c25d. Pages deployment37777968084 succeeded; post-merge Verify37777968117 succeeded (frontend, DB/RLS, browser and pages-continuity).
 
-- #473 exact-head Full Verify37779424007 succeeded at87ab6b8c; frontend-only reporting foundation remains unmerged pending explicit production approval. Family navigation is prepared on a dependent branch.
+- #473 exact-head Full Verify37779424007 succeeded at87ab6b8c; user approved production merge/deployment2026-10-08 16:08 Cairo. Squash merged856bc493; Pages37782100338 and postmerge Verify37782100371 monitored. #474 family navigation reconciled against this main; fresh exact-head CI and separate production approval required.
