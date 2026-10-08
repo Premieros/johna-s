@@ -1,3 +1,6 @@
+import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
+import { createReportSourceCache } from '../reportSourceCache';
+import { ReportWorkbench } from '../ReportWorkbench';
 import { orderReportColumns } from '../reportColumnLayout';
 import { loadProductSalesSummary } from '../services/productSalesReport';
 import { loadStationSalesLines } from '../services/stationSalesReport';
@@ -221,6 +224,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);
   const { data: snapshot, error: reportError, loading, reload: retryReport } = useLatestRead(readReport);
+  const reportSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range)), [reportReader]);
+  useEffect(() => () => reportSource.dispose(), [reportSource]);
+  const [workbenchScope, setWorkbenchScope] = useState<unknown>(null);
+  const workbenchActive = workbenchScope === reportReader;
   const data = snapshot?.rows || EMPTY_REPORT_ROWS;
   const summary = snapshot?.summary || { total: 0, count: 0 };
   const rowCount = snapshot?.serverPaged ? summary.count : data.length;
@@ -243,7 +250,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     return () => { exportGeneration.current = generation + 1; exportController.current?.abort(); };
   }, [reportReader]);
 
-  async function loadReport(page = 0, full = false, signal?: AbortSignal): Promise<ReportSnapshot> {
+  async function loadReport(page = 0, full = false, signal?: AbortSignal, range?: { from: string; to: string }): Promise<ReportSnapshot> {
     let resultRows: Record<string, unknown>[] = [];
     let resultSummary = { total: 0, count: 0 };
     const setData = (rows: Record<string, unknown>[]) => { resultRows = rows; };
@@ -251,9 +258,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     // Chart values were previously retained in unused state; preserve calculations here.
     const setChartData = (value: { name: string; value: number }[]) => { void value; };
     if (!user?.id) return { rows: resultRows, summary: resultSummary };
-    const allowed = history.clampRange(from, to);
-    if (allowed.from !== from) setFrom(allowed.from);
-    if (allowed.to !== to) setTo(allowed.to);
+    const allowed = history.clampRange(range?.from || from, range?.to || to);
+    if (range && (allowed.from !== range.from || allowed.to !== range.to)) throw new Error('COMPARISON_HISTORY_UNAVAILABLE');
+    if (!range && allowed.from !== from) setFrom(allowed.from);
+    if (!range && allowed.to !== to) setTo(allowed.to);
     const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
 
     const corePage = !full && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')
@@ -371,12 +379,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
       const results = await Promise.all(targetBranches.map(async (branch) => {
-        const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: from, p_to_date: to });
+        const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: allowed.from, p_to_date: allowed.to });
         if (error) throw error;
         return { branch, statement };
       }));
       const rows = results.map(({ branch, statement }) => withBranch(branch.id, {
-        [lang === 'ar' ? 'الفترة' : 'Period']: `${from} - ${to}`,
+        [lang === 'ar' ? 'الفترة' : 'Period']: `${allowed.from} - ${allowed.to}`,
         [lang === 'ar' ? 'صافي الإيراد' : 'Net Revenue']: Number(statement?.net_revenue || 0),
         [lang === 'ar' ? 'تكلفة البضاعة المباعة' : 'COGS']: Number(statement?.cogs || 0),
         [lang === 'ar' ? 'مجمل الربح' : 'Gross Profit']: Number(statement?.gross_profit || 0),
@@ -1292,7 +1300,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     exportingRef.current = true; setExporting(true); setExportError(null);
     try {
       // This reader captures applied filters/dates, never the edited draft.
-      const complete = snapshot?.serverPaged ? await reportReader(0, true, controller.signal) : snapshot;
+      if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
+      const complete = snapshot?.serverPaged ? await reportSource.read() : snapshot;
       if (generation !== exportGeneration.current || !complete) { reservedWindow?.close(); return; }
       if (kind === 'excel') await handleExportExcel(complete);
       else if (kind === 'csv') handleExportCSV(complete);
@@ -1392,7 +1401,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
       {reportType === 'sales_by_station' && <p data-testid="station-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
-      <Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
+      <ReportWorkbench type={reportType} lang={lang} scope={reportReader} userId={user?.id || ''}
+        rows={data} complete={!snapshot?.serverPaged} unavailable={loading || !!reportError}
+        currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
+        loadRows={async () => { if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT'); return (await reportSource.read()).rows; }}
+        period={snapshot?.from && snapshot?.to && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
+        loadComparison={async range => (await reportSource.read(range)).rows}
+        onOpen={open => setWorkbenchScope(open ? reportReader : null)} />
+      {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
         ) : reportError ? (
@@ -1477,7 +1493,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
             <Button size="sm" variant="outline" disabled={currentResultPage + 1 >= resultPageCount} onClick={() => changePage(currentResultPage + 1)}>{lang === 'ar' ? 'التالي' : 'Next'}</Button>
           </nav>
         )}
-      </Card>
+      </Card>)}
     </div>
   );
 }

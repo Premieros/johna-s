@@ -1,0 +1,1 @@
+export const MAX_REPORT_SOURCE_ROWS = 5000;
