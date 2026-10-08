@@ -3,7 +3,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-price-sql-timeouts`
 Current PR: `#478`
-Last updated: 2026-10-09 00:38 Africa/Cairo
+Last updated: 2026-10-09 00:43 Africa/Cairo
 
 ## Work status
 State: **BLOCKED** pending exact-head consolidated Full Verify for #478; production SQL apply additionally requires separate explicit approval. User authorized implementing explicit reports/shared results and fastest repair. Production #477 is deployed at8df96523; post-merge Full Verify37845279360 Green. Earlier report deliveries below are historical.
@@ -170,3 +170,7 @@ User instructs implementing manual report requests, a small default period and r
 - Earlier SQL-only headc9ed4673 Full Verify37846203726 Green. Previous production main8df96523 post-merge Full Verify37845279360 Green. Final consolidated exact-head Full Verify is still required; State: **BLOCKED** until those checks complete, and production SQL additionally requires separate approval.
 
 Final local frontend validation:337 test files /1643 unit-component tests passed. Final16 focused request/costing/worklog tests passed after scope guards. App/test typechecks, production build, API contract, locked project identity and lint (0 errors/14 existing warnings) passed. Browser cross-view behavior awaits exact-head CI; no local browser success is claimed. SQL migration remains unapplied.
+
+Final capacity follow-up: six multi-branch report families (including raw valuation/current cost) read branches sequentially rather than submitting heavy per-branch RPCs concurrently. The screen-read hook now passes an independent AbortSignal and aborts stale callers; branch readers stop before requesting another branch and reject errors/cancellation without partial output. Existing output order/totals retained.29 targeted report/cache/cancellation tests and app/test typechecks passed; final complete verification remains required.
+
+Final branch-capacity validation:338 local test files /1645 unit-component tests passed, with unchanged pricing/costing SQL. Build, typechecks, changed-file ESLint and API contract passed. No production SQL applied.

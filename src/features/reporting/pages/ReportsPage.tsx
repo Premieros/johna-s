@@ -1,3 +1,4 @@
+import { readReportBranches } from '../services/readReportBranches';
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
 import { requireReportData } from '../services/reportResult';
@@ -238,7 +239,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, user?.role, permissionVersion, lang]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
-  const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);
+  const readReport = useMemo(() => (signal?: AbortSignal) => reportReader(serverPage, false, signal), [reportReader, serverPage]);
   const { data: snapshot, error: reportError, loading, reload: retryReport } = useLatestRead(readReport, 0, requestedScope === reportScope);
   const reportSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range)), [reportReader]);
   useEffect(() => () => reportSource.dispose(), [reportSource]);
@@ -426,11 +427,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await Promise.all(targetBranches.map(async (branch) => {
+      const results = await readReportBranches(targetBranches, async (branch) => {
         const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: allowed.from, p_to_date: allowed.to });
         if (error) throw error;
         return { branch, statement };
-      }));
+      }, signal);
       const rows = results.map(({ branch, statement }) => withBranch(branch.id, {
         [lang === 'ar' ? 'الفترة' : 'Period']: `${allowed.from} - ${allowed.to}`,
         [lang === 'ar' ? 'صافي الإيراد' : 'Net Revenue']: Number(statement?.net_revenue || 0),
@@ -891,7 +892,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await Promise.all(targetBranches.map(async (branch) => {
+      const results = await readReportBranches(targetBranches, async (branch) => {
         const result = await reporting.getDayClosingRangeReport({
           p_branch_id: branch.id,
           p_from_date: allowed.from,
@@ -903,7 +904,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           branchId: branch.id,
           rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
         };
-      }));
+      }, signal);
       const rows = results.flatMap(({ branchId, rows: dayRows }) => dayRows.map((row) => withBranch(branchId, {
         [lang === 'ar' ? 'اليوم' : 'Business Date']: String(row.business_date || ''),
         [lang === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales']: Number(row.gross_sales || 0),
@@ -938,7 +939,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await Promise.all(targetBranches.map(async (branch) => {
+      const results = await readReportBranches(targetBranches, async (branch) => {
         const result = await reporting.getRawMaterialConsumptionReport({
           p_branch_id: branch.id,
           p_from_date: allowed.from,
@@ -947,7 +948,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         const raw = requireReportData(result, signal);
         if (!Array.isArray(raw)) throw new Error('REPORT_SOURCE_INVALID');
         return { branchId: branch.id, rows: raw as Record<string, unknown>[] };
-      }));
+      }, signal);
       const rows = results.flatMap(({ branchId, rows: rawRows }) => rawRows.map((row) => withBranch(branchId, {
         [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
         [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
@@ -982,11 +983,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await Promise.all(targetBranches.map(async (branch) => {
-        const result = await reporting.getCurrentRawMaterialValuation({ p_branch_id: branch.id });
+      const results = await readReportBranches(targetBranches, async (branch) => {
+        const result = await reporting.getCurrentRawMaterialValuation({ p_branch_id: branch.id }, signal);
         if (result.error) throw result.error;
         return { branchId: branch.id, rows: Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [] };
-      }));
+      }, signal);
       const rows = results.flatMap(({ branchId, rows: rawRows }) => rawRows.map((row) => withBranch(branchId, {
         [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
         [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
@@ -1020,7 +1021,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await Promise.all(targetBranches.map(async (branch) => {
+      const results = await readReportBranches(targetBranches, async (branch) => {
         const result = await reporting.getRawMaterialFinancialReport({
           p_branch_id: branch.id,
           p_from_date: allowed.from,
@@ -1033,7 +1034,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           summary: (payload.summary || {}) as Record<string, unknown>,
           rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
         };
-      }));
+      }, signal);
       const rows = results.flatMap(({ branchId, summary: financial, rows: rawRows }) => {
         const summaryRow = withBranch(branchId, {
           [lang === 'ar' ? 'الخامة' : 'Raw Material']: lang === 'ar' ? 'إجمالي الفترة' : 'Period Total',
@@ -1069,7 +1070,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await Promise.all(targetBranches.map(async (branch) => {
+      const results = await readReportBranches(targetBranches, async (branch) => {
         const result = await reporting.getSalesComponentReconciliationReport({
           p_branch_id: branch.id,
           p_from_date: allowed.from,
@@ -1082,7 +1083,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           summary: (payload.summary || {}) as Record<string, unknown>,
           rows: Array.isArray(payload.rows) ? payload.rows as Record<string, unknown>[] : [],
         };
-      }));
+      }, signal);
       const rows = results.flatMap(({ branchId, summary: reconciliation, rows: rawRows }) => {
         const summaryRow = withBranch(branchId, {
           [lang === 'ar' ? 'الخامة' : 'Raw Material']: lang === 'ar' ? 'إجمالي الفترة' : 'Period Total',

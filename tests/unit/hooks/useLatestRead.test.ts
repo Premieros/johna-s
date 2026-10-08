@@ -22,12 +22,14 @@ describe('useLatestRead', () => {
   it('clears previous scope and ignores an old response after scope changes', async () => {
     const first = deferred<string[]>();
     const second = deferred<string[]>();
-    const readA = vi.fn(() => first.promise);
+    let firstSignal: AbortSignal | undefined;
+    const readA = vi.fn((signal?: AbortSignal) => { firstSignal = signal; return first.promise; });
     const readB = vi.fn(() => second.promise);
     const { result, rerender } = renderHook(({ read }) => useLatestRead(read), { initialProps: { read: readA } });
     await waitFor(() => expect(readA).toHaveBeenCalledOnce());
     const oldReload = result.current.reload;
     rerender({ read: readB });
+    expect(firstSignal?.aborted).toBe(true);
     expect(result.current.data).toBeNull();
     await waitFor(() => expect(readB).toHaveBeenCalledOnce());
     await act(async () => { second.resolve(['branch B']); });
