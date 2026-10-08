@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `fcb2c25d`
-- Current active branch: `feat/reporting-core-20261008`
+- Latest main baseline reconciled: `856bc493`
+- Current active branch: `feat/report-column-layout-20261008`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
@@ -59,3 +59,5 @@ with shared definitions, accurate allocation, configurable tables and source tra
 - #469 approved recipe cost consistency migration applied; main 5f085641; Verify 37763464358 and Pages 37763464375 Green.
 
 - #472 approved checkout migration applied, exact live function hashes verified, merged at fcb2c25d. Pages deployment37777968084 succeeded; post-merge Verify37777968117 succeeded (frontend, DB/RLS, browser and pages-continuity).
+
+- #473 explicitly approved2026-10-08 16:08 Cairo, merged856bc493 and Pages37782100338 succeeded. Postmerge Verify37782100371 Green. #474 families is a separate draft at e36d6c0a with fresh Verify37782280412. Current work adds column search/order and selected-column exports on the published baseline, independent of #474.

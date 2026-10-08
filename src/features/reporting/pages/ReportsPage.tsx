@@ -1,3 +1,4 @@
+import { orderReportColumns } from '../reportColumnLayout';
 import { loadProductSalesSummary } from '../services/productSalesReport';
 import { loadStationSalesLines } from '../services/stationSalesReport';
 import { expenseAccountLabel } from '../utils/expenseAccountLabel';
@@ -136,7 +137,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   };
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
-  const { visibleColumns, toggleColumn, showAllColumns } = useColumnPreferences(reportType);
+  const { visibleColumns, toggleColumn, showAllColumns, columnOrder, moveColumn, resetColumnOrder } = useColumnPreferences(reportType);
   const { savedReports, saveReport, deleteReport } = useCustomReports();
   const reportBranchLabel = effectiveBranchFilter
     ? branchNameById(effectiveBranchFilter)
@@ -1111,13 +1112,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       totalRow,
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
-      columns: (reportType === 'sales_by_station' || reportType === 'sales_by_product') ? columns : excelProfile.columns,
+      columns,
       columnWidths: excelProfile.columnWidths,
       sourceNote: excelProfile.sourceNote,
       lang,
     });
   };
-  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV((reportType === 'sales_by_station' || reportType === 'sales_by_product') ? complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))) : complete.rows, `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
+  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV(complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))), `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
 
   const reportTypes: { key: ReportType; label: string; icon: React.ReactNode }[] = [
     { key: 'sales', label: t('salesReport'), icon: <TrendingUp className="w-4 h-4" /> },
@@ -1201,7 +1202,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
-  const allColumns = data.length > 0 ? Object.keys(data[0]) : [];
+  const allColumns = orderReportColumns(data.length > 0 ? Object.keys(data[0]) : [], columnOrder);
   const columns = visibleColumns ? allColumns.filter((column) => visibleColumns.includes(column)) : allColumns;
   const hiddenCount = visibleColumns ? allColumns.length - columns.length : 0;
   const reportMobilePrimaryColumns = columns.slice(0, 4);
@@ -1268,7 +1269,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const handlePrint = (complete: ReportSnapshot, reservedWindow?: Window | null) => {
     const reportLabel = reportTypes.find((row) => row.key === reportType)?.label ?? reportType;
-    const headers = (reportType === 'sales_by_station' || reportType === 'sales_by_product') ? columns : complete.rows.length > 0 ? Object.keys(complete.rows[0]) : [];
+    const headers = columns;
     const rows = complete.rows.map((row) => headers.map((header) => {
       const value = row[header];
       if (typeof value === 'number' && moneyKeys.includes(header)) return formatFinancialCurrency(value, currency, lang);
@@ -1279,7 +1280,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   };
 
   const exportComplete = async (kind: 'excel' | 'csv' | 'print') => {
-    if (exportingRef.current || loading || reportError) return;
+    if (exportingRef.current || loading || reportError || columns.length === 0) return;
     const reservedWindow = kind === 'print' && snapshot?.serverPaged
       ? window.open('', '_blank', 'width=960,height=680') : undefined;
     if (kind === 'print' && snapshot?.serverPaged && !reservedWindow) {
@@ -1309,20 +1310,23 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       <PageHeader title={t('reports')} actions={
         <div className="flex flex-wrap gap-2">
           <ColumnPicker
-            columns={data.length > 0 ? Object.keys(data[0]) : []}
+            columns={allColumns}
             visibleColumns={visibleColumns}
             onToggle={(key) => toggleColumn(key, allColumns)}
             onShowAll={showAllColumns}
+            onMove={(key, direction) => moveColumn(key, direction, allColumns)}
+            onResetOrder={resetColumnOrder}
             lang={lang}
             hiddenCount={hiddenCount}
           />
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('excel')} disabled={loading || exporting || !!reportError}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={loading || exporting || !!reportError}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
-          {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={loading || exporting || !!reportError}><Printer className="w-4 h-4" /> {t('print')}</Button>}
+          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('excel')} disabled={loading || exporting || !!reportError || columns.length === 0}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
+          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={loading || exporting || !!reportError || columns.length === 0}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
+          {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={loading || exporting || !!reportError || columns.length === 0}><Printer className="w-4 h-4" /> {t('print')}</Button>}
         </div>
       } />
 
       {exporting && <p role="status" className="mb-3 text-sm">{lang === 'ar' ? 'جاري تجهيز التقرير الكامل…' : 'Preparing complete report…'}</p>}
+      {data.length > 0 && columns.length === 0 && <p role="status" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'اختر عمودًا واحدًا على الأقل للعرض والتصدير من قائمة الأعمدة.' : 'Choose at least one column to display and export from Columns.'}</p>}
       {exportError != null && <p role="alert" className="mb-3 text-sm text-ui-danger">{userFacingErrorMessage(exportError, lang)}</p>}
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">

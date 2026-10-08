@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   loadOptions: vi.fn(),
   print: vi.fn(),
   excel: vi.fn(),
+  csv: vi.fn(),
+  visibleColumns: null as string[] | null,
+  columnOrder: undefined as string[] | undefined,
 }));
 vi.mock('@/api', () => ({ supabase: {}, costing: {}, reporting: {} }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: mocks.userId } }) }));
@@ -21,7 +24,7 @@ vi.mock('@/lib/permissions', () => ({ useCan: () => () => true }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ unlimited: true, clampRange: (from: string, to: string) => ({ from, to }) }) }));
 vi.mock('@/hooks/useBranches', () => ({ useBranches: () => ({ branches: mocks.branches }) }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
-vi.mock('@/features/reporting/useColumnPreferences', () => ({ useColumnPreferences: () => ({ visibleColumns: null, toggleColumn: vi.fn(), showAllColumns: vi.fn() }) }));
+vi.mock('@/features/reporting/useColumnPreferences', () => ({ useColumnPreferences: () => ({ visibleColumns: mocks.visibleColumns, columnOrder: mocks.columnOrder, toggleColumn: vi.fn(), showAllColumns: vi.fn() }) }));
 vi.mock('@/features/reporting/useCustomReports', () => ({ useCustomReports: () => ({ savedReports: [], saveReport: vi.fn(), deleteReport: vi.fn() }) }));
 vi.mock('@/features/reporting/ColumnPicker', () => ({ ColumnPicker: () => null }));
 vi.mock('@/features/reporting/CustomReportBar', () => ({ CustomReportBar: () => null }));
@@ -33,7 +36,7 @@ vi.mock('@/features/reporting/services/reportFilterOptions', () => ({
   loadReportFilterOptions: mocks.loadOptions,
   loadExpenseCategoryOptions: async () => [],
 }));
-vi.mock('@/lib/reportExport', () => ({ openPrintWindow: mocks.print, downloadCSV: vi.fn() }));
+vi.mock('@/lib/reportExport', () => ({ openPrintWindow: mocks.print, downloadCSV: mocks.csv }));
 vi.mock('@/lib/excel', () => ({ exportToExcelAdvanced: mocks.excel }));
 vi.mock('@/features/reporting/ReportFilterBar', () => ({ ReportFilterBar: (props: { total: number; count: number; from: string; onFromChange: (s: string) => void; onRunReport: () => void; filters: { warehouse?: string; customer?: string; payment_method?: string }; onFilterChange: (key: 'warehouse' | 'customer' | 'payment_method', value: string) => void }) => (
   <div><output data-testid="report-summary">{props.total}:{props.count}</output><input aria-label="From" value={props.from} onChange={e => props.onFromChange(e.target.value)} /><input aria-label="Warehouse filter" value={props.filters.warehouse || ''} onChange={e => props.onFilterChange('warehouse', e.target.value)} /><input aria-label="Customer filter" value={props.filters.customer || ''} onChange={e => props.onFilterChange('customer', e.target.value)} /><input aria-label="Payment filter" value={props.filters.payment_method || ''} onChange={e => props.onFilterChange('payment_method', e.target.value)} /><button onClick={props.onRunReport}>Run report</button></div>
@@ -47,9 +50,43 @@ function deferred() {
   return { promise, resolve };
 }
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
+beforeEach(() => { vi.clearAllMocks(); mocks.visibleColumns = null; mocks.columnOrder = undefined; vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it('keeps selected column order across full-report Excel, CSV and print exports', async () => {
+    mocks.visibleColumns = ['Branch', 'Invoice'];
+    mocks.columnOrder = ['Invoice', 'Branch'];
+    const all = Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`));
+    mocks.loadSales.mockResolvedValue(all); mocks.fullSales.mockResolvedValue(all);
+    render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
+    const headers = screen.getByRole('table').querySelectorAll('thead th');
+    expect(Array.from(headers).map(header => header.textContent)).toEqual(['Invoice', 'Branch']);
+    fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
+    await waitFor(() => expect(mocks.excel).toHaveBeenCalled());
+    expect(mocks.excel.mock.calls[0][0].columns).toEqual(['Invoice', 'Branch']);
+    expect(mocks.excel.mock.calls[0][0].data).toHaveLength(205);
+    fireEvent.click(screen.getByRole('button', { name: 'exportCsv' }));
+    await waitFor(() => expect(mocks.csv).toHaveBeenCalled());
+    expect(mocks.csv.mock.calls[0][0]).toHaveLength(205);
+    expect(Object.keys(mocks.csv.mock.calls[0][0][0])).toEqual(['Invoice', 'Branch']);
+    fireEvent.click(screen.getByRole('button', { name: 'print' }));
+    await waitFor(() => expect(mocks.print).toHaveBeenCalled());
+    expect(mocks.print.mock.calls[0][0].headers).toEqual(['Invoice', 'Branch']);
+    expect(mocks.print.mock.calls[0][0].rows).toHaveLength(205);
+  });
+
+  it('blocks export when every column is hidden instead of revealing all columns', async () => {
+    mocks.visibleColumns = [];
+    mocks.loadSales.mockResolvedValue([sale('sale')]);
+    render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    for (const name of ['exportExcel', 'exportCsv', 'print']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect(mocks.excel).not.toHaveBeenCalled();
+  });
+
   it('shows filter-specific failures and retries options without rerunning a successful report', async () => {
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     mocks.loadOptions.mockRejectedValueOnce(new Error('NETWORK_ERROR'));
