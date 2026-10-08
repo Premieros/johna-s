@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/report-column-layout-20261008`
-Current PR: #0 (column layout; #473 merged, #474 separate draft)
+Current PR: #475 (column layout; #473 deployed, #474 separate draft)
 Last updated: 2026-10-08
 
 ## Work status
