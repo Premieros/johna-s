@@ -7,6 +7,13 @@ const isServiceOrderType = (orderType?: OrderType): orderType is 'delivery' | 'd
   orderType === 'delivery' || orderType === 'drive_thru';
 
 export const floorPlan = {
+  async setCheckoutDiscount(p: {
+    p_order_id: string;
+    p_discount_amount: number;
+    p_approval_request_id: string | null;
+  }): ApiResult<RpcResult> {
+    return rpc<RpcResult>('set_order_checkout_discount', p);
+  },
   async createOrder(p: {
     p_branch_id: string;
     p_order_type?: OrderType;

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-07T19:59:06.541Z",
+  "generated_at": "2026-10-08T07:46:18.161Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -1253,6 +1253,14 @@
       "params": [
         "order_id",
         "sent_by"
+      ]
+    },
+    {
+      "name": "set_order_checkout_discount",
+      "params": [
+        "approval_request_id",
+        "discount_amount",
+        "order_id"
       ]
     },
     {

@@ -127,6 +127,23 @@ describe.skipIf(skip)('process_sale linked-order settlement (045 C1)', () => {
     }
   });
 
+  it('persists a header-only checkout discount and settles it without changing sent quantities', async () => {
+    const orderId = await insertOrder('held');
+    await insertOrderItem(orderId);
+    expect((await sendToKitchen(orderId)).success).toBe(true);
+    const before = await batchQty();
+    const itemsBefore = (await client.query('SELECT * FROM public.order_items WHERE order_id=$1', [orderId])).rows;
+    const applied = await client.query(`SELECT public.set_order_checkout_discount($1,100,NULL) AS r`, [orderId]);
+    expect(applied.rows[0].r).toMatchObject({success:true,discount_amount:100,total:0});
+    expect((await client.query('SELECT * FROM public.order_items WHERE order_id=$1', [orderId])).rows).toEqual(itemsBefore);
+    const result = await settle(`CHECKOUT-DISCOUNT-${randomUUID()}`, orderId);
+    expect(result.success, JSON.stringify(result)).toBe(true);
+    const sale = await client.query('SELECT discount_amount,total FROM public.sales WHERE id=$1', [result.sale_id]);
+    expect(Number(sale.rows[0].discount_amount)).toBe(100);
+    expect(Number(sale.rows[0].total)).toBe(0);
+    expect(await batchQty()).toBe(before);
+  });
+
   it('pays a held takeaway order (table_id NULL)', async () => {
     const orderId = await insertOrder('held', { tableId: null, orderType: 'takeaway' });
     await insertOrderItem(orderId);

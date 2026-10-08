@@ -7,10 +7,14 @@ export function CashierDiscountApprovalCard({
   onApproved,
   ar,
   canDirectDiscount,
+  orderId,
+  onPendingChange,
 }: {
   subtotal: number;
   currentType: 'amount' | 'percent';
-  onApproved: (type: 'amount' | 'percent', amount: number) => void;
+  onApproved: (type: 'amount' | 'percent', amount: number, requestId: string) => void | Promise<void>;
+  orderId?: string | null;
+  onPendingChange?: (pending: boolean) => void;
   ar: boolean;
   canDirectDiscount: boolean;
 }) {
@@ -18,18 +22,26 @@ export function CashierDiscountApprovalCard({
   const [amount, setAmount] = useState(0);
   const [reason, setReason] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected'>('idle');
+  const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected' | 'failed'>('idle');
   const [busy, setBusy] = useState(false);
   const appliedRequestRef = useRef<string | null>(null);
 
   useEffect(() => setType(currentType), [currentType]);
+  useEffect(() => { onPendingChange?.(busy || status === 'pending' || status === 'failed'); }, [busy, status, onPendingChange]);
+  const [error, setError] = useState('');
 
   const applyDecision = useCallback((row: {
     id?: string;
     status?: string;
+    expires_at?: string;
     payload?: Record<string, unknown> | null;
   } | null) => {
     if (!row || !requestId) return;
+    if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) {
+      setStatus('rejected');
+      setError(ar ? 'انتهت صلاحية الموافقة؛ أرسل طلبًا جديدًا' : 'Approval expired; request a new approval');
+      return;
+    }
     if (row.status === 'approved') {
       if (appliedRequestRef.current === requestId) return;
       const approvedPayload = row.payload || {};
@@ -44,21 +56,27 @@ export function CashierDiscountApprovalCard({
         : Math.min(Math.max(requestedValue, 0), Math.max(subtotal, 0));
       if (approvedValue <= 0) return;
       appliedRequestRef.current = requestId;
-      setStatus('approved');
-      onApproved(approvedType, approvedValue);
+      setBusy(true);
+      void Promise.resolve().then(() => onApproved(approvedType, approvedValue, requestId))
+        .then(() => { setStatus('approved'); setError(''); })
+        .catch((err: unknown) => {
+          setStatus('failed');
+          setError(err instanceof Error ? err.message : 'DISCOUNT_APPLY_FAILED');
+        })
+        .finally(() => setBusy(false));
     } else if (row.status === 'rejected' || row.status === 'expired') {
       setStatus('rejected');
     }
-  }, [onApproved, requestId, subtotal]);
+  }, [ar, onApproved, requestId, subtotal]);
 
   const refreshDecision = useCallback(async () => {
     if (!requestId) return;
     const { data } = await supabase
       .from('approval_requests')
-      .select('id,status,payload')
+      .select('id,status,payload,expires_at')
       .eq('id', requestId)
       .maybeSingle();
-    applyDecision(data as { id?: string; status?: string; payload?: Record<string, unknown> | null } | null);
+    applyDecision(data as { id?: string; status?: string; expires_at?: string; payload?: Record<string, unknown> | null } | null);
   }, [applyDecision, requestId]);
 
   useEffect(() => {
@@ -109,17 +127,17 @@ export function CashierDiscountApprovalCard({
       ? Math.min(amount, 100)
       : Math.min(amount, Math.max(subtotal, 0));
     const monetaryDiscount = type === 'percent'
-      ? (Math.max(subtotal, 0) * normalizedInput) / 100
-      : normalizedInput;
+      ? Math.round(((Math.max(subtotal, 0) * normalizedInput) / 100) * 100) / 100
+      : Math.round(normalizedInput * 100) / 100;
     if (monetaryDiscount <= 0) return;
 
     setBusy(true);
 
     try {
-      const { data } = await supabase.rpc('request_manager_approval', {
+      const { data, error: requestError } = await supabase.rpc('request_manager_approval', {
         p_action_type: 'discount',
-        p_entity_type: 'sale',
-        p_entity_id: null,
+        p_entity_type: orderId ? 'order' : 'sale',
+        p_entity_id: orderId || null,
         p_payload: {
           discount_amount: monetaryDiscount,
           discount_type: type,
@@ -132,13 +150,18 @@ export function CashierDiscountApprovalCard({
       const res = data as {
         success?: boolean;
         request_id?: string;
+        error?: string;
       } | null;
 
+      if (requestError || !res?.success) throw new Error(requestError?.message || res?.error || 'APPROVAL_REQUEST_FAILED');
+      setError('');
       if (res?.success && res.request_id) {
         appliedRequestRef.current = null;
         setRequestId(res.request_id);
         setStatus('pending');
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'APPROVAL_REQUEST_FAILED');
     } finally {
       setBusy(false);
     }
@@ -150,6 +173,7 @@ export function CashierDiscountApprovalCard({
         {ar ? 'طلب خصم من المدير' : 'Request manager discount approval'}
       </p>
 
+      {error && <p role="alert" className="mb-2 text-sm text-ui-danger">{error}</p>}
       <div className="grid grid-cols-2 gap-2">
         <select
           value={type}

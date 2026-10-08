@@ -164,6 +164,40 @@ export function usePosOrder(input: UsePosOrderInput) {
     return preview;
   }, [base.activeOrderId, isAr, loadScopedSettlementPreview, saveOpenOrderSnapshot, show]);
 
+  const applyApprovedDiscount = useCallback(async (
+    type: 'amount' | 'percent', amount: number, requestId: string,
+  ): Promise<void> => {
+    if (saleMutationLockRef.current) throw new Error('PAYMENT_IN_PROGRESS');
+    if (!base.activeOrderId) {
+      base.setDiscountType(type);
+      base.setDiscountAmount(amount);
+      return;
+    }
+    saleMutationLockRef.current = true;
+    setOfflineCompleting(true);
+    try {
+      const preview = await loadSettlementPreview(false);
+      if (!preview?.order_id) throw new Error('SETTLEMENT_PREVIEW_UNAVAILABLE');
+      const monetary = Math.round((type === 'percent' ? preview.subtotal * amount / 100 : amount) * 100) / 100;
+      const { data, error } = await api.floorPlan.setCheckoutDiscount({
+        p_order_id: preview.order_id,
+        p_discount_amount: monetary,
+        p_approval_request_id: requestId,
+      });
+      const result = data as { success?: boolean; error?: string } | null;
+      if (error || !result?.success) throw new Error(error?.message || result?.error || 'DISCOUNT_APPLY_FAILED');
+      if (!isCurrentSettlementPreview(preview)) throw new Error('SETTLEMENT_PREVIEW_SCOPE_MISMATCH');
+      const refreshed = await loadSettlementPreview(false);
+      if (!refreshed || refreshed.discount_amount !== monetary) throw new Error('DISCOUNT_PREVIEW_MISMATCH');
+      base.setDiscountType('amount');
+      base.setDiscountAmount(monetary);
+      base.setPaidAmount(refreshed.total);
+    } finally {
+      saleMutationLockRef.current = false;
+      setOfflineCompleting(false);
+    }
+  }, [base, loadSettlementPreview, isCurrentSettlementPreview]);
+
   const transferOrderToTable = useCallback(async (
     targetOrderId: string,
     _fromTableId: string,
@@ -542,6 +576,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     },
     transferOrderToTable,
     completeSale,
+    applyApprovedDiscount,
     printReceipt,
   };
 }

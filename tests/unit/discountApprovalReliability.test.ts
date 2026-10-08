@@ -22,6 +22,6 @@ describe('discount approval reliability contract', () => {
   it('applies the approved payload value only once', () => {
     expect(card).toContain('appliedRequestRef');
     expect(card).toContain('requested_value');
-    expect(card).toContain('onApproved(approvedType, approvedValue)');
+    expect(card).toContain('onApproved(approvedType, approvedValue, requestId)');
   });
 });
