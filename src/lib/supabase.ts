@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { postgrestDedupingFetch } from './postgrestDedupingFetch';
+import { reportCachingFetch } from './reportRequestCache';
 
 const supabaseUrl =
   (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ||
@@ -19,7 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'placeholde
     detectSessionInUrl: true,
   },
   global: {
-    fetch: postgrestDedupingFetch,
+    fetch: reportCachingFetch,
   },
 });
 

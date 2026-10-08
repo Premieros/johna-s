@@ -10,9 +10,10 @@ describe('system-wide duplicate query reduction contract', () => {
     const client = read('src/lib/supabase.ts');
     const coordinator = read('src/lib/postgrestDedupingFetch.ts');
 
-    expect(client).toContain('postgrestDedupingFetch');
+    const reports = read('src/lib/reportRequestCache.ts');
+    expect(reports).toContain('createReportRequestCache(postgrestDedupingFetch)');
     expect(client).toContain('global:');
-    expect(client).toContain('fetch: postgrestDedupingFetch');
+    expect(client).toContain('fetch: reportCachingFetch');
     expect(coordinator).toContain('const inFlight = new Map');
     expect(coordinator).toContain('generation += 1');
     expect(coordinator).not.toContain('recentReads');

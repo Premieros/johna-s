@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ branch: 'A', income: vi.fn() }));
@@ -17,6 +17,8 @@ describe('financial canonical report reads', () => {
   it('shows an API failure and blocks exporting old or empty results', async () => {
     mocks.income.mockResolvedValue({ data: null, error: { message: 'SOURCE_FAILED' } });
     render(page());
+    expect(mocks.income).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('financial-run-report'));
     await screen.findByRole('alert');
     expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();
     expect(screen.queryByText('123.00 EGP')).toBeNull();
@@ -25,11 +27,15 @@ describe('financial canonical report reads', () => {
     let resolve!: (value: { data: typeof data; error: null }) => void;
     mocks.income.mockImplementationOnce(() => new Promise(value => { resolve = value; }));
     const view = render(page());
+    fireEvent.click(screen.getByTestId('financial-run-report'));
     await waitFor(() => expect(mocks.income).toHaveBeenCalled());
     const signal = mocks.income.mock.calls[0][1] as AbortSignal;
     mocks.branch = 'B';
     mocks.income.mockResolvedValue({ data: { ...data, revenue: 456, net_revenue: 456, gross_profit: 456, net_income: 456 }, error: null });
     view.rerender(page());
+    expect(mocks.income).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();
+    fireEvent.click(screen.getByTestId('financial-run-report'));
     await waitFor(() => expect(screen.getByRole('button', { name: 'exportExcel' })).not.toBeDisabled());
     expect(signal.aborted).toBe(true);
     await act(async () => resolve({ data, error: null }));

@@ -200,6 +200,7 @@ test.describe('dashboard and navigation actions', () => {
       await page.goto('/#/reports');
       // Same-hash navigation keeps the prior page; start each viewport from a fresh document.
       await page.reload();
+      await page.getByTestId('run-report-button').click();
       const results = width < 640 ? page.getByTestId('reports-mobile-results') : page.getByRole('table');
       await expect(results.getByText('PAGE-0', { exact: true })).toBeVisible();
       expect(reads[reads.length - 1]?.p_page_size).toBe(100);
@@ -227,6 +228,7 @@ test.describe('dashboard and navigation actions', () => {
       metricReads++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({'Subtotal':1000,'Discount':0,'Tax':0,'Invoice Total':1000,'Paid':1000,'Refunded':0,'Net Sales':1000,'Net Collection':1000})});
     });
     await page.goto('/#/reports');
+    await page.getByTestId('run-report-button').click();
     await expect(page.getByRole('table').getByText('TOOL-0',{exact:true})).toBeVisible();
     expect(datasetReads).toBe(0);
     const tools=page.getByTestId('report-workbench');
@@ -261,12 +263,14 @@ test.describe('dashboard and navigation actions', () => {
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
     });
     await page.goto('/#/reports?type=inventory');
+    await page.getByTestId('run-report-button').click();
     await expect(page.getByRole('table').getByText('CANONICAL-STOCK',{exact:true})).toBeVisible();
     const tools=page.getByTestId('report-workbench');
     await tools.getByRole('button',{name:/أدوات الجدول والتحليل الكامل|Table tools & full analysis/}).click();
     await expect(tools.getByText(/1 (صف|rows) \/ 1/)).toBeVisible();
     expect(stockReads).toBe(1);
     await page.goto('/#/reports?type=low_stock');
+    await page.getByTestId('run-report-button').click();
     await expect(page.getByRole('table').getByText('CANONICAL-LOW-STOCK',{exact:true})).toBeVisible();
     await expect.poll(() => stockReads).toBe(2); expect(batchReads).toBe(0);
   });
@@ -280,8 +284,34 @@ test.describe('dashboard and navigation actions', () => {
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({rows,summary:{count:2,total:20}})});
     });
     await page.goto('/#/reports?type=sales_by_employee');
+    await page.getByTestId('run-report-button').click();
     await expect(page.getByRole('table').getByText('SAME-CASHIER-NAME',{exact:true})).toHaveCount(2);
     expect(datasetReads).toBe(1);expect(directReads).toBe(0);
+  });
+
+  test('reports stay idle until requested and reuse identical sales results across views', async ({ page }) => {
+    const reads: Record<string, unknown>[] = [];
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_dataset**`, async route => {
+      reads.push(route.request().postDataJSON());
+      const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { count: 1, total: 10 } }) });
+    });
+    await page.goto('/#/reports?type=sales_by_employee');
+    const run = page.getByTestId('run-report-button');
+    await expect(run).toBeVisible();
+    expect(reads).toHaveLength(0);
+    await run.click();
+    await expect(page.getByRole('table').getByText('SHARED-CASHIER', { exact: true })).toBeVisible();
+    expect(reads).toHaveLength(1);
+    await page.goto('/#/reports?type=detailed_invoices');
+    await expect(page.getByRole('table')).toHaveCount(0);
+    expect(reads).toHaveLength(1);
+    await run.click();
+    await expect(page.getByRole('table').getByText('SHARED-INVOICE', { exact: true })).toBeVisible();
+    expect(reads).toHaveLength(1);
+    await page.getByRole('button', { name: /تحديث التقرير|Refresh report/ }).click();
+    await expect.poll(() => reads.length).toBe(2);
+    await expect(page.getByRole('table').getByText('SHARED-INVOICE', { exact: true })).toBeVisible();
   });
 
   test('KDS separates 40-minute work and completed history and finishes only an empty voided order on phone and desktop', async ({ page }) => {
@@ -321,6 +351,7 @@ test.describe('dashboard and navigation actions', () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/#/kitchen-display');
       await page.reload();
+      await page.getByTestId('run-report-button').click();
       await expect(page.getByText('#RECENT-KDS', { exact: true })).toBeVisible();
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
       expect(historyReads.length).toBe(historyCount);

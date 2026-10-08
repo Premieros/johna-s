@@ -1,3 +1,5 @@
+import { clearReportRequestCache } from '@/lib/reportRequestCache';
+import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
 import { requireReportData } from '../services/reportResult';
 import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
 import { createReportSourceCache } from '../reportSourceCache';
@@ -77,13 +79,16 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const [reportParams] = useSearchParams();
   const branchFilter = useBranchFilter();
   const [reportType, setReportType] = useState<ReportType>(controlledReportType || 'sales');
-  const [from, setFrom] = useState(() => reportParams.get('from')?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] || history.minDate || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const [from, setFrom] = useState(() => reportParams.get('from')?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] || todayISO());
   const [to, setTo] = useState(() => reportParams.get('to')?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] || todayISO());
   const [period, setPeriod] = useState<PeriodKey>('custom');
   const [resultView, setResultView] = useState({ source: EMPTY_REPORT_ROWS, page: 0 });
   const [filters, setFilters] = useState<ReportFilters>({});
   const [filtersDirty, setFiltersDirty] = useState(false);
   const [queryVersion, setQueryVersion] = useState(0);
+  const [requestedScope, setRequestedScope] = useState<string | null>(null);
+  const permissionVersion = useReportPermissionVersion();
+  const reportScope = JSON.stringify([permissionVersion, reportType, branchFilter, user?.id, user?.role, history.unlimited, lang, canStationCost, canStationView]);
 
   useEffect(() => {
     if (controlledReportType) {
@@ -187,11 +192,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const handleRestoreCustomReport = (config: SavedReportConfig) => {
     handleReportTypeSelect(config.reportType);
     setFilters(config.filters || {});
-    setFiltersDirty(false);
-    setQueryVersion((version) => version + 1);
+    setFiltersDirty(true);
   };
 
-  const runReport = () => {
+  const runReport = (refresh = false) => {
+    if (refresh) clearReportRequestCache();
+    setRequestedScope(reportScope);
     const allowed = history.clampRange(from, to);
     const next = new URLSearchParams(reportParams);
     next.set('from', reportType === 'inventory_as_of' ? allowed.to : allowed.from);
@@ -226,14 +232,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     setFiltersDirty(true);
   }
 
-  // Capture draft filters only on Run report or an automatic report/scope change.
+  // Capture drafts on Run report; an unopened scope remains idle.
   const reportReader = useMemo(() => loadReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, lang]);
+    [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, user?.role, permissionVersion, lang]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);
-  const { data: snapshot, error: reportError, loading, reload: retryReport } = useLatestRead(readReport);
+  const { data: snapshot, error: reportError, loading, reload: retryReport } = useLatestRead(readReport, 0, requestedScope === reportScope);
   const reportSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range)), [reportReader]);
   useEffect(() => () => reportSource.dispose(), [reportSource]);
   const metricSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range, true)), [reportReader]);
@@ -1380,9 +1386,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
             lang={lang}
             hiddenCount={hiddenCount}
           />
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('excel')} disabled={loading || exporting || !!reportError || columns.length === 0}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={loading || exporting || !!reportError || columns.length === 0}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
-          {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={loading || exporting || !!reportError || columns.length === 0}><Printer className="w-4 h-4" /> {t('print')}</Button>}
+          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('excel')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
+          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
+          {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><Printer className="w-4 h-4" /> {t('print')}</Button>}
         </div>
       } />
 
@@ -1446,9 +1452,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         onFinancialSelect={(key) => navigate(`/financial-reports?view=${key}&from=${from}&to=${to}`)}
         reportTypes={reportTypes}
         onReportTypeChange={handleReportTypeSelect}
-        onRunReport={runReport}
+        onRunReport={() => runReport()}
         loading={loading}
-        unavailable={!!reportError}
+        unavailable={!snapshot || !!reportError}
         pendingChanges={filtersDirty}
       />
 
@@ -1457,8 +1463,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       {reportType === 'sales_by_station' && <details className="mb-3 text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'تفاصيل حساب المبيعات والتكلفة' : 'Sales and cost calculation details'}</summary><p data-testid="station-sales-source-note">{getReportExcelProfile(reportType, lang).sourceNote}</p></details>}
 
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
+      <Button variant="outline" disabled={loading} onClick={() => runReport(true)}>{lang === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button>
+      <p className="mb-3 text-xs text-ui-muted">{lang === 'ar' ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
       <ReportWorkbench type={reportType} lang={lang} scope={reportReader} userId={user?.id || ''}
-        rows={data} complete={!snapshot?.serverPaged} unavailable={loading || !!reportError}
+        rows={data} complete={!snapshot?.serverPaged} unavailable={!snapshot || loading || !!reportError}
         currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
         loadRows={async () => { if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT'); return (await reportSource.read()).rows; }}
         period={snapshot?.from && snapshot?.to && reportType !== 'inventory_as_of' && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
@@ -1474,7 +1482,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
             <Button variant="outline" onClick={() => { void retryReport(); }}>{lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}</Button>
           </div>
         ) : data.length === 0 ? (
-          <div className="text-center py-12 text-ui-subtle text-sm">{t('noData')}</div>
+          <div className="text-center py-12 text-ui-subtle text-sm">{snapshot ? t('noData') : (lang === 'ar' ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.')}</div>
         ) : (
           <div>
             <div data-testid="reports-mobile-results" className="space-y-2 sm:hidden">

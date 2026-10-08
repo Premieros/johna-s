@@ -10,6 +10,15 @@ function deferred<T>() {
 }
 
 describe('useLatestRead', () => {
+  it('does not start or reload a disabled read and discards it when disabled again', async () => {
+    const pending = deferred<string[]>(); const read = vi.fn(() => pending.promise);
+    const { result, rerender } = renderHook(({ enabled }) => useLatestRead(read, 0, enabled), { initialProps: { enabled: false } });
+    await act(async () => { await result.current.reload(); });
+    expect(read).not.toHaveBeenCalled(); expect(result.current.loading).toBe(false);
+    rerender({ enabled: true }); await waitFor(() => expect(read).toHaveBeenCalledOnce());
+    rerender({ enabled: false }); await act(async () => { pending.resolve(['stale']); });
+    expect(result.current.data).toBeNull(); expect(result.current.loading).toBe(false);
+  });
   it('clears previous scope and ignores an old response after scope changes', async () => {
     const first = deferred<string[]>();
     const second = deferred<string[]>();

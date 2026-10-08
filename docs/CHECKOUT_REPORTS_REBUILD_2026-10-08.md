@@ -3,10 +3,11 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-price-sql-timeouts`
 Current PR: `#478`
-Last updated: 2026-10-09 00:21 Africa/Cairo
+Last updated: 2026-10-09 00:38 Africa/Cairo
 
 ## Work status
-State: **BLOCKED** for the new seven-report workspace production merge pending exact-head Full Verify and explicit approval. Implementation and local verification in progress. Previous #475 applied/deployed at dd4bdeef; Full Verify37814067672 and deployment37814067770 succeeded.
+State: **BLOCKED** pending exact-head consolidated Full Verify for #478; production SQL apply additionally requires separate explicit approval. User authorized implementing explicit reports/shared results and fastest repair. Production #477 is deployed at8df96523; post-merge Full Verify37845279360 Green. Earlier report deliveries below are historical.
+
 
 ## Guardrails
 Single writer. No direct main writes, force pushes, permission/RLS weakening or SECURITY DEFINER shortcuts. Preserve printing, KDS, inventory, accounting and shifts.
@@ -156,3 +157,16 @@ Local SQL verification:35 tests across6 pricing/costing integration files passed
 Read-only live candidate query parity:all402 branch prices equal the existing API result; existing API3006.142ms versus guarded candidate SQL1564.014ms. Candidate valuation SQL returned402 rows in1285.564ms with the existing definer execution role postgres plus owner's JWT context. That reproduces calculation context only; local tests verify the public auth/permission gates. These single-branch warmed-read measurements are not a blanket speedup guarantee, and the candidate functions remain UNAPPLIED.
 
 Draft#478 opened for the reviewed two-function SQL read optimization. Exact-head Full Verify pending; no production application or merge.
+
+
+### Explicit report requests and shared results — 2026-10-09 00:22 Cairo user direction
+
+User instructs implementing manual report requests, a small default period and reuse of the same authoritative results between screens; permission to proceed with the best/fastest repair remains in force. Consolidate this frontend scope and the prepared two-function SQL optimization into #478. Frontend delivery is authorized by that implementation request; any new production SQL function apply remains separately gated by the explicit rule above.
+
+- Operational, financial and costing result reads now require Run report. Opening a screen, switching views/branches or editing dates does not start a heavy result read. Default dates are today; URL periods remain respected. Idle/error results cannot masquerade as zero totals or be exported. Small selector lookups remain automatic.
+- Identical read-only reporting RPCs share an in-memory result for at most60 seconds, bounded to16 entries and2MiB per response. The key includes all request headers/JWT and exact normalized parameters (branch, period and filters); permissions/profile changes clear reuse and scope results. Writes invalidate cached/pre-write reads. Errors are not retained. Refresh report clears reuse and explicitly reads latest data. Operational writes and live dashboard reads are not cached.
+- Costing overview no longer requests unused FIFO/current-price datasets. Period branch reads are sequential, stale follow-up reads stop, raw-valuation failure is unknown/error rather than a zero value. Shared historical/current-price RPCs reuse identical parameters across the costing tabs and other consumers.
+- New request-count, scope/cancellation/expiry/mutation tests and browser cross-view reuse/refresh checks cover behavior. Existing full-report/export completeness and financial/RLS tests remain. React hook, stale-response and accessible button review completed. Prepared migration is unchanged and UNAPPLIED.
+- Earlier SQL-only headc9ed4673 Full Verify37846203726 Green. Previous production main8df96523 post-merge Full Verify37845279360 Green. Final consolidated exact-head Full Verify is still required; State: **BLOCKED** until those checks complete, and production SQL additionally requires separate approval.
+
+Final local frontend validation:337 test files /1643 unit-component tests passed. Final16 focused request/costing/worklog tests passed after scope guards. App/test typechecks, production build, API contract, locked project identity and lint (0 errors/14 existing warnings) passed. Browser cross-view behavior awaits exact-head CI; no local browser success is claimed. SQL migration remains unapplied.

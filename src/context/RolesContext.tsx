@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { invalidateReportPermissions } from '../lib/reportRequestCache';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import {
@@ -48,6 +49,9 @@ export function RolesProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { session } = useAuth();
   const sessionUserId = session?.user?.id ?? null;
+
+  const reportPermissionsKey = JSON.stringify(rolesList.map(row => [row.role, row.scope, row.branch_id, row.is_active, [...row.permissions].sort()]).sort());
+  useLayoutEffect(() => { invalidateReportPermissions(); }, [reportPermissionsKey]);
 
   const refresh = useCallback(async () => {
     if (!sessionUserId) {
