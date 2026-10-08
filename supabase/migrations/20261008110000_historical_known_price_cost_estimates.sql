@@ -7,9 +7,10 @@ SET LOCAL statement_timeout='15s';
 CREATE FUNCTION public.get_historical_sale_cost_estimates(
   p_branch_id uuid DEFAULT NULL,p_from date DEFAULT NULL,p_to date DEFAULT NULL
 )
-RETURNS TABLE(sale_id uuid,estimated_cost numeric,priced_movements bigint,unpriced_movements bigint)
+RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=public,pg_temp
 AS $function$
+DECLARE result jsonb;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
   IF NOT public.can_permission('reports.costing') THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
@@ -18,7 +19,6 @@ BEGIN
   IF p_from IS NOT NULL AND p_to IS NOT NULL AND p_to<p_from
     THEN RAISE EXCEPTION 'INVALID_RANGE'; END IF;
 
-  RETURN QUERY
   WITH scoped_sales AS MATERIALIZED (
     SELECT s.id,s.branch_id,s.refunded_amount
     FROM public.sales s
@@ -55,10 +55,16 @@ BEGIN
   ), prices AS MATERIALIZED (
     SELECT p.* FROM branch_raws b CROSS JOIN LATERAL public.get_raw_material_current_prices(b.branch_id,b.raw_ids) p
   )
-  SELECT m.sale_id,round(sum(m.quantity*COALESCE(p.unit_cost,0)),2),
-    count(*) FILTER(WHERE p.unit_cost>0),count(*) FILTER(WHERE COALESCE(p.unit_cost,0)<=0)
-  FROM movements m LEFT JOIN prices p ON p.raw_material_id=m.raw_material_id AND p.branch_id=m.branch_id
-  GROUP BY m.sale_id;
+  , totals AS (
+    SELECT m.sale_id,round(sum(m.quantity*COALESCE(p.unit_cost,0)),2) estimated_cost,
+      count(*) FILTER(WHERE p.unit_cost>0) priced_movements,
+      count(*) FILTER(WHERE COALESCE(p.unit_cost,0)<=0) unpriced_movements
+    FROM movements m LEFT JOIN prices p ON p.raw_material_id=m.raw_material_id AND p.branch_id=m.branch_id
+    GROUP BY m.sale_id
+  )
+  -- Scalar JSON result avoids the REST set-returning row cap and paging drift.
+  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.sale_id),'[]'::jsonb) INTO result FROM totals t;
+  RETURN result;
 END;
 $function$;
 REVOKE ALL ON FUNCTION public.get_historical_sale_cost_estimates(uuid,date,date) FROM PUBLIC,anon;

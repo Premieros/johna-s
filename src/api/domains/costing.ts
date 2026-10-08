@@ -1,7 +1,6 @@
 import type { ApiResult } from '../types';
 import type { CostingOverviewRow, ProductCostingDetail, CostHistoryRow, SupplierPriceImpactRow, OrderMarginRow, RawMaterialCostOverviewRow, RawMaterialCostHistoryRow } from '@/lib/types';
 import { rpc } from '../rpc';
-import { supabase } from '@/lib/supabase';
 
 type CostingSalesSummary = {
   sales_count: number;
@@ -37,16 +36,7 @@ export const costing = {
   getSupplierPriceImpact(p: { p_supplier_id: string }): ApiResult<SupplierPriceImpactRow[]> { return rpc('get_supplier_price_impact', p); },
   getOrderMargin(p: { p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }): ApiResult<OrderMarginRow[]> { return rpc('get_order_margin', p); },
   getSalesSummary(p: { p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }): ApiResult<CostingSalesSummary> { return rpc('get_costing_sales_summary', p); },
-  async getHistoricalSaleCostEstimates(p: { p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }): ApiResult<HistoricalSaleCostEstimate[]> {
-    const rows: HistoricalSaleCostEstimate[] = [];
-    for (let from = 0; ; from += 500) {
-      const result = await supabase.rpc('get_historical_sale_cost_estimates', p).order('sale_id').range(from, from + 499);
-      if (result.error) return { data: null, error: result.error };
-      const page = (result.data || []) as HistoricalSaleCostEstimate[];
-      rows.push(...page);
-      if (page.length < 500) return { data: rows, error: null };
-    }
-  },
+  getHistoricalSaleCostEstimates(p: { p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }): ApiResult<HistoricalSaleCostEstimate[]> { return rpc('get_historical_sale_cost_estimates', p); },
   getRawMaterialCostOverview(p: { p_branch_id?: string | null }): ApiResult<RawMaterialCostOverviewRow[]> { return rpc('get_raw_material_cost_valuation_overview', p); },
   getRawMaterialCostHistory(p: { p_raw_material_id: string; p_branch_id?: string | null; p_limit?: number }): ApiResult<RawMaterialCostHistoryRow[]> { return rpc('get_raw_material_cost_history', p); },
   getRawConsumptionCostBreakdown(p: { p_branch_id: string; p_from: string; p_to: string }): ApiResult<RawConsumptionCostBreakdownRow[]> { return rpc('get_raw_consumption_cost_breakdown', p); },

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T10:46:55.534Z",
+  "generated_at": "2026-10-08T11:02:50.732Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {

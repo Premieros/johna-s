@@ -50,13 +50,13 @@ raw price source after #467. Its source, guards/security/ACL and actual movement
 are preserved; no replacement patch is needed.
 Frontend summary and invoice margins separate actual cost, latest-known-price supplement,
 total cost and corrected profit. Unpriced quantities do not suppress known costs.
-Paginated historical RPC reads avoid the PostgREST row cap. Failed price reads are errors,
+A scalar JSON historical RPC response avoids the PostgREST set-row cap and paging drift. Failed price reads are errors,
 not zero supplements. Invoice amounts, journals, stocks, print/KDS/send/shifts untouched.
 This is reporting correction, not a fabricated purchase receipt or booked actual FIFO cost.
 
 ## Verification ledger
 Targeted frontend checks cover mixed actual/zero ingredients, corrected profit, missing
-price contribution, pagination and failed reads. DB tests cover negative/zero/positive
+price contribution, complete responses above the row cap and failed reads. DB tests cover negative/zero/positive
 stock equivalence, latest price changes, kitchen voids, legacy overlap, real-cost replacement,
 unknown raws and invoker/anonymous ACL. Full Verify pending.
 Supabase CLI is unavailable locally; forward migration file created manually using the
@@ -92,3 +92,7 @@ patch before further CI; the new migration creates only the guarded historical R
 Fixture preflight supplies required price-event reference_number values before fresh-DB
 execution. Confirmed live invoice Johna's-02577: coffee6.60 plus two zero-cost sugar packets
 at current0.211 each yields7.02; no invoice or source movement mutated.
+
+Final response hardening: RPC returns a scalar JSON array computed in one database
+snapshot, avoiding set-returning row truncation and concurrent paging drift. API/UI keep
+the same array model; targeted tests include1200 invoices returned in one call.

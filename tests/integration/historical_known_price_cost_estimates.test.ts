@@ -15,7 +15,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
     await db.query('SET LOCAL ROLE authenticated');
     try { return await fn(); } finally { await db.query('RESET ROLE'); await db.query('RESET app.user_id'); }
   };
-  const estimates = () => asAdmin(async () => (await db.query(`SELECT * FROM public.get_historical_sale_cost_estimates($1,CURRENT_DATE-1,CURRENT_DATE+1)`, [branch])).rows);
+  const estimates = () => asAdmin(async () => (await db.query(`SELECT public.get_historical_sale_cost_estimates($1,CURRENT_DATE-1,CURRENT_DATE+1) AS result`, [branch])).rows[0].result as { sale_id: string; estimated_cost: number; unpriced_movements: number }[]);
 
   beforeAll(async () => {
     db = openDb(dbUrl!); await db.connect(); await db.query('BEGIN');

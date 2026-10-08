@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ range: vi.fn(), order: vi.fn(), rpc: vi.fn() }));
-vi.mock('@/lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
+vi.mock('@/api/rpc', () => ({ rpc: mocks.rpc }));
 import { costing } from '@/api/domains/costing';
-beforeEach(() => { mocks.range.mockReset(); mocks.order.mockReset().mockReturnValue({ range: mocks.range }); mocks.rpc.mockReset().mockReturnValue({ order: mocks.order }); });
-describe('historical cost pagination', () => {
-  it('reads beyond the REST row cap with deterministic invoice ordering', async () => {
-    const page = Array.from({ length: 500 }, (_, i) => ({ sale_id: `sale-${i}`, estimated_cost: 1, priced_movements: 1, unpriced_movements: 0 }));
-    mocks.range.mockResolvedValueOnce({ data: page, error: null }).mockResolvedValueOnce({ data: [{ ...page[0], sale_id: 'last' }], error: null });
+beforeEach(() => { mocks.rpc.mockReset(); });
+describe('complete historical cost response', () => {
+  it('keeps more than the REST set-row cap in one scalar JSON response', async () => {
+    const rows = Array.from({ length: 1200 }, (_, i) => ({ sale_id: `sale-${i}`, estimated_cost: 1, priced_movements: 1, unpriced_movements: 0 }));
+    mocks.rpc.mockResolvedValue({ data: rows, error: null });
     const result = await costing.getHistoricalSaleCostEstimates({ p_branch_id: 'branch', p_from: '2026-09-01', p_to: '2026-10-08' });
-    expect(result.data).toHaveLength(501);
-    expect(mocks.order).toHaveBeenCalledWith('sale_id');
-    expect(mocks.range.mock.calls).toEqual([[0,499],[500,999]]);
+    expect(result.data).toHaveLength(1200);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith('get_historical_sale_cost_estimates', { p_branch_id: 'branch', p_from: '2026-09-01', p_to: '2026-10-08' });
   });
-  it('fails a partially loaded correction rather than returning an incomplete total', async () => {
-    mocks.range.mockResolvedValueOnce({ data: Array(500).fill({ sale_id: 'sale', estimated_cost: 1 }), error: null }).mockResolvedValueOnce({ data: null, error: { message: 'Page failed' } });
+  it('keeps a failed historical read as an error rather than a zero supplement', async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: 'Read failed' } });
     const result = await costing.getHistoricalSaleCostEstimates({});
-    expect(result.data).toBeNull(); expect(result.error?.message).toBe('Page failed');
+    expect(result.data).toBeNull(); expect(result.error?.message).toBe('Read failed');
   });
 });
