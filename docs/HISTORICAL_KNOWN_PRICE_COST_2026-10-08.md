@@ -7,7 +7,7 @@ Current PR: #471
 Last updated: 2026-10-08
 
 ## Work status
-State: **IN_PROGRESS**. #470 is approved/applied/deployed; #471 sequences reads after live timeout evidence. Await exact-head Green, then publish under retained user approval. No new DB change.
+State: **BLOCKED** pending exact-head verification. #470 is approved/applied/deployed; #471 sequences reads after live timeout evidence. Await exact-head Green, then publish under retained user approval. No new DB change.
 
 ## Guardrails
 Single writer. Preserve RLS, Financial Visibility, branch isolation, inventory, accounting,
@@ -110,3 +110,6 @@ for this necessary follow-up is retained from the user's explicit approval.
 
 Follow-up PR: #471. Targeted9 tests, full typechecks and changed-file lint passed.
 Exact-head CI pending; do not merge until Green. #470 is approved/applied/deployed.
+
+Follow-up first CI attempt stopped at the required worklog state marker; restored
+BLOCKED for pending verification. No implementation test ran or failed in that attempt.
