@@ -132,3 +132,11 @@ Unresolved: existing generic CLIENT_ERROR events lack mutation identity. Preserv
 Verification: 336 local test files / 1634 unit-component tests passed, app typecheck and build passed, database identity verified. CI app/scope passed on c3d3f5f. Full Verify stopped at the active-worklog branch mismatch, corrected here. Fresh exact-head CI is required.
 
 Next action: complete Full Verify, mark #477 ready, merge only its validated head, follow Pages and confirm deployed assets. Preserve all normal business protection messages.
+
+
+### CI journal fixture statistics follow-up (2026-10-09 00:03 Cairo)
+
+- Final-head Full Verify run 37841200806 passed application verification and Pages continuity, but journal pagination assertions exceeded the unchanged 8-second SQL budget on both attempts (4 failures, then 3; 967 other database tests passed on attempt 2). Browser checks remained skipped.
+- A fresh isolated local PostgreSQL 16 database passed all 7 journal pagination tests in 2.77 seconds. The full local database suite could not establish comparable evidence because the local filesystem produced PostgreSQL relation EOF errors; those environment failures are not reported as application regressions or successful full validation.
+- Refresh planner statistics for the journal fixture and its permission tables after bulk inserts. This addresses a plausible stale-estimates contributor in the shared rolled-back fixture database; the exact CI cause is not yet proven. All existing isolation, financial visibility, pagination assertions and the 8-second statement budget remain intact.
+- No production migration, SQL function, RLS policy, data or permission change is included. Merge remains blocked until the updated exact head passes Full Verify. User approval for frontend merge/deployment remains recorded above.

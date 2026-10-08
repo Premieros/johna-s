@@ -47,6 +47,14 @@ describe.skipIf(!dbUrl)('bounded journal read with complete caller-visible total
        SELECT id, $2, 0, 12.34 FROM public.journal_entries WHERE entry_number LIKE $1 || '%'`,
       [prefix, ids.coaCashA],
     );
+    // The shared CI database contains dead tuples from earlier rolled-back
+    // fixtures. Refresh estimates after this fixture's bulk inserts so the
+    // planner sees the actual journal and permission data before caching plans.
+    // Keep the same 8s statement budget and all authenticated/RLS assertions.
+    await client.query(`ANALYZE public.journal_entries, public.journal_entry_lines,
+      public.chart_of_accounts, public.users, public.branches,
+      public.organization_members, public.user_branch_access, public.roles,
+      public.sales`);
   });
   afterAll(async () => {
     if (client) {
