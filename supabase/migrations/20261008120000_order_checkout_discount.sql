@@ -66,3 +66,46 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.set_order_checkout_discount(uuid,numeric,uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.set_order_checkout_discount(uuid,numeric,uuid) TO authenticated;
+
+-- The existing sale trigger must recognize the approval that process_sale has
+-- just consumed. Bind the audit proof to a unique invoice, not to a reusable GUC.
+DO $repair$
+DECLARE definition text;
+  original text := $$jsonb_build_object('action_type','discount','discount_amount',v_header_discount,'order_id',p_order_id)$$;
+BEGIN
+  SELECT pg_get_functiondef('public.process_sale(text,uuid,uuid,uuid,uuid,numeric,numeric,text,numeric,numeric,numeric,numeric,text,text,jsonb,uuid,text,uuid,uuid,integer)'::regprocedure)
+    INTO definition;
+  IF strpos(definition,original)=0 THEN RAISE EXCEPTION 'PROCESS_SALE_APPROVAL_BASELINE_MISMATCH'; END IF;
+  EXECUTE replace(definition,original,
+    $$jsonb_build_object('action_type','discount','discount_amount',v_header_discount,'order_id',p_order_id,'invoice_number',p_invoice_number)$$);
+END;
+$repair$;
+
+CREATE OR REPLACE FUNCTION public.guard_sale_discount()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=public,pg_temp
+AS $$
+BEGIN
+  IF NEW.discount_amount>0 AND NOT public.is_pos_admin()
+     AND NOT public.can_permission('pos.discount') THEN
+    IF NOT public.can_permission('pos.payment.take')
+       OR NOT public.user_may_access_branch(NEW.branch_id)
+       OR NOT EXISTS (
+         SELECT 1 FROM public.approval_requests r
+         JOIN public.audit_log a ON a.entity_id=r.id
+         WHERE r.requester_id=auth.uid() AND r.branch_id=NEW.branch_id
+           AND r.action_type='discount' AND r.status='consumed'
+           AND r.consumed_at=transaction_timestamp() AND r.expires_at>now()
+           AND abs((r.payload->>'discount_amount')::numeric-NEW.discount_amount)<0.0001
+           AND a.user_id=auth.uid() AND a.branch_id=NEW.branch_id
+           AND a.action='APPROVAL_CONSUMED' AND a.entity='approval_request'
+           AND a.created_at=transaction_timestamp()
+           AND a.details->>'action_type'='discount'
+           AND a.details->>'invoice_number'=NEW.invoice_number
+           AND (r.entity_id IS NULL OR r.entity_id=(a.details->>'order_id')::uuid)
+       ) THEN
+      RAISE EXCEPTION 'DISCOUNT_NOT_ALLOWED';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;

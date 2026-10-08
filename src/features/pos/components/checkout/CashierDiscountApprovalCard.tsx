@@ -33,9 +33,15 @@ export function CashierDiscountApprovalCard({
   const applyDecision = useCallback((row: {
     id?: string;
     status?: string;
+    expires_at?: string;
     payload?: Record<string, unknown> | null;
   } | null) => {
     if (!row || !requestId) return;
+    if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) {
+      setStatus('rejected');
+      setError(ar ? 'انتهت صلاحية الموافقة؛ أرسل طلبًا جديدًا' : 'Approval expired; request a new approval');
+      return;
+    }
     if (row.status === 'approved') {
       if (appliedRequestRef.current === requestId) return;
       const approvedPayload = row.payload || {};
@@ -61,16 +67,16 @@ export function CashierDiscountApprovalCard({
     } else if (row.status === 'rejected' || row.status === 'expired') {
       setStatus('rejected');
     }
-  }, [onApproved, requestId, subtotal]);
+  }, [ar, onApproved, requestId, subtotal]);
 
   const refreshDecision = useCallback(async () => {
     if (!requestId) return;
     const { data } = await supabase
       .from('approval_requests')
-      .select('id,status,payload')
+      .select('id,status,payload,expires_at')
       .eq('id', requestId)
       .maybeSingle();
-    applyDecision(data as { id?: string; status?: string; payload?: Record<string, unknown> | null } | null);
+    applyDecision(data as { id?: string; status?: string; expires_at?: string; payload?: Record<string, unknown> | null } | null);
   }, [applyDecision, requestId]);
 
   useEffect(() => {

@@ -14,7 +14,7 @@ e9b0b5e128fcdb0db8ac1a5b597cae18b6d061e3; prior latest raw-price change #467 dep
 ## Root-cause ledger
 Approval updated local discount only; linked checkout re-read unchanged order discount. Cleopatra invoice Johna's-02577 had subtotal55, discount0, tax7.70, total62.70. An unbound approved55 request preceded closure; linkage remains circumstantial.
 ## Change ledger
-Invoker header-only RPC validates order-scoped approval, requester, branch, amount, subtotal and expiry under existing RLS/triggers. Approval consumption remains in process_sale. UI awaits persistence and refresh, blocks payment while pending, reports failures.
+Invoker header-only RPC validates order-scoped approval, requester, branch, amount, subtotal and expiry under existing RLS/triggers. Approval consumption remains in process_sale. Also repair the existing sale trigger, which otherwise rejects approved cashier discounts: invoker-only validation of same-transaction consumption audit bound to the unique invoice, requester, branch, amount and order. No new security-definer function or permission bypass. UI awaits persistence and refresh, blocks payment while pending, reports failures.
 ## Verification ledger
 Local targeted tests 24/24 and full unit/component suite 1549/1549 passed; build passed; lint has 0 errors (15 existing warnings). Application and test typechecks passed. Exact-head Full Verify including fresh-database integration and browser tests running for PR #468. No real sale/send/printing test or production writes performed.
 ## Production gate

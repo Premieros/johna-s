@@ -44,5 +44,20 @@ describe.skipIf(!dbUrl)('order checkout discount authorization', () => {
   it('rejects expiry instead of silently replacing the discount', async () => {
     await client.query("UPDATE public.approval_requests SET expires_at=now()-interval '1 second' WHERE id=$1",[approvalId]);
     expect(await apply(ids.users.cashier,ids.rows.orders.own,20,approvalId)).toMatchObject({success:false,error:'MANAGER_APPROVAL_REQUIRED'});
+    await client.query("UPDATE public.approval_requests SET expires_at=now()+interval '10 minutes' WHERE id=$1",[approvalId]);
   });
+  it('settles the approved cashier discount once and records it on the invoice', async () => {
+    const invoice=`APPROVED-CHECKOUT-${approvalId}`;
+    const r=await runAsPersist(client,ids.users.cashier,
+      `SELECT public.process_sale($1,$2,$3,NULL,NULL,20,20,'amount',0,0,0,0,'cash','completed','[]'::jsonb,$4,'dine_in',NULL,$5,NULL) AS r`,
+      [invoice,ids.branchA,ids.whA,ids.shiftA,ids.rows.orders.own]);
+    expect(r.error).toBeUndefined();
+    const sale=r.rows[0]?.r as {success:boolean; sale_id?:string};
+    expect(sale.success,JSON.stringify(sale)).toBe(true);
+    const stored=await client.query('SELECT discount_amount,total FROM public.sales WHERE id=$1',[sale.sale_id]);
+    expect(Number(stored.rows[0].discount_amount)).toBe(20);
+    expect(Number(stored.rows[0].total)).toBe(0);
+    expect((await client.query('SELECT status FROM public.approval_requests WHERE id=$1',[approvalId])).rows[0].status).toBe('consumed');
+  });
+
 });
