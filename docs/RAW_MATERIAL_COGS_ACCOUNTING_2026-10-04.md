@@ -2,12 +2,14 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `fix/raw-material-cogs-accounting`
-Current PR: `#445`
+Branch: `fix/raw-material-cogs-main-sync-20261009`
+Current PR: `#479` (supersedes stale #445)
 Last updated: 2026-10-04
 
 ## Work status
-State: **BLOCKED**
+
+Reconciled against merged reporting baseline `7df65dd0`; source accounting logic and focused tests ported from PR #445. This work remains draft until exact-head Full Verify passes. No Production changes.
+State: **IN VERIFICATION — production apply blocked**
 
 Implementation is on a Draft PR and is not applied to Production. Exact-head Full Verify must be Green and Production requires separate explicit approval.
 
