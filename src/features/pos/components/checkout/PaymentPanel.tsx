@@ -38,6 +38,8 @@ interface PaymentPanelProps {
   canComplete: boolean;
   canEditOrder?: boolean;
   canDirectDiscount?: boolean;
+  activeOrderId?: string | null;
+  onApprovedDiscount?: (type: 'amount' | 'percent', amount: number, requestId: string) => Promise<void>;
   onComplete: () => void;
   onBack: () => void;
   currency: string;
@@ -56,6 +58,7 @@ const ICONS: Record<PosPaymentMethod, React.ReactNode> = {
 
 export function PaymentPanel(p: PaymentPanelProps) {
   const { t, lang } = useLanguage();
+  const [discountPending, setDiscountPending] = useState(false);
   const isAr = lang === 'ar';
   const round = Math.ceil((p.total || 0) / 50) * 50;
   const quick = [50, 100, 200, 500];
@@ -121,6 +124,7 @@ export function PaymentPanel(p: PaymentPanelProps) {
   };
 
   const complete = () => {
+    if (discountPending) return;
     if (!splitMode && p.paymentMethod === 'credit' && !creditAllowed) {
       return;
     }
@@ -137,10 +141,11 @@ export function PaymentPanel(p: PaymentPanelProps) {
     } else {
       clearArmedSplitTender();
     }
-    p.onComplete();
+    if (!discountPending) p.onComplete();
   };
 
   const back = () => {
+    if (discountPending) return;
     clearArmedSplitTender();
     armedRef.current = false;
     p.onBack();
@@ -243,11 +248,15 @@ export function PaymentPanel(p: PaymentPanelProps) {
           </div>
 
           {p.canEditOrder !== false && <CashierDiscountApprovalCard
+            key={p.activeOrderId || 'direct-sale'}
+            orderId={p.activeOrderId}
+            onPendingChange={setDiscountPending}
             subtotal={p.subtotal}
             currentType={p.discountType}
             ar={isAr}
             canDirectDiscount={p.canDirectDiscount === true}
-            onApproved={(type, amount) => {
+            onApproved={(type, amount, requestId) => {
+              if (p.onApprovedDiscount) return p.onApprovedDiscount(type, amount, requestId);
               p.onDiscountTypeChange(type);
               p.onDiscountAmountChange(amount);
             }}
@@ -378,7 +387,7 @@ export function PaymentPanel(p: PaymentPanelProps) {
             size="lg"
             className="w-full !min-h-14 !rounded-2xl !bg-ui-success text-lg font-black shadow-ui-xl"
             onClick={complete}
-            disabled={p.completing || !p.canComplete || (splitMode && !splitValid) || (!splitMode && p.paymentMethod === 'credit' && !creditAllowed)}
+            disabled={discountPending || p.completing || !p.canComplete || (splitMode && !splitValid) || (!splitMode && p.paymentMethod === 'credit' && !creditAllowed)}
           >
             {p.completing
               ? (isAr ? 'جاري المعالجة...' : 'Processing...')

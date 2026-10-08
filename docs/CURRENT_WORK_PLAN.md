@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `627b379b073cb06e4be071303676af293172c8ce`
-- Current active branch: `codex/global-raw-cost-20261007`
-- Mandatory active work log: `docs/GLOBAL_RAW_COST_2026-10-07.md`
+- Latest main baseline reconciled: `e9b0b5e128fcdb0db8ac1a5b597cae18b6d061e3`
+- Current active branch: `fix/discount-approval-20261008`
+- Mandatory active work log: `docs/CHECKOUT_DISCOUNT_2026-10-08.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,10 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Unify latest known positive raw-material prices across current costing, purchasing,
-recipes, pricing, exports and estimates. Keep immutable actual FIFO accounting;
-reject incomplete costs in the station sales report. Preserve existing RLS and
-Financial Visibility. Prepare a reviewed migration; no production application.
+Repair approved linked-order checkout discounts with an RLS-respecting header-only
+mutation and refreshed server totals. Investigate the Cleopatra complaint; preserve
+immutable actual FIFO costs and historical financial records.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

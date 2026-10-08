@@ -7,10 +7,14 @@ export function CashierDiscountApprovalCard({
   onApproved,
   ar,
   canDirectDiscount,
+  orderId,
+  onPendingChange,
 }: {
   subtotal: number;
   currentType: 'amount' | 'percent';
-  onApproved: (type: 'amount' | 'percent', amount: number) => void;
+  onApproved: (type: 'amount' | 'percent', amount: number, requestId: string) => void | Promise<void>;
+  orderId?: string | null;
+  onPendingChange?: (pending: boolean) => void;
   ar: boolean;
   canDirectDiscount: boolean;
 }) {
@@ -23,6 +27,8 @@ export function CashierDiscountApprovalCard({
   const appliedRequestRef = useRef<string | null>(null);
 
   useEffect(() => setType(currentType), [currentType]);
+  useEffect(() => { onPendingChange?.(busy || status === 'pending'); }, [busy, status, onPendingChange]);
+  const [error, setError] = useState('');
 
   const applyDecision = useCallback((row: {
     id?: string;
@@ -44,8 +50,14 @@ export function CashierDiscountApprovalCard({
         : Math.min(Math.max(requestedValue, 0), Math.max(subtotal, 0));
       if (approvedValue <= 0) return;
       appliedRequestRef.current = requestId;
-      setStatus('approved');
-      onApproved(approvedType, approvedValue);
+      setBusy(true);
+      void Promise.resolve().then(() => onApproved(approvedType, approvedValue, requestId))
+        .then(() => { setStatus('approved'); setError(''); })
+        .catch((err: unknown) => {
+          setStatus('rejected');
+          setError(err instanceof Error ? err.message : 'DISCOUNT_APPLY_FAILED');
+        })
+        .finally(() => setBusy(false));
     } else if (row.status === 'rejected' || row.status === 'expired') {
       setStatus('rejected');
     }
@@ -108,18 +120,18 @@ export function CashierDiscountApprovalCard({
     const normalizedInput = type === 'percent'
       ? Math.min(amount, 100)
       : Math.min(amount, Math.max(subtotal, 0));
-    const monetaryDiscount = type === 'percent'
+    const monetaryDiscount = Math.round((type === 'percent'
       ? (Math.max(subtotal, 0) * normalizedInput) / 100
-      : normalizedInput;
+      : normalizedInput) * 100) / 100;
     if (monetaryDiscount <= 0) return;
 
     setBusy(true);
 
     try {
-      const { data } = await supabase.rpc('request_manager_approval', {
+      const { data, error: requestError } = await supabase.rpc('request_manager_approval', {
         p_action_type: 'discount',
-        p_entity_type: 'sale',
-        p_entity_id: null,
+        p_entity_type: orderId ? 'order' : 'sale',
+        p_entity_id: orderId || null,
         p_payload: {
           discount_amount: monetaryDiscount,
           discount_type: type,
@@ -132,13 +144,18 @@ export function CashierDiscountApprovalCard({
       const res = data as {
         success?: boolean;
         request_id?: string;
+        error?: string;
       } | null;
 
+      if (requestError || !res?.success) throw new Error(requestError?.message || res?.error || 'APPROVAL_REQUEST_FAILED');
+      setError('');
       if (res?.success && res.request_id) {
         appliedRequestRef.current = null;
         setRequestId(res.request_id);
         setStatus('pending');
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'APPROVAL_REQUEST_FAILED');
     } finally {
       setBusy(false);
     }
@@ -150,6 +167,7 @@ export function CashierDiscountApprovalCard({
         {ar ? 'طلب خصم من المدير' : 'Request manager discount approval'}
       </p>
 
+      {error && <p role="alert" className="mb-2 text-sm text-ui-danger">{error}</p>}
       <div className="grid grid-cols-2 gap-2">
         <select
           value={type}
