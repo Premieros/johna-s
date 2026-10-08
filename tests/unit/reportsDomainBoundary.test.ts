@@ -20,7 +20,7 @@ const rpcNames = [
 describe('reports domain boundary', () => {
   it('keeps heavy report RPC ownership in the reporting domain', () => {
     for (const name of rpcNames) {
-      expect(domain).toContain(`rpc('${name}', p)`);
+      expect(domain).toMatch(new RegExp(`rpc\\('${name}', p(?:, signal)?\\)`));
       expect(page).not.toContain(`supabase.rpc('${name}'`);
     }
   });

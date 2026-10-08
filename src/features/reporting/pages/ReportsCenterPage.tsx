@@ -1,224 +1,79 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, ChevronDown, ChevronUp } from 'lucide-react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
 import { FinancialReportsPage } from '@/features/accounting/pages/FinancialReportsPage';
 import { useCan, type Permission } from '@/lib/permissions';
 import { useLanguage } from '@/context/LanguageContext';
-import { REPORT_REGISTRY } from '../reportRegistry';
 import type { ReportType } from '../reportFilters';
-import { FINANCIAL_REPORT_FAMILIES, OPERATIONAL_REPORT_FAMILIES, getVisibleReportFamilies, type FinancialReportView as FinancialView } from '../reportFamilies';
-
-const LEGACY_HIDDEN_REPORTS = new Set<ReportType>([
-  'component_consumption',
-  'recipe_costs',
-  'top_consumed_components',
-  'top_consumed_products',
-]);
-
-const FINANCIAL_REPORTS: Array<{ key: FinancialView; ar: string; en: string }> = [
-  { key: 'treasury_statement', ar: 'كشف حساب بنك / خزنة', en: 'Bank / Treasury Statement' },
-  { key: 'inventory_movement', ar: 'حركة صنف', en: 'Item Movement' },
-  { key: 'ledger', ar: 'دفتر الأستاذ', en: 'General Ledger' },
-  { key: 'trial_balance', ar: 'ميزان المراجعة', en: 'Trial Balance' },
-  { key: 'income', ar: 'قائمة الدخل', en: 'Income Statement' },
-  { key: 'balance_sheet', ar: 'الميزانية', en: 'Balance Sheet' },
-  { key: 'ar_aging', ar: 'أعمار ديون العملاء', en: 'AR Aging' },
-  { key: 'ap_aging', ar: 'أعمار ديون الموردين', en: 'AP Aging' },
-  { key: 'aging_summary', ar: 'ملخص الذمم', en: 'Aging Summary' },
-  { key: 'cash_flow', ar: 'التدفقات النقدية', en: 'Cash Flow' },
-  { key: 'party_statement', ar: 'كشف حساب عميل / مورد', en: 'Party Statement' },
-];
+import { permittedBasicReports, workspaceViewKey, type WorkspaceView } from '../reportWorkspace';
 
 export function ReportsCenterPage() {
   const can = useCan();
   const { lang } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [params] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [mobileListOpen, setMobileListOpen] = useState(false);
+  const ar = lang === 'ar';
+  const reports = useMemo(() => permittedBasicReports(permission => can(permission as Permission)), [can]);
+  const financial = location.pathname.includes('financial-reports') || params.get('section') === 'financial' || !!params.get('view');
+  const requested = financial ? `financial:${params.get('view') || 'trial_balance'}` : workspaceViewKey((params.get('type') || 'sales') as ReportType);
+  const report = reports.find(item => item.views.some(view => view.key === requested)) || reports[0];
+  const view = report?.views.find(item => item.key === requested) || report?.views[0];
+  const query = search.trim().toLocaleLowerCase();
+  const visible = reports.map(item => {
+    const match = (value: string) => value.toLocaleLowerCase().includes(query);
+    const groupMatches = [item.ar, item.en, item.descriptionAr, item.descriptionEn].some(match);
+    return { ...item, views: groupMatches ? item.views : item.views.filter(value => match(value.ar) || match(value.en)) };
+  }).filter(item => item.views.length);
 
-  const requestedType = searchParams.get('type') as ReportType | null;
-  const requestedFinancialView = searchParams.get('view') as FinancialView | null;
-  const requestedFinancial =
-    location.pathname.includes('financial-reports')
-    || searchParams.get('section') === 'financial'
-    || Boolean(requestedFinancialView);
-
-  const permittedOperational = useMemo(
-    () => REPORT_REGISTRY.filter((report) =>
-      !LEGACY_HIDDEN_REPORTS.has(report.key)
-      && report.permissions.every((permission) => can(permission as Permission))
-    ),
-    [can],
-  );
-
-  const initialOperational =
-    requestedType && permittedOperational.some((report) => report.key === requestedType)
-      ? requestedType
-      : permittedOperational[0]?.key || 'sales';
-
-  const [activeReport, setActiveReport] = useState<ReportType>(initialOperational);
-
-  useEffect(() => {
-    if (requestedType && permittedOperational.some((report) => report.key === requestedType)) {
-      setActiveReport(requestedType);
-    }
-  }, [requestedType, permittedOperational]);
-
-  const canFinancial = can('reports.financial');
-  const activeFinancialView: FinancialView =
-    requestedFinancialView && FINANCIAL_REPORTS.some((report) => report.key === requestedFinancialView)
-      ? requestedFinancialView
-      : 'trial_balance';
-
-  const filteredOperational = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return permittedOperational;
-    return permittedOperational.filter((report) =>
-      report.title.toLowerCase().includes(q)
-      || report.titleEn.toLowerCase().includes(q)
-      || report.key.toLowerCase().includes(q)
-    );
-  }, [search, permittedOperational]);
-
-  const filteredFinancial = useMemo(() => {
-    if (!canFinancial) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return FINANCIAL_REPORTS;
-    return FINANCIAL_REPORTS.filter((report) =>
-      report.ar.toLowerCase().includes(q)
-      || report.en.toLowerCase().includes(q)
-      || report.key.toLowerCase().includes(q)
-    );
-  }, [search, canFinancial]);
-
+  const select = useCallback((target: WorkspaceView) => {
+    const next = new URLSearchParams();
+    for (const key of ['from', 'to']) { const value = params.get(key); if (value) next.set(key, value); }
+    if (target.financial) { next.set('section', 'financial'); next.set('view', target.financial); }
+    else if (target.type) next.set('type', target.type);
+    navigate(`/reports?${next}`, { replace: true });
+  }, [navigate, params]);
   const selectOperational = useCallback((type: ReportType) => {
-    setActiveReport(type);
-    setMobileListOpen(false);
-    navigate(`/reports?type=${type}`, { replace: true });
-  }, [navigate]);
+    const target = reports.flatMap(item => item.views).find(item => item.key === workspaceViewKey(type));
+    if (target) select(target);
+  }, [reports, select]);
 
-  const selectFinancial = useCallback((view: FinancialView) => {
-    setMobileListOpen(false);
-    navigate(`/reports?section=financial&view=${view}`, { replace: true });
-  }, [navigate]);
-
-  const currentName = requestedFinancial
-    ? FINANCIAL_REPORTS.find((report) => report.key === activeFinancialView)
-    : permittedOperational.find((report) => report.key === activeReport);
-
-  const visibleFamilies = getVisibleReportFamilies(filteredOperational, filteredFinancial);
-
-  const reportList = (
-    <div className="rounded-lg border border-ui-border bg-ui-surface">
-      <div className="border-b border-ui-border p-2">
+  if (!report || !view) return <p role="status">{ar ? 'لا توجد تقارير متاحة لصلاحياتك.' : 'No reports are available for your permissions.'}</p>;
+  if (view.key !== requested) {
+    const fallback = new URLSearchParams();
+    for (const key of ['from', 'to']) { const value = params.get(key); if (value) fallback.set(key, value); }
+    if (view.financial) { fallback.set('section', 'financial'); fallback.set('view', view.financial); }
+    else if (view.type) fallback.set('type', view.type);
+    return <Navigate to={`/reports?${fallback}`} replace />;
+  }
+  return <div data-testid="unified-reports-center" className="space-y-3">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
+      <aside className="space-y-3 lg:sticky lg:top-2 lg:self-start" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
         <div className="relative">
-          <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-subtle" />
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            aria-label={lang === 'ar' ? 'بحث في التقارير' : 'Search reports'}
-            placeholder={lang === 'ar' ? 'بحث في التقارير' : 'Search reports'}
-            className="h-9 w-full rounded-md border border-ui-border bg-ui-page-alt ps-8 pe-2 text-xs font-semibold text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring"
-          />
+          <Search className="pointer-events-none absolute start-3 top-3 h-4 w-4 text-ui-muted" />
+          <input type="search" aria-label={ar ? 'بحث في التقارير' : 'Search reports'} placeholder={ar ? 'ابحث عن تقرير أو عرض' : 'Find a report or view'} value={search} onChange={event => setSearch(event.target.value)} className="h-10 w-full rounded-lg border border-ui-border bg-ui-surface ps-9 pe-3 text-sm" />
         </div>
-      </div>
-
-      <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
-        {visibleFamilies.map((family) => (
-          <section key={family.key} aria-label={lang === 'ar' ? family.ar : family.en} data-report-family={family.key}>
-            <h2 className="sticky top-0 z-10 border-b border-ui-border bg-ui-page-alt px-3 py-2 text-xs font-bold text-ui-muted">
-              {lang === 'ar' ? family.ar : family.en}
-            </h2>
-            {filteredOperational.map((report) => {
-              if (OPERATIONAL_REPORT_FAMILIES[report.key] !== family.key) return null;
-              const selected = !requestedFinancial && activeReport === report.key;
-              return (
-                <button
-                  key={report.key}
-                  type="button"
-                  aria-current={selected ? 'page' : undefined}
-                  onClick={() => selectOperational(report.key)}
-                  className={`flex min-h-9 w-full items-center border-b border-ui-border/70 px-3 text-start text-xs font-bold transition last:border-b-0 ${
-                    selected
-                      ? 'bg-ui-primary/10 text-ui-primary'
-                      : 'bg-ui-surface text-ui-text hover:bg-ui-page-alt'
-                  }`}
-                >
-                  <span className="truncate">{lang === 'ar' ? report.title : report.titleEn}</span>
-                </button>
-              );
-            })}
-
-            {filteredFinancial.map((report) => {
-              if (FINANCIAL_REPORT_FAMILIES[report.key] !== family.key) return null;
-              const selected = requestedFinancial && activeFinancialView === report.key;
-              return (
-                <button
-                  key={report.key}
-                  type="button"
-                  aria-current={selected ? 'page' : undefined}
-                  onClick={() => selectFinancial(report.key)}
-                  className={`flex min-h-9 w-full items-center border-b border-ui-border/70 px-3 text-start text-xs font-bold transition last:border-b-0 ${
-                    selected
-                      ? 'bg-ui-primary/10 text-ui-primary'
-                      : 'bg-ui-surface text-ui-text hover:bg-ui-page-alt'
-                  }`}
-                >
-                  <span className="truncate">{lang === 'ar' ? report.ar : report.en}</span>
-                </button>
-              );
-            })}
-
-          </section>
-        ))}
-
-        {filteredOperational.length === 0 && filteredFinancial.length === 0 && (
-          <div className="px-3 py-6 text-center text-xs text-ui-subtle">
-            {lang === 'ar' ? 'لا توجد تقارير مطابقة' : 'No matching reports'}
-          </div>
-        )}
-      </div>
+        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          {visible.map(item => <button key={item.key} type="button" data-report-primary={item.key} aria-current={item.key === report.key ? 'page' : undefined} onClick={() => select(item.views[0])} className={`min-h-12 rounded-lg border px-3 py-3 text-start text-sm font-bold ${item.key === report.key ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-surface text-ui-text hover:bg-ui-page-alt'}`}>
+            {ar ? item.ar : item.en}
+          </button>)}
+        </nav>
+        {!visible.length && <p role="status" className="text-sm text-ui-muted">{ar ? 'لا توجد نتائج مطابقة.' : 'No matching results.'}</p>}
+        {!!query && <div className="space-y-1">{visible.flatMap(item => item.views).map(item => <button type="button" key={item.key} onClick={() => select(item)} className="block w-full rounded px-2 py-2 text-start text-sm text-ui-primary">{ar ? item.ar : item.en}</button>)}</div>}
+      </aside>
+      <main className="min-w-0 space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-ui-border bg-ui-surface p-4">
+          <div><h2 className="text-xl font-bold">{ar ? report.ar : report.en}</h2><p className="mt-1 text-sm text-ui-muted">{ar ? report.descriptionAr : report.descriptionEn}</p></div>
+          <label className="min-w-56 text-sm font-semibold">{ar ? 'طريقة العرض' : 'Report view'}
+            <select aria-label={ar ? 'طريقة العرض' : 'Report view'} value={view.key} onChange={event => { const target = report.views.find(item => item.key === event.target.value); if (target) select(target); }} className="mt-1 block h-10 w-full rounded-lg border border-ui-border bg-ui-page-alt px-3 font-normal">
+              {report.views.map(item => <option key={item.key} value={item.key}>{ar ? item.ar : item.en}</option>)}
+            </select>
+          </label>
+        </div>
+        {view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
+      </main>
     </div>
-  );
-
-  return (
-    <div className="space-y-2" data-testid="unified-reports-center">
-      <div className="lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileListOpen((open) => !open)}
-          aria-expanded={mobileListOpen}
-          className="flex h-10 w-full items-center justify-between rounded-lg border border-ui-border bg-ui-surface px-3 text-sm font-bold text-ui-text"
-        >
-          <span className="truncate">
-            {currentName
-              ? ('title' in currentName
-                ? (lang === 'ar' ? currentName.title : currentName.titleEn)
-                : (lang === 'ar' ? currentName.ar : currentName.en))
-              : (lang === 'ar' ? 'التقارير' : 'Reports')}
-          </span>
-          {mobileListOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
-        {mobileListOpen && <div className="mt-2">{reportList}</div>}
-      </div>
-
-      <div className="grid min-w-0 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="hidden lg:block lg:sticky lg:top-2 lg:self-start">
-          {reportList}
-        </aside>
-
-        <main className="min-w-0">
-          {requestedFinancial && canFinancial ? (
-            <FinancialReportsPage hideViewPicker />
-          ) : (
-            <ReportsPage controlledReportType={activeReport} onReportTypeChange={selectOperational} />
-          )}
-        </main>
-      </div>
-    </div>
-  );
+  </div>;
 }

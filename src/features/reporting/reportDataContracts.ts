@@ -3,6 +3,8 @@ import { getReportExcelProfile } from './reportExcelProfiles';
 
 export interface ReportDataContract { source: string; grainAr: string; grainEn: string; }
 export const REPORT_DATA_CONTRACTS: Record<ReportType, ReportDataContract> = {
+  sales_costs: { source: 'get_operational_report_dataset / kitchen events / inventory_ledger / canonical raw prices', grainAr: 'بند مبيعات، تكلفة مسجلة وإعادة تسعير بالأسعار الحالية', grainEn: 'Sold invoice line, recorded cost and current-price repricing' },
+  inventory_as_of: { source: 'get_raw_material_consumption_report / permitted inventory_ledger', grainAr: 'خامة وفرع، رصيد حتى نهاية اليوم بتوقيت القاهرة', grainEn: 'Material and branch, balance through end of Cairo day' },
   sales: { source: 'get_operational_report_dataset (sales)', grainAr: 'فاتورة مبيعات في فرع', grainEn: 'Sales invoice within a branch' },
   purchases: { source: 'get_operational_report_dataset (purchases)', grainAr: 'فاتورة مشتريات في فرع', grainEn: 'Purchase invoice within a branch' },
   expenses: { source: 'get_operational_report_dataset (posted expenses)', grainAr: 'مصروف مرحّل', grainEn: 'Posted expense' },
@@ -39,6 +41,8 @@ const aliases: [string, string][] = [
   ['إجمالي الفاتورة', 'Invoice Total'], ['المدفوع', 'Paid'], ['صافي التحصيل', 'Net Collection'],
   ['المستخدم', 'User'], ['المخزن', 'Warehouse'], ['نوع الطلب', 'Order Type'],
   ['طريقة الدفع', 'Payment Method'], ['الحالة', 'Status'], ['حساب المصروف', 'Expense account'],
+  ['تكلفة المباع بالأسعار الحالية', 'Current-price Sold Cost'], ['تكلفة المكونات المسعرة فقط', 'Priced Components Only'],
+  ['التكلفة المسجلة', 'Recorded Cost'], ['مجمل الربح المسجل', 'Recorded Gross Profit'], ['مجمل الربح بالأسعار الحالية', 'Current-price Gross Profit'],
   ['سعر الوحدة', 'Unit Price'], ['تكلفة الوحدة', 'Unit Cost'],
   ['الفرع', 'Branch'], ['الفاتورة', 'Invoice'], ['رقم الفاتورة', 'Invoice'],
   ['المنتج', 'Product'], ['معرف المنتج', 'Product ID'], ['الوحدة', 'Unit'],
@@ -57,6 +61,7 @@ const additive = new Set([
   'Gross Sales', 'Allocated Discount', 'Allocated Tax', 'Return Value', 'Net Revenue Excluding Tax',
   'Net Revenue', 'Net Sales', 'Original Total', 'Invoice Total', 'Refunded', 'Refunded Amount',
   'Subtotal', 'Discount', 'Tax', 'Paid', 'Net Paid', 'Net Collection', 'Returned', 'Net Purchases', 'Amount',
+  'Recorded Cost', 'Current-price Sold Cost', 'Priced Components Only', 'Recorded Gross Profit', 'Current-price Gross Profit',
   'COGS', 'Gross Profit', 'Expenses', 'Net Profit', 'Total Cost', 'Consumption Cost', 'Invoices',
 ]);
 

@@ -18,6 +18,7 @@ export type FinancialReportView = 'trial_balance' | 'ledger' | 'treasury_stateme
 
 // Every existing report keeps its route and source; families only organize discovery.
 export const OPERATIONAL_REPORT_FAMILIES: Record<ReportType, ReportFamily> = {
+  sales_costs: 'costing', inventory_as_of: 'inventory',
   sales: 'sales', sales_by_station: 'sales', sales_by_product: 'sales',
   detailed_invoices: 'sales', top_consumed_products: 'sales', returns: 'sales',
   sales_by_payment: 'payments', daily_closing_range: 'payments', financial_reconciliation: 'payments',

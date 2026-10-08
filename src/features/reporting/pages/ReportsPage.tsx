@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLatestRead } from '@/hooks/useLatestRead';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, TrendingUp, ShoppingCart, Receipt, Package, BarChart3, CreditCard, Users, List, Layers, AlertTriangle, FileDown, Printer, UserCheck, RotateCcw, Trash2 } from 'lucide-react';
 import { costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -61,10 +61,11 @@ type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_m
 
 interface ReportsPageProps {
   controlledReportType?: ReportType;
+  workspaceTitle?: string;
   onReportTypeChange?: (type: ReportType) => void;
 }
 
-export function ReportsPage({ controlledReportType, onReportTypeChange }: ReportsPageProps = {}) {
+export function ReportsPage({ controlledReportType, onReportTypeChange, workspaceTitle }: ReportsPageProps = {}) {
   /* REPORT-BRANCH-AUDIT-2026 */
   const { t, lang } = useLanguage();
   const can = useCan();
@@ -73,10 +74,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const { user } = useAuth();
   const history = useHistoryAccess();
   const navigate = useNavigate();
+  const [reportParams] = useSearchParams();
   const branchFilter = useBranchFilter();
-  const [reportType, setReportType] = useState<ReportType>('sales');
-  const [from, setFrom] = useState(() => history.minDate || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
-  const [to, setTo] = useState(todayISO());
+  const [reportType, setReportType] = useState<ReportType>(controlledReportType || 'sales');
+  const [from, setFrom] = useState(() => reportParams.get('from')?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] || history.minDate || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => reportParams.get('to')?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] || todayISO());
   const [period, setPeriod] = useState<PeriodKey>('custom');
   const [resultView, setResultView] = useState({ source: EMPTY_REPORT_ROWS, page: 0 });
   const [filters, setFilters] = useState<ReportFilters>({});
@@ -190,6 +192,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   };
 
   const runReport = () => {
+    const allowed = history.clampRange(from, to);
+    const next = new URLSearchParams(reportParams);
+    next.set('from', reportType === 'inventory_as_of' ? allowed.to : allowed.from);
+    next.set('to', allowed.to);
+    navigate(`/reports?${next}`, { replace: true });
     setFiltersDirty(false);
     setQueryVersion((version) => version + 1);
   };
@@ -263,9 +270,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     // Chart values were previously retained in unused state; preserve calculations here.
     const setChartData = (value: { name: string; value: number }[]) => { void value; };
     if (!user?.id) return { rows: resultRows, summary: resultSummary };
-    const allowed = history.clampRange(range?.from || from, range?.to || to);
+    const selectedTo = range?.to || to;
+    const allowed = history.clampRange(reportType === 'inventory_as_of' ? selectedTo : range?.from || from, selectedTo);
     if (range && (allowed.from !== range.from || allowed.to !== range.to)) throw new Error('COMPARISON_HISTORY_UNAVAILABLE');
-    if (!range && allowed.from !== from) setFrom(allowed.from);
+    if (!range && reportType !== 'inventory_as_of' && allowed.from !== from) setFrom(allowed.from);
     if (!range && allowed.to !== to) setTo(allowed.to);
     const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
 
@@ -281,22 +289,40 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       ? await loadOperationalReportPage({ reportType, branchId: effectiveBranchFilter || null,
         from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, page }) : null;
 
-    if (reportType === 'sales_by_station') {
+    if (reportType === 'sales_by_station' || reportType === 'sales_costs') {
       if (!canStationView) throw new Error('PERMISSION_DENIED:reports.view');
+      if (reportType === 'sales_costs' && !canStationCost) throw new Error('PERMISSION_DENIED:reports.costing');
       const includeCost = canStationCost;
       const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
-      setData(lines.map(line => withBranch(line.sale.branch_id, {
+      if (reportType === 'sales_costs') {
+        setData(lines.map(line => withBranch(line.sale.branch_id, {
+          [label('الفاتورة', 'Invoice')]: line.sale.invoice_number,
+          [label('التاريخ', 'Date')]: formatDate(line.sale.created_at, lang),
+          [label('المنتج', 'Product')]: line.item.product?.name || label('منتج غير متاح', 'Unavailable product'),
+          [label('الوحدة', 'Unit')]: line.item.unit_name,
+          [label('المحطة', 'Station')]: line.station,
+          [label('التصنيف', 'Category')]: line.category,
+          [label('صافي الكمية', 'Net Quantity')]: line.netQuantity,
+          [label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax')]: line.netBeforeTax,
+          [label('تكلفة المباع بالأسعار الحالية', 'Current-price Sold Cost')]: line.estimatedCost ?? label('غير مكتملة', 'Incomplete'),
+          [label('تكلفة المكونات المسعرة فقط', 'Priced Components Only')]: line.knownEstimatedCost ?? label('غير متاحة', 'Unavailable'),
+          [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
+          [label('مجمل الربح المسجل', 'Recorded Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
+          [label('مجمل الربح بالأسعار الحالية', 'Current-price Gross Profit')]: line.estimatedCost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.estimatedCost,
+          [label('خامات غير مسعرة', 'Unpriced Materials')]: line.unpricedMaterials.join('، '),
+        })));
+      } else setData(lines.map(line => withBranch(line.sale.branch_id, {
         [label('الفاتورة', 'Invoice')]: line.sale.invoice_number,
         [label('التاريخ', 'Date')]: formatDate(line.sale.created_at),
         [label('المحطة', 'Station')]: line.station,
         [label('التصنيف', 'Category')]: line.category,
         [label('المنتج', 'Product')]: line.item.product?.name || label('منتج غير متاح', 'Unavailable product'),
         [label('الوحدة', 'Unit')]: line.item.unit_name,
-        [label('نوع الطلب', 'Order Type')]: line.sale.order_type,
+        [label('نوع الطلب', 'Order Type')]: orderTypeLabels[line.sale.order_type] || line.sale.order_type,
         [label('أمين الصندوق', 'Cashier')]: line.sale.cashier?.full_name || '',
         [label('العميل', 'Customer')]: line.sale.customer?.name || '',
-        [label('طريقة الدفع', 'Payment Method')]: line.sale.payment_method,
+        [label('طريقة الدفع', 'Payment Method')]: paymentMethodLabels[line.sale.payment_method] || line.sale.payment_method,
         [label('الكمية المباعة', 'Sold Quantity')]: Number(line.item.quantity),
         [label('الكمية المرتجعة', 'Returned Quantity')]: Number(line.item.refunded_quantity || 0),
         [label('صافي الكمية', 'Net Quantity')]: line.netQuantity,
@@ -317,7 +343,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           [label('خامات غير مسعرة', 'Unpriced Materials')]: line.unpricedMaterials.join('، '),
         } : {}),
       })));
-      setSummary({ total: lines.reduce((sum, line) => sum + line.net, 0), count: lines.length });
+      setSummary({ total: lines.reduce((sum, line) => sum + (reportType === 'sales_costs' ? line.netBeforeTax : line.net), 0), count: lines.length });
     } else if (reportType === 'sales') {
       const sales = corePage?.rows ?? await loadSalesReportRows({
         from: allowed.from, to: allowed.to,
@@ -335,9 +361,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           [lang === 'ar' ? 'العميل' : 'Customer']: (sale.customer as { name?: string })?.name || '',
           [lang === 'ar' ? 'المستخدم' : 'User']: cashier?.full_name || cashier?.email || '',
           [lang === 'ar' ? 'المخزن' : 'Warehouse']: warehouse?.name || '',
-          [lang === 'ar' ? 'نوع الطلب' : 'Order Type']: sale.order_type || '',
-          [lang === 'ar' ? 'طريقة الدفع' : 'Payment Method']: sale.payment_method || '',
-          [lang === 'ar' ? 'الحالة' : 'Status']: sale.status || '',
+          [lang === 'ar' ? 'نوع الطلب' : 'Order Type']: orderTypeLabels[String(sale.order_type)] || sale.order_type || '',
+          [lang === 'ar' ? 'طريقة الدفع' : 'Payment Method']: paymentMethodLabels[String(sale.payment_method)] || sale.payment_method || '',
+          [lang === 'ar' ? 'الحالة' : 'Status']: statusLabels[String(sale.status)] || sale.status || '',
           [lang === 'ar' ? 'قبل الخصم والضريبة' : 'Subtotal']: Number(sale.subtotal || 0),
           [lang === 'ar' ? 'الخصم' : 'Discount']: Number(sale.discount_amount || 0),
           [lang === 'ar' ? 'الضريبة' : 'Tax']: Number(sale.tax_amount || 0),
@@ -595,12 +621,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(sale.created_at as string, lang),
           [lang === 'ar' ? 'العميل' : 'Customer']: customer?.name || '-',
           [lang === 'ar' ? 'أمين الصندوق' : 'Cashier']: cashier?.full_name || '-',
-          [lang === 'ar' ? 'طريقة الدفع' : 'Payment']: sale.payment_method,
+          [lang === 'ar' ? 'طريقة الدفع' : 'Payment']: paymentMethodLabels[String(sale.payment_method)] || sale.payment_method,
           [lang === 'ar' ? 'الإجمالي الأصلي' : 'Original Total']: Number(sale.total || 0),
           [lang === 'ar' ? 'المرتجع' : 'Refunded']: Number(sale.refunded_amount || 0),
           [lang === 'ar' ? 'صافي الفاتورة' : 'Net Total']: netSaleAmount(sale),
           [lang === 'ar' ? 'صافي المدفوع' : 'Net Paid']: netSalePayment(sale),
-          [lang === 'ar' ? 'الحالة' : 'Status']: sale.status,
+          [lang === 'ar' ? 'الحالة' : 'Status']: statusLabels[String(sale.status)] || sale.status,
         });
       });
       setData(rows);
@@ -901,7 +927,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'صافي المبيعات' : 'Net Sales'] || 0), 0),
         count: rows.length,
       });
-    } else if (reportType === 'raw_material_consumption') {
+    } else if (reportType === 'raw_material_consumption' || reportType === 'inventory_as_of') {
+      if (reportType === 'inventory_as_of' && (!can('reports.view') || !can('reports.costing'))) throw new Error('PERMISSION_DENIED:reports.costing');
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
@@ -910,9 +937,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           p_branch_id: branch.id,
           p_from_date: allowed.from,
           p_to_date: allowed.to,
-        });
-        if (result.error) throw result.error;
-        return { branchId: branch.id, rows: Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [] };
+        }, signal);
+        const raw = requireReportData(result, signal);
+        if (!Array.isArray(raw)) throw new Error('REPORT_SOURCE_INVALID');
+        return { branchId: branch.id, rows: raw as Record<string, unknown>[] };
       }));
       const rows = results.flatMap(({ branchId, rows: rawRows }) => rawRows.map((row) => withBranch(branchId, {
         [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
@@ -929,11 +957,20 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         [lang === 'ar' ? 'رصيد آخر المدة' : 'Closing Qty']: Number(row.closing_quantity || 0),
         [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(row.closing_value || 0),
       })));
-      setData(rows);
+      const output = reportType === 'inventory_as_of' ? results.flatMap(({ branchId, rows: rawRows }) => rawRows.map(row => withBranch(branchId, {
+        [lang === 'ar' ? 'التاريخ' : 'Date']: allowed.to,
+        [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
+        [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
+        [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name || '',
+        [lang === 'ar' ? 'الرصيد بنهاية اليوم' : 'End-of-day Qty']: Number(row.closing_quantity || 0),
+        [lang === 'ar' ? 'القيمة المسجلة بنهاية اليوم' : 'End-of-day Recorded Value']: Number(row.closing_value || 0),
+      }))) : rows;
+      if (output.length > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
+      setData(output);
       setChartData([]);
       setSummary({
-        total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'قيمة الاستهلاك' : 'Consumption Value'] || 0), 0),
-        count: rows.length,
+        total: reportType === 'inventory_as_of' ? output.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'القيمة المسجلة بنهاية اليوم' : 'End-of-day Recorded Value'] || 0), 0) : rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'قيمة الاستهلاك' : 'Consumption Value'] || 0), 0),
+        count: output.length,
       });
     } else if (reportType === 'raw_material_current_cost') {
       const targetBranches = effectiveBranchFilter
@@ -1141,6 +1178,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV(complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))), `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
 
   const reportTypes: { key: ReportType; label: string; icon: React.ReactNode }[] = [
+    { key: 'sales_costs', label: lang === 'ar' ? 'تكلفة المباع وربحه' : 'Sold-item Costs & Profit', icon: <BarChart3 className="w-4 h-4" /> },
+    { key: 'inventory_as_of', label: lang === 'ar' ? 'أرصدة الخامات بتاريخ' : 'Material Balances as of Date', icon: <Package className="w-4 h-4" /> },
     { key: 'sales', label: t('salesReport'), icon: <TrendingUp className="w-4 h-4" /> },
     { key: 'sales_by_payment', label: t('salesByPayment'), icon: <CreditCard className="w-4 h-4" /> },
     { key: 'sales_by_employee', label: t('salesByEmployee'), icon: <Users className="w-4 h-4" /> },
@@ -1182,6 +1221,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   }
 
   const moneyKeys = [
+    'تكلفة المباع بالأسعار الحالية', 'Current-price Sold Cost', 'تكلفة المكونات المسعرة فقط', 'Priced Components Only', 'مجمل الربح المسجل', 'Recorded Gross Profit', 'مجمل الربح بالأسعار الحالية', 'Current-price Gross Profit', 'القيمة المسجلة بنهاية اليوم', 'End-of-day Recorded Value',
     'سعر الوحدة', 'Unit Price', 'المبيعات قبل الخصم', 'Gross Sales', 'الخصم الموزع', 'Allocated Discount', 'الضريبة الموزعة', 'Allocated Tax', 'قيمة المرتجع', 'Return Value', 'صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax', 'التكلفة المسجلة', 'Recorded Cost', 'تكلفة بآخر سعر (تقديرية)', 'Latest Price Cost (Estimated)', 'تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)',
     lang === 'ar' ? 'الإجمالي' : 'Total', lang === 'ar' ? 'المبلغ' : 'Amount',
     lang === 'ar' ? 'الإجمالي الأصلي' : 'Original Total', lang === 'ar' ? 'المرتجع' : 'Refunded',
@@ -1229,7 +1269,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const reportMobileSecondaryColumns = columns.slice(4);
   const allDefault = lang === 'ar' ? 'الكل' : 'All';
   const orderTypeLabels: Record<string, string> = { dine_in: t('dineIn'), takeaway: t('takeaway'), delivery: t('delivery'), drive_thru: t('driveThru') };
-  const paymentMethodLabels: Record<string, string> = { cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit') };
+  const paymentMethodLabels: Record<string, string> = { cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit'), split: lang === 'ar' ? 'دفع مقسم' : 'Split payment' };
   const statusLabels: Record<string, string> = {
     completed: t('statusCompleted'), returned: lang === 'ar' ? 'مرتجع' : 'Returned', refunded: t('refunded'),
     cancelled: t('statusCancelled'), pending: t('statusPending'),
@@ -1328,7 +1368,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   return (
     <div>
-      <PageHeader title={t('reports')} actions={
+      <PageHeader title={workspaceTitle || t('reports')} actions={
         <div className="flex flex-wrap gap-2">
           <ColumnPicker
             columns={allColumns}
@@ -1382,6 +1422,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           setFiltersDirty(true);
         }}
         showDate={showDate}
+        asOfDate={reportType === 'inventory_as_of'}
         period={period}
         onPeriodChange={(key) => applyPeriod(key as PeriodKey)}
         from={from}
@@ -1411,13 +1452,16 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         pendingChanges={filtersDirty}
       />
 
-      {reportType === 'sales_by_station' && <p data-testid="station-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
+      {reportType === 'sales_costs' && <p className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'التكلفة المسجلة تخص حركات البيع. تكلفة الأسعار الحالية تعيد تسعير المكونات المستهلكة بالأسعار المعتمدة الآن؛ لا تغيّر القيود. الربح دون الضريبة، والتكلفة الناقصة لا تُعرض كصفر.' : 'Recorded costs belong to the sale movements. Current-price costs reprice consumed components at today’s canonical prices without changing journals. Profit excludes tax; missing costs are not zero.'}</p>}
+      {reportType === 'inventory_as_of' && <p role="note" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? `أرصدة الخامات من الحركات المسموح لك عرضها حتى نهاية يوم ${snapshot?.to || to} بتوقيت القاهرة. القيمة هي المسجلة في الحركات؛ لا تمثل إعادة تسعير المخزون بأسعار اليوم.` : `Material balances from permitted movements through end of ${snapshot?.to || to} in Cairo. Values are recorded movement costs, not a repricing at today's prices.`}</p>}
+      {reportType === 'sales_by_station' && <details className="mb-3 text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'تفاصيل حساب المبيعات والتكلفة' : 'Sales and cost calculation details'}</summary><p data-testid="station-sales-source-note">{getReportExcelProfile(reportType, lang).sourceNote}</p></details>}
+
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
       <ReportWorkbench type={reportType} lang={lang} scope={reportReader} userId={user?.id || ''}
         rows={data} complete={!snapshot?.serverPaged} unavailable={loading || !!reportError}
         currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
         loadRows={async () => { if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT'); return (await reportSource.read()).rows; }}
-        period={snapshot?.from && snapshot?.to && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
+        period={snapshot?.from && snapshot?.to && reportType !== 'inventory_as_of' && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
         loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async range => (await metricSource.read(range)).metrics! : undefined}
         loadComparison={async range => (await reportSource.read(range)).rows}
         onOpen={open => setWorkbenchScope(() => open ? reportReader : null)} />

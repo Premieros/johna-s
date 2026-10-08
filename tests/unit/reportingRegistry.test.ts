@@ -108,12 +108,12 @@ describe('Reporting system components (Phase 1-5)', () => {
   // --- ReportsCenterPage.tsx ---
   const centerSource = read('src/features/reporting/pages/ReportsCenterPage.tsx');
 
-  it('ReportsCenterPage renders ReportsPage inside the compact unified list', () => {
+  it('ReportsCenterPage renders ReportsPage inside the basic report workspace', () => {
     expect(centerSource).not.toContain('ReportingShell');
-    expect(centerSource).toContain('filteredOperational.map');
-    expect(centerSource).toContain('filteredFinancial.map');
+    expect(centerSource).toContain('permittedBasicReports');
+    expect(centerSource).toContain('view.financial');
     expect(centerSource).toContain('ReportsPage');
-    expect(centerSource).toContain('activeReport');
+    expect(centerSource).toContain('controlledReportType');
   });
 
   // --- ColumnPicker.tsx ---

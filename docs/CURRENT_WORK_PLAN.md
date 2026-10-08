@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `c86116d3`
-- Current active branch: `feat/report-column-layout-20261008`
+- Latest main baseline reconciled: `dd4bdeef`
+- Current active branch: `feat/report-workspace-20261008`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
@@ -18,11 +18,7 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-User confirms the previous writer has finished and authorizes starting the agreed
-work list. First repair discounted normal/split checkout failure atomicity and invoice
-proof, including direct discount persistence at confirmation. Then rebuild reporting
-with shared definitions, accurate allocation, configurable tables and source traceability.
-#470 and #471 are merged. Preserve their current and historical costing changes.
+Implement the approved seven-report workspace with consolidated internal views, clearer advanced filters, sales-cost completeness and dated material ledger balances. Frontend-only package based on deployed #475; preserve canonical sources and permissions. Complete local and exact-head Full Verify before the next explicit production approval.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -104,3 +100,18 @@ Final local verification:1,618 tests/334 files passed; production build, applica
 Exact heade1abc24c Full Verify37808315016: frontend/pages continuity Green;969 database tests pass, one new returns assertion fails because the preceding history test moved its205 shared fixture invoices into restricted history. Reset only refunded fixture timestamps inside the secondary-source SAVEPOINT, then roll back. Production source/history rules unchanged. Fresh exact-head Full Verify required.
 
 Exact head9061cfa5 Full Verify37809355100: frontend/pages continuity and all970 database tests Green;122 browser tests pass, stock read-count test fails and cashier count is flaky. Equivalent empty branch lookup refreshes recreated the report reader and issued redundant reads; use stable branch ID/name/name_en contents as the scope key, preserving real changes. Add component regression for identical contents versus changed labels. Low-stock browser test waits for its distinct result rather than the previous stock label. Typecheck and34 focused tests pass; changed-file lint pending. Fresh exact-head Full Verify required.
+
+Production approval2026-10-08 20:04 Cairo: user explicitly approves applying consolidated reporting migration and merging/deploying#475. Exact head98390df838490889c4143607a38843abdbaa1abe / Full Verify37811310007 Green:1619 frontend,970 DB/RLS,124 browser; production mainc86116d3 unchanged. Live page body matches canonical baseline/hash a69aea21be0af3cfb9a7018d17b08290; four new source functions absent. Catalog fingerprints pinned for all other functions, tables/ACL/RLS, policies and triggers. Apply exact tested SQL with2s lock/10s statement bounds, verify before merge; no real sales or printing tests. This approval transition is recorded locally and in PR metadata without changing the verified head.
+
+Approved apply completed: exact five source-body hashes match; all invoker/authenticated-only. Catalog fingerprints for other functions, policies, tables/ACL/RLS and triggers unchanged; existing page ACL preserved. Live Smoha source parity301 invoices/net80874.5; inventory278 raw groups/6 unit groups. PR475 mergeddd4bdeef5e3fcc01197ea5e557d7864d90aff4c6; deployment and postmerge verification in progress. No transaction/printing writes.
+
+GitHub Pages deployment37814067770 SUCCESS, production-parity job Green. Public homepage and deployed index-BHO3XVsh.js returnHTTP200; no signed-in/operational transaction invoked. Postmerge Full Verify37814067672 still in progress.
+
+Completed#475: Pages37814067770 and postmerge Full Verify37814067672 SUCCESS atdd4bdeef5e3fcc01197ea5e557d7864d90aff4c6. Public reporting-G6rqGK4L.js returnsHTTP200 and contains dataset/metrics/stock APIs; index hash matches deployed build. User feedback20:16 Cairo: long/technical report navigation and overlapping views; requests clearer sales-cost and as-of balance reports. Screenshot inspected successfully after attachment became available. Audit finds costs inside station/profit views and historical closing quantities in movement/raw reports, but not clear primary entry points. Review basic report navigation/presets and period versus end-of-day balance semantics; no new production changes in this UX review.
+
+
+### Basic report workspace — approved preparation2026-10-08 21:58 Cairo
+User directs implementation of the reviewed seven basic reports, merged view discovery, compact advanced filters, clear sales-cost reporting and balances as of a chosen date. Baseline maindd4bdeef;#475 applied/deployed/verified Green. Prepare frontend-only changes in one new draft; no production schema/transaction change. Reuse canonical sales/items/cost and existing raw material historical movement RPCs. Date balance is raw-material ledger closing quantity/value at end of selected Cairo day, not current batches filtered by date; individual inventory/treasury/party statements retain their separate grains and permissions. State: **BLOCKED** for production merge until exact-head verification and explicit approval.
+
+## Active consolidated draft #476
+Seven basic reports and internal views, cost completeness, and dated material balances. Local 1625 frontend tests passed; app/test typechecks, build, lint (0 errors/15 existing warnings), API contract and locked identity passed. Production gate remains blocked pending exact-head Full Verify and explicit user approval. Frontend-only; no migration.

@@ -1,5 +1,7 @@
 export type ReportType =
   | 'sales'
+  | 'sales_costs'
+  | 'inventory_as_of'
   | 'purchases'
   | 'expenses'
   | 'profit'
@@ -69,15 +71,17 @@ export const REPORT_FILTER_KEYS: ReportFilterKey[] = [
 ];
 
 export const ALL_REPORT_TYPES: ReportType[] = [
-  'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
+  'sales_costs', 'inventory_as_of', 'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
   'top_consumed_components', 'top_consumed_products', 'low_stock',
   'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption', 'raw_material_current_cost', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ];
 
 export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
+  sales_costs: ['station', 'category', 'product', 'cashier', 'customer', 'order_type', 'payment_method'],
+  inventory_as_of: [],
   sales_by_station: ['station', 'category', 'product', 'order_type', 'cashier', 'customer', 'payment_method'],
-  sales: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
+  sales: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'table', 'status'],
   sales_by_payment: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
   sales_by_employee: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
   sales_by_product: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'status'],
@@ -94,9 +98,8 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
   top_consumed_components: ['warehouse', 'product', 'category'],
   top_consumed_products: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category'],
   low_stock: [],
-  // The cashier report currently has a cashier-level query contract only.
-  // Do not expose a warehouse filter that would silently return misleading rows.
-  cashier_performance: ['cashier'],
+  // Canonical invoice source applies these dimensions before aggregation.
+  cashier_performance: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
   returns: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
   production_waste: ['warehouse', 'product'],
   raw_material_consumption: [],
@@ -108,7 +111,7 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
 };
 
 export const DATE_DRIVEN_REPORTS = new Set<ReportType>([
-  'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
+  'sales_costs', 'inventory_as_of', 'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'component_consumption', 'top_consumed_components', 'top_consumed_products',
   'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ]);
