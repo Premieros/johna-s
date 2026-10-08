@@ -18,9 +18,9 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Repair approved linked-order checkout discounts with an RLS-respecting header-only
-mutation and refreshed server totals. Investigate the Cleopatra complaint; preserve
-immutable actual FIFO costs and historical financial records.
+Unify product recipe unit costs across Products, Pricing and Costing Center. Approved
+checkout discount repair #468 is deployed. The user authorizes correcting historical
+sale costs using recorded evidence; preserve invoice amounts and balanced accounting.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

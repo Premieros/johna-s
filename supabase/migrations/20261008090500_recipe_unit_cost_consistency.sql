@@ -90,11 +90,9 @@ BEGIN
   replacement:=$current$CASE WHEN COALESCE(rct.recipe_item_count,0)>0 THEN rc.cost
     WHEN sp.product_type='manufactured' THEN NULL
     ELSE COALESCE(NULLIF(pw.unit_cost,0),NULLIF(sp.cost_price,0)) END::numeric(12,2)$current$;
-  original:='COALESCE(rc.cost, 0)::numeric(12,2)';
-  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'THEORETICAL_COST_BASELINE_MISMATCH'; END IF;
-  definition:=replace(definition,original,replacement);
   original:='CASE WHEN COALESCE(rct.recipe_item_count,0)>0 THEN rc.cost ELSE 0 END::numeric(12,2)';
-  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'CURRENT_COST_BASELINE_MISMATCH'; END IF;
+  IF (length(definition)-length(replace(definition,original,'')))/length(original)<>2
+    THEN RAISE EXCEPTION 'CURRENT_COST_BASELINE_MISMATCH'; END IF;
   EXECUTE replace(definition,original,replacement);
 
   SELECT pg_get_functiondef('public.get_product_costing_detail(uuid,uuid)'::regprocedure) INTO definition;
