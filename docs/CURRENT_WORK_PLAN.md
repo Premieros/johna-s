@@ -23,7 +23,7 @@ independently of current stock quantity. Correct historical sale profitability a
 period estimates while keeping actual receipt/FIFO COGS separately identifiable.
 User explicitly requested and confirmed historical correction, including negative stock.
 Current recipe cost #469 is approved, applied, merged and deployed; all checks Green.
-New reporting RPC migration still requires the separate schema approval gate above.
+Reporting RPC #470 was separately approved, applied and deployed. #471 fixes read concurrency only; no further schema apply. User publication approval retained; exact-head Green required.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

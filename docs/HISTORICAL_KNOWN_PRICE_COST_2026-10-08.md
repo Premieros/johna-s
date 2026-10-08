@@ -7,7 +7,7 @@ Current PR: #471
 Last updated: 2026-10-08
 
 ## Work status
-Implementation prepared. State: **BLOCKED** for production pending verification and the separate new-function approval.
+State: **IN_PROGRESS**. #470 is approved/applied/deployed; #471 sequences reads after live timeout evidence. Await exact-head Green, then publish under retained user approval. No new DB change.
 
 ## Guardrails
 Single writer. Preserve RLS, Financial Visibility, branch isolation, inventory, accounting,
