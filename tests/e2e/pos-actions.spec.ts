@@ -242,6 +242,7 @@ async function addProduct(page: Page) {
   const addButton = productCard.getByRole('button', { name: /^(إضافة|Add)$/i });
   await expect(addButton).toBeEnabled({ timeout: 10000 });
   await addButton.click({ timeout: 10000 });
+  await page.getByTestId('pos-product-config-modal').getByRole('button', { name: /^(إضافة|Add)$/i }).click();
   await expect(page.getByTestId(`pos-cart-qty-${PRODUCT_ID}`)).toHaveText('1', { timeout: 10000 });
   expect(rpcCalls).not.toContain('get_pos_cart_product_availability');
   await expect(addButton).toBeEnabled({ timeout: 10000 });
@@ -291,6 +292,7 @@ test.describe('POS action-level', () => {
     await expect(page.getByTestId('pos-mobile-command-dock')).toBeVisible();
     const productCard = page.getByTestId(`pos-product-card-${PRODUCT_ID}`);
     await productCard.getByRole('button', { name: /^(إضافة|Add)$/i }).click();
+    await page.getByTestId('pos-product-config-modal').getByRole('button', { name: /^(إضافة|Add)$/i }).click();
 
     await page.getByTestId('pos-mobile-nav-order').click();
     await expect(page.getByTestId('pos-mobile-order-sheet')).toBeVisible();

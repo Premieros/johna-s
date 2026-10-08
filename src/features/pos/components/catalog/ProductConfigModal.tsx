@@ -156,7 +156,7 @@ export function ProductConfigModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ui-text/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+    <div data-testid="pos-product-config-modal" className="fixed inset-0 z-50 flex items-end justify-center bg-ui-text/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-ui-border bg-ui-surface pb-[env(safe-area-inset-bottom)] shadow-ui-2xl sm:max-h-[86vh] sm:max-w-lg sm:rounded-2xl sm:pb-0">
         <div className="flex items-center justify-between border-b border-ui-border px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex min-w-0 items-center gap-2.5">
