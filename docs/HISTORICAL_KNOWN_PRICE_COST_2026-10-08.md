@@ -88,3 +88,7 @@ Financial Visibility and a live cutoff can change the authorized report totals.
 Production preflight confirmed the old fallback expression had already been replaced by
 #467 with get_raw_material_current_prices. Removed the redundant proposed period-function
 patch before further CI; the new migration creates only the guarded historical RPC.
+
+Fixture preflight supplies required price-event reference_number values before fresh-DB
+execution. Confirmed live invoice Johna's-02577: coffee6.60 plus two zero-cost sugar packets
+at current0.211 each yields7.02; no invoice or source movement mutated.

@@ -26,7 +26,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
     await db.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Cost Admin','super_admin',$3,true)`, [admin, `${admin}@test.local`, branch]);
     const unit = (await db.query(`SELECT id FROM public.measurement_units WHERE code='KG' LIMIT 1`)).rows[0].id;
     await db.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Known chicken',$3,$4,0,true),($5,$6,'Unpriced ingredient',$3,$4,0,true)`, [raw, `KNOWN-${raw}`, unit, branch, unknown, `UNKNOWN-${unknown}`]);
-    await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,priced_at) VALUES($1,$2,210,'pricing',now())`, [raw, branch]);
+    await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,priced_at,reference_number) VALUES($1,$2,210,'pricing',now(),'HIST-PRICE-1')`, [raw, branch]);
     await db.query(`INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,-10,0)`, [raw, branch]);
     await db.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Historical Product',$2,100,0,true)`, [product, branch]);
     await db.query(`INSERT INTO public.sales(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,status) VALUES($1,$2,$3,$4,100,100,100,'completed'),($5,$6,$3,$4,200,200,200,'completed')`, [legacy, `LEGACY-${legacy}`, branch, warehouse, kitchen, `KITCHEN-${kitchen}`]);
@@ -53,7 +53,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
     expect(Number(source.total_cost)).toBe(0); expect(Number(source.quantity)).toBe(-0.2);
     const period = await asAdmin(async () => (await db.query(`SELECT estimated_cost FROM public.get_raw_consumption_cost_breakdown($1,now()-interval '1 day',now()+interval '1 day') WHERE raw_material_id=$2`, [branch, raw])).rows[0]);
     expect(Number(period.estimated_cost)).toBe(2016); // (0.2 + 0.4 + 9) * 210; unchanged raw-movement scope
-    await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,priced_at) VALUES($1,$2,310,'pricing',now()+interval '1 minute')`, [raw, branch]);
+    await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,priced_at,reference_number) VALUES($1,$2,310,'pricing',now()+interval '1 minute','HIST-PRICE-2')`, [raw, branch]);
     const repriced = await estimates();
     expect(Number(repriced.find(r => r.sale_id === legacy)?.estimated_cost)).toBe(62);
     expect(Number(repriced.find(r => r.sale_id === kitchen)?.estimated_cost)).toBe(93);
