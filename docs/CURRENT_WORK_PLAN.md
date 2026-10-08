@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `e9b0b5e128fcdb0db8ac1a5b597cae18b6d061e3`
-- Current active branch: `fix/recipe-live-cost-20261008`
-- Mandatory active work log: `docs/RECIPE_UNIT_COST_2026-10-08.md`
+- Latest main baseline reconciled: `5f08564187ba93507225a651164d311a2d77356b`
+- Current active branch: `fix/historical-known-price-cost-20261008`
+- Mandatory active work log: `docs/HISTORICAL_KNOWN_PRICE_COST_2026-10-08.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,9 +18,12 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Unify product recipe unit costs across Products, Pricing and Costing Center. Approved
-checkout discount repair #468 is deployed. The user authorizes correcting historical
-sale costs using recorded evidence; preserve invoice amounts and balanced accounting.
+Supplement previous zero-cost raw consumption with the canonical latest known price,
+independently of current stock quantity. Correct historical sale profitability and raw
+period estimates while keeping actual receipt/FIFO COGS separately identifiable.
+User explicitly requested and confirmed historical correction, including negative stock.
+Current recipe cost #469 is approved, applied, merged and deployed; all checks Green.
+New reporting RPC migration still requires the separate schema approval gate above.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.
@@ -52,3 +55,6 @@ sale costs using recorded evidence; preserve invoice amounts and balanced accoun
   postmerge Verify 37478093699 and Pages 37478093744 green.
 
 - #466 completed at 627b379b: station sales report deployed; Full Verify 37670195057 and Pages 37671923579 green.
+
+- #468 approved checkout discount repair deployed and verified.
+- #469 approved recipe cost consistency migration applied; main 5f085641; Verify 37763464358 and Pages 37763464375 Green.

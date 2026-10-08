@@ -1,6 +1,7 @@
 import { loadRawCurrentPrices, rawCurrentPriceMap } from '../services/rawCurrentPriceData';
 import { loadRawFifoCosts, rawFifoCostMap } from '../services/rawFifoCostData';
 import { businessDateISO, reportDateRangeUtc } from '@/lib/businessTime';
+import { supplementHistoricalMargins, type HistoricalOrderMargin } from '../services/historicalCostEstimates';
 import type { RawConsumptionCostBreakdownRow } from '@/api/domains/costing';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, History } from 'lucide-react';
@@ -19,7 +20,7 @@ import { formatFinancialCurrency, formatNumber, formatDate, formatDateTime, form
 import { exportToExcel } from '@/lib/excel';
 import { foodCostPct, marginPct, safeDiv } from '@/lib/costing';
 import type {
-  CostingOverviewRow, OrderMarginRow, SupplierPriceImpactRow, ProductCostingDetail,
+  CostingOverviewRow, SupplierPriceImpactRow, ProductCostingDetail,
   RawMaterialCostOverviewRow, RawMaterialCostHistoryRow, RawMaterialPriceSource,
 } from '@/lib/types';
 import { loadCostingBranches, loadCostingSuppliers, loadRawMaterialUnitDisplayMap } from '../services/costingSelectors';
@@ -36,13 +37,14 @@ export function CostingCenterPage() {
 
   const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<CostingOverviewRow[]>([]);
-  const [orders, setOrders] = useState<OrderMarginRow[]>([]);
+  const [orders, setOrders] = useState<HistoricalOrderMargin[]>([]);
   const [supplierImpact, setSupplierImpact] = useState<SupplierPriceImpactRow[]>([]);
   const [rawCosts, setRawCosts] = useState<(RawMaterialCostOverviewRow & { fifo_cost?: number | null; current_price?: number | null })[]>([]);
   const [rawHistory, setRawHistory] = useState<RawMaterialCostHistoryRow[]>([]);
   const [rawHistoryTarget, setRawHistoryTarget] = useState<RawMaterialCostOverviewRow | null>(null);
   const [rawHistoryLoading, setRawHistoryLoading] = useState(false);
   const [salesCostSummary, setSalesCostSummary] = useState<SalesCostSummary>({ sales_count: 0, net_sales: 0, cogs: 0, ratio: 0 });
+  const [historicalEstimate, setHistoricalEstimate] = useState<{ cost: number; unpriced: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -92,15 +94,18 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     try {
-      const [res, summaryRes, rawValuationRes, fifoRows, priceRows] = await Promise.all([
+      const [res, summaryRes, rawValuationRes, fifoRows, priceRows, historicalRes] = await Promise.all([
         api.costing.getOverview({ p_branch_id: effBranch }),
         api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
         api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
         loadRawFifoCosts(effBranch),
         loadRawCurrentPrices(effBranch),
+        api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
       ]);
       if (requestId !== request.current) return;
       if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
+      if (historicalRes.error || summaryRes.error) { const message = (historicalRes.error || summaryRes.error)!.message; setHistoricalEstimate(null); setError(message); setLoading(false); show(message, 'error'); return; }
+      setHistoricalEstimate({ cost: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.estimated_cost), 0), unpriced: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.unpriced_movements), 0) });
       setOverview(res.data || []);
       if (!summaryRes.error && summaryRes.data) {
         setSalesCostSummary({
@@ -125,10 +130,12 @@ export function CostingCenterPage() {
     const requestId = ++request.current;
     setLoading(true);
     setError(null);
-    const res = await api.costing.getOrderMargin({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+    const params = { p_branch_id: effBranch, p_from: fromDate, p_to: toDate };
+    const [res, historicalRes] = await Promise.all([api.costing.getOrderMargin(params), api.costing.getHistoricalSaleCostEstimates(params)]);
     if (requestId !== request.current) return;
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-    setOrders(res.data || []);
+    if (historicalRes.error) { setOrders([]); setError(historicalRes.error.message); setLoading(false); show(historicalRes.error.message, 'error'); return; }
+    setOrders(supplementHistoricalMargins(res.data || [], historicalRes.data || []));
     setLoading(false);
   }, [effBranch, fromDate, toDate, show]);
 
@@ -338,14 +345,16 @@ export function CostingCenterPage() {
     { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null ? '-' : marginPill(marginPct(Number(r.actual_cost), r.sale_price)) },
   ];
 
-  const orderColumns: Column<OrderMarginRow & { id: string }>[] = [
+  const orderColumns: Column<HistoricalOrderMargin & { id: string }>[] = [
     { key: 'invoice', header: t('invoiceNumber'), render: (r) => <span className="font-medium">{r.invoice_number}</span> },
     { key: 'date', header: t('date'), render: (r) => formatDate(r.sale_date, lang) },
     { key: 'total', header: t('total'), render: (r) => money(r.total) },
     { key: 'discount', header: t('discountAmount'), render: (r) => money(r.discount_amount) },
-    { key: 'cogs', header: t('unitCost'), render: (r) => money(r.cogs) },
-    { key: 'margin', header: t('grossMargin'), render: (r) => <span className={`font-semibold ${r.gross_margin >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger'}`}>{money(r.gross_margin)}</span> },
-    { key: 'marginPct', header: t('marginPct'), render: (r) => marginPill(marginPct(r.cogs, r.total)) },
+    { key: 'cogs', header: isAr ? 'التكلفة الفعلية' : 'Actual cost', render: (r) => money(r.cogs) },
+    { key: 'estimated_cost', header: isAr ? 'تكلفة مستكملة (تقديرية)' : 'Supplemental cost (estimated)', render: (r) => money(r.estimated_cost) },
+    { key: 'displayed_cost', header: isAr ? 'إجمالي التكلفة' : 'Total cost', render: (r) => money(r.displayed_cost) },
+    { key: 'margin', header: t('grossMargin'), render: (r) => <span className={`font-semibold ${r.displayed_margin >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger'}`}>{money(r.displayed_margin)}</span> },
+    { key: 'marginPct', header: t('marginPct'), render: (r) => marginPill(marginPct(r.displayed_cost, r.total)) },
   ];
 
   const supplierColumns: Column<SupplierPriceImpactRow & { id: string }>[] = [
@@ -386,7 +395,7 @@ export function CostingCenterPage() {
 
   const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, CurrentUnitCost: r.actual_cost ?? (isAr ? 'غير مكتملة' : 'Incomplete') })), 'costing-overview');
   const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, CurrentFifoUnitCost: r.fifo_cost ?? '', LatestKnownUnitPrice: r.current_price ?? '', LatestReferenceUnitCost: r.latest_cost, ActualPositiveStockValue: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
-  const handleExportOrders = () => exportToExcel(orders.map((r) => ({ Invoice: r.invoice_number, Date: r.sale_date, Total: r.total, Discount: r.discount_amount, COGS: r.cogs, GrossMargin: r.gross_margin })), 'order-margin');
+  const handleExportOrders = () => exportToExcel(orders.map((r) => ({ Invoice: r.invoice_number, Date: r.sale_date, Total: r.total, Discount: r.discount_amount, ActualCOGS: r.cogs, EstimatedSupplement: r.estimated_cost, TotalCost: r.displayed_cost, GrossMargin: r.displayed_margin, UnpricedMovements: r.unpriced_movements })), 'order-margin');
   const handleExportSupplier = () => exportToExcel(supplierImpact.map((r) => ({ Item: r.item_name, Type: r.item_type, FirstCost: r.first_cost, LastCost: r.last_cost, AvgCost: r.avg_cost, ChangePct: r.change_pct, PurchaseCount: r.purchase_count })), 'supplier-price-impact');
 
   return (
@@ -430,6 +439,13 @@ export function CostingCenterPage() {
 
       {tab === 'overview' && <>
         <DesignPanel testId="costing-summary-panel">
+          <div data-testid="historical-cost-summary" className="mb-3 rounded-xl border border-ui-border p-4">
+            <p className="font-semibold">{isAr ? 'إجمالي تكلفة المبيعات بعد استكمال الصفر' : 'Sales cost including zero-cost supplements'}</p>
+            <p className="text-xl font-bold">{historicalEstimate && !error ? money(salesCostSummary.cogs + historicalEstimate.cost) : '-'}</p>
+            <p className="text-sm text-ui-muted">{isAr ? 'التكلفة المستكملة بآخر سعر معروف (تقديرية): ' : 'Supplement at latest known price (estimated): '}{historicalEstimate && !error ? money(historicalEstimate.cost) : '-'}</p>
+            <p className="text-sm text-ui-muted">{isAr ? 'الربح بعد استكمال التكلفة: ' : 'Profit after cost supplement: '}{historicalEstimate && !error ? money(salesCostSummary.net_sales - salesCostSummary.cogs - historicalEstimate.cost) : '-'}</p>
+            {historicalEstimate && historicalEstimate.unpriced > 0 && <p className="text-sm text-ui-warning">{isAr ? 'بعض الحركات بلا سعر معروف؛ تُجمع تكلفة باقي الخامات.' : 'Some movements have no known price; other ingredient costs still sum.'}</p>}
+          </div>
           <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{t('product')}</p><p className="mt-1 text-2xl font-bold text-ui-primary">{stats.count}</p></div>
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'متوسط تكلفة المنتجات' : 'Average product cost'}</p><p className="mt-1 text-2xl font-bold text-ui-text">{formatNumber(stats.avg, 1)}%</p></div>
@@ -465,6 +481,7 @@ export function CostingCenterPage() {
       </>}
 
       {tab === 'orders' && <DesignPanel testId="order-margin-panel">
+        <p className="mb-3 text-sm text-ui-muted">{isAr ? 'الربحية تشمل استكمال حركات الخامات المسجلة بصفر بآخر سعر معروف، مع فصلها كتقدير عن التكلفة الفعلية.' : 'Profit includes zero-cost raw movements supplemented at the latest known price, shown separately from actual cost.'}</p>
 
         <DataTable columns={orderColumns} data={orders.map((r) => ({ ...r, id: r.sale_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
       </DesignPanel>}

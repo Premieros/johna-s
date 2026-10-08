@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T09:12:30.545Z",
+  "generated_at": "2026-10-08T10:46:55.534Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -552,6 +552,14 @@
         "branch_id",
         "from_date",
         "to_date"
+      ]
+    },
+    {
+      "name": "get_historical_sale_cost_estimates",
+      "params": [
+        "branch_id",
+        "from",
+        "to"
       ]
     },
     {
