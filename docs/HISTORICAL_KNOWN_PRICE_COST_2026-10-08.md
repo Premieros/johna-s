@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/costing-report-read-load-20261008`
-Current PR: #470
+Current PR: #471
 Last updated: 2026-10-08
 
 ## Work status
@@ -107,3 +107,6 @@ individually. Sequence historical pricing after existing overview reads and afte
 margins, preserving stale-request checks, costing and all permissions. No new DB change.
 Targeted verification and new exact-head Full Verify pending. Publication authorization
 for this necessary follow-up is retained from the user's explicit approval.
+
+Follow-up PR: #471. Targeted9 tests, full typechecks and changed-file lint passed.
+Exact-head CI pending; do not merge until Green. #470 is approved/applied/deployed.
