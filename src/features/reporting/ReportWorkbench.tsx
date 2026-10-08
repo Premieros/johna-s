@@ -16,6 +16,7 @@ interface Props {
   loadRows: (signal: AbortSignal) => Promise<ReportRow[]>;
   canExport: boolean; canPrint: boolean; onOpen: (open: boolean) => void;
   period?: ComparisonPeriod;
+  loadComparisonMetrics?: (period: ComparisonPeriod, signal: AbortSignal) => Promise<Record<string, number>>;
   loadComparison?: (period: ComparisonPeriod, signal: AbortSignal) => Promise<ReportRow[]>;
 }
 interface SavedLayout { name: string; layout: AnalysisLayout; }
@@ -58,7 +59,7 @@ export function ReportWorkbench(props: Props) {
   const displayed = analysed.slice(Math.min(page, maxPage) * 100, (Math.min(page, maxPage) + 1) * 100);
   const contract = REPORT_DATA_CONTRACTS[type];
   const format = (value: unknown, key: string) => value == null ? '—' : typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value);
-  const update = (change: Partial<AnalysisLayout>) => { setLayout(previous => ({ ...previous, ...change })); setPage(0); };
+  const update = (change: Partial<AnalysisLayout>) => { if (change.filters) { comparisonController.current?.abort(); setComparison(null); setComparing(false); } setLayout(previous => ({ ...previous, ...change })); setPage(0); };
   const width = (id: string) => Math.max(80, Math.min(600, Number(layout.widths[id]) || 160));
   const cellStyle = (id: string) => ({ minWidth: width(id), width: width(id), ...(layout.pinned.includes(id) ? { position: 'sticky' as const, insetInlineStart: displayIds.slice(0, displayIds.indexOf(id)).filter(other => layout.pinned.includes(other)).reduce((sum, other) => sum + width(other), 0), zIndex: 1 } : {}) });
 
@@ -87,10 +88,12 @@ export function ReportWorkbench(props: Props) {
     comparisonController.current?.abort(); const abort = new AbortController(); comparisonController.current = abort;
     setComparing(true); setComparison(null); setError(null);
     try {
-      const result = await props.loadComparison(period, abort.signal);
+      const metricsOnly = props.loadComparisonMetrics && Object.values(layout.filters).every(filter => !filter.value.trim());
+      const metrics = metricsOnly ? await props.loadComparisonMetrics!(period, abort.signal) : null;
+      const result = metrics ? [Object.fromEntries(columns.filter(column => column.aggregation === 'sum').map(column => [column.key, metrics[column.id] ?? null]))] : await props.loadComparison(period, abort.signal);
       if (!abort.signal.aborted && currentScope.current === requestScope) setComparison({ scope: requestScope, rows: result, period });
     } catch (failure) { if (!abort.signal.aborted && currentScope.current === requestScope) setError(failure); }
-    finally { if (currentScope.current === requestScope) setComparing(false); }
+    finally { if (currentScope.current === requestScope && comparisonController.current === abort) setComparing(false); }
   }
 
   return <section className="my-3 space-y-3" data-testid="report-workbench">

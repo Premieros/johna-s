@@ -53,7 +53,7 @@ import {
 } from '../numericIntegrity';
 
 const EMPTY_REPORT_ROWS: Record<string, unknown>[] = [];
-interface ReportSnapshot { rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; }
+interface ReportSnapshot { rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; metrics?: Record<string, number>; }
 
 type FinancialReportType = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
@@ -250,7 +250,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     return () => { exportGeneration.current = generation + 1; exportController.current?.abort(); };
   }, [reportReader]);
 
-  async function loadReport(page = 0, full = false, signal?: AbortSignal, range?: { from: string; to: string }): Promise<ReportSnapshot> {
+  async function loadReport(page = 0, full = false, signal?: AbortSignal, range?: { from: string; to: string }, metricsOnly = false): Promise<ReportSnapshot> {
     let resultRows: Record<string, unknown>[] = [];
     let resultSummary = { total: 0, count: 0 };
     const setData = (rows: Record<string, unknown>[]) => { resultRows = rows; };
@@ -263,6 +263,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     if (!range && allowed.from !== from) setFrom(allowed.from);
     if (!range && allowed.to !== to) setTo(allowed.to);
     const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
+
+    if (metricsOnly && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')) {
+      const result = await reporting.getOperationalReportMetrics({ p_report_type: reportType, p_branch_id: effectiveBranchFilter || null,
+        p_from_date: allowed.from, p_to_date: allowed.to, p_filters: { ...filters }, p_from_ts: fromTs, p_to_exclusive_ts: toExclusiveTs }, signal);
+      if (result.error) throw new Error(result.error.message || 'REPORT_METRICS_LOAD_FAILED');
+      if (!result.data) throw new Error('REPORT_METRICS_INVALID');
+      return { rows: [], summary: { total: 0, count: 0 }, metrics: result.data };
+    }
 
     const corePage = !full && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')
       ? await loadOperationalReportPage({ reportType, branchId: effectiveBranchFilter || null,
@@ -307,6 +315,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: lines.reduce((sum, line) => sum + line.net, 0), count: lines.length });
     } else if (reportType === 'sales') {
       const sales = corePage?.rows ?? await loadSalesReportRows({
+        from: allowed.from, to: allowed.to,
         branchId: effectiveBranchFilter || null,
         fromTs,
         toExclusiveTs,
@@ -339,6 +348,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
     } else if (reportType === 'purchases') {
       const purchases = corePage?.rows ?? await loadPurchaseReportRows({
+        from: allowed.from, to: allowed.to,
         branchId: effectiveBranchFilter || null,
         fromTs,
         toExclusiveTs,
@@ -357,6 +367,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: purchases.reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: purchases.length });
     } else if (reportType === 'expenses') {
       const expenses = corePage?.rows ?? await loadExpenseReportRows({
+        fromTs, toExclusiveTs,
         branchId: effectiveBranchFilter || null,
         from: allowed.from,
         to: allowed.to,
@@ -1406,6 +1417,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
         loadRows={async () => { if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT'); return (await reportSource.read()).rows; }}
         period={snapshot?.from && snapshot?.to && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
+        loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async (range, signal) => (await reportReader(0, true, signal, range, true)).metrics! : undefined}
         loadComparison={async range => (await reportSource.read(range)).rows}
         onOpen={open => setWorkbenchScope(open ? reportReader : null)} />
       {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">

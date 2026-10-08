@@ -77,4 +77,16 @@ describe('full reporting workspace', () => {
     expect(screen.queryByRole('button', { name: 'Branch A' })).toBeNull();
   });
 
+  it('reads only server metrics for an unfiltered comparison and invalidates it on row filtering', async () => {
+    const loadComparison=vi.fn(); const loadComparisonMetrics=vi.fn().mockResolvedValue({'Net Sales':10});
+    render(<ReportWorkbench {...base} complete rows={[{Branch:'A',Invoice:'I1','Net Sales':20}]} loadRows={vi.fn()}
+      period={{from:'2026-10-01',to:'2026-10-07'}} loadComparison={loadComparison} loadComparisonMetrics={loadComparisonMetrics} />);
+    fireEvent.click(screen.getByRole('button',{name:'Table tools & full analysis'}));
+    fireEvent.click(screen.getByRole('button',{name:'Compare previous period'}));
+    await screen.findByText('Comparison period: 2026-09-24 — 2026-09-30');
+    expect(loadComparison).not.toHaveBeenCalled(); expect(loadComparisonMetrics).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByRole('textbox',{name:'Branch filter'}),{target:{value:'A'}});
+    expect(screen.queryByText('Comparison period: 2026-09-24 — 2026-09-30')).toBeNull();
+  });
+
 });

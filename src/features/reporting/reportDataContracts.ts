@@ -51,7 +51,7 @@ const aliases: [string, string][] = [
 const additive = new Set([
   'Gross Sales', 'Allocated Discount', 'Allocated Tax', 'Return Value', 'Net Revenue Excluding Tax',
   'Net Revenue', 'Net Sales', 'Original Total', 'Invoice Total', 'Refunded', 'Refunded Amount',
-  'Discount', 'Tax', 'Paid', 'Net Paid', 'Net Collection', 'Returned', 'Net Purchases', 'Amount',
+  'Subtotal', 'Discount', 'Tax', 'Paid', 'Net Paid', 'Net Collection', 'Returned', 'Net Purchases', 'Amount',
   'COGS', 'Gross Profit', 'Expenses', 'Net Profit', 'Total Cost', 'Consumption Cost', 'Invoices',
 ]);
 

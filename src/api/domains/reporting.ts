@@ -8,6 +8,8 @@ export type OperationalReportPage = {
 };
 
 export const reporting = {
+  getOperationalReportMetrics(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<Record<string, number>> { return rpc('get_operational_report_metrics', p, signal); },
+  getOperationalReportDataset(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<OperationalReportPage> { return rpc('get_operational_report_dataset', p, signal); },
   getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number; p_from_ts: string; p_to_exclusive_ts: string }): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p); },
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p); },
   getTrialBalanceSummary(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceSummary> { return rpc('get_trial_balance_summary', p); },

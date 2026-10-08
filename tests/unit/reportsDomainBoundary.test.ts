@@ -56,9 +56,9 @@ describe('reports domain boundary', () => {
     expect(page).not.toContain("select('id, branch_id, invoice_number, subtotal, discount_amount, tax_amount");
     expect(page).not.toContain("supabase.from('purchases').select('id, branch_id, invoice_number, total, returned_amount");
     expect(page).not.toContain("supabase.from('expenses').select('id, branch_id, category, description, amount, expense_date')");
-    expect(coreLoaders).toContain(".from('sales')");
-    expect(coreLoaders).toContain(".from('purchases')");
-    expect(coreLoaders).toContain(".from('expenses')");
+    expect(coreLoaders).toContain('reporting.getOperationalReportDataset');
+    expect(coreLoaders).not.toContain('.from(');
+    expect(domain).toContain("rpc('get_operational_report_dataset', p, signal)");
   });
 
   it('keeps secondary sales report query construction out of the page', () => {
