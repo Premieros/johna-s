@@ -43,6 +43,7 @@ type ProductPriceRow = {
   sale_price: number | null;
   wholesale_price: number | null;
   is_active: boolean;
+  current_cost?: number | null;
 };
 
 type RawDraft = { default_cost: number };
@@ -59,6 +60,7 @@ export function PricingPage() {
   const ar = lang === 'ar';
   const { show } = useToast();
   const can = useCan();
+  const canCurrentCostView = can('reports.costing');
   const branchId = useBranchFilter();
   const { branches } = useBranches();
 
@@ -108,6 +110,7 @@ export function PricingPage() {
         branchId,
         includeRaw: canRawView,
         includeProducts: canProductsView,
+        includeCurrentCosts: canCurrentCostView,
       });
 
       if (requestId !== loadRequest.current) return;
@@ -140,7 +143,7 @@ export function PricingPage() {
     // remain stuck as an empty initial result.
     return () => { loadRequest.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, canRawView, canProductsView]);
+  }, [branchId, canRawView, canProductsView, canCurrentCostView]);
 
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const matches = (name: string, code?: string | null) =>
@@ -246,6 +249,7 @@ export function PricingPage() {
       sale_price: nextSale,
       wholesale_price: nextWholesale,
     } : item));
+    await load();
     show(ar ? 'تم حفظ تسعير المنتج' : 'Product pricing saved', 'success');
     setSavingId(null);
   }
@@ -341,7 +345,8 @@ export function PricingPage() {
                     <><th className="px-4 py-3 text-end">{ar ? 'آخر سعر معروف / وحدة' : 'Latest known price / unit'}</th><th className="px-4 py-3 text-end">{ar ? 'سعر مرجعي يدوي' : 'Manual reference price'}</th></>
                   ) : (
                     <>
-                      <th className="px-4 py-3 text-end">{ar ? 'التكلفة' : 'Cost'}</th>
+                      {tab === 'products' && <th className="px-4 py-3 text-end">{ar ? 'تكلفة الوحدة الحالية' : 'Current unit cost'}</th>}
+                      <th className="px-4 py-3 text-end">{ar ? 'تكلفة مرجعية يدوية' : 'Manual reference cost'}</th>
                       <th className="px-4 py-3 text-end">{ar ? 'سعر البيع' : 'Sale price'}</th>
                       {tab === 'products' && <th className="px-4 py-3 text-end">{ar ? 'سعر الجملة' : 'Wholesale'}</th>}
                     </>
@@ -399,6 +404,7 @@ export function PricingPage() {
                     <tr key={row.id} className="hover:bg-ui-page-alt/70">
                       <td className="px-4 py-3 font-semibold text-ui-text">{row.name}</td>
                       <td className="px-4 py-3 font-mono text-xs text-ui-muted">{row.sku || '-'}</td>
+                      <td className="px-4 py-3 text-end">{row.current_cost === undefined ? '—' : row.current_cost === null ? (ar ? 'غير مكتملة' : 'Incomplete') : formatNumber(row.current_cost,2)}</td>
                       <td className="px-4 py-3 text-end">
                         {priceInput(draft.cost_price, (value) => setProductDrafts((state) => ({ ...state, [row.id]: { ...draft, cost_price: value } })), !canProductsEdit, `${row.name} ${ar ? 'التكلفة' : 'cost'}`)}
                       </td>

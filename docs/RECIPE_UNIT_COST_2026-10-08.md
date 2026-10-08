@@ -1,0 +1,41 @@
+# Current recipe unit cost consistency
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `fix/recipe-live-cost-20261008`
+Current PR: #469
+Last updated: 2026-10-08
+
+## Work status
+Implementation under verification. State: **BLOCKED** for production application.
+## Guardrails
+Single writer. Preserve RLS, permissions, Financial Visibility, sent items, stock, print, KDS, shifts and balanced accounting. User keeps old invoice values unchanged, but now explicitly authorizes correcting previous sale COSTS when supported by evidence. No invented prices.
+## Baseline
+05c77317f64ba35edd16465928144bf37d918a78. Discount #468 user approved and applied to production; postmerge Full Verify37752414581 and Pages37752414554 passed.
+## Root-cause ledger
+Product editor displays manual cost0 rather than a recipe unit estimate; old Recipes route is retired and redirects to Products. Costing Center includes all recipe versions without unit-yield division, and ignores nested component groups. Cleopatra has31 used raw materials with no known price. The user clarified that genuine zero-price raw materials should contribute zero while other ingredient costs are still summed. Repair known/entered prices that were wrongly shown as zero; never invent prices.
+## Change ledger
+Read-only private SECURITY INVOKER raw-line helper flattens nested component groups, respects latest active direct recipe and direct recipe yield. Existing public costing RPCs retain access guards/ACL and use the same lines. Saved product costs in Products, Pricing and Costing Center read get_costing_overview through one service; ready products use actual positive batch cost then manual reference, manufactured products use their recipe. Unsaved product editor group estimates use their raw ingredients and latest raw prices, guard empty/cyclic groups, and sum known raw prices with genuinely unpriced ingredients contributing zero. Product-linked group quantities remain per sale. No operational stock/printing/sale mutation changes.
+## Verification ledger
+Initial full unit run had one source-contract failure in the retired recipe page; that unrelated page change was removed after user clarified recipes are inside Products. Final targeted14 tests passed, application/test typechecks passed. Full unit/build/lint recheck and fresh-database full CI pending. Product cost displays use two decimals. Supabase CLI is not installed in this runtime; forward SQL migration uses the repository's established timestamped migration path and fresh-DB harness.
+## Production gate
+New production helper/function changes require separate explicit approval after exact-head Full Verify Green. No costing migration applied. The latest user clarification supersedes the earlier proposed suppression of entire recipe costs for an unpriced ingredient.
+## Next action
+Verify nested-group/yield/unknown-price coverage, open PR, finish exact-head CI, and request approval of concrete costing migration. Actual missing raw prices still need source data.
+## Mandatory update protocol
+Update this log with implementation/verification transitions. Reconcile unexpected head movement; no force push or direct main write.
+
+Historical Cleopatra read audit from Oct1:1668 zero-cost raw consumption movements;1474 have a current reference price (estimated10233.93),194 still lack prices. These figures are reference estimates, not assumed purchase receipts. No historical cost write performed.
+
+Full local suite exposed pricing hydration source-contract mismatch and repeated toast-handler dependency in product cost loading under smoke-test mocks. Updated dependency contract and stabilized cost-error notification reference; no repeated cost query on search/render. Reverification pending.
+
+Local full suite passed:318 files/1556 tests, including a second run with CI build environment. Exact head640e466 frontend verification and Pages continuity passed. Fresh-DB migration exposed an overly strict old theoretical-cost baseline: the preceding global-price migration already replaced BOTH output expressions. Corrected the patch to require exactly two current-source expressions and replace both together; no guard relaxed. Fresh-DB recheck pending.
+
+Prepared existing historical FIFO replay plan3bdd6482-cf84-4c18-b88d-8c34aa9cf528 for Cleopatra (no ledger/stock/journal mutation):10416 consumption rows,4077 unresolved rows. Only two consumption costs differ from recorded-receipt replay: a0.0056 rounding decrease and a307.1624 purchase-return increase. This cannot repair thousands of unreceived consumption costs. Plan is review evidence only and may become stale during live operations; no historical apply performed. Unresolved Oct1-onward debts at audit time:1641 movements,174 unpriced, current reference estimate10156.88. Current-price estimates must not be silently posted as purchased actual FIFO costs.
+
+Head5d221bb fresh-DB migration applied successfully;953 of954 integration tests passed. The sole failure was an invalid new fixture inserting two recipes for one product/branch, forbidden by the existing unique key. Corrected the fixture to retire its existing recipe inside the rollback-only savepoint, retaining explicit overview/detail assertions that inactive direct ingredients are excluded while nested groups remain priced. No schema constraint or production guard changed. Full exact-head recheck pending.
+
+User clarification at12:47–12:50 Cairo: ingredient summation is correct; a real zero contributes zero and the other ingredients must still sum. The defect is an entered/previously known raw price displayed as zero. Updated server and draft recipe summation accordingly, retaining null only for structurally invalid groups/missing manufactured recipes. Removed the uncommitted partial-period reporting proposal; historical accounting semantics remain unchanged. Production read evidence: manufactured basmati rice has a known79 price with inventory average0; espresso1200 with inventory average0, among other examples. Added known-price/zero-valuation regression and mixed priced/unpriced ingredient coverage. All price reads remain on the canonical latest-positive source.
+
+Head265b703 fresh-DB calculations/nested groups passed up to the inactive-recipe fixture mutation; a recipe-item guard correctly prohibited changing ingredients after retiring its recipe. Moved that fixture ingredient update BEFORE retiring the recipe; guard unchanged. Updated source-only margin calculations to use the same current unit cost even when it is zero, without falling back to a legacy cost. Exact-head recheck pending.
+
+Updated the existing Financial Visibility regression for the clarified summation contract: an inaccessible historical purchase price still resolves to NULL on the raw-price path and zero on its recipe line, while a visible ingredient50 is included in the product total50. The hidden price999/reference remain concealed; no visibility guard or ACL was modified. Targeted10 tests/typechecks/lint passed for the clarified behavior.

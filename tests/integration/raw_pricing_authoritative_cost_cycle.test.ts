@@ -320,12 +320,16 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     await client.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Hidden price product',$2,2000,0,true)`,[product,branchA]);
     await client.query(`INSERT INTO public.recipes(id,name,product_id,branch_id,yield_quantity,is_active) VALUES($1,'Hidden price recipe',$2,$3,1,true)`,[recipe,product,branchA]);
     await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,raw]);
+    await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,rawA]);
     const prices=await asUser(viewerUser,async()=>await client.query(`SELECT unit_cost FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,raw]));
     expect(prices.rows[0].unit_cost).toBeNull();
     const overview=await asUser(viewerUser,async()=>await client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,product]));
-    expect(overview.rows[0].actual_cost).toBeNull();
+    expect(Number(overview.rows[0].actual_cost)).toBe(50); // sum visible price; hidden price contributes no value
     const detail=await asUser(viewerUser,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[product,branchA]));
-    expect(detail.rows[0].r.actual_cost).toBeNull();
+    expect(Number(detail.rows[0].r.actual_cost)).toBe(50);
+    const hidden=detail.rows[0].r.recipe_items.find((line:{raw_material_id:string})=>line.raw_material_id===raw);
+    expect(Number(hidden.unit_cost)).toBe(0);
+    expect(hidden.cost_reference).toBeNull();
   });
 
 });

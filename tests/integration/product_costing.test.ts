@@ -115,8 +115,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       ),
     );
     expect(overview.length).toBe(1);
-    expect(Number(overview[0].actual_cost)).toBe(42); // direct 22 + linked group: 2 x 0.5 x 20
-    expect(Number(overview[0].theoretical_cost)).toBe(42); // canonical recipe model: direct 22 + linked group 20
+    expect(Number(overview[0].actual_cost)).toBe(31); // direct 11 per sale + linked group: 2 x 0.5 x 20
+    expect(Number(overview[0].theoretical_cost)).toBe(31); // canonical recipe model: direct 11 per sale + linked group 20
     expect(Number(overview[0].sale_price)).toBe(100);
     expect(Number(overview[0].recipe_item_count)).toBe(2);
 
@@ -126,7 +126,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
         `SELECT product_id, actual_cost, recipe_item_count FROM public.get_costing_overview(NULL) WHERE product_id = $1`, [prodNoRecipe],
       ),
     );
-    expect(Number(noRecipe[0].actual_cost)).toBe(0);
+    expect(Number(noRecipe[0].actual_cost)).toBe(20);
     expect(Number(noRecipe[0].recipe_item_count)).toBe(0);
   });
 
@@ -176,15 +176,15 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     );
     expect(detail[0].r.success).toBe(true);
     expect(detail[0].r.product_name).toBe('Cost Product');
-    expect(Number(detail[0].r.theoretical_cost)).toBe(42);
-    expect(Number(detail[0].r.actual_cost)).toBe(42);
+    expect(Number(detail[0].r.theoretical_cost)).toBe(31);
+    expect(Number(detail[0].r.actual_cost)).toBe(31);
     expect(detail[0].r.recipe_items.length).toBe(2);
     const directLine = detail[0].r.recipe_items.find((line) => !line.component_group_id);
     const groupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId);
     expect(directLine).toBeTruthy();
     expect(groupLine).toBeTruthy();
     expect(Number(directLine!.unit_cost)).toBe(20);
-    expect(Number(directLine!.line_cost)).toBe(22);
+    expect(Number(directLine!.line_cost)).toBe(11);
     expect(Number(groupLine!.unit_cost)).toBe(20);
     expect(Number(groupLine!.line_cost)).toBe(20);
     expect(groupLine!.component_group_name).toBe('Cost Component Group');
@@ -294,11 +294,11 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
         [prodId, branchA],
       ),
     );
-    expect(Number(detail[0].r.actual_cost)).toBe(58.8); // latest count: direct 30.8 + group 28
+    expect(Number(detail[0].r.actual_cost)).toBe(43.4); // latest count: direct 15.4 per sale + group 28
     const pricedDirectLine = detail[0].r.recipe_items.find((line) => !line.component_group_id)!;
     const pricedGroupLine = detail[0].r.recipe_items.find((line) => line.component_group_id === componentUnitId)!;
     expect(Number(pricedDirectLine.unit_cost)).toBe(28);
-    expect(Number(pricedDirectLine.line_cost)).toBe(30.8);
+    expect(Number(pricedDirectLine.line_cost)).toBe(15.4);
     expect(pricedDirectLine.cost_source).toBe('stock_count');
     expect(pricedDirectLine.cost_reference).toBe('RAW-COST-SC');
     expect(Number(pricedGroupLine.unit_cost)).toBe(28);
@@ -388,18 +388,76 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(Number(impact[0].avg_cost)).toBe(18);
     expect(Number(impact[0].purchase_count)).toBe(1);
   });
-  it('does not present a partial recipe cost as a complete estimate', async () => {
+  it('includes nested group quantities/waste and ignores an inactive direct recipe', async () => {
+    await client.query('SAVEPOINT nested_cost_case');
+    try {
+      const before=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      const price=await client.query(`SELECT public._raw_cost_for_costing($1,$2) AS cost`,[rmId,branchA]);
+      const child=randomUUID();
+      await client.query(`INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,cost_price,is_active) VALUES($1,$2,'Nested current group','manufactured',$3,999,true)`,[child,`NEST-${child.slice(0,8)}`,branchA]);
+      await client.query(`INSERT INTO public.inventory_unit_recipes(unit_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[child,rmId]);
+      await client.query(`INSERT INTO public.inventory_unit_recipe_units(unit_id,component_unit_id,quantity,wastage_percent) VALUES($1,$2,2,10)`,[componentUnitId,child]);
+      const expected=Number(before.rows[0].actual_cost)+4.4*Number(price.rows[0].cost);
+      const after=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      const detail=await asUser(managerId,async()=>client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
+      expect(Number(after.rows[0].actual_cost)).toBeCloseTo(expected,2);
+      expect(Number(detail.rows[0].r.actual_cost)).toBeCloseTo(expected,2);
+      const childLine=detail.rows[0].r.recipe_items.find((line:{component_group_id:string})=>line.component_group_id===child);
+      expect(Number(childLine.quantity)).toBeCloseTo(4.4);
+      expect(Number(childLine.line_cost)).toBeCloseTo(4.4*Number(price.rows[0].cost),2);
+      // The schema permits one recipe per product/branch. Retire that existing
+      // recipe instead of constructing a second row that violates its key.
+      await client.query(`UPDATE public.recipe_items SET quantity=100 WHERE recipe_id=$1`,[recipeId]);
+      await client.query(`UPDATE public.recipes SET is_active=false,version=99 WHERE id=$1`,[recipeId]);
+      const retired=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      const retiredDetail=await asUser(managerId,async()=>client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
+      expect(Number(retired.rows[0].actual_cost)).toBeCloseTo(5.4*Number(price.rows[0].cost),2);
+      expect(Number(retiredDetail.rows[0].r.actual_cost)).toBeCloseTo(5.4*Number(price.rows[0].cost),2);
+      expect(retiredDetail.rows[0].r.recipe_items.every((line:{component_group_id:string|null})=>line.component_group_id!==null)).toBe(true);
+    } finally { await client.query('ROLLBACK TO SAVEPOINT nested_cost_case'); }
+  });
+  it('withholds a complete estimate for an empty linked component group',async()=>{
+    await client.query('SAVEPOINT empty_cost_case');
+    try {
+      const group=randomUUID();
+      await client.query(`INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,is_active) VALUES($1,$2,'Empty cost group','manufactured',$3,true)`,[group,`EMPTY-${group.slice(0,8)}`,branchA]);
+      await client.query(`INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)`,[prodId,group]);
+      const r=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      expect(r.rows[0].actual_cost).toBeNull();
+      const denied=await asUser(managerId,async()=>client.query(`SELECT has_function_privilege(current_user,'public._costing_product_raw_lines(uuid,uuid)','EXECUTE') allowed`));
+      expect(denied.rows[0].allowed).toBe(false);
+    } finally { await client.query('ROLLBACK TO SAVEPOINT empty_cost_case'); }
+  });
+  it('keeps summing known ingredient prices when another raw material has no price', async () => {
+    const before=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
     const missingRaw=randomUUID();
     const unit=await client.query(`SELECT unit_id FROM public.raw_materials WHERE id=$1`,[rmId]);
     await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Unpriced component',$3,$4,0,true)`,[missingRaw,`UNP-${missingRaw.slice(0,8)}`,unit.rows[0].unit_id,branchA]);
     await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,0.01,0)`,[recipeId,missingRaw]);
     const overview=await asUser(managerId,async()=>await client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
-    expect(overview.rows[0].actual_cost).toBeNull();
+    expect(Number(overview.rows[0].actual_cost)).toBe(Number(before.rows[0].actual_cost));
     const detail=await asUser(managerId,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
-    expect(detail.rows[0].r.actual_cost).toBeNull();
+    expect(Number(detail.rows[0].r.actual_cost)).toBe(Number(before.rows[0].actual_cost));
     const price=await client.query(`SELECT unit_cost,price_source FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,missingRaw]);
     expect(price.rows[0].unit_cost).toBeNull();
     expect(price.rows[0].price_source).toBe('unpriced');
+  });
+
+  it('uses an entered raw price even when inventory average and manual product/group costs are zero',async()=>{
+    await client.query('SAVEPOINT known_raw_zero_valuation');
+    try {
+      const before=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      expect(Number(before.rows[0].actual_cost)).toBeGreaterThan(0);
+      await client.query(`UPDATE public.raw_material_inventory SET avg_cost=0 WHERE raw_material_id=$1 AND branch_id=$2`,[rmId,branchA]);
+      await client.query(`UPDATE public.products SET cost_price=0 WHERE id=$1`,[prodId]);
+      await client.query(`UPDATE public.inventory_units SET cost_price=0 WHERE id=$1`,[componentUnitId]);
+      const after=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      const detail=await asUser(managerId,async()=>client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
+      expect(Number(after.rows[0].actual_cost)).toBe(Number(before.rows[0].actual_cost));
+      expect(Number(detail.rows[0].r.actual_cost)).toBe(Number(before.rows[0].actual_cost));
+      const direct=detail.rows[0].r.recipe_items.find((line:{raw_material_id:string;component_group_id:string|null})=>line.raw_material_id===rmId&&!line.component_group_id);
+      expect(Number(direct.unit_cost)).toBeGreaterThan(0);
+    } finally { await client.query('ROLLBACK TO SAVEPOINT known_raw_zero_valuation'); }
   });
 
 });
