@@ -60,4 +60,4 @@ with shared definitions, accurate allocation, configurable tables and source tra
 
 - #472 approved checkout migration applied, exact live function hashes verified, merged at fcb2c25d. Pages deployment37777968084 succeeded; post-merge Verify37777968117 succeeded (frontend, DB/RLS, browser and pages-continuity).
 
-- #473 explicitly approved2026-10-08 16:08 Cairo, merged856bc493 and Pages37782100338 succeeded. Postmerge Verify37782100371 Green. #474 families is a separate draft at e36d6c0a with fresh Verify37782280412. Current work adds column search/order and selected-column exports on the published baseline, independent of #474.
+- #473 explicitly approved2026-10-08 16:08 Cairo, merged856bc493 and Pages37782100338 succeeded. Postmerge Verify37782100371 Green. #474 families is a separate draft at e36d6c0a with fresh Verify37782280412 Green at e36d6c0a. Current work adds column search/order and selected-column exports on the published baseline, independent of #474.
