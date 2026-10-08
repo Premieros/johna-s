@@ -3,7 +3,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-price-sql-timeouts`
 Current PR: `#478`
-Last updated: 2026-10-09 01:03 Africa/Cairo
+Last updated: 2026-10-09 01:16 Africa/Cairo
 
 ## Work status
 State: **BLOCKED** pending exact-head consolidated Full Verify for #478; production SQL apply additionally requires separate explicit approval. User authorized implementing explicit reports/shared results and fastest repair. Production #477 is deployed at8df96523; post-merge Full Verify37845279360 Green. Earlier report deliveries below are historical.
@@ -182,3 +182,5 @@ Native body correction local verification:338 files /1646 frontend tests pass;28
 Transport consistency follow-up:invalidate shared reports both before and after a mutation completes, so a report read during an outstanding write cannot be retained as a post-write result. Added a delayed-write native-body regression. No report numbers, permissions or SQL changed; exact-head verification remains required.
 
 Write-completion follow-up:12 focused transport tests pass; app/test typechecks, build and changed-file lint pass. Prior complete local suite1646 tests was Green. Require Full Verify on the updated head; production remains unchanged.
+
+Corrected transport headc5a278d2 Full Verify37851029825 passed1647 frontend and971 DB/RLS tests plus Pages continuity. Browser:123 passed, inventory request-count test flaky (two batch reads on first attempt, zero after retry), and new cross-view test failed only at detailed invoice rendering because its synthetic sale omitted mandatory created_at. Add a date within the requested period plus normal sale fields. Start the stock test on a fresh report document before installing counters, excluding possible pending dashboard reads from the report contract. Exact output, one shared dataset/two after forced refresh, zero report batch reads and all KDS assertions retained. Application and SQL unchanged; fresh exact-head Full Verify required. No production deployment or SQL apply.

@@ -251,6 +251,10 @@ test.describe('dashboard and navigation actions', () => {
 
   test('inventory and low-stock use aggregate source results without reading batches in the browser', async ({ page }) => {
     let stockReads=0; let batchReads=0;
+    // Start a fresh report document before counting report requests.
+    await page.goto('/#/reports?type=inventory');
+    await page.reload();
+    await expect(page.getByTestId('run-report-button')).toBeVisible();
     for (const table of ['raw_material_batches','inventory_unit_batches','raw_material_inventory']) {
       await page.route(`${SUPABASE_ORIGIN}/rest/v1/${table}**`,async route=>{ batchReads++; await route.fulfill({status:200,contentType:'application/json',body:'[]'}); });
     }
@@ -262,7 +266,6 @@ test.describe('dashboard and navigation actions', () => {
         rawBalances:low?[{raw_material_id:'material',branch_id:'branch',quantity:5}]:[],unitMasters:[],unitBatches:[]};
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
     });
-    await page.goto('/#/reports?type=inventory');
     await page.getByTestId('run-report-button').click();
     await expect(page.getByRole('table').getByText('CANONICAL-STOCK',{exact:true})).toBeVisible();
     const tools=page.getByTestId('report-workbench');
@@ -292,8 +295,8 @@ test.describe('dashboard and navigation actions', () => {
   test('reports stay idle until requested and reuse identical sales results across views', async ({ page }) => {
     const reads: Record<string, unknown>[] = [];
     await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_dataset**`, async route => {
-      reads.push(route.request().postDataJSON());
-      const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
+      const args = route.request().postDataJSON(); reads.push(args);
+      const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', created_at: `${args.p_from_date}T08:00:00Z`, status: 'completed', payment_method: 'cash', paid_amount: 10, branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { count: 1, total: 10 } }) });
     });
     await page.goto('/#/reports?type=sales_by_employee');
