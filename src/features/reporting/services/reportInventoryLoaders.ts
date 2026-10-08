@@ -16,18 +16,6 @@ const filterQ = <T,>(
 const fetchRows = <T,>(query: unknown): Promise<T[]> =>
   fetchAllReportRows(query as RangePageQuery<T>);
 
-export async function loadSalesByProductItems(args: {
-  branchId: string | null;
-  filters: ReportFilters;
-}): Promise<Record<string, unknown>[]> {
-  let q = supabase
-    .from('sale_items')
-    .select('sale_id, quantity, refunded_quantity, total, refunded_amount, product:products(name), sale:sales(id, created_at, branch_id, status, order_type, warehouse_id, cashier_id, customer_id, payment_method, total, refunded_amount)');
-  if (args.branchId) q = q.eq('sale.branch_id', args.branchId);
-  q = filterQ(q, args.filters, applySaleItemFilters);
-  return fetchRows<Record<string, unknown>>(q);
-}
-
 export async function loadTopConsumedProductItems(args: {
   branchId: string | null;
   filters: ReportFilters;

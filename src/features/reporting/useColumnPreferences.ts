@@ -19,15 +19,14 @@ export function useColumnPreferences(reportType: string) {
 
   const visibleColumns: string[] | null = stored[reportType] ?? null;
 
-  const toggleColumn = useCallback((key: string) => {
+  const toggleColumn = useCallback((key: string, allColumns: string[]) => {
     setStored((prev) => {
       const current = prev[reportType] ?? null;
       let next: string[] | null;
       if (current === null) {
-        next = [key];
+        next = allColumns.filter((column) => column !== key);
       } else if (current.includes(key)) {
         next = current.filter((c) => c !== key);
-        if (next.length === 0) next = null;
       } else {
         next = [...current, key];
       }

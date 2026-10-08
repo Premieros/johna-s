@@ -78,7 +78,7 @@ describe('reports domain boundary', () => {
   it('keeps inventory, item, low-stock and waste query construction out of the page', () => {
     expect(page).not.toContain('supabase.from(');
     expect(page).not.toContain('fetchAllReportRows');
-    expect(page).toContain('loadSalesByProductItems');
+    expect(page).toContain('loadProductSalesSummary');
     expect(page).toContain('loadTopConsumedProductItems');
     expect(page).toContain('loadComponentConsumptionRows');
     expect(page).toContain('loadTopConsumedComponentRows');

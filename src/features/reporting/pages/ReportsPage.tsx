@@ -1,3 +1,4 @@
+import { loadProductSalesSummary } from '../services/productSalesReport';
 import { loadStationSalesLines } from '../services/stationSalesReport';
 import { expenseAccountLabel } from '../utils/expenseAccountLabel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -27,7 +28,7 @@ import { ReportFilterBar } from '../ReportFilterBar';
 import { EMPTY_REPORT_FILTER_OPTIONS, useReportFilterOptions } from '../useReportFilterOptions';
 import { loadExpenseReportRows, loadPurchaseReportRows, loadSalesReportRows, loadOperationalReportPage } from '../services/reportCoreLoaders';
 import { loadCashierPerformanceRows, loadDetailedInvoiceRows, loadReturnRows, loadSalesByEmployeeRows } from '../services/reportSalesLoaders';
-import { loadComponentConsumptionRows, loadInventoryBatchRows, loadLowStockSources, loadProductBranchRows, loadSalesByProductItems, loadTopConsumedComponentRows, loadTopConsumedProductItems, loadWasteRows } from '../services/reportInventoryLoaders';
+import { loadComponentConsumptionRows, loadInventoryBatchRows, loadLowStockSources, loadProductBranchRows, loadTopConsumedComponentRows, loadTopConsumedProductItems, loadWasteRows } from '../services/reportInventoryLoaders';
 import { useBranches } from '@/hooks/useBranches';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -41,11 +42,9 @@ import {
   type ReportType,
 } from '../reportFilters';
 import {
-  allocateSaleNetRevenue,
   netPurchaseAmount,
   netSaleAmount,
   netSaleItemQuantity,
-  netSaleItemRevenue,
   netSalePayment,
 } from '../numericIntegrity';
 
@@ -532,43 +531,28 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setChartData(Array.from(empMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((employee) => ({ name: employee.name, value: employee.total })));
       setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
     } else if (reportType === 'sales_by_product') {
-      const items = await loadSalesByProductItems({
-        branchId: effectiveBranchFilter || null,
-        filters,
+      const products = await loadProductSalesSummary({
+        branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters,
+        lang: lang as 'ar' | 'en', includeCost: false,
       });
-      const filtered = items.filter((item: Record<string, unknown>) => {
-        const sale = item.sale as { created_at: string } | null;
-        return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
-      });
-      const saleBaseTotals = new Map<string, number>();
-      filtered.forEach((item: Record<string, unknown>) => {
-        const saleId = String(item.sale_id || '');
-        saleBaseTotals.set(saleId, (saleBaseTotals.get(saleId) || 0) + netSaleItemRevenue(item));
-      });
-      const prodMap = new Map<string, { branchId: string; name: string; quantity: number; total: number }>();
-      filtered.forEach((item: Record<string, unknown>) => {
-        const product = item.product as { name: string } | null;
-        const sale = item.sale as { branch_id?: string; total?: number | string | null; refunded_amount?: number | string | null } | null;
-        const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
-        const branchId = String(sale?.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
-        const existing = prodMap.get(key) || { branchId, name, quantity: 0, total: 0 };
-        const baseRevenue = netSaleItemRevenue(item);
-        const saleBase = saleBaseTotals.get(String(item.sale_id || '')) || 0;
-        const authoritativeSaleNet = netSaleAmount(sale || {});
-        const allocatedRevenue = allocateSaleNetRevenue(baseRevenue, authoritativeSaleNet, saleBase);
-        existing.quantity += netSaleItemQuantity(item);
-        existing.total += allocatedRevenue;
-        prodMap.set(key, existing);
-      });
-      const rows = Array.from(prodMap.values()).sort((a, b) => b.total - a.total).map((product) => withBranch(product.branchId, {
-        [lang === 'ar' ? 'المنتج' : 'Product']: product.name,
-        [lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']: product.quantity,
-        [lang === 'ar' ? 'صافي الإيراد' : 'Net Revenue']: product.total,
+      const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
+      const rows = products.map((product) => withBranch(product.branchId, {
+        [label('المنتج', 'Product')]: product.name || label('غير معروف', 'Unknown'),
+        [label('معرف المنتج', 'Product ID')]: product.productId || '-',
+        [label('الوحدة', 'Unit')]: product.unit,
+        [label('الكمية المباعة', 'Sold Quantity')]: product.soldQuantity,
+        [label('الكمية المرتجعة', 'Returned Quantity')]: product.returnedQuantity,
+        [label('صافي الكمية', 'Net Quantity')]: product.netQuantity,
+        [label('المبيعات قبل الخصم', 'Gross Sales')]: product.gross,
+        [label('الخصم الموزع', 'Allocated Discount')]: product.discount,
+        [label('الضريبة الموزعة', 'Allocated Tax')]: product.tax,
+        [label('قيمة المرتجع', 'Return Value')]: product.refunded,
+        [label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax')]: product.netBeforeTax,
+        [label('صافي الإيراد', 'Net Revenue')]: product.net,
       }));
       setData(rows);
-      setChartData(Array.from(prodMap.values()).sort((a, b) => b.total - a.total).slice(0, 10).map((product) => ({ name: product.name, value: product.total })));
-      setSummary({ total: Array.from(prodMap.values()).reduce((sum, product) => sum + product.total, 0), count: rows.length });
+      setChartData(products.slice(0, 10).map((product) => ({ name: `${product.name || label('غير معروف', 'Unknown')} (${product.unit})`, value: product.net })));
+      setSummary({ total: products.reduce((sum, product) => sum + product.net, 0), count: rows.length });
     } else if (reportType === 'detailed_invoices') {
       const sales = await loadDetailedInvoiceRows({
         branchId: effectiveBranchFilter || null,
@@ -1127,13 +1111,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       totalRow,
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
-      columns: reportType === 'sales_by_station' ? columns : excelProfile.columns,
+      columns: (reportType === 'sales_by_station' || reportType === 'sales_by_product') ? columns : excelProfile.columns,
       columnWidths: excelProfile.columnWidths,
       sourceNote: excelProfile.sourceNote,
       lang,
     });
   };
-  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV(reportType === 'sales_by_station' ? complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))) : complete.rows, `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
+  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV((reportType === 'sales_by_station' || reportType === 'sales_by_product') ? complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))) : complete.rows, `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
 
   const reportTypes: { key: ReportType; label: string; icon: React.ReactNode }[] = [
     { key: 'sales', label: t('salesReport'), icon: <TrendingUp className="w-4 h-4" /> },
@@ -1284,7 +1268,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const handlePrint = (complete: ReportSnapshot, reservedWindow?: Window | null) => {
     const reportLabel = reportTypes.find((row) => row.key === reportType)?.label ?? reportType;
-    const headers = reportType === 'sales_by_station' ? columns : complete.rows.length > 0 ? Object.keys(complete.rows[0]) : [];
+    const headers = (reportType === 'sales_by_station' || reportType === 'sales_by_product') ? columns : complete.rows.length > 0 ? Object.keys(complete.rows[0]) : [];
     const rows = complete.rows.map((row) => headers.map((header) => {
       const value = row[header];
       if (typeof value === 'number' && moneyKeys.includes(header)) return formatFinancialCurrency(value, currency, lang);
@@ -1327,7 +1311,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
           <ColumnPicker
             columns={data.length > 0 ? Object.keys(data[0]) : []}
             visibleColumns={visibleColumns}
-            onToggle={toggleColumn}
+            onToggle={(key) => toggleColumn(key, allColumns)}
             onShowAll={showAllColumns}
             lang={lang}
             hiddenCount={hiddenCount}
