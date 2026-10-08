@@ -39,6 +39,7 @@ export function ProductConfigModal({
   const [itemNotes, setItemNotes] = useState('');
   const [itemDiscount, setItemDiscount] = useState(0);
   const [loadingModifiers, setLoadingModifiers] = useState(false);
+  const [loadedProductId, setLoadedProductId] = useState<string | null>(null);
   const [modifierError, setModifierError] = useState('');
 
   useEffect(() => {
@@ -50,6 +51,8 @@ export function ProductConfigModal({
     setItemDiscount(initialItem?.discount_amount || 0);
     setModifierError('');
     setLoadingModifiers(true);
+    setLoadedProductId(null);
+    setGroups([]);
 
     api.catalog.getProductModifiers(product.id).then(({ data, error }) => {
       if (cancelled) return;
@@ -66,6 +69,7 @@ export function ProductConfigModal({
       }
       const loaded = Array.isArray(res.groups) ? res.groups : [];
       setGroups(loaded);
+      setLoadedProductId(product.id);
       if (!initialItem?.modifier_option_ids?.length) {
         const defaults: string[] = [];
         for (const group of loaded) {
@@ -73,6 +77,11 @@ export function ProductConfigModal({
           defaults.push(...defaultOptions.map((o) => o.id));
         }
         setSelectedIds(defaults);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setLoadedProductId(null);
+        setModifierError(isAr ? 'تعذر تحميل الاختيارات. أغلق النافذة وأعد فتحها للمحاولة.' : 'Could not load options. Close and reopen to retry.');
       }
     }).finally(() => {
       if (!cancelled) setLoadingModifiers(false);
@@ -107,6 +116,7 @@ export function ProductConfigModal({
   const lineTotal = Math.max(0, lineSubtotal - itemDiscount);
 
   const handleSave = () => {
+    if (loadingModifiers || loadedProductId !== product.id) return;
     for (const group of groups) {
       const ids = new Set(group.options.map((o) => o.id));
       const count = selectedIds.filter((id) => ids.has(id)).length;
@@ -146,7 +156,7 @@ export function ProductConfigModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ui-text/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+    <div data-testid="pos-product-config-modal" className="fixed inset-0 z-50 flex items-end justify-center bg-ui-text/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-ui-border bg-ui-surface pb-[env(safe-area-inset-bottom)] shadow-ui-2xl sm:max-h-[86vh] sm:max-w-lg sm:rounded-2xl sm:pb-0">
         <div className="flex items-center justify-between border-b border-ui-border px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -228,7 +238,7 @@ export function ProductConfigModal({
           </div>
           <div className="flex shrink-0 gap-2">
             <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-ui-border bg-ui-surface px-3 text-[11px] font-black text-ui-muted">{t('cancel')}</button>
-            <button type="button" disabled={loadingModifiers} onClick={handleSave} className="min-h-10 rounded-lg bg-ui-primary px-4 text-[11px] font-black text-ui-primary-fg shadow-ui-sm disabled:opacity-50 sm:px-5 sm:text-xs">{initialItem ? (isAr ? 'تحديث' : 'Update') : (isAr ? 'إضافة' : 'Add')}</button>
+            <button type="button" disabled={loadingModifiers || loadedProductId !== product.id} onClick={handleSave} className="min-h-10 rounded-lg bg-ui-primary px-4 text-[11px] font-black text-ui-primary-fg shadow-ui-sm disabled:opacity-50 sm:px-5 sm:text-xs">{initialItem ? (isAr ? 'تحديث' : 'Update') : (isAr ? 'إضافة' : 'Add')}</button>
           </div>
         </div>
       </div>

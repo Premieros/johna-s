@@ -78,7 +78,10 @@ export const ProductBrowser = memo(function ProductBrowser({ branchId = null, us
 
   const addProductDirectly = (product: Product) => {
     if (!canAddToCart) return;
-    onAddToCart(product);
+    // The add button must follow the same configuration path as the card.
+    // Required options are authoritative on the server; skipping them creates
+    // a cart that cannot be saved or sent to kitchen.
+    selectProduct(product);
   };
 
   const handleImageUpload = async (product: Product, file?: File) => {

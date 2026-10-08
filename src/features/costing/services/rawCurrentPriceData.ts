@@ -20,15 +20,31 @@ export function rawCurrentPriceMap(rows: RawCurrentPriceRow[]): Record<string, n
 /** Latest accessible known price for current estimates; never actual FIFO valuation. */
 export async function loadRawCurrentPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
   if (rawIds?.length === 0) return [];
+  // Page the inexpensive identity list, then price bounded sets. Paging the
+  // result of the pricing RPC reruns its entire history query for every page.
+  const ids = new Set(rawIds || []);
+  if (rawIds === null) {
+    for (let from = 0; ; from += 500) {
+      let query = supabase.from('raw_materials').select('id').order('id').range(from, from + 499);
+      if (branchId) query = query.eq('branch_id', branchId);
+      const result = await query;
+      if (result.error) throw result.error;
+      const page = (result.data || []) as Array<{ id: string }>;
+      page.forEach(row => ids.add(row.id));
+      if (page.length < 500) break;
+    }
+  }
   const rows: RawCurrentPriceRow[] = [];
-  for (let from = 0; ; from += 500) {
+  const selected = [...ids].sort();
+  // Sequential batches limit database pressure. A failed batch rejects the
+  // whole read; no partial price map or invented zero reaches the caller.
+  for (let from = 0; from < selected.length; from += 100) {
     const result = await supabase.rpc('get_raw_material_current_prices', {
       p_branch_id: branchId,
-      p_raw_material_ids: rawIds,
-    }).order('raw_material_id').range(from, from + 499);
+      p_raw_material_ids: selected.slice(from, from + 100),
+    }).order('raw_material_id');
     if (result.error) throw result.error;
-    const page = (result.data || []) as RawCurrentPriceRow[];
-    rows.push(...page);
-    if (page.length < 500) return rows;
+    rows.push(...((result.data || []) as RawCurrentPriceRow[]));
   }
+  return rows;
 }

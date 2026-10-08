@@ -1,9 +1,9 @@
 # Checkout and reports rebuild — 2026-10-08
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `feat/report-workspace-20261008`
-Current PR: #476 (seven-report workspace; #475 deployed baseline)
-Last updated: 2026-10-08
+Branch: `fix/pos-modifier-and-cost-read-failures`
+Current PR: #477 (POS modifier failures and bounded pricing reads)
+Last updated: 2026-10-08 23:23 Africa/Cairo
 
 ## Work status
 State: **BLOCKED** for the new seven-report workspace production merge pending exact-head Full Verify and explicit approval. Implementation and local verification in progress. Previous #475 applied/deployed at dd4bdeef; Full Verify37814067672 and deployment37814067770 succeeded.
@@ -118,3 +118,25 @@ User directs implementation of the reviewed seven basic reports, merged view dis
 
 ## Seven-report workspace local verification
 1625 frontend tests passed. App/test typechecks passed. Production build passed. Lint: zero errors, 15 existing warnings. API contract unchanged (166 RPCs, 57 tables); locked database identity verified. New behavioral coverage checks seven primary reports, permission-filtered discovery, legacy links, missing costs, recorded/current cost separation, historical day-only RPC scope, negative closing values, full export read reuse and failure export blocking. Full isolated DB/RLS and browser verification remains required on the published exact head.
+
+
+## POS failure follow-up — current scope
+State: **BLOCKED** until exact-head Full Verify succeeds. User approval for #477 merge and Pages deployment was received 2026-10-08 23:23 Cairo; no further production approval is needed for this frontend-only scope. No database migrations or live order mutations authorized or included.
+
+Root cause: the + button bypassed ProductConfigModal, and its confirm action remained available after options failed to load. Required two-choice modifiers could reach a cart incomplete and fail server validation. Route + through configuration and fail closed on read failure.
+
+Costing mitigation: enumerate visible raw identities and price at most 100 per sequential request, retaining server pricing and caller permissions. Serialize overlapping costing reads and stop stale follow-ups. Total loading time and historical query latency remain unverified on production.
+
+Unresolved: existing generic CLIENT_ERROR events lack mutation identity. Preserve bounded original error code and create/update operation context for future diagnoses; do not claim these causes fixed.
+
+Verification: 336 local test files / 1634 unit-component tests passed, app typecheck and build passed, database identity verified. CI app/scope passed on c3d3f5f. Full Verify stopped at the active-worklog branch mismatch, corrected here. Fresh exact-head CI is required.
+
+Next action: complete Full Verify, mark #477 ready, merge only its validated head, follow Pages and confirm deployed assets. Preserve all normal business protection messages.
+
+
+### CI journal fixture statistics follow-up (2026-10-09 00:03 Cairo)
+
+- Final-head Full Verify run 37841200806 passed application verification and Pages continuity, but journal pagination assertions exceeded the unchanged 8-second SQL budget on both attempts (4 failures, then 3; 967 other database tests passed on attempt 2). Browser checks remained skipped.
+- A fresh isolated local PostgreSQL 16 database passed all 7 journal pagination tests in 2.77 seconds. The full local database suite could not establish comparable evidence because the local filesystem produced PostgreSQL relation EOF errors; those environment failures are not reported as application regressions or successful full validation.
+- Refresh planner statistics for the journal fixture and its permission tables after bulk inserts. This addresses a plausible stale-estimates contributor in the shared rolled-back fixture database; the exact CI cause is not yet proven. All existing isolation, financial visibility, pagination assertions and the 8-second statement budget remain intact.
+- No production migration, SQL function, RLS policy, data or permission change is included. Merge remains blocked until the updated exact head passes Full Verify. User approval for frontend merge/deployment remains recorded above.
