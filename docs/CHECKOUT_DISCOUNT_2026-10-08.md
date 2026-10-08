@@ -33,3 +33,5 @@ CI c2a69ccb: 1548/1549 unit tests passed; source contract required the normalize
 Failed approval persistence keeps payment blocked until a new approval succeeds; rejection/expiry remain explicit decisions. Latest full-unit recheck and fresh-database end-to-end checks are pending; no production migration or merge.
 
 Full Verify 37748475108 at2232621f: frontend1549/1549 and schema/Pages continuity passed; DB951/952 passed. New cashier settlement fixture lacked the pinned inventory warehouse, correctly rejected by production guard. Fixed only test fixture warehouse and sent snapshot; production warehouse guards untouched. Full recheck pending.
+
+Full Verify 37749647121 at e11012ea: all1549 frontend tests passed; all6 new authenticated cashier checkout integration tests passed, including exact invoice discount and replay rejection. DB951/952 passed; the unrelated existing journal_page_read test hit its statement timeout. Recheck required; no production writes.
