@@ -3,7 +3,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-price-sql-timeouts`
 Current PR: `#478`
-Last updated: 2026-10-09 00:43 Africa/Cairo
+Last updated: 2026-10-09 01:01 Africa/Cairo
 
 ## Work status
 State: **BLOCKED** pending exact-head consolidated Full Verify for #478; production SQL apply additionally requires separate explicit approval. User authorized implementing explicit reports/shared results and fastest repair. Production #477 is deployed at8df96523; post-merge Full Verify37845279360 Green. Earlier report deliveries below are historical.
@@ -174,3 +174,7 @@ Final local frontend validation:337 test files /1643 unit-component tests passed
 Final capacity follow-up: six multi-branch report families (including raw valuation/current cost) read branches sequentially rather than submitting heavy per-branch RPCs concurrently. The screen-read hook now passes an independent AbortSignal and aborts stale callers; branch readers stop before requesting another branch and reject errors/cancellation without partial output. Existing output order/totals retained.29 targeted report/cache/cancellation tests and app/test typechecks passed; final complete verification remains required.
 
 Final branch-capacity validation:338 local test files /1645 unit-component tests passed, with unchanged pricing/costing SQL. Build, typechecks, changed-file ESLint and API contract passed. No production SQL applied.
+
+Browser verification correction:exact headcb53ff2a Full Verify37848784002 passed1645 frontend and971 DB/RLS tests plus Pages continuity;119 browser tests passed and6 failed. Native Request inspection in the original GET coordinator transferred/consumed the POST body before handing it to fetch when the new report cache supplied a Request object. Reproduced with the native Request constructor; preserve the original upload body while inspecting. Add an integrated two-transport native-body consumption regression. Remove one incorrectly added report-button click from the unrelated KDS browser test. All original report output/read-count and KDS assertions retained. No production deployment or SQL apply; fresh exact-head Full Verify required.
+
+Native body correction local verification:338 files /1646 frontend tests pass;28 focused transport/report tests, app/test typechecks, build, changed-file lint and contract check pass. No production deployment/apply. Publish corrected head and require fresh Full Verify.

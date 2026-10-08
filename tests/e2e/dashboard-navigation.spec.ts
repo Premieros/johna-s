@@ -351,7 +351,6 @@ test.describe('dashboard and navigation actions', () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/#/kitchen-display');
       await page.reload();
-      await page.getByTestId('run-report-button').click();
       await expect(page.getByText('#RECENT-KDS', { exact: true })).toBeVisible();
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
       expect(historyReads.length).toBe(historyCount);

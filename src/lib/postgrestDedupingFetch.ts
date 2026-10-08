@@ -2,7 +2,10 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 
 function postgrestRequest(input: RequestInfo | URL, init?: RequestInit): Request | null {
   try {
-    const request = new Request(input, init);
+    // Inspect a Request without transferring/consuming its upload body.
+    const request = input instanceof Request && !init
+      ? input
+      : new Request(input instanceof Request ? input.clone() : input, init);
     const url = new URL(request.url);
     return url.pathname.startsWith('/rest/v1/') ? request : null;
   } catch {
