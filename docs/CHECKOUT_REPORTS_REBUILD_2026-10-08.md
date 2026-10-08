@@ -1,8 +1,8 @@
 # Checkout and reports rebuild — 2026-10-08
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `fix/pos-modifier-and-cost-read-failures`
-Current PR: #477 (POS modifier failures and bounded pricing reads)
+Branch: `fix/raw-price-sql-timeouts`
+Current PR: `0` (preparing separate SQL review)
 Last updated: 2026-10-08 23:23 Africa/Cairo
 
 ## Work status
@@ -140,3 +140,17 @@ Next action: complete Full Verify, mark #477 ready, merge only its validated hea
 - A fresh isolated local PostgreSQL 16 database passed all 7 journal pagination tests in 2.77 seconds. The full local database suite could not establish comparable evidence because the local filesystem produced PostgreSQL relation EOF errors; those environment failures are not reported as application regressions or successful full validation.
 - Refresh planner statistics for the journal fixture and its permission tables after bulk inserts. This addresses a plausible stale-estimates contributor in the shared rolled-back fixture database; the exact CI cause is not yet proven. All existing isolation, financial visibility, pagination assertions and the 8-second statement budget remain intact.
 - No production migration, SQL function, RLS policy, data or permission change is included. Merge remains blocked until the updated exact head passes Full Verify. User approval for frontend merge/deployment remains recorded above.
+
+
+### Shared raw price read optimization (2026-10-09 Cairo)
+
+- Previous #477 delivery completed: exact-head Full Verify37843961082 Green; merged8df96523; Pages37845279299 Green. Live index-DL1uX8F7.js references new POS/price chunks; configuration marker, POS error context and price batch parameter present.
+- Active branch now fix/raw-price-sql-timeouts. User reports many screens showing statement timeout; inspect last5 hours16:12–21:12 UTC. Seven Postgres timeouts involve current prices, historical sales-cost estimates and current raw valuation; shared current-price routine appears in each context.
+- Authenticated owner read-only EXPLAIN:100 selected prices946.738ms. Exact price SQL for402 visible branch raws2939.712ms. Fallback batch scans ran402 times despite292 known event prices, consuming about1.13s; existing raw valuation separately invokes the price context per raw material and again for debt valuation. These are measurements for one authorized branch, not all-screen performance proof.
+- Prepared additive migration20261009001500_raw_price_read_reuse: guard fallback subqueries before scanning; materialize one current-price map per raw valuation call and reuse it for debt and displayed prices. Existing auth/permission/branch gates, INVOKER/DEFINER modes, output semantics and FIFO quantities/values preserved. No table/index/policy/grant change. Exact previous function definitions included as rollback.
+- Add parity integration coverage against the previous definitions for two authenticated roles, current events, unpriced and default/inventory/batch fallbacks. Local and exact-head verification pending.
+- State: **BLOCKED** for production SQL apply/merge until exact-head Full Verify Green and separate explicit approval of this concrete SQL change. Prior frontend approval remains valid only for completed#477. No production DDL/DML or operational transactions performed.
+
+
+Local SQL verification:35 tests across6 pricing/costing integration files passed against an isolated PostgreSQL16 database with all migrations; app/test typecheck, worklog4 tests and changed-test ESLint passed. Price parity compares all fields with previous function definitions for manager and viewer, including event prices, hidden/unpriced and default/inventory/batch fallbacks.
+Read-only live candidate query parity:all402 branch prices equal the existing API result; existing API3006.142ms versus guarded candidate SQL1564.014ms. Candidate valuation SQL returned402 rows in1285.564ms with the existing definer execution role postgres plus owner's JWT context. That reproduces calculation context only; local tests verify the public auth/permission gates. These single-branch warmed-read measurements are not a blanket speedup guarantee, and the candidate functions remain UNAPPLIED.

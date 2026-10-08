@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `c0a94027`
-- Current active branch: `fix/pos-modifier-and-cost-read-failures`
+- Latest main baseline reconciled: `8df96523`
+- Current active branch: `fix/raw-price-sql-timeouts`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
@@ -119,3 +119,7 @@ Seven basic reports and internal views, cost completeness, and dated material ba
 
 ## POS failures follow-up — 2026-10-08
 Active PR #477 addresses incomplete required modifier selections through the plus button and failed configuration reads. Current-price reads use bounded sequential batches; costing reads release database capacity before follow-up queries. Historical generic CLIENT_ERROR causes remain unresolved. User explicitly approved merge/deployment at 23:23 Cairo after reviewing scope. No production database changes are included. Exact-head Full Verify remains required before merge. Previous reporting sections are historical context, not active parallel work.
+
+
+## Shared raw-price timeout follow-up — 2026-10-09
+#477 merged at8df96523 after exact-head Full Verify37843961082 passed; Pages37845279299 succeeded. Live POS and price chunks contain the new configuration marker, error context and bounded batch argument. User reports the same database timeout across multiple screens. Prepare a separately reviewed database read optimization on fix/raw-price-sql-timeouts; no production SQL apply is authorized yet. Preserve all security modes, grants, price precedence, stock values and RLS/Financial Visibility.
