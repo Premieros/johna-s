@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/reporting-families-20261008`
-Current PR: #0 (family navigation, dependent on #473)
+Current PR: #474 (family navigation draft, dependent on #473)
 Last updated: 2026-10-08
 
 ## Work status
@@ -27,7 +27,7 @@ Reporting foundation: product summaries now use whole-invoice allocations from t
 Invoice proof added only to split approval audit. Failed split/normal settlement returns unwind all writes via a nested exception block, returning the original structured failure. Direct-discount users persist and verify checkout changes before payment. Split closure now follows the normal sent-only completion rule after exact kitchen finalization, and returns persisted order closure and remaining quantities. A downstream-core rejection regression covers rollback after consumption. Existing stock/accounting/print routines retained.
 
 ## Verification ledger
-Family navigation:26 focused tests passed, including permission filtering, no duplicate family placement, cross-catalog search, existing deep links and financial selection. App/test typechecks, changed-file lint and production build passed. Full frontend suite pending; exact-head CI required.
+Family navigation:26 focused tests passed, including permission filtering, no duplicate family placement, cross-catalog search, existing deep links and financial selection. App/test typechecks, changed-file lint and production build passed. Full frontend suite1581/1581 passed; exact-head CI required.
 
 Reporting foundation: 20 focused tests passed; app/test typechecks and production build passed; full lint has zero errors (15 existing warnings). Full suite:1574 passed, one worklog-state contract failure resolved by accurately recording the reporting production gate as BLOCKED; rerun passed (4/4); combined suite evidence1575 tests passed.
 
@@ -40,7 +40,7 @@ Approved checkout_discount_failure_atomicity migration applied successfully; nor
 
 ## Next action
 Reporting phase: use whole-invoice allocated sales lines for product summaries, separate product IDs and units, and correct column hide/show behavior. Keep all changes frontend-only.
-Foundation #473 Full Verify37779424007 succeeded at87ab6b8cd94c6909ed1ae766580459fe71cc32f2. Prepare a separate dependent PR for eight report families with unchanged report routes, permission filtering and bounded compact navigation. No database migration in this reporting stage. Obtain separate approval for its production merge/deployment after verification. Checkout #472 approval/apply/merge/deploy is complete; do not request it again. Continue reporting rebuild in staged PRs under the agreed ordered backlog.
+Foundation #473 Full Verify37779424007 succeeded at87ab6b8cd94c6909ed1ae766580459fe71cc32f2. Dependent draft #474 prepared for eight report families with unchanged report routes, permission filtering and bounded compact navigation. No database migration in this reporting stage. Obtain separate approval for its production merge/deployment after verification. Checkout #472 approval/apply/merge/deploy is complete; do not request it again. Continue reporting rebuild in staged PRs under the agreed ordered backlog.
 
 ## Mandatory update protocol
 Record verification transitions and exact head. Reconcile unexpected main movement. Update this log before every mutation scope change.
