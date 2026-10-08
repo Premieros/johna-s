@@ -34,7 +34,7 @@ describe('shift override and catalog visibility repair contract', () => {
   });
 
   it('reloads pricing rows when permissions hydrate after branch context', () => {
-    expect(pricing).toContain('[branchId, canRawView, canProductsView]');
+    expect(pricing).toContain('[branchId, canRawView, canProductsView, canCurrentCostView]');
     expect(pricing).toContain('void load();');
   });
 });

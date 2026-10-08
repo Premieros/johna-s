@@ -37,6 +37,8 @@ type OperationalIngredient = { raw_material_id: string; quantity: number; wastag
 export function ProductsPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
+  const costErrorToast = useRef(show);
+  costErrorToast.current = show;
   const can = useCan();
   const canViewCurrentCosts = can('reports.costing');
   const branchFilter = useBranchFilter();
@@ -101,9 +103,9 @@ export function ProductsPage() {
     let active=true;setCurrentCosts({});
     if(canViewCurrentCosts)void loadProductCurrentCosts(branchFilter)
       .then(costs=>{if(active)setCurrentCosts(costs);})
-      .catch(error=>{if(active)show(error instanceof Error?error.message:String(error),'error');});
+      .catch(error=>{if(active)costErrorToast.current(error instanceof Error?error.message:String(error),'error');});
     return()=>{active=false;};
-  },[branchFilter,canViewCurrentCosts,costRevision,show]);
+  },[branchFilter,canViewCurrentCosts,costRevision]);
 
   const filtered = products;
   const availableToAdd = stockComponents.filter((s) => s.product_id !== editing?.id && !productComponents.some((c) => c.component_product_id === s.product_id));

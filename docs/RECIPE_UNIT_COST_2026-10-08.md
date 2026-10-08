@@ -23,3 +23,7 @@ New production helper/function changes require separate explicit approval after 
 Verify nested-group/yield/unknown-price coverage, open PR, finish exact-head CI, and request approval of concrete costing migration. Actual missing raw prices still need source data.
 ## Mandatory update protocol
 Update this log with implementation/verification transitions. Reconcile unexpected head movement; no force push or direct main write.
+
+Historical Cleopatra read audit from Oct1:1668 zero-cost raw consumption movements;1474 have a current reference price (estimated10233.93),194 still lack prices. These figures are reference estimates, not assumed purchase receipts. No historical cost write performed.
+
+Full local suite exposed pricing hydration source-contract mismatch and repeated toast-handler dependency in product cost loading under smoke-test mocks. Updated dependency contract and stabilized cost-error notification reference; no repeated cost query on search/render. Reverification pending.
