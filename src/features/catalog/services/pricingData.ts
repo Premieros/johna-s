@@ -1,5 +1,6 @@
 import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
+import { loadProductCurrentCosts } from '@/features/costing/services/productCurrentCostData';
 
 export type RawPriceRow = {
   id: string;
@@ -30,18 +31,20 @@ export type ProductPriceRow = {
   sale_price: number | null;
   wholesale_price: number | null;
   is_active: boolean;
+  current_cost?: number | null;
 };
 
 export async function loadPricingRows(params: {
   branchId: string;
   includeRaw: boolean;
   includeProducts: boolean;
+  includeCurrentCosts?: boolean;
 }): Promise<{
   rawRows: RawPriceRow[];
   manufacturedRows: ManufacturedPriceRow[];
   productRows: ProductPriceRow[];
 }> {
-  const [rawResult, manufacturedResult, productResult, priceRows] = await Promise.all([
+  const [rawResult, manufacturedResult, productResult, priceRows, productCosts] = await Promise.all([
     params.includeRaw
       ? supabase
           .from('raw_materials')
@@ -65,6 +68,7 @@ export async function loadPricingRows(params: {
           .order('name')
       : Promise.resolve({ data: [], error: null }),
     params.includeRaw ? loadRawCurrentPrices(params.branchId) : Promise.resolve([]),
+    params.includeProducts && params.includeCurrentCosts ? loadProductCurrentCosts(params.branchId) : Promise.resolve({} as Record<string,number|null>),
   ]);
 
   const firstError = rawResult.error || manufacturedResult.error || productResult.error;
@@ -74,7 +78,7 @@ export async function loadPricingRows(params: {
   return {
     rawRows: ((rawResult.data || []) as Omit<RawPriceRow, 'latest_cost'>[]).map((row) => ({ ...row, latest_cost: costs[row.id] ?? null })),
     manufacturedRows: (manufacturedResult.data || []) as ManufacturedPriceRow[],
-    productRows: (productResult.data || []) as ProductPriceRow[],
+    productRows: ((productResult.data || []) as ProductPriceRow[]).map(row=>({...row,current_cost:productCosts[row.id]})),
   };
 }
 

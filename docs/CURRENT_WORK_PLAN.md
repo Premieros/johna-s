@@ -5,8 +5,8 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `e9b0b5e128fcdb0db8ac1a5b597cae18b6d061e3`
-- Current active branch: `fix/discount-approval-20261008`
-- Mandatory active work log: `docs/CHECKOUT_DISCOUNT_2026-10-08.md`
+- Current active branch: `fix/recipe-live-cost-20261008`
+- Mandatory active work log: `docs/RECIPE_UNIT_COST_2026-10-08.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.

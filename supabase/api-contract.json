@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T07:46:18.161Z",
+  "generated_at": "2026-10-08T09:12:30.545Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -1450,6 +1450,7 @@
     "inventory_ledger",
     "inventory_movements",
     "inventory_unit_batches",
+    "inventory_unit_recipe_units",
     "inventory_unit_recipes",
     "inventory_units",
     "kitchen_stations",
