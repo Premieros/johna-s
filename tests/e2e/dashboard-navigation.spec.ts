@@ -239,7 +239,7 @@ test.describe('dashboard and navigation actions', () => {
     await expect(tools.getByText(/الفترة المقارنة:|Comparison period:/)).toBeVisible();
     expect(metricReads).toBe(1);
     await tools.locator('summary').click();
-    await tools.getByRole('textbox',{name:/الفاتورة فلتر|Invoice filter/}).fill('TOOL-204');
+    await tools.getByRole('textbox',{name:/^(الفاتورة فلتر|Invoice filter)$/}).fill('TOOL-204');
     await expect(tools.getByRole('button',{name:'TOOL-204',exact:true})).toBeVisible();
     const download=page.waitForEvent('download');
     await tools.getByRole('button',{name:'CSV',exact:true}).click();
