@@ -235,6 +235,9 @@ test.describe('dashboard and navigation actions', () => {
     await tools.getByRole('button',{name:/مقارنة بالفترة السابقة|Compare previous period/}).click();
     await expect(tools.getByText(/الفترة المقارنة:|Comparison period:/)).toBeVisible();
     expect(metricReads).toBe(1); expect(datasetReads).toBe(1);
+    await tools.getByRole('button',{name:/مقارنة بالفترة السابقة|Compare previous period/}).click();
+    await expect(tools.getByText(/الفترة المقارنة:|Comparison period:/)).toBeVisible();
+    expect(metricReads).toBe(1);
     await tools.locator('summary').click();
     await tools.getByRole('textbox',{name:/الفاتورة فلتر|Invoice filter/}).fill('TOOL-204');
     await expect(tools.getByRole('button',{name:'TOOL-204',exact:true})).toBeVisible();

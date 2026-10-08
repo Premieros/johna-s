@@ -226,6 +226,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   const { data: snapshot, error: reportError, loading, reload: retryReport } = useLatestRead(readReport);
   const reportSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range)), [reportReader]);
   useEffect(() => () => reportSource.dispose(), [reportSource]);
+  const metricSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range, true)), [reportReader]);
+  useEffect(() => () => metricSource.dispose(), [metricSource]);
   const [workbenchScope, setWorkbenchScope] = useState<unknown>(null);
   const workbenchActive = workbenchScope === reportReader;
   const data = snapshot?.rows || EMPTY_REPORT_ROWS;
@@ -1417,7 +1419,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
         loadRows={async () => { if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT'); return (await reportSource.read()).rows; }}
         period={snapshot?.from && snapshot?.to && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
-        loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async (range, signal) => (await reportReader(0, true, signal, range, true)).metrics! : undefined}
+        loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async range => (await metricSource.read(range)).metrics! : undefined}
         loadComparison={async range => (await reportSource.read(range)).rows}
         onOpen={open => setWorkbenchScope(open ? reportReader : null)} />
       {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
