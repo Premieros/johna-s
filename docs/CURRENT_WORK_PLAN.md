@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `dd4bdeef`
-- Current active branch: `feat/report-workspace-20261008`
+- Latest main baseline reconciled: `c0a94027`
+- Current active branch: `fix/pos-modifier-and-cost-read-failures`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
@@ -115,3 +115,7 @@ User directs implementation of the reviewed seven basic reports, merged view dis
 
 ## Active consolidated draft #476
 Seven basic reports and internal views, cost completeness, and dated material balances. Local 1625 frontend tests passed; app/test typechecks, build, lint (0 errors/15 existing warnings), API contract and locked identity passed. Production gate remains blocked pending exact-head Full Verify and explicit user approval. Frontend-only; no migration.
+
+
+## POS failures follow-up — 2026-10-08
+Active PR #477 addresses incomplete required modifier selections through the plus button and failed configuration reads. Current-price reads use bounded sequential batches; costing reads release database capacity before follow-up queries. Historical generic CLIENT_ERROR causes remain unresolved. User explicitly approved merge/deployment at 23:23 Cairo after reviewing scope. No production database changes are included. Exact-head Full Verify remains required before merge. Previous reporting sections are historical context, not active parallel work.
