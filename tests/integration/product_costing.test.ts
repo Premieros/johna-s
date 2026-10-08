@@ -388,17 +388,15 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(Number(impact[0].avg_cost)).toBe(18);
     expect(Number(impact[0].purchase_count)).toBe(1);
   });
-  it('includes nested group quantities/waste and ignores inactive recipe versions', async () => {
+  it('includes nested group quantities/waste and ignores an inactive direct recipe', async () => {
     await client.query('SAVEPOINT nested_cost_case');
     try {
       const before=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
       const price=await client.query(`SELECT public._raw_cost_for_costing($1,$2) AS cost`,[rmId,branchA]);
-      const child=randomUUID(); const retired=randomUUID();
+      const child=randomUUID();
       await client.query(`INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,cost_price,is_active) VALUES($1,$2,'Nested current group','manufactured',$3,999,true)`,[child,`NEST-${child.slice(0,8)}`,branchA]);
       await client.query(`INSERT INTO public.inventory_unit_recipes(unit_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[child,rmId]);
       await client.query(`INSERT INTO public.inventory_unit_recipe_units(unit_id,component_unit_id,quantity,wastage_percent) VALUES($1,$2,2,10)`,[componentUnitId,child]);
-      await client.query(`INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active,version) VALUES($1,$2,$3,'Retired expensive recipe',1,false,99)`,[retired,prodId,branchA]);
-      await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,100,0)`,[retired,rmId]);
       const expected=Number(before.rows[0].actual_cost)+4.4*Number(price.rows[0].cost);
       const after=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
       const detail=await asUser(managerId,async()=>client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
@@ -407,6 +405,15 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       const childLine=detail.rows[0].r.recipe_items.find((line:{component_group_id:string})=>line.component_group_id===child);
       expect(Number(childLine.quantity)).toBeCloseTo(4.4);
       expect(Number(childLine.line_cost)).toBeCloseTo(4.4*Number(price.rows[0].cost),2);
+      // The schema permits one recipe per product/branch. Retire that existing
+      // recipe instead of constructing a second row that violates its key.
+      await client.query(`UPDATE public.recipes SET is_active=false,version=99 WHERE id=$1`,[recipeId]);
+      await client.query(`UPDATE public.recipe_items SET quantity=100 WHERE recipe_id=$1`,[recipeId]);
+      const retired=await asUser(managerId,async()=>client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,prodId]));
+      const retiredDetail=await asUser(managerId,async()=>client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
+      expect(Number(retired.rows[0].actual_cost)).toBeCloseTo(5.4*Number(price.rows[0].cost),2);
+      expect(Number(retiredDetail.rows[0].r.actual_cost)).toBeCloseTo(5.4*Number(price.rows[0].cost),2);
+      expect(retiredDetail.rows[0].r.recipe_items.every((line:{component_group_id:string|null})=>line.component_group_id!==null)).toBe(true);
     } finally { await client.query('ROLLBACK TO SAVEPOINT nested_cost_case'); }
   });
   it('withholds a complete estimate for an empty linked component group',async()=>{
