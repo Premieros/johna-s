@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/reporting-core-20261008`
-Current PR: #0 (reporting foundation; checkout #472 merged)
+Current PR: #473 (reporting foundation draft; checkout #472 merged)
 Last updated: 2026-10-08
 
 ## Work status
@@ -36,7 +36,7 @@ Approved checkout_discount_failure_atomicity migration applied successfully; nor
 
 ## Next action
 Reporting phase: use whole-invoice allocated sales lines for product summaries, separate product IDs and units, and correct column hide/show behavior. Keep all changes frontend-only.
-Publish the frontend-only reporting foundation as a draft PR and run exact-head Full Verify. No database migration in this reporting stage. Obtain separate approval for its production merge/deployment after verification. Checkout #472 approval/apply/merge/deploy is complete; do not request it again. Continue reporting rebuild in staged PRs under the agreed ordered backlog.
+Draft #473 opened. Run exact-head Full Verify on the final documentation/code head. No database migration in this reporting stage. Obtain separate approval for its production merge/deployment after verification. Checkout #472 approval/apply/merge/deploy is complete; do not request it again. Continue reporting rebuild in staged PRs under the agreed ordered backlog.
 
 ## Mandatory update protocol
 Record verification transitions and exact head. Reconcile unexpected main movement. Update this log before every mutation scope change.
