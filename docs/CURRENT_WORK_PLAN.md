@@ -4,7 +4,7 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `856bc493`
+- Latest main baseline reconciled: `c86116d3`
 - Current active branch: `feat/report-column-layout-20261008`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
@@ -60,4 +60,4 @@ with shared definitions, accurate allocation, configurable tables and source tra
 
 - #472 approved checkout migration applied, exact live function hashes verified, merged at fcb2c25d. Pages deployment37777968084 succeeded; post-merge Verify37777968117 succeeded (frontend, DB/RLS, browser and pages-continuity).
 
-- #473 explicitly approved2026-10-08 16:08 Cairo, merged856bc493 and Pages37782100338 succeeded. Postmerge Verify37782100371 Green. #474 families is a separate draft at e36d6c0a with fresh Verify37782280412 Green at e36d6c0a. Current work adds column search/order and selected-column exports on the published baseline, independent of #474.
+- #473 explicitly approved2026-10-08 16:08 Cairo, merged856bc493 and Pages37782100338 succeeded. Postmerge Verify37782100371 Green. #474 families approved2026-10-08 16:33 Cairo and mergedc86116d3 after Full Verify37782280412 Green. Pages37785343543 and Verify37785343690 monitored. Current work adds column search/order and selected-column exports, reconciled against merged #474. Only work-log files conflicted; application changes combine without conflicts.

@@ -7,19 +7,7 @@ import { useCan, type Permission } from '@/lib/permissions';
 import { useLanguage } from '@/context/LanguageContext';
 import { REPORT_REGISTRY } from '../reportRegistry';
 import type { ReportType } from '../reportFilters';
-
-type FinancialView =
-  | 'trial_balance'
-  | 'ledger'
-  | 'treasury_statement'
-  | 'inventory_movement'
-  | 'income'
-  | 'balance_sheet'
-  | 'ar_aging'
-  | 'ap_aging'
-  | 'aging_summary'
-  | 'cash_flow'
-  | 'party_statement';
+import { FINANCIAL_REPORT_FAMILIES, OPERATIONAL_REPORT_FAMILIES, getVisibleReportFamilies, type FinancialReportView as FinancialView } from '../reportFamilies';
 
 const LEGACY_HIDDEN_REPORTS = new Set<ReportType>([
   'component_consumption',
@@ -121,6 +109,8 @@ export function ReportsCenterPage() {
     ? FINANCIAL_REPORTS.find((report) => report.key === activeFinancialView)
     : permittedOperational.find((report) => report.key === activeReport);
 
+  const visibleFamilies = getVisibleReportFamilies(filteredOperational, filteredFinancial);
+
   const reportList = (
     <div className="rounded-lg border border-ui-border bg-ui-surface">
       <div className="border-b border-ui-border p-2">
@@ -130,6 +120,7 @@ export function ReportsCenterPage() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            aria-label={lang === 'ar' ? 'بحث في التقارير' : 'Search reports'}
             placeholder={lang === 'ar' ? 'بحث في التقارير' : 'Search reports'}
             className="h-9 w-full rounded-md border border-ui-border bg-ui-page-alt ps-8 pe-2 text-xs font-semibold text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ring"
           />
@@ -137,41 +128,53 @@ export function ReportsCenterPage() {
       </div>
 
       <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
-        {filteredOperational.map((report) => {
-          const selected = !requestedFinancial && activeReport === report.key;
-          return (
-            <button
-              key={report.key}
-              type="button"
-              onClick={() => selectOperational(report.key)}
-              className={`flex min-h-9 w-full items-center border-b border-ui-border/70 px-3 text-start text-xs font-bold transition last:border-b-0 ${
-                selected
-                  ? 'bg-ui-primary/10 text-ui-primary'
-                  : 'bg-ui-surface text-ui-text hover:bg-ui-page-alt'
-              }`}
-            >
-              <span className="truncate">{lang === 'ar' ? report.title : report.titleEn}</span>
-            </button>
-          );
-        })}
+        {visibleFamilies.map((family) => (
+          <section key={family.key} aria-label={lang === 'ar' ? family.ar : family.en} data-report-family={family.key}>
+            <h2 className="sticky top-0 z-10 border-b border-ui-border bg-ui-page-alt px-3 py-2 text-xs font-bold text-ui-muted">
+              {lang === 'ar' ? family.ar : family.en}
+            </h2>
+            {filteredOperational.map((report) => {
+              if (OPERATIONAL_REPORT_FAMILIES[report.key] !== family.key) return null;
+              const selected = !requestedFinancial && activeReport === report.key;
+              return (
+                <button
+                  key={report.key}
+                  type="button"
+                  aria-current={selected ? 'page' : undefined}
+                  onClick={() => selectOperational(report.key)}
+                  className={`flex min-h-9 w-full items-center border-b border-ui-border/70 px-3 text-start text-xs font-bold transition last:border-b-0 ${
+                    selected
+                      ? 'bg-ui-primary/10 text-ui-primary'
+                      : 'bg-ui-surface text-ui-text hover:bg-ui-page-alt'
+                  }`}
+                >
+                  <span className="truncate">{lang === 'ar' ? report.title : report.titleEn}</span>
+                </button>
+              );
+            })}
 
-        {filteredFinancial.map((report) => {
-          const selected = requestedFinancial && activeFinancialView === report.key;
-          return (
-            <button
-              key={report.key}
-              type="button"
-              onClick={() => selectFinancial(report.key)}
-              className={`flex min-h-9 w-full items-center border-b border-ui-border/70 px-3 text-start text-xs font-bold transition last:border-b-0 ${
-                selected
-                  ? 'bg-ui-primary/10 text-ui-primary'
-                  : 'bg-ui-surface text-ui-text hover:bg-ui-page-alt'
-              }`}
-            >
-              <span className="truncate">{lang === 'ar' ? report.ar : report.en}</span>
-            </button>
-          );
-        })}
+            {filteredFinancial.map((report) => {
+              if (FINANCIAL_REPORT_FAMILIES[report.key] !== family.key) return null;
+              const selected = requestedFinancial && activeFinancialView === report.key;
+              return (
+                <button
+                  key={report.key}
+                  type="button"
+                  aria-current={selected ? 'page' : undefined}
+                  onClick={() => selectFinancial(report.key)}
+                  className={`flex min-h-9 w-full items-center border-b border-ui-border/70 px-3 text-start text-xs font-bold transition last:border-b-0 ${
+                    selected
+                      ? 'bg-ui-primary/10 text-ui-primary'
+                      : 'bg-ui-surface text-ui-text hover:bg-ui-page-alt'
+                  }`}
+                >
+                  <span className="truncate">{lang === 'ar' ? report.ar : report.en}</span>
+                </button>
+              );
+            })}
+
+          </section>
+        ))}
 
         {filteredOperational.length === 0 && filteredFinancial.length === 0 && (
           <div className="px-3 py-6 text-center text-xs text-ui-subtle">
@@ -188,6 +191,7 @@ export function ReportsCenterPage() {
         <button
           type="button"
           onClick={() => setMobileListOpen((open) => !open)}
+          aria-expanded={mobileListOpen}
           className="flex h-10 w-full items-center justify-between rounded-lg border border-ui-border bg-ui-surface px-3 text-sm font-bold text-ui-text"
         >
           <span className="truncate">

@@ -2,17 +2,17 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/report-column-layout-20261008`
-Current PR: #475 (column layout; #473 deployed, #474 separate draft)
+Current PR: #475 (column layout; #473 deployed, #474 merged)
 Last updated: 2026-10-08
 
 ## Work status
-State: **BLOCKED** for column-layout production merge pending exact-head Full Verify and separate explicit approval; code preparation and local verification complete. Checkout #472 applied, merged and deployed. #473 approved2026-10-08 16:08 Cairo, merged856bc493, Pages37782100338 and postmerge Verify37782100371 all Green. #474 family navigation remains separate draft, reconciled e36d6c0a; Verify37782280412 Green at e36d6c0a (all four jobs).
+State: **BLOCKED** for column-layout production merge pending exact-head Full Verify and separate explicit approval; code preparation and local verification complete. Checkout #472 applied, merged and deployed. #473 approved2026-10-08 16:08 Cairo, merged856bc493, Pages37782100338 and postmerge Verify37782100371 all Green. #474 family navigation Full Verify37782280412 Green at e36d6c0a; user approved2026-10-08 16:33 Cairo. Mergedc86116d3; Pages37785343543 and postmerge Verify37785343690 monitored. #475 column layout reconciled against this main; fresh exact-head CI required.
 
 ## Guardrails
 Single writer. No direct main writes, force pushes, permission/RLS weakening or SECURITY DEFINER shortcuts. Preserve printing, KDS, inventory, accounting and shifts.
 
 ## Baseline
-Main856bc49325b1bc814be179ad12981651302db72b (checkout #472 merged; preserves #470 historical costing and #471 serialized reporting reads).
+Mainc86116d3c64e1dbe720c84d614c67a6758888b9f (checkout #472 merged; preserves #470 historical costing and #471 serialized reporting reads).
 Production function definitions read and pinned before preparing repair.
 
 ## Root-cause ledger
@@ -39,7 +39,7 @@ New integration tests: full/partial split closure metadata, split success, perce
 Approved checkout_discount_failure_atomicity migration applied successfully; normal hash03a148288dcf37f250e7a49f5afc0cd4,split hash6d372a7806ef0f698b95b8184287a35a. Original ACL/security modes preserved; guard_sale_discount and set_order_checkout_discount unchanged. Table48 remains completed/paid,invoice02608,discount40,total/paid150. User approved fixing checkout; exact-head Full Verify Green required before concrete guarded apply. No real sales or prints executed by agent. Historical closed invoices are audit-only until evidence and correction approval.
 
 ## Next action
-#473 approved at2026-10-08 16:08 Cairo, merged856bc493, Pages37782100338 succeeded; postmerge Verify37782100371 Green. #474 families draft reconciled e36d6c0a, Verify37782280412 Green at e36d6c0a. Prepare independent column-layout draft against published main and run exact-head Full Verify before separate production approval.
+#473 approved at2026-10-08 16:08 Cairo, merged856bc493, Pages37782100338 succeeded; postmerge Verify37782100371 Green. #474 approved2026-10-08 16:33 Cairo, mergedc86116d3, Pages37785343543 and postmerge Verify37785343690 monitored. Prepare independent column-layout draft against published main and run exact-head Full Verify before separate production approval.
 Run exact-head CI on the column-layout draft, then obtain separate production approval. #473 approval/merge/deployment/verification is complete; do not request it again. No database migration. Continue canonical column definitions, typed aggregation and grouping under the backlog.
 
 ## Mandatory update protocol
