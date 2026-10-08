@@ -42,6 +42,8 @@ export const REPORT_CATEGORIES: Record<ReportCategory, { title: string; titleEn:
 };
 
 export const REPORT_REGISTRY: ReportDefinition[] = [
+  { key: 'sales_costs', category: 'manufacturing_costing', title: 'تكلفة المباع وربحه', titleEn: 'Sold-item Costs & Profit', description: 'تكلفة بنود المبيعات المسجلة وإعادة تسعيرها بالأسعار المعتمدة الحالية مع بيان اكتمال التكلفة', descriptionEn: 'Recorded sold-item costs and repricing at current canonical prices, with completeness', icon: 'BarChart3', permissions: ['reports.view', 'reports.costing'], filterDimensions: ['station','category','product','cashier','customer','order_type','payment_method'], dateDriven: true },
+  { key: 'inventory_as_of', category: 'inventory', title: 'أرصدة الخامات بتاريخ', titleEn: 'Material Balances as of Date', description: 'رصيد الخامة وقيمتها من الحركات المسموح عرضها حتى نهاية يوم محدد بتوقيت القاهرة', descriptionEn: 'Material quantity and recorded value from permitted movements through end of a Cairo day', icon: 'Package', permissions: ['reports.view', 'reports.costing'], filterDimensions: [], dateDriven: true },
   {
     key: 'sales',
     category: 'sales',
@@ -51,7 +53,7 @@ export const REPORT_REGISTRY: ReportDefinition[] = [
     descriptionEn: 'Comprehensive sales summary with order details',
     icon: 'TrendingUp',
     permissions: ['reports.view'],
-    filterDimensions: ['order_type', 'warehouse', 'cashier', 'customer', 'payment_method', 'status'],
+    filterDimensions: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'table', 'status'],
     dateDriven: true,
     deepLinkKey: 'sales',
   },
@@ -242,7 +244,7 @@ export const REPORT_REGISTRY: ReportDefinition[] = [
     descriptionEn: 'Per-cashier metrics: orders, revenue, avg order, refund rate',
     icon: 'UserCheck',
     permissions: ['reports.view'],
-    filterDimensions: ['cashier'],
+    filterDimensions: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
     dateDriven: true,
     deepLinkKey: 'cashier_performance',
   },

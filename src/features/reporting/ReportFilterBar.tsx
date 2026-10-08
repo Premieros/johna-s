@@ -17,6 +17,7 @@ export interface ReportFilterBarProps {
   filters: ReportFilters;
   onFilterChange: (dim: ReportFilterKey, value: string) => void;
   showDate: boolean;
+  asOfDate?: boolean;
   period: string;
   onPeriodChange: (key: string) => void;
   from: string;
@@ -51,6 +52,7 @@ export function ReportFilterBar({
   filters,
   onFilterChange,
   showDate,
+  asOfDate = false,
   period,
   onPeriodChange,
   from,
@@ -114,7 +116,7 @@ export function ReportFilterBar({
 
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          {showDate && (
+          {showDate && !asOfDate && (
             <div>
               <label className="mb-1 block text-xs font-medium text-ui-muted">{t('filterByPeriod')}</label>
               <select
@@ -135,7 +137,7 @@ export function ReportFilterBar({
             </div>
           )}
 
-          {showDate && (
+          {showDate && !asOfDate && (
             <Input
               label={t('from')}
               type="date"
@@ -147,7 +149,7 @@ export function ReportFilterBar({
 
           {showDate && (
             <Input
-              label={t('to')}
+              label={asOfDate ? (lang === 'ar' ? 'حتى نهاية يوم' : 'Through end of day') : t('to')}
               type="date"
               value={to}
               onChange={(e) => {
@@ -176,6 +178,12 @@ export function ReportFilterBar({
             </div>
           )}
 
+
+        </div>
+
+        {filterDimensions.length > 0 && <details className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold">{lang === 'ar' ? 'فلاتر متقدمة' : 'Advanced filters'}{Object.values(filters).some(Boolean) ? ` (${Object.values(filters).filter(Boolean).length})` : ''}</summary>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filterDimensions.map((dim) => (
             <div key={dim} data-testid="report-contextual-filters">
               <label className="mb-1 block text-xs font-medium text-ui-muted">{filterLabel(dim)}</label>
@@ -192,8 +200,8 @@ export function ReportFilterBar({
               </select>
             </div>
           ))}
-        </div>
-
+          </div>
+        </details>}
         <div className="flex flex-col gap-2 border-t border-ui-border pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">

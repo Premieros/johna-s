@@ -101,7 +101,7 @@ export function ReportWorkbench(props: Props) {
       <Button size="sm" variant="outline" disabled={busy || props.unavailable} onClick={() => { if (open) { setOpenedScope(null); props.onOpen(false); } else void begin(); }}>
         {open ? text('إغلاق أدوات الجدول', 'Close table tools') : text('أدوات الجدول والتحليل الكامل', 'Table tools & full analysis')}
       </Button>
-      <span className="text-xs text-ui-muted">{text('مصدر التقرير', 'Report source')}: {contract.source} · {ar ? contract.grainAr : contract.grainEn}</span>
+      <details className="text-xs text-ui-muted"><summary className="cursor-pointer">{text('تفاصيل مصدر الأرقام', 'Data source details')}</summary><p className="mt-2">{contract.source} · {ar ? contract.grainAr : contract.grainEn}</p></details>
     </div>
     {open && <div className="rounded-lg border border-ui-border bg-ui-surface p-3 space-y-3">
       {busy && <p role="status">{text('جاري تحميل كامل البيانات المسموحة…', 'Loading the full permitted dataset…')}</p>}

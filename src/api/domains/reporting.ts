@@ -31,7 +31,7 @@ export const reporting = {
   getDashboardSalesSnapshot(p: { p_branch_id: string | null; p_current_from: string; p_current_to: string; p_previous_from: string; p_previous_to: string; p_granularity: 'hour' | 'day' | 'month'; p_timezone: string }): ApiResult<Record<string, unknown>> { return rpc('get_dashboard_sales_snapshot', p); },
 
   getDayClosingRangeReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_day_closing_range_report', p); },
-  getRawMaterialConsumptionReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>[]> { return rpc('get_raw_material_consumption_report', p); },
+  getRawMaterialConsumptionReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }, signal?: AbortSignal): ApiResult<Record<string, unknown>[]> { return rpc('get_raw_material_consumption_report', p, signal); },
   getCurrentRawMaterialValuation(p: { p_branch_id: string }): ApiResult<Record<string, unknown>[]> { return rpc('get_current_raw_material_valuation', p); },
   getRawMaterialFinancialReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_raw_material_financial_report', p); },
   getSalesComponentReconciliationReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_sales_component_reconciliation_report', p); },

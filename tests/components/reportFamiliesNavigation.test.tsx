@@ -9,34 +9,38 @@ vi.mock('@/features/accounting/pages/FinancialReportsPage', () => ({ FinancialRe
 import { ReportsCenterPage } from '@/features/reporting/pages/ReportsCenterPage';
 
 const open = (route = '/reports') => render(<MemoryRouter initialEntries={[route]}><ReportsCenterPage /></MemoryRouter>);
-// Both responsive copies intentionally share the same permission-filtered catalog.
 const navigation = () => within(screen.getByRole('complementary'));
 beforeEach(() => { permissions.clear(); permissions.add('reports.view'); });
 
-describe('report family navigation', () => {
-  it('keeps reports outside the user permissions out of discovery', () => {
-    open();
-    expect(navigation().queryByText('Trial Balance')).toBeNull();
-    expect(navigation().queryByText('Profit Report')).toBeNull();
-    expect(navigation().getByRole('heading', { name: 'Sales & Returns' })).toBeTruthy();
-    expect(navigation().queryByText('Top Consumed Products')).toBeNull();
+describe('basic report navigation', () => {
+  it('filters discovery and requested views by permissions', () => {
+    open('/reports?type=sales_costs');
+    expect(navigation().queryByRole('button', { name: 'Sales Cost & Profit' })).toBeNull();
+    expect(navigation().queryByRole('button', { name: 'Accounting Reports' })).toBeNull();
+    expect(screen.getByTestId('operational-report').textContent).toBe('sales');
+    expect(screen.queryByRole('option', { name: 'Sold-item costs & profit' })).toBeNull();
   });
-  it('searches across both catalogs and removes empty families', () => {
-    permissions.add('reports.financial');
-    open();
-    fireEvent.change(navigation().getByRole('searchbox'), { target: { value: 'Trial Balance' } });
-    expect(navigation().getByRole('button', { name: 'Trial Balance' })).toBeTruthy();
-    expect(navigation().getAllByRole('heading')).toHaveLength(1);
-    expect(navigation().queryByText('Sales Report')).toBeNull();
-  });
-  it('preserves operational and financial deep links and selections', () => {
-    permissions.add('reports.financial');
+  it('shows seven primary reports and selects internal views', () => {
+    permissions.add('reports.financial'); permissions.add('reports.costing');
     open('/reports?type=sales_by_product');
+    expect(navigation().getAllByRole('button')).toHaveLength(7);
     expect(screen.getByTestId('operational-report').textContent).toBe('sales_by_product');
-    fireEvent.click(navigation().getByRole('button', { name: 'Sales by Station & Category' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Report view' }), { target: { value: 'sales_by_station' } });
     expect(screen.getByTestId('operational-report').textContent).toBe('sales_by_station');
-    fireEvent.click(navigation().getByRole('button', { name: 'Bank / Treasury Statement' }));
+    fireEvent.click(navigation().getByRole('button', { name: 'Collections & Balances' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Report view' }), { target: { value: 'financial:treasury_statement' } });
     expect(screen.getByTestId('financial-report')).toBeTruthy();
-    expect(navigation().getByRole('button', { name: 'Bank / Treasury Statement' }).getAttribute('aria-current')).toBe('page');
+  });
+  it('searches internal views without querying a different report until selection', () => {
+    permissions.add('reports.financial'); open();
+    fireEvent.change(navigation().getByRole('searchbox'), { target: { value: 'Trial balance' } });
+    expect(navigation().queryByRole('button', { name: 'Sales' })).toBeNull();
+    expect(screen.getByTestId('operational-report').textContent).toBe('sales');
+    fireEvent.click(navigation().getByRole('button', { name: 'Trial balance as of date' }));
+    expect(screen.getByTestId('financial-report')).toBeTruthy();
+  });
+  it.each([['detailed_invoices', 'sales'], ['sales_by_employee', 'cashier_performance'], ['top_consumed_products', 'sales_by_product']])('resolves legacy %s to %s', (legacy, current) => {
+    open('/reports?type=' + legacy);
+    expect(screen.getByTestId('operational-report').textContent).toBe(current);
   });
 });

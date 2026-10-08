@@ -12,6 +12,8 @@ const pick = (lang: 'ar' | 'en', ar: string, en: string) => lang === 'ar' ? ar :
 export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en'): ReportExcelProfile {
   const branch = pick(lang, 'الفرع', 'Branch');
   const profiles: Record<ReportType, Omit<ReportExcelProfile, 'sourceNote'>> = {
+    sales_costs: { columns: [], columnWidths: { [branch]: 24 }, integerColumns: [] },
+    inventory_as_of: { columns: [branch, pick(lang, 'التاريخ', 'Date'), pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'), pick(lang, 'الرصيد بنهاية اليوم', 'End-of-day Qty'), pick(lang, 'القيمة المسجلة بنهاية اليوم', 'End-of-day Recorded Value')], columnWidths: { [branch]: 24 }, integerColumns: [] },
     sales_by_station: { columns: [], columnWidths: { [branch]: 24 }, integerColumns: [] },
     sales: {
       columns: [branch, pick(lang, 'الفاتورة', 'Invoice'), pick(lang, 'التاريخ', 'Date'), pick(lang, 'العميل', 'Customer'), pick(lang, 'الإجمالي الأصلي', 'Original Total'), pick(lang, 'المرتجع', 'Refunded'), pick(lang, 'صافي المبيعات', 'Net Sales')],
@@ -190,7 +192,9 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
   };
 
   const profile = profiles[reportType];
-  const sourceNote = reportType === 'sales_by_station'
+  const sourceNote = reportType === 'inventory_as_of'
+    ? pick(lang, 'رصيد الخامات وقيمتها المسجلة حتى نهاية اليوم بتوقيت القاهرة من الحركات المسموح عرضها. لا تمثل القيمة إعادة تسعير بالأسعار الحالية. لا تجمع الكميات عبر وحدات مختلفة.', 'Material closing quantities and recorded values through end of the Cairo day from permitted movements. Values are not repriced at current prices. Quantities across different units must not be summed.')
+    : (reportType === 'sales_by_station' || reportType === 'sales_costs')
     ? pick(lang, 'المحطة والتصنيف من الربط الحالي. الخصم والضريبة موزعان على كامل الفاتورة قبل الفلترة. المرتجعات حتى وقت العرض لفواتير الفترة. تكلفة FIFO الناقصة أو غير القابلة للتتبع والربح تظهر غير متاحة. تقدير آخر سعر منفصل، والخامات غير المسعرة معلنة. الربح دون الضريبة.', 'Current station/category mapping. Invoice discount/tax allocated before filtering. Lifetime returns on invoices in the selected period. Incomplete or untraceable FIFO cost and profit are unavailable. Latest-price estimates are separate and unpriced materials are listed. Profit excludes tax.')
     : reportType === 'sales_by_product'
     ? pick(lang, 'بنود sales المرتبطة بـ sale_items. الصف لكل فرع ومعرف منتج ووحدة بيع. الخصم والضريبة والمرتجع موزعة على كامل الفاتورة قبل فلترة المنتج والتصنيف. المرتجعات حتى وقت العرض لفواتير الفترة؛ لا تمثل حركة المرتجعات داخل الفترة.', 'sales joined to sale_items. One row per branch, product ID and sale unit. Invoice discount, tax and returns are allocated before product/category filtering. Lifetime returns on invoices in the selected period, rather than returns occurring within that period.')
