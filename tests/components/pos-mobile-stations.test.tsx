@@ -41,6 +41,15 @@ beforeEach(() => {
   mocks.eq.mockReset().mockReturnValue(query);
 });
 describe('phone POS station categories and product browsing', () => {
+  it('routes the plus button through required configuration instead of adding an incomplete item', async () => {
+    const configure = vi.fn(); const add = vi.fn();
+    render(<MemoryRouter><ProductBrowser branchId="a" products={products} categories={categories} selectedCategory="" search="" onSearch={vi.fn()} onSelectCategory={vi.fn()} currency="EGP" hasBranch canModifyOrder shiftChecked shiftOpen onAddToCart={add} onConfigureProduct={configure} /></MemoryRouter>);
+    const card = await screen.findByTestId('pos-product-card-burger');
+    fireEvent.click(within(card).getByRole('button', { name: 'Add' }));
+    expect(configure).toHaveBeenCalledWith(products[0]);
+    expect(add).not.toHaveBeenCalled();
+  });
+
   it('reads branch-active stations only and displays their actual names and linked categories', async () => {
     render(<Browser />);
     await screen.findByTestId('pos-station-kitchen');

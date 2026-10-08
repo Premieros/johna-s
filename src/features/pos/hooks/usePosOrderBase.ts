@@ -629,9 +629,9 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_total: total,
         p_status: status,
       });
-      if (error) { show(error.message, 'error'); return { ok: false, orderId: null, orderNumber: null }; }
+      if (error) { show(error.message, 'error', { source: error, action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
       const r = data as RpcResult | null;
-      if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
+      if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
       return { ok: true, orderId: activeOrderId, orderNumber: activeOrderNumber };
     }
 
@@ -650,11 +650,11 @@ export function usePosOrder(input: UsePosOrderInput) {
       p_total: total,
       p_cashier_id: user?.id || null,
     });
-    if (error) { show(error.message, 'error'); return { ok: false, orderId: null, orderNumber: null }; }
+    if (error) { show(error.message, 'error', { source: error, action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
     const r = data as RpcResult | null;
-    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
+    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
     return { ok: true, orderId: r.order_id || null, orderNumber: (r as RpcResult & { order_number?: string }).order_number || null };
-  }, [branchId, activeOrderId, activeOrderNumber, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
+  }, [branchId, activeOrderId, activeOrderNumber, activeTable?.id, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
 
   const holdOrder = useCallback(async (): Promise<boolean> => {
     if (cart.length === 0 || completing || orderLoading) return false;

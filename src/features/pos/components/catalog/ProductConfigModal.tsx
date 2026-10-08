@@ -39,6 +39,7 @@ export function ProductConfigModal({
   const [itemNotes, setItemNotes] = useState('');
   const [itemDiscount, setItemDiscount] = useState(0);
   const [loadingModifiers, setLoadingModifiers] = useState(false);
+  const [loadedProductId, setLoadedProductId] = useState<string | null>(null);
   const [modifierError, setModifierError] = useState('');
 
   useEffect(() => {
@@ -50,6 +51,8 @@ export function ProductConfigModal({
     setItemDiscount(initialItem?.discount_amount || 0);
     setModifierError('');
     setLoadingModifiers(true);
+    setLoadedProductId(null);
+    setGroups([]);
 
     api.catalog.getProductModifiers(product.id).then(({ data, error }) => {
       if (cancelled) return;
@@ -66,6 +69,7 @@ export function ProductConfigModal({
       }
       const loaded = Array.isArray(res.groups) ? res.groups : [];
       setGroups(loaded);
+      setLoadedProductId(product.id);
       if (!initialItem?.modifier_option_ids?.length) {
         const defaults: string[] = [];
         for (const group of loaded) {
@@ -73,6 +77,11 @@ export function ProductConfigModal({
           defaults.push(...defaultOptions.map((o) => o.id));
         }
         setSelectedIds(defaults);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setLoadedProductId(null);
+        setModifierError(isAr ? 'تعذر تحميل الاختيارات. أغلق النافذة وأعد فتحها للمحاولة.' : 'Could not load options. Close and reopen to retry.');
       }
     }).finally(() => {
       if (!cancelled) setLoadingModifiers(false);
@@ -107,6 +116,7 @@ export function ProductConfigModal({
   const lineTotal = Math.max(0, lineSubtotal - itemDiscount);
 
   const handleSave = () => {
+    if (loadingModifiers || loadedProductId !== product.id) return;
     for (const group of groups) {
       const ids = new Set(group.options.map((o) => o.id));
       const count = selectedIds.filter((id) => ids.has(id)).length;
@@ -228,7 +238,7 @@ export function ProductConfigModal({
           </div>
           <div className="flex shrink-0 gap-2">
             <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-ui-border bg-ui-surface px-3 text-[11px] font-black text-ui-muted">{t('cancel')}</button>
-            <button type="button" disabled={loadingModifiers} onClick={handleSave} className="min-h-10 rounded-lg bg-ui-primary px-4 text-[11px] font-black text-ui-primary-fg shadow-ui-sm disabled:opacity-50 sm:px-5 sm:text-xs">{initialItem ? (isAr ? 'تحديث' : 'Update') : (isAr ? 'إضافة' : 'Add')}</button>
+            <button type="button" disabled={loadingModifiers || loadedProductId !== product.id} onClick={handleSave} className="min-h-10 rounded-lg bg-ui-primary px-4 text-[11px] font-black text-ui-primary-fg shadow-ui-sm disabled:opacity-50 sm:px-5 sm:text-xs">{initialItem ? (isAr ? 'تحديث' : 'Update') : (isAr ? 'إضافة' : 'Add')}</button>
           </div>
         </div>
       </div>

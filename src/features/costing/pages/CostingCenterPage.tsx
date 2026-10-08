@@ -94,15 +94,20 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     try {
-      const [res, summaryRes, rawValuationRes, fifoRows, priceRows] = await Promise.all([
-        api.costing.getOverview({ p_branch_id: effBranch }),
-        api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
-        api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
-        loadRawFifoCosts(effBranch),
-        loadRawCurrentPrices(effBranch),
-      ]);
+      // These reads scan overlapping costing/inventory sources. Serialize them
+      // so a single screen does not run five heavy reads on the small database.
+      const res = await api.costing.getOverview({ p_branch_id: effBranch });
       if (requestId !== request.current) return;
       if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
+      const summaryRes = await api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+      if (requestId !== request.current) return;
+      if (summaryRes.error) { setHistoricalEstimate(null); setError(summaryRes.error.message); setLoading(false); show(summaryRes.error.message, 'error'); return; }
+      const rawValuationRes = await api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch });
+      if (requestId !== request.current) return;
+      const fifoRows = await loadRawFifoCosts(effBranch);
+      if (requestId !== request.current) return;
+      const priceRows = await loadRawCurrentPrices(effBranch);
+      if (requestId !== request.current) return;
       // Run historical pricing after current valuation reads release database capacity.
       const historicalRes = await api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
       if (requestId !== request.current) return;
@@ -160,7 +165,7 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     try {
-      const [res, fifoRows, priceRows] = await Promise.all([api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }), loadRawFifoCosts(effBranch), loadRawCurrentPrices(effBranch)]);
+      const res = await api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch });
       if (requestId !== request.current) return;
       if (res.error) {
         setError(res.error.message);
@@ -168,6 +173,10 @@ export function CostingCenterPage() {
         show(res.error.message, 'error');
         return;
       }
+      const fifoRows = await loadRawFifoCosts(effBranch);
+      if (requestId !== request.current) return;
+      const priceRows = await loadRawCurrentPrices(effBranch);
+      if (requestId !== request.current) return;
       const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows);
       setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null })));
       setLoading(false);
