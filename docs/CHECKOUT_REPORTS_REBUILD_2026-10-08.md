@@ -1,8 +1,8 @@
 # Checkout and reports rebuild — 2026-10-08
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `feat/reporting-core-20261008`
-Current PR: #473 (reporting foundation draft; checkout #472 merged)
+Branch: `feat/reporting-families-20261008`
+Current PR: #0 (family navigation, dependent on #473)
 Last updated: 2026-10-08
 
 ## Work status
@@ -20,11 +20,15 @@ Smoha Table48 Johna's-02447 initially open/unpaid: 190 subtotal,40 discount,150 
 Two approvals consumed with split audit shape but no invoice proof. guard_sale_discount requires invoice_number, so split core can reject. Early JSON failures commit approval consumption although no sale was created. Split also compared percentage approval metadata against its normalized amount type. Direct UI discount changes can be discarded by confirmation reading only the server preview.
 
 ## Change ledger
+Family stage scope: discovery/navigation only; eight core families, permission-filtered contents and search. No loader, accounting, stock, payment, printing or database changes.
+
 Reporting foundation: product summaries now use whole-invoice allocations from the station loader before dimension filtering, grouping by branch/product ID/unit. Exposes sold/returned/net quantities and gross/discount/tax/refund/net values. Selected product columns carry through CSV/Excel/print. Column uncheck hides only that column; empty selection persists until Show All. Product display/export source note documents row grain and lifetime-return policy.
 
 Invoice proof added only to split approval audit. Failed split/normal settlement returns unwind all writes via a nested exception block, returning the original structured failure. Direct-discount users persist and verify checkout changes before payment. Split closure now follows the normal sent-only completion rule after exact kitchen finalization, and returns persisted order closure and remaining quantities. A downstream-core rejection regression covers rollback after consumption. Existing stock/accounting/print routines retained.
 
 ## Verification ledger
+Family navigation:26 focused tests passed, including permission filtering, no duplicate family placement, cross-catalog search, existing deep links and financial selection. App/test typechecks, changed-file lint and production build passed. Full frontend suite pending; exact-head CI required.
+
 Reporting foundation: 20 focused tests passed; app/test typechecks and production build passed; full lint has zero errors (15 existing warnings). Full suite:1574 passed, one worklog-state contract failure resolved by accurately recording the reporting production gate as BLOCKED; rerun passed (4/4); combined suite evidence1575 tests passed.
 
 Final exact head 28d470e93f51e90096c37e571980ab46682aef14: 1569 frontend tests,967 DB/RLS tests,121 browser tests, lint, app/test typechecks, build, schema and pages-continuity all Green. Seven new database cases passed, including downstream core rejection and genuine partial closure. Final main reconciled at 8f1041fb; production normal/split/discount-guard hashes unchanged. This final transition is recorded locally and in PR metadata; no additional code commit changes the verified head.
@@ -36,7 +40,7 @@ Approved checkout_discount_failure_atomicity migration applied successfully; nor
 
 ## Next action
 Reporting phase: use whole-invoice allocated sales lines for product summaries, separate product IDs and units, and correct column hide/show behavior. Keep all changes frontend-only.
-Draft #473 opened. Run exact-head Full Verify on the final documentation/code head. No database migration in this reporting stage. Obtain separate approval for its production merge/deployment after verification. Checkout #472 approval/apply/merge/deploy is complete; do not request it again. Continue reporting rebuild in staged PRs under the agreed ordered backlog.
+Foundation #473 Full Verify37779424007 succeeded at87ab6b8cd94c6909ed1ae766580459fe71cc32f2. Prepare a separate dependent PR for eight report families with unchanged report routes, permission filtering and bounded compact navigation. No database migration in this reporting stage. Obtain separate approval for its production merge/deployment after verification. Checkout #472 approval/apply/merge/deploy is complete; do not request it again. Continue reporting rebuild in staged PRs under the agreed ordered backlog.
 
 ## Mandatory update protocol
 Record verification transitions and exact head. Reconcile unexpected main movement. Update this log before every mutation scope change.

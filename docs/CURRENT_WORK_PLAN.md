@@ -5,7 +5,7 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `fcb2c25d`
-- Current active branch: `feat/reporting-core-20261008`
+- Current active branch: `feat/reporting-families-20261008`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
@@ -59,3 +59,5 @@ with shared definitions, accurate allocation, configurable tables and source tra
 - #469 approved recipe cost consistency migration applied; main 5f085641; Verify 37763464358 and Pages 37763464375 Green.
 
 - #472 approved checkout migration applied, exact live function hashes verified, merged at fcb2c25d. Pages deployment37777968084 succeeded; post-merge Verify37777968117 succeeded (frontend, DB/RLS, browser and pages-continuity).
+
+- #473 exact-head Full Verify37779424007 succeeded at87ab6b8c; frontend-only reporting foundation remains unmerged pending explicit production approval. Family navigation is prepared on a dependent branch.
