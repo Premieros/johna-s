@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/discount-approval-20261008`
-Current PR: #0
+Current PR: #468
 Last updated: 2026-10-08
 
 ## Work status
@@ -16,7 +16,7 @@ Approval updated local discount only; linked checkout re-read unchanged order di
 ## Change ledger
 Invoker header-only RPC validates order-scoped approval, requester, branch, amount, subtotal and expiry under existing RLS/triggers. Approval consumption remains in process_sale. UI awaits persistence and refresh, blocks payment while pending, reports failures.
 ## Verification ledger
-Local targeted tests 24/24 and full unit/component suite 1549/1549 passed; build passed; lint has 0 errors (15 existing warnings). Typechecks being finalized. Exact-head Full Verify including fresh-database integration and browser tests pending. No real sale/send/printing test or production writes performed.
+Local targeted tests 24/24 and full unit/component suite 1549/1549 passed; build passed; lint has 0 errors (15 existing warnings). Application and test typechecks passed. Exact-head Full Verify including fresh-database integration and browser tests running for PR #468. No real sale/send/printing test or production writes performed.
 ## Production gate
 New production function requires separate explicit approval after exact-head Full Verify Green. No historical sale changes authorized on an assumed cash receipt; verify actual amount received first.
 ## Next action
