@@ -33,7 +33,7 @@ describe.skipIf(!dbUrl)('discount checkout failures and split invoice proof', ()
       `SELECT public.process_sale_split($1,$2,$3,NULL,NULL,20,5,'amount',0,0,15,$4::jsonb,'completed',$5::jsonb,$6,'dine_in',NULL,$7,NULL) AS r`,
       [invoice,ids.branchA,warehouse || ids.whA,JSON.stringify([{payment_method:'cash',amount:5},{payment_method:'card',amount:paid-5}]),JSON.stringify(preview.items),ids.shiftA,ids.rows.orders.own]);
     expect(r.error).toBeUndefined();
-    return r.rows[0].r as {success:boolean;error?:string;sale_id?:string};
+    return r.rows[0].r as {success:boolean;error?:string;sale_id?:string;order_completed?:boolean;remaining_unsent_quantity?:number;remaining_unsettled_quantity?:number};
   };
   const approvalState = async () => (await client.query('SELECT status,consumed_at FROM public.approval_requests WHERE id=$1',[approval])).rows[0];
   it('preserves approval and all financial rows when split totals mismatch', async () => {
@@ -45,10 +45,20 @@ describe.skipIf(!dbUrl)('discount checkout failures and split invoice proof', ()
     expect((await split('SPLIT-DISCOUNT-WH-'+approval,15,ids.whB)).success).toBe(false);
     expect(await approvalState()).toMatchObject({status:'approved',consumed_at:null});
   });
+  it('rolls back approval consumption when the sale core rejects a closed shift', async () => {
+    await client.query("UPDATE public.shifts SET status='closed' WHERE id=$1",[ids.shiftA]);
+    const r=await split('SPLIT-CORE-FAIL-'+approval,15);
+    expect(r.success).toBe(false);
+    expect(await approvalState()).toMatchObject({status:'approved',consumed_at:null});
+    expect((await client.query('SELECT count(*)::int AS n FROM public.sales WHERE invoice_number=$1',['SPLIT-CORE-FAIL-'+approval])).rows[0].n).toBe(0);
+  });
   it('records the approved split discount and two tenders with invoice-bound proof', async () => {
     const invoice='SPLIT-DISCOUNT-OK-'+approval;
     const r=await split(invoice,15);
     expect(r.success,JSON.stringify(r)).toBe(true);
+    expect(r.order_completed).toBe(true);
+    expect(Number(r.remaining_unsent_quantity)).toBe(0);
+    expect(Number(r.remaining_unsettled_quantity)).toBe(0);
     expect((await approvalState()).status).toBe('consumed');
     const sale=(await client.query('SELECT discount_amount::numeric,total::numeric,paid_amount::numeric,payment_method FROM public.sales WHERE id=$1',[r.sale_id])).rows[0];
     expect(Number(sale.discount_amount)).toBe(5);
@@ -57,6 +67,15 @@ describe.skipIf(!dbUrl)('discount checkout failures and split invoice proof', ()
     expect(sale.payment_method).toBe('split');
     expect((await client.query('SELECT count(*)::int AS n FROM public.sale_payments WHERE sale_id=$1',[r.sale_id])).rows[0].n).toBe(2);
     expect((await client.query("SELECT details->>'invoice_number' AS invoice FROM public.audit_log WHERE entity_id=$1 AND action='APPROVAL_CONSUMED'",[approval])).rows[0].invoice).toBe(invoice);
+  });
+  it('reports genuine partial settlement when unsent quantity remains', async () => {
+    await client.query('UPDATE public.order_items SET quantity=2,total=40 WHERE order_id=$1',[ids.rows.orders.own]);
+    await client.query('UPDATE public.orders SET subtotal=40,total=35 WHERE id=$1',[ids.rows.orders.own]);
+    const r=await split('SPLIT-PARTIAL-'+approval,15);
+    expect(r.success,JSON.stringify(r)).toBe(true);
+    expect(r.order_completed).toBe(false);
+    expect(Number(r.remaining_unsent_quantity)).toBe(1);
+    expect((await client.query('SELECT status FROM public.orders WHERE id=$1',[ids.rows.orders.own])).rows[0].status).toBe('open');
   });
   it('accepts a percentage approval persisted as an exact monetary order discount', async () => {
     await client.query(`UPDATE public.approval_requests SET payload=payload || '{"discount_type":"percent","requested_value":25}'::jsonb WHERE id=$1`,[approval]);

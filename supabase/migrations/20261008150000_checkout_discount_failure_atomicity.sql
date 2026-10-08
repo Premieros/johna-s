@@ -973,6 +973,9 @@ DECLARE
   v_req_id uuid;
   v_email text;
   v_order_owner uuid;
+  v_order_table uuid;
+  v_remaining_unsent numeric := 0;
+  v_remaining_unsettled numeric := 0;
 BEGIN
   BEGIN
     IF auth.uid() IS NULL THEN
@@ -1054,7 +1057,7 @@ BEGIN
     -- The existing sale core remains the single stock/write boundary.
     -- Use a temporary cash collection, then replace only the collection-side accounting below.
     IF p_order_id IS NOT NULL THEN
-      SELECT o.cashier_id INTO v_order_owner
+      SELECT o.cashier_id,o.table_id INTO v_order_owner,v_order_table
       FROM public.orders o
       WHERE o.id=p_order_id AND o.branch_id=p_branch_id AND o.status IN ('open','held');
       IF NOT FOUND THEN
@@ -1089,7 +1092,7 @@ BEGIN
       p_shift_id,
       p_order_type,
       p_table_id,
-      p_order_id,
+      NULL, -- Closure belongs to this wrapper after exact kitchen finalization.
       p_guest_count
     );
 
@@ -1101,7 +1104,7 @@ BEGIN
     END IF;
 
     IF COALESCE((v_core->>'success')::boolean, false) IS NOT TRUE THEN
-      RETURN v_core;
+      RAISE EXCEPTION USING ERRCODE='PZ001', MESSAGE=v_core::text;
     END IF;
 
     v_sale_id := (v_core->>'sale_id')::uuid;
@@ -1128,6 +1131,26 @@ BEGIN
     -- Mirror the normal process_sale linked-order reconciliation after
     -- the split sale has its final paid_amount and Kitchen events are settled.
     IF p_order_id IS NOT NULL THEN
+      SELECT COALESCE(sum(e.sent_quantity-e.voided_quantity),0)
+      INTO v_remaining_unsettled
+      FROM public.order_kitchen_inventory_events e
+      WHERE e.order_id=p_order_id AND e.settled_sale_id IS NULL
+        AND e.sent_quantity>e.voided_quantity;
+      SELECT COALESCE(sum(GREATEST(oi.quantity-COALESCE(s.sent_quantity,0),0)),0)
+      INTO v_remaining_unsent
+      FROM public.order_items oi
+      LEFT JOIN public.order_kitchen_sends s ON s.order_item_id=oi.id
+      WHERE oi.order_id=p_order_id;
+      IF v_remaining_unsettled<=0.000001 AND v_remaining_unsent<=0.000001 THEN
+        UPDATE public.orders SET status='completed',completed_at=now(),updated_at=now()
+        WHERE id=p_order_id AND branch_id=p_branch_id AND status IN ('open','held');
+        IF v_order_table IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM public.orders o WHERE o.table_id=v_order_table
+            AND o.status IN ('open','held') AND o.id<>p_order_id
+        ) THEN
+          UPDATE public.dining_tables SET status='vacant',updated_at=now() WHERE id=v_order_table;
+        END IF;
+      END IF;
       UPDATE public.orders o
       SET payment_status = CASE
             WHEN x.total > 0 AND x.paid >= x.total THEN
@@ -1151,6 +1174,14 @@ BEGIN
       ) x
       WHERE o.id = p_order_id
         AND o.branch_id = p_branch_id;
+
+      -- Return persisted closure state; absent metadata must not become a false partial receipt.
+      SELECT v_core || jsonb_build_object(
+        'order_completed',o.status = 'completed',
+        'remaining_unsent_quantity',v_remaining_unsent,
+        'remaining_unsettled_quantity',v_remaining_unsettled
+      ) INTO v_core FROM public.orders o
+      WHERE o.id=p_order_id AND o.branch_id=p_branch_id;
     END IF;
 
     -- Replace the one temporary shift collection with one row per tender.

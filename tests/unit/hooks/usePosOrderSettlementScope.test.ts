@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks=vi.hoisted(()=>({permissions:{canEditOrder:false,canDiscount:false},discount:vi.fn(),fetch:vi.fn(),invoice:vi.fn(),pay:vi.fn(),show:vi.fn(),base:{activeOrderId:'a',activeTable:null,orderType:'takeaway',tableId:null,cart:[],discountType:'amount' as 'amount'|'percent',discountAmount:0,paidAmount:0,paymentMethod:'cash',checkoutOpen:false,setCheckoutOpen:vi.fn(),setPaidAmount:vi.fn(),setDiscountType:vi.fn(),setDiscountAmount:vi.fn()}}));
+const mocks=vi.hoisted(()=>({permissions:{canEditOrder:false,canDiscount:false},discount:vi.fn(),fetch:vi.fn(),invoice:vi.fn(),pay:vi.fn(),show:vi.fn(),base:{activeOrderId:'a',activeTable:null,orderType:'takeaway',tableId:null,cart:[],discountType:'amount' as 'amount'|'percent',discountAmount:0,paidAmount:0,paymentMethod:'cash',checkoutOpen:false,resetWorkspace:vi.fn(),setCheckoutOpen:vi.fn(),setPaidAmount:vi.fn(),setDiscountType:vi.fn(),setDiscountAmount:vi.fn()}}));
 vi.mock('@/api',()=>({supabase:{},floorPlan:{setCheckoutDiscount:mocks.discount}}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en',t:(s:string)=>s})}));
 vi.mock('@/components/Toast',()=>({useToast:()=>({show:mocks.show})}));
@@ -120,5 +120,18 @@ describe('direct linked-order discount', () => {
     mocks.base.discountAmount=5; rerender();
     await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
     expect(mocks.pay).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('persisted settlement closure', () => {
+  it('shows the completed receipt and resets workspace for a closed split order', async () => {
+    mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+    mocks.pay.mockResolvedValue({result:{success:true,sale_id:'sale-a',invoice_number:'INV',order_completed:true,remaining_unsent_quantity:0,payments:[{payment_method:'cash',amount:10},{payment_method:'card',amount:10}]},error:null});
+    const {result}=renderHook(()=>usePosOrder(input));
+    await act(async()=>{expect(await result.current.completeSale()).toBe(true);});
+    expect(result.current.receiptOrderCompleted).toBe(true);
+    expect(mocks.base.resetWorkspace).toHaveBeenCalledOnce();
+    expect(mocks.show.mock.calls.some(call=>call[1]==='warning')).toBe(false);
   });
 });
