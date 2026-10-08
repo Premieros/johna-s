@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
-import { runAsPersist, seedRlsFixture, type RlsIds } from './rls';
+import { runAs, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 
 const dbUrl = getDbUrl();
 describe.skipIf(!dbUrl)('order checkout discount authorization', () => {
@@ -59,5 +59,10 @@ describe.skipIf(!dbUrl)('order checkout discount authorization', () => {
     expect(Number(stored.rows[0].total)).toBe(0);
     expect((await client.query('SELECT status FROM public.approval_requests WHERE id=$1',[approvalId])).rows[0].status).toBe('consumed');
   });
-
+  it('cannot reuse consumed proof for a different invoice through direct insertion', async () => {
+    const r = await runAs(client,ids.users.cashier,
+      `INSERT INTO public.sales(invoice_number,branch_id,subtotal,discount_amount,total,paid_amount,payment_method,status)
+       VALUES($1,$2,20,20,0,0,'cash','completed')`, [`REPLAY-${approvalId}`,ids.branchA]);
+    expect(r.error).toContain('DISCOUNT_NOT_ALLOWED');
+  });
 });

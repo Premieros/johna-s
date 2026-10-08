@@ -1,3 +1,7 @@
+BEGIN;
+SET LOCAL lock_timeout='2s';
+SET LOCAL statement_timeout='15s';
+
 -- Header-only checkout discount: existing RLS and mutation guards remain in force.
 -- Approval is consumed by process_sale, never by this preview preparation step.
 CREATE FUNCTION public.set_order_checkout_discount(
@@ -109,3 +113,5 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+COMMIT;

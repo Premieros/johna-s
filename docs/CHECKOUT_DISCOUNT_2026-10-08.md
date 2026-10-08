@@ -27,3 +27,5 @@ Update this log with every implementation/verification transition and reconcile 
 Cost read evidence: Turkish Coffee S current recipe is 0.012kg coffee at550 +2 sugar packs at0.211 =7.022 (7.02 displayed); catalog manual cost remains0. Need identify which user screen is reported before changing historical cost.
 
 Actual Cleopatra coffee event cost6.60: coffee6.60 and sugar0 (unpriced historical stock). Current recipe7.022 is distinct; do not overwrite historical actual FIFO with latest price.
+
+CI c2a69ccb: 1548/1549 unit tests passed; source contract required the normalized monetary expression shape. Retained that contract while rounding approval payloads to cents. Migration made explicitly atomic with short lock/statement timeouts. Re-verification required.

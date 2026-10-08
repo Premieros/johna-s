@@ -126,9 +126,9 @@ export function CashierDiscountApprovalCard({
     const normalizedInput = type === 'percent'
       ? Math.min(amount, 100)
       : Math.min(amount, Math.max(subtotal, 0));
-    const monetaryDiscount = Math.round((type === 'percent'
-      ? (Math.max(subtotal, 0) * normalizedInput) / 100
-      : normalizedInput) * 100) / 100;
+    const monetaryDiscount = type === 'percent'
+      ? Math.round(((Math.max(subtotal, 0) * normalizedInput) / 100) * 100) / 100
+      : Math.round(normalizedInput * 100) / 100;
     if (monetaryDiscount <= 0) return;
 
     setBusy(true);
