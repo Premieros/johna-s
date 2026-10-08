@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `5f08564187ba93507225a651164d311a2d77356b`
-- Current active branch: `fix/historical-known-price-cost-20261008`
+- Latest main baseline reconciled: `b2bb81eba49e53a9ccf4b61e43b1cdd9e3826b0e`
+- Current active branch: `fix/costing-report-read-load-20261008`
 - Mandatory active work log: `docs/HISTORICAL_KNOWN_PRICE_COST_2026-10-08.md`
 
 ## Operational rules

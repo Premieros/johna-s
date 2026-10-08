@@ -2,7 +2,7 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `fix/historical-known-price-cost-20261008`
+Branch: `fix/costing-report-read-load-20261008`
 Current PR: #470
 Last updated: 2026-10-08
 
@@ -96,3 +96,14 @@ at current0.211 each yields7.02; no invoice or source movement mutated.
 Final response hardening: RPC returns a scalar JSON array computed in one database
 snapshot, avoiding set-returning row truncation and concurrent paging drift. API/UI keep
 the same array model; targeted tests include1200 invoices returned in one call.
+
+## Post-deployment performance follow-up
+User separately approved Production RPC and publication at14:20 Cairo. #470 merged
+b2bb81eb, exact premerge Verify37767885053 passed1563/960/121; Pages37769445145 succeeded.
+Migration historical_known_price_cost_estimates applied; INVOKER/anon-denied verified.
+Live month overview hit8s timeouts under concurrent reads; each canonical historical RPC
+read succeeded in isolation at about4–5s. Current valuation and summary reads also succeed
+individually. Sequence historical pricing after existing overview reads and after order
+margins, preserving stale-request checks, costing and all permissions. No new DB change.
+Targeted verification and new exact-head Full Verify pending. Publication authorization
+for this necessary follow-up is retained from the user's explicit approval.
