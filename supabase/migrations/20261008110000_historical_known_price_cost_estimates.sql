@@ -64,17 +64,5 @@ $function$;
 REVOKE ALL ON FUNCTION public.get_historical_sale_cost_estimates(uuid,date,date) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_historical_sale_cost_estimates(uuid,date,date) TO authenticated,service_role;
 
--- Existing guarded period report uses the same canonical raw-price source.
--- Keep its original security, permission/history/visibility guards and ACLs.
-DO $patch$
-DECLARE definition text; original text;
-BEGIN
-  SELECT pg_get_functiondef('public.get_raw_consumption_cost_breakdown(uuid,timestamptz,timestamptz)'::regprocedure) INTO definition;
-  original:=E'public._raw_last_known_fifo_cost(\n          m.raw_material_id,\n          m.branch_id,\n          m.warehouse_id\n        )';
-  IF position(original IN definition)=0 OR position('private.financial_reference_visible' IN definition)=0
-    THEN RAISE EXCEPTION 'HISTORICAL_PERIOD_BASELINE_MISMATCH'; END IF;
-  EXECUTE replace(definition,original,'public._raw_cost_for_costing(m.raw_material_id,m.branch_id)');
-END;
-$patch$;
 NOTIFY pgrst,'reload schema';
 COMMIT;

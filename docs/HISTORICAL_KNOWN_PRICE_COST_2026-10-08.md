@@ -1,8 +1,20 @@
 # Historical known-price costing — 2026-10-08
 
-Repository Premieros/johna-s. Production johnas / azzdesuowpdcoflmyezn.
-Single writer. Active branch fix/historical-known-price-cost-20261008.
-Baseline main 5f08564187ba93507225a651164d311a2d77356b.
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `fix/historical-known-price-cost-20261008`
+Current PR: #470
+Last updated: 2026-10-08
+
+## Work status
+Implementation prepared. State: **BLOCKED** for production pending verification and the separate new-function approval.
+
+## Guardrails
+Single writer. Preserve RLS, Financial Visibility, branch isolation, inventory, accounting,
+printing, KDS, send and shifts. No direct main writes, force pushes or SECURITY DEFINER shortcuts.
+
+## Baseline
+Main 5f08564187ba93507225a651164d311a2d77356b, approved #469 deployed and fully verified.
 
 ## Authorized objective
 User requested correcting historical zero raw consumption costs where a known price
@@ -11,7 +23,7 @@ be negative; consumed quantity times known price still counts as cost. No stock-
 predicate is permitted in the calculation. Truly unpriced ingredients contribute zero
 and other priced ingredients still sum.
 
-## Evidence
+## Root-cause ledger
 Read-only Cleopatra audit: 4104 zero raw sale/kitchen consumption ledger movements,
 3522 with currently known prices, gross reference estimate 29300.55. 4021 zero rows
 have FIFO debt; 306 currently known price events postdate consumption. Initial net-sale
@@ -21,7 +33,7 @@ financial visibility can narrow it). Dates Sep20–Oct8. No historical ledger wr
 Raw chicken breast215/kg; manufactured210/kg. Current inventory balance does not
 participate in any historical estimate.
 
-## Implementation
+## Change ledger
 New get_historical_sale_cost_estimates reporting RPC is STABLE SECURITY INVOKER,
 requires auth, reports.costing, allowed branch, history bounds, existing RLS and explicit
 Financial Visibility. It queries immutable consumption quantities, resolves kitchen
@@ -33,15 +45,16 @@ actual costs are never replaced. After a receipt supplies actual cost, its zero 
 disappears, preventing full settlement double counting. No new SECURITY DEFINER.
 Legacy invoices with partial refunds are conservatively excluded from supplements
 until exact per-raw refund linkage is verified; no refund-value proportion is guessed.
-The raw period report switches its zero estimate source to the same canonical raw price,
-retaining original guard/security/ACL and actual movement semantics.
+Production inspection confirms the existing raw period report already uses the canonical
+raw price source after #467. Its source, guards/security/ACL and actual movement semantics
+are preserved; no replacement patch is needed.
 Frontend summary and invoice margins separate actual cost, latest-known-price supplement,
 total cost and corrected profit. Unpriced quantities do not suppress known costs.
 Paginated historical RPC reads avoid the PostgREST row cap. Failed price reads are errors,
 not zero supplements. Invoice amounts, journals, stocks, print/KDS/send/shifts untouched.
 This is reporting correction, not a fabricated purchase receipt or booked actual FIFO cost.
 
-## Validation / production gate
+## Verification ledger
 Targeted frontend checks cover mixed actual/zero ingredients, corrected profit, missing
 price contribution, pagination and failed reads. DB tests cover negative/zero/positive
 stock equivalence, latest price changes, kitchen voids, legacy overlap, real-cost replacement,
@@ -51,3 +64,27 @@ established repository naming path. No new library/API features or dependencies 
 No migration applied. New Production reporting RPC requires separate explicit approval
 after exact-head Full Verify Green. User approval of historical correction is retained;
 only this new function/schema gate remains. Existing FIFO replay run3bdd6482 is not used.
+
+## Production gate
+No new reporting function/migration applied. Separate explicit approval is required after
+exact-head Full Verify Green. Existing user authorization for historical costing persists.
+
+## Next action
+Complete exact-head CI, resolve meaningful failures, then seek approval for the concrete
+new guarded reporting RPC. Apply/merge/deploy only after approval.
+
+## Mandatory update protocol
+Update this log for verification transitions. Reconcile unexpected main/head movement.
+No parallel writers. Record final exact-head evidence in PR metadata to avoid a documentation/CI loop.
+
+## Latest verification checkpoint
+6ae3f119 Verify37766229409 stopped at the mandatory worklog structure guard before code/DB
+execution; this update supplies the required headings and branch/PR metadata. Targeted8
+frontend tests and typechecks/lint succeeded. Refined read-only audit matching the new
+movement selection:1334 invoices including unpriced-only invoices,3418 priced movements,
+570 unpriced movements,28497.72 known-price supplement. This is reference costing;
+Financial Visibility and a live cutoff can change the authorized report totals.
+
+Production preflight confirmed the old fallback expression had already been replaced by
+#467 with get_raw_material_current_prices. Removed the redundant proposed period-function
+patch before further CI; the new migration creates only the guarded historical RPC.

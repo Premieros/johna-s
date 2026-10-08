@@ -444,6 +444,7 @@ export function CostingCenterPage() {
             <p className="text-xl font-bold">{historicalEstimate && !error ? money(salesCostSummary.cogs + historicalEstimate.cost) : '-'}</p>
             <p className="text-sm text-ui-muted">{isAr ? 'التكلفة المستكملة بآخر سعر معروف (تقديرية): ' : 'Supplement at latest known price (estimated): '}{historicalEstimate && !error ? money(historicalEstimate.cost) : '-'}</p>
             <p className="text-sm text-ui-muted">{isAr ? 'الربح بعد استكمال التكلفة: ' : 'Profit after cost supplement: '}{historicalEstimate && !error ? money(salesCostSummary.net_sales - salesCostSummary.cogs - historicalEstimate.cost) : '-'}</p>
+            <p className="text-sm text-ui-muted">{isAr ? 'نسبة التكلفة بعد الاستكمال: ' : 'Cost ratio after supplement: '}{historicalEstimate && !error ? `${formatNumber(safeDiv(salesCostSummary.cogs + historicalEstimate.cost, salesCostSummary.net_sales) * 100, 1)}%` : '-'}</p>
             {historicalEstimate && historicalEstimate.unpriced > 0 && <p className="text-sm text-ui-warning">{isAr ? 'بعض الحركات بلا سعر معروف؛ تُجمع تكلفة باقي الخامات.' : 'Some movements have no known price; other ingredient costs still sum.'}</p>}
           </div>
           <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
