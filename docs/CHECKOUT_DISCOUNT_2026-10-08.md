@@ -29,3 +29,5 @@ Cost read evidence: Turkish Coffee S current recipe is 0.012kg coffee at550 +2 s
 Actual Cleopatra coffee event cost6.60: coffee6.60 and sugar0 (unpriced historical stock). Current recipe7.022 is distinct; do not overwrite historical actual FIFO with latest price.
 
 CI c2a69ccb: 1548/1549 unit tests passed; source contract required the normalized monetary expression shape. Retained that contract while rounding approval payloads to cents. Migration made explicitly atomic with short lock/statement timeouts. Re-verification required.
+
+Failed approval persistence keeps payment blocked until a new approval succeeds; rejection/expiry remain explicit decisions. Latest full-unit recheck and fresh-database end-to-end checks are pending; no production migration or merge.

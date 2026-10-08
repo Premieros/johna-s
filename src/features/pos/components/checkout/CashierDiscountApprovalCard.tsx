@@ -22,12 +22,12 @@ export function CashierDiscountApprovalCard({
   const [amount, setAmount] = useState(0);
   const [reason, setReason] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected'>('idle');
+  const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected' | 'failed'>('idle');
   const [busy, setBusy] = useState(false);
   const appliedRequestRef = useRef<string | null>(null);
 
   useEffect(() => setType(currentType), [currentType]);
-  useEffect(() => { onPendingChange?.(busy || status === 'pending'); }, [busy, status, onPendingChange]);
+  useEffect(() => { onPendingChange?.(busy || status === 'pending' || status === 'failed'); }, [busy, status, onPendingChange]);
   const [error, setError] = useState('');
 
   const applyDecision = useCallback((row: {
@@ -60,7 +60,7 @@ export function CashierDiscountApprovalCard({
       void Promise.resolve().then(() => onApproved(approvedType, approvedValue, requestId))
         .then(() => { setStatus('approved'); setError(''); })
         .catch((err: unknown) => {
-          setStatus('rejected');
+          setStatus('failed');
           setError(err instanceof Error ? err.message : 'DISCOUNT_APPLY_FAILED');
         })
         .finally(() => setBusy(false));
