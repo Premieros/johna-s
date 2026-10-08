@@ -31,3 +31,5 @@ Actual Cleopatra coffee event cost6.60: coffee6.60 and sugar0 (unpriced historic
 CI c2a69ccb: 1548/1549 unit tests passed; source contract required the normalized monetary expression shape. Retained that contract while rounding approval payloads to cents. Migration made explicitly atomic with short lock/statement timeouts. Re-verification required.
 
 Failed approval persistence keeps payment blocked until a new approval succeeds; rejection/expiry remain explicit decisions. Latest full-unit recheck and fresh-database end-to-end checks are pending; no production migration or merge.
+
+Full Verify 37748475108 at2232621f: frontend1549/1549 and schema/Pages continuity passed; DB951/952 passed. New cashier settlement fixture lacked the pinned inventory warehouse, correctly rejected by production guard. Fixed only test fixture warehouse and sent snapshot; production warehouse guards untouched. Full recheck pending.

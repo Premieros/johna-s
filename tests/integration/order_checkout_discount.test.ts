@@ -20,7 +20,9 @@ describe.skipIf(!dbUrl)('order checkout discount authorization', () => {
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
     await client.query(`UPDATE public.roles SET permissions=permissions || '["pos.order.edit","pos.payment.take"]'::jsonb WHERE role='cashier'`);
-    await client.query('UPDATE public.orders SET subtotal=20,total=20 WHERE id=$1', [ids.rows.orders.own]);
+    await client.query('UPDATE public.orders SET subtotal=20,total=20,inventory_warehouse_id=$2 WHERE id=$1', [ids.rows.orders.own,ids.whA]);
+    await client.query(`INSERT INTO public.order_kitchen_sends(branch_id,order_id,order_item_id,sent_quantity,sent_by)
+      SELECT $2,order_id,id,1,$3 FROM public.order_items WHERE order_id=$1`, [ids.rows.orders.own,ids.branchA,ids.users.cashier]);
     await client.query(`INSERT INTO public.order_kitchen_inventory_events(order_id,order_item_id,branch_id,warehouse_id,sent_quantity)
       SELECT order_id,id,$2,$3,1 FROM public.order_items WHERE order_id=$1`, [ids.rows.orders.own,ids.branchA,ids.whA]);
     const r = await client.query(`INSERT INTO public.approval_requests(branch_id,requester_id,action_type,entity_type,entity_id,payload,reason,status,expires_at)
