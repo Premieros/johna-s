@@ -41,6 +41,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const perms = usePosPermissions();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
   const saleMutationLockRef = useRef(false);
+  const directDiscountDirtyOrderRef = useRef<string | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const { preview: settlementPreview, load: loadScopedSettlementPreview, clear: clearSettlementPreview, isCurrent: isCurrentSettlementPreview } = useScopedSettlementPreview(base.activeOrderId, input.branchId);
   const [settlementReceipt, setSettlementReceipt] = useState<ReceiptData | null>(null);
@@ -232,6 +233,36 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
   }, [base.activeOrderId, base.setTableId, isAr, show]);
 
+  const loadPaymentPreview = useCallback(async (): Promise<OrderSettlementPreview | null> => {
+    let preview = await loadSettlementPreview(false);
+    if (!preview?.order_id || !isCurrentSettlementPreview(preview)) return null;
+    // A direct discount edited inside checkout must be durable before payment.
+    // Cashier-approved discounts are already persisted by applyApprovedDiscount.
+    if (perms.canDiscount && directDiscountDirtyOrderRef.current === preview.order_id) {
+      const intendedDiscount = Math.round((base.discountType === 'percent'
+        ? preview.subtotal * base.discountAmount / 100 : base.discountAmount) * 100) / 100;
+      if (intendedDiscount !== preview.discount_amount) {
+        const saved = await api.floorPlan.setCheckoutDiscount({
+          p_order_id: preview.order_id,
+          p_discount_amount: intendedDiscount,
+          p_approval_request_id: null,
+        });
+        if (saved.error || !saved.data?.success) {
+          show(saved.error?.message || saved.data?.error || 'DISCOUNT_APPLY_FAILED', 'error');
+          return null;
+        }
+        preview = await loadSettlementPreview(false);
+        if (!preview || preview.discount_amount !== intendedDiscount) {
+          show(isAr ? 'تعذر تأكيد الخصم؛ لم يتم تحصيل الطلب' : 'Discount verification failed; payment was not taken', 'error');
+          return null;
+        }
+      }
+    }
+
+    directDiscountDirtyOrderRef.current = null;
+    return preview;
+  }, [base, isAr, isCurrentSettlementPreview, loadSettlementPreview, perms.canDiscount, show]);
+
   const setCheckoutOpen = useCallback((open: boolean) => {
     if (!open) {
       clearSettlementPreview();
@@ -245,7 +276,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
 
     void (async () => {
-      const preview = await loadSettlementPreview(false);
+      const preview = await loadPaymentPreview();
       if (!preview) return;
       if (preview.unsent_quantity > 0) {
         show(
@@ -258,7 +289,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
     })();
-  }, [base, clearSettlementPreview, isAr, loadSettlementPreview, show]);
+  }, [base, clearSettlementPreview, isAr, loadPaymentPreview, show]);
 
   const completeSale = useCallback(async (): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -367,31 +398,8 @@ export function usePosOrder(input: UsePosOrderInput) {
     setOfflineCompleting(true);
     try {
       // Re-read authoritative sent items and pinned warehouse at confirmation.
-      let preview = await loadSettlementPreview(false);
-      if (!preview?.order_id) return false;
-
-      // A direct discount edited inside checkout must be durable before payment.
-      // Cashier-approved discounts are already persisted by applyApprovedDiscount.
-      if (perms.canDiscount) {
-        const intendedDiscount = Math.round((base.discountType === 'percent'
-          ? preview.subtotal * base.discountAmount / 100 : base.discountAmount) * 100) / 100;
-        if (intendedDiscount !== preview.discount_amount) {
-          const saved = await api.floorPlan.setCheckoutDiscount({
-            p_order_id: preview.order_id,
-            p_discount_amount: intendedDiscount,
-            p_approval_request_id: null,
-          });
-          if (saved.error || !saved.data?.success) {
-            show(saved.error?.message || saved.data?.error || 'DISCOUNT_APPLY_FAILED', 'error');
-            return false;
-          }
-          preview = await loadSettlementPreview(false);
-          if (!preview || preview.discount_amount !== intendedDiscount) {
-            show(isAr ? 'تعذر تأكيد الخصم؛ لم يتم تحصيل الطلب' : 'Discount verification failed; payment was not taken', 'error');
-            return false;
-          }
-        }
-      }
+      const preview = await loadPaymentPreview();
+      if (!preview) return false;
 
       const invoiceNumber = await nextInvoiceNumber();
       if (!isCurrentSettlementPreview(preview)) return false;
@@ -510,7 +518,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
-  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadSettlementPreview, offlineCompleting, perms.canDiscount, show, t]);
+  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadPaymentPreview, offlineCompleting, show, t]);
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
@@ -583,6 +591,16 @@ export function usePosOrder(input: UsePosOrderInput) {
   return {
     ...base,
     ...settlementTotals,
+    setDiscountAmount: (amount: number) => {
+      if (saleMutationLockRef.current) return;
+      if (base.activeOrderId) directDiscountDirtyOrderRef.current = base.activeOrderId;
+      base.setDiscountAmount(amount);
+    },
+    setDiscountType: (type: 'amount' | 'percent') => {
+      if (saleMutationLockRef.current) return;
+      if (base.activeOrderId) directDiscountDirtyOrderRef.current = base.activeOrderId;
+      base.setDiscountType(type);
+    },
     completing: base.completing || offlineCompleting,
     checkoutOpen: base.checkoutOpen,
     setCheckoutOpen,

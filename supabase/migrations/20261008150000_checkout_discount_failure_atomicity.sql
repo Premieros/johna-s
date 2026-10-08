@@ -322,10 +322,8 @@ BEGIN
   RETURN v_result;
 END;
 $function$
-$baseline_process_sale$ THEN
-    RAISE EXCEPTION 'PROCESS_SALE_BASELINE_CHANGED';
-  END IF;
-  EXECUTE $new_process_sale$CREATE OR REPLACE FUNCTION public.process_sale(p_invoice_number text, p_branch_id uuid, p_warehouse_id uuid, p_customer_id uuid, p_salesperson_id uuid, p_subtotal numeric, p_discount_amount numeric, p_discount_type text, p_tax_amount numeric, p_bonus_amount numeric, p_total numeric, p_paid_amount numeric, p_payment_method text, p_status text, p_items jsonb, p_shift_id uuid DEFAULT NULL::uuid, p_order_type text DEFAULT 'takeaway'::text, p_table_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_guest_count integer DEFAULT NULL::integer)
+$baseline_process_sale$
+     AND d IS DISTINCT FROM $canonical_process_sale$CREATE OR REPLACE FUNCTION public.process_sale(p_invoice_number text, p_branch_id uuid, p_warehouse_id uuid, p_customer_id uuid, p_salesperson_id uuid, p_subtotal numeric, p_discount_amount numeric, p_discount_type text, p_tax_amount numeric, p_bonus_amount numeric, p_total numeric, p_paid_amount numeric, p_payment_method text, p_status text, p_items jsonb, p_shift_id uuid DEFAULT NULL::uuid, p_order_type text DEFAULT 'takeaway'::text, p_table_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_guest_count integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -357,7 +355,6 @@ DECLARE
   v_order_paid numeric(14,2) := 0;
   v_order_total numeric(14,2) := 0;
 BEGIN
-  BEGIN
   IF auth.uid() IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'AUTH_REQUIRED');
   END IF;
@@ -367,15 +364,6 @@ BEGIN
   IF NOT public.user_may_access_branch(p_branch_id) THEN
     RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
   END IF;
-  IF p_shift_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM public.shifts s
-    WHERE s.id = p_shift_id
-      AND s.branch_id = p_branch_id
-      AND s.status = 'open'
-  ) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'NO_OPEN_SHIFT');
-  END IF;
-
   IF p_order_id IS NOT NULL THEN
     SELECT o.cashier_id
     INTO v_order_owner
@@ -396,13 +384,23 @@ BEGIN
       PERFORM set_config('app.pos_action_order_id',p_order_id::text,true);
       PERFORM set_config('app.pos_action_permission','pos.payment.take',true);
     END IF;
+  END IF;
+  IF p_shift_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.shifts s
+    WHERE s.id = p_shift_id
+      AND s.branch_id = p_branch_id
+      AND s.status = 'open'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NO_OPEN_SHIFT');
+  END IF;
 
+  IF p_order_id IS NOT NULL THEN
     v_preview := public._build_order_settlement_preview(p_order_id);
     IF COALESCE((v_preview->>'success')::boolean, false) IS NOT TRUE THEN
       RETURN v_preview;
     END IF;
     IF COALESCE((v_preview->>'pending_quantity')::numeric, 0) <= 0 THEN
-      RETURN jsonb_build_object('success', false, 'error', 'NO_SENT_ITEMS_TO_SETTLE');
+      RETURN jsonb_build_object('success', false, 'error', 'ORDER_NOT_FULLY_SENT');
     END IF;
     v_effective_items := COALESCE(v_preview->'items', '[]'::jsonb);
   END IF;
@@ -518,7 +516,7 @@ BEGIN
       v_effective_items
     );
     IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
-      RAISE EXCEPTION USING ERRCODE='PZ001', MESSAGE=v_result::text;
+      RETURN v_result;
     END IF;
 
     SELECT table_id INTO v_order_table
@@ -536,7 +534,7 @@ BEGIN
     CASE WHEN p_order_id IS NOT NULL THEN v_order_owner ELSE auth.uid() END,
     v_server_subtotal,
     v_header_discount,
-    'amount',
+    CASE WHEN p_order_id IS NOT NULL THEN 'amount' ELSE COALESCE(p_discount_type, 'amount') END,
     0,
     p_bonus_amount,
     0,
@@ -641,16 +639,30 @@ BEGIN
     END IF;
   END IF;
 
-  IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
+  RETURN v_result;
+END;
+$function$
+$canonical_process_sale$ THEN
+    RAISE EXCEPTION 'PROCESS_SALE_BASELINE_CHANGED';
+  END IF;
+  -- Preserve the known live/canonical differences outside this repair.
+  d := replace(d,$old_atomic_0$BEGIN
+  IF auth.uid() IS NULL THEN$old_atomic_0$,$new_atomic_0$BEGIN
+  BEGIN
+  IF auth.uid() IS NULL THEN$new_atomic_0$);
+  d := replace(d,$old_atomic_1$IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
+      RETURN v_result;$old_atomic_1$,$new_atomic_1$IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
+      RAISE EXCEPTION USING ERRCODE='PZ001', MESSAGE=v_result::text;$new_atomic_1$);
+  d := replace(d,$old_atomic_2$  RETURN v_result;
+END;$old_atomic_2$,$new_atomic_2$  IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
     RAISE EXCEPTION USING ERRCODE='PZ001', MESSAGE=v_result::text;
   END IF;
   RETURN v_result;
   EXCEPTION WHEN SQLSTATE 'PZ001' THEN
     RETURN SQLERRM::jsonb;
   END;
-END;
-$function$
-$new_process_sale$;
+END;$new_atomic_2$);
+  EXECUTE d;
   SELECT pg_get_functiondef(oid) INTO d FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname='process_sale_split';
   IF d IS DISTINCT FROM $baseline_process_sale_split$CREATE OR REPLACE FUNCTION public.process_sale_split(p_invoice_number text, p_branch_id uuid, p_warehouse_id uuid, p_customer_id uuid, p_salesperson_id uuid, p_subtotal numeric, p_discount_amount numeric, p_discount_type text, p_tax_amount numeric, p_bonus_amount numeric, p_total numeric, p_payments jsonb, p_status text, p_items jsonb, p_shift_id uuid DEFAULT NULL::uuid, p_order_type text DEFAULT 'takeaway'::text, p_table_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_guest_count integer DEFAULT NULL::integer)
  RETURNS jsonb
@@ -1021,7 +1033,7 @@ BEGIN
       WHERE requester_id=auth.uid() AND branch_id=p_branch_id AND action_type='discount'
         AND status='approved' AND expires_at>now()
         AND (entity_id IS NULL OR entity_id IS NOT DISTINCT FROM p_order_id)
-        AND COALESCE(payload->>'discount_type','amount')=COALESCE(p_discount_type,'amount')
+        AND (p_order_id IS NOT NULL OR COALESCE(payload->>'discount_type','amount')=COALESCE(p_discount_type,'amount'))
         AND abs(COALESCE((payload->>'discount_amount')::numeric,-1)-p_discount_amount)<0.0001
         AND abs(COALESCE((payload->>'subtotal')::numeric,-1)-v_server_subtotal)<0.0001
       ORDER BY decided_at DESC NULLS LAST,created_at DESC LIMIT 1 FOR UPDATE;
@@ -1046,7 +1058,7 @@ BEGIN
       FROM public.orders o
       WHERE o.id=p_order_id AND o.branch_id=p_branch_id AND o.status IN ('open','held');
       IF NOT FOUND THEN
-        RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND');
+        RAISE EXCEPTION USING ERRCODE='PZ001', MESSAGE=jsonb_build_object('success',false,'error','ORDER_NOT_FOUND')::text;
       END IF;
       IF v_order_owner IS DISTINCT FROM auth.uid() THEN
         PERFORM set_config('app.pos_action_authorized','1',true);

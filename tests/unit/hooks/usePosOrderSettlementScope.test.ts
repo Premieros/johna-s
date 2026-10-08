@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks=vi.hoisted(()=>({discount:vi.fn(),fetch:vi.fn(),invoice:vi.fn(),pay:vi.fn(),show:vi.fn(),base:{activeOrderId:'a',activeTable:null,orderType:'takeaway',tableId:null,cart:[],paidAmount:0,paymentMethod:'cash',checkoutOpen:false,setCheckoutOpen:vi.fn(),setPaidAmount:vi.fn(),setDiscountType:vi.fn(),setDiscountAmount:vi.fn()}}));
+const mocks=vi.hoisted(()=>({permissions:{canEditOrder:false,canDiscount:false},discount:vi.fn(),fetch:vi.fn(),invoice:vi.fn(),pay:vi.fn(),show:vi.fn(),base:{activeOrderId:'a',activeTable:null,orderType:'takeaway',tableId:null,cart:[],discountType:'amount' as 'amount'|'percent',discountAmount:0,paidAmount:0,paymentMethod:'cash',checkoutOpen:false,setCheckoutOpen:vi.fn(),setPaidAmount:vi.fn(),setDiscountType:vi.fn(),setDiscountAmount:vi.fn()}}));
 vi.mock('@/api',()=>({supabase:{},floorPlan:{setCheckoutDiscount:mocks.discount}}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en',t:(s:string)=>s})}));
 vi.mock('@/components/Toast',()=>({useToast:()=>({show:mocks.show})}));
-vi.mock('@/features/pos/hooks/usePosPermissions',()=>({usePosPermissions:()=>({canEditOrder:false})}));
+vi.mock('@/features/pos/hooks/usePosPermissions',()=>({usePosPermissions:()=>mocks.permissions}));
 vi.mock('@/features/pos/hooks/usePosOrderBase',()=>({usePosOrder:()=>mocks.base}));
 vi.mock('@/features/pos/services/settlementPreview',()=>({fetchOrderSettlementPreview:mocks.fetch}));
 vi.mock('@/features/pos/services/payment',()=>({nextInvoiceNumber:mocks.invoice,createSaleOperationKey:()=> 'operation-key',processSaleForOrder:mocks.pay}));
 import { usePosOrder, type UsePosOrderInput } from '@/features/pos/hooks/usePosOrder';
 const input={branchId:'branch-a',products:[],customers:[],activeShift:{id:'shift-a'}} as unknown as UsePosOrderInput;
 const preview=(order:string,branch:string,warehouse:string)=>({preview:{success:true,order_id:order,branch_id:branch,warehouse_id:warehouse,items:[],subtotal:20,discount_amount:0,tax_amount:0,total:20,pending_quantity:1,unsent_quantity:0,has_payable_items:true},error:null});
-beforeEach(()=>{vi.clearAllMocks();mocks.base.activeOrderId='a';mocks.invoice.mockReset().mockResolvedValue('INV');mocks.pay.mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:null});});
+beforeEach(()=>{vi.clearAllMocks();mocks.base.activeOrderId='a';mocks.base.discountAmount=0;mocks.base.discountType='amount';mocks.permissions.canDiscount=false;mocks.invoice.mockReset().mockResolvedValue('INV');mocks.pay.mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:null});});
 describe('payment confirmation warehouse source',()=>{
   it('re-reads warehouse on confirmation rather than reusing checkout preview',async()=>{
     mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','old-warehouse')).mockResolvedValueOnce(preview('a','branch-a','pinned-warehouse'));
@@ -71,6 +71,54 @@ describe('approved linked-order discount', () => {
     const {result}=renderHook(()=>usePosOrder(input));
     await act(async()=>{await expect(result.current.applyApprovedDiscount('amount',20,'expired')).rejects.toThrow('MANAGER_APPROVAL_REQUIRED');});
     expect(mocks.base.setDiscountAmount).not.toHaveBeenCalled();
+    expect(mocks.pay).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('direct linked-order discount', () => {
+  const discounted = () => {
+    const value = preview('a','branch-a','warehouse-a');
+    value.preview.discount_amount=5; value.preview.total=15;
+    return value;
+  };
+  it('preserves a saved discount when resuming with default local state', async () => {
+    mocks.permissions.canDiscount=true;
+    mocks.fetch.mockResolvedValue(discounted());
+    const {result}=renderHook(()=>usePosOrder(input));
+    await act(async()=>{await result.current.completeSale();});
+    expect(mocks.discount).not.toHaveBeenCalled();
+    expect(mocks.pay.mock.calls[0][0]).toMatchObject({p_discount_amount:5});
+  });
+  it('persists an explicit edit and re-reads the amount before payment', async () => {
+    mocks.permissions.canDiscount=true;
+    mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','warehouse-a')).mockResolvedValueOnce(discounted());
+    mocks.discount.mockResolvedValue({data:{success:true},error:null});
+    const {result,rerender}=renderHook(()=>usePosOrder(input));
+    act(()=>result.current.setDiscountAmount(5));
+    mocks.base.discountAmount=5; rerender();
+    await act(async()=>{await result.current.completeSale();});
+    expect(mocks.discount).toHaveBeenCalledWith({p_order_id:'a',p_discount_amount:5,p_approval_request_id:null});
+    expect(mocks.pay.mock.calls[0][0]).toMatchObject({p_discount_amount:5});
+  });
+  it('stops payment when saving an explicit discount fails', async () => {
+    mocks.permissions.canDiscount=true;
+    mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+    mocks.discount.mockResolvedValue({data:{success:false,error:'DISCOUNT_FAILED'},error:null});
+    const {result,rerender}=renderHook(()=>usePosOrder(input));
+    act(()=>result.current.setDiscountAmount(5));
+    mocks.base.discountAmount=5; rerender();
+    await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+    expect(mocks.pay).not.toHaveBeenCalled();
+  });
+  it('stops payment if the saved amount differs from the authoritative preview', async () => {
+    mocks.permissions.canDiscount=true;
+    mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+    mocks.discount.mockResolvedValue({data:{success:true},error:null});
+    const {result,rerender}=renderHook(()=>usePosOrder(input));
+    act(()=>result.current.setDiscountAmount(5));
+    mocks.base.discountAmount=5; rerender();
+    await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
     expect(mocks.pay).not.toHaveBeenCalled();
   });
 });

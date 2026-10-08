@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION public.process_sale(p_invoice_number text, p_branch_i
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
-AS $function$
+AS $function$;
 DECLARE
   v_req_id uuid;
   v_result jsonb;
@@ -318,14 +318,14 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.process_sale_split(p_invoice_number text, p_branch_id uuid, p_warehouse_id uuid, p_customer_id uuid, p_salesperson_id uuid, p_subtotal numeric, p_discount_amount numeric, p_discount_type text, p_tax_amount numeric, p_bonus_amount numeric, p_total numeric, p_payments jsonb, p_status text, p_items jsonb, p_shift_id uuid DEFAULT NULL::uuid, p_order_type text DEFAULT 'takeaway'::text, p_table_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_guest_count integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
-AS $function$
+AS $function$;
 DECLARE
   v_payment jsonb;
   v_method text;
@@ -593,7 +593,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'TRANSACTION_FAILED', 'detail', SQLERRM);
   END;
 END;
-$function$
+$function$;
 
 COMMIT;
 

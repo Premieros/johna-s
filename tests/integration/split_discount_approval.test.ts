@@ -58,6 +58,12 @@ describe.skipIf(!dbUrl)('discount checkout failures and split invoice proof', ()
     expect((await client.query('SELECT count(*)::int AS n FROM public.sale_payments WHERE sale_id=$1',[r.sale_id])).rows[0].n).toBe(2);
     expect((await client.query("SELECT details->>'invoice_number' AS invoice FROM public.audit_log WHERE entity_id=$1 AND action='APPROVAL_CONSUMED'",[approval])).rows[0].invoice).toBe(invoice);
   });
+  it('accepts a percentage approval persisted as an exact monetary order discount', async () => {
+    await client.query(`UPDATE public.approval_requests SET payload=payload || '{"discount_type":"percent","requested_value":25}'::jsonb WHERE id=$1`,[approval]);
+    const r=await split('SPLIT-PERCENT-'+approval,15);
+    expect(r.success,JSON.stringify(r)).toBe(true);
+    expect(Number((await client.query('SELECT discount_amount FROM public.sales WHERE id=$1',[r.sale_id])).rows[0].discount_amount)).toBe(5);
+  });
   it('keeps normal-payment approval available after settlement validation fails', async () => {
     const r=await runAsPersist(client,ids.users.cashier,
       `SELECT public.process_sale($1,$2,$3,NULL,NULL,20,5,'amount',0,0,15,15,'cash','completed','[]'::jsonb,$4,'dine_in',NULL,$5,NULL) AS r`,
