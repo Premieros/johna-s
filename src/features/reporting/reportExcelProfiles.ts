@@ -192,6 +192,8 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
   const profile = profiles[reportType];
   const sourceNote = reportType === 'sales_by_station'
     ? pick(lang, 'المحطة والتصنيف من الربط الحالي. الخصم والضريبة موزعان على كامل الفاتورة قبل الفلترة. المرتجعات حتى وقت العرض لفواتير الفترة. تكلفة FIFO الناقصة أو غير القابلة للتتبع والربح تظهر غير متاحة. تقدير آخر سعر منفصل، والخامات غير المسعرة معلنة. الربح دون الضريبة.', 'Current station/category mapping. Invoice discount/tax allocated before filtering. Lifetime returns on invoices in the selected period. Incomplete or untraceable FIFO cost and profit are unavailable. Latest-price estimates are separate and unpriced materials are listed. Profit excludes tax.')
+    : reportType === 'sales_by_product'
+    ? pick(lang, 'بنود sales المرتبطة بـ sale_items. الصف لكل فرع ومعرف منتج ووحدة بيع. الخصم والضريبة والمرتجع موزعة على كامل الفاتورة قبل فلترة المنتج والتصنيف. المرتجعات حتى وقت العرض لفواتير الفترة؛ لا تمثل حركة المرتجعات داخل الفترة.', 'sales joined to sale_items. One row per branch, product ID and sale unit. Invoice discount, tax and returns are allocated before product/category filtering. Lifetime returns on invoices in the selected period, rather than returns occurring within that period.')
     : reportType === 'financial_reconciliation'
     ? pick(lang, 'تفاصيل الدفع + قيود الخزنة والبنك، مع إظهار أي فرق دون إخفائه.', 'Payment detail + treasury/bank journal entries; mismatches are shown explicitly.')
     : reportType === 'sales_component_reconciliation'

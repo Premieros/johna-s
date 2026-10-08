@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `8f1041fb`
-- Current active branch: `fix/split-discount-reports-20261008`
+- Latest main baseline reconciled: `fcb2c25d`
+- Current active branch: `feat/reporting-core-20261008`
 - Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
@@ -57,3 +57,5 @@ with shared definitions, accurate allocation, configurable tables and source tra
 
 - #468 approved checkout discount repair deployed and verified.
 - #469 approved recipe cost consistency migration applied; main 5f085641; Verify 37763464358 and Pages 37763464375 Green.
+
+- #472 approved checkout migration applied, exact live function hashes verified, merged at fcb2c25d. Pages deployment37777968084 succeeded; post-merge Verify37777968117 succeeded (frontend, DB/RLS, browser and pages-continuity).
