@@ -72,7 +72,7 @@ export function ReportsCenterPage() {
             </select>
           </label>
         </div>
-        {view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
+        {view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} key={view.key} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
       </main>
     </div>
   </div>;

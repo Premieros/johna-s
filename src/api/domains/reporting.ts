@@ -32,7 +32,7 @@ export const reporting = {
 
   getDayClosingRangeReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_day_closing_range_report', p); },
   getRawMaterialConsumptionReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }, signal?: AbortSignal): ApiResult<Record<string, unknown>[]> { return rpc('get_raw_material_consumption_report', p, signal); },
-  getCurrentRawMaterialValuation(p: { p_branch_id: string }): ApiResult<Record<string, unknown>[]> { return rpc('get_current_raw_material_valuation', p); },
+  getCurrentRawMaterialValuation(p: { p_branch_id: string }, signal?: AbortSignal): ApiResult<Record<string, unknown>[]> { return rpc('get_current_raw_material_valuation', p, signal); },
   getRawMaterialFinancialReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_raw_material_financial_report', p); },
   getSalesComponentReconciliationReport(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<Record<string, unknown>> { return rpc('get_sales_component_reconciliation_report', p); },
 

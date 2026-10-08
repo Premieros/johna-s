@@ -56,9 +56,24 @@ afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); mocks.visibleColumns = null; mocks.columnOrder = undefined; vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it('does not request results on mount, filter changes or a report-type change', async () => {
+    mocks.loadSales.mockResolvedValue([sale('manual')]);
+    const view = render(page());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(mocks.loadSales).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
+    expect(mocks.loadSales).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
+    await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledOnce());
+    view.rerender(page({ controlledReportType: 'sales_costs' }));
+    expect(mocks.stationLines).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();
+  });
   it('reuses reads across equivalent branch lookup refreshes and reloads changed labels', async () => {
     mocks.loadSales.mockResolvedValue([sale('stable-branch')]);
     const view = render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
     mocks.branches = mocks.branches.map(branch => ({ ...branch }));
     view.rerender(page());
@@ -77,6 +92,7 @@ describe('report read stability', () => {
     const all = Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`));
     mocks.loadSales.mockResolvedValue(all); mocks.fullSales.mockResolvedValue(all);
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
     const headers = screen.getByRole('table').querySelectorAll('thead th');
     expect(Array.from(headers).map(header => header.textContent)).toEqual(['Invoice', 'Branch']);
@@ -98,6 +114,7 @@ describe('report read stability', () => {
     mocks.visibleColumns = [];
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
     for (const name of ['exportExcel', 'exportCsv', 'print']) {
       expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
@@ -109,6 +126,7 @@ describe('report read stability', () => {
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     mocks.loadOptions.mockRejectedValueOnce(new Error('NETWORK_ERROR'));
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await screen.findByRole('alert', { name: 'Filter loading error' });
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
     fireEvent.click(screen.getByRole('button', { name: 'Retry filters' }));
@@ -121,6 +139,7 @@ describe('report read stability', () => {
     const all = Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`));
     mocks.loadSales.mockResolvedValue(all); mocks.fullSales.mockResolvedValue(all);
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
     const body = () => within(screen.getByRole('table').querySelector('tbody')!);
     expect(body().queryByText('invoice-204')).toBeNull();
@@ -139,8 +158,11 @@ describe('report read stability', () => {
     const first = deferred(); const second = deferred();
     mocks.loadSales.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
     const { rerender } = render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(1));
     mocks.branch = 'b'; rerender(page());
+    expect(mocks.loadSales).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     expect(screen.getByTestId('report-summary').textContent).toBe('0:0');
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(2));
     await act(async () => { second.resolve([sale('B-sale', 'b', 20)]); });
@@ -152,6 +174,7 @@ describe('report read stability', () => {
   it.each(['branch', 'user'])('clears scoped selections on %s change without querying the new scope with old identifiers', async (scope) => {
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     const { rerender } = render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByLabelText('Warehouse filter'), { target: { value: 'warehouse-a' } });
     fireEvent.change(screen.getByLabelText('Customer filter'), { target: { value: 'customer-a' } });
@@ -164,6 +187,8 @@ describe('report read stability', () => {
     expect(screen.getByLabelText('Warehouse filter')).toHaveValue('');
     expect(screen.getByLabelText('Customer filter')).toHaveValue('');
     expect(screen.getByLabelText('Payment filter')).toHaveValue('cash');
+    expect(mocks.loadSales).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(3));
     expect(mocks.loadSales.mock.calls[2][0]).toMatchObject({ branchId: mocks.branch, filters: { payment_method: 'cash' } });
     expect(mocks.loadSales.mock.calls[2][0].filters.warehouse).toBeUndefined();
@@ -174,6 +199,7 @@ describe('report read stability', () => {
     const all = Array.from({ length: 205 }, (_, i) => sale(`invoice-${i}`));
     mocks.loadSales.mockResolvedValue(all); mocks.fullSales.mockResolvedValue(all);
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
     const appliedFrom = mocks.loadSales.mock.calls[0][0].from;
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
@@ -191,11 +217,14 @@ describe('report read stability', () => {
     const full = deferred();
     mocks.loadSales.mockResolvedValue([sale('sale')]); mocks.fullSales.mockReturnValue(full.promise);
     const { rerender } = render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
     fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
     await waitFor(() => expect(mocks.fullSales).toHaveBeenCalled());
     const signal = mocks.fullSales.mock.calls[0][0].signal as AbortSignal;
     mocks.branch = 'b'; rerender(page());
+    expect(mocks.loadSales).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     expect(signal.aborted).toBe(true);
     await act(async () => { full.resolve([sale('obsolete','a',999)]); });
     expect(mocks.excel).not.toHaveBeenCalled();
@@ -205,6 +234,7 @@ describe('report read stability', () => {
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     mocks.fullSales.mockRejectedValue(new Error('NETWORK_ERROR'));
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
     fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
     await screen.findByRole('alert');
@@ -214,6 +244,7 @@ describe('report read stability', () => {
   it('shows a read failure, prevents empty printing, and retries successfully', async () => {
     mocks.loadSales.mockRejectedValueOnce(new Error('NETWORK_ERROR')).mockResolvedValueOnce([sale('retry-sale')]);
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await screen.findByRole('alert');
     expect((screen.getByRole('button', { name: 'print' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -224,6 +255,7 @@ describe('report read stability', () => {
   it('applies draft dates only when Run report is pressed', async () => {
     mocks.loadSales.mockResolvedValue([sale('sale')]);
     render(page());
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
     await act(async () => { await Promise.resolve(); });
@@ -239,6 +271,7 @@ describe('cost and dated balance views', () => {
   it('reads historical closing values for the selected day, preserving negative balances', async () => {
     mocks.materialBalances.mockResolvedValue({ data: [{ raw_material_name: 'Flour', raw_material_code: 'F', unit_name: 'kg', closing_quantity: -2, closing_value: -30 }], error: null });
     render(<MemoryRouter initialEntries={['/reports?type=inventory_as_of&from=2026-09-01&to=2026-10-05']}><ReportsPage controlledReportType="inventory_as_of" /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('-30:1'));
     expect(mocks.materialBalances.mock.calls[0][0]).toEqual({ p_branch_id: 'a', p_from_date: '2026-10-05', p_to_date: '2026-10-05' });
     expect(screen.getByRole('table').textContent).toContain('-2');
@@ -252,6 +285,7 @@ describe('cost and dated balance views', () => {
     const line = { sale: sale('COST'), item: { product: { name: 'Meal' }, unit_name: 'piece' }, station: 'Kitchen', category: 'Meals', netQuantity: 1, netBeforeTax: 100, net: 114, cost: 25, estimatedCost: 40, knownEstimatedCost: 40, unpricedMaterials: [] };
     mocks.stationLines.mockResolvedValue([line, { ...line, sale: sale('INCOMPLETE'), cost: null, estimatedCost: null, knownEstimatedCost: 12, unpricedMaterials: ['Oil'] }]);
     render(page({ controlledReportType: 'sales_costs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await screen.findAllByText('INCOMPLETE');
     fireEvent.click(screen.getByRole('button', { name: 'exportCsv' }));
     await waitFor(() => expect(mocks.csv).toHaveBeenCalled());
@@ -269,6 +303,7 @@ describe('cost and dated balance views', () => {
   it('blocks dated balance exports when a source fails', async () => {
     mocks.materialBalances.mockResolvedValue({ data: null, error: { message: 'SOURCE_FAILURE' } });
     render(page({ controlledReportType: 'inventory_as_of' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await screen.findByRole('alert');
     expect((screen.getByRole('button', { name: 'exportCsv' }) as HTMLButtonElement).disabled).toBe(true);
     expect(mocks.csv).not.toHaveBeenCalled();

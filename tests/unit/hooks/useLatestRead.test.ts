@@ -10,15 +10,26 @@ function deferred<T>() {
 }
 
 describe('useLatestRead', () => {
+  it('does not start or reload a disabled read and discards it when disabled again', async () => {
+    const pending = deferred<string[]>(); const read = vi.fn(() => pending.promise);
+    const { result, rerender } = renderHook(({ enabled }) => useLatestRead(read, 0, enabled), { initialProps: { enabled: false } });
+    await act(async () => { await result.current.reload(); });
+    expect(read).not.toHaveBeenCalled(); expect(result.current.loading).toBe(false);
+    rerender({ enabled: true }); await waitFor(() => expect(read).toHaveBeenCalledOnce());
+    rerender({ enabled: false }); await act(async () => { pending.resolve(['stale']); });
+    expect(result.current.data).toBeNull(); expect(result.current.loading).toBe(false);
+  });
   it('clears previous scope and ignores an old response after scope changes', async () => {
     const first = deferred<string[]>();
     const second = deferred<string[]>();
-    const readA = vi.fn(() => first.promise);
+    let firstSignal: AbortSignal | undefined;
+    const readA = vi.fn((signal?: AbortSignal) => { firstSignal = signal; return first.promise; });
     const readB = vi.fn(() => second.promise);
     const { result, rerender } = renderHook(({ read }) => useLatestRead(read), { initialProps: { read: readA } });
     await waitFor(() => expect(readA).toHaveBeenCalledOnce());
     const oldReload = result.current.reload;
     rerender({ read: readB });
+    expect(firstSignal?.aborted).toBe(true);
     expect(result.current.data).toBeNull();
     await waitFor(() => expect(readB).toHaveBeenCalledOnce());
     await act(async () => { second.resolve(['branch B']); });

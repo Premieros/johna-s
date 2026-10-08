@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
 
@@ -330,6 +331,37 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     const hidden=detail.rows[0].r.recipe_items.find((line:{raw_material_id:string})=>line.raw_material_id===raw);
     expect(Number(hidden.unit_cost)).toBe(0);
     expect(hidden.cost_reference).toBeNull();
+  });
+
+  it('matches the previous complete price and valuation results for events and every fallback', async () => {
+    const fallbackIds = [randomUUID(), randomUUID(), randomUUID()];
+    for (const [index, id] of fallbackIds.entries()) {
+      await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active)
+        VALUES($1,$2,$3,$4,$5,7,true)`, [id, `PARITY-${id}`, `Fallback ${index}`, kgUnit, branchA]);
+    }
+    for (const id of fallbackIds.slice(1)) {
+      await client.query(`INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost)
+        VALUES($1,$2,2,9)`, [id, branchA]);
+    }
+    await client.query(`INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type)
+      VALUES($1,$2,$3,$4,2,11,'opening')`, [fallbackIds[2], branchA, warehouseA, `PARITY-${randomUUID()}`]);
+
+    const snapshot = async (userId: string) => asUser(userId, async () => {
+      const prices = (await client.query(`SELECT * FROM public.get_raw_material_current_prices($1) ORDER BY raw_material_id`, [branchA])).rows;
+      const value = (await client.query(`SELECT public.get_current_raw_material_valuation($1) AS value`, [branchA])).rows[0].value;
+      return { prices, value };
+    });
+    const updated = [await snapshot(managerUser), await snapshot(viewerUser)];
+    expect(fallbackIds.map(id => Number(updated[0].prices.find(row => row.raw_material_id === id)?.unit_cost))).toEqual([7, 9, 11]);
+    await client.query('SAVEPOINT price_read_parity');
+    try {
+      await client.query(readFileSync('supabase/rollback/20261009001500_raw_price_read_reuse.sql', 'utf8'));
+      expect(await snapshot(managerUser)).toEqual(updated[0]);
+      expect(await snapshot(viewerUser)).toEqual(updated[1]);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT price_read_parity');
+      await client.query('RELEASE SAVEPOINT price_read_parity');
+    }
   });
 
 });

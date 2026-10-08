@@ -1,3 +1,5 @@
+import { clearReportRequestCache } from '@/lib/reportRequestCache';
+import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
 import { requireReportData } from '@/features/reporting/services/reportResult';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useAuth } from '@/context/AuthContext';
@@ -50,7 +52,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       setView(requestedView as View);
     }
   }, [requestedView, view]);
-  const [from, setFrom] = useState(() => history.clampRange(searchParams.get('from') || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), searchParams.get('to') || todayISO()).from);
+  const [from, setFrom] = useState(() => history.clampRange(searchParams.get('from') || todayISO(), searchParams.get('to') || todayISO()).from);
   const [to, setTo] = useState(() => history.clampRange(searchParams.get('from'), searchParams.get('to') || todayISO()).to);
   const [loading, setLoading] = useState(false);
   const { effectiveSettings } = useSettings();
@@ -73,7 +75,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const readGeneration = useRef(0);
   const [reportError, setReportError] = useState<unknown>(null);
   const [loadedReportScope, setLoadedReportScope] = useState('');
-  const reportScope = JSON.stringify([user?.id, branchFilter, view, from, to, accountId, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited]);
+  const permissionVersion = useReportPermissionVersion();
+  const reportScope = JSON.stringify([permissionVersion, user?.id, branchFilter, view, from, to, accountId, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited]);
   const effectiveBranchFilter = branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const selectorContextKey = `${effectiveBranchFilter || ''}|${view}|${partySide}|${inventoryItemType}`;
@@ -271,7 +274,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   }, [reportScope, effectiveBranchFilter, view, to, accountId, from, partySide, partyId, treasuryId, inventoryItemType, inventoryItemId, warehouseId, history.unlimited, loadedSelectorContextKey, selectorContextKey]);
 
   const cancelRead = useCallback(() => { readGeneration.current++; readController.current?.abort(); }, []);
-  useEffect(() => { void load(); return cancelRead; }, [load, cancelRead]);
+  useEffect(() => { cancelRead(); setLoading(false); setReportError(null); return cancelRead; }, [reportScope, cancelRead]);
 
   const views: { key: View; label: string; icon: React.ReactNode }[] = [
     { key: 'trial_balance', label: t('trialBalance'), icon: <Scale className="w-4 h-4" /> },
@@ -554,8 +557,15 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </div>
       </DesignPanel>
 
+      <div className="flex gap-2 mb-4">
+        <Button data-testid="financial-run-report" disabled={loading || !effectiveBranchFilter || (['ledger', 'treasury_statement', 'inventory_movement', 'party_statement'].includes(view) && loadedSelectorContextKey !== selectorContextKey)} onClick={() => void load()}>{isAr ? 'عرض التقرير' : 'Run report'}</Button>
+        <Button variant="outline" disabled={loading || loadedReportScope !== reportScope} onClick={() => { clearReportRequestCache(); void load(); }}>{isAr ? 'تحديث التقرير' : 'Refresh report'}</Button>
+      </div>
+      <p className="mb-3 text-xs text-ui-muted">{isAr ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
       {!!reportError && <div role="alert" className="rounded border border-ui-border p-3">{userFacingErrorMessage(reportError, lang)} <Button size="sm" onClick={() => void load()}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button></div>}
-      {reportError ? null : (loading || loadedReportScope !== reportScope) ? (
+      {reportError ? null : !loading && loadedReportScope !== reportScope ? (
+        <DesignPanel testId="financial-reports-idle"><p className="py-12 text-center text-ui-subtle">{isAr ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.'}</p></DesignPanel>
+      ) : loading ? (
         <DesignPanel testId="financial-reports-loading"><div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div></DesignPanel>
       ) : !effectiveBranchFilter ? (
         <DesignPanel testId="financial-reports-placeholder"><div className="text-center py-12 text-ui-subtle text-sm">{t('filterByBranch')}</div></DesignPanel>

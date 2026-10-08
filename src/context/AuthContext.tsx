@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { invalidateReportPermissions } from '../lib/reportRequestCache';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import * as api from '../api';
@@ -24,7 +25,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  useLayoutEffect(() => { invalidateReportPermissions(); }, [user?.id, user?.role, user?.branch_id]);
+
   const clearAuthState = useCallback(() => {
+    invalidateReportPermissions();
     setSession(null);
     setUser(null);
   }, []);

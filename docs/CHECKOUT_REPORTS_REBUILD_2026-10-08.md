@@ -1,12 +1,13 @@
 # Checkout and reports rebuild — 2026-10-08
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `fix/pos-modifier-and-cost-read-failures`
-Current PR: #477 (POS modifier failures and bounded pricing reads)
-Last updated: 2026-10-08 23:23 Africa/Cairo
+Branch: `fix/raw-price-sql-timeouts`
+Current PR: `#478`
+Last updated: 2026-10-09 01:16 Africa/Cairo
 
 ## Work status
-State: **BLOCKED** for the new seven-report workspace production merge pending exact-head Full Verify and explicit approval. Implementation and local verification in progress. Previous #475 applied/deployed at dd4bdeef; Full Verify37814067672 and deployment37814067770 succeeded.
+State: **BLOCKED** pending exact-head consolidated Full Verify for #478; production SQL apply additionally requires separate explicit approval. User authorized implementing explicit reports/shared results and fastest repair. Production #477 is deployed at8df96523; post-merge Full Verify37845279360 Green. Earlier report deliveries below are historical.
+
 
 ## Guardrails
 Single writer. No direct main writes, force pushes, permission/RLS weakening or SECURITY DEFINER shortcuts. Preserve printing, KDS, inventory, accounting and shifts.
@@ -140,3 +141,46 @@ Next action: complete Full Verify, mark #477 ready, merge only its validated hea
 - A fresh isolated local PostgreSQL 16 database passed all 7 journal pagination tests in 2.77 seconds. The full local database suite could not establish comparable evidence because the local filesystem produced PostgreSQL relation EOF errors; those environment failures are not reported as application regressions or successful full validation.
 - Refresh planner statistics for the journal fixture and its permission tables after bulk inserts. This addresses a plausible stale-estimates contributor in the shared rolled-back fixture database; the exact CI cause is not yet proven. All existing isolation, financial visibility, pagination assertions and the 8-second statement budget remain intact.
 - No production migration, SQL function, RLS policy, data or permission change is included. Merge remains blocked until the updated exact head passes Full Verify. User approval for frontend merge/deployment remains recorded above.
+
+
+### Shared raw price read optimization (2026-10-09 Cairo)
+
+- Previous #477 delivery completed: exact-head Full Verify37843961082 Green; merged8df96523; Pages37845279299 Green. Live index-DL1uX8F7.js references new POS/price chunks; configuration marker, POS error context and price batch parameter present.
+- Active branch now fix/raw-price-sql-timeouts. User reports many screens showing statement timeout; inspect last5 hours16:12–21:12 UTC. Seven Postgres timeouts involve current prices, historical sales-cost estimates and current raw valuation; shared current-price routine appears in each context.
+- Authenticated owner read-only EXPLAIN:100 selected prices946.738ms. Exact price SQL for402 visible branch raws2939.712ms. Fallback batch scans ran402 times despite292 known event prices, consuming about1.13s; existing raw valuation separately invokes the price context per raw material and again for debt valuation. These are measurements for one authorized branch, not all-screen performance proof.
+- Prepared additive migration20261009001500_raw_price_read_reuse: guard fallback subqueries before scanning; materialize one current-price map per raw valuation call and reuse it for debt and displayed prices. Existing auth/permission/branch gates, INVOKER/DEFINER modes, output semantics and FIFO quantities/values preserved. No table/index/policy/grant change. Exact previous function definitions included as rollback.
+- Add parity integration coverage against the previous definitions for two authenticated roles, current events, unpriced and default/inventory/batch fallbacks. Local and exact-head verification pending.
+- State: **BLOCKED** for production SQL apply/merge until exact-head Full Verify Green and separate explicit approval of this concrete SQL change. Prior frontend approval remains valid only for completed#477. No production DDL/DML or operational transactions performed.
+
+
+Local SQL verification:35 tests across6 pricing/costing integration files passed against an isolated PostgreSQL16 database with all migrations; app/test typecheck, worklog4 tests and changed-test ESLint passed. Price parity compares all fields with previous function definitions for manager and viewer, including event prices, hidden/unpriced and default/inventory/batch fallbacks.
+Read-only live candidate query parity:all402 branch prices equal the existing API result; existing API3006.142ms versus guarded candidate SQL1564.014ms. Candidate valuation SQL returned402 rows in1285.564ms with the existing definer execution role postgres plus owner's JWT context. That reproduces calculation context only; local tests verify the public auth/permission gates. These single-branch warmed-read measurements are not a blanket speedup guarantee, and the candidate functions remain UNAPPLIED.
+
+Draft#478 opened for the reviewed two-function SQL read optimization. Exact-head Full Verify pending; no production application or merge.
+
+
+### Explicit report requests and shared results — 2026-10-09 00:22 Cairo user direction
+
+User instructs implementing manual report requests, a small default period and reuse of the same authoritative results between screens; permission to proceed with the best/fastest repair remains in force. Consolidate this frontend scope and the prepared two-function SQL optimization into #478. Frontend delivery is authorized by that implementation request; any new production SQL function apply remains separately gated by the explicit rule above.
+
+- Operational, financial and costing result reads now require Run report. Opening a screen, switching views/branches or editing dates does not start a heavy result read. Default dates are today; URL periods remain respected. Idle/error results cannot masquerade as zero totals or be exported. Small selector lookups remain automatic.
+- Identical read-only reporting RPCs share an in-memory result for at most60 seconds, bounded to16 entries and2MiB per response. The key includes all request headers/JWT and exact normalized parameters (branch, period and filters); permissions/profile changes clear reuse and scope results. Writes invalidate cached/pre-write reads. Errors are not retained. Refresh report clears reuse and explicitly reads latest data. Operational writes and live dashboard reads are not cached.
+- Costing overview no longer requests unused FIFO/current-price datasets. Period branch reads are sequential, stale follow-up reads stop, raw-valuation failure is unknown/error rather than a zero value. Shared historical/current-price RPCs reuse identical parameters across the costing tabs and other consumers.
+- New request-count, scope/cancellation/expiry/mutation tests and browser cross-view reuse/refresh checks cover behavior. Existing full-report/export completeness and financial/RLS tests remain. React hook, stale-response and accessible button review completed. Prepared migration is unchanged and UNAPPLIED.
+- Earlier SQL-only headc9ed4673 Full Verify37846203726 Green. Previous production main8df96523 post-merge Full Verify37845279360 Green. Final consolidated exact-head Full Verify is still required; State: **BLOCKED** until those checks complete, and production SQL additionally requires separate approval.
+
+Final local frontend validation:337 test files /1643 unit-component tests passed. Final16 focused request/costing/worklog tests passed after scope guards. App/test typechecks, production build, API contract, locked project identity and lint (0 errors/14 existing warnings) passed. Browser cross-view behavior awaits exact-head CI; no local browser success is claimed. SQL migration remains unapplied.
+
+Final capacity follow-up: six multi-branch report families (including raw valuation/current cost) read branches sequentially rather than submitting heavy per-branch RPCs concurrently. The screen-read hook now passes an independent AbortSignal and aborts stale callers; branch readers stop before requesting another branch and reject errors/cancellation without partial output. Existing output order/totals retained.29 targeted report/cache/cancellation tests and app/test typechecks passed; final complete verification remains required.
+
+Final branch-capacity validation:338 local test files /1645 unit-component tests passed, with unchanged pricing/costing SQL. Build, typechecks, changed-file ESLint and API contract passed. No production SQL applied.
+
+Browser verification correction:exact headcb53ff2a Full Verify37848784002 passed1645 frontend and971 DB/RLS tests plus Pages continuity;119 browser tests passed and6 failed. Native Request inspection in the original GET coordinator transferred/consumed the POST body before handing it to fetch when the new report cache supplied a Request object. Reproduced with the native Request constructor; preserve the original upload body while inspecting. Add an integrated two-transport native-body consumption regression. Remove one incorrectly added report-button click from the unrelated KDS browser test. All original report output/read-count and KDS assertions retained. No production deployment or SQL apply; fresh exact-head Full Verify required.
+
+Native body correction local verification:338 files /1646 frontend tests pass;28 focused transport/report tests, app/test typechecks, build, changed-file lint and contract check pass. No production deployment/apply. Publish corrected head and require fresh Full Verify.
+
+Transport consistency follow-up:invalidate shared reports both before and after a mutation completes, so a report read during an outstanding write cannot be retained as a post-write result. Added a delayed-write native-body regression. No report numbers, permissions or SQL changed; exact-head verification remains required.
+
+Write-completion follow-up:12 focused transport tests pass; app/test typechecks, build and changed-file lint pass. Prior complete local suite1646 tests was Green. Require Full Verify on the updated head; production remains unchanged.
+
+Corrected transport headc5a278d2 Full Verify37851029825 passed1647 frontend and971 DB/RLS tests plus Pages continuity. Browser:123 passed, inventory request-count test flaky (two batch reads on first attempt, zero after retry), and new cross-view test failed only at detailed invoice rendering because its synthetic sale omitted mandatory created_at. Add a date within the requested period plus normal sale fields. Start the stock test on a fresh report document before installing counters, excluding possible pending dashboard reads from the report contract. Exact output, one shared dataset/two after forced refresh, zero report batch reads and all KDS assertions retained. Application and SQL unchanged; fresh exact-head Full Verify required. No production deployment or SQL apply.
