@@ -1,3 +1,8 @@
+import { requireReportData } from '../services/reportResult';
+import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
+import { createReportSourceCache } from '../reportSourceCache';
+import { ReportWorkbench } from '../ReportWorkbench';
+import { orderReportColumns } from '../reportColumnLayout';
 import { loadProductSalesSummary } from '../services/productSalesReport';
 import { loadStationSalesLines } from '../services/stationSalesReport';
 import { expenseAccountLabel } from '../utils/expenseAccountLabel';
@@ -49,7 +54,7 @@ import {
 } from '../numericIntegrity';
 
 const EMPTY_REPORT_ROWS: Record<string, unknown>[] = [];
-interface ReportSnapshot { rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; }
+interface ReportSnapshot { rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; metrics?: Record<string, number>; }
 
 type FinancialReportType = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
@@ -104,6 +109,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     setQueryVersion((version) => version + 1);
   }, [effectiveBranchFilter, user?.id, canStationCost, canStationView]);
   const { branches } = useBranches();
+  // Equivalent lookup refreshes must not invalidate complete report data.
+  const branchSourceKey = JSON.stringify(branches.map(({ id, name, name_en }) => [id, name, name_en]));
   const { data: scopedOptions, error: optionsError, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id);
   const options = scopedOptions || EMPTY_REPORT_FILTER_OPTIONS;
   const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch';
@@ -136,7 +143,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   };
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
-  const { visibleColumns, toggleColumn, showAllColumns } = useColumnPreferences(reportType);
+  const { visibleColumns, toggleColumn, showAllColumns, columnOrder, moveColumn, resetColumnOrder } = useColumnPreferences(reportType);
   const { savedReports, saveReport, deleteReport } = useCustomReports();
   const reportBranchLabel = effectiveBranchFilter
     ? branchNameById(effectiveBranchFilter)
@@ -215,11 +222,17 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   // Capture draft filters only on Run report or an automatic report/scope change.
   const reportReader = useMemo(() => loadReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang]);
+    [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, lang]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);
   const { data: snapshot, error: reportError, loading, reload: retryReport } = useLatestRead(readReport);
+  const reportSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range)), [reportReader]);
+  useEffect(() => () => reportSource.dispose(), [reportSource]);
+  const metricSource = useMemo(() => createReportSourceCache((signal, range) => reportReader(0, true, signal, range, true)), [reportReader]);
+  useEffect(() => () => metricSource.dispose(), [metricSource]);
+  const [workbenchScope, setWorkbenchScope] = useState<unknown>(null);
+  const workbenchActive = workbenchScope === reportReader;
   const data = snapshot?.rows || EMPTY_REPORT_ROWS;
   const summary = snapshot?.summary || { total: 0, count: 0 };
   const rowCount = snapshot?.serverPaged ? summary.count : data.length;
@@ -242,7 +255,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     return () => { exportGeneration.current = generation + 1; exportController.current?.abort(); };
   }, [reportReader]);
 
-  async function loadReport(page = 0, full = false, signal?: AbortSignal): Promise<ReportSnapshot> {
+  async function loadReport(page = 0, full = false, signal?: AbortSignal, range?: { from: string; to: string }, metricsOnly = false): Promise<ReportSnapshot> {
     let resultRows: Record<string, unknown>[] = [];
     let resultSummary = { total: 0, count: 0 };
     const setData = (rows: Record<string, unknown>[]) => { resultRows = rows; };
@@ -250,10 +263,19 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     // Chart values were previously retained in unused state; preserve calculations here.
     const setChartData = (value: { name: string; value: number }[]) => { void value; };
     if (!user?.id) return { rows: resultRows, summary: resultSummary };
-    const allowed = history.clampRange(from, to);
-    if (allowed.from !== from) setFrom(allowed.from);
-    if (allowed.to !== to) setTo(allowed.to);
+    const allowed = history.clampRange(range?.from || from, range?.to || to);
+    if (range && (allowed.from !== range.from || allowed.to !== range.to)) throw new Error('COMPARISON_HISTORY_UNAVAILABLE');
+    if (!range && allowed.from !== from) setFrom(allowed.from);
+    if (!range && allowed.to !== to) setTo(allowed.to);
     const { startIso: fromTs, endExclusiveIso: toExclusiveTs } = reportDateRangeUtc(allowed.from, allowed.to);
+
+    if (metricsOnly && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')) {
+      const result = await reporting.getOperationalReportMetrics({ p_report_type: reportType, p_branch_id: effectiveBranchFilter || null,
+        p_from_date: allowed.from, p_to_date: allowed.to, p_filters: { ...filters }, p_from_ts: fromTs, p_to_exclusive_ts: toExclusiveTs }, signal);
+      if (result.error) throw new Error(result.error.message || 'REPORT_METRICS_LOAD_FAILED');
+      if (!result.data) throw new Error('REPORT_METRICS_INVALID');
+      return { rows: [], summary: { total: 0, count: 0 }, metrics: result.data };
+    }
 
     const corePage = !full && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')
       ? await loadOperationalReportPage({ reportType, branchId: effectiveBranchFilter || null,
@@ -262,7 +284,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     if (reportType === 'sales_by_station') {
       if (!canStationView) throw new Error('PERMISSION_DENIED:reports.view');
       const includeCost = canStationCost;
-      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
+      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
       setData(lines.map(line => withBranch(line.sale.branch_id, {
         [label('الفاتورة', 'Invoice')]: line.sale.invoice_number,
@@ -298,6 +320,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: lines.reduce((sum, line) => sum + line.net, 0), count: lines.length });
     } else if (reportType === 'sales') {
       const sales = corePage?.rows ?? await loadSalesReportRows({
+        from: allowed.from, to: allowed.to,
         branchId: effectiveBranchFilter || null,
         fromTs,
         toExclusiveTs,
@@ -330,6 +353,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
     } else if (reportType === 'purchases') {
       const purchases = corePage?.rows ?? await loadPurchaseReportRows({
+        from: allowed.from, to: allowed.to,
         branchId: effectiveBranchFilter || null,
         fromTs,
         toExclusiveTs,
@@ -348,6 +372,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: purchases.reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: purchases.length });
     } else if (reportType === 'expenses') {
       const expenses = corePage?.rows ?? await loadExpenseReportRows({
+        fromTs, toExclusiveTs,
         branchId: effectiveBranchFilter || null,
         from: allowed.from,
         to: allowed.to,
@@ -370,12 +395,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
       const results = await Promise.all(targetBranches.map(async (branch) => {
-        const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: from, p_to_date: to });
+        const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: allowed.from, p_to_date: allowed.to });
         if (error) throw error;
         return { branch, statement };
       }));
       const rows = results.map(({ branch, statement }) => withBranch(branch.id, {
-        [lang === 'ar' ? 'الفترة' : 'Period']: `${from} - ${to}`,
+        [lang === 'ar' ? 'الفترة' : 'Period']: `${allowed.from} - ${allowed.to}`,
         [lang === 'ar' ? 'صافي الإيراد' : 'Net Revenue']: Number(statement?.net_revenue || 0),
         [lang === 'ar' ? 'تكلفة البضاعة المباعة' : 'COGS']: Number(statement?.cogs || 0),
         [lang === 'ar' ? 'مجمل الربح' : 'Gross Profit']: Number(statement?.gross_profit || 0),
@@ -389,7 +414,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'inventory') {
       const { rawRows, unitRows } = await loadInventoryBatchRows({
         branchId: effectiveBranchFilter || null,
-        warehouseId: filters.warehouse,
+        warehouseId: filters.warehouse, signal,
       });
       const stockMap = new Map<string, { branchId: string; warehouse: string; item: string; code: string; type: string; quantity: number }>();
       rawRows.forEach((row: Record<string, unknown>) => {
@@ -397,7 +422,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const warehouse = row.warehouse as { name?: string } | null;
         const branchId = String(row.branch_id || '');
         const warehouseId = String(row.warehouse_id || '');
-        const itemId = String(material?.id || '');
+        const itemId = String(material?.id || row.raw_material_id || '');
         const key = `raw:${branchId}:${warehouseId}:${itemId}`;
         const current = stockMap.get(key) || {
           branchId,
@@ -415,7 +440,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const warehouse = row.warehouse as { name?: string } | null;
         const branchId = String(row.branch_id || '');
         const warehouseId = String(row.warehouse_id || '');
-        const itemId = String(unit?.id || '');
+        const itemId = String(unit?.id || row.unit_id || '');
         const key = `unit:${branchId}:${warehouseId}:${itemId}`;
         const current = stockMap.get(key) || {
           branchId,
@@ -466,8 +491,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       let paymentSummaryTotal = 0;
       let paymentInvoiceCount = 0;
       const methodRows = results.flatMap((result, index) => {
-        const raw = (result.data as Record<string, unknown> | null) || {};
-        if (result.error || raw.success === false || !Array.isArray(raw.rows)) return [];
+        const raw = requireReportData(result, signal);
+        if (!Array.isArray(raw.rows)) throw new Error('REPORT_SOURCE_INVALID');
         const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
         paymentSummaryTotal += Number(summaryRow.sales_total || 0);
         paymentInvoiceCount += Number(summaryRow.invoice_count || 0);
@@ -506,6 +531,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'sales_by_employee') {
       const sales = await loadSalesByEmployeeRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
         filters,
@@ -532,7 +558,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: sales.reduce((sum: number, sale: Record<string, unknown>) => sum + netSaleAmount(sale), 0), count: sales.length });
     } else if (reportType === 'sales_by_product') {
       const products = await loadProductSalesSummary({
-        branchId: effectiveBranchFilter || null, fromTs, toExclusiveTs, filters,
+        branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, signal,
         lang: lang as 'ar' | 'en', includeCost: false,
       });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
@@ -556,6 +582,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'detailed_invoices') {
       const sales = await loadDetailedInvoiceRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
         filters,
@@ -583,7 +610,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const tx = await loadComponentConsumptionRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
-        toExclusiveTs,
+        toExclusiveTs, signal,
         filters,
       });
       const map = new Map<string, { branchId: string; name: string; qty: number; cost: number; count: number }>();
@@ -591,7 +618,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const product = row.product as { name?: string } | null;
         const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
         const branchId = String(row.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
+        const key = `${branchId}\u0000${String(row.product_id || name)}`;
         const current = map.get(key) || { branchId, name, qty: 0, cost: 0, count: 0 };
         const qty = -Number(row.quantity || 0);
         current.qty += qty;
@@ -612,7 +639,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const tx = await loadTopConsumedComponentRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
-        toExclusiveTs,
+        toExclusiveTs, signal,
         filters,
       });
       const map = new Map<string, { branchId: string; name: string; qty: number }>();
@@ -620,7 +647,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         const product = row.product as { name?: string } | null;
         const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
         const branchId = String(row.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
+        const key = `${branchId}\u0000${String(row.product_id || name)}`;
         const current = map.get(key) || { branchId, name, qty: 0 };
         current.qty += -Number(row.quantity || 0);
         map.set(key, current);
@@ -635,27 +662,19 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'top_consumed_products') {
       const items = await loadTopConsumedProductItems({
         branchId: effectiveBranchFilter || null,
-        filters,
+        filters, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, lang, includeCost: false, signal,
       });
-      const filtered = items.filter((item: Record<string, unknown>) => {
-        const sale = item.sale as { created_at: string } | null;
-        return !!sale && sale.created_at >= fromTs && sale.created_at < toExclusiveTs;
-      });
-      const prodMap = new Map<string, { branchId: string; name: string; quantity: number }>();
-      filtered.forEach((item: Record<string, unknown>) => {
-        const product = item.product as { name: string } | null;
+      // Source rows already keep branch/product identity and sale units separate.
+      const rows = [...items].sort((a, b) => netSaleItemQuantity(b) - netSaleItemQuantity(a)).map(item => {
+        const product = item.product as { name?: string } | null;
         const sale = item.sale as { branch_id?: string } | null;
-        const name = product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown');
-        const branchId = String(sale?.branch_id || '');
-        const key = `${branchId}\u0000${name}`;
-        const existing = prodMap.get(key) || { branchId, name, quantity: 0 };
-        existing.quantity += netSaleItemQuantity(item);
-        prodMap.set(key, existing);
+        return withBranch(sale?.branch_id, {
+          [lang === 'ar' ? 'المنتج' : 'Product']: product?.name || (lang === 'ar' ? 'غير معروف' : 'Unknown'),
+          [lang === 'ar' ? 'معرف المنتج' : 'Product ID']: item.product_id || '-',
+          [lang === 'ar' ? 'الوحدة' : 'Unit']: item.unit_name || '',
+          [lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']: netSaleItemQuantity(item),
+        });
       });
-      const rows = Array.from(prodMap.values()).sort((a, b) => b.quantity - a.quantity).map((product) => withBranch(product.branchId, {
-        [lang === 'ar' ? 'المنتج' : 'Product']: product.name,
-        [lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']: product.quantity,
-      }));
       setData(rows);
       setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'صافي الكمية' : 'Net Quantity']) })));
       setSummary({ total: rows.length, count: rows.length });
@@ -664,7 +683,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       if (result.error) throw result.error;
       const catName = filters.category ? options.categories.find((category) => category.id === filters.category)?.name ?? filters.category : '';
       const productIds = (result.data || []).map((row) => row.product_id);
-      const productBranchRows = await loadProductBranchRows(productIds);
+      const productBranchRows = await loadProductBranchRows(productIds, signal);
       const productBranches = new Map(productBranchRows.map((product) => [product.id, product.branch_id]));
       const rows = (result.data || [])
         .filter((row) => row.recipe_item_count > 0)
@@ -681,7 +700,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost'] || 0), 0), count: rows.length });
     } else if (reportType === 'low_stock') {
       const { rawMasters, rawBalances, unitMasters, unitBatches } = await loadLowStockSources(
-        effectiveBranchFilter || null,
+        effectiveBranchFilter || null, signal,
       );
       const rawQty = new Map<string, number>();
       rawBalances.forEach((row: Record<string, unknown>) => {
@@ -734,13 +753,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'cashier_performance') {
       const sales = await loadCashierPerformanceRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
+        filters,
       });
       const empMap = new Map<string, { branchId: string; name: string; total: number; count: number; refundCount: number }>();
       sales.forEach((sale: Record<string, unknown>) => {
-        if (filters.cashier && sale.cashier_id !== filters.cashier) return;
-        if (filters.warehouse && sale.warehouse_id !== filters.warehouse) return;
         const cashier = sale.users as { full_name?: string; email?: string } | null;
         const name = cashier?.full_name || cashier?.email || (lang === 'ar' ? 'غير معروف' : 'Unknown');
         const branchId = String(sale.branch_id || '');
@@ -765,8 +784,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     } else if (reportType === 'returns') {
       const returns = await loadReturnRows({
         branchId: effectiveBranchFilter || null,
+        from: allowed.from, to: allowed.to, signal,
         fromTs,
         toExclusiveTs,
+        filters,
       });
       const statusLabels: Record<string, string> = {
         returned: lang === 'ar' ? 'مرتجع' : 'Returned', refunded: t('refunded'), cancelled: t('statusCancelled'),
@@ -800,13 +821,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       let totalNetSales = 0;
       let mismatchCount = 0;
       results.forEach((result, index) => {
-        const raw = (result.data as Record<string, unknown> | null) || {};
-        if (result.error || raw.success === false) return;
+        const raw = requireReportData(result, signal);
         const branchId = targetBranchIds[index];
         const summaryRow = (raw.summary as Record<string, unknown> | null) || {};
         totalNetSales += Number(summaryRow.net_sales || 0);
         mismatchCount += Number(summaryRow.mismatch_count || 0);
-        if (!Array.isArray(raw.rows)) return;
+        if (!Array.isArray(raw.rows)) throw new Error('REPORT_SOURCE_INVALID');
         raw.rows.forEach((item) => {
           const row = item as Record<string, unknown>;
           const status = String(row.reconciliation_status || 'matched');
@@ -1067,7 +1087,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       const waste = await loadWasteRows({
         branchId: effectiveBranchFilter || null,
         fromTs,
-        toExclusiveTs,
+        toExclusiveTs, signal,
+        filters,
       });
       const rows = waste.map((row: Record<string, unknown>) => {
         const product = row.product as { name?: string } | null;
@@ -1111,13 +1132,13 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       totalRow,
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
-      columns: (reportType === 'sales_by_station' || reportType === 'sales_by_product') ? columns : excelProfile.columns,
+      columns,
       columnWidths: excelProfile.columnWidths,
       sourceNote: excelProfile.sourceNote,
       lang,
     });
   };
-  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV((reportType === 'sales_by_station' || reportType === 'sales_by_product') ? complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))) : complete.rows, `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
+  const handleExportCSV = (complete: ReportSnapshot) => { downloadCSV(complete.rows.map(row => Object.fromEntries(columns.map(key => [key, row[key]]))), `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`); };
 
   const reportTypes: { key: ReportType; label: string; icon: React.ReactNode }[] = [
     { key: 'sales', label: t('salesReport'), icon: <TrendingUp className="w-4 h-4" /> },
@@ -1201,7 +1222,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   ];
 
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
-  const allColumns = data.length > 0 ? Object.keys(data[0]) : [];
+  const allColumns = orderReportColumns(data.length > 0 ? Object.keys(data[0]) : [], columnOrder);
   const columns = visibleColumns ? allColumns.filter((column) => visibleColumns.includes(column)) : allColumns;
   const hiddenCount = visibleColumns ? allColumns.length - columns.length : 0;
   const reportMobilePrimaryColumns = columns.slice(0, 4);
@@ -1268,7 +1289,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
   const handlePrint = (complete: ReportSnapshot, reservedWindow?: Window | null) => {
     const reportLabel = reportTypes.find((row) => row.key === reportType)?.label ?? reportType;
-    const headers = (reportType === 'sales_by_station' || reportType === 'sales_by_product') ? columns : complete.rows.length > 0 ? Object.keys(complete.rows[0]) : [];
+    const headers = columns;
     const rows = complete.rows.map((row) => headers.map((header) => {
       const value = row[header];
       if (typeof value === 'number' && moneyKeys.includes(header)) return formatFinancialCurrency(value, currency, lang);
@@ -1279,7 +1300,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   };
 
   const exportComplete = async (kind: 'excel' | 'csv' | 'print') => {
-    if (exportingRef.current || loading || reportError) return;
+    if (exportingRef.current || loading || reportError || columns.length === 0) return;
     const reservedWindow = kind === 'print' && snapshot?.serverPaged
       ? window.open('', '_blank', 'width=960,height=680') : undefined;
     if (kind === 'print' && snapshot?.serverPaged && !reservedWindow) {
@@ -1291,7 +1312,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     exportingRef.current = true; setExporting(true); setExportError(null);
     try {
       // This reader captures applied filters/dates, never the edited draft.
-      const complete = snapshot?.serverPaged ? await reportReader(0, true, controller.signal) : snapshot;
+      if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
+      const complete = snapshot?.serverPaged ? await reportSource.read() : snapshot;
       if (generation !== exportGeneration.current || !complete) { reservedWindow?.close(); return; }
       if (kind === 'excel') await handleExportExcel(complete);
       else if (kind === 'csv') handleExportCSV(complete);
@@ -1309,20 +1331,23 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
       <PageHeader title={t('reports')} actions={
         <div className="flex flex-wrap gap-2">
           <ColumnPicker
-            columns={data.length > 0 ? Object.keys(data[0]) : []}
+            columns={allColumns}
             visibleColumns={visibleColumns}
             onToggle={(key) => toggleColumn(key, allColumns)}
             onShowAll={showAllColumns}
+            onMove={(key, direction) => moveColumn(key, direction, allColumns)}
+            onResetOrder={resetColumnOrder}
             lang={lang}
             hiddenCount={hiddenCount}
           />
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('excel')} disabled={loading || exporting || !!reportError}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
-          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={loading || exporting || !!reportError}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
-          {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={loading || exporting || !!reportError}><Printer className="w-4 h-4" /> {t('print')}</Button>}
+          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('excel')} disabled={loading || exporting || !!reportError || columns.length === 0}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}
+          {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={loading || exporting || !!reportError || columns.length === 0}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
+          {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={loading || exporting || !!reportError || columns.length === 0}><Printer className="w-4 h-4" /> {t('print')}</Button>}
         </div>
       } />
 
       {exporting && <p role="status" className="mb-3 text-sm">{lang === 'ar' ? 'جاري تجهيز التقرير الكامل…' : 'Preparing complete report…'}</p>}
+      {data.length > 0 && columns.length === 0 && <p role="status" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'اختر عمودًا واحدًا على الأقل للعرض والتصدير من قائمة الأعمدة.' : 'Choose at least one column to display and export from Columns.'}</p>}
       {exportError != null && <p role="alert" className="mb-3 text-sm text-ui-danger">{userFacingErrorMessage(exportError, lang)}</p>}
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
@@ -1388,7 +1413,15 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
 
       {reportType === 'sales_by_station' && <p data-testid="station-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
-      <Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
+      <ReportWorkbench type={reportType} lang={lang} scope={reportReader} userId={user?.id || ''}
+        rows={data} complete={!snapshot?.serverPaged} unavailable={loading || !!reportError}
+        currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
+        loadRows={async () => { if (snapshot?.serverPaged && snapshot.summary.count > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT'); return (await reportSource.read()).rows; }}
+        period={snapshot?.from && snapshot?.to && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
+        loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async range => (await metricSource.read(range)).metrics! : undefined}
+        loadComparison={async range => (await reportSource.read(range)).rows}
+        onOpen={open => setWorkbenchScope(() => open ? reportReader : null)} />
+      {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
         ) : reportError ? (
@@ -1473,7 +1506,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
             <Button size="sm" variant="outline" disabled={currentResultPage + 1 >= resultPageCount} onClick={() => changePage(currentResultPage + 1)}>{lang === 'ar' ? 'التالي' : 'Next'}</Button>
           </nav>
         )}
-      </Card>
+      </Card>)}
     </div>
   );
 }

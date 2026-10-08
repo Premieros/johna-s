@@ -74,7 +74,7 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       integerColumns: [],
     },
     top_consumed_products: {
-      columns: [branch, pick(lang, 'المنتج', 'Product'), pick(lang, 'صافي الكمية', 'Net Quantity')],
+      columns: [branch, pick(lang, 'المنتج', 'Product'), pick(lang, 'معرف المنتج', 'Product ID'), pick(lang, 'الوحدة', 'Unit'), pick(lang, 'صافي الكمية', 'Net Quantity')],
       columnWidths: { [branch]: 24, [pick(lang, 'المنتج', 'Product')]: 32 },
       integerColumns: [],
     },

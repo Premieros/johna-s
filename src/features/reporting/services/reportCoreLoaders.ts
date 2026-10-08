@@ -1,21 +1,5 @@
-import { reporting, supabase } from '@/api';
-import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
-import {
-  applyExpenseFilters,
-  applyPurchaseFilters,
-  applySalesFilters,
-  type EqBuilder,
-  type ReportFilters,
-} from '../reportFilters';
-
-const filterQ = <T,>(
-  q: T,
-  filters: ReportFilters,
-  applier: (builder: EqBuilder, filters: ReportFilters) => EqBuilder,
-): T => applier(q as unknown as EqBuilder, filters) as unknown as T;
-
-const fetchRows = <T,>(query: unknown, signal?: AbortSignal): Promise<T[]> =>
-  fetchAllReportRows(query as RangePageQuery<T>, 1000, signal);
+import { reporting } from '@/api';
+import type { ReportFilters } from '../reportFilters';
 
 export async function loadOperationalReportPage(args: {
   reportType: 'sales' | 'purchases' | 'expenses'; branchId: string | null;
@@ -31,57 +15,21 @@ export async function loadOperationalReportPage(args: {
   return result.data;
 }
 
-export async function loadSalesReportRows(args: {
-  branchId: string | null;
-  fromTs: string;
-  toExclusiveTs: string;
-  filters: ReportFilters;
-  signal?: AbortSignal;
-}): Promise<Record<string, unknown>[]> {
-  let q = supabase
-    .from('sales')
-    .select('id, branch_id, invoice_number, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, order_type, status, created_at, customer:customers(name), cashier:users!fk_sales_cashier(full_name,email), warehouse:warehouses(name)')
-    .gte('created_at', args.fromTs)
-    .lt('created_at', args.toExclusiveTs)
-    .order('created_at', { ascending: false }).order('id', { ascending: false });
-  if (args.branchId) q = q.eq('branch_id', args.branchId);
-  q = filterQ(q, args.filters, applySalesFilters);
-  return fetchRows<Record<string, unknown>>(q, args.signal);
-}
 
-export async function loadPurchaseReportRows(args: {
-  branchId: string | null;
-  fromTs: string;
-  toExclusiveTs: string;
-  filters: ReportFilters;
-  signal?: AbortSignal;
-}): Promise<Record<string, unknown>[]> {
-  let q = supabase
-    .from('purchases')
-    .select('id, branch_id, invoice_number, total, returned_amount, status, created_at, supplier:suppliers(name)')
-    .gte('created_at', args.fromTs)
-    .lt('created_at', args.toExclusiveTs)
-    .order('created_at', { ascending: false }).order('id', { ascending: false });
-  if (args.branchId) q = q.eq('branch_id', args.branchId);
-  q = filterQ(q, args.filters, applyPurchaseFilters);
-  return fetchRows<Record<string, unknown>>(q, args.signal);
+export interface DatasetArgs {
+ branchId: string | null; from: string; to: string; fromTs: string; toExclusiveTs: string;
+ filters: ReportFilters; signal?: AbortSignal; returnsOnly?: boolean; includeItems?: boolean; settledOnly?: boolean;
 }
-
-export async function loadExpenseReportRows(args: {
-  branchId: string | null;
-  from: string;
-  to: string;
-  filters: ReportFilters;
-  signal?: AbortSignal;
-}): Promise<Record<string, unknown>[]> {
-  let q = supabase
-    .from('expenses')
-    .select('id, branch_id, category, description, amount, expense_date, account_id, expense_account:chart_of_accounts!account_id(code,name,name_en)')
-    .eq('status', 'posted')
-    .gte('expense_date', args.from)
-    .lte('expense_date', args.to)
-    .order('expense_date', { ascending: false }).order('id', { ascending: false });
-  if (args.branchId) q = q.eq('branch_id', args.branchId);
-  q = filterQ(q, args.filters, applyExpenseFilters);
-  return fetchRows<Record<string, unknown>>(q, args.signal);
+async function loadDataset(type: 'sales' | 'purchases' | 'expenses', args: DatasetArgs): Promise<Record<string, unknown>[]> {
+ args.signal?.throwIfAborted();
+ const result = await reporting.getOperationalReportDataset({ p_report_type: type, p_branch_id: args.branchId,
+  p_from_date: args.from, p_to_date: args.to, p_filters: { ...args.filters, ...(args.returnsOnly ? { returns_only: 'true' } : {}), ...(args.includeItems ? { include_items: 'true' } : {}), ...(args.settledOnly ? { settled_only: 'true' } : {}) },
+  p_from_ts: args.fromTs, p_to_exclusive_ts: args.toExclusiveTs }, args.signal);
+ args.signal?.throwIfAborted();
+ if (result.error) throw new Error(result.error.message || 'REPORT_DATASET_LOAD_FAILED');
+ if (!result.data || !Array.isArray(result.data.rows) || !result.data.summary || result.data.rows.length !== result.data.summary.count) throw new Error('REPORT_DATASET_INCOMPLETE');
+ return result.data.rows;
 }
+export const loadSalesReportRows = (args: DatasetArgs) => loadDataset('sales', args);
+export const loadPurchaseReportRows = (args: DatasetArgs) => loadDataset('purchases', args);
+export const loadExpenseReportRows = (args: DatasetArgs) => loadDataset('expenses', args);

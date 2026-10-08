@@ -1,21 +1,28 @@
 import { useState, useCallback } from 'react';
+import { moveReportColumn } from './reportColumnLayout';
 
 const STORAGE_KEY = 'premire_report_columns';
+const ORDER_STORAGE_KEY = 'premire_report_column_order';
 
-function readAll(): Record<string, string[]> {
+function readAll(key = STORAGE_KEY): Record<string, string[]> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const value: unknown = JSON.parse(localStorage.getItem(key) || '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string[]] =>
+      Array.isArray(entry[1]) && entry[1].every(column => typeof column === 'string'),
+    ));
   } catch {
     return {};
   }
 }
 
-function writeAll(map: Record<string, string[]>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+function writeAll(map: Record<string, string[]>, key = STORAGE_KEY) {
+  try { localStorage.setItem(key, JSON.stringify(map)); } catch { /* Keep the current session usable when storage is unavailable. */ }
 }
 
 export function useColumnPreferences(reportType: string) {
   const [stored, setStored] = useState<Record<string, string[]>>(() => readAll());
+  const [orders, setOrders] = useState<Record<string, string[]>>(() => readAll(ORDER_STORAGE_KEY));
 
   const visibleColumns: string[] | null = stored[reportType] ?? null;
 
@@ -46,5 +53,22 @@ export function useColumnPreferences(reportType: string) {
     });
   }, [reportType]);
 
-  return { visibleColumns, toggleColumn, showAllColumns };
+  const moveColumn = useCallback((key: string, direction: -1 | 1, allColumns: string[]) => {
+    setOrders(previous => {
+      const updated = { ...previous, [reportType]: moveReportColumn(allColumns, previous[reportType], key, direction) };
+      writeAll(updated, ORDER_STORAGE_KEY);
+      return updated;
+    });
+  }, [reportType]);
+
+  const resetColumnOrder = useCallback(() => {
+    setOrders(previous => {
+      const updated = { ...previous };
+      delete updated[reportType];
+      writeAll(updated, ORDER_STORAGE_KEY);
+      return updated;
+    });
+  }, [reportType]);
+
+  return { visibleColumns, toggleColumn, showAllColumns, columnOrder: orders[reportType], moveColumn, resetColumnOrder };
 }

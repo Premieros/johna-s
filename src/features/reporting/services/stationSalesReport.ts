@@ -1,7 +1,9 @@
 import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
-import { applySalesFilters, type ReportFilters, type EqBuilder } from '../reportFilters';
+import { type ReportFilters } from '../reportFilters';
+import { loadSalesReportRows } from './reportCoreLoaders';
+import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
 
 export interface StationSaleItem {
   id: string; product_id: string | null; unit_name: string; quantity: number;
@@ -125,31 +127,27 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
     && (!filters.product || line.item.product_id === filters.product));
 }
 
-export async function loadStationSalesLines(args: { branchId: string | null; fromTs: string; toExclusiveTs: string; filters: ReportFilters; lang: 'ar' | 'en'; includeCost: boolean; signal?: AbortSignal }): Promise<StationLine[]> {
-  // Parent sales scope applies date/branch first. Nested items retain whole-invoice allocation.
-  const selection: string = 'id,branch_id,invoice_number,created_at,subtotal,total,tax_amount,refunded_amount,status,payment_method,order_type,cashier:users!fk_sales_cashier(full_name),customer:customers(name),items:sale_items(id,product_id,unit_name,quantity,unit_price,discount_amount,total,refunded_quantity,refunded_amount,source_order_item_id,product:products(name,category_id,category:categories(name,kitchen_station_id,station:kitchen_stations(id,name_ar,name_en))))';
-  let q = supabase.from('sales').select(selection)
-    .gte('created_at', args.fromTs).lt('created_at', args.toExclusiveTs)
-    .in('status', ['completed', 'returned', 'refunded'])
-    .order('created_at', { ascending: false }).order('id', { ascending: false });
-  if (args.branchId) q = q.eq('branch_id', args.branchId);
-  const filtered: EqBuilder = applySalesFilters(q as unknown as EqBuilder, args.filters);
-  const sales = await fetchAllReportRows(filtered as unknown as RangePageQuery<StationSale>, 100, args.signal);
-  if (sales.some(sale => !sale.items?.length || sale.items.length >= 1000)) throw new Error('STATION_REPORT_INCOMPLETE_ITEMS');
+export async function loadStationSalesLines(args: { branchId: string | null; from: string; to: string; fromTs: string; toExclusiveTs: string; filters: ReportFilters; lang: 'ar' | 'en'; includeCost: boolean; signal?: AbortSignal }): Promise<StationLine[]> {
+  // Canonical invoice scope and bounded whole-invoice items; allocation precedes line filters.
+  const sales = await loadSalesReportRows({ ...args, includeItems: true, settledOnly: true }) as unknown as StationSale[];
+  if (sales.some(sale => !sale.items?.length || sale.items.length > 5000)) throw new Error('STATION_REPORT_INCOMPLETE_ITEMS');
   const events: CostEvent[] = [];
   if (args.includeCost) {
     const ids = sales.filter(sale => sale.items.some(item => item.source_order_item_id)).map(sale => sale.id);
     for (let i = 0; i < ids.length; i += 100) {
       let costQuery = supabase.from('order_kitchen_inventory_events').select('id,settled_sale_id,order_item_id,sent_quantity,voided_quantity,total_cost,component_snapshot').in('settled_sale_id', ids.slice(i, i + 100)).order('id');
       if (args.branchId) costQuery = costQuery.eq('branch_id', args.branchId);
-      events.push(...await fetchAllReportRows(costQuery as unknown as RangePageQuery<CostEvent>, 1000, args.signal));
+      events.push(...await fetchAllReportRows(costQuery as unknown as RangePageQuery<CostEvent>, 1000, args.signal, MAX_REPORT_SOURCE_ROWS - events.length));
     }
   }
   const ledger: CostLedgerLine[] = [];
   let prices: Record<string, number | null> = {};
   if (args.includeCost && events.length) {
     const rawIds = [...new Set(events.flatMap(event => (event.component_snapshot || []).map(component => component.raw_material_id)))];
+    if (rawIds.length > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
+    args.signal?.throwIfAborted();
     prices = rawCurrentPriceMap(await loadRawCurrentPrices(args.branchId, rawIds));
+    args.signal?.throwIfAborted();
     const eventIds = events.map(event => event.id);
     for (let i = 0; i < eventIds.length; i += 100) {
       let ledgerQuery = supabase.from('inventory_ledger')
@@ -157,7 +155,7 @@ export async function loadStationSalesLines(args: { branchId: string | null; fro
         .eq('reference_type', 'kitchen_send').lt('quantity', 0)
         .in('reference_id', eventIds.slice(i, i + 100)).order('id');
       if (args.branchId) ledgerQuery = ledgerQuery.eq('branch_id', args.branchId);
-      ledger.push(...await fetchAllReportRows(ledgerQuery as unknown as RangePageQuery<CostLedgerLine>, 1000, args.signal));
+      ledger.push(...await fetchAllReportRows(ledgerQuery as unknown as RangePageQuery<CostLedgerLine>, 1000, args.signal, MAX_REPORT_SOURCE_ROWS - ledger.length));
     }
   }
   return buildStationSalesLines(sales, args.filters, args.lang, events, prices, ledger);

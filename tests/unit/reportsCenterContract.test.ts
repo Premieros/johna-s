@@ -86,7 +86,7 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportsSource).toContain('const [queryVersion, setQueryVersion]');
     expect(reportsSource).toContain('const [filtersDirty, setFiltersDirty]');
     expect(reportsSource).toContain('setQueryVersion((version) => version + 1)');
-    expect(reportsSource).toContain('[reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang]');
+    expect(reportsSource).toContain('[reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, lang]');
   });
 
   it('provides a contextual period filter that drives from/to', () => {
@@ -116,11 +116,12 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportFiltersSource).toContain('applyPurchaseFilters');
     expect(reportFiltersSource).toContain('applyExpenseFilters');
     expect(reportFiltersSource).toContain('applyProductScopedFilters');
-    expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applySalesFilters)');
-    expect(reportSalesLoadersSource).toContain('filterQ(q, args.filters, applySalesFilters)');
-    expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applyPurchaseFilters)');
-    expect(reportCoreLoadersSource).toContain('filterQ(q, args.filters, applyExpenseFilters)');
-    expect(reportInventoryLoadersSource).toContain('filterQ(q, args.filters, applySaleItemFilters)');
+    expect(reportCoreLoadersSource).toContain('reporting.getOperationalReportDataset');
+    expect(reportCoreLoadersSource).toContain('p_filters: { ...args.filters }');
+    expect(reportSalesLoadersSource).toContain('loadSalesReportRows(args)');
+    expect(reportCoreLoadersSource).toContain("loadDataset('purchases', args)");
+    expect(reportCoreLoadersSource).toContain("loadDataset('expenses', args)");
+    expect(reportInventoryLoadersSource).toContain('loadProductSalesSummary');
     expect(reportInventoryLoadersSource).toContain('filterQ(q, args.filters, applyProductScopedFilters)');
   });
 
@@ -139,10 +140,10 @@ describe('Reports Center contract (6H-P4)', () => {
   it('keeps every operational report row branch-identifiable, including all-branch aggregates', () => {
     expect(reportsSource).toContain("const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch'");
     expect(reportsSource).toContain('const withBranch =');
-    expect(reportSalesLoadersSource).toContain("select('id, branch_id, invoice_number, total, refunded_amount, status, created_at");
+    expect(reportSalesLoadersSource).toContain('loadSalesReportRows({ ...args, returnsOnly: true })');
     expect(reportsSource).toContain('reporting.getSalesByPaymentReport');
     expect(reportsSource).toContain('reporting.getFinancialReconciliationReport');
-    expect(reportCoreLoadersSource).toContain('fetchAllReportRows');
+    expect(reportCoreLoadersSource).toContain('result.data.rows.length !== result.data.summary.count');
     expect(reportInventoryLoadersSource).toContain('fetchAllReportRows');
     expect(reportsSource).toContain('withBranch(row.branchId, {');
     expect(reportsSource).toContain('productBranches.get(row.product_id)');

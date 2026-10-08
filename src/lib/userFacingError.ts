@@ -55,6 +55,10 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
 };
 
 const messages: Record<string, { ar: string; en: string }> = {
+  REPORT_SOURCE_LIMIT: {
+    ar: 'حجم التقرير يتجاوز حد القراءة الآمنة. قلّل الفترة أو حدّد الفرع والفلاتر؛ لم تُعرض نتائج جزئية.',
+    en: 'The report exceeds the safe read limit. Narrow the period, branch or filters; partial results are not displayed.',
+  },
   EMPTY_KDS_ADMIN_REQUIRED: {
     ar: 'إنهاء الطلب الملغي الخالي من الأصناف يحتاج صلاحية إدارة الإعدادات وتحديث المطبخ.',
     en: 'Finishing an empty voided order requires settings management and kitchen update permissions.',
