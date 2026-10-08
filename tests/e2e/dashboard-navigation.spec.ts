@@ -292,28 +292,34 @@ test.describe('dashboard and navigation actions', () => {
     expect(datasetReads).toBe(1);expect(directReads).toBe(0);
   });
 
-  test('reports stay idle until requested and reuse identical sales results across views', async ({ page }) => {
-    const reads: Record<string, unknown>[] = [];
+  test('reports stay idle until requested and refresh canonical sales page after cashier view', async ({ page }) => {
+    const datasetReads: Record<string, unknown>[] = [];
+    const pageReads: Record<string, unknown>[] = [];
+    const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', invoice_date: '2026-10-08', created_at: '2026-10-08T08:00:00Z', status: 'completed', payment_method: 'cash', paid_amount: 10, branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
     await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_dataset**`, async route => {
-      const args = route.request().postDataJSON(); reads.push(args);
-      const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', invoice_date: args.p_from_date, created_at: `${args.p_from_date}T08:00:00Z`, status: 'completed', payment_method: 'cash', paid_amount: 10, branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
+      datasetReads.push(route.request().postDataJSON());
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { count: 1, total: 10 } }) });
     });
-    await page.goto('/#/reports?type=sales_by_employee');
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_page**`, async route => {
+      pageReads.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { count: 1, total: 10 } }) });
+    });
+    await page.goto('/#/reports?type=cashier_performance');
     const run = page.getByTestId('run-report-button');
     await expect(run).toBeVisible();
-    expect(reads).toHaveLength(0);
+    expect(datasetReads).toHaveLength(0);
+    expect(pageReads).toHaveLength(0);
     await run.click();
     await expect(page.getByRole('table').getByText('SHARED-CASHIER', { exact: true })).toBeVisible();
-    expect(reads).toHaveLength(1);
-    await page.goto('/#/reports?type=detailed_invoices');
+    expect(datasetReads).toHaveLength(1);
+    await page.goto('/#/reports?type=sales');
     await expect(page.getByRole('table')).toHaveCount(0);
-    expect(reads).toHaveLength(1);
+    expect(pageReads).toHaveLength(0);
     await run.click();
     await expect(page.getByRole('table').getByText('SHARED-INVOICE', { exact: true })).toBeVisible();
-    expect(reads).toHaveLength(1);
+    expect(pageReads).toHaveLength(1);
     await page.getByRole('button', { name: /تحديث التقرير|Refresh report/ }).click();
-    await expect.poll(() => reads.length).toBe(2);
+    await expect.poll(() => pageReads.length).toBe(2);
     await expect(page.getByRole('table').getByText('SHARED-INVOICE', { exact: true })).toBeVisible();
   });
 
