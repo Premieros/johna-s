@@ -20,8 +20,7 @@ export function estimateGroupCosts(
     let total = 0;
     for (const line of lines) {
       const price = prices[line.raw_material_id];
-      if (!(price > 0)) return result[id] = null;
-      total += Number(line.quantity) * (1 + Number(line.wastage_percent || 0) / 100) * price;
+      total += Number(line.quantity) * (1 + Number(line.wastage_percent || 0) / 100) * (price > 0 ? price : 0);
     }
     for (const child of children) {
       const cost = visit(child.component_unit_id, next);
@@ -47,8 +46,7 @@ export function estimateRecipeCost(
   for (const line of lines) {
     if (!line.raw_material_id || !(Number(line.quantity) > 0)) continue;
     const price = prices[line.raw_material_id];
-    if (!(price > 0)) incomplete = true;
-    else direct += Number(line.quantity) * (1 + Number(line.wastage_percent || 0) / 100) * price;
+    direct += Number(line.quantity) * (1 + Number(line.wastage_percent || 0) / 100) * (price > 0 ? price : 0);
   }
   for (const group of groups) {
     if (!group.unit_id || !(Number(group.quantity) > 0)) continue;

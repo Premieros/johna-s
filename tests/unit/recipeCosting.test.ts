@@ -14,7 +14,7 @@ describe('current recipe unit estimates',()=>{
       [{unit_id:'group',quantity:2}],{coffee:5},{group:3},2).unitCost).toBeCloseTo(17);
     expect(estimateRecipeCost([{raw_material_id:'coffee',quantity:1,wastage_percent:0}],[],{coffee:5},{},0.5).unitCost).toBe(10);
   });
-  it('marks missing prices, empty groups, unavailable children and cycles incomplete',()=>{
+  it('sums known prices while empty groups, unavailable children and cycles stay incomplete',()=>{
     const costs=estimateGroupCosts(['missing','empty','a','b','foreign'],[
       {unit_id:'missing',raw_material_id:'unknown',quantity:1,wastage_percent:0},
     ],[
@@ -22,8 +22,8 @@ describe('current recipe unit estimates',()=>{
       {unit_id:'b',component_unit_id:'a',quantity:1,wastage_percent:0},
       {unit_id:'foreign',component_unit_id:'otherBranch',quantity:1,wastage_percent:0},
     ],{});
-    expect(Object.values(costs)).toEqual([null,null,null,null,null]);
-    expect(estimateRecipeCost([], [{unit_id:'missing',quantity:1}],{},costs,1)).toEqual({unitCost:null,incomplete:true});
-    expect(estimateRecipeCost([{raw_material_id:'unknown',quantity:1,wastage_percent:0}],[],{},costs,1).unitCost).toBeNull();
+    expect(Object.values(costs)).toEqual([0,null,null,null,null]);
+    expect(estimateRecipeCost([], [{unit_id:'missing',quantity:1}],{},costs,1)).toEqual({unitCost:0,incomplete:false});
+    expect(estimateRecipeCost([{raw_material_id:'unknown',quantity:1,wastage_percent:0},{raw_material_id:'priced',quantity:2,wastage_percent:0}],[],{priced:5},costs,1).unitCost).toBe(10);
   });
 });

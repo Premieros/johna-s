@@ -61,6 +61,9 @@ BEGIN
   original:=substring(definition FROM start_at FOR end_at-start_at);
   replacement:=E'  WITH raw_lines AS (\n    SELECT * FROM public._costing_product_raw_lines(p_product_id,COALESCE(p_branch_id,(SELECT p.branch_id FROM public.products p WHERE p.id=p_product_id)))\n  )\n';
   definition:=replace(definition,original,replacement);
+  original:='rl.quantity > 0 AND COALESCE(public._raw_cost_for_costing(rl.raw_material_id,p_branch_id),0)<=0';
+  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'RECIPE_ZERO_PRICE_BASELINE_MISMATCH'; END IF;
+  definition:=replace(definition,original,'rl.raw_material_id IS NULL');
   original:='    ELSE COALESCE(round(SUM(';
   IF position(original IN definition)=0 THEN RAISE EXCEPTION 'RECIPE_FALLBACK_BASELINE_MISMATCH'; END IF;
   replacement:=$fallback$    WHEN count(*)=0 THEN (
@@ -84,6 +87,9 @@ BEGIN
   original:=substring(definition FROM start_at FOR end_at-start_at);
   replacement:=E'  recipe_lines AS MATERIALIZED (\n    SELECT sp.id AS product_id,rl.* FROM scoped_products sp\n    CROSS JOIN LATERAL public._costing_product_raw_lines(sp.id,sp.branch_id) rl\n  ),\n';
   definition:=replace(definition,original,replacement);
+  original:='rl.quantity>0 AND COALESCE(rc.unit_cost,0)<=0';
+  IF position(original IN definition)=0 THEN RAISE EXCEPTION 'OVERVIEW_ZERO_PRICE_BASELINE_MISMATCH'; END IF;
+  definition:=replace(definition,original,'rl.raw_material_id IS NULL');
   original:='p.product_type, p.sale_price';
   IF position(original IN definition)=0 THEN RAISE EXCEPTION 'PRODUCT_SCOPE_BASELINE_MISMATCH'; END IF;
   definition:=replace(definition,original,'p.product_type, p.sale_price, p.cost_price');

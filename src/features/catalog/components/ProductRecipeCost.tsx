@@ -25,7 +25,7 @@ export function ProductRecipeCost({branchId,ingredients,groups,yieldQuantity,sal
     <p className="font-semibold text-ui-text">{isAr?'تكلفة الوصفة / وحدة بيع (تقديرية)':'Recipe cost / sale unit (estimated)'}</p>
     {loading?<p className="text-sm text-ui-subtle">{isAr?'جاري تحميل أسعار الخامات…':'Loading raw prices…'}</p>:error?<p role="alert" className="text-sm text-ui-danger">{error}</p>:<>
       <p className="font-bold text-ui-primary">{cost===null?(isAr?'غير مكتملة':'Incomplete'):formatFinancialCurrency(cost,'EGP',lang)}</p>
-      {estimate?.incomplete&&<p role="status" className="text-sm text-ui-warning">{isAr?'توجد خامات بلا سعر معروف أو مجموعة مكونات غير مكتملة. أكمل أسعار الخامات لحساب التكلفة وهامش الربح.':'A raw price or component group is missing. Complete raw prices to calculate cost and margin.'}</p>}
+      {estimate?.incomplete&&<p role="status" className="text-sm text-ui-warning">{isAr?'تحقق من مجموعات المكونات وكمية ناتج الوصفة لحساب التكلفة.':'Check component groups and recipe yield to calculate cost.'}</p>}
       <p className="text-sm text-ui-muted">{isAr?'هامش الربح المتوقع:':'Expected margin:'} {margin===null?'—':`${formatNumber(margin,1)}%`}</p>
     </>}
     <p className="text-xs text-ui-subtle">{isAr?'حسب المكونات والكميات الحالية وآخر أسعار الخامات؛ تتحدث مع تعديل الوصفة.':'Uses current component quantities and latest raw prices; updates with recipe edits.'}</p>

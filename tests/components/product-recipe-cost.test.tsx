@@ -16,12 +16,18 @@ describe('recipe cost within product editor',()=>{
     expect(screen.getByText('20.00 EGP')).toBeVisible();
     expect(mocks.load).toHaveBeenCalledTimes(1);
   });
-  it('withholds cost and margin when an ingredient or group lacks a price',async()=>{
+  it('withholds cost and margin when a component group is invalid',async()=>{
     mocks.load.mockResolvedValue({prices:{},groupCosts:{group:null}});
     render(<ProductRecipeCost branchId="a" ingredients={[]} groups={[{unit_id:'group',quantity:1}]} yieldQuantity={1} salePrice={100}/>);
     await waitFor(()=>expect(screen.getByText('Incomplete')).toBeVisible());
     expect(screen.getByRole('status')).toBeVisible();
     expect(screen.getByText('Expected margin: —')).toBeVisible();
     expect(screen.queryByText('0.00 EGP')).not.toBeInTheDocument();
+  });
+  it('shows the sum of priced ingredients when another raw material is zero',async()=>{
+    mocks.load.mockResolvedValue({prices:{priced:5,zero:0},groupCosts:{}});
+    render(<ProductRecipeCost branchId="a" ingredients={[{raw_material_id:'priced',quantity:2,wastage_percent:0},{raw_material_id:'zero',quantity:1,wastage_percent:0}]} groups={[]} yieldQuantity={1} salePrice={100}/>);
+    await waitFor(()=>expect(screen.getByText('10.00 EGP')).toBeVisible());
+    expect(screen.queryByText('Incomplete')).not.toBeInTheDocument();
   });
 });
