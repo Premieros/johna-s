@@ -6,7 +6,7 @@ Current PR: #473 (reporting foundation draft; checkout #472 merged)
 Last updated: 2026-10-08
 
 ## Work status
-State: **BLOCKED** for reporting production merge pending exact-head Full Verify and separate approval; reporting foundation preparation is active. Checkout #472 merged at fcb2c25d; Pages deployment37777968084 succeeded; postmerge Verify37777968117 is monitored. User explicitly approved migration, verification, merge and deployment at 2026-10-08 15:33 Cairo. Exact-head Full Verify Green at 28d470e93f51e90096c37e571980ab46682aef14, run37775948535. User authorized work after the previous writer finished.
+State: **BLOCKED** for reporting production merge pending exact-head Full Verify and separate approval; reporting foundation preparation is active. Checkout #472 merged at fcb2c25d; Pages deployment37777968084 succeeded; postmerge Verify37777968117 succeeded (all four jobs). User explicitly approved migration, verification, merge and deployment at 2026-10-08 15:33 Cairo. Exact-head Full Verify Green at 28d470e93f51e90096c37e571980ab46682aef14, run37775948535. User authorized work after the previous writer finished.
 
 ## Guardrails
 Single writer. No direct main writes, force pushes, permission/RLS weakening or SECURITY DEFINER shortcuts. Preserve printing, KDS, inventory, accounting and shifts.
@@ -20,7 +20,7 @@ Smoha Table48 Johna's-02447 initially open/unpaid: 190 subtotal,40 discount,150 
 Two approvals consumed with split audit shape but no invoice proof. guard_sale_discount requires invoice_number, so split core can reject. Early JSON failures commit approval consumption although no sale was created. Split also compared percentage approval metadata against its normalized amount type. Direct UI discount changes can be discarded by confirmation reading only the server preview.
 
 ## Change ledger
-Reporting foundation: product summaries now use whole-invoice allocations from the station loader before dimension filtering, grouping by branch/product ID/unit. Exposes sold/returned/net quantities and gross/discount/tax/refund/net values. Selected product columns carry through CSV/Excel/print. Column uncheck hides only that column; empty selection persists until Show All. Product export source note documents row grain and lifetime-return policy.
+Reporting foundation: product summaries now use whole-invoice allocations from the station loader before dimension filtering, grouping by branch/product ID/unit. Exposes sold/returned/net quantities and gross/discount/tax/refund/net values. Selected product columns carry through CSV/Excel/print. Column uncheck hides only that column; empty selection persists until Show All. Product display/export source note documents row grain and lifetime-return policy.
 
 Invoice proof added only to split approval audit. Failed split/normal settlement returns unwind all writes via a nested exception block, returning the original structured failure. Direct-discount users persist and verify checkout changes before payment. Split closure now follows the normal sent-only completion rule after exact kitchen finalization, and returns persisted order closure and remaining quantities. A downstream-core rejection regression covers rollback after consumption. Existing stock/accounting/print routines retained.
 
