@@ -112,3 +112,6 @@ Completed#475: Pages37814067770 and postmerge Full Verify37814067672 SUCCESS atd
 
 ### Basic report workspace — approved preparation2026-10-08 21:58 Cairo
 User directs implementation of the reviewed seven basic reports, merged view discovery, compact advanced filters, clear sales-cost reporting and balances as of a chosen date. Baseline maindd4bdeef;#475 applied/deployed/verified Green. Prepare frontend-only changes in one new draft; no production schema/transaction change. Reuse canonical sales/items/cost and existing raw material historical movement RPCs. Date balance is raw-material ledger closing quantity/value at end of selected Cairo day, not current batches filtered by date; individual inventory/treasury/party statements retain their separate grains and permissions. State: **BLOCKED** for production merge until exact-head verification and explicit approval.
+
+## Active consolidated draft #476
+Seven basic reports and internal views, cost completeness, and dated material balances. Local 1625 frontend tests passed; app/test typechecks, build, lint (0 errors/15 existing warnings), API contract and locked identity passed. Production gate remains blocked pending exact-head Full Verify and explicit user approval. Frontend-only; no migration.

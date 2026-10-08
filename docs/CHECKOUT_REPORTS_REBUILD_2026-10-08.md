@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/report-workspace-20261008`
-Current PR: #475 (previous deployed baseline; new draft being created)
+Current PR: #476 (seven-report workspace; #475 deployed baseline)
 Last updated: 2026-10-08
 
 ## Work status
