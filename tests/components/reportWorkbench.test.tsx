@@ -7,6 +7,16 @@ import { ReportWorkbench } from '@/features/reporting/ReportWorkbench';
 const base = { type: 'sales' as const, lang: 'en' as const, scope: 'scope', userId: 'reader', complete: false, unavailable: false, currency: 'EGP', moneyKeys: ['Net Sales'], canExport: true, canPrint: true, onOpen: vi.fn() };
 
 describe('full reporting workspace', () => {
+  it('stores a function scope as an identity without executing it as a state updater', async () => {
+    const scope = vi.fn();
+    const loadRows = vi.fn().mockResolvedValue([{ Invoice: 'FUNCTION-SCOPE', 'Net Sales': 10 }]);
+    render(<ReportWorkbench {...base} scope={scope} rows={[]} loadRows={loadRows} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Table tools & full analysis' }));
+    await screen.findByText('1 rows / 1 source rows');
+    expect(screen.getByRole('button', { name: 'FUNCTION-SCOPE' })).toBeTruthy();
+    expect(scope).not.toHaveBeenCalled();
+    expect(loadRows).toHaveBeenCalledTimes(1);
+  });
   it('loads full data only on request, caches it, and filters/exports all permitted rows', async () => {
     const full = Array.from({ length: 205 }, (_, index) => ({ Branch: 'A', Invoice: `INV-${index}`, 'Net Sales': index }));
     const loadRows = vi.fn().mockResolvedValue(full);

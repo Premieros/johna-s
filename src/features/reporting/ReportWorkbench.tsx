@@ -67,7 +67,7 @@ export function ReportWorkbench(props: Props) {
     if (busy || props.unavailable) return;
     const requestScope = scope; controller.current?.abort();
     const abort = new AbortController(); controller.current = abort;
-    setOpenedScope(scope); props.onOpen(true); setBusy(true); setError(null);
+    setOpenedScope(() => scope); props.onOpen(true); setBusy(true); setError(null);
     try {
       if (!complete && dataset?.scope !== scope) {
         const result = await props.loadRows(abort.signal);

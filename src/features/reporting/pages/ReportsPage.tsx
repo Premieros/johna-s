@@ -1421,7 +1421,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
         period={snapshot?.from && snapshot?.to && DATE_DRIVEN_REPORTS.has(reportType) ? { from: snapshot.from, to: snapshot.to } : undefined}
         loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async range => (await metricSource.read(range)).metrics! : undefined}
         loadComparison={async range => (await reportSource.read(range)).rows}
-        onOpen={open => setWorkbenchScope(open ? reportReader : null)} />
+        onOpen={open => setWorkbenchScope(() => open ? reportReader : null)} />
       {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
