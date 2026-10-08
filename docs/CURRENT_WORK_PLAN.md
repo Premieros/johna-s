@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `b2bb81eba49e53a9ccf4b61e43b1cdd9e3826b0e`
-- Current active branch: `fix/costing-report-read-load-20261008`
-- Mandatory active work log: `docs/HISTORICAL_KNOWN_PRICE_COST_2026-10-08.md`
+- Latest main baseline reconciled: `8f1041fb`
+- Current active branch: `fix/split-discount-reports-20261008`
+- Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,12 +18,11 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Supplement previous zero-cost raw consumption with the canonical latest known price,
-independently of current stock quantity. Correct historical sale profitability and raw
-period estimates while keeping actual receipt/FIFO COGS separately identifiable.
-User explicitly requested and confirmed historical correction, including negative stock.
-Current recipe cost #469 is approved, applied, merged and deployed; all checks Green.
-Reporting RPC #470 was separately approved, applied and deployed. #471 fixes read concurrency only; no further schema apply. User publication approval retained; exact-head Green required.
+User confirms the previous writer has finished and authorizes starting the agreed
+work list. First repair discounted normal/split checkout failure atomicity and invoice
+proof, including direct discount persistence at confirmation. Then rebuild reporting
+with shared definitions, accurate allocation, configurable tables and source traceability.
+#470 and #471 are merged. Preserve their current and historical costing changes.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

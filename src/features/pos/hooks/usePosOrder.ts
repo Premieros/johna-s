@@ -367,8 +367,31 @@ export function usePosOrder(input: UsePosOrderInput) {
     setOfflineCompleting(true);
     try {
       // Re-read authoritative sent items and pinned warehouse at confirmation.
-      const preview = await loadSettlementPreview(false);
-      if (!preview) return false;
+      let preview = await loadSettlementPreview(false);
+      if (!preview?.order_id) return false;
+
+      // A direct discount edited inside checkout must be durable before payment.
+      // Cashier-approved discounts are already persisted by applyApprovedDiscount.
+      if (perms.canDiscount) {
+        const intendedDiscount = Math.round((base.discountType === 'percent'
+          ? preview.subtotal * base.discountAmount / 100 : base.discountAmount) * 100) / 100;
+        if (intendedDiscount !== preview.discount_amount) {
+          const saved = await api.floorPlan.setCheckoutDiscount({
+            p_order_id: preview.order_id,
+            p_discount_amount: intendedDiscount,
+            p_approval_request_id: null,
+          });
+          if (saved.error || !saved.data?.success) {
+            show(saved.error?.message || saved.data?.error || 'DISCOUNT_APPLY_FAILED', 'error');
+            return false;
+          }
+          preview = await loadSettlementPreview(false);
+          if (!preview || preview.discount_amount !== intendedDiscount) {
+            show(isAr ? 'تعذر تأكيد الخصم؛ لم يتم تحصيل الطلب' : 'Discount verification failed; payment was not taken', 'error');
+            return false;
+          }
+        }
+      }
 
       const invoiceNumber = await nextInvoiceNumber();
       if (!isCurrentSettlementPreview(preview)) return false;
@@ -487,7 +510,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
-  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadSettlementPreview, offlineCompleting, show, t]);
+  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadSettlementPreview, offlineCompleting, perms.canDiscount, show, t]);
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
