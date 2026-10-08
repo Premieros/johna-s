@@ -109,6 +109,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
     setQueryVersion((version) => version + 1);
   }, [effectiveBranchFilter, user?.id, canStationCost, canStationView]);
   const { branches } = useBranches();
+  // Equivalent lookup refreshes must not invalidate complete report data.
+  const branchSourceKey = JSON.stringify(branches.map(({ id, name, name_en }) => [id, name, name_en]));
   const { data: scopedOptions, error: optionsError, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id);
   const options = scopedOptions || EMPTY_REPORT_FILTER_OPTIONS;
   const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch';
@@ -220,7 +222,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange }: Report
   // Capture draft filters only on Run report or an automatic report/scope change.
   const reportReader = useMemo(() => loadReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reportType, effectiveBranchFilter, branches, history.unlimited, queryVersion, user?.id, lang]);
+    [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, lang]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => () => reportReader(serverPage), [reportReader, serverPage]);

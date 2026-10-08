@@ -53,6 +53,21 @@ afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); mocks.visibleColumns = null; mocks.columnOrder = undefined; vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it('reuses reads across equivalent branch lookup refreshes and reloads changed labels', async () => {
+    mocks.loadSales.mockResolvedValue([sale('stable-branch')]);
+    const view = render(page());
+    await waitFor(() => expect(screen.getByTestId('report-summary').textContent).toBe('10:1'));
+    mocks.branches = mocks.branches.map(branch => ({ ...branch }));
+    view.rerender(page());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(mocks.loadSales).toHaveBeenCalledTimes(1);
+    const previous = mocks.branches;
+    mocks.branches = mocks.branches.map(branch => ({ ...branch, name: branch.name + ' updated' }));
+    view.rerender(page());
+    await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledTimes(2));
+    mocks.branches = previous;
+  });
+
   it('keeps selected column order across full-report Excel, CSV and print exports', async () => {
     mocks.visibleColumns = ['Branch', 'Invoice'];
     mocks.columnOrder = ['Invoice', 'Branch'];

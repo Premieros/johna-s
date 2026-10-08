@@ -256,7 +256,7 @@ test.describe('dashboard and navigation actions', () => {
       stockReads++;
       const low=route.request().postDataJSON().p_low_stock;
       const data={rawRows:low?[]:[{branch_id:'branch',warehouse_id:'warehouse',raw_material_id:'material',quantity:5,raw_material:{id:'material',name:'CANONICAL-STOCK',code:'RAW'},warehouse:{name:'Warehouse'}}],unitRows:[],
-        rawMasters:low?[{id:'material',branch_id:'branch',name:'CANONICAL-STOCK',code:'RAW',min_stock:10}]:[],
+        rawMasters:low?[{id:'material',branch_id:'branch',name:'CANONICAL-LOW-STOCK',code:'RAW',min_stock:10}]:[],
         rawBalances:low?[{raw_material_id:'material',branch_id:'branch',quantity:5}]:[],unitMasters:[],unitBatches:[]};
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
     });
@@ -267,8 +267,8 @@ test.describe('dashboard and navigation actions', () => {
     await expect(tools.getByText(/1 (صف|rows) \/ 1/)).toBeVisible();
     expect(stockReads).toBe(1);
     await page.goto('/#/reports?type=low_stock');
-    await expect(page.getByRole('table').getByText('CANONICAL-STOCK',{exact:true})).toBeVisible();
-    expect(stockReads).toBe(2); expect(batchReads).toBe(0);
+    await expect(page.getByRole('table').getByText('CANONICAL-LOW-STOCK',{exact:true})).toBeVisible();
+    await expect.poll(() => stockReads).toBe(2); expect(batchReads).toBe(0);
   });
 
   test('employee reports retain distinct cashier identities through the canonical sales dataset', async ({ page }) => {
