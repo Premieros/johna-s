@@ -2,8 +2,8 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-price-sql-timeouts`
-Current PR: `0` (preparing separate SQL review)
-Last updated: 2026-10-08 23:23 Africa/Cairo
+Current PR: `#478`
+Last updated: 2026-10-09 00:21 Africa/Cairo
 
 ## Work status
 State: **BLOCKED** for the new seven-report workspace production merge pending exact-head Full Verify and explicit approval. Implementation and local verification in progress. Previous #475 applied/deployed at dd4bdeef; Full Verify37814067672 and deployment37814067770 succeeded.
@@ -154,3 +154,5 @@ Next action: complete Full Verify, mark #477 ready, merge only its validated hea
 
 Local SQL verification:35 tests across6 pricing/costing integration files passed against an isolated PostgreSQL16 database with all migrations; app/test typecheck, worklog4 tests and changed-test ESLint passed. Price parity compares all fields with previous function definitions for manager and viewer, including event prices, hidden/unpriced and default/inventory/batch fallbacks.
 Read-only live candidate query parity:all402 branch prices equal the existing API result; existing API3006.142ms versus guarded candidate SQL1564.014ms. Candidate valuation SQL returned402 rows in1285.564ms with the existing definer execution role postgres plus owner's JWT context. That reproduces calculation context only; local tests verify the public auth/permission gates. These single-branch warmed-read measurements are not a blanket speedup guarantee, and the candidate functions remain UNAPPLIED.
+
+Draft#478 opened for the reviewed two-function SQL read optimization. Exact-head Full Verify pending; no production application or merge.
