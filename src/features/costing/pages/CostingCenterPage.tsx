@@ -94,16 +94,18 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     try {
-      const [res, summaryRes, rawValuationRes, fifoRows, priceRows, historicalRes] = await Promise.all([
+      const [res, summaryRes, rawValuationRes, fifoRows, priceRows] = await Promise.all([
         api.costing.getOverview({ p_branch_id: effBranch }),
         api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
         api.costing.getRawMaterialCostOverview({ p_branch_id: effBranch }),
         loadRawFifoCosts(effBranch),
         loadRawCurrentPrices(effBranch),
-        api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }),
       ]);
       if (requestId !== request.current) return;
       if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
+      // Run historical pricing after current valuation reads release database capacity.
+      const historicalRes = await api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+      if (requestId !== request.current) return;
       if (historicalRes.error || summaryRes.error) { const message = (historicalRes.error || summaryRes.error)!.message; setHistoricalEstimate(null); setError(message); setLoading(false); show(message, 'error'); return; }
       setHistoricalEstimate({ cost: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.estimated_cost), 0), unpriced: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.unpriced_movements), 0) });
       setOverview(res.data || []);
@@ -131,7 +133,9 @@ export function CostingCenterPage() {
     setLoading(true);
     setError(null);
     const params = { p_branch_id: effBranch, p_from: fromDate, p_to: toDate };
-    const [res, historicalRes] = await Promise.all([api.costing.getOrderMargin(params), api.costing.getHistoricalSaleCostEstimates(params)]);
+    const res = await api.costing.getOrderMargin(params);
+    if (requestId !== request.current) return;
+    const historicalRes = await api.costing.getHistoricalSaleCostEstimates(params);
     if (requestId !== request.current) return;
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
     if (historicalRes.error) { setOrders([]); setError(historicalRes.error.message); setLoading(false); show(historicalRes.error.message, 'error'); return; }

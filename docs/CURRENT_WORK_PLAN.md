@@ -4,8 +4,8 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `5f08564187ba93507225a651164d311a2d77356b`
-- Current active branch: `fix/historical-known-price-cost-20261008`
+- Latest main baseline reconciled: `b2bb81eba49e53a9ccf4b61e43b1cdd9e3826b0e`
+- Current active branch: `fix/costing-report-read-load-20261008`
 - Mandatory active work log: `docs/HISTORICAL_KNOWN_PRICE_COST_2026-10-08.md`
 
 ## Operational rules
@@ -23,7 +23,7 @@ independently of current stock quantity. Correct historical sale profitability a
 period estimates while keeping actual receipt/FIFO COGS separately identifiable.
 User explicitly requested and confirmed historical correction, including negative stock.
 Current recipe cost #469 is approved, applied, merged and deployed; all checks Green.
-New reporting RPC migration still requires the separate schema approval gate above.
+Reporting RPC #470 was separately approved, applied and deployed. #471 fixes read concurrency only; no further schema apply. User publication approval retained; exact-head Green required.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

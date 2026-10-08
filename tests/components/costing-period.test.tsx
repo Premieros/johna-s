@@ -26,6 +26,18 @@ beforeEach(() => {
   mocks.consumption.mockReset().mockResolvedValue({ data: [{ raw_material_id: 'r', raw_material_name: 'Sugar', unit_name: 'kg', consumed_quantity: 2, actual_quantity: 1, estimated_quantity: 1, actual_cost: 10, estimated_cost: 12, displayed_cost: 22 }] });
 });
 describe('costing selected-period reports', () => {
+  it('waits for current reads before historical pricing and avoids stale follow-up reads', async () => {
+    let finish!: (value: unknown) => void;
+    mocks.summary.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
+    await waitFor(() => expect(mocks.summary).toHaveBeenCalledTimes(1));
+    expect(mocks.historical).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Raw Material Prices' }));
+    finish({ data: { cogs: 12, net_sales: 100, sales_count: 1, ratio: 12 } });
+    await waitFor(() => expect(mocks.unitOptions).toHaveBeenCalled());
+    expect(mocks.historical).not.toHaveBeenCalled();
+  });
+
   it('supplements historical sales cost and profit without substituting stock-shortage valuation', async () => {
     mocks.historical.mockResolvedValue({ data: [{ sale_id: 'sale', estimated_cost: 8, priced_movements: 1, unpriced_movements: 0 }] });
     render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
