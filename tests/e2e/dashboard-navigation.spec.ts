@@ -296,7 +296,7 @@ test.describe('dashboard and navigation actions', () => {
     const reads: Record<string, unknown>[] = [];
     await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_operational_report_dataset**`, async route => {
       const args = route.request().postDataJSON(); reads.push(args);
-      const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', created_at: `${args.p_from_date}T08:00:00Z`, status: 'completed', payment_method: 'cash', paid_amount: 10, branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
+      const rows = [{ id: 'shared', invoice_number: 'SHARED-INVOICE', invoice_date: args.p_from_date, created_at: `${args.p_from_date}T08:00:00Z`, status: 'completed', payment_method: 'cash', paid_amount: 10, branch_id: 'branch', cashier_id: 'cashier', cashier: { full_name: 'SHARED-CASHIER' }, total: 10, refunded_amount: 0 }];
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { count: 1, total: 10 } }) });
     });
     await page.goto('/#/reports?type=sales_by_employee');
