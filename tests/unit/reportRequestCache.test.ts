@@ -52,6 +52,20 @@ describe('shared authoritative report requests', () => {
     for (let i = 0; i < 2; i++) await cache.fetch('https://example.test/rest/v1/rpc/pos_create_order', options());
     expect(base).toHaveBeenCalledTimes(5);
   });
+  it('invalidates reports read while a write was still awaiting completion', async () => {
+    let finish!: (value: Response) => void; let reads = 0;
+    const writePending = new Promise<Response>(resolve => { finish = resolve; });
+    const base = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      return request.method === 'PATCH' ? writePending : response(++reads);
+    });
+    const cache = createReportRequestCache(base);
+    await cache.fetch(url, options());
+    const writing = cache.fetch('https://example.test/rest/v1/sales', { method: 'PATCH', body: '{}' });
+    await cache.fetch(url, options()); expect(reads).toBe(2);
+    finish(Response.json({ success: true })); await writing;
+    expect(await (await cache.fetch(url, options())).json()).toEqual({ revenue: 3 });
+  });
   it('does not publish a read that completed after a mutation', async () => {
     let finish!: (value: Response) => void;
     const base = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; })).mockImplementation(async () => response(20));
