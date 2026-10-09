@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, type RawCurrentPriceRow } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, type RawCurrentPriceRow } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Branch, RawMaterialBatch, RawMaterialInventory, Unit } from '@/lib/types';
 
@@ -14,7 +14,7 @@ export async function loadRawMaterialMeta(): Promise<{
     supabase.from('raw_material_batches').select('*, raw_material:raw_materials(*), branch:branches(*)').order('created_at', { ascending: false }),
     supabase.from('measurement_units').select('*').eq('is_active', true).order('name'),
     supabase.from('branches').select('*').eq('is_active', true).order('name'),
-    loadRawCurrentPrices(null),
+    loadRawMaterialDisplayPrices(null),
   ]);
 
   const error = inventoryResult.error || batchesResult.error || unitsResult.error || branchesResult.error;
