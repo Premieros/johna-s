@@ -183,7 +183,7 @@ class TabletKioskActivity : Activity() {
             }
             dpm.setLockTaskPackages(admin, arrayOf(packageName))
             dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
-            dpm.addPersistentPreferredActivity(home, home, ComponentName(this, TabletKioskActivity::class.java))
+            dpm.addPersistentPreferredActivity(admin, home, ComponentName(this, TabletKioskActivity::class.java))
             dpm.setKeyguardDisabled(admin, true)
             startLockTask()
         }.onFailure {
