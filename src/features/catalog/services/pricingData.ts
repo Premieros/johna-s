@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { loadProductCurrentCosts } from '@/features/costing/services/productCurrentCostData';
 
@@ -67,7 +67,7 @@ export async function loadPricingRows(params: {
           .eq('branch_id', params.branchId)
           .order('name')
       : Promise.resolve({ data: [], error: null }),
-    params.includeRaw ? loadRawCurrentPrices(params.branchId) : Promise.resolve([]),
+    params.includeRaw ? loadRawMaterialDisplayPrices(params.branchId) : Promise.resolve([]),
     params.includeProducts && params.includeCurrentCosts ? loadProductCurrentCosts(params.branchId) : Promise.resolve({} as Record<string,number|null>),
   ]);
 
