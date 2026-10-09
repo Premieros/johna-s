@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `1e74391a`
-- Current active branch: `fix/raw-fifo-price-source-20261009`
-- Mandatory active work log: `docs/RAW_FIFO_PRICE_SOURCE_2026-10-09.md`
+- Latest main baseline reconciled: `44c9d627`
+- Current active branch: `fix/report-show-known-cost-20261009`
+- Mandatory active work log: `docs/REPORT_KNOWN_COST_DISPLAY_2026-10-09.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -17,14 +17,16 @@
 - Any new Production function/schema/policy apply requires separate explicit approval.
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
-## Current objective
-Unify raw material price reads across pages and reports: positive recorded FIFO unit cost first, otherwise the last known positive historical saved price. Never assign a value to an unpriced material. Preserve actual FIFO inventory valuations and existing accounting logic.
+## Current objective — approved 2026-10-09
+Operational sale costs use only saved raw-material unit costs captured at **Send to Kitchen**: consumed quantity × latest positive approved price available at dispatch. Never calculate FIFO in sales-cost reports or reprice old sales with new prices. Show priced ingredients and their known subtotal, leave unknown prices NULL. Keep separate FIFO inventory deductions, historic postings and financial journal valuations unchanged.
 
-## FIFO source reconciliation — 2026-10-09
-- Active branch: `fix/raw-fifo-price-source-20261009`.
-- The changes are read-only frontend data source changes with isolated tests.
-- Mandatory log `docs/RAW_FIFO_PRICE_SOURCE_2026-10-09.md`.
-- No new production SQL migration is included.
+## PR #482 / frozen kitchen prices
+- New, unapplied migration: `20261009143000_kitchen_sale_known_price_snapshot.sql` captures unit_cost, price_source and priced_at in the existing component_snapshot on INSERT for future kitchen events only.
+- Sales cost and station reports, Excel and CSV use frozen snapshot values; no inventory_ledger or current-price scan in their read path.
+- Remove obsolete actual-FIFO button, costMode parameter and misleading FIFO/current-price labels.
+- Display a partial known total when only some materials have approved prices, never a manufactured zero/complete margin.
+- Old sales stay historically unavailable if snapshot lacks price; no backfill using later prices.
+- CI must pass on the exact final head before asking user to approve merge. **New production trigger requires its own explicit approval**; no live SQL applied by this PR preparation.
 
 ## Accounting reconciliation — 2026-10-09
 - Source PR: #445, historical branch diverged and merge-conflicted.

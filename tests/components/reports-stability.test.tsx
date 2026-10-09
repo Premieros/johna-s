@@ -281,23 +281,26 @@ describe('cost and dated balance views', () => {
     expect(mocks.csv.mock.calls[0][0][0]['End-of-day Recorded Value']).toBe(-30);
     expect(mocks.materialBalances).toHaveBeenCalledTimes(1);
   });
-  it('keeps recorded cost and current repricing distinct and exposes missing prices', async () => {
-    const line = { sale: sale('COST'), item: { product: { name: 'Meal' }, unit_name: 'piece' }, station: 'Kitchen', category: 'Meals', netQuantity: 1, netBeforeTax: 100, net: 114, cost: 25, estimatedCost: 40, knownEstimatedCost: 40, unpricedMaterials: [] };
-    mocks.stationLines.mockResolvedValue([line, { ...line, sale: sale('INCOMPLETE'), cost: null, estimatedCost: null, knownEstimatedCost: 12, unpricedMaterials: ['Oil'] }]);
+  it('exports frozen ingredient cost and never invokes FIFO when reading sales reports', async () => {
+    const line = { sale: sale('COST'), item: { product: { name: 'Meal' }, unit_name: 'piece' },
+      station: 'Kitchen', category: 'Meals', netQuantity: 1, netBeforeTax: 100,
+      net: 114, cost: null, estimatedCost: 40, knownEstimatedCost: 40, unpricedMaterials: [] };
+    mocks.stationLines.mockResolvedValue([line, { ...line, sale: sale('UNPRICED'),
+      estimatedCost: null, knownEstimatedCost: 12, unpricedMaterials: ['Oil'] }]);
     render(page({ controlledReportType: 'sales_costs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
-    await screen.findAllByText('INCOMPLETE');
+    await screen.findAllByText('UNPRICED');
+    expect(mocks.stationLines.mock.calls[0][0]).toMatchObject({ includeCost: true });
+    expect(mocks.stationLines.mock.calls[0][0]).not.toHaveProperty('costMode');
+    expect(screen.queryByRole('button', { name: /Calculate actual cost|FIFO/i })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'exportCsv' }));
-    await waitFor(() => expect(mocks.csv).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.csv).toHaveBeenCalledTimes(1));
     const rows = mocks.csv.mock.calls[0][0];
-    expect(rows[0]['Recorded Cost']).toBe(25);
-    expect(rows[0]['Current-price Sold Cost']).toBe(40);
-    expect(rows[0]['Recorded Gross Profit']).toBe(75);
-    expect(rows[1]['Recorded Cost']).toBe('Unavailable');
-    expect(rows[1]['Current-price Sold Cost']).toBe('Incomplete');
-    expect(rows[1]['Priced Components Only']).toBe(12);
+    expect(rows[0]['Sale-time Ingredient Cost']).toBe(40);
+    expect(rows[0]['Recorded Cost']).toBeUndefined();
+    expect(rows[1]['Sale-time Ingredient Cost']).toBe(12);
     expect(rows[1]['Unpriced Materials']).toBe('Oil');
-    expect(mocks.stationLines).toHaveBeenCalledTimes(1);
+    expect(rows[1]['Gross Profit (Saved Cost)']).toBe('Unavailable');
     expect(mocks.loadSales).not.toHaveBeenCalled();
   });
   it('blocks dated balance exports when a source fails', async () => {

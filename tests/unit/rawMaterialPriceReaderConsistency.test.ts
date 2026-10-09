@@ -11,7 +11,6 @@ const consumers = [
   'src/features/manufacturing/services/recipeData.ts',
   'src/features/import-export/validation-context-service.ts',
   'src/features/import-export/export-service.ts',
-  'src/features/reporting/services/stationSalesReport.ts',
   'src/features/trade/pages/PurchasesPage.tsx',
   'src/features/costing/pages/CostingCenterPage.tsx',
   'src/features/trade/services/shiftClosingReport.ts',
@@ -21,6 +20,12 @@ describe('FIFO-first material price reader contract', () => {
     const content = readFileSync(path, 'utf8');
     expect(content).toContain('loadRawMaterialDisplayPrices');
     expect(content).not.toMatch(/\bloadRawCurrentPrices\b/);
+  });
+  it('sales reports use immutable kitchen cost snapshots rather than current price readers', () => {
+    const content = readFileSync('src/features/reporting/services/stationSalesReport.ts', 'utf8');
+    expect(content).not.toContain('loadRawMaterialDisplayPrices');
+    expect(content).not.toContain('loadRawCurrentPrices');
+    expect(content).toContain('component_snapshot');
   });
   it('does not replace an existing purchase material price with artificial zero', () => {
     const content = readFileSync('src/features/trade/pages/PurchasesPage.tsx', 'utf8');
