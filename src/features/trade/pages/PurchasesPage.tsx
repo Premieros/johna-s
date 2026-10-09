@@ -40,9 +40,10 @@ interface PurchaseFormItem {
   unit_name: string;
   quantity: number;
   unit_cost: number;
+  price_missing?: boolean;
 }
 
-const EMPTY_LINE: PurchaseFormItem = { line_type: 'product', product_id: '', raw_material_id: '', unit_name: 'piece', quantity: 1, unit_cost: 0 };
+const EMPTY_LINE: PurchaseFormItem = { line_type: 'product', product_id: '', raw_material_id: '', unit_name: 'piece', quantity: 1, unit_cost: 0, price_missing: true };
 
 export function PurchasesPage() {
   const { t, lang } = useLanguage();
@@ -162,6 +163,7 @@ export function PurchasesPage() {
       unit_name: String(row.unit_name || 'piece'),
       quantity: Number(row.quantity || 0),
       unit_cost: Number(row.unit_cost || 0),
+      price_missing: false,
     }));
     if (editableLines.length === 0) {
       show(lang === 'ar' ? 'لا توجد بنود قابلة للتعديل في الفاتورة' : 'No editable items were found for this invoice', 'error');
@@ -187,6 +189,9 @@ export function PurchasesPage() {
     if (line.line_type === 'raw' && field === 'unit_name') return { ...line, unit_name: String(value), unit_cost: convertPurchaseUnitPrice(line.unit_cost, line.unit_name, String(value)) ?? 0 };
     return { ...line, [field]: value };
   }));
+  const updatePurchasePrice = (i: number, value: string) => setLineItems(current => current.map((line, idx) =>
+    idx === i ? { ...line, unit_cost: value === '' ? 0 : Number(value), price_missing: value === '' } : line
+  ));
   const removeLine = (i: number) => setLineItems(lineItems.filter((_, idx) => idx !== i));
 
   const rawUnitName = (id: string) => {
@@ -233,7 +238,7 @@ export function PurchasesPage() {
   const updateRawMaterial = (index: number, rawMaterialId: string) => {
     const defaultUnit = purchaseUnitOptions(rawMaterialId)[0]?.value || rawUnitName(rawMaterialId);
     setLineItems((current) => current.map((line, idx) => (
-      idx === index ? { ...line, raw_material_id: rawMaterialId, unit_name: defaultUnit, unit_cost: Number(rawMaterials.find(raw => raw.id === rawMaterialId)?.default_cost || 0) } : line
+      idx === index ? { ...line, raw_material_id: rawMaterialId, unit_name: defaultUnit, unit_cost: Number(rawMaterials.find(raw => raw.id === rawMaterialId)?.default_cost || 0), price_missing: rawMaterials.find(raw => raw.id === rawMaterialId)?.default_cost == null } : line
     )));
   };
 
@@ -305,6 +310,10 @@ export function PurchasesPage() {
     const validItems = lineItems.filter((l) => (l.line_type === 'product' ? l.product_id : l.raw_material_id) && l.quantity > 0);
     if (!form.supplier_id) { show(t('required') + ': ' + t('supplier'), 'error'); return; }
     if (validItems.length === 0) { show(t('required') + ': ' + t('addProduct'), 'error'); return; }
+    if (validItems.some(line => line.price_missing)) {
+      show(lang === 'ar' ? 'أدخل سعر كل بند، أو اكتب صفرًا صراحةً إذا كان مجانيًا' : 'Enter each item price, or explicitly enter zero for a free item', 'error');
+      return;
+    }
     const hasProductLines = validItems.some((l) => l.line_type === 'product');
     if (hasProductLines && !form.warehouse_id) { show(t('required') + ': ' + t('warehouse'), 'error'); return; }
 
@@ -724,7 +733,7 @@ export function PurchasesPage() {
                     <input value={l.unit_name} onChange={(e) => updateLine(i, 'unit_name', e.target.value)} className="col-span-2 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" placeholder={lang === 'ar' ? 'الوحدة' : 'Unit'} />
                   )}
                   <input type="number" placeholder={t('quantity')} value={l.quantity || ''} onChange={(e) => updateLine(i, 'quantity', parseFloat(e.target.value) || 0)} className="col-span-1 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
-                  <input type="number" placeholder={t('cost')} step="0.01" value={l.unit_cost || ''} onChange={(e) => updateLine(i, 'unit_cost', parseFloat(e.target.value) || 0)} className="col-span-2 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
+                  <input type="number" placeholder={t('cost')} step="0.01" value={l.price_missing ? '' : l.unit_cost} onChange={(e) => updatePurchasePrice(i, e.target.value)} className="col-span-2 rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
                   <span className="col-span-1 text-sm text-ui-muted text-end">{formatCurrency(l.quantity * l.unit_cost, currency, lang)}</span>
                   <button onClick={() => removeLine(i)} className="col-span-1 p-1.5 text-ui-danger hover:bg-ui-danger-soft rounded-md"><Trash2 className="w-4 h-4" /></button>
                 </div>
