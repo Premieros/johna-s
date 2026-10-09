@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `1e74391a`
-- Current active branch: `fix/raw-fifo-price-source-20261009`
-- Mandatory active work log: `docs/RAW_FIFO_PRICE_SOURCE_2026-10-09.md`
+- Latest main baseline reconciled: `44c9d627`
+- Current active branch: `fix/report-show-known-cost-20261009`
+- Mandatory active work log: `docs/REPORT_KNOWN_COST_DISPLAY_2026-10-09.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,13 +18,13 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Unify raw material price reads across pages and reports: positive recorded FIFO unit cost first, otherwise the last known positive historical saved price. Never assign a value to an unpriced material. Preserve actual FIFO inventory valuations and existing accounting logic.
+Show the already-computed priced-components cost in station and sales cost reports instead of the literal 'غير مكتملة' placeholder whenever full current-price cost is unavailable; preserve actual recorded costing and unpriced indicators without creating estimates or posting financial data.
 
-## FIFO source reconciliation — 2026-10-09
-- Active branch: `fix/raw-fifo-price-source-20261009`.
-- The changes are read-only frontend data source changes with isolated tests.
-- Mandatory log `docs/RAW_FIFO_PRICE_SOURCE_2026-10-09.md`.
-- No new production SQL migration is included.
+## Reporting cost display — 2026-10-09
+- Branch: `fix/report-show-known-cost-20261009`.
+- PR: #482.
+- Work log: `docs/REPORT_KNOWN_COST_DISPLAY_2026-10-09.md`.
+- No production SQL or database writes.
 
 ## Accounting reconciliation — 2026-10-09
 - Source PR: #445, historical branch diverged and merge-conflicted.
