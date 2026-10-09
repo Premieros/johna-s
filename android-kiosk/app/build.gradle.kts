@@ -19,8 +19,8 @@ android {
         applicationId = "com.johnas.kiosk"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         buildConfigField("String", "START_URL", "\"https://premieros.github.io/johna-s/\"")
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }
