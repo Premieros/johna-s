@@ -1,10 +1,10 @@
 import { supabase } from '@/api';
 import { estimateGroupCosts, type GroupCostLink, type RawCostLine } from '@/lib/recipeCosting';
-import { loadRawCurrentPrices,rawCurrentPriceMap } from './rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices,rawCurrentPriceMap } from './rawCurrentPriceData';
 
 export async function loadRecipeEstimateData(branchId:string) {
   const [priceRows,groupsResult]=await Promise.all([
-    loadRawCurrentPrices(branchId),
+    loadRawMaterialDisplayPrices(branchId),
     supabase.from('inventory_units').select('id').eq('branch_id',branchId).eq('unit_type','manufactured').eq('is_active',true),
   ]);
   if(groupsResult.error) throw groupsResult.error;
