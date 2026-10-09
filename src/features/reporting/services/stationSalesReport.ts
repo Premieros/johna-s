@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { fetchAllReportRows, type RangePageQuery } from '../fetchAllReportRows';
 import { type ReportFilters } from '../reportFilters';
@@ -146,7 +146,7 @@ export async function loadStationSalesLines(args: { branchId: string | null; fro
     const rawIds = [...new Set(events.flatMap(event => (event.component_snapshot || []).map(component => component.raw_material_id)))];
     if (rawIds.length > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
     args.signal?.throwIfAborted();
-    prices = rawCurrentPriceMap(await loadRawCurrentPrices(args.branchId, rawIds));
+    prices = rawCurrentPriceMap(await loadRawMaterialDisplayPrices(args.branchId, rawIds));
     args.signal?.throwIfAborted();
     const eventIds = events.map(event => event.id);
     for (let i = 0; i < eventIds.length; i += 100) {
