@@ -5,6 +5,7 @@ Standalone Android wrapper for the already-deployed Johnas POS website. The web 
 ## Current state and important limitations
 
 - **Source/builder only:** the GitHub Action produces a DEBUG test APK. The test artifact is **not** the permanent-signature production enrollment APK.
+- **Debug preview mode:** if Device Owner has not been provisioned, the DEBUG build opens the Johnas website with a visible **device is not locked** banner; Home and Recents remain available. The RELEASE build instead refuses to show the POS until Device Owner is configured. Never treat preview as kiosk protection.
 - Kiosk hard-lock needs Android **Device Owner** provisioning; merely installing an APK does not lock Android. A fresh tablet is recommended. **Do not reset a configured device without an explicit owner decision.**
 - Default pinned site: `https://premieros.github.io/johna-s/`; verify that this is the real deployed production site on the tablet **before** provisioning.
 - Only same-origin, same-base-path web navigation is permitted. Supabase API calls inside the web page are not navigation and can work normally.
@@ -44,6 +45,8 @@ Then run `gradle :app:assembleRelease` from `android-kiosk` with Gradle 8.9 and 
 6. Verify HOME / Recents / Back / notifications cannot leave the POS; restart and verify automatic launch.
 7. Verify Wi-Fi selection works through the **Wi-Fi panel** while lock task is active and it does not open unrestricted Settings. If not, **do not deploy this build** until a compliant network-management path is verified.
 8. Test an actual permitted **test transaction**, offline recovery, void/refund, checkout printing and Excel exports with the user's approval. No real purchases or production tests are part of this source build.
+
+Observed target hardware: **Lenovo Tab One model TB305FU, Android 15**, connected successfully by ADB. This confirms the device identifier and developer transport only; it does NOT constitute a functional kiosk test.
 
 The application enters lock task only when BOTH Device Owner is active and the admin PIN is configured. The tablet never unlocks for ordinary staff merely because Wi-Fi is changed. Authorized administrator exit clears persistent HOME and lock-task allowlisting for that session.
 
