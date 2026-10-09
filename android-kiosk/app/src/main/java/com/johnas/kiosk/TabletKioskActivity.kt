@@ -40,6 +40,8 @@ class TabletKioskActivity : Activity() {
         super.onCreate(savedInstanceState)
         immersive()
         when {
+            // Preview is safe only in debug builds: it must never pretend to lock Android.
+            !dpm.isDeviceOwnerApp(packageName) && BuildConfig.DEBUG -> showWebApp(previewOnly = true)
             !dpm.isDeviceOwnerApp(packageName) -> showProvisioningRequired()
             !pinVault.isConfigured() -> showSetAdminPin()
             else -> showWebApp()
@@ -132,7 +134,7 @@ class TabletKioskActivity : Activity() {
         dialog.show()
     }
 
-    private fun showWebApp() {
+    private fun showWebApp(previewOnly: Boolean = false) {
         val frame = FrameLayout(this)
         val web = WebView(this)
         webView = web
@@ -162,16 +164,32 @@ class TabletKioskActivity : Activity() {
             text = "Wi-Fi"
             contentDescription = "إعدادات Wi-Fi. اضغط مطولًا لإدخال رمز المدير"
             setOnClickListener { showWifiPanel() }
-            setOnLongClickListener { requestAdminExit(); true }
+            if (!previewOnly) {
+                setOnLongClickListener { requestAdminExit(); true }
+            }
         }
         val lp = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.TOP or Gravity.END
         ).apply { setMargins(8, 12, 12, 8) }
         frame.addView(wifiButton, lp)
+        if (previewOnly) {
+            frame.addView(TextView(this).apply {
+                text = "نسخة تجريبية — الجهاز غير مقفل"
+                textSize = 15f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.rgb(150, 55, 35))
+                setPadding(12, 12, 12, 12)
+            }, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            ))
+        }
         setContentView(frame)
         web.loadUrl(BuildConfig.START_URL)
-        applyDevicePolicyAndStartLock()
+        if (!previewOnly) applyDevicePolicyAndStartLock()
     }
 
     private fun applyDevicePolicyAndStartLock() {
