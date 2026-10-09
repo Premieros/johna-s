@@ -42,6 +42,7 @@ The reporting projection printed 'غير مكتملة' when some components lack
 - Excel source note: explain saved dispatch costs and absence of FIFO from sales reporting.
 
 ## Verification ledger
+- 2026-10-09: Verify main run 37934441578: worklog, API contract, lint and typechecks passed; unit suite had 1 failed / 1674 passed because rawMaterialPriceReaderConsistency still required a live current-price reader in the snapshot-only station report. Updated contract test to explicitly require immutable component_snapshot and prohibit both current-price readers. Database, browser and build remained skipped; rerun required on latest SHA. No production changes.
 - Exact-head Fast Verify and Verify main must rerun on the new PR head, including stationSalesReport tests and reports-stability component tests.
 - Live account browser performance/permissions remain to be validated separately; no claim of measured speedup.
 
