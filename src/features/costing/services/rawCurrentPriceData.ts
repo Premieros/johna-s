@@ -72,6 +72,11 @@ export function mergeRawFifoKnownPrices(known: RawCurrentPriceRow[], fifoRows: i
 
 export async function loadRawMaterialDisplayPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
   const { loadRawFifoCosts } = await import('./rawFifoCostData');
-  const [known, fifoRows] = await Promise.all([loadRawCurrentPrices(branchId, rawIds), loadRawFifoCosts(branchId, rawIds)]);
+  const fifoRows = await loadRawFifoCosts(branchId, rawIds);
+  // Requested material subsets can skip historical price scans for positive FIFO costs.
+  const missingIds = rawIds?.filter(id => !fifoRows.some(row =>
+    row.raw_material_id === id && Number(row.avg_cost) > 0 && Number.isFinite(Number(row.avg_cost))
+  )) ?? null;
+  const known = missingIds?.length === 0 ? [] : await loadRawCurrentPrices(branchId, missingIds);
   return mergeRawFifoKnownPrices(known, fifoRows, rawIds);
 }
