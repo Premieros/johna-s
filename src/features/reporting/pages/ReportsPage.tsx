@@ -87,6 +87,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const [filters, setFilters] = useState<ReportFilters>({});
   const [filtersDirty, setFiltersDirty] = useState(false);
   const [queryVersion, setQueryVersion] = useState(0);
+  // The expensive FIFO movement reconciliation is deliberately opt-in per requested report.
+  const [includeActualCost, setIncludeActualCost] = useState(false);
   const [requestedScope, setRequestedScope] = useState<string | null>(null);
   const permissionVersion = useReportPermissionVersion();
   const reportScope = JSON.stringify([permissionVersion, reportType, branchFilter, user?.id, user?.role, history.unlimited, lang, canStationCost, canStationView]);
@@ -97,6 +99,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         if (prev !== controlledReportType) {
           setFilters({});
           setFiltersDirty(false);
+          setIncludeActualCost(false);
           onReportTypeChange?.(controlledReportType);
           return controlledReportType;
         }
@@ -114,6 +117,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     filterScope.current = { branchId: effectiveBranchFilter, userId: user?.id, canStationCost, canStationView };
     setFilters(({ order_type, payment_method, status }) => ({ order_type, payment_method, status }));
     setFiltersDirty(false);
+    setIncludeActualCost(false);
     setQueryVersion((version) => version + 1);
   }, [effectiveBranchFilter, user?.id, canStationCost, canStationView]);
   const { branches } = useBranches();
@@ -180,6 +184,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     }
     setFilters({});
     setFiltersDirty(false);
+    setIncludeActualCost(false);
     setReportType(value as ReportType);
     onReportTypeChange?.(value as ReportType);
   }
@@ -198,6 +203,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
   const runReport = (refresh = false) => {
     if (refresh) clearReportRequestCache();
+    setIncludeActualCost(false);
     setRequestedScope(reportScope);
     const allowed = history.clampRange(from, to);
     const next = new URLSearchParams(reportParams);
@@ -236,7 +242,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   // Capture drafts on Run report; an unopened scope remains idle.
   const reportReader = useMemo(() => loadReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, user?.id, user?.role, permissionVersion, lang]);
+    [reportType, effectiveBranchFilter, branchSourceKey, history.unlimited, queryVersion, includeActualCost, user?.id, user?.role, permissionVersion, lang]);
   const [serverView, setServerView] = useState<{ reader: typeof reportReader | null; page: number }>({ reader: null, page: 0 });
   const serverPage = serverView.reader === reportReader ? serverView.page : 0;
   const readReport = useMemo(() => (signal?: AbortSignal) => reportReader(serverPage, false, signal), [reportReader, serverPage]);
@@ -300,7 +306,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       if (!canStationView) throw new Error('PERMISSION_DENIED:reports.view');
       if (reportType === 'sales_costs' && !canStationCost) throw new Error('PERMISSION_DENIED:reports.costing');
       const includeCost = canStationCost;
-      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, lang, includeCost, signal });
+      const lines = await loadStationSalesLines({ branchId: effectiveBranchFilter || null, from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, lang, includeCost, costMode: includeActualCost ? 'actual' : 'estimated', signal });
       const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
       if (reportType === 'sales_costs') {
         setData(lines.map(line => withBranch(line.sale.branch_id, {
@@ -314,9 +320,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax')]: line.netBeforeTax,
           [label('تكلفة المباع بالأسعار الحالية', 'Current-price Sold Cost')]: line.estimatedCost ?? line.knownEstimatedCost ?? '—',
           [label('تكلفة المكونات المسعرة فقط', 'Priced Components Only')]: line.knownEstimatedCost ?? label('غير متاحة', 'Unavailable'),
-          [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
-          [label('مجمل الربح المسجل', 'Recorded Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
           [label('مجمل الربح بالأسعار الحالية', 'Current-price Gross Profit')]: line.estimatedCost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.estimatedCost,
+          ...(includeActualCost ? {
+            [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
+            [label('مجمل الربح المسجل', 'Recorded Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
+          } : {}),
           [label('خامات غير مسعرة', 'Unpriced Materials')]: line.unpricedMaterials.join('، '),
         })));
       } else setData(lines.map(line => withBranch(line.sale.branch_id, {
@@ -342,9 +350,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         [label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax')]: line.netBeforeTax,
         [label('صافي المبيعات', 'Net Sales')]: line.net,
         ...(includeCost ? {
-          [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
-          [label('مجمل الربح', 'Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
-          [label('هامش الربح %', 'Profit Margin %')]: line.cost === null || !line.netBeforeTax ? label('غير متاح', 'Unavailable') : Number(((line.netBeforeTax - line.cost) / line.netBeforeTax * 100).toFixed(2)),
+          ...(includeActualCost ? {
+            [label('التكلفة المسجلة', 'Recorded Cost')]: line.cost ?? label('غير متاحة', 'Unavailable'),
+            [label('مجمل الربح', 'Gross Profit')]: line.cost === null ? label('غير متاح', 'Unavailable') : line.netBeforeTax - line.cost,
+            [label('هامش الربح %', 'Profit Margin %')]: line.cost === null || !line.netBeforeTax ? label('غير متاح', 'Unavailable') : Number(((line.netBeforeTax - line.cost) / line.netBeforeTax * 100).toFixed(2)),
+          } : {}),
           [label('تكلفة بآخر سعر (تقديرية)', 'Latest Price Cost (Estimated)')]: line.estimatedCost ?? line.knownEstimatedCost ?? '—',
           [label('تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)')]: line.knownEstimatedCost ?? label('غير متاحة', 'Unavailable'),
           [label('خامات غير مسعرة', 'Unpriced Materials')]: line.unpricedMaterials.join('، '),
@@ -1459,7 +1469,17 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         pendingChanges={filtersDirty}
       />
 
-      {reportType === 'sales_costs' && <p className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'التكلفة المسجلة تخص حركات البيع. تكلفة الأسعار الحالية تعيد تسعير المكونات المستهلكة بالأسعار المعتمدة الآن؛ لا تغيّر القيود. الربح دون الضريبة، والتكلفة الناقصة لا تُعرض كصفر.' : 'Recorded costs belong to the sale movements. Current-price costs reprice consumed components at today’s canonical prices without changing journals. Profit excludes tax; missing costs are not zero.'}</p>}
+      {(reportType === 'sales_costs' || reportType === 'sales_by_station') && canStationCost && (
+        <div className="mb-3 flex flex-wrap items-center gap-3" data-testid="station-cost-mode">
+          <p className="text-sm text-ui-muted">{includeActualCost
+            ? (lang === 'ar' ? 'التكلفة الفعلية المسجلة حسب حركات FIFO، منفصلة عن التقديرية.' : 'Recorded FIFO movement cost is shown separately from estimated cost.')
+            : (lang === 'ar' ? 'التكلفة المعروضة تقديرية: الكمية × سعر FIFO الحالي أو آخر سعر محفوظ؛ لا تُحمّل حركات FIFO التفصيلية. الخام غير المسعّر يظل بلا سعر ولا يُفترض أن تكلفته صفر.' : 'Default cost is estimated: quantity × current FIFO unit price or last saved price. Detailed FIFO movements are not loaded; unpriced materials are not zero.')}</p>
+          <Button variant="outline" size="sm" disabled={!snapshot || loading || filtersDirty} onClick={() => {
+            setIncludeActualCost(value => !value);
+            setQueryVersion(version => version + 1);
+          }}>{includeActualCost ? (lang === 'ar' ? 'عرض التكلفة التقديرية فقط' : 'Show estimated cost only') : (lang === 'ar' ? 'حساب التكلفة الفعلية (FIFO)' : 'Calculate actual cost (FIFO)')}</Button>
+        </div>
+      )}
       {reportType === 'inventory_as_of' && <p role="note" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? `أرصدة الخامات من الحركات المسموح لك عرضها حتى نهاية يوم ${snapshot?.to || to} بتوقيت القاهرة. القيمة هي المسجلة في الحركات؛ لا تمثل إعادة تسعير المخزون بأسعار اليوم.` : `Material balances from permitted movements through end of ${snapshot?.to || to} in Cairo. Values are recorded movement costs, not a repricing at today's prices.`}</p>}
       {reportType === 'sales_by_station' && <details className="mb-3 text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'تفاصيل حساب المبيعات والتكلفة' : 'Sales and cost calculation details'}</summary><p data-testid="station-sales-source-note">{getReportExcelProfile(reportType, lang).sourceNote}</p></details>}
 
