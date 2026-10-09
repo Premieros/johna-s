@@ -10,7 +10,8 @@ Standalone Android wrapper for the already-deployed Johnas POS website. The web 
 - Default pinned site: `https://premieros.github.io/johna-s/`; verify that this is the real deployed production site on the tablet **before** provisioning.
 - Only same-origin, same-base-path web navigation is permitted. Supabase API calls inside the web page are not navigation and can work normally.
 - Initial administrator PIN is selected on the tablet (6–12 numbers), stored as a salted PBKDF2 hash; there is no default PIN. Long-press the on-screen Wi-Fi button to unlock using that PIN.
-- The Wi-Fi button requests Android's `Settings.Panel.ACTION_WIFI`, **not** the full Settings app. Under some Lenovo firmware/device-owner lock-task policies, Android may block this system panel. **Do not claim Wi-Fi-only escape works until checked on the actual Tab One.** Never allowlist the whole Settings package as a workaround.
+- The short-tap Wi-Fi button requests Android's `Settings.Panel.ACTION_WIFI`, **not** the full Settings app. On the actual Lenovo TB305FU Android 15, the user reported the panel is blocked while locked. **Staff Wi-Fi-only access is NOT solved/validated.** Never allowlist the whole Settings package as a workaround.
+- Authorized manager fallback (versionCode 2): **long-press Wi-Fi**, enter manager PIN, then use the **manager maintenance** screen's Wi-Fi Settings button. The app suspends lock task first and deliberately **does not launch HOME** (which is Johnas and previously re-locked immediately). In this UNLOCKED manager mode, other Settings could be reached; it is strictly PIN-protected maintenance, **not** a Wi-Fi-only staff workflow. Always tap **Return to Johnas and re-lock** before handing the tablet to staff.
 - Lock-task, HOME replacement and boot handling require testing on the exact Lenovo Tab One Android build. Automatic boot launch is primarily via persistent HOME; boot broadcast is a fallback.
 - Printing, scanner/camera, file downloads (including blob Excel), permissions, login persistence and native back behaviour require hands-on QA before staff deployment. Android WebView is not automatically equivalent to Chrome.
 - Server-side permissions / branch isolation still control POS business data. The staff may view material costs under the existing app roles; no extra financial data grant is added.
@@ -66,3 +67,9 @@ The application enters lock task only when BOTH Device Owner is active and the a
 ## Security limits
 
 A Device Owner APK is sensitive infrastructure. All elevated operations are explicit. The Android wrapper does not change production accounting, stock, kitchen flows or Supabase policies.
+
+## Upgrading the currently enrolled Device Owner kiosk (versionCode 2)
+
+The user enrolled the **production-signed** build of `com.johnas.kiosk` on Lenovo TB305FU with their **local key**. A new release MUST be signed with the **same PKCS12 keystore and alias**, then installed using `adb install -r <signed APK>`. **Do not uninstall the enrolled Device Owner APK.** Keep USB connected during first trial, and verify signature locally with apksigner before installation. Initial release used versionCode 1; the manager Wi-Fi fix bumps it to versionCode 2.
+
+After updating, long-press Wi-Fi and enter the PIN. A manager maintenance page should appear rather than jumping briefly to HOME and immediately returning to Johnas. Select manager Wi-Fi Settings; use Back to return to maintenance; explicitly press Return to Johnas/re-lock. Verify Home/Recents are blocked again. Staff short-tap Wi-Fi under lock task still may not work until a separate tested system-level Wi-Fi-only path is implemented. No factory reset is expected for same-certificate APK updates.
