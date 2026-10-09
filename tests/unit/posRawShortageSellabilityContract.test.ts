@@ -12,7 +12,9 @@ const cartMigration = read('supabase/migrations/20260912113000_pos_cart_negative
 
 describe('POS sell-through staged-retirement contract', () => {
   it('makes every visible POS product quantity-eligible while server deduction remains authoritative', () => {
-    expect(hook).toContain('if (!isNegativeEligible(product.id) && totalProductQty + quantity > stock)');
+    expect(hook).not.toContain('if (!isNegativeEligible(product.id) && totalProductQty + quantity > stock)');
+    expect(hook).not.toContain('getStock(');
+    expect(hook).toContain('await sendOrderToKitchen(');
     expect(wrapper).toContain('POS wrapper for unconditional quantity sell-through.');
     expect(wrapper).toContain('rawShortageOnly: Object.fromEntries(input.products.map((product) => [product.id, true]))');
     expect(wrapper).toContain('Physical raw-material deduction remains server-owned at send_to_kitchen');
