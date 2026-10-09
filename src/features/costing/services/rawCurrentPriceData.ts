@@ -73,10 +73,24 @@ export function mergeRawFifoKnownPrices(known: RawCurrentPriceRow[], fifoRows: i
 export async function loadRawMaterialDisplayPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
   const { loadRawFifoCosts } = await import('./rawFifoCostData');
   const fifoRows = await loadRawFifoCosts(branchId, rawIds);
-  // Requested material subsets can skip historical price scans for positive FIFO costs.
-  const missingIds = rawIds?.filter(id => !fifoRows.some(row =>
-    row.raw_material_id === id && Number(row.avg_cost) > 0 && Number.isFinite(Number(row.avg_cost))
-  )) ?? null;
-  const known = missingIds?.length === 0 ? [] : await loadRawCurrentPrices(branchId, missingIds);
-  return mergeRawFifoKnownPrices(known, fifoRows, rawIds);
+  // Enumerate all visible material identities only for full-screen reads.
+  // Keep pricing RPCs restricted to raw materials without a positive FIFO cost.
+  const selected = rawIds === null ? [] as string[] : rawIds;
+  if (rawIds === null) {
+    for (let from = 0; ; from += 500) {
+      let query = supabase.from('raw_materials').select('id').order('id').range(from, from + 499);
+      if (branchId) query = query.eq('branch_id', branchId);
+      const result = await query;
+      if (result.error) throw result.error;
+      const page = (result.data || []) as Array<{ id: string }>;
+      selected.push(...page.map(row => row.id));
+      if (page.length < 500) break;
+    }
+  }
+  const positiveFifo = new Set(fifoRows.filter(row =>
+    Number.isFinite(Number(row.avg_cost)) && Number(row.avg_cost) > 0
+  ).map(row => row.raw_material_id));
+  const missingIds = selected.filter(id => !positiveFifo.has(id));
+  const known = missingIds.length ? await loadRawCurrentPrices(branchId, missingIds) : [];
+  return mergeRawFifoKnownPrices(known, fifoRows, selected);
 }
