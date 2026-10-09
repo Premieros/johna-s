@@ -245,14 +245,62 @@ class TabletKioskActivity : Activity() {
     }
 
     private fun unlockWithAdminPermission() {
+        // Starting HOME after unlock immediately re-enters this very activity on
+        // Lenovo Tab One because Johnas is a HOME launcher. Stay here instead.
+        // Keep the device-owner role; only suspend Lock Task for an authorized manager.
+        val stopped = runCatching { stopLockTask() }.isSuccess
+        if (!stopped) {
+            Toast.makeText(this, "تعذر إيقاف القفل. لم يتم فتح إعدادات الجهاز.", Toast.LENGTH_LONG).show()
+            return
+        }
         kioskExitApproved = true
-        runCatching { stopLockTask() }
         runCatching { dpm.clearPackagePersistentPreferredActivities(admin, packageName) }
         runCatching { dpm.setLockTaskPackages(admin, emptyArray()) }
         runCatching { dpm.setKeyguardDisabled(admin, false) }
-        Toast.makeText(this, "تم فك قفل الجهاز بواسطة المدير", Toast.LENGTH_LONG).show()
-        startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
-        finish()
+        showAdminMaintenance()
+    }
+
+    private fun showAdminMaintenance() {
+        // This screen is only available after manager PIN verification.
+        // Do not expose the full Settings app to ordinary operators.
+        webView?.apply { stopLoading(); destroy() }
+        webView = null
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(32, 32, 32, 32)
+        }
+        layout.addView(TextView(this).apply {
+            text = "صيانة المدير — جوناس غير مقفل مؤقتًا"
+            textSize = 22f
+            setTextColor(Color.rgb(145, 40, 24))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 20)
+        })
+        layout.addView(TextView(this).apply {
+            text = "إعدادات أندرويد متاحة الآن للمدير فقط. بعد تعديل الواي فاي ارجع واضغط «العودة إلى جوناس وقفل الجهاز» قبل تسليم التابلت للموظف."
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 22)
+        })
+        layout.addView(Button(this).apply {
+            text = "فتح إعدادات Wi-Fi للمدير"
+            setOnClickListener {
+                runCatching { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) }
+                    .onFailure {
+                        Toast.makeText(this@TabletKioskActivity, "لم تفتح إعدادات Wi-Fi: ${it.message}", Toast.LENGTH_LONG).show()
+                    }
+            }
+        })
+        layout.addView(Button(this).apply {
+            text = "العودة إلى جوناس وقفل الجهاز"
+            setOnClickListener {
+                kioskExitApproved = false
+                showWebApp()
+            }
+        })
+        setContentView(layout)
     }
 
     @Deprecated("Android back navigation is owned by the WebView inside the kiosk.")
