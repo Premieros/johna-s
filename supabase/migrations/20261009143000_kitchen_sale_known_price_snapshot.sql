@@ -1,146 +1,100 @@
--- PROPOSAL ONLY: do not apply to production without separately approved migration.
--- Freeze operational ingredient costs when Send to Kitchen records the consumed component snapshot.
--- This is NOT posted FIFO inventory valuation or accounting COGS.
--- Price details are intentionally in a separate, costing-permission-protected table:
--- kitchen event SELECT is branch-wide and must never expose financial material prices.
+-- PROPOSAL ONLY: deployment to the live POS requires a separate explicit approval.
+-- Freeze the latest APPROVED raw-material price at Send to Kitchen, alongside the
+-- already-immutable consumed ingredient quantity. This is operational sale cost,
+-- NOT inventory FIFO valuation or posted accounting cost.
+-- Branch operators may see the price in their own kitchen snapshots as requested.
+-- Old kitchen events are never backfilled with a newer price.
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '15s';
 
-CREATE TABLE IF NOT EXISTS public.order_kitchen_known_cost_snapshots (
-  event_id uuid PRIMARY KEY REFERENCES public.order_kitchen_inventory_events(id) ON DELETE CASCADE,
-  branch_id uuid NOT NULL REFERENCES public.branches(id),
-  known_cost numeric(18,6),
-  complete_cost numeric(18,6),
-  priced_components integer NOT NULL DEFAULT 0 CHECK (priced_components >= 0),
-  unpriced_materials jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(unpriced_materials) = 'array'),
-  components jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(components) = 'array'),
-  pricing_status text NOT NULL CHECK (pricing_status IN ('complete','partial','unpriced','lookup_failed')),
-  captured_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT kitchen_known_cost_nonnegative CHECK (
-    (known_cost IS NULL OR known_cost >= 0)
-    AND (complete_cost IS NULL OR complete_cost >= 0)
-  )
-);
-CREATE INDEX IF NOT EXISTS idx_kitchen_known_cost_branch ON public.order_kitchen_known_cost_snapshots(branch_id, event_id);
-
-ALTER TABLE public.order_kitchen_known_cost_snapshots ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.order_kitchen_known_cost_snapshots FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON TABLE public.order_kitchen_known_cost_snapshots TO authenticated, service_role;
-DROP POLICY IF EXISTS kitchen_known_cost_select ON public.order_kitchen_known_cost_snapshots;
-CREATE POLICY kitchen_known_cost_select
-  ON public.order_kitchen_known_cost_snapshots FOR SELECT TO authenticated
-  USING (public.user_may_access_branch(branch_id) AND public.can_permission('reports.costing'));
-
-CREATE OR REPLACE FUNCTION public._capture_kitchen_known_sale_cost()
+CREATE OR REPLACE FUNCTION public._capture_kitchen_ingredient_prices()
 RETURNS trigger
-LANGUAGE plpgsql SECURITY INVOKER
+LANGUAGE plpgsql
+SECURITY INVOKER
 SET search_path TO 'public', 'pg_temp'
-AS $function$
+AS $capture$
 DECLARE
   v_raw_ids uuid[];
-  v_price_map jsonb := '{}'::jsonb;
+  v_prices jsonb := '{}'::jsonb;
   v_component jsonb;
   v_price jsonb;
   v_components jsonb := '[]'::jsonb;
-  v_missing jsonb := '[]'::jsonb;
   v_unit_cost numeric;
-  v_qty numeric;
-  v_known numeric := 0;
-  v_priced integer := 0;
-  v_missing_count integer := 0;
+  v_quantity numeric;
   v_lookup_failed boolean := false;
-  v_status text;
 BEGIN
-  -- Runs on new immutable v2 consumption snapshots only. Never backfill old sales
-  -- from today's prices, and never replace inventory FIFO event total_cost.
   IF NEW.snapshot_version < 2
      OR jsonb_typeof(NEW.component_snapshot) IS DISTINCT FROM 'array'
      OR jsonb_array_length(NEW.component_snapshot) = 0 THEN
     RETURN NEW;
   END IF;
 
-  SELECT array_agg(DISTINCT (c->>'raw_material_id')::uuid)
+  SELECT array_agg(DISTINCT (component->>'raw_material_id')::uuid)
     INTO v_raw_ids
-  FROM jsonb_array_elements(NEW.component_snapshot) c
-  WHERE c ? 'raw_material_id';
+  FROM jsonb_array_elements(NEW.component_snapshot) component
+  WHERE component ? 'raw_material_id';
 
   BEGIN
-    -- One bounded canonical-price read for the entire kitchen event.
-    -- Its 'last_batch' / 'inventory_average' / 'default_cost' fallbacks are
-    -- *excluded*: sale pricing must never silently use FIFO or a guessed price.
+    -- One scoped read per new kitchen event; never scan individual FIFO layers.
+    -- Do not use inventory averages, FIFO batch costs, or default-cost guesses.
     SELECT COALESCE(jsonb_object_agg(
       p.raw_material_id::text,
-      jsonb_build_object('unit_cost',p.unit_cost,'source',p.price_source,'priced_at',p.priced_at)
+      jsonb_build_object('unit_cost',p.unit_cost, 'price_source',p.price_source, 'priced_at',p.priced_at)
     ), '{}'::jsonb)
-    INTO v_price_map
+    INTO v_prices
     FROM public.get_raw_material_current_prices(NEW.branch_id, v_raw_ids) p
     WHERE p.unit_cost > 0
-      AND p.price_source IN ('purchase','stock_count','pricing')
+      AND p.price_source IN ('purchase','pricing','stock_count')
       AND p.priced_at IS NOT NULL
-      AND p.priced_at <= COALESCE(NEW.created_at,now());
+      AND p.priced_at <= COALESCE(NEW.created_at, now());
   EXCEPTION WHEN OTHERS THEN
-    -- Pricing failure must not stop kitchen sends, printing or stock deduction.
-    -- Store an explicit lookup_failed snapshot; never turn a lookup error into zero.
+    -- A pricing lookup failure cannot break checkout, kitchen dispatch or stock.
+    -- Missing prices remain NULL, never zero and never today's retrospective price.
     v_lookup_failed := true;
-    v_price_map := '{}'::jsonb;
-    RAISE LOG 'kitchen_known_cost_lookup_failed for event %, SQLSTATE %', NEW.id, SQLSTATE;
+    v_prices := '{}'::jsonb;
+    RAISE LOG 'kitchen_price_snapshot_lookup_failed event % SQLSTATE %', NEW.id, SQLSTATE;
   END;
 
   FOR v_component IN SELECT value FROM jsonb_array_elements(NEW.component_snapshot)
   LOOP
-    v_price := v_price_map -> (v_component->>'raw_material_id');
-    v_qty := COALESCE((v_component->>'quantity')::numeric,0);
-    v_unit_cost := NULLIF((v_price->>'unit_cost')::numeric,0);
-    IF v_qty > 0 AND v_unit_cost > 0 THEN
-      v_priced := v_priced + 1;
-      v_known := v_known + v_qty * v_unit_cost;
+    v_price := v_prices -> (v_component->>'raw_material_id');
+    v_quantity := NULLIF(v_component->>'quantity','')::numeric;
+    v_unit_cost := NULLIF(v_price->>'unit_cost','')::numeric;
+    IF v_unit_cost IS NULL OR v_unit_cost <= 0 OR v_quantity IS NULL OR v_quantity <= 0 THEN
       v_components := v_components || jsonb_build_array(
         v_component || jsonb_build_object(
-          'unit_cost',v_unit_cost,
-          'extended_cost',round(v_qty * v_unit_cost,6),
-          'price_source',v_price->>'source',
-          'priced_at',v_price->>'priced_at'
+          'unit_cost',NULL,
+          'extended_cost',NULL,
+          'price_source',CASE WHEN v_lookup_failed THEN 'lookup_failed' ELSE 'unpriced' END,
+          'priced_at',NULL,
+          'price_captured_at',COALESCE(NEW.created_at,now())
         )
       );
     ELSE
-      v_missing_count := v_missing_count + 1;
-      v_missing := v_missing || jsonb_build_array(
-        COALESCE(NULLIF(v_component->>'raw_name',''),v_component->>'raw_material_id','unknown')
-      );
       v_components := v_components || jsonb_build_array(
-        v_component || jsonb_build_object('unit_cost',NULL,'extended_cost',NULL)
+        v_component || jsonb_build_object(
+          'unit_cost',v_unit_cost,
+          'extended_cost',round(v_quantity*v_unit_cost,6),
+          'price_source',v_price->>'price_source',
+          'priced_at',v_price->>'priced_at',
+          'price_captured_at',COALESCE(NEW.created_at,now())
+        )
       );
     END IF;
   END LOOP;
 
-  v_status := CASE
-    WHEN v_lookup_failed THEN 'lookup_failed'
-    WHEN v_missing_count = 0 AND v_priced > 0 THEN 'complete'
-    WHEN v_priced > 0 THEN 'partial'
-    ELSE 'unpriced'
-  END;
-  INSERT INTO public.order_kitchen_known_cost_snapshots(
-    event_id,branch_id,known_cost,complete_cost,priced_components,
-    unpriced_materials,components,pricing_status
-  ) VALUES (
-    NEW.id,NEW.branch_id,
-    CASE WHEN v_priced > 0 THEN round(v_known,6) ELSE NULL END,
-    CASE WHEN v_missing_count = 0 AND v_priced > 0 THEN round(v_known,6) ELSE NULL END,
-    v_priced,v_missing,v_components,v_status
-  )
-  ON CONFLICT (event_id) DO NOTHING;
-
+  NEW.component_snapshot := v_components;
   RETURN NEW;
 END;
-$function$;
-REVOKE ALL ON FUNCTION public._capture_kitchen_known_sale_cost() FROM PUBLIC, anon, authenticated;
+$capture$;
 
-DROP TRIGGER IF EXISTS trg_capture_kitchen_known_sale_cost ON public.order_kitchen_inventory_events;
-CREATE TRIGGER trg_capture_kitchen_known_sale_cost
-AFTER INSERT ON public.order_kitchen_inventory_events
+REVOKE ALL ON FUNCTION public._capture_kitchen_ingredient_prices() FROM PUBLIC, anon;
+DROP TRIGGER IF EXISTS trg_capture_kitchen_ingredient_prices ON public.order_kitchen_inventory_events;
+CREATE TRIGGER trg_capture_kitchen_ingredient_prices
+BEFORE INSERT ON public.order_kitchen_inventory_events
 FOR EACH ROW
 WHEN (NEW.snapshot_version >= 2)
-EXECUTE FUNCTION public._capture_kitchen_known_sale_cost();
+EXECUTE FUNCTION public._capture_kitchen_ingredient_prices();
 
-COMMENT ON TABLE public.order_kitchen_known_cost_snapshots IS
-  'Frozen operational ingredient prices at kitchen send; costing permission only. Never FIFO accounting COGS or retrospective repricing.';
+COMMENT ON FUNCTION public._capture_kitchen_ingredient_prices() IS
+  'Frozen raw ingredient quantities and latest approved prices for operational sale-cost reports. Does not change kitchen FIFO ledger or posted journals.';
