@@ -18,11 +18,24 @@ Standalone Android wrapper for the already-deployed Johnas POS website. The web 
 
 ## Build a test APK using GitHub Actions
 
-The `Build Lenovo Tab One kiosk (test APK)` workflow compiles `app-debug.apk` and runs unit tests, then attaches the result as a GitHub Actions artifact. This version uses an **ephemeral CI debug signing key**. DO NOT enroll it as permanent Device Owner: a later release with a different signature cannot update it in place.
+The `Build Lenovo Tab One kiosk (test and unsigned release APKs)` workflow compiles `app-debug.apk` and `app-release-unsigned.apk` and runs unit tests, then attaches both results as GitHub Actions artifacts. This version uses an **ephemeral CI debug signing key**. DO NOT enroll it as permanent Device Owner: a later release with a different signature cannot update it in place.
 
 Local Android Studio: open the `android-kiosk` directory and build the app using AGP 8.7.3, Gradle 8.9 and JDK 17; Android SDK 35. The repository does not bundle a Gradle wrapper binary.
 
 ## Production signing is a separate requirement
+
+The user confirmed they created their own local PKCS12 keystore on Windows at `D:\\JohnasKioskKeys\\johnas-kiosk-release.p12` (do not upload it). **The new GitHub workflow also publishes an unsigned release APK**, under the artifact name `johnas-tab-one-UNSIGNED-RELEASE-LOCAL-SIGNING-REQUIRED`. It contains `app-release-unsigned.apk`. It **will not install** until the owner signs it.
+
+To sign locally on Windows after downloading the unsigned APK, obtain `apksigner.bat` from the official Android SDK Build Tools (version 35.0.0 or newer) and run it on the machine that holds the keystore:
+
+```powershell
+& "C:\\Path\\To\\Android\\Sdk\\build-tools\\35.0.0\\apksigner.bat" sign --ks "D:\\JohnasKioskKeys\\johnas-kiosk-release.p12" --ks-type PKCS12 --ks-key-alias johnas-kiosk --out "D:\\platform-tools\\johnas-kiosk-release-signed.apk" "D:\\platform-tools\\app-release-unsigned.apk"
+& "C:\\Path\\To\\Android\\Sdk\\build-tools\\35.0.0\\apksigner.bat" verify --verbose --print-certs "D:\\platform-tools\\johnas-kiosk-release-signed.apk"
+```
+
+Use interactive PIN/password prompts only; do not provide passwords on the command line, in a screenshot, in chat, or in GitHub secrets. Retain the same keystore and certificate for every app update and keep a secure **offline encrypted backup**.
+
+The tablet currently runs the **CI-debug signed APK**. Before installing a production-signed APK, the incompatible debug build must be uninstalled (`adb uninstall com.johnas.kiosk`), which clears its app-local data. **Never run uninstall after Device Owner enrollment.** Only uninstall before provisioning, and only after the owner's acknowledgment. Installing the signed release before provisioning will show the Device Owner required message; that is correct and is not a crash.
 
 Choose and securely back up a permanent **release** signing keystore before Device Owner provisioning. Never commit the keystore, passwords or base64 secret to GitHub. The Gradle build accepts these environment variables:
 
