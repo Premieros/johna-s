@@ -1487,7 +1487,6 @@
     "dining_tables",
     "expenses",
     "inventory",
-    "inventory_ledger",
     "inventory_movements",
     "inventory_unit_batches",
     "inventory_unit_recipe_units",
