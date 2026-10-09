@@ -20,6 +20,10 @@
 ## Current objective — Lenovo Tab One Android kiosk 2026-10-09
 Active PR #483 prepares a dedicated-device Android kiosk for the NEW Lenovo Tab One tablet, with Device Owner, lock-task HOME and auto-start, immutable Johnas URL, restricted Wi-Fi panel, manager PIN and APK CI. No live website or database changes. Do not enroll using short-lived GitHub debug APK; permanent release signing and real device validation are mandatory before use. The Android Wi-Fi panel must be verified on the exact firmware without whitelisting unrestricted Settings. No merge/deployment unless exact-head verification and explicit approval.
 
+## Tab One V2 field acceptance (2026-10-09)
+- User enrolled signed Device Owner APK, upgraded in-place to same-certificate V2 (versionCode 2), verified manager PIN-gated Wi-Fi Settings and explicit re-lock on hardware, and confirmed Johnas auto-launch after an ADB reboot.
+- Still to verify after reboot: Home/Recents do not permit employee exit. Staff short-tap Wi-Fi-only networking inside Android 15 Lock Task remains **unsolved** (manager maintenance is not an employee Wi-Fi-only option). Kiosk PR #483 remains draft; no merge or production change without explicit approval and exact-head CI.
+
 ## Historical objective (completed PR #482) — approved 2026-10-09
 Operational sale costs use only saved raw-material unit costs captured at **Send to Kitchen**: consumed quantity × latest positive approved price available at dispatch. Never calculate FIFO in sales-cost reports or reprice old sales with new prices. Show priced ingredients and their known subtotal, leave unknown prices NULL. Keep separate FIFO inventory deductions, historic postings and financial journal valuations unchanged.
 
