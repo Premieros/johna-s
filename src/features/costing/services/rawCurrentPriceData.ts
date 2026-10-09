@@ -48,3 +48,26 @@ export async function loadRawCurrentPrices(branchId: string | null, rawIds: stri
   }
   return rows;
 }
+
+/**
+ * Canonical read for material cost displays: use actual FIFO inventory cost
+ * when present, otherwise the last explicitly known positive price. Never
+ * turn unknown/null prices into zero or invent a price.
+ */
+export async function loadRawMaterialDisplayPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
+  const { loadRawFifoCosts, rawFifoCostMap } = await import('./rawFifoCostData');
+  const [known, fifoRows] = await Promise.all([loadRawCurrentPrices(branchId, rawIds), loadRawFifoCosts(branchId)]);
+  const fifo = rawFifoCostMap(fifoRows);
+  const byId = new Map(known.map(row => [row.raw_material_id, row]));
+  for (const row of fifoRows) {
+    if (rawIds !== null && !rawIds.includes(row.raw_material_id)) continue;
+    if (!byId.has(row.raw_material_id)) byId.set(row.raw_material_id, {
+      raw_material_id: row.raw_material_id, branch_id: row.branch_id,
+      unit_cost: null, price_source: 'unpriced', priced_at: null, reference_number: null,
+    });
+  }
+  return [...byId.values()].map(row => {
+    const fifoCost = fifo[row.raw_material_id] ?? null;
+    return fifoCost === null ? row : { ...row, unit_cost: fifoCost, price_source: 'fifo' };
+  });
+}
