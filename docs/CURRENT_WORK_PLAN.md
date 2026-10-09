@@ -18,7 +18,14 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Show the already-computed priced-components cost in station and sales cost reports instead of the literal 'غير مكتملة' placeholder whenever full current-price cost is unavailable; preserve actual recorded costing and unpriced indicators without creating estimates or posting financial data.
+Default station/sales COGS reports to estimated ingredient cost (saved component quantity × current FIFO unit cost or last saved positive price). Fetch detailed FIFO inventory-ledger movements only after an explicit Calculate actual cost click. Keep partial/unpriced cost visible without inventing zero or writing financial data.
+
+## Sales estimated-cost default / actual FIFO on-demand — 2026-10-09
+- Continue in existing PR #482 branch (single writer), preserving previous known-cost display fix.
+- Estimated sales reports request kitchen component snapshots and shared price reader, not inventory_ledger.
+- Explicit FIFO button requests detailed movement verification, never a posting or historical cost backfill.
+- Accounting, shifts, journal posting, actual FIFO stock movements remain unchanged.
+- Tests cover default/actual mode, partial prices and missing price nulls. No Production SQL.
 
 ## Reporting cost display — 2026-10-09
 - Branch: `fix/report-show-known-cost-20261009`.
