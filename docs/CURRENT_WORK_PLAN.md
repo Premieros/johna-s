@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `7df65dd0`
-- Current active branch: `fix/raw-material-cogs-main-sync-20261009`
-- Mandatory active work log: `docs/RAW_MATERIAL_COGS_ACCOUNTING_2026-10-04.md`
+- Latest main baseline reconciled: `1e74391a`
+- Current active branch: `fix/report-available-cost-display-20261009`
+- Mandatory active work log: `docs/REPORT_AVAILABLE_COST_DISPLAY_2026-10-09.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,7 +18,12 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Reconcile unfinished restaurant COGS accounting PR #445 against the latest deployed main using a fresh branch. Preserve inventory/refund/FIFO account lineage, execute exact-head full verification, and keep Production migration separately gated. Prior reporting PR #478 was merged and its post-merge verification and GitHub Pages deployment passed.
+Display existing known costs on station sales and sales cost reporting views instead of ambiguous incomplete/unavailable placeholders, explicitly labeling recorded vs current-price vs priced-components-only estimates. Retain strict posted gross profit semantics; no database changes. Require green exact-head CI before merge.
+
+## Available cost reporting — 2026-10-09
+- Source PR: #480 on `fix/report-available-cost-display-20261009`.
+- Current production baseline: main `1e74391a`; approved accounting and current price read migrations already applied separately.
+- Existing finalized accounting migrations are not altered.
 
 ## Accounting reconciliation — 2026-10-09
 - Source PR: #445, historical branch diverged and merge-conflicted.
