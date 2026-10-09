@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `8df96523`
-- Current active branch: `fix/raw-price-sql-timeouts`
-- Mandatory active work log: `docs/CHECKOUT_REPORTS_REBUILD_2026-10-08.md`
+- Latest main baseline reconciled: `7df65dd0`
+- Current active branch: `fix/raw-material-cogs-main-sync-20261009`
+- Mandatory active work log: `docs/RAW_MATERIAL_COGS_ACCOUNTING_2026-10-04.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,7 +18,14 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Repair shared report timeouts in #478: explicit report requests with today's default period, bounded shared authoritative results and removal of unused costing reads. Prepare and verify the two-function SQL read optimization against previous outputs. Complete exact-head Full Verify before authorized frontend delivery; new production SQL apply requires separate explicit approval.
+Reconcile unfinished restaurant COGS accounting PR #445 against the latest deployed main using a fresh branch. Preserve inventory/refund/FIFO account lineage, execute exact-head full verification, and keep Production migration separately gated. Prior reporting PR #478 was merged and its post-merge verification and GitHub Pages deployment passed.
+
+## Accounting reconciliation — 2026-10-09
+- Source PR: #445, historical branch diverged and merge-conflicted.
+- Rebased by porting the migration, rollback, targeted unit/integration tests and worklog to this fresh main-based branch, with original PR left unchanged.
+- Future-only accounting fix; never rewrite historical journals.
+- SQL migration intentionally NOT applied to Production. Exact-head CI, fresh-DB integration, production definition parity and final approval are required before applying.
+- Follow-up: successful CI then review migration signatures against production, followed by separately authorized production application and post-apply verification.
 
 ## Verified state
 - #450 approved served-resend repair applied; #451 and #452 merged/deployed and verified.

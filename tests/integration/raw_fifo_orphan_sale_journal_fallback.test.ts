@@ -82,7 +82,7 @@ describe.skipIf(skip)('FIFO orphan sale journal fallback', () => {
     const reconciliation = await q<{ cogs: string; inventory: string }>(
       `SELECT
          COALESCE(sum(CASE WHEN am.semantic_key='cogs' THEN jel.debit-jel.credit ELSE 0 END),0)::text cogs,
-         COALESCE(sum(CASE WHEN am.semantic_key='inventory_fg' THEN jel.debit-jel.credit ELSE 0 END),0)::text inventory
+         COALESCE(sum(CASE WHEN am.semantic_key='inventory_rm' THEN jel.debit-jel.credit ELSE 0 END),0)::text inventory
        FROM public.journal_entries je
        JOIN public.journal_entry_lines jel ON jel.journal_entry_id=je.id
        JOIN public.account_mappings am ON am.branch_id=je.branch_id AND am.account_id=jel.account_id
