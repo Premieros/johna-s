@@ -1,4 +1,4 @@
-name: Build Lenovo Tab One kiosk (test APK)
+name: Build Lenovo Tab One kiosk (test and unsigned release APKs)
 
 on:
   pull_request:
@@ -37,10 +37,20 @@ jobs:
           gradle-version: '8.9'
       - name: Compile APK and run unit tests
         working-directory: android-kiosk
-        run: gradle --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest
+        run: gradle --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: johnas-tab-one-TEST-APK-not-for-device-owner
           path: android-kiosk/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Confirm release is unsigned (must be signed locally)
+        run: |
+          test -s android-kiosk/app/build/outputs/apk/release/app-release-unsigned.apk
+          test ! -e android-kiosk/app/build/outputs/apk/release/app-release.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: johnas-tab-one-UNSIGNED-RELEASE-LOCAL-SIGNING-REQUIRED
+          path: android-kiosk/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 14
           if-no-files-found: error
