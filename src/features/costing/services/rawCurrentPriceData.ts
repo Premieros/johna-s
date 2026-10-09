@@ -54,20 +54,24 @@ export async function loadRawCurrentPrices(branchId: string | null, rawIds: stri
  * when present, otherwise the last explicitly known positive price. Never
  * turn unknown/null prices into zero or invent a price.
  */
-export async function loadRawMaterialDisplayPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
-  const { loadRawFifoCosts, rawFifoCostMap } = await import('./rawFifoCostData');
-  const [known, fifoRows] = await Promise.all([loadRawCurrentPrices(branchId, rawIds), loadRawFifoCosts(branchId)]);
-  const fifo = rawFifoCostMap(fifoRows);
+export function mergeRawFifoKnownPrices(known: RawCurrentPriceRow[], fifoRows: import('./rawFifoCostData').RawFifoCostRow[], rawIds: string[] | null = null): RawCurrentPriceRow[] {
   const byId = new Map(known.map(row => [row.raw_material_id, row]));
   for (const row of fifoRows) {
     if (rawIds !== null && !rawIds.includes(row.raw_material_id)) continue;
-    if (!byId.has(row.raw_material_id)) byId.set(row.raw_material_id, {
-      raw_material_id: row.raw_material_id, branch_id: row.branch_id,
-      unit_cost: null, price_source: 'unpriced', priced_at: null, reference_number: null,
+    const fifoCost = Number(row.avg_cost);
+    if (!Number.isFinite(fifoCost) || fifoCost <= 0) continue;
+    const previous = byId.get(row.raw_material_id);
+    byId.set(row.raw_material_id, {
+      ...(previous || { raw_material_id: row.raw_material_id, branch_id: row.branch_id,
+        unit_cost: null, price_source: 'unpriced', priced_at: null, reference_number: null }),
+      unit_cost: fifoCost, price_source: 'fifo',
     });
   }
-  return [...byId.values()].map(row => {
-    const fifoCost = fifo[row.raw_material_id] ?? null;
-    return fifoCost === null ? row : { ...row, unit_cost: fifoCost, price_source: 'fifo' };
-  });
+  return [...byId.values()];
+}
+
+export async function loadRawMaterialDisplayPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
+  const { loadRawFifoCosts } = await import('./rawFifoCostData');
+  const [known, fifoRows] = await Promise.all([loadRawCurrentPrices(branchId, rawIds), loadRawFifoCosts(branchId, rawIds)]);
+  return mergeRawFifoKnownPrices(known, fifoRows, rawIds);
 }
