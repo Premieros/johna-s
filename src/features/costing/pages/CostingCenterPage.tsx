@@ -1,6 +1,6 @@
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '../services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '../services/rawCurrentPriceData';
 import { loadRawFifoCosts, rawFifoCostMap } from '../services/rawFifoCostData';
 import { businessDateISO, reportDateRangeUtc } from '@/lib/businessTime';
 import { supplementHistoricalMargins, type HistoricalOrderMargin } from '../services/historicalCostEstimates';
@@ -195,7 +195,7 @@ export function CostingCenterPage() {
       }
       const fifoRows = await loadRawFifoCosts(effBranch);
       if (requestId !== request.current) return;
-      const priceRows = await loadRawCurrentPrices(effBranch);
+      const priceRows = await loadRawMaterialDisplayPrices(effBranch);
       if (requestId !== request.current) return;
       const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows);
       setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null })));
