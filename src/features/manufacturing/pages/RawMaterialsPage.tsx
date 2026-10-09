@@ -207,7 +207,7 @@ export function RawMaterialsPage() {
     { key: 'category', header: t('category'), render: (m) => m.category || '-' },
     { key: 'branch', header: t('branch'), render: (m) => <BranchBadge name={branchLabel(m.branch_id)} /> },
     { key: 'min_stock', header: t('minStock'), render: (m) => formatRawMaterialQuantity(Number(m.min_stock), unitForMaterial(m), { lang }) },
-    { key: 'latest_cost', header: isAr ? 'آخر سعر معروف / وحدة' : 'Latest known price / unit', render: (m) => { const cost = currentPrices[m.id] ?? null; return cost === null ? '-' : formatNumber(cost, 6); } },
+    { key: 'latest_cost', header: isAr ? 'تكلفة FIFO أو آخر سعر محفوظ / وحدة' : 'FIFO or last saved price / unit', render: (m) => { const cost = currentPrices[m.id] ?? null; return cost === null ? '-' : formatNumber(cost, 6); } },
     { key: 'is_active', header: t('status'), render: (m) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-subtle dark:text-ui-subtle'}`}>{m.is_active ? t('active') : t('inactive')}</span> },
     { key: 'actions', header: t('actions'), render: (m) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
       {can('raw_materials.manage') && <button onClick={() => openEdit(m)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>}
@@ -219,7 +219,7 @@ export function RawMaterialsPage() {
     { key: 'material', header: t('rawMaterial'), render: (i) => <div><p>{i.raw_material?.name || '-'}</p><p className="text-xs text-ui-subtle">{unitLabel(i.raw_material?.unit_id)}</p></div> },
     { key: 'branch', header: t('branch'), render: (i) => branchLabel(i.branch_id) },
     { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(Number(i.quantity), unitForMaterial(i.raw_material), { lang })}</span> },
-    { key: 'latest_price', header: isAr ? 'آخر سعر معروف / وحدة' : 'Latest known price / unit', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(currentPrices[i.raw_material_id]!, 6) },
+    { key: 'latest_price', header: isAr ? 'تكلفة FIFO أو آخر سعر محفوظ / وحدة' : 'FIFO or last saved price / unit', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(currentPrices[i.raw_material_id]!, 6) },
     { key: 'avg_cost', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (i) => rawFifoCost(i) === null ? '-' : formatNumber(Number(i.avg_cost), 2) },
     { key: 'actions', header: t('actions'), render: (i) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('raw_materials.manage') && <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}><Edit2 className="w-4 h-4" /></button>}</div> },
   ];

@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Category, InventoryUnit } from '@/lib/types';
 
@@ -26,7 +26,7 @@ export async function loadProductSetupChoices(branchId: string): Promise<{
       .eq('branch_id', branchId)
       .eq('is_active', true)
       .order('name'),
-    loadRawCurrentPrices(branchId),
+    loadRawMaterialDisplayPrices(branchId),
   ]);
 
   const costs = rawCurrentPriceMap(prices);

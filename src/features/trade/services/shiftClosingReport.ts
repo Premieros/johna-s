@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { formatCurrency, formatDateTime, escapeHtml } from '@/lib/format';
 import type { Language } from '@/lib/types';
@@ -228,7 +228,7 @@ export async function fetchShiftClosingDetails(shiftId: string, branchId?: strin
   if (productMap.size > 0 && effectiveBranchId) {
     const productIds = Array.from(productMap.keys()).filter((id) => id !== 'unknown');
     if (productIds.length > 0) {
-      const currentPrices = rawCurrentPriceMap(await loadRawCurrentPrices(effectiveBranchId));
+      const currentPrices = rawCurrentPriceMap(await loadRawMaterialDisplayPrices(effectiveBranchId));
       const { data: recipes } = await supabase
         .from('recipes')
         .select('product_id, yield_quantity, recipe_items(raw_material_id, quantity, wastage_percent, raw_material:raw_materials(name, unit_id, default_cost, unit:units(name, name_en, symbol)))')

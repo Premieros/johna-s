@@ -10,7 +10,7 @@ describe('UI and production database drift guards', () => {
     const recipeData = read('src/features/manufacturing/services/recipeData.ts');
     expect(recipeData).not.toContain(".eq('product_type', 'manufactured')");
     expect(recipeData).toContain("productQuery = productQuery.eq('branch_id', branchId)");
-    expect(recipeData).toContain('loadRawCurrentPrices(branchId)');
+    expect(recipeData).toContain('loadRawMaterialDisplayPrices(branchId)');
     expect(source).toContain('materialCosts[item.raw_material_id]');
   });
 

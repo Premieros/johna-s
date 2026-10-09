@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Supplier, Warehouse } from '@/lib/types';
 
@@ -48,7 +48,7 @@ export async function loadRawMaterialReorderRows(branchId: string): Promise<RawM
   const [result, prices] = await Promise.all([supabase
     .from('raw_material_inventory')
     .select('raw_material_id, quantity, min_stock, avg_cost, raw_material:raw_materials(id, name, code, min_stock, default_cost, is_active, unit:units(name))')
-    .eq('branch_id', branchId), loadRawCurrentPrices(branchId)]);
+    .eq('branch_id', branchId), loadRawMaterialDisplayPrices(branchId)]);
   if (result.error) throw result.error;
   const costs = rawCurrentPriceMap(prices);
   return ((result.data || []) as unknown as RawMaterialReorderRow[]).map(row => ({ ...row, latest_cost: costs[row.raw_material_id] ?? null }));

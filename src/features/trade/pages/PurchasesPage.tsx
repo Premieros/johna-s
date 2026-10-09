@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { convertPurchaseUnitPrice } from '../services/purchasePriceUnits';
 import { useEffect, useState, useMemo } from 'react';
 import { Plus, Trash2, Eye, Download, Send, Check, X, PackageOpen, RotateCcw, Edit2 } from 'lucide-react';
@@ -426,8 +426,8 @@ export function PurchasesPage() {
 
   async function refreshRawPrices() {
     try {
-      const prices = rawCurrentPriceMap(await loadRawCurrentPrices(branchFilter || null));
-      setRawMaterials(current => current.map(raw => branchFilter && raw.branch_id !== branchFilter ? raw : ({ ...raw, default_cost: prices[raw.id] ?? 0 })));
+      const prices = rawCurrentPriceMap(await loadRawMaterialDisplayPrices(branchFilter || null));
+      setRawMaterials(current => current.map(raw => branchFilter && raw.branch_id !== branchFilter ? raw : ({ ...raw, default_cost: prices[raw.id] ?? raw.default_cost })));
     } catch (error) {
       show(error instanceof Error ? error.message : String(error), 'error');
     }

@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import { ImportExportEntity, ExportFilters, ExportFormat } from './types';
 import { ENTITY_CONFIGS } from './entity-configs';
@@ -122,7 +122,7 @@ export class ExportService {
       }
 
       case 'components': {
-        const currentPrices = rawCurrentPriceMap(await loadRawCurrentPrices(filters.branchId || null));
+        const currentPrices = rawCurrentPriceMap(await loadRawMaterialDisplayPrices(filters.branchId || null));
         let query = supabase.from('raw_materials').select('*');
         if (filters.branchId) query = query.eq('branch_id', filters.branchId);
         if (filters.status === 'active') query = query.eq('is_active', true);

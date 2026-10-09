@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Branch, Product, RawMaterial, Recipe, RecipeItem, RecipeItemInput, Unit } from '@/lib/types';
 
@@ -48,7 +48,7 @@ export async function loadRecipeComponents(branchId: string): Promise<{
 }> {
   const [materialsResult, priceRows, manufacturedResult] = await Promise.all([
     supabase.from('raw_materials').select('*').eq('is_active', true).eq('branch_id', branchId).order('name'),
-    loadRawCurrentPrices(branchId),
+    loadRawMaterialDisplayPrices(branchId),
     supabase.from('inventory_units').select('id,name,branch_id,cost_price').eq('branch_id', branchId).eq('unit_type', 'manufactured').eq('is_active', true).order('name'),
   ]);
 

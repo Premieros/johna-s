@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Product, RawMaterial, Supplier, Warehouse } from '@/lib/types';
 
@@ -35,7 +35,7 @@ export async function fetchPurchaseMeta(branchId?: string | null): Promise<Purch
     rawMaterialQuery,
     warehouseQuery,
     supabase.from('measurement_units').select('id,name,symbol').eq('is_active', true).order('name'),
-    loadRawCurrentPrices(branchId || null),
+    loadRawMaterialDisplayPrices(branchId || null),
   ]);
 
   const error = suppliersRes.error || productsRes.error || rawMaterialsRes.error || warehousesRes.error || unitsRes.error;
