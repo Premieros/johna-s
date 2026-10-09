@@ -83,4 +83,19 @@ describe('station sales accounting', () => {
     expect(row.estimatedCost).toBe(50);
   });
 
+  it('estimates from saved component quantities without any actual FIFO ledger read', () => {
+    const s = sale([item('food', 100, 'kitchen')]);
+    const events = [{ id: 'e', settled_sale_id: 'sale', order_item_id: 'food', sent_quantity: 1, voided_quantity: 0, total_cost: 999,
+      component_snapshot: [{ raw_material_id: 'flour', quantity: 2 }] }];
+    const row = buildStationSalesLines([s], {}, 'en', events, { flour: 15 }, [], false)[0];
+    expect(row.estimatedCost).toBe(30);
+    expect(row.knownEstimatedCost).toBe(30);
+    expect(row.cost).toBeNull();
+    const unknown = buildStationSalesLines([s], {}, 'en', events, {}, [], false)[0];
+    expect(unknown.cost).toBeNull();
+    expect(unknown.estimatedCost).toBeNull();
+    expect(unknown.knownEstimatedCost).toBeNull();
+    expect(unknown.unpricedMaterials).toEqual(['flour']);
+  });
+
 });
