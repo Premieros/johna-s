@@ -1,4 +1,4 @@
-import { loadRawCurrentPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
+import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { ValidationContext } from './validation-engine';
 
@@ -29,7 +29,7 @@ export async function loadImportExportValidationContext(
     Promise.resolve(supabase.from('warehouses').select('*')).catch(() => ({ data: [], error: null })),
     Promise.resolve(supabase.from('branches').select('*')).catch(() => ({ data: [], error: null })),
     Promise.resolve(supabase.from('users').select('*')).catch(() => ({ data: [], error: null })),
-    loadRawCurrentPrices(scope.branchId || null),
+    loadRawMaterialDisplayPrices(scope.branchId || null),
   ]);
 
   const isSuperAdmin = scope.role === 'super_admin';
