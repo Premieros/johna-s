@@ -18,6 +18,9 @@ State: **IN DEVELOPMENT**. Latest user-approved rule: operational sale cost is q
 ## Baseline
 The reporting projection printed 'غير مكتملة' when some components lacked prices, even though the priced-components portion was already calculated and available.
 
+## Change ledger
+- 2026-10-09: Diagnosed exact-head Verify main failure: mandatory active worklog contract requires this heading; corrected documentation only. No SQL or operational data changes.
+
 ## Root-cause ledger
 - The display used estimatedCost as the only source for the current-price cost column.
 - knownEstimatedCost was calculated separately but not used as the visible fallback.
