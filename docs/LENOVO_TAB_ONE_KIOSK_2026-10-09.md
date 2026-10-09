@@ -28,12 +28,16 @@ An ordinary browser shortcut, PWA, or Android WebView without Device Owner does 
 - Wi-Fi button opens Android `Settings.Panel.ACTION_WIFI`; long press requests manager PIN, PBKDF2 hash in app-private preferences; manager may unlock.
 - GitHub workflow builds a **DEBUG TEST APK ONLY**; production installation needs a stable release keystore, stored outside repository.
 - Navigation policy unit test exercises URL origin/path protection.
-- GitHub build runner's deprecated `setup-android` step used a removed `tools` SDK package; revised to runner SDK tools.
+- GitHub build runner's deprecated `setup-android` step used a removed `tools` SDK package; revised to install `platform-tools` explicitly.
+- User connected exact Lenovo Tab One **TB305FU** with ADB; device reports **Android 15**.
+- After successful Android APK builds (run 37949973343) and full Verify main (run 37949974457), discovered that the initial debug APK only displayed a Device Owner provisioning warning and could not preview the website.
+- Adjusted **DEBUG builds only** to show a clearly marked unlocked Johnas WebView preview; release builds still refuse app use until Device Owner onboarding. This is an integration/usability correction, not a relaxation of the production kiosk gate.
+
 
 ## Verification ledger
 - Initial Android APK workflow failed during SDK bootstrap, before Kotlin compilation; SDK setup action replaced.
 - PR Verify main initially failed because the worklog declared an earlier active branch. Correcting plan and this log.
-- Android APK compilation, Device Owner provisioning, Wi-Fi system panel, boot, printing, downloads and real device tests have **not** yet passed or been claimed.
+- Android APK compilation and Kotlin navigation tests succeeded at pre-preview commit `52852b86`. **Latest preview change requires a new exact-head APK and Verify-main check.** Device Owner provisioning, Wi-Fi system panel, boot, printing, downloads and hands-on tablet tests have **not** passed or been claimed.
 - Production website/SQL untouched.
 
 ## Production gate
