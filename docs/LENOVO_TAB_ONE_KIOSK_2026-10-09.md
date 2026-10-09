@@ -46,11 +46,18 @@ An ordinary browser shortcut, PWA, or Android WebView without Device Owner does 
 - Same local-keystore signing is mandatory for update (`adb install -r`); do NOT uninstall the existing Device Owner.
 - Production website/SQL untouched.
 
+## Lenovo Tab One V2 real-device acceptance — user-reported 2026-10-09
+- Exact pre-documentation Android APK build run `37963931099` and Verify main run `37963931334` succeeded at commit `201bd790`. Documentation-only commits require fresh exact-head CI before merge.
+- User aligned and locally signed V2 with the SAME permanent PKCS12 certificate (v3 signature verified, SHA-256 `dbbda122bb839b5c6494fdc5fdb984aaf175d8579fb4e7f402bc49e324d16496` matched the original). Initial wrong keystore password was corrected locally; no secrets were shared.
+- User reported V2 working on the enrolled Lenovo Tab One: manager long-press/PIN opened maintenance, Wi-Fi Settings worked, and manager returned to Johnas and re-locked.
+- User then ran `adb reboot` and explicitly confirmed Johnas opened automatically after device restart. This validates AUTO-LAUNCH after reboot on their hardware. It does **not**, by itself, separately prove Home/Recents cannot escape after reboot; ask for that final lockdown test if required.
+- Ordinary employee short-tap Wi-Fi inside Lock Task remained blocked by Android 15 on this device; **operator Wi-Fi-only access without manager PIN is unresolved**. Manager maintenance temporarily lifts Lock Task and must not be represented as a restricted employee Wi-Fi panel.
+
 ## Production gate
-State: **BLOCKED**: require exact-head CI + locally signed v2 release APK + Lenovo Tab One manager maintenance and re-lock tests + strict Wi-Fi-only operator solution before asserting all original requirements satisfied. PR merge and production distribution still require explicit approval. Never enroll with ephemeral GitHub CI debug signing certificate.
+State: **BASIC DEVICE OWNER KIOSK SMOKE TEST PASSED; STAFF WI-FI-ONLY REQUIREMENT OPEN.** User confirmed V2 manager Wi-Fi maintenance/re-lock and auto-start on reboot. Confirm post-reboot Home/Recents lock separately and implement/test restricted staff Wi-Fi if still required. PR merge and production distribution still require exact-head CI and explicit approval. Never enroll with ephemeral GitHub CI debug signing certificate.
 
 ## Mandatory update protocol
 Reconcile latest `main` and PR head before merge; keep `docs/CURRENT_WORK_PLAN.md` and this mandatory log synchronized. No merge without successful verification and explicit permission. No production SQL changes.
 
 ## Next action
-Check exact-head APK CI; provide the new unsigned RELEASE artifact to user, locally align/sign/verify with existing PKCS12 key, and update using `adb install -r` WITHOUT uninstall. Test PIN manager maintenance Wi-Fi and manual re-lock on the live Lenovo Tab One. Staff Wi-Fi-only networking remains a separate blocked acceptance gate; never whitelist all Settings while locked. Verify Wi-Fi panel cannot open arbitrary Settings before declaring the kiosk locked.
+User should verify Home/Recents cannot escape the app **after reboot**. Keep secure encrypted/off-device backup of signing PKCS12 key and password. If original scope still requires ordinary staff changing Wi-Fi without manager PIN, design and test a restricted Android 15-safe network workflow (do not allowlist unrestricted Settings). Keep PR #483 draft until exact-head CI and explicit merge approval. No factory reset/uninstall of Device Owner app.
