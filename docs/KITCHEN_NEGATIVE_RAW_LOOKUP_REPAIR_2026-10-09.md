@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/kitchen-raw-negative-batch-lookup-20261009`
-Current PR: #TBD
+Current PR: #485
 Last updated: 2026-10-09
 
 ## Work status
