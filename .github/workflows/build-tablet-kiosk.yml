@@ -25,8 +25,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # Ubuntu GitHub runners already contain Android cmdline-tools. The older
-      # setup-android action invokes the removed SDK 'tools' package and fails.
+      # The action defaults to obsolete package "tools"; install only platform-tools.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
       - name: Install Android SDK platform
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
