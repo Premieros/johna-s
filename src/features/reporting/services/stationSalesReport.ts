@@ -48,8 +48,8 @@ function allocate(amount: number, weights: number[]): number[] {
   return allocated.map(value => value / 100);
 }
 
-export function buildStationSalesLines(sales: StationSale[], filters: ReportFilters, lang: 'ar' | 'en', costs: CostEvent[] = [], currentPrices: Record<string, number | null> = {}, ledger: CostLedgerLine[] = []): StationLine[] {
-  const costMap = new Map<string, { quantity: number; cost: number; complete: boolean; estimate: number; estimateAvailable: boolean; missing: Set<string> }>();
+export function buildStationSalesLines(sales: StationSale[], filters: ReportFilters, lang: 'ar' | 'en', costs: CostEvent[] = [], currentPrices: Record<string, number | null> = {}, ledger: CostLedgerLine[] = [], calculateActual = true): StationLine[] {
+  const costMap = new Map<string, { quantity: number; cost: number; complete: boolean; estimate: number; estimateAvailable: boolean; missing: Set<string>; pricedComponents: number }>();
   const ledgerMap = new Map<string, CostLedgerLine[]>();
   for (const row of ledger) {
     const rows = ledgerMap.get(row.reference_id) || [];
@@ -57,12 +57,12 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
   }
   for (const event of costs) {
     const key = `${event.settled_sale_id}:${event.order_item_id}`;
-    const previous = costMap.get(key) || { quantity: 0, cost: 0, complete: true, estimate: 0, estimateAvailable: true, missing: new Set<string>() };
+    const previous = costMap.get(key) || { quantity: 0, cost: 0, complete: true, estimate: 0, estimateAvailable: true, missing: new Set<string>(), pricedComponents: 0 };
     // event total_cost is the original send snapshot; voided units restore that cost proportionally.
     const quantity = Math.max(0, n(event.sent_quantity) - n(event.voided_quantity));
     if (quantity === 0) continue;
     const snapshot = event.component_snapshot || [];
-    const movements = (ledgerMap.get(event.id) || []).filter(row => n(row.quantity) < 0);
+    const movements = calculateActual ? (ledgerMap.get(event.id) || []).filter(row => n(row.quantity) < 0) : [];
     const expected = new Map<string, number>();
     for (const component of snapshot) expected.set(component.raw_material_id, (expected.get(component.raw_material_id) || 0) + n(component.quantity));
     const actual = new Map<string, number>();
@@ -72,7 +72,7 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
       movementCost += Math.abs(n(movement.total_cost));
     }
     // Missing RLS-visible movement coverage and unpriced negative debt are incomplete.
-    previous.complete &&= snapshot.length > 0 && expected.size === actual.size
+    previous.complete &&= calculateActual && snapshot.length > 0 && expected.size === actual.size
       && [...expected].every(([id, qty]) => qty > 0 && Math.abs(qty - (actual.get(id) || 0)) < 0.000001)
       && movements.every(row => Math.abs(n(row.total_cost)) > 0 && !row.batch_number?.startsWith('OV-'))
       && Math.abs(movementCost - n(event.total_cost)) < 0.0001;
@@ -82,6 +82,7 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
       if (price == null || !Number.isFinite(price) || price <= 0 || n(component.quantity) <= 0) {
         previous.missing.add(component.raw_name || component.raw_material_id);
       } else {
+        previous.pricedComponents++;
         previous.estimate += n(component.quantity) * price * quantity / n(event.sent_quantity);
       }
     }
@@ -118,7 +119,7 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
         netQuantity,
         cost: exactCost && costSource.complete && n(item.quantity) > 0 ? costSource.cost * netQuantity / n(item.quantity) : null,
         estimatedCost: exactCost && costSource.estimateAvailable && !costSource.missing.size && n(item.quantity) > 0 ? costSource.estimate * netQuantity / n(item.quantity) : null,
-        knownEstimatedCost: exactCost && costSource.estimateAvailable && n(item.quantity) > 0 ? costSource.estimate * netQuantity / n(item.quantity) : null,
+        knownEstimatedCost: exactCost && costSource.estimateAvailable && costSource.pricedComponents > 0 && n(item.quantity) > 0 ? costSource.estimate * netQuantity / n(item.quantity) : null,
         unpricedMaterials: costSource ? [...costSource.missing].sort() : [],
       };
     });
@@ -127,7 +128,7 @@ export function buildStationSalesLines(sales: StationSale[], filters: ReportFilt
     && (!filters.product || line.item.product_id === filters.product));
 }
 
-export async function loadStationSalesLines(args: { branchId: string | null; from: string; to: string; fromTs: string; toExclusiveTs: string; filters: ReportFilters; lang: 'ar' | 'en'; includeCost: boolean; signal?: AbortSignal }): Promise<StationLine[]> {
+export async function loadStationSalesLines(args: { branchId: string | null; from: string; to: string; fromTs: string; toExclusiveTs: string; filters: ReportFilters; lang: 'ar' | 'en'; includeCost: boolean; costMode?: 'estimated' | 'actual'; signal?: AbortSignal }): Promise<StationLine[]> {
   // Canonical invoice scope and bounded whole-invoice items; allocation precedes line filters.
   const sales = await loadSalesReportRows({ ...args, includeItems: true, settledOnly: true }) as unknown as StationSale[];
   if (sales.some(sale => !sale.items?.length || sale.items.length > 5000)) throw new Error('STATION_REPORT_INCOMPLETE_ITEMS');
@@ -140,6 +141,8 @@ export async function loadStationSalesLines(args: { branchId: string | null; fro
       events.push(...await fetchAllReportRows(costQuery as unknown as RangePageQuery<CostEvent>, 1000, args.signal, MAX_REPORT_SOURCE_ROWS - events.length));
     }
   }
+  // Actual movement verification is an explicit, expensive operation; default reports only reprice saved component quantities.
+  const calculateActual = args.includeCost && args.costMode === 'actual';
   const ledger: CostLedgerLine[] = [];
   let prices: Record<string, number | null> = {};
   if (args.includeCost && events.length) {
@@ -148,15 +151,17 @@ export async function loadStationSalesLines(args: { branchId: string | null; fro
     args.signal?.throwIfAborted();
     prices = rawCurrentPriceMap(await loadRawMaterialDisplayPrices(args.branchId, rawIds));
     args.signal?.throwIfAborted();
-    const eventIds = events.map(event => event.id);
-    for (let i = 0; i < eventIds.length; i += 100) {
+    if (calculateActual) {
+      const eventIds = events.map(event => event.id);
+      for (let i = 0; i < eventIds.length; i += 100) {
       let ledgerQuery = supabase.from('inventory_ledger')
         .select('reference_id,raw_material_id,quantity,total_cost,batch_number')
         .eq('reference_type', 'kitchen_send').lt('quantity', 0)
         .in('reference_id', eventIds.slice(i, i + 100)).order('id');
       if (args.branchId) ledgerQuery = ledgerQuery.eq('branch_id', args.branchId);
-      ledger.push(...await fetchAllReportRows(ledgerQuery as unknown as RangePageQuery<CostLedgerLine>, 1000, args.signal, MAX_REPORT_SOURCE_ROWS - ledger.length));
+        ledger.push(...await fetchAllReportRows(ledgerQuery as unknown as RangePageQuery<CostLedgerLine>, 1000, args.signal, MAX_REPORT_SOURCE_ROWS - ledger.length));
+      }
     }
   }
-  return buildStationSalesLines(sales, args.filters, args.lang, events, prices, ledger);
+  return buildStationSalesLines(sales, args.filters, args.lang, events, prices, ledger, calculateActual);
 }
