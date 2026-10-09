@@ -355,6 +355,7 @@ export function CostingCenterPage() {
   };
 
   const rawPriceSourceLabel = (source: RawMaterialPriceSource | string) => {
+    if (source === 'fifo') return isAr ? 'تكلفة FIFO' : 'FIFO cost';
     if (source === 'purchase') return isAr ? 'مشتريات' : 'Purchase';
     if (source === 'stock_count') return isAr ? 'جرد' : 'Stock count';
     if (source === 'pricing') return isAr ? 'تسعير' : 'Pricing';
@@ -408,7 +409,7 @@ export function CostingCenterPage() {
   const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string; fifo_cost?: number | null; current_price?: number | null }>[] = [
     { key: 'raw', header: t('rawMaterial'), render: (r) => <div><p className="font-semibold text-ui-text">{r.raw_material_name}</p><p className="text-xs text-ui-subtle">{r.raw_material_code || '-'}</p></div> },
     { key: 'stock', header: isAr ? 'الرصيد' : 'Stock', render: (r) => <span className={`font-semibold ${Number(r.stock_quantity) < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(r.stock_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang })}</span> },
-    { key: 'current_price', header: isAr ? 'آخر سعر معروف / وحدة' : 'Latest known price / unit', render: (r) => r.current_price == null ? '-' : rawUnitMoney(r.current_price) },
+    { key: 'current_price', header: isAr ? 'تكلفة FIFO أو آخر سعر محفوظ / وحدة' : 'FIFO or last saved price / unit', render: (r) => r.current_price == null ? '-' : rawUnitMoney(r.current_price) },
     { key: 'fifo', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (r) => r.fifo_cost == null ? '-' : rawUnitMoney(r.fifo_cost) },
     { key: 'latest', header: isAr ? 'آخر سعر مرجعي / وحدة' : 'Latest reference / unit', render: (r) => <div><span className="font-bold text-ui-text">{rawUnitMoney(r.latest_cost)}</span>{rawUnitLabel(r.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(r.raw_material_id)}</p>}</div> },
     { key: 'actualValue', header: isAr ? 'القيمة الفعلية' : 'Actual value', render: (r) => <div><span className="font-bold text-ui-text">{money(r.actual_stock_value)}</span><p className="text-[10px] text-ui-subtle">{isAr ? 'المخزون الموجب فقط' : 'Positive stock only'}</p></div> },
