@@ -5,8 +5,8 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `44c9d627`
-- Current active branch: `hotfix/pos-negative-stock-client-guard-20261009`
-- Mandatory active work log: `docs/POS_NEGATIVE_STOCK_HOTFIX_2026-10-09.md`
+- Current active branch: `fix/kitchen-raw-negative-batch-lookup-20261009`
+- Mandatory active work log: `docs/KITCHEN_NEGATIVE_RAW_LOOKUP_REPAIR_2026-10-09.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
