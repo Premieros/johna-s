@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `7df65dd0`
-- Current active branch: `fix/raw-material-cogs-main-sync-20261009`
-- Mandatory active work log: `docs/RAW_MATERIAL_COGS_ACCOUNTING_2026-10-04.md`
+- Latest main baseline reconciled: `1e74391a`
+- Current active branch: `fix/raw-fifo-price-source-20261009`
+- Mandatory active work log: `docs/RAW_FIFO_PRICE_SOURCE_2026-10-09.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
@@ -18,7 +18,13 @@
 - Preserve Permission-First, branch isolation, Financial Visibility and live operations.
 
 ## Current objective
-Reconcile unfinished restaurant COGS accounting PR #445 against the latest deployed main using a fresh branch. Preserve inventory/refund/FIFO account lineage, execute exact-head full verification, and keep Production migration separately gated. Prior reporting PR #478 was merged and its post-merge verification and GitHub Pages deployment passed.
+Unify raw material price reads across pages and reports: positive recorded FIFO unit cost first, otherwise the last known positive historical saved price. Never assign a value to an unpriced material. Preserve actual FIFO inventory valuations and existing accounting logic.
+
+## FIFO source reconciliation — 2026-10-09
+- Active branch: `fix/raw-fifo-price-source-20261009`.
+- The changes are read-only frontend data source changes with isolated tests.
+- Mandatory log `docs/RAW_FIFO_PRICE_SOURCE_2026-10-09.md`.
+- No new production SQL migration is included.
 
 ## Accounting reconciliation — 2026-10-09
 - Source PR: #445, historical branch diverged and merge-conflicted.
