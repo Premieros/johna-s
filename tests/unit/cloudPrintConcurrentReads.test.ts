@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   const requests: Array<{ branchId: string; limit: number }> = [];
+  let notifyAuthChange: (() => void) | undefined;
   let pending: Array<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void }> = [];
   const from = vi.fn(() => ({
     select: () => ({
@@ -15,11 +16,11 @@ const mocks = vi.hoisted(() => {
       }),
     }),
   }));
-  return { requests, from, get pending() { return pending; }, reset: () => { requests.length = 0; pending = []; from.mockClear(); } };
+  return { requests, from, get pending() { return pending; }, onAuthStateChange: vi.fn((callback: () => void) => { notifyAuthChange = callback; return { data: { subscription: { unsubscribe: vi.fn() } } }; }), authChanged: () => notifyAuthChange?.(), reset: () => { requests.length = 0; pending = []; from.mockClear(); notifyAuthChange?.(); } };
 });
 
 vi.mock('@/api', () => ({
-  supabase: { from: mocks.from },
+  supabase: { from: mocks.from, auth: { onAuthStateChange: mocks.onAuthStateChange } },
   pos: {},
   shifts: {},
 }));
@@ -57,6 +58,19 @@ describe('cloud print list concurrent read capacity', () => {
     expect(mocks.requests).toHaveLength(3);
     mocks.pending.forEach((request) => request.resolve({ data: [], error: null }));
     await Promise.all([first, second, third]);
+  });
+
+
+  it('does not reuse an in-flight queue response across authentication changes', async () => {
+    const previousUser = listCloudPrintQueue('branch-a', 100);
+    mocks.authChanged();
+    const nextUser = listCloudPrintQueue('branch-a', 100);
+    expect(mocks.requests).toHaveLength(2);
+    expect(previousUser).not.toBe(nextUser);
+    mocks.pending[0].resolve({ data: [{ id: 'previous-user-job' }], error: null });
+    mocks.pending[1].resolve({ data: [{ id: 'next-user-job' }], error: null });
+    expect(await previousUser).toEqual([{ id: 'previous-user-job' }]);
+    expect(await nextUser).toEqual([{ id: 'next-user-job' }]);
   });
 
   it('does not cache failure; next caller retries database', async () => {
