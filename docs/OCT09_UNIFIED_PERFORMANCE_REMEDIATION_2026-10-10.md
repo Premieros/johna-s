@@ -78,3 +78,8 @@ The existing BEFORE INSERT trigger invokes price resolution per qualifying kitch
 
 ## Delivery state
 Investigation + dependency mapping only. No executable change, tests or production migration claimed.
+## Latest focused investigation — 2026-10-10
+- Production `_raw_last_known_fifo_cost` performs up to three recency lookups (negative FIFO issue, latest receipt ledger, latest real batch), then a default price fallback. Inventory ledger only has isolated raw-id and warehouse indexes and branch/created-time index; the sampled empty-identifier EXPLAIN chose `idx_inventory_ledger_warehouse_id` and a sort. It is not a measured real-key baseline.
+- Added `scripts/diagnostics/oct09_fifo_cost_readonly.sql` to gather read-only inventory ledger indexes and statement counters on a controlled diagnostic environment. No changes to production function, indexes or data.
+- Exact-head Full Verify run 38044573460 green on commit 9b21ed75 (verify, DB, pages-continuity, browser). Subsequent documentation/diagnostics changes require new exact-head CI.
+- Blocking: representative safe latency comparison before index migration, DB-atomic price batching and parity fixtures, unresolved Oct 9 FIFO/refund/printing query timeouts.
