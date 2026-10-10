@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `44c9d627`
-- Current active branch: `hotfix/pos-negative-stock-client-guard-20261009`
-- Mandatory active work log: `docs/POS_NEGATIVE_STOCK_HOTFIX_2026-10-09.md`
+- Latest main baseline reconciled: `3e242054`
+- Current active branch: `fix/oct09-kitchen-payment-performance-20261010`
+- Mandatory active work log: `docs/OCT09_UNIFIED_PERFORMANCE_REMEDIATION_2026-10-10.md`
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
