@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Regression guard for #487 until a benchmarked DB-atomic batching replacement exists.
 // Static checks are *not* a substitute for fresh-DB permission/stock/printing tests.
 const kitchenMigration = readFileSync(
-  new URL('../../supabase/migrations/20261009143000_kitchen_sale_known_price_snapshot.sql', import.meta.url),
+  'supabase/migrations/20261009143000_kitchen_sale_known_price_snapshot.sql',
   'utf8',
 );
 
