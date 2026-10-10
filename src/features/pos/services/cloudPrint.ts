@@ -181,7 +181,7 @@ const activeQueueReads = new Map<string, Promise<CloudPrintQueueRow[]>>();
 
 // Never reuse an in-flight financial/printing read across sign-in, sign-out or
 // refreshed authentication context. Existing callers keep their original promise.
-supabase.auth.onAuthStateChange(() => {
+supabase.auth?.onAuthStateChange?.(() => {
   activeQueueReads.clear();
 });
 
