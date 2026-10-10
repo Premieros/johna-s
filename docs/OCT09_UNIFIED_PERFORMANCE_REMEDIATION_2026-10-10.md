@@ -1,5 +1,43 @@
 # October 9 production incident — unified remediation work log (DRAFT / NOT DEPLOYED)
 
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `fix/oct09-kitchen-payment-performance-20261010`
+Current PR: `#487`
+Last updated: 2026-10-10 12:33 Africa/Cairo
+
+## Work status
+State: **BLOCKED**. Draft PR only; exact-head verify, database parity, performance regression and explicit production approval required.
+
+## Guardrails
+No direct main edits, no live migration, no printing or stock accounting changes without isolated tests; retain permission-first, FIFO and branch isolation.
+
+## Baseline
+main at 3e242054, production October 9 error evidence in issue #486. PR #482 trigger active in production.
+
+## Root-cause ledger
+Investigations and uncertainty appear in Evidence below. 57014 timeouts have multiple contexts, not a single proved culprit.
+
+## Change ledger
+- `eb26074d` shared only concurrent identical listCloudPrintQueue reads; no response cache and no print dispatch change.
+- `6e9d6d42` added cloud queue concurrency tests.
+- `30ce10b7` added static send-time price-snapshot contract tests.
+- `a90ff90f` aligned active work plan pointer, and this update repairs structural CI gate.
+- No database SQL modified.
+
+## Verification ledger
+Prior run 38043888489 failed active-worklog branch mismatch. Run 38044214412 failed missing required headings and metadata. No other suite had run because the gate stopped it. Tests must run on exact next head.
+
+## Production gate
+Separate explicit production approval required after complete exact-head CI and benchmarked DB implementation; no live change authorized by this draft.
+
+## Next action
+Run exact-head Full Verify; fix test failures; implement safe DB price batching with source/authorization parity, then verify remaining FIFO and print-read timeouts.
+
+## Mandatory update protocol
+On every change, append verified commit, test evidence, impact assessment, and remaining blockers to this worklog; no assumption of successful deployment.
+
+
 Repository: Premieros/johna-s
 Production: azzdesuowpdcoflmyezn
 Base: main
