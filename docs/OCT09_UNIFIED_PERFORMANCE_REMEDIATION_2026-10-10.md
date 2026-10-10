@@ -89,3 +89,8 @@ Investigation + dependency mapping only. No executable change, tests or producti
 - Staged *UNAPPLIED* `scripts/experiments/oct09_fifo_issue_index_candidate.sql`: concurrent partial covering index matching `_raw_last_known_fifo_cost` negative-issue predicate and its ordering, plus static SQL contract test in `tests/unit/fifoIssueIndexCandidate.test.ts`. This is NOT an authorized migration or production change.
 - Evaluate under representative keys and write load on isolation fixture before promoting to generated migration; account for index insert overhead and `CONCURRENTLY` nontransactional execution.
 - Full Verify 38046468821 on prior head 7e122c7a passed four jobs; latest candidate commits require exact-head rerun.
+
+## FIFO scope distribution, live read-only evidence — 2026-10-10
+- Matching negative real FIFO ledger rows 17,597 across 299 raw-material/branch/warehouse scopes; mean 58.9, p95 191.7, maximum 2,017 rows per scope. These are actual production *counts*, not query latencies or proof of a missing index.
+- `scripts/diagnostics/oct09_fifo_cost_readonly.sql` now includes aggregate-only scope distribution query. Candidate index remains un-applied; safe representative-index plan comparisons and concurrent writer-load tests are still required.
+- Previous exact-head Full Verify 38048248906 at ed285899 green (4/4), branch-agent claim/start/complete unchanged. Subsequent diagnostic commit needs new exact-head CI.
