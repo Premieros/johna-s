@@ -83,3 +83,9 @@ Investigation + dependency mapping only. No executable change, tests or producti
 - Added `scripts/diagnostics/oct09_fifo_cost_readonly.sql` to gather read-only inventory ledger indexes and statement counters on a controlled diagnostic environment. No changes to production function, indexes or data.
 - Exact-head Full Verify run 38044573460 green on commit 9b21ed75 (verify, DB, pages-continuity, browser). Subsequent documentation/diagnostics changes require new exact-head CI.
 - Blocking: representative safe latency comparison before index migration, DB-atomic price batching and parity fixtures, unresolved Oct 9 FIFO/refund/printing query timeouts.
+
+## FIFO index candidate — 2026-10-10
+- Read-only production count: inventory_ledger 35,012 entries; 17,518 records match negative non-oversold positive-cost predicate. Counts do not measure selectivity per material/branch/warehouse.
+- Staged *UNAPPLIED* `scripts/experiments/oct09_fifo_issue_index_candidate.sql`: concurrent partial covering index matching `_raw_last_known_fifo_cost` negative-issue predicate and its ordering, plus static SQL contract test in `tests/unit/fifoIssueIndexCandidate.test.ts`. This is NOT an authorized migration or production change.
+- Evaluate under representative keys and write load on isolation fixture before promoting to generated migration; account for index insert overhead and `CONCURRENTLY` nontransactional execution.
+- Full Verify 38046468821 on prior head 7e122c7a passed four jobs; latest candidate commits require exact-head rerun.
