@@ -179,6 +179,12 @@ export async function enqueueCloudReportPrint(params: { branchId: string; payloa
 // a new poll after claim/print/failure must observe current server state.
 const activeQueueReads = new Map<string, Promise<CloudPrintQueueRow[]>>();
 
+// Never reuse an in-flight financial/printing read across sign-in, sign-out or
+// refreshed authentication context. Existing callers keep their original promise.
+supabase.auth.onAuthStateChange(() => {
+  activeQueueReads.clear();
+});
+
 export function listCloudPrintQueue(branchId: string, limit = 100): Promise<CloudPrintQueueRow[]> {
   const scopedBranchId = safeText(branchId);
   if (!scopedBranchId) return Promise.resolve([]);
