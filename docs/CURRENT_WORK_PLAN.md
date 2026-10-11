@@ -4,9 +4,14 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `44c9d627`
-- Current active branch: `hotfix/pos-negative-stock-client-guard-20261009`
-- Mandatory active work log: `docs/POS_NEGATIVE_STOCK_HOTFIX_2026-10-09.md`
+- Latest main baseline reconciled: `3e242054`
+- Current active branch: `hotfix/kitchen-send-trigger-latency-20261011`
+- Mandatory active work log: `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`
+
+## Emergency production incident — 2026-10-11
+- Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
+- Proposed emergency response: pause ONLY that price-reporting trigger, preserving stock FIFO, order warehouse binding, KDS, printing, financial journals and all historical snapshots. The trade-off is UNKNOWN sale-cost report pricing for newly sent items while paused; do NOT backfill at newer prices.
+- New SQL migration is **NOT APPLIED**. Exact-head CI + separate explicit production approval is mandatory before apply. Verify physical printing/warehouse at both branches after approval; don't claim production fixed before it is verified.
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
