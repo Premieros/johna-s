@@ -97,13 +97,13 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     await client.query(
       `INSERT INTO public.raw_materials
           (id,code,name,branch_id,unit_id,default_cost,is_active)
-       VALUES ($1,$3,'Legacy purchase material',$5,$7,777,true),
-              ($2,$4,'Tie resolution material',$5,$7,777,true)`,
+       VALUES ($1,$3,'Legacy purchase material',$5,$6,777,true),
+              ($2,$4,'Tie resolution material',$5,$6,777,true)`,
       [
         legacyMaterial, tiedMaterial,
         `legacy-${legacyMaterial.slice(0,8)}`,
         `tie-${tiedMaterial.slice(0,8)}`,
-        branchA, branchB, kgStockUnit,
+        branchA, kgStockUnit,
       ],
     );
     for (const [id, raw, branch, price, ref, at] of [
