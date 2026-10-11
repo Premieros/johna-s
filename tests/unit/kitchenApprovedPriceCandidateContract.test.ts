@@ -23,7 +23,7 @@ describe('P0 approved kitchen price optimization draft safety (#486)', () => {
   it('separates installing inactive capture code from separately approved trigger activation', () => {
     expect(stageA).toContain('_kitchen_approved_price_candidate(');
     expect(stageA).toContain('KITCHEN_CAPTURE_TRIGGER_MUST_REMAIN_DISABLED');
-    expect(stageA).toContain('SOURCE_ORDER_SYNC_EXPECTED_ENABLED');
+    expect(stageA).toContain('KITCHEN_SOURCE_SYNC_EXPECTED_ENABLED');
     expect(stageA).not.toMatch(/ALTER TABLE public\.order_kitchen_inventory_events\s+ENABLE TRIGGER/i);
     expect(stageB).toMatch(/ALTER TABLE public\.order_kitchen_inventory_events\s+ENABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
     expect(stageB).toContain('OPTIMIZED_CAPTURE_FUNCTION_NOT_INSTALLED');
