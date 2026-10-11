@@ -8,10 +8,10 @@ Last updated: 2026-10-11
 Issue: #486; independent index investigation #489
 
 ## Work status
-State: **BLOCKED** for Stage B activation — Stage A was explicitly owner-approved and successfully APPLIED to production 2026-10-11, with the capture trigger still disabled.
+State: **BLOCKED** for final live operational/physical print evidence; owner-approved Stage A **and** Stage B are applied to production and both kitchen triggers verified enabled. No synthetic live orders.
 
 ## Guardrails
-**STAGE A APPLIED; STAGE B STILL GATED.** Owner granted full approval 2026-10-11. Stage A installed price lookup and replacement disabled-trigger body into production through Supabase migration `20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011`, preserving trigger `D`, source-sync `O`, no order or FIFO rewrites. Canonical forward-only migration reconciled to exactly the applied production version. Do not create test orders or printer jobs in real stores; activate only after the isolated Stage B lifecycle/permission tests pass.
+**STAGE A + STAGE B APPLIED — PHYSICAL PRINT NOT YET PROVEN.** Owner granted full approval 2026-10-11. Stage A installed price lookup and replacement disabled-trigger body into production through Supabase migration `20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011` (capture `D` at completion). Stage B enabled only the capture trigger after exact-head 4/4 CI green via migration `20261011111235_kitchen_approved_price_stage_b_enable_20261011`. Both capture and source-sync triggers verified `O`. No historical, FIFO, journal or warehouse rewrites. Canonical forward-only migration reconciled to exactly the applied production version. Do not create test orders or printer jobs in real stores; activate only after the isolated Stage B lifecycle/permission tests pass.
 
 Known production state: Supabase migration `20261011063452` already paused only `trg_capture_kitchen_ingredient_prices` (`D`); `trg_sync_sale_source_order_from_kitchen_event` remains enabled (`O`). FIFO deductions, order warehouse pinning, printing, financial postings are independent and untouched.
 
@@ -48,6 +48,10 @@ Baseline main: `3cb08d52b028e393ecbfd46409afd8a8292ac278` after #488 + #490.
 - Earlier exact-head CI #491 `38130925606` was 4/4 green, 990 DB tests including 14 kitchen-price cases; local-CI synthetic paired EXPLAIN median 5.858ms canonical vs 1.707ms candidate, p95 6.912ms vs 1.837ms (9 samples, NOT production latency).
 - After explicit owner approval, stage A production apply migration `20261011105541` succeeded; tested trigger flags and reader ACL separately.
 - Stage B exact staging lifecycle CI currently running under newer PR head. No operational test orders or printers on production.
+
+- Exact-head CI `38133988775` completed all four jobs Green including isolated `kitchen_sends` real first-send/re-send/new price/void lifecycle, and 991 DB integration tests; Stage B production apply followed under owner's full approval.
+- Direct production post-apply read-only check: capture trigger `O`, source-sync `O`; migration `20261011111235` recorded. First organic captured event has one approved purchase price and one unknown NULL with no `lookup_failed` status.
+- The canonical Stage B migration is now included, and branch integration fixture baselines were adjusted to avoid assuming production trigger remains disabled. Run final exact-head Full Verify before merge; do not claim physical paper printing is verified.
 
 ## Verification ledger
 - First head CI 38125918065 stopped at mandatory worklog format contract, before executing SQL integration tests. This update corrects the required format; fresh exact-head Full Verify is mandatory.
