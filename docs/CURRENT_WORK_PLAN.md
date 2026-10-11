@@ -30,6 +30,12 @@
 - The exact SQL was recorded in canonical `supabase/migrations/20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011.sql` with matching already-applied production version; do NOT double-apply.
 - Stage B remains a *separate activation step* requiring exact-head CI with **actual isolated** send/resend/void snapshot lifecycle and production parity/guard checks. Do not create live operational test orders, touch FIFO and journals or backfill unknown costs. Emergency disable script prepared.
 
+## Owner-approved kitchen price Stage B — applied 2026-10-11
+- Stage B applied to production Supabase as migration `20261011111235_kitchen_approved_price_stage_b_enable_20261011`, after exact-head Full Verify `38133988775` all 4 jobs green, 991 DB integration tests and isolated first-send/re-send/void Stage B price snapshot rehearsal.
+- Post-apply production read-only proof: `trg_capture_kitchen_ingredient_prices` `O`, `trg_sync_sale_source_order_from_kitchen_event` `O`; candidate function ACL still excludes anon. First real kitchen event since enable froze one approved purchase cost and retained one unknown as NULL; no fake order, historical price backfill, FIFO or accounting change.
+- Canonical `supabase/migrations/20261011111235_kitchen_approved_price_stage_b_enable_20261011.sql` reconciled with **already applied** production version. Never replay an equivalent new migration by another name.
+- Latest CI must be rerun for the exact branch head after canonical Stage B insertion and isolated fixture baseline adjustments; no merge until green. Physical print and real sustained P95 are not proven from unit/DB/browser tests. Emergency disable proposal remains available if latency/error regressions occur.
+
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
 - CI يجب أن يفشل إذا كان السجل الإلزامي مفقودًا أو لا يطابق المسار النشط.
