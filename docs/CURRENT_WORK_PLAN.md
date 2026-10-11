@@ -25,6 +25,11 @@
 - Source ranking preserves approved purchase/pricing/stock-count precedence, financial purchase visibility, branch/RLS scope and dispatch-time cutoff. No FIFO or accounting changes.
 - Follow-up requires full role/as-of parity and production-equivalent benchmark. Separate owner approval for any production DDL/trigger enable; no test orders or printer tests in production.
 
+## Owner-approved kitchen price Stage A — applied 2026-10-11
+- Owner provided full approval for production kitchen approved-price repair. Stage A applied as Supabase migration `20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011`, verified installed helper and adjusted capture function while price capture trigger remains `D` and source-link trigger `O`.
+- The exact SQL was recorded in canonical `supabase/migrations/20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011.sql` with matching already-applied production version; do NOT double-apply.
+- Stage B remains a *separate activation step* requiring exact-head CI with **actual isolated** send/resend/void snapshot lifecycle and production parity/guard checks. Do not create live operational test orders, touch FIFO and journals or backfill unknown costs. Emergency disable script prepared.
+
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
 - CI يجب أن يفشل إذا كان السجل الإلزامي مفقودًا أو لا يطابق المسار النشط.
