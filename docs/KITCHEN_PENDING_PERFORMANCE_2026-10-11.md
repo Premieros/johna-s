@@ -4,7 +4,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Baseline: `main@3e2420543700258c9754a1af7234d4043ff30f0f`
 Branch: `fix/kitchen-fifo-print-warehouse-20261011`
-Current PR: #0 (draft PR number will replace this placeholder)
+Current PR: #490 (draft; awaiting separate production approval)
 Last updated: 2026-10-11
 
 ## Work status
@@ -45,7 +45,7 @@ State: **BLOCKED** — code and migration proposed; production index migration a
 - No old FIFO accounting price, warehouse default flag, branch assignment, receipt history, or cloud print job is rewritten.
 
 ## Next action
-- Open draft PR against current `main` and replace the PR number in this log.
+- Draft PR #490 opened against main; exact-head automatic CI is pending and is NOT a live test of production.
 - Inspect exact-head CI and the differential SQL before proposing a separate authorized production rollout. Avoid further live order tests as requested.
 - Investigate any further warehouse selection UI symptom from logs rather than changing historical order warehouse IDs.
 
