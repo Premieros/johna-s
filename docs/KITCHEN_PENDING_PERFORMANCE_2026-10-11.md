@@ -31,12 +31,14 @@ State: **BLOCKED** — code and migration proposed; production index migration a
 ## Change ledger
 - Proposed forward-only migration `20261011083000_kitchen_fifo_print_lookup_indexes.sql`: branch-keyed `text_pattern_ops` print receipt index, exact-predicate partial newest-known-FIFO issue/receipt indexes, and partial real-batch index. No function, grant, RLS, trigger, journal, order, or inventory data changes.
 - POS warehouse resolver now fails closed when a linked order fetch errors or returns no matching branch row, and when warehouse fetch errors. Valid unsent orders still select deterministic first active/default warehouse and sent orders retain their pinned warehouse.
-- Added source contract test for index SQL target/guardrails and warehouse lookup behavior. No production test orders or print attempts performed.
+- Consolidated the isolated, in-flight-only cloud print queue list-read coalescing from #487 into #490. Keyed by branch and bounded limit, authentication changes clear the map, failures are not cached and enqueue/claim/start/complete jobs are untouched.
+- Added source contract tests for index SQL targets and warehouse lookup plus the previously green #487 concurrent print queue/agent protocol test suite. No production test orders or print attempts performed.
 
 ## Verification ledger
 - Read-only PostgreSQL schema and index check: production `get_open_order_print_state` and `_raw_last_known_fifo_cost` definitions inspected; partial index predicates mirror canonical SELECT filters.
 - Prior real operational test evidence belongs to #488 and Issue #489, not to this un-applied follow-up.
 - Static source review of the POS warehouse resolver confirms that the previous missing-order/error branch could silently fall back.
+- #487 initial CI Full Verify was Green; its queue-read change and relevant 2 test files were ported directly without modifying agent RPCs. Its SQL index suggestion is superseded by the broader, still-unapplied #490 index migration.
 - **Tests paused by user:** no new live order, print, stock mutation or performance load tests. Automatic repository CI is a non-production preflight gate, not a user-operated live smoke test; require exact-head Green before permission to merge.
 
 ## Production gate
@@ -45,7 +47,8 @@ State: **BLOCKED** — code and migration proposed; production index migration a
 - No old FIFO accounting price, warehouse default flag, branch assignment, receipt history, or cloud print job is rewritten.
 
 ## Next action
-- Draft PR #490 opened against main; exact-head automatic CI is pending and is NOT a live test of production.
+- Draft PR #490 opened against main; new exact-head automatic CI is required after consolidating #487 and is NOT a live test of production.
+- Close #487 as superseded only after consolidated #490 exact-head CI passes; retain #488 as separate emergency migration PR already applied to production.
 - Inspect exact-head CI and the differential SQL before proposing a separate authorized production rollout. Avoid further live order tests as requested.
 - Investigate any further warehouse selection UI symptom from logs rather than changing historical order warehouse IDs.
 
