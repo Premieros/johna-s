@@ -434,6 +434,44 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     ]);
   });
 
+
+  it('captures a temporally correct snapshot through a temp-table trigger only', async () => {
+    // No real order or inventory event table is ever written. A temporary
+    // trigger uses the Stage A function created earlier in this transaction.
+    await client.query(
+      "CREATE TEMP TABLE kitchen_price_capture_probe(id uuid,branch_id uuid,created_at timestamptz,snapshot_version integer,component_snapshot jsonb) ON COMMIT DROP",
+    );
+    await client.query(
+      "CREATE TRIGGER price_probe_before_insert BEFORE INSERT ON pg_temp.kitchen_price_capture_probe FOR EACH ROW EXECUTE FUNCTION public._capture_kitchen_ingredient_prices()",
+    );
+    const source=JSON.stringify([
+      {raw_material_id:material,raw_name:'approved',quantity:2},
+      {raw_material_id:noApprovedPrice,raw_name:'unpriced',quantity:1},
+    ]);
+    const read=async(time:Date)=>client.query(
+      "INSERT INTO pg_temp.kitchen_price_capture_probe(id,branch_id,created_at,snapshot_version,component_snapshot) VALUES($1,$2,$3,2,$4::jsonb) RETURNING component_snapshot",
+      [randomUUID(),branchA,time.toISOString(),source],
+    );
+    const historic=(await read(new Date(t1.getTime()+10_000))).rows[0].component_snapshot;
+    expect(historic).toHaveLength(2);
+    expect(Number(historic[0].unit_cost)).toBe(15);
+    expect(Number(historic[0].extended_cost)).toBe(30);
+    expect(historic[0].price_source).toBe('stock_count');
+    expect(historic[1].unit_cost).toBeNull();
+    expect(historic[1].extended_cost).toBeNull();
+    expect(historic[1].price_source).toBe('unpriced');
+    const newer=(await read(asOf)).rows[0].component_snapshot;
+    expect(Number(newer[0].unit_cost)).toBe(20);
+    expect(Number(newer[0].extended_cost)).toBe(40);
+    expect(newer[0].price_source).toBe('pricing');
+    expect(newer[0].quantity).toBe(2);
+    // Historical snapshot cannot change when later events are inserted.
+    const unchanged=await client.query(
+      "SELECT component_snapshot FROM pg_temp.kitchen_price_capture_probe ORDER BY created_at ASC LIMIT 1",
+    );
+    expect(unchanged.rows[0].component_snapshot).toEqual(historic);
+  });
+
   // Local-only workload: transactional synthetic records, never real orders.
   // Matches recent production ledger count (36,581) but NOT source/branch skew.
   it.skipIf(!dbUrl || !/^(localhost|127\\.0\\.0\\.1|::1)$/.test(new URL(dbUrl).hostname))(
