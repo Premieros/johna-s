@@ -2,13 +2,13 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Baseline: `main@3e2420543700258c9754a1af7234d4043ff30f0f`
+Baseline: `main@0f2bd306eb5eb925960b6581d1b40cd1312ecd2f` (emergency #488 merged; applied Supabase migration retained)
 Branch: `fix/kitchen-fifo-print-warehouse-20261011`
-Current PR: #490 (draft; awaiting separate production approval)
+Current PR: #490 (code-only merge authorized after exact-head Full Verify; index rollout separate)
 Last updated: 2026-10-11
 
 ## Work status
-State: **BLOCKED** — code and migration proposed; production index migration and frontend deployment are NOT applied, and no additional live testing is planned at the user's request. Exact-head CI and a separate production/schema approval are required before any rollout.
+State: **BLOCKED** — reconciling code-only PR #490 with merged #488. New exact-head Full Verify required before frontend merge/deploy. Index candidate is NOT in canonical migrations, has never been applied, and requires separate production authorization. No operational test orders.
 
 ## Guardrails
 - Stop operational test orders, resend trials and unnecessary live printer checks. User explicitly requested to stop testing and address the remaining problems.
@@ -18,7 +18,7 @@ State: **BLOCKED** — code and migration proposed; production index migration a
 - Permission-First and branch-scoped warehouse authority remain mandatory.
 
 ## Baseline
-- Current `main` is `3e2420543700258c9754a1af7234d4043ff30f0f`, prior to the unmerged emergency draft PR #488.
+- Current `main` is `0f2bd306eb5eb925960b6581d1b40cd1312ecd2f`, INCLUDING now-merged emergency PR #488. Price trigger pause was already applied under owner approval; no replay or new SQL by #490.
 - Live production has the #488 price-trigger pause applied, confirmed `tgenabled='D'`; new operational price snapshots may report unknown price. New frontend code must not re-enable or reinterpret the price trigger.
 - Prior two Cleopatra live orders `Johna's-02894` and `02895` had valid branch/warehouse scope, matched event component quantities and reported kitchen/bar cloud jobs; operator confirmed physical printing. No Smoha operational test requested now.
 
@@ -29,10 +29,10 @@ State: **BLOCKED** — code and migration proposed; production index migration a
 - Read-only live cardinalities at diagnostic time: `inventory_ledger` 36,468 rows, `cloud_print_jobs` 12,296 rows, raw priced FIFO issue 18,358 rows, priced purchase/receipt 1,334 rows. Estimate-only indexes still need staging query-plan and write-cost review.
 
 ## Change ledger
-- Proposed forward-only migration `20261011083000_kitchen_fifo_print_lookup_indexes.sql`: branch-keyed `text_pattern_ops` print receipt index, exact-predicate partial newest-known-FIFO issue/receipt indexes, and partial real-batch index. No function, grant, RLS, trigger, journal, order, or inventory data changes.
+- Index SQL was deliberately moved OUT of `supabase/migrations` into `scripts/experiments/kitchen_fifo_print_indexes_candidate_20261011.sql`: proposed branch-keyed `text_pattern_ops` print receipt index, exact-predicate partial FIFO issue/receipt indexes and partial real-batch index. GitHub's Supabase integration may automatically apply canonical migrations on main merge; this unapproved production DDL must never be auto-run. Proposal remains unexecuted. No function, grant, RLS, trigger, journal, order or inventory data changes.
 - POS warehouse resolver now fails closed when a linked order fetch errors or returns no matching branch row, and when warehouse fetch errors. Valid unsent orders still select deterministic first active/default warehouse and sent orders retain their pinned warehouse.
 - Consolidated the isolated, in-flight-only cloud print queue list-read coalescing from #487 into #490. Keyed by branch and bounded limit, authentication changes clear the map, failures are not cached and enqueue/claim/start/complete jobs are untouched.
-- Added source contract tests for index SQL targets and warehouse lookup plus the previously green #487 concurrent print queue/agent protocol test suite. No production test orders or print attempts performed.
+- Added source contract tests for the UNAPPLIED SQL candidate, including an assertion that it is absent from canonical migrations, and warehouse lookup plus the previously green #487 concurrent print queue/agent protocol test suite. No production test orders or print attempts performed.
 
 ## Verification ledger
 - Read-only PostgreSQL schema and index check: production `get_open_order_print_state` and `_raw_last_known_fifo_cost` definitions inspected; partial index predicates mirror canonical SELECT filters.
@@ -43,12 +43,12 @@ State: **BLOCKED** — code and migration proposed; production index migration a
 
 ## Production gate
 - User requested fixing outstanding problems without continuing operational tests; this authorizes preparation, NOT silent application of new production index DDL.
-- New forward-only migration is UNAPPLIED; deployment remains **BLOCKED** pending separate approval, CI and staged plan verification. SQL uses short lock and execution timeouts to fail instead of holding a busy POS lock.
+- Candidate indexes are UNAPPLIED and NOT a canonical migration. The frontend changes may be merged after owner-approved exact-head Full Verify; a separate index production rollout needs explicit new approval and plan/write-lock validation. The candidate's transaction/lock behavior must be reviewed before execution; never run it directly on a busy POS.
 - No old FIFO accounting price, warehouse default flag, branch assignment, receipt history, or cloud print job is rewritten.
 
 ## Next action
-- Draft PR #490 opened against main; new exact-head automatic CI is required after consolidating #487 and is NOT a live test of production.
-- Close #487 as superseded only after consolidated #490 exact-head CI passes; retain #488 as separate emergency migration PR already applied to production.
+- #488 is merged in main; #487 was closed as superseded after #490 previous exact-head Full Verify `38122811325` Green.
+- #490 is reconciled to main preserving #488; its new *code-only* exact-head CI is mandatory. No new live production tests.
 - Inspect exact-head CI and the differential SQL before proposing a separate authorized production rollout. Avoid further live order tests as requested.
 - Investigate any further warehouse selection UI symptom from logs rather than changing historical order warehouse IDs.
 

@@ -1,3 +1,6 @@
+-- PROPOSAL ONLY. DO NOT APPLY TO PRODUCTION OR RESTORE TO supabase/migrations
+-- without a separate owner approval and migration/lock plan. This file is not
+-- picked up by automatic migration runners. Its statements are for review only.
 -- PENDING FIX #489: bounded read indexes for open-check print guard and
 -- historical-cost lookup on oversold raw material batches.
 -- Forward-only, no data rewrites or function/security changes.
