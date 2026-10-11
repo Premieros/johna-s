@@ -33,7 +33,15 @@ Baseline main: `3cb08d52b028e393ecbfd46409afd8a8292ac278` after #488 + #490.
 
 - 2026-10-11 follow-up: discovered PostgreSQL PUBLIC EXECUTE default would overexpose the new invoker function relative to `get_raw_material_current_prices`, whose production ACL is postgres/authenticated/service_role only. Added REVOKE PUBLIC/anon + GRANT authenticated/service_role in the experimental script, with runtime ACL and static guard tests.
 - Expanded rollback-only integration matrix from 5 to 10 cases: normalized legacy purchase cost, ledger-receipt duplicate suppression, equal-time source/reference priority, authenticated branch isolation and empty/null input handling. No changes to actual operational send.
-- New exact-head CI is required after these changes; do not interpret the previous run 38126072982 as verifying this updated head.
+- Earlier run 38128813077 had Verify, DB/RLS and Pages green (browser was still running at last check) on an older head. It DOES NOT certify the new benchmark/staging proposal; new exact-head Full Verify remains mandatory.
+
+- 2026-10-11 owner authorized continuing **isolated verification and preparation** (not production deployment or trigger enable). Staged proposals created OUTSIDE canonical migrations:
+  - `scripts/experiments/kitchen_approved_price_stage_a_sql_PROPOSAL_20261011.sql` — guarded helper installation and replacement of the **disabled** trigger function body, without enabling the trigger. Intended to run atomically only after independent approval.
+  - `scripts/experiments/kitchen_approved_price_stage_b_enable_ONLY_IF_APPROVED_20261011.sql` — independently gated trigger activation. NEVER run automatically with stage A.
+  - `scripts/experiments/kitchen_approved_price_emergency_disable_PROPOSAL_20261011.sql` — manual rollback to price snapshot unknown while preserving source synchronization, FIFO and journals.
+- A new rollback-only CI test compiles proposed Stage A SQL, verifies new capture definition, and verifies price-capture trigger stays `D` and source-sync stays `O`. Stage B is STATIC CONTRACT TEST ONLY and never executed.
+- Added local-CI-only paired EXPLAIN (ANALYZE, BUFFERS) performance diagnostic with 9 alternating samples per reader, synthetic 35,247 other-ledger entries, 1,334 purchase-ledger entries and 296 pricing records, plus direct canonical/candidate result parity; all inside a rollback-only transaction, explicitly skipped on non-loopback DB URLs. This matches approx **ledger cardinality** of a read-only production snapshot, NOT real data distribution/locks/hardware. Never claim deployment readiness or actual production p95 from these results.
+- Exact-head CI on this new combination is pending. No production modifications have been made.
 
 ## Verification ledger
 - First head CI 38125918065 stopped at mandatory worklog format contract, before executing SQL integration tests. This update corrects the required format; fresh exact-head Full Verify is mandatory.
