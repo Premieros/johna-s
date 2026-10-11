@@ -17,6 +17,13 @@ describe('P0 approved kitchen price optimization draft safety (#486)', () => {
     expect(emergency).toContain('DISABLE TRIGGER trg_capture_kitchen_ingredient_prices');
   });
 
+  it('does not expose a new public EXECUTE bypass to the approved price reader', () => {
+    expect(candidate).toContain('REVOKE ALL ON FUNCTION public._kitchen_approved_price_candidate');
+    expect(candidate).toContain('FROM PUBLIC, anon');
+    expect(candidate).toContain('TO authenticated, service_role');
+    expect(candidate).toContain('SECURITY INVOKER');
+  });
+
   it('preserves the purchase finance-permission predicate and receipt de-duplication', () => {
     expect(candidate).toContain('private.financial_row_visible(p.id,p.branch_id,p.created_at)');
     expect(candidate).toContain("(auth.uid() IS NULL AND current_user IN ('postgres','service_role'))");
