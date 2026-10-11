@@ -11,7 +11,7 @@
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
 - Proposed emergency response: pause ONLY that price-reporting trigger, preserving stock FIFO, order warehouse binding, KDS, printing, financial journals and all historical snapshots. The trade-off is UNKNOWN sale-cost report pricing for newly sent items while paused; do NOT backfill at newer prices.
-- New SQL migration is **NOT APPLIED**. Exact-head CI + separate explicit production approval is mandatory before apply. Verify physical printing/warehouse at both branches after approval; don't claim production fixed before it is verified.
+- **Approved and applied 2026-10-11:** production Supabase migration `20261011063452_pause_blocking_kitchen_price_snapshot_20261011`; named price-capture trigger verified `D`, unrelated kitchen source-link trigger remains `O`. First Full Verify `38117909929` was Green. No kitchen print/order events observed immediately after apply, so speedup and physical print must still be proven at both branches. Draft PR #488 migration filename now aligned with applied version; repeat exact-head CI before any merge.
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
