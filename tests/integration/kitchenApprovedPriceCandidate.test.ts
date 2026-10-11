@@ -179,14 +179,25 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
       [legacyPurchaseId, legacyMaterial, t0],
     );
 
+    // Use a role with real explicit costing/ingredient-read permissions so
+    // parity tests cannot pass vacuously when RLS hides all price events.
+    await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active)
+       VALUES('kitchen_candidate_reader','قارئ أسعار التجربة','Kitchen Candidate Reader',
+              $1::jsonb,true)
+       ON CONFLICT(role) DO UPDATE
+         SET permissions=EXCLUDED.permissions,is_active=true`,
+      [JSON.stringify(['raw_materials.view','reports.costing','history.unlimited'])],
+    );
+
     await client.query(
       `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
-       VALUES($1,$2,'Candidate Manager','branch_manager',$3,true)`,
+       VALUES($1,$2,'Candidate Manager','kitchen_candidate_reader',$3,true)`,
       [manager, `${randomUUID()}@test.local`, branchA],
     );
     await client.query(
       `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
-       VALUES($1,$2,'Different Branch Manager','branch_manager',$3,true)`,
+       VALUES($1,$2,'Different Branch Manager','kitchen_candidate_reader',$3,true)`,
       [deniedBranchUser, `${randomUUID()}@test.local`, branchB],
     );
   });
@@ -252,7 +263,9 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
          ORDER BY raw_material_id`,
         [branchA, [material, purchasedMaterial]],
       );
+      expect(visible.rows).toHaveLength(2); // no vacuous parity on hidden data
       const candidate = await prices(branchA, [material, purchasedMaterial], afterFuture);
+      expect(candidate).toHaveLength(2);
       expect(candidate.map(x => ({
         raw_material_id: x.raw_material_id, unit_cost: x.unit_cost, price_source: x.price_source,
       }))).toEqual(visible.rows);
@@ -321,6 +334,16 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
       const local = await prices(branchB, [foreignMaterial], asOf);
       expect(local).toHaveLength(1);
       expect(local[0].raw_material_id).toBe(foreignMaterial);
+      const canonicalLocal = await client.query(
+        `SELECT raw_material_id::text,unit_cost::numeric(18,6)::text,price_source
+         FROM public.get_raw_material_current_prices($1,$2::uuid[])
+         WHERE price_source IN ('purchase','pricing','stock_count')`,
+        [branchB, [foreignMaterial]],
+      );
+      expect(canonicalLocal.rows).toHaveLength(1);
+      expect(local.map(x => ({
+        raw_material_id: x.raw_material_id,unit_cost:x.unit_cost,price_source:x.price_source,
+      }))).toEqual(canonicalLocal.rows);
     } finally {
       await client.query('RESET ROLE');
       await client.query('RESET app.user_id');
