@@ -173,6 +173,15 @@ AS $bounded$
     AND rm.id=ANY(p_raw_material_ids);
 $bounded$;
 
+-- Match the canonical price reader's EXECUTE boundary. PostgreSQL defaults
+-- NEW functions to PUBLIC EXECUTE unless revoked; invoker/RLS alone is not
+-- sufficient to enforce parity with the production function's grants.
+REVOKE ALL ON FUNCTION public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)
+  TO authenticated, service_role;
+
+
 -- Next-stage experiment: compare the candidate with the currently callable
 -- get_raw_material_current_prices(p_branch_id, ids) at NOW() for each permission
 -- persona and mixed purchases/stock counts/pricing events, then test the
