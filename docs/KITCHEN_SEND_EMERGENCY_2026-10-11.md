@@ -5,9 +5,20 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Baseline: `main@3e2420543700258c9754a1af7234d4043ff30f0f`
 Branch: `hotfix/kitchen-send-trigger-latency-20261011`
 Migration: `20261011060000_pause_blocking_kitchen_price_snapshot.sql`
+Current PR: #488
+Last updated: 2026-10-11
 
 ## Work status
-**PROPOSED / NOT APPLIED** — requires exact-head Full Verify Green and separate explicit production migration approval. No live SQL, kitchen sends, physical printing, warehouse rebinding, or sales mutations performed by this hotfix preparation.
+State: **BLOCKED** pending exact-head Full Verify Green, safe staging validation and production apply. Owner approved temporary disable of price snapshot trigger and explicitly accepted reporting unknown-price trade-off on 2026-10-11. This is NOT approval to merge/deploy frontend changes. No live SQL, kitchen sends, physical printing, warehouse rebinding, or sales mutations performed by this hotfix preparation.
+
+## Guardrails
+- Preserve existing kitchen send, warehouse pinning, FIFO inventory and journals, payment and cloud-print queues unchanged.
+- Disable ONLY the named price snapshot trigger; never rewrite events, backfill price estimates or create phantom zero costs.
+- Do not merge or deploy PR without separate approval; keep user informed of remaining risks.
+
+## Baseline
+- Live production has the post-#482 capture trigger enabled, and main currently remains at `3e2420543700258c9754a1af7234d4043ff30f0f`.
+- Read-only Postgres timeout context shows the new trigger in the send-to-kitchen stack; printer jobs appear healthy after queue creation, warehouse scope is consistent.
 
 ## Root-cause ledger
 - Merged PR #482 added a row-level BEFORE INSERT trigger to `order_kitchen_inventory_events`. It executes `get_raw_material_current_prices(branch, raw_ids)` synchronously on every event. That canonical reader traverses purchase inventory ledger, historical purchase items, stock-count prices, price events, and permission/history checks. This work is repeated per order line while a live order is locked and BEFORE the frontend invokes the print dispatch.
@@ -32,6 +43,15 @@ Only pause `trg_capture_kitchen_ingredient_prices` using the guarded, single-tar
 - Required before applying: exact-head Full Verify, staging kitchen first send + added quantity resend + idempotent retry, FIFO negative batch, cancellation, station routing and queue; run with the trigger disabled in isolated DB and assert missing report prices render unknown.
 - Required after separately approved production apply: verify trigger `tgenabled='D'`, check send endpoint latency/errors before/after, verify warehouse ID and single stock deduction, check cloud queue submission, physical ticket print at BOTH branches, then monitor journal/shift side effects.
 - Re-enable only after a bounded indexed price snapshot implementation is tested, and only under separate authorization.
+
+## Production gate
+- User approval for temporary production trigger pause and reporting trade-off: received 2026-10-11.
+- Actual production application: blocked until exact-head CI Green and staging validation; do not claim already applied.
+- Verify old and new trigger state, no unintended changes, and inspect real sending and print jobs after change. Never auto-reenable trigger without optimized implementation approval.
+
+## Next action
+- Resolve the active-worklog CI gate failure (missing required metadata/sections in first commit), rerun Full Verify on exact new head and assess remaining failures.
+- If green and feasible staging smoke passes, execute only the owner-approved reversible trigger change, verify its disabled flag. Follow up separately on FIFO and other timeouts, and test actual printed output in both branches.
 
 ## Mandatory update protocol
 - Single writer; do not write main directly; do not force push.
