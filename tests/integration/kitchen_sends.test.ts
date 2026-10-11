@@ -442,6 +442,12 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     );
     const rawId=material.rows[0]?.raw_material_id;
     expect(rawId).toBeTruthy();
+    // Stage B canonical migration has enabled the trigger in the fresh DB.
+    // Test the separate Stage B cutover by simulating a disabled trigger
+    // *inside this rollback-only fixture* first, never in production.
+    await client.query(
+      'ALTER TABLE public.order_kitchen_inventory_events DISABLE TRIGGER trg_capture_kitchen_ingredient_prices',
+    );
     const initialState=await client.query<{ tgenabled: string }>(
       `SELECT tgenabled FROM pg_trigger
        WHERE tgrelid='public.order_kitchen_inventory_events'::regclass
