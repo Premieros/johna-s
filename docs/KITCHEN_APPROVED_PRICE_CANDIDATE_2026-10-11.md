@@ -8,10 +8,10 @@ Last updated: 2026-10-11
 Issue: #486; independent index investigation #489
 
 ## Work status
-State: **BLOCKED** — candidate only, automatic SQL deployment and any production trigger enable are prohibited.
+State: **BLOCKED** for Stage B activation — Stage A was explicitly owner-approved and successfully APPLIED to production 2026-10-11, with the capture trigger still disabled.
 
 ## Guardrails
-**EXPERIMENT / NOT READY FOR PRODUCTION.** Owner said continue after successful merge, but has NOT separately authorized any new production function/index DDL or re-enabling the kitchen ingredient-price trigger. Do not apply the experimental SQL in production, put it under `supabase/migrations`, or deploy it. Do not create test orders or printer jobs in real stores.
+**STAGE A APPLIED; STAGE B STILL GATED.** Owner granted full approval 2026-10-11. Stage A installed price lookup and replacement disabled-trigger body into production through Supabase migration `20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011`, preserving trigger `D`, source-sync `O`, no order or FIFO rewrites. Canonical forward-only migration reconciled to exactly the applied production version. Do not create test orders or printer jobs in real stores; activate only after the isolated Stage B lifecycle/permission tests pass.
 
 Known production state: Supabase migration `20261011063452` already paused only `trg_capture_kitchen_ingredient_prices` (`D`); `trg_sync_sale_source_order_from_kitchen_event` remains enabled (`O`). FIFO deductions, order warehouse pinning, printing, financial postings are independent and untouched.
 
@@ -41,7 +41,13 @@ Baseline main: `3cb08d52b028e393ecbfd46409afd8a8292ac278` after #488 + #490.
   - `scripts/experiments/kitchen_approved_price_emergency_disable_PROPOSAL_20261011.sql` — manual rollback to price snapshot unknown while preserving source synchronization, FIFO and journals.
 - A new rollback-only CI test compiles proposed Stage A SQL, verifies new capture definition, and verifies price-capture trigger stays `D` and source-sync stays `O`. Stage B is STATIC CONTRACT TEST ONLY and never executed.
 - Added local-CI-only paired EXPLAIN (ANALYZE, BUFFERS) performance diagnostic with 9 alternating samples per reader, synthetic 35,247 other-ledger entries, 1,334 purchase-ledger entries and 296 pricing records, plus direct canonical/candidate result parity; all inside a rollback-only transaction, explicitly skipped on non-loopback DB URLs. This matches approx **ledger cardinality** of a read-only production snapshot, NOT real data distribution/locks/hardware. Never claim deployment readiness or actual production p95 from these results.
-- Exact-head CI on this new combination is pending. No production modifications have been made.
+- Stage A already applied successfully to production with owner approval. Production before/after read-only verification: candidate and capture functions are SECURITY INVOKER, candidate grants only `postgres`, `authenticated`, `service_role` (anon false), capture trigger `D`, source-sync `O`. Production migration version exactly `20261011105541`.
+- Canonical `supabase/migrations/20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011.sql` now records the previously applied SQL with comment-only reconciliation; on future deployment it must not reapply a duplicate version.
+- Added isolated CI send-to-kitchen Stage B rehearsal invoking the **exact** Stage B proposal SQL inside a rollback-only database transaction: first priced snapshot, later price, idempotent resend, fresh send, void + FIFO invariants; requires fresh exact-head CI green. Stage B has not run on production.
+
+- Earlier exact-head CI #491 `38130925606` was 4/4 green, 990 DB tests including 14 kitchen-price cases; local-CI synthetic paired EXPLAIN median 5.858ms canonical vs 1.707ms candidate, p95 6.912ms vs 1.837ms (9 samples, NOT production latency).
+- After explicit owner approval, stage A production apply migration `20261011105541` succeeded; tested trigger flags and reader ACL separately.
+- Stage B exact staging lifecycle CI currently running under newer PR head. No operational test orders or printers on production.
 
 ## Verification ledger
 - First head CI 38125918065 stopped at mandatory worklog format contract, before executing SQL integration tests. This update corrects the required format; fresh exact-head Full Verify is mandatory.
