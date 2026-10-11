@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `0f2bd306eb5eb925960b6581d1b40cd1312ecd2f`
-- Current active branch: `fix/kitchen-fifo-print-warehouse-20261011`
-- Mandatory active work log: `docs/KITCHEN_PENDING_PERFORMANCE_2026-10-11.md`
+- Latest main baseline reconciled: `3cb08d52b028e393ecbfd46409afd8a8292ac278`
+- Current active branch: `fix/kitchen-approved-price-candidate-20261011`
+- Mandatory active work log: `docs/KITCHEN_APPROVED_PRICE_CANDIDATE_2026-10-11.md`
 
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
@@ -18,6 +18,23 @@
 - Owner authorized ordered #488 then #490 merge subject to exact-head verification and staging of unrelated production SQL. #490 contains only frontend print-queue and warehouse guard code, tests and an **unapplied** index candidate archived at `scripts/experiments/kitchen_fifo_print_indexes_candidate_20261011.sql`.
 - The indexing proposal is **not** a canonical migration and cannot auto-run on merge. Before any real SQL index creation require separate owner permission, query-plan/write-lock assessment and a distinct future rollout.
 - Do not create operational test orders or print tickets; previous operator-confirmed Cleopatra prints remain historical evidence. Restore per-event frozen ingredient prices only in separate permission-preserving #486 remediation.
+
+## Active issue #486 — bounded kitchen approved-price candidate (2026-10-11)
+- #488 and #490 have both merged/deployed, exact-head and post-merge Full Verify green. Their fixes do NOT restore frozen per-ingredient approved prices for new kitchen sends.
+- This branch proposes ONLY `scripts/experiments/kitchen_approved_price_bounded_candidate_20261011.sql` and rollback-only CI tests. New SQL is NOT under `supabase/migrations`, NOT applied to production, and does NOT change or enable any trigger.
+- Source ranking preserves approved purchase/pricing/stock-count precedence, financial purchase visibility, branch/RLS scope and dispatch-time cutoff. No FIFO or accounting changes.
+- Follow-up requires full role/as-of parity and production-equivalent benchmark. Separate owner approval for any production DDL/trigger enable; no test orders or printer tests in production.
+
+## Owner-approved kitchen price Stage A — applied 2026-10-11
+- Owner provided full approval for production kitchen approved-price repair. Stage A applied as Supabase migration `20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011`, verified installed helper and adjusted capture function while price capture trigger remains `D` and source-link trigger `O`.
+- The exact SQL was recorded in canonical `supabase/migrations/20261011105541_kitchen_approved_price_stage_a_install_disabled_20261011.sql` with matching already-applied production version; do NOT double-apply.
+- Stage B remains a *separate activation step* requiring exact-head CI with **actual isolated** send/resend/void snapshot lifecycle and production parity/guard checks. Do not create live operational test orders, touch FIFO and journals or backfill unknown costs. Emergency disable script prepared.
+
+## Owner-approved kitchen price Stage B — applied 2026-10-11
+- Stage B applied to production Supabase as migration `20261011111235_kitchen_approved_price_stage_b_enable_20261011`, after exact-head Full Verify `38133988775` all 4 jobs green, 991 DB integration tests and isolated first-send/re-send/void Stage B price snapshot rehearsal.
+- Post-apply production read-only proof: `trg_capture_kitchen_ingredient_prices` `O`, `trg_sync_sale_source_order_from_kitchen_event` `O`; candidate function ACL still excludes anon. First real kitchen event since enable froze one approved purchase cost and retained one unknown as NULL; no fake order, historical price backfill, FIFO or accounting change.
+- Canonical `supabase/migrations/20261011111235_kitchen_approved_price_stage_b_enable_20261011.sql` reconciled with **already applied** production version. Never replay an equivalent new migration by another name.
+- Latest CI must be rerun for the exact branch head after canonical Stage B insertion and isolated fixture baseline adjustments; no merge until green. Physical print and real sustained P95 are not proven from unit/DB/browser tests. Emergency disable proposal remains available if latency/error regressions occur.
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
