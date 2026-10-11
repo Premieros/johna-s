@@ -370,6 +370,52 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
   });
 
 
+
+  it('preserves canonical finance-history visibility for a restricted historical role', async () => {
+    const oldRaw=randomUUID(),oldPurchase=randomUUID(),oldUser=randomUUID();
+    const oldTime=new Date(t0.getTime()-30*24*60*60_000);
+    await client.query(
+      "INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost,is_active) VALUES($1,$2,'Historic candidate raw',$3,$4,999,true)",
+      [oldRaw,'historic-'+oldRaw.slice(0,8),branchA,kgStockUnit],
+    );
+    await client.query(
+      "INSERT INTO public.purchases(id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at,approved_at) VALUES($1,$2,$3,41,41,41,'completed',$4,$4)",
+      [oldPurchase,'HISTORIC-'+oldPurchase.slice(0,8),branchA,oldTime],
+    );
+    await client.query(
+      "INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,reference_number,created_at) VALUES($1,$2,$3,1,41,41,'purchase','purchase',$4,'HISTORIC-RECEIPT',$5)",
+      [oldRaw,branchA,warehouseA,oldPurchase,oldTime],
+    );
+    await client.query(
+      "INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active) VALUES('kitchen_candidate_limited_history','محدود التاريخ','Limited historic test',$1::jsonb,true) ON CONFLICT(role) DO UPDATE SET permissions=EXCLUDED.permissions,is_active=true",
+      [JSON.stringify(['raw_materials.view','reports.costing'])],
+    );
+    await client.query(
+      "INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'History Restricted','kitchen_candidate_limited_history',$3,true)",
+      [oldUser,oldUser+'@test.local',branchA],
+    );
+    const full=await prices(branchA,[oldRaw],asOf);
+    expect(full).toHaveLength(1);
+    expect(Number(full[0].unit_cost)).toBe(41);
+    await client.query("SELECT set_config('app.user_id',$1,true)",[oldUser]);
+    await client.query('SET LOCAL ROLE authenticated');
+    try {
+      const canonical=await client.query(
+        "SELECT raw_material_id::text,unit_cost::numeric(18,6)::text,price_source,reference_number FROM public.get_raw_material_current_prices($1,$2::uuid[]) WHERE price_source IN ('purchase','pricing','stock_count') ORDER BY raw_material_id",
+        [branchA,[oldRaw]],
+      );
+      const bounded=await prices(branchA,[oldRaw],asOf);
+      expect(bounded.map(x=>({
+        raw_material_id:x.raw_material_id,unit_cost:x.unit_cost,
+        price_source:x.price_source,reference_number:x.reference_number,
+      }))).toEqual(canonical.rows);
+      expect(await prices(branchB,[oldRaw],asOf)).toEqual([]);
+    } finally {
+      await client.query('RESET ROLE');
+      await client.query('RESET app.user_id');
+    }
+  });
+
   it('proposed Stage A SQL installs an inert function and preserves both trigger flags', async () => {
     // Executed ONLY inside this disposable transaction. Never run Stage B in CI.
     await client.query(readFileSync(
