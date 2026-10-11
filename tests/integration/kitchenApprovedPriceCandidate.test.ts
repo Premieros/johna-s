@@ -53,6 +53,12 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    // Production now runs Stage B (trigger O). In this rollback-only fixture,
+    // pause the capture trigger to exercise the emergency and Stage A guards
+    // without changing the live or default CI database outside the transaction.
+    await client.query(
+      'ALTER TABLE public.order_kitchen_inventory_events DISABLE TRIGGER trg_capture_kitchen_ingredient_prices',
+    );
     // Function DDL is rolled back along with all fixtures.
     await client.query(readFileSync(
       'scripts/experiments/kitchen_approved_price_bounded_candidate_20261011.sql', 'utf8',
