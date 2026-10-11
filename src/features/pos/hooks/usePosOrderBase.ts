@@ -48,7 +48,7 @@ const EMPTY_CART: CartItem[] = [];
 const VALID_PAYMENT_METHODS: PosPaymentMethod[] = ['cash', 'card', 'transfer', 'credit'];
 
 export function usePosOrder(input: UsePosOrderInput) {
-  const { branchId, branchName, orderId, customers, effSettings, activeShift, stockMap, rawShortageOnly = {}, onInventoryChanged } = input;
+  const { branchId, branchName, orderId, customers, effSettings, activeShift, onInventoryChanged } = input;
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { user } = useAuth();
@@ -178,9 +178,6 @@ export function usePosOrder(input: UsePosOrderInput) {
     return () => { cancelled = true; };
   }, [tableId]);
 
-  const getStock = useCallback((productId: string) => stockMap[productId] || 0, [stockMap]);
-  const isNegativeEligible = useCallback((productId: string) => rawShortageOnly[productId] === true, [rawShortageOnly]);
-
   const addToCart = useCallback((
     product: Product,
     quantity = 1,
@@ -190,15 +187,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     unitPrice?: number,
     itemNote?: string,
   ) => {
-    const stock = getStock(product.id);
-    const totalProductQty = cart
-      .filter((i) => i.product.id === product.id)
-      .reduce((sum, i) => sum + i.quantity, 0);
-    if (!isNegativeEligible(product.id) && totalProductQty + quantity > stock) {
-      show(`${product.name}: ${t('insufficientStock')} (${stock})`, 'error');
-      return;
-    }
-
+    // POS does not preflight stock; the server kitchen/sale RPC owns deduction.
     const incoming: CartItem = {
       product,
       unit_name: 'piece',
@@ -224,37 +213,22 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return [...prev, incoming];
     });
-  }, [getStock, isNegativeEligible, cart, show, t]);
+  }, []);
 
   const updateQty = useCallback((lineKey: string, delta: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
     if (!target) return;
-    const stock = getStock(target.product.id);
-    if (delta > 0) {
-      const totalProductQty = cart
-        .filter((i) => i.product.id === target.product.id)
-        .reduce((sum, i) => sum + i.quantity, 0);
-      if (!isNegativeEligible(target.product.id) && totalProductQty + delta > stock) { show(`${t('insufficientStock')} (${stock})`, 'error'); return; }
-    }
     setCart((prev) => prev
       .map((i) => cartLineKey(i) === lineKey ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
       .filter((i) => i.quantity > 0));
-  }, [getStock, isNegativeEligible, cart, show, t]);
+  }, [cart]);
 
   const setQty = useCallback((lineKey: string, qty: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
     if (!target) return;
-    const stock = getStock(target.product.id);
-    const otherQty = cart
-      .filter((i) => i.product.id === target.product.id && cartLineKey(i) !== lineKey)
-      .reduce((sum, i) => sum + i.quantity, 0);
-    const maxForLine = isNegativeEligible(target.product.id)
-      ? Number.MAX_SAFE_INTEGER
-      : Math.max(0, stock - otherQty);
-    if (qty > maxForLine) { show(`${t('insufficientStock')} (${stock})`, 'error'); qty = maxForLine; }
     setCart((prev) => prev
       .map((i) => cartLineKey(i) === lineKey ? { ...i, quantity: Math.max(1, qty) } : i));
-  }, [cart, getStock, isNegativeEligible, show, t]);
+  }, [cart]);
 
   const removeFromCart = useCallback((lineKey: string) => setCart((prev) => prev.filter((i) => cartLineKey(i) !== lineKey)), []);
   const clearCart = useCallback(() => setCart(EMPTY_CART), []);
@@ -268,14 +242,6 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [cart]);
 
   const replaceCartLine = useCallback((lineKey: string, nextItem: CartItem) => {
-    const stock = getStock(nextItem.product.id);
-    const otherQty = cart
-      .filter((i) => i.product.id === nextItem.product.id && cartLineKey(i) !== lineKey)
-      .reduce((sum, i) => sum + i.quantity, 0);
-    if (!isNegativeEligible(nextItem.product.id) && otherQty + nextItem.quantity > stock) {
-      show(`${nextItem.product.name}: ${t('insufficientStock')} (${stock})`, 'error');
-      return false;
-    }
     setCart((prev) => {
       const withoutOld = prev.filter((i) => cartLineKey(i) !== lineKey);
       const nextKey = cartLineKey(nextItem);
@@ -288,7 +254,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       return [...withoutOld, nextItem];
     });
     return true;
-  }, [cart, getStock, isNegativeEligible, show, t]);
+  }, []);
 
   const taxRate = effSettings?.tax_enabled ? (effSettings?.tax_rate || 0) : 0;
   const totals = useMemo(
@@ -806,16 +772,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
     setCompleting(true);
     try {
-      // A linked order has already crossed the authoritative kitchen boundary.
-      // The server verifies that every delta was sent and reuses those effects.
-      // Only a direct, unpersisted sale still needs the pre-deduction client check.
-      if (!activeOrderId) {
-        for (const item of cart) {
-          const stock = getStock(item.product.id);
-          if (!isNegativeEligible(item.product.id) && stock < item.quantity) { show(`${item.product.name}: ${t('insufficientStock')} (${stock})`, 'error'); return false; }
-        }
-      }
-
+      // Stock authorization and deductions belong to the server RPC, including direct sales.
       const warehouseId = await fetchBranchWarehouseId(branchId, activeOrderId);
       const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
       const itemsPayload = cartToItems(cart);
@@ -944,7 +901,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setCompleting(false);
     }
-  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, getStock, isNegativeEligible, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
+  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
 
   const printReceipt = useCallback(async () => {
     if (!effSettings) return;
