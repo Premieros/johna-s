@@ -31,6 +31,10 @@ Baseline main: `3cb08d52b028e393ecbfd46409afd8a8292ac278` after #488 + #490.
 - `tests/integration/kitchenApprovedPriceCandidate.test.ts`: rollback-only isolated database fixture (no live order), price precedence across manual/stock-count/purchase sources, time cutoffs, branch scoping, no fallback, canonical parity under manager role, trigger remains disabled. This test creates the candidate function in the transaction and rolls it back.
 - `tests/unit/kitchenApprovedPriceCandidateContract.test.ts`: static gate preventing auto-Supabase migration or production trigger change and guarding finance/branch/time predicate parity.
 
+- 2026-10-11 follow-up: discovered PostgreSQL PUBLIC EXECUTE default would overexpose the new invoker function relative to `get_raw_material_current_prices`, whose production ACL is postgres/authenticated/service_role only. Added REVOKE PUBLIC/anon + GRANT authenticated/service_role in the experimental script, with runtime ACL and static guard tests.
+- Expanded rollback-only integration matrix from 5 to 10 cases: normalized legacy purchase cost, ledger-receipt duplicate suppression, equal-time source/reference priority, authenticated branch isolation and empty/null input handling. No changes to actual operational send.
+- New exact-head CI is required after these changes; do not interpret the previous run 38126072982 as verifying this updated head.
+
 ## Verification ledger
 - First head CI 38125918065 stopped at mandatory worklog format contract, before executing SQL integration tests. This update corrects the required format; fresh exact-head Full Verify is mandatory.
 - Tests described below run in an isolated rollback-only CI database, not production.
