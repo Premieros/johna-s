@@ -490,5 +490,6 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
         canonical:stats(samples.canonical),candidate:stats(samples.candidate),plan_nodes:nodes,
       }));
     },
+    120_000, // explicit local 36k-row EXPLAIN diagnostic, not a live latency gate
   );
 });
