@@ -1,11 +1,11 @@
 # Kitchen send-time approved ingredient price performance — 2026-10-11
 
-- Repository: `Premieros/johna-s`
-- Production project: `azzdesuowpdcoflmyezn`
-- Baseline: `main@3cb08d52b028e393ecbfd46409afd8a8292ac278` (#488 and #490 merged)
-- Branch: `fix/kitchen-approved-price-candidate-20261011`
-- Current PR: #491 (DRAFT, candidate only, not deployable)
-- Issue: #486; independent index investigation #489
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `fix/kitchen-approved-price-candidate-20261011`
+Current PR: #491
+Last updated: 2026-10-11
+Issue: #486; independent index investigation #489
 
 ## Work status
 State: **BLOCKED** — candidate only, automatic SQL deployment and any production trigger enable are prohibited.
