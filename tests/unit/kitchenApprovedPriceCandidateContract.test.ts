@@ -24,12 +24,12 @@ describe('P0 approved kitchen price optimization draft safety (#486)', () => {
     expect(stageA).toContain('_kitchen_approved_price_candidate(');
     expect(stageA).toContain('KITCHEN_CAPTURE_TRIGGER_MUST_REMAIN_DISABLED');
     expect(stageA).toContain('SOURCE_ORDER_SYNC_EXPECTED_ENABLED');
-    expect(stageA).not.toMatch(/ALTER TABLE public\\.order_kitchen_inventory_events\\s+ENABLE TRIGGER/i);
-    expect(stageB).toMatch(/ALTER TABLE public\\.order_kitchen_inventory_events\\s+ENABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
+    expect(stageA).not.toMatch(/ALTER TABLE public\.order_kitchen_inventory_events\s+ENABLE TRIGGER/i);
+    expect(stageB).toMatch(/ALTER TABLE public\.order_kitchen_inventory_events\s+ENABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
     expect(stageB).toContain('OPTIMIZED_CAPTURE_FUNCTION_NOT_INSTALLED');
-    expect(emergencyDisable).toMatch(/ALTER TABLE public\\.order_kitchen_inventory_events\\s+DISABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
-    expect(stageA).not.toMatch(/\\bTRUNCATE\\s+|\\bDELETE FROM public\\.|\\bUPDATE public\\.order_kitchen_inventory_events/i);
-    expect(stageB).not.toMatch(/\\bTRUNCATE\\s+|\\bDELETE FROM public\\.|\\bUPDATE public\\.order_kitchen_inventory_events/i);
+    expect(emergencyDisable).toMatch(/ALTER TABLE public\.order_kitchen_inventory_events\s+DISABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
+    expect(stageA).not.toMatch(/\bTRUNCATE\s+|\bDELETE FROM public\.|\bUPDATE public\.order_kitchen_inventory_events/i);
+    expect(stageB).not.toMatch(/\bTRUNCATE\s+|\bDELETE FROM public\.|\bUPDATE public\.order_kitchen_inventory_events/i);
     expect(existsSync('supabase/migrations/20261011120000_kitchen_price_capture_resume.sql')).toBe(false);
   });
 
