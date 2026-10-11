@@ -175,17 +175,41 @@ export async function enqueueCloudReportPrint(params: { branchId: string; payloa
     : { accepted: false, error: result.error || result.detail || 'CLOUD_PRINT_ENQUEUE_FAILED' };
 }
 
-export async function listCloudPrintQueue(branchId: string, limit = 100): Promise<CloudPrintQueueRow[]> {
+// Coalesce only simultaneous, identical queue reads. Never cache completed responses:
+// a new poll after claim/print/failure must observe current server state.
+const activeQueueReads = new Map<string, Promise<CloudPrintQueueRow[]>>();
+
+// Never reuse an in-flight financial/printing read across sign-in, sign-out or
+// refreshed authentication context. Existing callers keep their original promise.
+supabase.auth?.onAuthStateChange?.(() => {
+  activeQueueReads.clear();
+});
+
+export function listCloudPrintQueue(branchId: string, limit = 100): Promise<CloudPrintQueueRow[]> {
   const scopedBranchId = safeText(branchId);
-  if (!scopedBranchId) return [];
-  const { data, error } = await supabase
-    .from('cloud_print_jobs')
-    .select('id,branch_id,kind,station_code,payload,sale_id,expected_print_number,attempts,status,last_error,claimed_at,submitted_at,printed_at,created_at,updated_at')
-    .eq('branch_id', scopedBranchId)
-    .order('created_at', { ascending: false })
-    .limit(Math.max(1, Math.min(250, Number(limit) || 100)));
-  if (error) throw error;
-  return (Array.isArray(data) ? data : []) as CloudPrintQueueRow[];
+  if (!scopedBranchId) return Promise.resolve([]);
+  const boundedLimit = Math.max(1, Math.min(250, Number(limit) || 100));
+  const key = JSON.stringify([scopedBranchId, boundedLimit]);
+  const existing = activeQueueReads.get(key);
+  if (existing) return existing;
+
+  const read = (async () => {
+    const { data, error } = await supabase
+      .from('cloud_print_jobs')
+      .select('id,branch_id,kind,station_code,payload,sale_id,expected_print_number,attempts,status,last_error,claimed_at,submitted_at,printed_at,created_at,updated_at')
+      .eq('branch_id', scopedBranchId)
+      .order('created_at', { ascending: false })
+      .limit(boundedLimit);
+    if (error) throw error;
+    return (Array.isArray(data) ? data : []) as CloudPrintQueueRow[];
+  })();
+  activeQueueReads.set(key, read);
+  void read.finally(() => {
+    if (activeQueueReads.get(key) === read) activeQueueReads.delete(key);
+  }).catch(() => {
+    // The caller receives the original rejection; avoid an unhandled cleanup rejection.
+  });
+  return read;
 }
 
 export async function claimCloudPrintJobs(branchId: string, agentId: string, limit = 12): Promise<CloudPrintJob[]> {

@@ -257,19 +257,27 @@ export async function nextInvoiceNumber(): Promise<string> {
 }
 
 export async function fetchBranchWarehouseId(branchId: string, orderId?: string | null): Promise<string | null> {
+  if (!branchId) return null;
   try {
     if (orderId) {
-      const { data: order } = await supabase
+      const { data: order, error: orderError } = await supabase
         .from('orders')
         .select('inventory_warehouse_id')
         .eq('id', orderId)
         .eq('branch_id', branchId)
         .maybeSingle();
-      const orderWarehouseId = (order as { inventory_warehouse_id?: string | null } | null)?.inventory_warehouse_id;
+      // An inaccessible, deleted or cross-branch order must NOT silently fall
+      // back to a branch default. The server pins the warehouse for each order,
+      // so an invented fallback would display misleading stock and may cause a
+      // settlement warehouse mismatch. Fail closed until the order is readable.
+      if (orderError || !order) return null;
+      const orderWarehouseId = (order as { inventory_warehouse_id?: string | null }).inventory_warehouse_id;
       if (orderWarehouseId) return orderWarehouseId;
+      // For a valid order not yet sent to kitchen, use the same deterministic
+      // active-warehouse order as send_to_kitchen's first-send resolver.
     }
 
-    const { data } = await supabase
+    const { data, error: warehouseError } = await supabase
       .from('warehouses')
       .select('id,is_default,created_at')
       .eq('branch_id', branchId)
@@ -277,6 +285,7 @@ export async function fetchBranchWarehouseId(branchId: string, orderId?: string 
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true })
       .order('id', { ascending: true });
+    if (warehouseError) return null;
     const rows = (data as { id: string }[] | null) || [];
     return rows.length > 0 ? rows[0].id : null;
   } catch {

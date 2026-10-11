@@ -4,14 +4,20 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3e242054`
-- Current active branch: `hotfix/kitchen-send-trigger-latency-20261011`
-- Mandatory active work log: `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`
+- Latest main baseline reconciled: `0f2bd306eb5eb925960b6581d1b40cd1312ecd2f`
+- Current active branch: `fix/kitchen-fifo-print-warehouse-20261011`
+- Mandatory active work log: `docs/KITCHEN_PENDING_PERFORMANCE_2026-10-11.md`
 
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
 - Proposed emergency response: pause ONLY that price-reporting trigger, preserving stock FIFO, order warehouse binding, KDS, printing, financial journals and all historical snapshots. The trade-off is UNKNOWN sale-cost report pricing for newly sent items while paused; do NOT backfill at newer prices.
 - **Approved and applied 2026-10-11:** production Supabase migration `20261011063452_pause_blocking_kitchen_price_snapshot_20261011`; named price-capture trigger verified `D`, unrelated kitchen source-link trigger remains `O`. First Full Verify `38117909929` was Green. No kitchen print/order events observed immediately after apply, so speedup and physical print must still be proven at both branches. Draft PR #488 migration filename now aligned with applied version; repeat exact-head CI before any merge.
+
+## Approved post-#488 kitchen follow-up — 2026-10-11
+- Emergency PR #488 was merged into main at `0f2bd306eb5eb925960b6581d1b40cd1312ecd2f`; its Supabase migration `20261011063452` **had already been applied** with target trigger disabled. Do not reapply or re-enable it.
+- Owner authorized ordered #488 then #490 merge subject to exact-head verification and staging of unrelated production SQL. #490 contains only frontend print-queue and warehouse guard code, tests and an **unapplied** index candidate archived at `scripts/experiments/kitchen_fifo_print_indexes_candidate_20261011.sql`.
+- The indexing proposal is **not** a canonical migration and cannot auto-run on merge. Before any real SQL index creation require separate owner permission, query-plan/write-lock assessment and a distinct future rollout.
+- Do not create operational test orders or print tickets; previous operator-confirmed Cleopatra prints remain historical evidence. Restore per-event frozen ingredient prices only in separate permission-preserving #486 remediation.
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
