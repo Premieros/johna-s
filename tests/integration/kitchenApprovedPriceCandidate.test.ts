@@ -368,4 +368,62 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     );
     expect(r.rows).toEqual([{ tgenabled: 'D' }]);
   });
+
+  // Local-only workload: transactional synthetic records, never real orders.
+  // Matches recent production ledger count (36,581) but NOT source/branch skew.
+  it.skipIf(!dbUrl || !/^(localhost|127\\.0\\.0\\.1|::1)$/.test(new URL(dbUrl).hostname))(
+    'logs local paired EXPLAIN ANALYZE plans/median/p95 without asserting live speed',
+    async () => {
+      await client.query("SELECT set_config('statement_timeout','45000',true)");
+      await client.query(
+        "INSERT INTO public.inventory_ledger (raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,reference_number,created_at) SELECT $1::uuid,$2::uuid,$3::uuid,1,2,2,'adjustment','benchmark',NULL,'SYNTH-NOT-REAL',$4::timestamptz - interval '4 hours' FROM generate_series(1,35247)",
+        [purchasedMaterial,branchA,warehouseA,t0.toISOString()],
+      );
+      await client.query(
+        "INSERT INTO public.inventory_ledger (raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,reference_number,created_at) SELECT $1::uuid,$2::uuid,$3::uuid,1,2,2,'purchase','purchase',$4::uuid,'SYNTH-OLDER-RECEIPT',$5::timestamptz - interval '4 hours' FROM generate_series(1,1334)",
+        [purchasedMaterial,branchA,warehouseA,purchase,t0.toISOString()],
+      );
+      await client.query(
+        "INSERT INTO public.raw_material_price_events(id,raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) SELECT gen_random_uuid(),$1::uuid,$2::uuid,3,'pricing','SYNTH-PRICE-'||s::text,$3::timestamptz - interval '1 day' - (s::text||' seconds')::interval FROM generate_series(1,296) AS s",
+        [material,branchA,t0.toISOString()],
+      );
+      await client.query('ANALYZE public.inventory_ledger');
+      await client.query('ANALYZE public.raw_material_price_events');
+      const ids=[material,purchasedMaterial,legacyMaterial,tiedMaterial];
+      const queries={
+        canonical:"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT raw_material_id,unit_cost,price_source FROM public.get_raw_material_current_prices($1::uuid,$2::uuid[]) WHERE price_source IN ('purchase','pricing','stock_count') ORDER BY raw_material_id",
+        candidate:"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT raw_material_id,unit_cost,price_source FROM public._kitchen_approved_price_candidate($1::uuid,$2::uuid[],$3::timestamptz) ORDER BY raw_material_id",
+      };
+      const samples:Record<'canonical'|'candidate',number[]>={canonical:[],candidate:[]};
+      const nodes:Record<'canonical'|'candidate',string>={canonical:'',candidate:''};
+      for(let round=0;round<9;round++){
+        const order: Array<'canonical'|'candidate'>=round%2?['candidate','canonical']:['canonical','candidate'];
+        for(const name of order){
+          const res=await client.query(queries[name],name==='canonical'?[branchA,ids]:[branchA,ids,afterFuture.toISOString()]);
+          const val=res.rows[0]['QUERY PLAN'];
+          const parsed=typeof val==='string'?JSON.parse(val):val;
+          const root=parsed[0] as {'Execution Time':number;Plan:{'Node Type':string}};
+          expect(root['Execution Time']).toBeGreaterThanOrEqual(0);
+          samples[name].push(Number(root['Execution Time']));
+          nodes[name]=root.Plan['Node Type'];
+        }
+      }
+      const canonical=await client.query(
+        "SELECT raw_material_id::text,unit_cost::numeric(18,6)::text,price_source FROM public.get_raw_material_current_prices($1,$2::uuid[]) WHERE price_source IN ('purchase','pricing','stock_count') ORDER BY raw_material_id",
+        [branchA,ids],
+      );
+      const candidate=await client.query(
+        "SELECT raw_material_id::text,unit_cost::numeric(18,6)::text,price_source FROM public._kitchen_approved_price_candidate($1,$2::uuid[],$3::timestamptz) ORDER BY raw_material_id",
+        [branchA,ids,afterFuture.toISOString()],
+      );
+      expect(candidate.rows).toEqual(canonical.rows);
+      const stats=(a:number[])=>{const s=[...a].sort((x,y)=>x-y);return {median_ms:s[4],p95_ms:s[8]};};
+      console.info('KITCHEN_APPROVED_PRICE_LOCAL_BENCHMARK '+JSON.stringify({
+        source:'LOCAL CI TRANSACTION, synthetic source distribution, not live latency',
+        generated_non_purchase:35247,generated_purchase:1334,generated_price_events:296,
+        materials_queried:ids.length,samples_per_reader:9,
+        canonical:stats(samples.canonical),candidate:stats(samples.candidate),plan_nodes:nodes,
+      }));
+    },
+  );
 });
