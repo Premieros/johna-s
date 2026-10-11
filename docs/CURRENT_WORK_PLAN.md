@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `0f2bd306eb5eb925960b6581d1b40cd1312ecd2f`
-- Current active branch: `fix/kitchen-fifo-print-warehouse-20261011`
-- Mandatory active work log: `docs/KITCHEN_PENDING_PERFORMANCE_2026-10-11.md`
+- Latest main baseline reconciled: `3cb08d52b028e393ecbfd46409afd8a8292ac278`
+- Current active branch: `fix/kitchen-approved-price-candidate-20261011`
+- Mandatory active work log: `docs/KITCHEN_APPROVED_PRICE_CANDIDATE_2026-10-11.md`
 
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
@@ -18,6 +18,12 @@
 - Owner authorized ordered #488 then #490 merge subject to exact-head verification and staging of unrelated production SQL. #490 contains only frontend print-queue and warehouse guard code, tests and an **unapplied** index candidate archived at `scripts/experiments/kitchen_fifo_print_indexes_candidate_20261011.sql`.
 - The indexing proposal is **not** a canonical migration and cannot auto-run on merge. Before any real SQL index creation require separate owner permission, query-plan/write-lock assessment and a distinct future rollout.
 - Do not create operational test orders or print tickets; previous operator-confirmed Cleopatra prints remain historical evidence. Restore per-event frozen ingredient prices only in separate permission-preserving #486 remediation.
+
+## Active issue #486 — bounded kitchen approved-price candidate (2026-10-11)
+- #488 and #490 have both merged/deployed, exact-head and post-merge Full Verify green. Their fixes do NOT restore frozen per-ingredient approved prices for new kitchen sends.
+- This branch proposes ONLY `scripts/experiments/kitchen_approved_price_bounded_candidate_20261011.sql` and rollback-only CI tests. New SQL is NOT under `supabase/migrations`, NOT applied to production, and does NOT change or enable any trigger.
+- Source ranking preserves approved purchase/pricing/stock-count precedence, financial purchase visibility, branch/RLS scope and dispatch-time cutoff. No FIFO or accounting changes.
+- Follow-up requires full role/as-of parity and production-equivalent benchmark. Separate owner approval for any production DDL/trigger enable; no test orders or printer tests in production.
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
