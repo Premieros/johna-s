@@ -4,12 +4,12 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Baseline: `main@3e2420543700258c9754a1af7234d4043ff30f0f`
 Branch: `hotfix/kitchen-send-trigger-latency-20261011`
-Migration: `20261011060000_pause_blocking_kitchen_price_snapshot.sql`
+Migration: `20261011063452_pause_blocking_kitchen_price_snapshot_20261011.sql`
 Current PR: #488
 Last updated: 2026-10-11
 
 ## Work status
-State: **BLOCKED** pending exact-head Full Verify Green, safe staging validation and production apply. Owner approved temporary disable of price snapshot trigger and explicitly accepted reporting unknown-price trade-off on 2026-10-11. This is NOT approval to merge/deploy frontend changes. No live SQL, kitchen sends, physical printing, warehouse rebinding, or sales mutations performed by this hotfix preparation.
+State: **BLOCKED** pending new exact-head CI following migration filename reconciliation and real-device print/warehouse smoke tests; PR is still draft and not merged. Owner approved temporary trigger pause and unknown-price reporting trade-off on 2026-10-11. **Production trigger pause APPLIED successfully** as Supabase migration `20261011063452_pause_blocking_kitchen_price_snapshot_20261011`; verification shows target `tgenabled='D'` while other kitchen-event sync trigger remains `O`. No frontend deployment, warehouse reassignment, live test order or physical printer execution performed by the agent.
 
 ## Guardrails
 - Preserve existing kitchen send, warehouse pinning, FIFO inventory and journals, payment and cloud-print queues unchanged.
@@ -33,7 +33,8 @@ Only pause `trg_capture_kitchen_ingredient_prices` using the guarded, single-tar
 
 ## Change ledger
 - 2026-10-11: Inspected production migration presence, live trigger, call stack, cloud print metrics, warehouse integrity, and repo POS send/dispatch source.
-- Prepared a reversible, guarded migration that changes only the trigger enable flag. No trigger/function body rewrite and no live database action.
+- Prepared a reversible, guarded migration that changes only the trigger enable flag. No trigger/function body rewrite and no live business-data mutation.
+- 2026-10-11: Owner approval received; exact-head Full Verify `38117909929` Green. Applied trigger pause to production; Supabase migration version `20261011063452`; verified named trigger disabled and companion trigger enabled. Aligned PR migration filename after apply.
 - Added scoped contract test for trigger targeting and preservation of send/print/warehouse paths. Updated mandatory work-plan pointer.
 
 ## Verification ledger
@@ -46,12 +47,16 @@ Only pause `trg_capture_kitchen_ingredient_prices` using the guarded, single-tar
 
 ## Production gate
 - User approval for temporary production trigger pause and reporting trade-off: received 2026-10-11.
-- Actual production application: blocked until exact-head CI Green and staging validation; do not claim already applied.
+- First Full Verify `38117909929` on `e4ca6f4b635f3c925fb3aff4ba72d75ab156d9c1`: **SUCCESS** all verify, database, pages-continuity and browser-smoke jobs.
+- Production apply **completed** with `mcp__Supabase__apply_migration` under short statement/lock timeouts and the named trigger guard. Applied version `20261011063452`. Trigger disabled `D`, unaffected kitchen sync trigger enabled `O`; recorded Supabase migration exists.
+- Post-apply immediate read-only window contains 0 kitchen inventory events and 0 kitchen print jobs, so no live speedup or physical printer success can yet be claimed.
+- Filename in this PR now reconciled with the exact production migration version; fresh exact-head Full Verify required before any future merge/deployment.
 - Verify old and new trigger state, no unintended changes, and inspect real sending and print jobs after change. Never auto-reenable trigger without optimized implementation approval.
 
 ## Next action
-- Resolve the active-worklog CI gate failure (missing required metadata/sections in first commit), rerun Full Verify on exact new head and assess remaining failures.
-- If green and feasible staging smoke passes, execute only the owner-approved reversible trigger change, verify its disabled flag. Follow up separately on FIFO and other timeouts, and test actual printed output in both branches.
+- Reverify the exact branch head after aligning SQL filename with the applied migration version and ensure no unintentional DB replay.
+- Operator smoke test both branches using normal live orders: first send, resend, idempotent retry, stable warehouse ID, one stock deduction, cloud job submission and **physical** kitchen ticket. Avoid fake production orders.
+- Monitor send_to_kitchen 57014 errors, price snapshot unknown reporting, FIFO timeouts and cloud print queue latency separately. Prepare a bounded-cost optimized snapshot implementation before considering reactivation; separate approval required.
 
 ## Mandatory update protocol
 - Single writer; do not write main directly; do not force push.
