@@ -175,7 +175,7 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     await client.query(
       `INSERT INTO public.purchase_items
          (purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at)
-       VALUES($1,$2,'kg',1.5,16,24,$3)`,
+       VALUES($1,$2,'g',1500,0.016,24,$3)`,
       [legacyPurchaseId, legacyMaterial, t0],
     );
 
