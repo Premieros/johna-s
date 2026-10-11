@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
 import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
@@ -455,9 +456,12 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
       [rawId,branchId,cost,ref,minutesAgo],
     );
     await priceEvent(23,'STAGING-FIRST-APPROVED',2);
-    await client.query(
-      'ALTER TABLE public.order_kitchen_inventory_events ENABLE TRIGGER trg_capture_kitchen_ingredient_prices',
-    );
+    // Execute the exact proposed Stage B SQL in this disposable transaction,
+    // including its grants/function-body/trigger guards.
+    await client.query(readFileSync(
+      'scripts/experiments/kitchen_approved_price_stage_b_enable_ONLY_IF_APPROVED_20261011.sql',
+      'utf8',
+    ));
     try {
       const qtyBefore=await batchQty(unitA);
       const firstOrder=await createOrder();
@@ -512,6 +516,41 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
         (c:{raw_material_id:string})=>c.raw_material_id===rawId,
       );
       expect(Number(latest.unit_cost)).toBe(31);
+
+      // With Stage B active, cancellation must return stock without repricing
+      // the frozen ingredient snapshot or mutating unrelated journal paths.
+      const cashierPermission=await client.query<{ permissions: unknown }>(
+        "SELECT permissions FROM public.roles WHERE role='cashier'",
+      );
+      const priorPermissions=cashierPermission.rows[0]?.permissions ?? [];
+      try {
+        await client.query(
+          `UPDATE public.roles SET permissions =
+             COALESCE(permissions,'[]'::jsonb) || '["pos.void"]'::jsonb
+           WHERE role='cashier'`,
+        );
+        const item=await client.query<{ id:string }>(
+          'SELECT id FROM public.order_items WHERE order_id=$1 LIMIT 1',
+          [nextOrder.order_id],
+        );
+        const voided=await asUser(async()=>client.query(
+          "SELECT public.cancel_sent_order_item_exact($1,$2,1,'isolated staging void') AS r",
+          [nextOrder.order_id,item.rows[0].id],
+        ));
+        expect(voided.rows[0].r.success,JSON.stringify(voided.rows[0].r)).toBe(true);
+      } finally {
+        await client.query(
+          "UPDATE public.roles SET permissions=$1::jsonb WHERE role='cashier'",
+          [JSON.stringify(priorPermissions)],
+        );
+      }
+      expect(await batchQty(unitA)).toBe(qtyBefore-1);
+      const frozenAfterVoid=await client.query(
+        'SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1',
+        [nextOrder.order_id],
+      );
+      expect(frozenAfterVoid.rows[0].component_snapshot).toEqual(nextEvent.rows[0].component_snapshot);
+
       const flags=await client.query(
         "SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='public.order_kitchen_inventory_events'::regclass AND tgname='trg_sync_sale_source_order_from_kitchen_event'",
       );
