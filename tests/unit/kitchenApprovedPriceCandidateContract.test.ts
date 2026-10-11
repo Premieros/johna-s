@@ -8,7 +8,31 @@ const emergency = readFileSync(
   'supabase/migrations/20261011063452_pause_blocking_kitchen_price_snapshot_20261011.sql', 'utf8',
 );
 
+
+const stageA = readFileSync(
+  'scripts/experiments/kitchen_approved_price_stage_a_sql_PROPOSAL_20261011.sql', 'utf8',
+);
+const stageB = readFileSync(
+  'scripts/experiments/kitchen_approved_price_stage_b_enable_ONLY_IF_APPROVED_20261011.sql', 'utf8',
+);
+const emergencyDisable = readFileSync(
+  'scripts/experiments/kitchen_approved_price_emergency_disable_PROPOSAL_20261011.sql', 'utf8',
+);
+
 describe('P0 approved kitchen price optimization draft safety (#486)', () => {
+  it('separates installing inactive capture code from separately approved trigger activation', () => {
+    expect(stageA).toContain('_kitchen_approved_price_candidate(');
+    expect(stageA).toContain('KITCHEN_CAPTURE_TRIGGER_MUST_REMAIN_DISABLED');
+    expect(stageA).toContain('SOURCE_ORDER_SYNC_EXPECTED_ENABLED');
+    expect(stageA).not.toMatch(/ALTER TABLE public\\.order_kitchen_inventory_events\\s+ENABLE TRIGGER/i);
+    expect(stageB).toMatch(/ALTER TABLE public\\.order_kitchen_inventory_events\\s+ENABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
+    expect(stageB).toContain('OPTIMIZED_CAPTURE_FUNCTION_NOT_INSTALLED');
+    expect(emergencyDisable).toMatch(/ALTER TABLE public\\.order_kitchen_inventory_events\\s+DISABLE TRIGGER trg_capture_kitchen_ingredient_prices/);
+    expect(stageA).not.toMatch(/\\bTRUNCATE\\s+|\\bDELETE FROM public\\.|\\bUPDATE public\\.order_kitchen_inventory_events/i);
+    expect(stageB).not.toMatch(/\\bTRUNCATE\\s+|\\bDELETE FROM public\\.|\\bUPDATE public\\.order_kitchen_inventory_events/i);
+    expect(existsSync('supabase/migrations/20261011120000_kitchen_price_capture_resume.sql')).toBe(false);
+  });
+
   it('keeps unapproved SQL out of canonical migrations and leaves the emergency pause intact', () => {
     expect(existsSync('supabase/migrations/20261011113000_kitchen_approved_price_candidate.sql')).toBe(false);
     expect(candidate).toContain('SECURITY INVOKER');
