@@ -4,9 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `44c9d627`
-- Current active branch: `hotfix/pos-negative-stock-client-guard-20261009`
-- Mandatory active work log: `docs/POS_NEGATIVE_STOCK_HOTFIX_2026-10-09.md`
+- Latest main baseline reconciled: `3e2420543700258c9754a1af7234d4043ff30f0f`
+- Current active branch: `fix/kitchen-fifo-print-warehouse-20261011`
+- Mandatory active work log: `docs/KITCHEN_PENDING_PERFORMANCE_2026-10-11.md`
+
+## Active emergency follow-up — 2026-10-11
+- User requested **stop further operational testing** and fix remaining kitchen/print/warehouse issues. No new live orders or print experiments.
+- #488 production pause already applied as Supabase migration `20261011063452`; `trg_capture_kitchen_ingredient_prices` remains disabled. No repeat/re-enable.
+- #489 follow-up in **DRAFT / BLOCKED**: propose scoped partial indexes for open-order print prefix lookup and known-cost raw FIFO lookups, and fail-closed linked-order warehouse selection in client. SQL `20261011083000_kitchen_fifo_print_lookup_indexes.sql` is **NOT APPLIED** to Production.
+- Exact-head Full Verify is a merge gate, not approval to apply production schema or deploy the frontend. Separate approval required; no warehouse default/data changes.
 
 ## Operational rules
 - السجل هو المرجع الإجباري للعمل، وهذا الملف يحدد المسار النشط الوحيد.
