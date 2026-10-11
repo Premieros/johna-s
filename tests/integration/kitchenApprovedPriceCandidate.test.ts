@@ -369,6 +369,25 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     expect(r.rows).toEqual([{ tgenabled: 'D' }]);
   });
 
+
+  it('proposed Stage A SQL installs an inert function and preserves both trigger flags', async () => {
+    // Executed ONLY inside this disposable transaction. Never run Stage B in CI.
+    await client.query(readFileSync(
+      'scripts/experiments/kitchen_approved_price_stage_a_sql_PROPOSAL_20261011.sql','utf8',
+    ));
+    const r=await client.query(
+      "SELECT pg_get_functiondef('public._capture_kitchen_ingredient_prices()'::regprocedure) AS body",
+    );
+    expect(r.rows[0].body).toContain('_kitchen_approved_price_candidate');
+    const flags=await client.query(
+      "SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='public.order_kitchen_inventory_events'::regclass AND tgname IN ('trg_capture_kitchen_ingredient_prices','trg_sync_sale_source_order_from_kitchen_event') ORDER BY tgname",
+    );
+    expect(flags.rows).toEqual([
+      {tgname:'trg_capture_kitchen_ingredient_prices',tgenabled:'D'},
+      {tgname:'trg_sync_sale_source_order_from_kitchen_event',tgenabled:'O'},
+    ]);
+  });
+
   // Local-only workload: transactional synthetic records, never real orders.
   // Matches recent production ledger count (36,581) but NOT source/branch skew.
   it.skipIf(!dbUrl || !/^(localhost|127\\.0\\.0\\.1|::1)$/.test(new URL(dbUrl).hostname))(
