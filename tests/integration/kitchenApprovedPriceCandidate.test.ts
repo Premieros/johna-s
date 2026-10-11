@@ -175,7 +175,7 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     await client.query(
       `INSERT INTO public.purchase_items
          (purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at)
-       VALUES($1,$2,'g',1500,0.016,24,$3)`,
+       VALUES($1,$2,'g',1200,0.02,24,$3)`,
       [legacyPurchaseId, legacyMaterial, t0],
     );
 
@@ -300,7 +300,7 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     const legacy = await prices(branchA, [legacyMaterial], asOf);
     expect(legacy).toHaveLength(1);
     expect(legacy[0].price_source).toBe('purchase');
-    expect(Number(legacy[0].unit_cost)).toBe(16);
+    expect(Number(legacy[0].unit_cost)).toBe(20); // 0.02 EGP/g stored at 2dp => 20 EGP/kg
     // A same-purchase legacy item is present with a conflicting 999 cost but
     // must not override the qualified ledger receipt of 45.
     const ledger = await prices(branchA, [purchasedMaterial], afterFuture);
