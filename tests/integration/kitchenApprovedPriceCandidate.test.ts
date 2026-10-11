@@ -18,6 +18,10 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
   const noApprovedPrice = randomUUID();
   const foreignMaterial = randomUUID();
   const purchasedMaterial = randomUUID();
+  const legacyMaterial = randomUUID();
+  const tiedMaterial = randomUUID();
+  const kgStockUnit = randomUUID();
+  const deniedBranchUser = randomUUID();
   const manager = randomUUID();
   const purchase = randomUUID();
   const asOf = new Date();
@@ -84,11 +88,31 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
         `purchase-${purchasedMaterial.slice(0,8)}`,
       ],
     );
+    // Real normalization helper uses public.units, not measurement_units.
+    await client.query(
+      `INSERT INTO public.units(id,code,name,symbol,is_active)
+       VALUES($1,$2,'Candidate kilogram','كجم',true)`,
+      [kgStockUnit, `candidate-kg-${randomUUID().slice(0,8)}`],
+    );
+    await client.query(
+      `INSERT INTO public.raw_materials
+          (id,code,name,branch_id,unit_id,default_cost,is_active)
+       VALUES ($1,$3,'Legacy purchase material',$5,$7,777,true),
+              ($2,$4,'Tie resolution material',$5,$7,777,true)`,
+      [
+        legacyMaterial, tiedMaterial,
+        `legacy-${legacyMaterial.slice(0,8)}`,
+        `tie-${tiedMaterial.slice(0,8)}`,
+        branchA, branchB, kgStockUnit,
+      ],
+    );
     for (const [id, raw, branch, price, ref, at] of [
       [randomUUID(), material, branchA, 10, 'FIRST', t0],
       [randomUUID(), material, branchA, 20, 'LATEST', t2],
       [randomUUID(), material, branchA, 30, 'FUTURE', future],
       [randomUUID(), foreignMaterial, branchB, 77, 'CROSS-BRANCH', t2],
+      [randomUUID(), tiedMaterial, branchA, 55, 'PRICE-A', t1],
+      [randomUUID(), tiedMaterial, branchA, 66, 'PRICE-Z', t1],
     ] as const) {
       await client.query(
         `INSERT INTO public.raw_material_price_events
@@ -113,6 +137,11 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
        VALUES($1,$2,15)`,
       [stock.rows[0].id, material],
     );
+    await client.query(
+      `INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,unit_cost)
+       VALUES($1,$2,99)`,
+      [stock.rows[0].id, tiedMaterial],
+    );
 
     await client.query(
       `INSERT INTO public.purchases(id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at)
@@ -127,10 +156,38 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
       [purchasedMaterial, branchA, warehouseA, purchase, t2],
     );
 
+    // When purchase ledger exists, the legacy item MUST be suppressed even
+    // if its later approval timestamp and amount would otherwise win.
+    await client.query(
+      `INSERT INTO public.purchase_items
+         (purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at)
+       VALUES($1,$2,'kg',1,999,999,$3)`,
+      [purchase, purchasedMaterial, future],
+    );
+
+    const legacyPurchaseId = randomUUID();
+    await client.query(
+      `INSERT INTO public.purchases
+        (id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at,approved_at)
+       VALUES($1,$2,$3,24,24,24,'completed',$4,$5)`,
+      [legacyPurchaseId, `LEGACY-${randomUUID().slice(0,7)}`, branchA, t0, t1],
+    );
+    await client.query(
+      `INSERT INTO public.purchase_items
+         (purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at)
+       VALUES($1,$2,'kg',1.5,16,24,$3)`,
+      [legacyPurchaseId, legacyMaterial, t0],
+    );
+
     await client.query(
       `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
        VALUES($1,$2,'Candidate Manager','branch_manager',$3,true)`,
       [manager, `${randomUUID()}@test.local`, branchA],
+    );
+    await client.query(
+      `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
+       VALUES($1,$2,'Different Branch Manager','branch_manager',$3,true)`,
+      [deniedBranchUser, `${randomUUID()}@test.local`, branchB],
     );
   });
 
@@ -203,6 +260,81 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
       await client.query('RESET ROLE');
       await client.query('RESET app.user_id');
     }
+  });
+
+
+  it('honors explicit function EXECUTE grants instead of the PostgreSQL PUBLIC default', async () => {
+    const r = await client.query(`
+      SELECT
+        has_function_privilege('anon',
+          'public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)',
+          'EXECUTE') AS anon_can_execute,
+        has_function_privilege('authenticated',
+          'public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)',
+          'EXECUTE') AS authenticated_can_execute,
+        has_function_privilege('service_role',
+          'public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)',
+          'EXECUTE') AS service_can_execute
+    `);
+    expect(r.rows[0]).toEqual({
+      anon_can_execute: false,
+      authenticated_can_execute: true,
+      service_can_execute: true,
+    });
+  });
+
+  it('normalizes legacy purchase unit costs and prevents ledger/legacy duplication', async () => {
+    const legacy = await prices(branchA, [legacyMaterial], asOf);
+    expect(legacy).toHaveLength(1);
+    expect(legacy[0].price_source).toBe('purchase');
+    expect(Number(legacy[0].unit_cost)).toBe(16);
+    // A same-purchase legacy item is present with a conflicting 999 cost but
+    // must not override the qualified ledger receipt of 45.
+    const ledger = await prices(branchA, [purchasedMaterial], afterFuture);
+    expect(Number(ledger[0].unit_cost)).toBe(45);
+    const canonical = await client.query(
+      `SELECT raw_material_id::text,unit_cost::numeric(18,6)::text,price_source
+       FROM public.get_raw_material_current_prices($1,$2::uuid[])
+       ORDER BY raw_material_id`,
+      [branchA, [legacyMaterial, purchasedMaterial]],
+    );
+    expect(
+      [...legacy, ...ledger].sort((a,b) => a.raw_material_id.localeCompare(b.raw_material_id))
+        .map(x => ({raw_material_id:x.raw_material_id,unit_cost:x.unit_cost,price_source:x.price_source}))
+    ).toEqual(canonical.rows);
+  });
+
+  it('uses source priority and reference descending ties, not arbitrary insertion order', async () => {
+    const r = await prices(branchA, [tiedMaterial], new Date(t1.getTime()+1_000));
+    expect(r).toHaveLength(1);
+    expect(r[0].price_source).toBe('pricing'); // outranks tied stock_count
+    expect(r[0].reference_number).toBe('PRICE-Z');
+    expect(Number(r[0].unit_cost)).toBe(66);
+  });
+
+  it('rejects wrong-branch price access under an authenticated branch manager', async () => {
+    await client.query("SELECT set_config('app.user_id',$1,true)", [deniedBranchUser]);
+    await client.query('SET LOCAL ROLE authenticated');
+    try {
+      const r = await prices(branchA, [material, purchasedMaterial], asOf);
+      expect(r).toEqual([]);
+      const local = await prices(branchB, [foreignMaterial], asOf);
+      expect(local).toHaveLength(1);
+      expect(local[0].raw_material_id).toBe(foreignMaterial);
+    } finally {
+      await client.query('RESET ROLE');
+      await client.query('RESET app.user_id');
+    }
+  });
+
+  it('returns no price with a null dispatch cutoff or missing material ids', async () => {
+    const r = await client.query(
+      `SELECT raw_material_id FROM public._kitchen_approved_price_candidate
+        ($1,$2::uuid[],$3::timestamptz)`,
+      [branchA,[material],null],
+    );
+    expect(r.rows).toEqual([]);
+    expect(await prices(branchA, [], asOf)).toEqual([]);
   });
 
   it('does not enable or change the kitchen trigger in the sandbox', async () => {
