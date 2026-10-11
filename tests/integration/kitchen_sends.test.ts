@@ -430,4 +430,97 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     }
   });
 
+  it('STAGING ONLY: enabled Stage B snapshot freezes approved prices without duplicate send or stock', async () => {
+    // Rollback-only CI transaction; never create a live POS order, paper ticket
+    // or production trigger activation. Exact same Stage B enable mechanism.
+    const material = await client.query<{ raw_material_id: string }>(
+      `SELECT raw_material_id::text
+       FROM public.inventory_unit_recipes
+       WHERE unit_id=$1 ORDER BY id LIMIT 1`,
+      [unitA],
+    );
+    const rawId=material.rows[0]?.raw_material_id;
+    expect(rawId).toBeTruthy();
+    const initialState=await client.query<{ tgenabled: string }>(
+      `SELECT tgenabled FROM pg_trigger
+       WHERE tgrelid='public.order_kitchen_inventory_events'::regclass
+         AND tgname='trg_capture_kitchen_ingredient_prices'`,
+    );
+    expect(initialState.rows).toEqual([{tgenabled:'D'}]);
+
+    const priceEvent=async(cost:number,ref:string,minutesAgo:number)=>client.query(
+      `INSERT INTO public.raw_material_price_events
+       (raw_material_id,branch_id,unit_cost,source,reference_number,priced_at)
+       VALUES($1,$2,$3,'pricing',$4,now()-($5::int * interval '1 minute'))`,
+      [rawId,branchId,cost,ref,minutesAgo],
+    );
+    await priceEvent(23,'STAGING-FIRST-APPROVED',2);
+    await client.query(
+      'ALTER TABLE public.order_kitchen_inventory_events ENABLE TRIGGER trg_capture_kitchen_ingredient_prices',
+    );
+    try {
+      const qtyBefore=await batchQty(unitA);
+      const firstOrder=await createOrder();
+      expect(firstOrder.success).toBe(true);
+      const first=await sendToKitchen(firstOrder.order_id!);
+      expect(first.success,JSON.stringify(first)).toBe(true);
+      expect(first.items_sent_count).toBe(1);
+      expect(await batchQty(unitA)).toBe(qtyBefore-1);
+
+      const result=await client.query<{ component_snapshot: Array<{
+        raw_material_id:string; quantity:string|number; unit_cost:number|null;
+        extended_cost:number|null;price_source:string;priced_at:string|null;
+      }> }>(
+        `SELECT component_snapshot
+           FROM public.order_kitchen_inventory_events
+          WHERE order_id=$1 ORDER BY created_at DESC LIMIT 1`,
+        [firstOrder.order_id],
+      );
+      expect(result.rows).toHaveLength(1);
+      const components=result.rows[0].component_snapshot;
+      const approved=components.find(c=>c.raw_material_id===rawId);
+      expect(approved).toBeDefined();
+      expect(Number(approved?.unit_cost)).toBe(23);
+      expect(Number(approved?.extended_cost)).toBeCloseTo(23*Number(approved?.quantity),6);
+      expect(approved?.price_source).toBe('pricing');
+      expect(approved?.priced_at).toBeTruthy();
+
+      // A newly approved price must NOT retrospectively update the first send.
+      await priceEvent(31,'STAGING-SECOND-APPROVED',1);
+      const resend=await sendToKitchen(firstOrder.order_id!);
+      expect(resend.success).toBe(true);
+      expect(resend.items_sent_count).toBe(0);
+      expect(await batchQty(unitA)).toBe(qtyBefore-1);
+      const reread=await client.query(
+        'SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1',
+        [firstOrder.order_id],
+      );
+      expect(reread.rows).toHaveLength(1);
+      expect(reread.rows[0].component_snapshot).toEqual(components);
+
+      const nextOrder=await createOrder();
+      expect(nextOrder.success).toBe(true);
+      const next=await sendToKitchen(nextOrder.order_id!);
+      expect(next.success,JSON.stringify(next)).toBe(true);
+      expect(next.items_sent_count).toBe(1);
+      expect(await batchQty(unitA)).toBe(qtyBefore-2);
+      const nextEvent=await client.query(
+        'SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1',
+        [nextOrder.order_id],
+      );
+      const latest=nextEvent.rows[0].component_snapshot.find(
+        (c:{raw_material_id:string})=>c.raw_material_id===rawId,
+      );
+      expect(Number(latest.unit_cost)).toBe(31);
+      const flags=await client.query(
+        "SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='public.order_kitchen_inventory_events'::regclass AND tgname='trg_sync_sale_source_order_from_kitchen_event'",
+      );
+      expect(flags.rows).toEqual([{tgname:'trg_sync_sale_source_order_from_kitchen_event',tgenabled:'O'}]);
+    } finally {
+      await client.query(
+        'ALTER TABLE public.order_kitchen_inventory_events DISABLE TRIGGER trg_capture_kitchen_ingredient_prices',
+      );
+    }
+  });
+
 });
