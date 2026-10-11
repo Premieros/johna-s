@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 describe('emergency kitchen price snapshot trigger isolation', () => {
-  const migration = readFileSync('supabase/migrations/20261011060000_pause_blocking_kitchen_price_snapshot.sql', 'utf8');
+  const migration = readFileSync('supabase/migrations/20261011063452_pause_blocking_kitchen_price_snapshot_20261011.sql', 'utf8');
   const kitchen = readFileSync('src/features/pos/services/kitchen.ts', 'utf8');
   const dispatch = readFileSync('src/features/pos/services/kitchenDispatch.ts', 'utf8');
   const original = readFileSync('supabase/migrations/20261009143000_kitchen_sale_known_price_snapshot.sql', 'utf8');
