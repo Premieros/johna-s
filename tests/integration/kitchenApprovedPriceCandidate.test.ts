@@ -474,7 +474,7 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
 
   // Local-only workload: transactional synthetic records, never real orders.
   // Matches recent production ledger count (36,581) but NOT source/branch skew.
-  it.skipIf(!dbUrl || !/^(localhost|127\\.0\\.0\\.1|::1)$/.test(new URL(dbUrl).hostname))(
+  it.skipIf(!dbUrl || !/^(localhost|127\.0\.0\.1|::1)$/.test(new URL(dbUrl).hostname))(
     'logs local paired EXPLAIN ANALYZE plans/median/p95 without asserting live speed',
     async () => {
       await client.query("SELECT set_config('statement_timeout','45000',true)");
