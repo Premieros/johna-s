@@ -272,28 +272,34 @@ BEGIN
       );
     END IF;
 
-    -- Initialize only a server-owned temporary context. A client-created
-    -- namesake is ignored and the capture trigger uses its canonical reader.
-    IF (SELECT count(*) FROM pg_temp.kns_delta)>1 AND (
-      to_regclass('pg_temp.kitchen_price_context_candidate') IS NULL
-      OR EXISTS (
-        SELECT 1 FROM pg_class c
-        WHERE c.oid=to_regclass('pg_temp.kitchen_price_context_candidate')
-          AND c.relowner=(SELECT proowner FROM pg_proc
-            WHERE oid='public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure)
-          AND c.relnamespace=pg_my_temp_schema() AND c.relpersistence='t'
-      )
-    ) THEN
-      CREATE TEMP TABLE IF NOT EXISTS pg_temp.kitchen_price_context_candidate (
-        key text PRIMARY KEY,payload jsonb NOT NULL
-      ) ON COMMIT DROP;
-      REVOKE ALL ON TABLE pg_temp.kitchen_price_context_candidate FROM PUBLIC,anon,authenticated,service_role;
-      TRUNCATE pg_temp.kitchen_price_context_candidate;
-      INSERT INTO pg_temp.kitchen_price_context_candidate(key,payload)
-      SELECT 'scope',jsonb_build_object(
-        'branch_id',v_branch_id,'actor_id',auth.uid(),'as_of',now(),
-        'txid',txid_current()::text,'event_ids',jsonb_agg(event_id::text)
-      ) FROM pg_temp.kns_delta;
+    -- Keep the backend-local object, delete data at commit. Recreating
+    -- temporary catalogs for every send would increase WAL and CPU.
+    IF (SELECT count(*) FROM pg_temp.kns_delta)>1 THEN
+      IF to_regclass('pg_temp.kitchen_price_context_candidate') IS NULL THEN
+        CREATE TEMP TABLE pg_temp.kitchen_price_context_candidate (
+          key text PRIMARY KEY,payload jsonb NOT NULL
+        ) ON COMMIT DELETE ROWS;
+        REVOKE ALL ON TABLE pg_temp.kitchen_price_context_candidate FROM PUBLIC,anon,authenticated,service_role;
+      END IF;
+      IF EXISTS (
+        SELECT c.oid FROM pg_class c
+       WHERE c.oid=to_regclass('pg_temp.kitchen_price_context_candidate')
+         AND c.relnamespace=pg_my_temp_schema() AND c.relpersistence='t'
+         AND c.relowner=(SELECT proowner FROM pg_proc
+           WHERE oid='public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure)
+         AND NOT has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+         AND NOT has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+         AND NOT has_table_privilege('service_role',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+         AND has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE')
+      ) THEN
+        -- DELETE, rather than TRUNCATE, avoids replacing temporary relfilenodes.
+        DELETE FROM pg_temp.kitchen_price_context_candidate;
+        INSERT INTO pg_temp.kitchen_price_context_candidate(key,payload)
+        SELECT 'scope',jsonb_build_object(
+          'branch_id',v_branch_id,'actor_id',auth.uid(),'as_of',now(),
+          'txid',txid_current()::text,'event_ids',jsonb_agg(event_id::text)
+        ) FROM pg_temp.kns_delta;
+      END IF;
     END IF;
 
     -- Plan only when an exact configuration is repeated.
