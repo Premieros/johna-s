@@ -153,6 +153,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     const created=await createOrder(itemJson([
       {product_id:prodB,quantity:2,notes:'valid first'},
       {product_id:prodA,quantity:1,notes:'invalid second',modifier_option_ids:[badOption]},
+      {product_id:prodA,quantity:2,notes:'invalid repeated',modifier_option_ids:[badOption]},
     ]));
     expect(created.success,JSON.stringify(created)).toBe(true);
     await client.query("UPDATE public.order_items SET created_at=now()-interval '1 minute' WHERE order_id=$1 AND product_id=$2",[created.order_id,prodB]);
