@@ -50,6 +50,7 @@ Tests: `tests/integration/kitchenComponentReuseDispatchCandidate.test.ts` runs o
 - إبقاء FIFO والسالب والدفاتر ولقطات السعر والحماية كما هي في هذه المرحلة.
 - اختبار عدم التكرار/الفشل الكامل والعزل والوصفات المختلفة/السطر المتكرر/الخام غير المكوّن.
 - لا تبنّي التحسين إذا زادت كلفة الإرسال الكلية.
+- Live read-only `_ensure_pos_fallback_product_raw` review proved that fallback can create the PRODUCT recipe during dispatch. If ANY configuration of a product resolves empty or errors, ALL configurations of that product keep canonical per-line resolution. Hoisting must not hide the newly materialized base recipe from a later modifier configuration. New replay test uses repeated plain lines then an extra ingredient, and proves three auto-raw deductions plus the extra raw, with the recipe initially unconfigured.
 
 ### P2 — أسعار الخامات المميزة مرة في الإرسال
 **بدأ التنفيذ التجريبي المعزول؛ لا تفعيل إنتاج.**
