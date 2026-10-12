@@ -20,8 +20,8 @@ describe('Johnas #489 staged total database work reduction contracts', () => {
   });
 
   it('terminates all three staged SQL functions rather than concatenating bare definitions', () => {
-    expect((balanceAndCount.match(/CREATE OR REPLACE FUNCTION public\\./g) || []).length).toBe(3);
-    expect((balanceAndCount.match(/\\$function\\$;\\s+CREATE OR REPLACE FUNCTION public\\./g) || []).length).toBe(2);
+    expect(balanceAndCount.split('CREATE OR REPLACE FUNCTION public.')).toHaveLength(4);
+    expect(balanceAndCount.split('$function$;')).toHaveLength(4);
     expect(balanceAndCount.trimEnd().endsWith(';')).toBe(true);
   });
 
