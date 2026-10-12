@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
 import { attachDirectRawComponentToProduct, rawQtyForProduct } from './componentTestFixtures';
@@ -297,5 +298,101 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     );
     expect(Number(finalBaseline.rows[0]?.served_quantity)).toBe(3);
   });
+
+  it('benchmarks REAL send_to_kitchen with 1/5/20/50 units before/after shared FIFO helper deltas', async () => {
+    // This is rollback-only local CI: no physical tickets, no production order.
+    // Stage B touches shared raw FIFO helpers, NOT send_to_kitchen itself.
+    const stage = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
+    const reviewProduct = randomUUID();
+    await client.query(
+      "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'FIFO Kitchen Load',$2,100,10,true)",
+      [reviewProduct, branchId],
+    );
+    await client.query(
+      "INSERT INTO public.inventory_batches(product_id,warehouse_id,branch_id,quantity,unit_cost) VALUES($1,$2,$3,100,10)",
+      [reviewProduct, warehouseId, branchId],
+    );
+    await client.query(
+      "INSERT INTO public.inventory(product_id,warehouse_id,branch_id,quantity) VALUES($1,$2,$3,100)",
+      [reviewProduct, warehouseId, branchId],
+    );
+    const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
+    const readState = async (orderId: string) => {
+      const r = await client.query<{
+        stock: string; official: string | null; sends: string; events: string; ledger: string;
+      }>(
+        `SELECT
+           (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_batches
+             WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3) stock,
+           (SELECT quantity::text FROM public.raw_material_inventory
+             WHERE raw_material_id=$1 AND branch_id=$2) official,
+           (SELECT count(*)::text FROM public.order_kitchen_sends WHERE order_id=$4) sends,
+           (SELECT count(*)::text FROM public.order_kitchen_inventory_events WHERE order_id=$4) events,
+           (SELECT count(*)::text FROM public.inventory_ledger
+             WHERE raw_material_id=$1 AND branch_id=$2 AND quantity<0) ledger`,
+        [rawId, branchId, warehouseId, orderId],
+      );
+      return r.rows[0];
+    };
+    const sendMeasured = async (orderId: string) => {
+      const r = await asCashier(async () =>
+        client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
+          'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) SELECT public.send_to_kitchen($1)',
+          [orderId],
+        ),
+      );
+      const envelope = r.rows[0]['QUERY PLAN'][0];
+      const plan = (envelope.Plan || {}) as Record<string, number>;
+      return {
+        ms: Number(envelope['Execution Time'] || 0),
+        sharedHits: Number(plan['Shared Hit Blocks'] || 0),
+        walRecords: Number(plan['WAL Records'] || 0),
+        walBytes: Number(plan['WAL Bytes'] || 0),
+      };
+    };
+    const samples = [];
+    for (const quantity of [1, 5, 20, 50]) {
+      await client.query('SAVEPOINT fifo_kitchen_case');
+      const created = await asCashier(async () => {
+        const cart = JSON.stringify([{
+          product_id: reviewProduct, unit_name: 'piece', quantity, unit_price: 100,
+          discount_amount: 0, bonus_quantity: 0, total: quantity * 100,
+        }]);
+        const r = await client.query(
+          "SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,$3,0,'amount',0,$3,$4) AS r",
+          [branchId, cart, quantity * 100, cashierId],
+        );
+        return r.rows[0].r;
+      });
+      expect(created.success).toBe(true);
+      const orderId = String(created.order_id);
+      await client.query('SAVEPOINT fifo_kitchen_send');
+      const baseline = await sendMeasured(orderId);
+      const beforeState = await readState(orderId);
+      expect(Number(beforeState.stock)).toBe(100 - quantity);
+      expect(Number(beforeState.sends)).toBe(1);
+      expect(Number(beforeState.events)).toBeGreaterThanOrEqual(1);
+
+      await client.query('ROLLBACK TO SAVEPOINT fifo_kitchen_send');
+      await client.query(stage);
+      const optimized = await sendMeasured(orderId);
+      const afterState = await readState(orderId);
+      expect(afterState).toEqual(beforeState);
+
+      // A repeated kitchen send must not consume inventory again.
+      const retried = await send(orderId);
+      expect(retried.success).toBe(true);
+      expect(retried.items_sent_count).toBe(0);
+      expect(await readState(orderId)).toEqual(afterState);
+
+      samples.push({ quantity, baseline, optimized });
+      await client.query('ROLLBACK TO SAVEPOINT fifo_kitchen_case');
+    }
+    console.info('RAW_FIFO_REAL_KITCHEN_FACTORIAL_LOCAL', JSON.stringify({
+      scope: 'Actual send_to_kitchen RPC, staged warehouse-aware stock delta only; local rollback-only',
+      samples,
+      caution: 'One sample per size. No production, concurrent load, full-sale payment or print latency.',
+    }));
+  }, 120000);
 
 });
