@@ -53,7 +53,7 @@ describe('negative-first raw stock shadow design contract (#489)', () => {
     for (const action of ['INSERT', 'UPDATE', 'DELETE']) {
       expect(candidate).toContain(`TG_OP = '${action}'`);
     }
-    expect(candidate).toContain('NEW.quantity * NEW.unit_cost - OLD.quantity * OLD.unit_cost');
+    expect(candidate).toContain('NEW.quantity*NEW.unit_cost - OLD.quantity*OLD.unit_cost');
     expect(candidate).not.toContain('ON CONFLICT (raw_material_id,branch_id) DO UPDATE');
     expect(candidate).toContain('ON CONFLICT (raw_material_id,branch_id,warehouse_id) DO UPDATE');
     expect(candidate).toContain('RAW_STOCK_SHADOW_BOOTSTRAP_PARITY_FAILED');
