@@ -90,6 +90,34 @@ State: **BLOCKED** for production; independent review and isolated CI only.
 - Production-adjacent index DDL remains intentionally unapplied; these failures
   are isolated CI candidate problems and NOT evidence of production regressions.
 
+### Verified October 12 exact-head observations
+
+- CI `38247008594` GREEN on `bf16f96`: verify, pages, DB and browser checks,
+  994/994 DB tests; first single 12-debt receipt showed 18.274ms vs 8.175ms,
+  shared buffer hits 4,043 vs 2,911, but WAL **increased** 32,673 to 34,631
+  bytes. One-off execution-time savings cannot be called a total-load win.
+- CI `38249478933` DB GREEN on `ed2f567`: 995/995 integration tests; 1/5/20/50
+  **units of one item** measured through REAL `send_to_kitchen` (not physical print).
+  Observed original/staged times: 12.937/14.196ms; 13.439/13.936ms;
+  13.595/13.753ms; 13.553/13.612ms. Kitchen latency did **not** improve
+  in these isolated examples. Idempotent re-send and stock/snapshot parity passed.
+- Same CI factorial test, 12 sale-origin negative stock deductions + 2 receipts:
+  original/no extra index **40.429ms, 57,270 WAL bytes**;
+  candidate/no extra index **21.572ms, 59,269 WAL bytes**;
+  original/new FIFO partial index **24.350ms, 61,959 WAL bytes**;
+  candidate/new index **24.268ms, 57,422 WAL bytes**.
+  Candidate+index WAL is **0.27% above** original/no-index (not a demonstrated
+  overall WAL improvement); relative to original WITH the same index candidate
+  WAL is 7.32% less. Index maintenance and cache/order effects are NOT yet
+  separable from actual production workload. Negative helper measurements
+  are shared with sale/kitchen callers but are not complete point-of-sale RPCs.
+- Added a 100-debt source parity/receipt stress test, with 2,000 source debts
+  enabled only by explicit local `RAW_FIFO_REVIEW_DEEP_BENCH=1`; neither is
+  claimed green until exact-head CI completes. 2,000 is not routinely run by CI.
+- Decision: **production gate remains BLOCKED**. Need repeat distributions,
+  direct-sale end-to-end, busy kitchen across many distinct lines, concurrency,
+  index WAL tradeoff and total transaction workload across sources. No live mutation.
+
 ## Production gate
 State: **BLOCKED**
 - Do not ship even if static + CI integration tests pass. Need independent staging load
