@@ -104,6 +104,35 @@ UPDATE shadow_batch_fixture
 SET warehouse_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid
 WHERE warehouse_id='dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid;
 
+-- Independent physical-count model: balance -10, counted +5, so the
+-- adjustment amount is 15 (NOT 5). This tests the balance math only.
+-- The actual apply_stock_count RPC and financial journals must separately
+-- pass integration tests against a disposable full-schema database.
+INSERT INTO shadow_batch_fixture(raw_material_id,branch_id,warehouse_id,quantity,unit_cost)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffffffff',
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',-10,0);
+INSERT INTO shadow_batch_fixture(raw_material_id,branch_id,warehouse_id,quantity,unit_cost)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffffffff',
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',15,8);
+UPDATE shadow_batch_fixture SET quantity=0
+WHERE quantity=-10 AND raw_material_id='ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid;
+UPDATE shadow_batch_fixture SET quantity=5
+WHERE quantity=15 AND raw_material_id='ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid;
+DO $check$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM private.raw_stock_warehouse_shadow
+    WHERE raw_material_id='ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid
+      AND branch_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
+      AND warehouse_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid
+      AND quantity=5 AND positive_qty=5 AND stock_value=40
+      AND positive_value=40
+  ) THEN RAISE EXCEPTION 'NEGATIVE_COUNT_ADJUSTMENT_NOT_FIVE'; END IF;
+END;
+$check$;
+
 -- A failed call rolls back its shadow balance as well as its batch.
 SAVEPOINT failed_send;
 INSERT INTO shadow_batch_fixture(raw_material_id,branch_id,warehouse_id,quantity,unit_cost)
@@ -153,10 +182,8 @@ BEGIN
 END;
 $verify$;
 
--- PHYSICAL STOCK COUNT -10 -> +5 follows the same quantity arithmetic:
--- write a +15 stock-count adjustment and settle 10 outstanding debt.
--- Keep this explanation in the fixture; live apply_stock_count must be
--- exercised separately for full authorization / ledger / journal semantics.
-SELECT 'shadow math verified; physical-count FIFO accounting requires separate integration' AS note;
+-- Both modeled purchase and physical-count paths must be audited against
+-- real FIFO debt and journal semantics in a dedicated full-schema test.
+SELECT 'shadow quantity math checked; live FIFO accounting untested' AS note;
 
 ROLLBACK;
