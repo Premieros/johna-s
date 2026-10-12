@@ -126,6 +126,12 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
     db = new pg.Client({ connectionString: dbUrl });
     await db.connect();
     await db.query('BEGIN');
+    // Production has two FIFO estimated-cost tables absent from canonical CI.
+    // Install their read-only-captured shape transactionally, LOCAL ONLY.
+    await db.query(readFileSync(
+      'scripts/experiments/raw_fifo_price_estimate_parity_local_20261012.sql',
+      'utf8',
+    ));
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'FIFO stage benchmark')", [branch]);
     await db.query(
       "INSERT INTO public.warehouses(id,name,branch_id,is_active,is_default) VALUES($1,'Review WH1',$3,true,true),($2,'Review WH2',$3,true,false)",
@@ -155,6 +161,26 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
   });
 
   it('replays identical negative-first multiwarehouse debt settlement before/after and measures buffers, WAL and time', async () => {
+    // Both baseline and candidate must use the *same production function*
+    // rather than comparing the historical CI migration to the newer live
+    // function (which includes estimated-cost settlement logic).
+    const candidateSql = readFileSync(stageA, 'utf8');
+    const functionStart = candidateSql.indexOf('CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(');
+    expect(functionStart).toBeGreaterThan(0);
+    const afterFunction = candidateSql.slice(functionStart);
+    const deferred = '    -- Receipt batch update is deferred until after every source reconciliation.';
+    expect(afterFunction).toContain(deferred);
+    let baselineFunction = afterFunction.replace(deferred, `    UPDATE public.raw_material_batches
+    SET quantity=GREATEST(quantity-v_take,0)
+    WHERE id=v_batch.id;`);
+    const finalStart = baselineFunction.indexOf('  -- All debt, estimate, COGS/journal');
+    const finalReturn = baselineFunction.indexOf('  RETURN jsonb_build_object(', finalStart);
+    expect(finalStart).toBeGreaterThan(0);
+    expect(finalReturn).toBeGreaterThan(finalStart);
+    baselineFunction = baselineFunction.slice(0, finalStart) + baselineFunction.slice(finalReturn);
+    expect(baselineFunction).not.toContain('quantity-v_total_settled');
+    await db.query(baselineFunction);
+
     await db.query('SAVEPOINT stock_before');
     const before = await runPurchaseAfterDebt();
     await db.query('ROLLBACK TO SAVEPOINT stock_before');
