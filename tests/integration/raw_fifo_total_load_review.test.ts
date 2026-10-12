@@ -63,6 +63,20 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
     walFpi: p.Plan?.['WAL FPI'] ?? null,
   });
 
+  const total = (plans: Plan[]) => {
+    const rows = plans.map(tally);
+    return {
+      ms: Number(rows.reduce((sum, row) => sum + (row.ms ?? 0), 0).toFixed(3)),
+      sharedHits: rows.reduce((sum, row) => sum + (row.sharedHits ?? 0), 0),
+      sharedReads: rows.reduce((sum, row) => sum + (row.sharedReads ?? 0), 0),
+      sharedWrites: rows.reduce((sum, row) => sum + (row.sharedWrites ?? 0), 0),
+      sharedDirtied: rows.reduce((sum, row) => sum + (row.sharedDirtied ?? 0), 0),
+      walRecords: rows.reduce((sum, row) => sum + (row.walRecords ?? 0), 0),
+      walBytes: rows.reduce((sum, row) => sum + (row.walBytes ?? 0), 0),
+      walFpi: rows.reduce((sum, row) => sum + (row.walFpi ?? 0), 0),
+    };
+  };
+
   const qty = async (rawId: string, warehouse?: string) => {
     const sql = warehouse
       ? 'SELECT COALESCE(SUM(quantity),0)::text AS q FROM public.raw_material_batches WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3'
@@ -85,12 +99,22 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
       [rawId, branch, warehouse, amount, cost, randomUUID(), ref]);
 
   async function runPurchaseAfterDebt() {
-    for (let i = 0; i < 12; i++) await oversell(raw, 0.5, sale, 'REVIEW-DEBT-' + i);
+    // EXPLAIN ANALYZE executes the real negative-consumption helper used by
+    // sale/kitchen callers; this is NOT a timed send_to_kitchen RPC.
+    const deductions: Plan[] = [];
+    for (let i = 0; i < 12; i++) {
+      deductions.push(await measured(
+        "SELECT public._raw_remove_fifo($1,$2,$3,$4,'sale','sale',$5,$6,NULL,true)",
+        [raw, branch, wh1, 0.5, sale, 'REVIEW-DEBT-' + i],
+      ));
+    }
     expect(await qty(raw, wh1)).toBe(-6);
     expect(await qty(raw)).toBe(-6);
-    const inWh2 = await purchase(raw, wh2, 4, 11, 'REVIEW-WH2');
-    expect(inWh2[0].result.success).toBe(true);
-    expect(n(inWh2[0].result.fifo_settled_quantity)).toBe(0);
+    const otherReceipt = await measured(
+      "SELECT public._raw_add($1,$2,$3,4,11,NULL,NULL,NULL,'purchase_receipt','fifo_review',$4,'REVIEW-WH2',NULL)",
+      [raw, branch, wh2, randomUUID()],
+    );
+    expect(await qty(raw, wh2)).toBe(4);
     const receipt = await measured(
       "SELECT public._raw_add($1,$2,$3,8,7,NULL,NULL,NULL,'purchase_receipt','fifo_review',$4,'REVIEW-RECEIPT',NULL)",
       [raw, branch, wh1, randomUUID()],
@@ -118,7 +142,8 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
       debtQuantity: 6, debtSettled: 6,
       saleCost: -42, journalDelta: 42, positiveAvgCost: 9.67,
     });
-    return { result, receipt: tally(receipt) };
+    return { result, receipt: tally(receipt), negative: total(deductions),
+      otherReceipt: tally(otherReceipt), allInventoryStatements: total([...deductions, otherReceipt, receipt]) };
   }
 
   const asUser = async <T>(f: () => Promise<T>) => {
@@ -190,18 +215,35 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
     expect(baselineFunction).not.toContain('quantity-v_total_settled');
     await db.query(baselineFunction);
 
+    // Factorial A/B: isolate extra index maintenance from helper function
+    // changes. Savepoints rewind both fixture writes and transactional DDL.
     await db.query('SAVEPOINT stock_before');
-    const before = await runPurchaseAfterDebt();
+    const baselineNoIndex = await runPurchaseAfterDebt();
     await db.query('ROLLBACK TO SAVEPOINT stock_before');
 
-    await db.query(readFileSync(stageA, 'utf8'));
+    await db.query(afterFunction); // Stage A settlement, WITHOUT a new index.
     await db.query(readFileSync(stageB, 'utf8'));
-    const after = await runPurchaseAfterDebt();
-    expect(after.result).toEqual(before.result);
-    console.info('RAW_FIFO_TOTAL_LOAD_REVIEW_LOCAL', JSON.stringify({
-      debts: 12, operations: '12 negative sends + second-warehouse receipt + purchase settling debts',
-      beforeReceipt: before.receipt, afterReceipt: after.receipt,
-      caution: 'One local sample, not production-equivalent p95/p99, concurrent locks or aggregate system load',
+    const optimizedNoIndex = await runPurchaseAfterDebt();
+    expect(optimizedNoIndex.result).toEqual(baselineNoIndex.result);
+    await db.query('ROLLBACK TO SAVEPOINT stock_before');
+
+    // Same FIFO index for BOTH executions in this pair.
+    await db.query(candidateSql.slice(0, functionStart));
+    await db.query('SAVEPOINT stock_index_before');
+    const baselineWithIndex = await runPurchaseAfterDebt();
+    await db.query('ROLLBACK TO SAVEPOINT stock_index_before');
+
+    await db.query(afterFunction);
+    await db.query(readFileSync(stageB, 'utf8'));
+    const optimizedWithIndex = await runPurchaseAfterDebt();
+    expect(optimizedWithIndex.result).toEqual(baselineWithIndex.result);
+    expect(baselineWithIndex.result).toEqual(baselineNoIndex.result);
+
+    console.info('RAW_FIFO_TOTAL_LOAD_FACTORIAL_LOCAL', JSON.stringify({
+      debts: 12,
+      scope: '12 negative inventory deductions + 2 receipts, NOT complete sale/kitchen/purchase RPC',
+      baselineNoIndex, optimizedNoIndex, baselineWithIndex, optimizedWithIndex,
+      caution: 'Single rollback-only local samples; order/cache noise, not production-concurrency/p95 or index-write proof',
     }));
   }, 120000);
 
