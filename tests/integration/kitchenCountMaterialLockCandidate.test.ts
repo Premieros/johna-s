@@ -137,7 +137,8 @@ describe.skipIf(skip)('unwired material-locked stock count after kitchen oversel
     await client.query("UPDATE public.stock_counts SET status='approved' WHERE id=$1",[id]);
     await locker.query('BEGIN');
     try {
-      await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text||':'||$2::text,0))",[rawA,branchA]);
+      const sameMaterial=(await locker.query("SELECT pg_try_advisory_xact_lock(hashtextextended($1::text||':'||$2::text,0)) held",[rawA,branchA])).rows[0].held;
+      expect(sameMaterial).toBe(true);
       const independent=(await locker.query("SELECT pg_try_advisory_xact_lock(hashtextextended($1::text||':'||$2::text,0)) allowed",[rawB,branchB])).rows[0].allowed;
       expect(independent).toBe(true);
       await client.query("SET LOCAL lock_timeout='150ms'");
