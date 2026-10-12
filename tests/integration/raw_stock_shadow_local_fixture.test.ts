@@ -47,7 +47,7 @@ describe.skipIf(!isLocal)('raw stock shadow transaction SQL (disposable local DB
       "SELECT to_regclass('private.raw_stock_branch_shadow')::text AS branch, " +
       "to_regclass('private.raw_stock_warehouse_shadow')::text AS warehouse",
     );
-    expect(tables.rows[0].branch).toBe('private.raw_stock_branch_shadow');
+    expect(tables.rows[0].branch).toBeNull(); // No duplicate branch-counter.
     expect(tables.rows[0].warehouse).toBe('private.raw_stock_warehouse_shadow');
 
     const fixture = readFileSync(
