@@ -33,7 +33,7 @@ describe.skipIf(!isLocal)('raw stock shadow transaction SQL (disposable local DB
       'scripts/experiments/raw_stock_shadow_state_candidate_20261012.sql',
       'utf8',
     );
-    expect(candidate).toContain('STAGE A IS SHADOW ONLY');
+    expect(candidate).toMatch(/Stage A is SHADOW ONLY/i);
     expect(candidate.trimEnd().endsWith('COMMIT;')).toBe(true);
     await client.query(candidate);
   }, 30000);
@@ -72,18 +72,22 @@ describe.skipIf(!isLocal)('raw stock shadow transaction SQL (disposable local DB
     await client.query('BEGIN');
     try {
       await client.query(`
-        CREATE TEMP TABLE stock_pressure_plain (
+        -- Both test tables are LOGGED and created within a rolled-back
+        -- transaction. TEMP baseline would artificially undercount WAL
+        -- compared with a real logged source table.
+        CREATE TABLE private.stock_pressure_plain (
           raw_material_id uuid NOT NULL,
           branch_id uuid NOT NULL,
           warehouse_id uuid NOT NULL,
           quantity numeric NOT NULL,
           unit_cost numeric NOT NULL
-        ) ON COMMIT DROP;
-        CREATE TEMP TABLE stock_pressure_with_shadow
-          (LIKE stock_pressure_plain INCLUDING ALL) ON COMMIT DROP;
-        CREATE INDEX ON stock_pressure_plain (raw_material_id,branch_id,warehouse_id);
+        );
+        CREATE TABLE private.stock_pressure_with_shadow
+          (LIKE private.stock_pressure_plain INCLUDING ALL);
+        CREATE INDEX ON private.stock_pressure_plain (raw_material_id,branch_id,warehouse_id);
+        CREATE INDEX ON private.stock_pressure_with_shadow (raw_material_id,branch_id,warehouse_id);
         CREATE TRIGGER trg_stock_pressure_shadow
-        AFTER INSERT OR UPDATE OR DELETE ON stock_pressure_with_shadow
+        AFTER INSERT OR UPDATE OR DELETE ON private.stock_pressure_with_shadow
         FOR EACH ROW EXECUTE FUNCTION private.sync_raw_stock_shadow_from_batch();
       `);
 
@@ -100,12 +104,14 @@ describe.skipIf(!isLocal)('raw stock shadow transaction SQL (disposable local DB
         '33333333-3333-4333-8333-333333333333'::uuid,
         -1::numeric, 0::numeric FROM generate_series(1, 1200)`;
 
-      const baselineWrite = await explain(`INSERT INTO stock_pressure_plain
+      const baselineWrite = await explain(`INSERT INTO private.stock_pressure_plain
         (raw_material_id,branch_id,warehouse_id,quantity,unit_cost) ${source}`);
-      const shadowWrite = await explain(`INSERT INTO stock_pressure_with_shadow
+      const shadowWrite = await explain(`INSERT INTO private.stock_pressure_with_shadow
         (raw_material_id,branch_id,warehouse_id,quantity,unit_cost) ${source}`);
+      // This simple synthetic probe does NOT model a full Stage B cutover.
+      // Compare write WALs on the same logged storage type.
       const baselineRead = await explain(`
-        SELECT COALESCE(SUM(quantity),0) FROM stock_pressure_plain
+        SELECT COALESCE(SUM(quantity),0) FROM private.stock_pressure_plain
         WHERE raw_material_id='11111111-1111-4111-8111-111111111111'::uuid
           AND branch_id='22222222-2222-4222-8222-222222222222'::uuid
           AND warehouse_id='33333333-3333-4333-8333-333333333333'::uuid`);
@@ -131,7 +137,7 @@ describe.skipIf(!isLocal)('raw stock shadow transaction SQL (disposable local DB
         indexedWarehouseReadMs: warehouseRead['Execution Time'],
         baselineWriteWalBytes: baselineWrite.WAL?.['WAL Bytes'] ?? null,
         shadowWriteWalBytes: shadowWrite.WAL?.['WAL Bytes'] ?? null,
-        caveat: 'Not production, not a net-load benchmark: Stage B read-path rewrite absent',
+        caveat: 'Synthetic logged tables; not a net-load benchmark: Stage B read-path rewrite absent',
       }));
     } finally {
       await client.query('ROLLBACK');
