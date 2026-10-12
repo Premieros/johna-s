@@ -136,6 +136,34 @@ State: **BLOCKED** for production; independent review and isolated CI only.
   used quantities of one item), 2,000 debts, repeated independent trials,
   index DDL/write amplification, concurrent transactions and lock waits.
 
+### Authorized deep test — verified on disposable CI, October 12
+
+- Run `38257326601`, commit `45a41634`: database job PASS,
+  **998/998 integration tests**. One-time 2,000-source sale-origin debt
+  receipt settled with exact quantity/ledger/COGS parity, 2,680.534ms
+  original receipt vs 1,913.771ms batched (28.61% less);
+  WAL 7,428,038 vs 6,015,572 bytes (19.01% less);
+  shared buffer hits 3,299,395 vs 1,436,719 (56.46% less).
+  This compares settlement function changes with the SAME FIFO index
+  and signed stock delta on both sides, not complete purchase UI latency.
+  No concurrent sessions or repeated p95 sample.
+- In the same local run, real `send_to_kitchen` with **distinct recipe lines**
+  (NOT quantities of one item) showed, at 50 distinct lines:
+  240.090ms original vs 272.133ms stage-B stock-delta helper
+  (13.35% slower); WAL 290,573 vs 304,569 bytes (+4.82%);
+  buffer hits 45,978 vs 67,375 (+46.54%).
+  1/5/20/50 line parity and no-op kitchen re-send succeeded.
+  This is evidence against unconditionally rolling out the current
+  stage-B branch-summary implementation as a kitchen optimization.
+- The 2,000-debt stress is restored to explicit local opt-in
+  `RAW_FIFO_REVIEW_DEEP_BENCH=1` after the one-off approved execution,
+  keeping routine CI comparatively light.
+- Next candidate: CI-only, two-connection same-material FIFO advisory-lock
+  test without touching production. Stage A (receipt batching) and
+  Stage B (signed branch balance) must be independently gated.
+- **RELEASE remains BLOCKED:** no untested kitchen performance regression
+  or guaranteed WAL benefit for mixed sale/kitchen loads.
+
 ## Production gate
 State: **BLOCKED**
 - Do not ship even if static + CI integration tests pass. Need independent staging load
