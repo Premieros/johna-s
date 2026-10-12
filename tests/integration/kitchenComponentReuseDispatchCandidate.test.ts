@@ -194,6 +194,40 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     expect(result.stock[3].find((row: {raw_material_id:string})=>row.raw_material_id===raw)?.debt).toBe('3.000000');
     expect(result.snapshots[0].component_snapshot[0].raw_material_id).toBe(raw);
   });
+
+  it('later modifier configurations see the recipe materialized by an earlier fallback line',async()=>{
+    const product=randomUUID(),autoRaw=randomUUID(),group=randomUUID(),option=randomUUID();
+    const extraRaw=(await client.query("SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1",[unitB])).rows[0].raw_material_id;
+    await client.query("INSERT INTO public.products(id,name,branch_id,sale_price,is_active) VALUES($1,'Dynamic fallback recipe',$2,100,true)",[product,branchId]);
+    // Keep the same raw identity in all replays, but leave the recipe genuinely
+    // unconfigured: the first canonical deduction must materialize it.
+    await client.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active)
+      VALUES($1,$2,'Dynamic fallback recipe',$3,0,true)`,[autoRaw,'AUTO-PROD-'+product.replaceAll('-',''),branchId]);
+    await client.query(`INSERT INTO public.product_modifier_groups(id,branch_id,product_id,name,min_selections,max_selections,is_active)
+      VALUES($1,$2,$3,'Dynamic extra',0,1,true)`,[group,branchId,product]);
+    await client.query("INSERT INTO public.product_modifier_group_products(group_id,product_id,branch_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[group,product,branchId]);
+    await client.query(`INSERT INTO public.product_modifier_options(id,branch_id,group_id,name,price_delta,is_active)
+      VALUES($1,$2,$3,'Dynamic ingredient',0,true)`,[option,branchId,group]);
+    await client.query(`INSERT INTO public.product_modifier_inventory_effects(branch_id,option_id,target_type,raw_material_id,quantity_delta)
+      VALUES($1,$2,'raw_material',$3,1)`,[branchId,option,extraRaw]);
+    const created=await createOrder(itemJson([
+      {product_id:product,quantity:1,notes:'auto first'},
+      {product_id:product,quantity:1,notes:'auto repeated'},
+      {product_id:product,quantity:1,notes:'auto extra',modifier_option_ids:[option]},
+    ]));
+    expect(created.success,JSON.stringify(created)).toBe(true);
+    expect((await client.query(`SELECT count(*)::int n FROM public.recipe_items ri
+      JOIN public.recipes r ON r.id=ri.recipe_id WHERE r.product_id=$1`,[product])).rows[0].n).toBe(0);
+    await client.query(`UPDATE public.order_items SET created_at=now()-
+      CASE notes WHEN 'auto first' THEN interval '3 minutes'
+                 WHEN 'auto repeated' THEN interval '2 minutes'
+                 ELSE interval '1 minute' END WHERE order_id=$1`,[created.order_id]);
+    const result=await compare(created.order_id);
+    expect(result.stock[3].find((row:{raw_material_id:string})=>row.raw_material_id===autoRaw)?.debt).toBe('3.000000');
+    expect(result.qty[1]).toBe(99);
+    expect(result.snapshots.flatMap((event:{component_snapshot:Array<{raw_material_id:string}>})=>
+      event.component_snapshot).filter((raw:{raw_material_id:string})=>raw.raw_material_id===autoRaw)).toHaveLength(3);
+  });
   it('cross-branch dispatch and missing authentication are rejected before inventory work',async()=>{
     const foreign=randomUUID(),order=randomUUID();
     await client.query("INSERT INTO public.branches(id,name) VALUES($1,'Foreign reuse')",[foreign]);
