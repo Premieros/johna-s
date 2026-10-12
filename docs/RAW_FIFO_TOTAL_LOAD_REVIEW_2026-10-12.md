@@ -118,6 +118,24 @@ State: **BLOCKED** for production; independent review and isolated CI only.
   direct-sale end-to-end, busy kitchen across many distinct lines, concurrency,
   index WAL tradeoff and total transaction workload across sources. No live mutation.
 
+### 100-debt receipt and direct-sale route verification
+
+- CI `38250725466` local Postgres DB **997/997 tests passed**, including a 100-source
+  FIFO receipt with identical branch/debt/COGS accounting. Same FIFO index and
+  same branch-delta helpers in both cases, changing only receipt settlement:
+  original 74.220ms, 362,813 WAL bytes and 33,066 buffer hits;
+  batched 66.276ms, 298,117 WAL bytes and 27,012 buffer hits. This is
+  10.70% less receipt time and 17.83% less WAL in ONE sampled receipt,
+  not a p95/production load result. 2,000 sources remain manual local opt-in.
+- First REAL direct `process_sale` benchmark with stocked ready goods gave
+  `rawDeducted=0`, so any timing difference was irrelevant to RAW FIFO.
+  The fixture is now amended to omit the ready-product batch and assert raw
+  recipe deduction and source inventory ledger entries. Exact-head CI for that
+  route still required before claiming any direct POS stock performance.
+- Outstanding: real kitchen 1/5/20/50 **distinct line items** (prior experiment
+  used quantities of one item), 2,000 debts, repeated independent trials,
+  index DDL/write amplification, concurrent transactions and lock waits.
+
 ## Production gate
 State: **BLOCKED**
 - Do not ship even if static + CI integration tests pass. Need independent staging load
