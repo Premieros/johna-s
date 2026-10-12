@@ -19,6 +19,12 @@ describe('Johnas #489 staged total database work reduction contracts', () => {
     expect(balanceAndCount).not.toMatch(/CREATE\s+TRIGGER\s+/i);
   });
 
+  it('terminates all three staged SQL functions rather than concatenating bare definitions', () => {
+    expect((balanceAndCount.match(/CREATE OR REPLACE FUNCTION public\\./g) || []).length).toBe(3);
+    expect((balanceAndCount.match(/\\$function\\$;\\s+CREATE OR REPLACE FUNCTION public\\./g) || []).length).toBe(2);
+    expect(balanceAndCount.trimEnd().endsWith(';')).toBe(true);
+  });
+
   it('preserves per-source FIFO debt and accounting updates while writing receipt batch once', () => {
     expect(indexAndSettle).toContain('UPDATE public.raw_fifo_debts');
     expect(indexAndSettle).toContain('UPDATE public.raw_fifo_debt_price_estimates');
