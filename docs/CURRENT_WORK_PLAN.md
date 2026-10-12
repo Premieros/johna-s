@@ -4,9 +4,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3cb08d52b028e393ecbfd46409afd8a8292ac278`
-- Current active branch: `fix/kitchen-approved-price-candidate-20261011`
-- Mandatory active work log: `docs/KITCHEN_APPROVED_PRICE_CANDIDATE_2026-10-11.md`
+- Latest main baseline reconciled: `6673da6db4dbd9db1e018131a3d7f15db978c022`
+- Current active branch: `perf/raw-stock-live-balance-shadow-20261012`
+- Mandatory active work log: `docs/RAW_STOCK_SHADOW_STAGE_A_2026-10-12.md`
+
+## Current task — approved architecture, separate nonproduction stage (2026-10-12)
+- Owner approved the **negative-first raw-stock live balance architecture**, not production SQL, paid test branches or a PR merge.
+- Draft PR #493 carries a **Stage A shadow balance proposal** in `scripts/experiments/` only, plus a rollback-only temporary-batch fixture and guarded tests. No canonical migration or live application.
+- Current stock warehouse view is an aggregating VIEW, not a ready balance. `_raw_add`, `_raw_remove_fifo`, `apply_stock_count` and the raw stock average-cost guard have batch scans. Stage A must prove signed and positive-only balance parity and bounded overhead before a separate Stage B read switch.
+- Live workflow frequently sends kitchen orders into negative raw balances, later resolved by purchase or physical count. Preserve debt settlement, historical per-source reference/ledger costs, approvals and journals. Thousands of historic debt rows cannot be silently aggregated away.
+- Existing kitchen price Stage A/B was already completed/activated on 2026-10-11. Older historical disabled-trigger text below does not describe current production. Cashier area-print plan and print guard draft #492 remain separate.
+- **No Merge and no Production migration** before exact-head Full Verify Green plus a new explicit owner approval. No synthetic production kitchen, purchase or print test.
 
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
