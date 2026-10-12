@@ -66,6 +66,13 @@ New tests compare all three dispatch variants, try a client-owned forged table, 
 - حماية الرؤية المالية وRLS. لا تعطيل لملتقط الأسعار لمجرد تسريع القياس.
 
 ### P3 — الرصيد والحركة مرة لكل مفتاح مادة/فرع/مخزن
+**بدأ شرط الصحة والتزامن؛ لم يُنفّذ تجميع تحديثات الرصيد بعد.**
+
+Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of a direct advisory call is not automatically an unguarded quantity write: `_fifo_adjust_warehouse_transfer_delta` changes destination batch cost and summary average under transfer/batch row locks; `update_purchase_invoice` delegates quantity reversal/replacement to canonical purchase helpers and directly rewrites created_at. Administrative seed/delete paths still need maintenance/lock reconciliation. No private cached warehouse quantity is activated.
+
+`apply_stock_count` currently reads warehouse quantity before its canonical raw helper takes the material lock. The isolated `_apply_stock_count_material_lock_candidate` now prelocks all counted raw IDs in UUID order, using the EXACT same material+branch key as `_raw_add`/`_raw_remove_fifo`, before reading variance. All original branch/permission checks, inbound/FIFO, accounting and terminal-count rules retained. New function is SECURITY INVOKER and client execution revoked.
+
+`tests/integration/kitchenCountMaterialLockCandidate.test.ts`: localhost only, two DB connections, a material lock held in the second session, lock_timeout and no partial stock/count mutation, unrelated material lock availability, then a real canonical kitchen deduction into negative stock before applying the precreated physical count. Checks counted quantity replaces the warehouse net, another warehouse is unchanged, one balanced journal, no retry reapply and frozen send snapshot. This is lock exclusion + sequential recovery, NOT simultaneous committed quantity writers or complete writer-throughput/deadlock proof.
 - استخدام السلطة الموجودة؛ تصميم رصيد مخزن محفوظ فقط إذا أثبتت الحاجة والكلفة، دون سلطة منافسة.
 - جمع الاحتياج المتكرر مع الحفاظ على تخصيص كل سطر ودفعة FIFO وتكلفته ودينه.
 - تحديث الرصيد ذريًا مع الأقفال ومنع الخصم المتكرر.
@@ -103,7 +110,9 @@ New tests compare all three dispatch variants, try a client-owned forged table, 
 - P2 now implemented behind separate isolated entry points; measure ownership checks/temp-context overhead and do not assume it wins. P3/P4 concurrency and canonical replay drift remain open.
 - First P2 Fast DB job 115009021473 on ba76ca8b86ccc2f77bfd4b5ad713db2e38639001 passed 11 tests including forged-temp-context rejection, private ACL and frozen resend/new-price lifetime. Reader calls 50→1; negative repeated-50 median 164.672→113.577ms, but WAL 323758→347841 (+7.44%). Five-line catalog churn was worse. This DROP-per-transaction context lifetime is REJECTED as a total-load improvement.
 - P2 revised to backend-local ON COMMIT DELETE ROWS, create/revoke once and DELETE per new scope. Benchmark reports first context creation separately, then identical warm-backend savepoint replays. This is an explicit first-use/steady split, not a claim that new backend connections are free. The first-use penalty, pooled lifecycle and RLS/security remain production gates.
-- Final new-head results pending. No performance acceptance, production DDL, merge or deployment from this step.
+- P2 backend-reuse DB job 115010728779 passed 11 tests. First context creation sample: baseline 32287 WAL bytes vs 41975 (one-time +9688); object startup is not free. Warm repeated-50 negative median 170.163→118.868ms, WAL 307135→314335 (+2.34%); repeated-50 positive 129.523→79.144ms. This iteration retained canonical temporary worktables in the fixture transaction, so revised final benchmark now recreates canonical ON COMMIT DROP worktables for BOTH variants, while retaining only the protected empty price context. Never present the earlier warm setup as exact PostgREST transaction behavior.
+- P3 count-lock prerequisite and two-session/recovery tests added. Quantity aggregation, all-writer concurrency, receipt/debt replay drift and real production acceptance remain OPEN.
+- Latest exact-head verification and benchmark results are recorded in PR #497 and its GitHub Actions checks; pending is never a merge/production approval. Final new-head run is pending. No performance acceptance, production DDL, merge or deployment from this step.
 
 
 Implementation commits: be52d830063c0becba52279edb3b3f30190336ba; first parity tests c2bc78320b92c5ec5ac54c6b8eb6a6c37e74a028, fixture cleanup ef618e0a1070a01eef87c7cdc330c1886b552b0d. CI must be evaluated at the latest documentation head; pending is not green.
