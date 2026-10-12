@@ -1,0 +1,95 @@
+# خطة Johnas: تقليل التكرار مع استمرار البيع بالسالب
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `development/kitchen-negative-stock-dedup-20261012`
+Current PR: #497
+Last updated: 2026-10-12
+Execution mode: **SINGLE_WRITER**
+Parallel execution: **FORBIDDEN**
+Unexpected HEAD policy: **STOP_AND_RECONCILE**
+Write mode: **SEQUENTIAL_ONLY**
+
+## Work status
+State: **BLOCKED** for production. User authorized documenting this development branch and starting implementation. Development/testing proceeds; no production SQL, merge, deployment or real operating tests.
+
+## Guardrails
+- البيع بالسالب يبقى مسموحًا؛ لا نعيد فحص كفاية الرصيد أو حواجز stockMap القديمة.
+- الصلاحيات والفرع والمخزن وقفل العملية ومنع التكرار تبقى إلزامية.
+- لا حذف لديون FIFO أو الدفاتر أو القيود ولا إعادة كتابة تاريخية.
+- لا تعديل للطباعة أو KDS أو الموافقات أو الدفع/الشيفت، ولا اختبارات طلبات أو طباعات في المطعم.
+- التنفيذ متسلسل في هذا الفرع فقط. #492–#494 مرجع قراءة، لا مسارات تنفيذ متزامنة.
+- لا جداول ظل أو مشغّل لكل دفعة لمجرد جعل قراءة واحدة أسرع. معيار القرار هو الحمل الكلي.
+- الجرد يثبت الكمية المعدودة ويطبّق الفرق؛ لا يجمع الكمية المعدودة مع الرصيد القديم.
+- زيادة الرصيد من الشراء/النقل/المرتجع/التصنيع/الجرد تحافظ على المصدر وصلاحياته وتسويته.
+
+## Baseline
+main 859aa9e148077e0dd02b8f596ffb339e279a23c5. #496 merged/deployed, postmerge Verify 38295468229 GREEN. Its SQL candidates remain unwired.
+#494 latest reviewed head ed4db8c6e7a3155bd89b0e99bf0398f2056ba375, Verify 38259374517 GREEN. Stage A receipt batching and Stage B balance deltas are not applied.
+برنامج PR1–PR7 وفصل الخدمات والصلاحيات والمصادر والتقارير والاستعادة موجود؛ لا نعيد بناء الأساسات.
+
+## Root-cause ledger
+- الإرسال يستهلك فرق الكمية فقط، لكنه يعيد حل الوصفات وتحديد الخام والأسعار وتحديثات الملخص عند تكرار الأصناف والخامات.
+- current balance raw_material_inventory موجود، لكن جمع دفعات المخزن/الفرع وحارس متوسط التكلفة ما زال جزءًا من العمل.
+- #494: تسوية 2000 دين تحسّنت في الاختبار المعزول؛ إرسال 50 صنفًا مختلفًا مع Stage B كان أبطأ 13.35% وWAL أعلى 4.82% وbuffer hits أعلى 46.54%. لا نفعّل هذا التنفيذ كتحسين للمطبخ.
+- حراس التوافر على الكارت سبق إزالتها في #484. المطلوب تقليل أعمال حساب/تسجيل الحركة، لا حذف الحماية أو فقدان الرصيد.
+- بعض كتّاب الدفعات يعتمدون على أقفال أخرى أو نداءات الآباء؛ يلزم تتبع كل المسارات قبل إعادة استخدام رصيد بين الخصومات.
+
+## Change ledger
+### P0 — المرجع والقواعد
+تحديد هذا الفرع والسجل الوحيد، إغلاق الإحالة التنفيذية إلى #496 المدمج، حفظ الأدلة والقياسات السابقة. توثيق ما هو منشور وما هو تجريبي.
+
+### P1 — مكونات الوصفات مرة لكل تكوين داخل الإرسال
+**بدأ التنفيذ.**
+- إعادة استخدام حل مكونات المنتج والاختيارات المتطابقة ضمن دفعة إرسال واحدة.
+- حفظ هوية كل سطر وملاحظاته وكمية فرق الإرسال والتطبيع والتقريب.
+- ربط ذلك بمسار إرسال تجريبي حقيقي في قاعدة اختبار معزولة.
+- إبقاء FIFO والسالب والدفاتر ولقطات السعر والحماية كما هي في هذه المرحلة.
+- اختبار عدم التكرار/الفشل الكامل والعزل والوصفات المختلفة/السطر المتكرر/الخام غير المكوّن.
+- لا تبنّي التحسين إذا زادت كلفة الإرسال الكلية.
+
+### P2 — أسعار الخامات المميزة مرة في الإرسال
+- البناء على خطة القراءة في #496 بدل استنساخها.
+- لقطة سعر معتمدة بتاريخ الإرسال لكل خامة، ثم توزيع نفس المصدر على السطور.
+- المجهول NULL؛ لا أسعار مستقبلية ولا أسعار اليوم للماضي.
+- وضع آلية ربط موثوقة على الخادم؛ لا ثقة بجدول مؤقت أو GUC يستطيع العميل تزويره.
+- حماية الرؤية المالية وRLS. لا تعطيل لملتقط الأسعار لمجرد تسريع القياس.
+
+### P3 — الرصيد والحركة مرة لكل مفتاح مادة/فرع/مخزن
+- استخدام السلطة الموجودة؛ تصميم رصيد مخزن محفوظ فقط إذا أثبتت الحاجة والكلفة، دون سلطة منافسة.
+- جمع الاحتياج المتكرر مع الحفاظ على تخصيص كل سطر ودفعة FIFO وتكلفته ودينه.
+- تحديث الرصيد ذريًا مع الأقفال ومنع الخصم المتكرر.
+- منع مسح التاريخ لإجابة «هل تكفي الكمية؟» في وضع البيع بالسالب.
+- ضبط كل الكاتبِين معًا: إرسال، شراء، جرد، نقل، مرتجع، إلغاء، إصلاح تكلفة.
+- حفظ متوسط التكلفة الموجب وآخر متوسط صحيح؛ تجميع التحديث لا يجوز أن يغيّر نتيجة نفاد الدفعات أو وصول الرصيد للصفر/السالب.
+- التنفيذ المقاس في #494 ليس قرارًا نهائيًا؛ يقبل أو يرفض بحسب الحمل الكلي.
+
+### P4 — الزيادات والتسويات
+- تقييم Stage A في #494 مستقلًا: تحديث دفعة الاستلام مرة خارج حلقة الديون مع حفظ تسوية كل مصدر.
+- اختبار الشراء بعد السالب والجرد المعتمد بعده والنقل والمرتجع.
+- لا إعادة تسوية مرتين ولا تغيير القيود التاريخية.
+- تسوية فجوة canonical migrations التي رصدها #494 قبل أي طرح، دون تكرار جداول الإنتاج.
+
+### P5 — قبول القياس والطرح
+- مقارنة baseline/candidate في نفس المخطط والبيانات والفهرس وبترتيب عينات متبادل.
+- أصناف متكررة وأسطر مختلفة 1/5/20/50، وصفات متداخلة، مخازن متعددة، رصيد سالب، واستلام 12/100/2000 مصدر وفق opt-in معزول.
+- قياس CPU/زمن كامل RPC، buffers/قراءات، WAL/كتابات، locks/deadlocks، p50/p95/p99 وعدد الاستدعاءات الداخلية.
+- صحة: تطابق الكميات والدفاتر وFIFO/COGS ولقطات السعر وأرقام السطور ومحتوى تذكرة الإرسال.
+- جلستان مستقلتان: نفس الطلب/نفس الخام/خامات مختلفة، شراء وجرد/نقل متزامن، إلغاء وإعادة إرسال.
+- لا ادعاء مكسب أداء من نجاح الاختبارات الوظيفية أو عينة واحدة.
+- سياسة طرح تدريجي واختبار/رجوع قبل أي موافقة على SQL إنتاج.
+
+## Verification ledger
+- Main/head and open PRs read before branch creation; no unknown baseline accepted.
+- Previous worklog and cancelled-scope guard reviewed. No cancelled management/treasury scope revived.
+- First implementation and executable tests will record exact results below.
+- Isolated database tests only; no production mutation or print ticket.
+
+## Production gate
+State: **BLOCKED**
+Full Verify on exact final head + proven total-load/correctness improvement + permission/schema/concurrency reconciliation + reviewed rollout + separate owner approval. P1/P2/P3/P4 can be accepted/rejected independently. No automatic migrations from experimental scripts.
+
+## Next action
+Implement P1 component reuse in an unwired candidate dispatch and compare it with canonical send under identical isolated fixtures. Then P2 only after server-owned price-context design. Keep existing production stock and printing behavior.
+
+## Mandatory update protocol
+Fetch branch HEAD before every sequential write and require exact expected SHA. Record coherent changes/results. On interruption/error, re-read HEAD, this log and CURRENT_WORK_PLAN. Stop writes during exact-head verification except a real failure or explicitly directed new scope.
