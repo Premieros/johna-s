@@ -31,7 +31,11 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, cost_price, sale_price, is_active) VALUES ($1, $2, $3, 'ready', $4, 50, 100, true)`, [unit, `048-${name}-${randomUUID()}`, `048 Unit ${name}`, branchId]);
       await client.query(`INSERT INTO public.product_unit_links (product_id, unit_id, quantity) VALUES ($1, $2, 1)`, [prod, unit]);
       await client.query(`INSERT INTO public.inventory_unit_batches (unit_id, branch_id, warehouse_id, quantity, unit_cost) VALUES ($1, $2, $3, 100, 50)`, [unit, branchId, whId]);
-      await attachRawComponentToUnit(client, unit, branchId, whId, 100, 50);
+      const raw=await attachRawComponentToUnit(client, unit, branchId, whId, 100, 50);
+      if (prod===prodA) await client.query(`INSERT INTO public.raw_material_price_events
+        (raw_material_id,branch_id,unit_cost,source,reference_number,priced_at)
+        VALUES($1,$2,7,'pricing','REUSE-PAST',now()-interval '1 day'),
+              ($1,$2,99,'pricing','REUSE-FUTURE',now()+interval '1 day')`,[raw,branchId]);
     }
     await client.query(`INSERT INTO public.users (id, email, full_name, role, branch_id, is_active) VALUES ($1, $2, $3, 'cashier', $4, true)`, [cashierId, `k-${randomUUID()}@test.local`, 'Cashier', branchId]);
     await client.query(`INSERT INTO public.organization_members (organization_id, user_id, membership_role, is_active) VALUES ($1, $2, 'member', true)`, [orgId, cashierId]);
@@ -49,7 +53,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   async function stockState() {
     const queries = [
       "SELECT raw_material_id,warehouse_id,source_type,unit_cost,sum(quantity)::text quantity,count(*)::int rows FROM public.raw_material_batches WHERE branch_id=$1 GROUP BY raw_material_id,warehouse_id,source_type,unit_cost ORDER BY raw_material_id,warehouse_id,source_type,unit_cost",
-      "SELECT raw_material_id,quantity,to_jsonb(i)->'avg_cost' avg_cost FROM public.raw_material_inventory i WHERE branch_id=$1 ORDER BY raw_material_id",
+      "SELECT raw_material_id,to_jsonb(i)-'id'-'created_at'-'updated_at' state FROM public.raw_material_inventory i WHERE branch_id=$1 ORDER BY raw_material_id",
       "SELECT raw_material_id,warehouse_id,sum(quantity)::text quantity,sum(total_cost)::text total_cost,count(*)::int rows FROM public.inventory_ledger WHERE branch_id=$1 GROUP BY raw_material_id,warehouse_id ORDER BY raw_material_id,warehouse_id",
       "SELECT raw_material_id,warehouse_id,sum(debt_quantity)::text debt,sum(settled_quantity)::text settled,count(*)::int rows FROM public.raw_fifo_debts WHERE branch_id=$1 GROUP BY raw_material_id,warehouse_id ORDER BY raw_material_id,warehouse_id",
     ];
@@ -70,8 +74,14 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         expect(second.items_sent_count).toBe(0);
         expect([await batchQty(unitA),await batchQty(unitB)]).toEqual(beforeResend);
         const sends=(await client.query('SELECT order_item_id,sent_quantity FROM public.order_kitchen_sends WHERE order_id=$1 ORDER BY order_item_id',[orderId])).rows;
-        const snapshots=(await client.query('SELECT order_item_id,component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id',[orderId])).rows;
-        outcomes.push({qty:beforeResend,sends,snapshots,stock:await stockState(),count:first.items_sent_count,
+        const snapshots=(await client.query('SELECT order_item_id,total_cost,component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id',[orderId])).rows;
+        const effects=(await client.query(`SELECT e.order_item_id,f.target_id,f.quantity,f.total_cost
+          FROM public.order_kitchen_inventory_effects f JOIN public.order_kitchen_inventory_events e ON e.id=f.event_id
+          WHERE e.order_id=$1 ORDER BY e.order_item_id,f.target_id`,[orderId])).rows;
+        const ledger=(await client.query(`SELECT e.order_item_id,l.raw_material_id,l.quantity,l.unit_cost,l.total_cost,l.before_qty,l.after_qty
+          FROM public.inventory_ledger l JOIN public.order_kitchen_inventory_events e ON e.id=l.reference_id
+          WHERE e.order_id=$1 ORDER BY e.order_item_id,l.raw_material_id,l.before_qty,l.after_qty`,[orderId])).rows;
+        outcomes.push({effects,ledger,qty:beforeResend,sends,snapshots,stock:await stockState(),count:first.items_sent_count,
           tickets:first.sent.map((row: Record<string,unknown>)=>Object.fromEntries(Object.entries(row).filter(([key])=>key!=='send_id' && key!=='kitchen_send_id')))});
       } finally {
         await client.query('ROLLBACK TO SAVEPOINT dispatch_variant');
@@ -91,6 +101,10 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     const result=await compare(created.order_id);
     expect(result.count).toBe(3);
     expect(result.sends).toHaveLength(3);
+    const rawA=(await client.query("SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1",[unitA])).rows[0].raw_material_id;
+    const snapshots=result.snapshots.flatMap((row:{component_snapshot: Array<{raw_material_id:string;unit_cost:number|null}>})=>row.component_snapshot);
+    expect(snapshots.filter((raw:{raw_material_id:string})=>raw.raw_material_id===rawA).every((raw:{unit_cost:number|null})=>raw.unit_cost===7)).toBe(true);
+    expect(snapshots.filter((raw:{raw_material_id:string})=>raw.raw_material_id!==rawA).every((raw:{unit_cost:number|null})=>raw.unit_cost===null)).toBe(true);
   });
   it('negative-first sales remain successful and resend does not create another deduction',async()=>{
     const created=await createOrder(itemJson([{product_id:prodA,quantity:150,notes:'negative stock'}]));
@@ -188,7 +202,9 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     };
     const resolverCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
       FROM pg_stat_xact_user_functions WHERE funcid='public.resolve_kitchen_item_raw_components(uuid,uuid,jsonb)'::regprocedure`)).rows[0].n);
-    for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
+    for (const negative of [false,true]) {
+      if (negative) await client.query("UPDATE public.raw_material_batches SET quantity=0 WHERE branch_id=$1",[branchId]);
+      for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
       const products=[];
       for (let index=0;index<count;index+=1) {
         if (!distinct) { products.push(prodB); continue; }
@@ -199,7 +215,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       }
       const created=await createOrder(itemJson(products.map((product,index)=>({product_id:product,quantity:1,notes:'bench-'+index}))));
       expect(created.success,JSON.stringify(created)).toBe(true);
-      const name=(distinct?'distinct':'repeated')+'-'+count;
+      const name=(negative?'negative-':'positive-')+(distinct?'distinct':'repeated')+'-'+count;
       measurements[name]={baseline:[],candidate:[]};
       // Warmup plus seven alternated samples. Each starts from the same state;
       // canonical price capture and FIFO stay enabled for both variants.
@@ -223,11 +239,12 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         }
       }
     }
+    }
     const summary=Object.fromEntries(Object.entries(measurements).map(([name,variants])=>[name,
       Object.fromEntries(Object.entries(variants).map(([variant,samples])=>[variant,{
         samples: samples.length,
         p50ms:quantile(samples.map(s=>s.ms),0.5),p95ms:quantile(samples.map(s=>s.ms),0.95),
-        medianHits:quantile(samples.map(s=>s.hits),0.5),medianWal:quantile(samples.map(s=>s.wal),0.5),
+        medianHits:quantile(samples.map(s=>s.hits),0.5),medianReads:quantile(samples.map(s=>s.reads),0.5),medianWal:quantile(samples.map(s=>s.wal),0.5),
         resolverCalls:samples[0].resolverCalls,
       }]))]));
     console.info('KITCHEN_COMPONENT_REUSE_FULL_CORE_BENCHMARK '+JSON.stringify(summary));
