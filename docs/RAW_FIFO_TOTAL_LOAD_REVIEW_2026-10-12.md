@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/raw-fifo-total-load-review-20261012`
-Current PR: `#0` (draft not yet opened)
+Current PR: `#494` (DRAFT; not approved for merge)
 Last updated: 2026-10-12
 State: **BLOCKED** for production; independent review and isolated CI only.
 
@@ -61,7 +61,7 @@ State: **BLOCKED** for production; independent review and isolated CI only.
   stock count after negative, one-time count application and retry guard.
 - Query plan captures `EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)` receipt execution time,
   buffer hits/reads/writes and WAL bytes/records before and after.
-- Pending GitHub Actions results at exact head. A single synthetic sample cannot establish
+- GitHub Actions run 38240332039 failed at mandatory active-worklog branch pointer (old kitchen branch versus this review branch); DB job skipped. This is a CI gate blocker, not proof of SQL correctness. A single synthetic sample cannot establish
   CPU, p95/p99, two-session lock waits or net production workload savings. 100/2000-debt
   load, busy branch concurrency, end-to-end send/print testing are not yet validated.
 - Production RLS/schema/trigger snapshots remain unchanged by this work.
