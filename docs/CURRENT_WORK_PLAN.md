@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3cb08d52b028e393ecbfd46409afd8a8292ac278`
-- Current active branch: `fix/kitchen-approved-price-candidate-20261011`
-- Mandatory active work log: `docs/KITCHEN_APPROVED_PRICE_CANDIDATE_2026-10-11.md`
+- Latest main baseline reconciled: `6673da6db4dbd9db1e018131a3d7f15db978c022`
+- Current active branch: `perf/raw-fifo-total-load-review-20261012`
+- Mandatory active work log: `docs/RAW_FIFO_TOTAL_LOAD_REVIEW_2026-10-12.md`
 
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
 import { attachDirectRawComponentToProduct, rawQtyForProduct } from './componentTestFixtures';
@@ -297,5 +298,300 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     );
     expect(Number(finalBaseline.rows[0]?.served_quantity)).toBe(3);
   });
+
+  it('benchmarks REAL send_to_kitchen with 1/5/20/50 units before/after shared FIFO helper deltas', async () => {
+    // This is rollback-only local CI: no physical tickets, no production order.
+    // Stage B touches shared raw FIFO helpers, NOT send_to_kitchen itself.
+    const stage = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
+    const reviewProduct = randomUUID();
+    await client.query(
+      "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'FIFO Kitchen Load',$2,100,10,true)",
+      [reviewProduct, branchId],
+    );
+    await client.query(
+      "INSERT INTO public.inventory_batches(product_id,warehouse_id,branch_id,quantity,unit_cost) VALUES($1,$2,$3,100,10)",
+      [reviewProduct, warehouseId, branchId],
+    );
+    await client.query(
+      "INSERT INTO public.inventory(product_id,warehouse_id,branch_id,quantity) VALUES($1,$2,$3,100)",
+      [reviewProduct, warehouseId, branchId],
+    );
+    const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
+    // Production already has branch summaries for its material-batch groups.
+    // Seed the matching OFFICIAL row so we measure its normal fast path, not
+    // the missing-row repair fallback after a direct batch-only test fixture.
+    await client.query(
+      'INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) ' +
+      'VALUES($1,$2,100,10) ON CONFLICT(raw_material_id,branch_id) DO UPDATE ' +
+      'SET quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost',
+      [rawId, branchId],
+    );
+    const readState = async (orderId: string) => {
+      const r = await client.query<{
+        stock: string; official: string | null; sends: string; events: string; ledger: string;
+      }>(
+        `SELECT
+           (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_batches
+             WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3) stock,
+           (SELECT quantity::text FROM public.raw_material_inventory
+             WHERE raw_material_id=$1 AND branch_id=$2) official,
+           (SELECT count(*)::text FROM public.order_kitchen_sends WHERE order_id=$4) sends,
+           (SELECT count(*)::text FROM public.order_kitchen_inventory_events WHERE order_id=$4) events,
+           (SELECT count(*)::text FROM public.inventory_ledger
+             WHERE raw_material_id=$1 AND branch_id=$2 AND quantity<0) ledger`,
+        [rawId, branchId, warehouseId, orderId],
+      );
+      return r.rows[0];
+    };
+    const sendMeasured = async (orderId: string) => {
+      const r = await asCashier(async () =>
+        client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
+          'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) SELECT public.send_to_kitchen($1)',
+          [orderId],
+        ),
+      );
+      const envelope = r.rows[0]['QUERY PLAN'][0];
+      const plan = (envelope.Plan || {}) as Record<string, number>;
+      return {
+        ms: Number(envelope['Execution Time'] || 0),
+        sharedHits: Number(plan['Shared Hit Blocks'] || 0),
+        walRecords: Number(plan['WAL Records'] || 0),
+        walBytes: Number(plan['WAL Bytes'] || 0),
+      };
+    };
+    const samples = [];
+    for (const quantity of [1, 5, 20, 50]) {
+      await client.query('SAVEPOINT fifo_kitchen_case');
+      const created = await asCashier(async () => {
+        const cart = JSON.stringify([{
+          product_id: reviewProduct, unit_name: 'piece', quantity, unit_price: 100,
+          discount_amount: 0, bonus_quantity: 0, total: quantity * 100,
+        }]);
+        const r = await client.query(
+          "SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,$3,0,'amount',0,$3,$4) AS r",
+          [branchId, cart, quantity * 100, cashierId],
+        );
+        return r.rows[0].r;
+      });
+      expect(created.success).toBe(true);
+      const orderId = String(created.order_id);
+      await client.query('SAVEPOINT fifo_kitchen_send');
+      const baseline = await sendMeasured(orderId);
+      const beforeState = await readState(orderId);
+      expect(Number(beforeState.stock)).toBe(100 - quantity);
+      expect(Number(beforeState.sends)).toBe(1);
+      expect(Number(beforeState.events)).toBeGreaterThanOrEqual(1);
+
+      await client.query('ROLLBACK TO SAVEPOINT fifo_kitchen_send');
+      await client.query(stage);
+      const optimized = await sendMeasured(orderId);
+      const afterState = await readState(orderId);
+      expect(afterState).toEqual(beforeState);
+
+      // A repeated kitchen send must not consume inventory again.
+      const retried = await send(orderId);
+      expect(retried.success).toBe(true);
+      expect(retried.items_sent_count).toBe(0);
+      expect(await readState(orderId)).toEqual(afterState);
+
+      samples.push({ quantity, baseline, optimized });
+      await client.query('ROLLBACK TO SAVEPOINT fifo_kitchen_case');
+    }
+    console.info('RAW_FIFO_REAL_KITCHEN_FACTORIAL_LOCAL', JSON.stringify({
+      scope: 'Actual send_to_kitchen RPC, staged warehouse-aware stock delta only; local rollback-only',
+      samples,
+      caution: 'One sample per size. No production, concurrent load, full-sale payment or print latency.',
+    }));
+  }, 120000);
+
+  it('checks complete direct process_sale before/after shared raw FIFO stock delta without an order send', async () => {
+    // An independent direct POS checkout, not a kitchen event or a sale-helper-only probe.
+    const reviewProduct = randomUUID();
+    await client.query(
+      "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'FIFO Direct Sale',$2,100,10,true)",
+      [reviewProduct, branchId],
+    );
+    // No ready-product batch: force the POS core through this product's raw
+    // recipe, rather than an unrelated finished-goods shortcut.
+    const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
+    // Production already has branch summaries for its material-batch groups.
+    // Seed the matching OFFICIAL row so we measure its normal fast path, not
+    // the missing-row repair fallback after a direct batch-only test fixture.
+    await client.query(
+      'INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) ' +
+      'VALUES($1,$2,100,10) ON CONFLICT(raw_material_id,branch_id) DO UPDATE ' +
+      'SET quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost',
+      [rawId, branchId],
+    );
+    const staged = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
+    const samples = [];
+
+    for (const quantity of [1, 5, 20]) {
+      const invoice = 'FIFO-DIRECT-' + randomUUID();
+      const cart = JSON.stringify([{
+        product_id: reviewProduct, unit_name: 'piece', quantity,
+        unit_price: 100, discount_amount: 0, bonus_quantity: 0, total: quantity * 100,
+      }]);
+      const totalAmount = quantity * 100;
+      const readState = async () => {
+        const r = await client.query<{ sold: string; raw: string; official: string | null; negative_ledger: string }>(
+          `SELECT
+             (SELECT count(*)::text FROM public.sales WHERE invoice_number=$1 AND branch_id=$2) sold,
+             (SELECT coalesce(sum(quantity),0)::text FROM public.raw_material_batches
+                WHERE raw_material_id=$3 AND branch_id=$2 AND warehouse_id=$4) raw,
+             (SELECT quantity::text FROM public.raw_material_inventory
+                WHERE raw_material_id=$3 AND branch_id=$2) official,
+             (SELECT count(*)::text FROM public.inventory_ledger
+                WHERE raw_material_id=$3 AND branch_id=$2 AND quantity<0) negative_ledger`,
+          [invoice, branchId, rawId, warehouseId],
+        );
+        return r.rows[0];
+      };
+      const checkout = async () => {
+        const res = await asCashier(async () =>
+          client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
+            `EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)
+             SELECT public.process_sale(
+               $1,$2,$3,NULL,NULL,$4,0,'amount',0,0,$4,$4,'cash','completed',
+               $5::jsonb,NULL,'takeaway',NULL,NULL)`,
+            [invoice, branchId, warehouseId, totalAmount, cart],
+          ),
+        );
+        const envelope = res.rows[0]['QUERY PLAN'][0];
+        const plan = (envelope.Plan || {}) as Record<string, number>;
+        return {
+          ms: Number(envelope['Execution Time'] || 0),
+          sharedHits: Number(plan['Shared Hit Blocks'] || 0),
+          walRecords: Number(plan['WAL Records'] || 0),
+          walBytes: Number(plan['WAL Bytes'] || 0),
+        };
+      };
+
+      await client.query('SAVEPOINT fifo_direct_checkout');
+      const baseline = await checkout();
+      const originalState = await readState();
+      expect(Number(originalState.sold)).toBe(1);
+      expect(Number(originalState.raw)).toBe(100 - quantity);
+      expect(Number(originalState.negative_ledger)).toBeGreaterThan(0);
+
+      await client.query('ROLLBACK TO SAVEPOINT fifo_direct_checkout');
+      await client.query(staged);
+      const optimized = await checkout();
+      const candidateState = await readState();
+      expect(candidateState).toEqual(originalState);
+      samples.push({ quantity, baseline, optimized,
+        rawDeducted: 100 - Number(originalState.raw),
+        ledgerMovements: Number(originalState.negative_ledger) });
+      await client.query('ROLLBACK TO SAVEPOINT fifo_direct_checkout');
+    }
+
+    console.info('RAW_FIFO_REAL_DIRECT_SALE_LOCAL', JSON.stringify({
+      scope: 'Actual direct process_sale RPC without kitchen order; rollback-only local DB',
+      samples,
+      caution: 'Single samples; raw-material involvement depends on route and is reported, not assumed.',
+    }));
+  }, 120000);
+
+  it('measures end-to-end kitchen send of 1/5/20/50 DISTINCT raw-recipe lines and preserves re-send idempotency', async () => {
+    // All transactions are rolled back by this suite on local CI Postgres.
+    // Earlier 1/5/20/50 benchmark varied one item's QUANTITY, not distinct lines.
+    const stage = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
+    const products: string[] = [];
+    const rawIds: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const p = randomUUID();
+      await client.query(
+        "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,$2,$3,100,5,true)",
+        [p, 'FIFO Many Line ' + i, branchId],
+      );
+      products.push(p);
+      const rawId = await attachDirectRawComponentToProduct(
+        client, p, branchId, warehouseId, 10, 5, 1,
+      );
+      rawIds.push(rawId);
+      await client.query(
+        'INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) ' +
+        'VALUES($1,$2,10,5) ON CONFLICT(raw_material_id,branch_id) DO UPDATE ' +
+        'SET quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost',
+        [rawId, branchId],
+      );
+    }
+    // The order id changes within the loop; each sample starts at its own savepoint.
+    let currentOrderId = '';
+    const stockFor = async (size: number) => {
+      const res = await client.query<{ stock: string; official: string; ledger: string; sent: string; events: string }>(
+        `SELECT
+          (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_batches
+           WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=ANY($3::uuid[])) stock,
+          (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_inventory
+           WHERE branch_id=$1 AND raw_material_id=ANY($3::uuid[])) official,
+          (SELECT count(*)::text FROM public.inventory_ledger
+           WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=ANY($3::uuid[]) AND quantity<0) ledger,
+          (SELECT count(*)::text FROM public.order_kitchen_sends WHERE order_id=$4) sent,
+          (SELECT count(*)::text FROM public.order_kitchen_inventory_events WHERE order_id=$4) events`,
+        [branchId, warehouseId, rawIds.slice(0, size), currentOrderId],
+      );
+      return res.rows[0];
+    };
+    const benchmarkSend = async (id: string) => {
+      const res = await asCashier(async () =>
+        client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
+          'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) SELECT public.send_to_kitchen($1)',
+          [id],
+        ),
+      );
+      const statement = res.rows[0]['QUERY PLAN'][0];
+      const plan = (statement.Plan || {}) as Record<string, number>;
+      return {
+        ms: Number(statement['Execution Time'] || 0),
+        sharedHits: Number(plan['Shared Hit Blocks'] || 0),
+        walRecords: Number(plan['WAL Records'] || 0),
+        walBytes: Number(plan['WAL Bytes'] || 0),
+      };
+    };
+    const samples = [];
+    for (const size of [1, 5, 20, 50]) {
+      await client.query('SAVEPOINT fifo_distinct_kitchen_case');
+      const cart = products.slice(0, size).map(product_id => ({
+        product_id, unit_name: 'piece', quantity: 1, unit_price: 100,
+        discount_amount: 0, bonus_quantity: 0, total: 100,
+      }));
+      const created = await asCashier(async () => {
+        const res = await client.query(
+          "SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,$3,0,'amount',0,$3,$4) AS r",
+          [branchId, JSON.stringify(cart), size * 100, cashierId],
+        );
+        return res.rows[0].r;
+      });
+      expect(created.success).toBe(true);
+      currentOrderId = String(created.order_id);
+      await client.query('SAVEPOINT fifo_distinct_kitchen_send');
+      const baseline = await benchmarkSend(currentOrderId);
+      const before = await stockFor(size);
+      expect(Number(before.stock)).toBe(size * 9);
+      expect(Number(before.official)).toBe(size * 9);
+      expect(Number(before.ledger)).toBe(size);
+      expect(Number(before.sent)).toBe(size);
+      expect(Number(before.events)).toBeGreaterThanOrEqual(size);
+
+      await client.query('ROLLBACK TO SAVEPOINT fifo_distinct_kitchen_send');
+      await client.query(stage);
+      const optimized = await benchmarkSend(currentOrderId);
+      const after = await stockFor(size);
+      expect(after).toEqual(before);
+      const noOp = await send(currentOrderId);
+      expect(noOp.success).toBe(true);
+      expect(noOp.items_sent_count).toBe(0);
+      expect(await stockFor(size)).toEqual(after);
+
+      samples.push({ distinctLines: size, baseline, optimized });
+      await client.query('ROLLBACK TO SAVEPOINT fifo_distinct_kitchen_case');
+    }
+    console.info('RAW_FIFO_DISTINCT_KITCHEN_LINES_LOCAL', JSON.stringify({
+      scope: 'Real send_to_kitchen with distinct raw-recipe products, 1 unit each, official branch balance already seeded',
+      samples,
+      caution: 'Single local rollback-only samples, no print-device or concurrent-operator latency',
+    }));
+  }, 180000);
 
 });
