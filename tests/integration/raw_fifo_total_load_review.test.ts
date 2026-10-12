@@ -93,11 +93,6 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
     return rows[0].result;
   };
 
-  const purchase = async (rawId: string, warehouse: string, amount: number, cost: number, ref: string) =>
-    query<{ result: { success: boolean; fifo_settled_quantity: number } }>(
-      "SELECT public._raw_add($1,$2,$3,$4,$5,NULL,NULL,NULL,'purchase_receipt','fifo_review',$6,$7,NULL) AS result",
-      [rawId, branch, warehouse, amount, cost, randomUUID(), ref]);
-
   async function runPurchaseAfterDebt() {
     // EXPLAIN ANALYZE executes the real negative-consumption helper used by
     // sale/kitchen callers; this is NOT a timed send_to_kitchen RPC.
