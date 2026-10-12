@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
 // Opt-in ONLY for disposable local Postgres. Never runs against Supabase.
-const dbUrl = process.env.RAW_FIFO_REVIEW_LOCAL_DB_URL || '';
+const dbUrl = process.env.RAW_FIFO_REVIEW_LOCAL_DB_URL || process.env.SUPABASE_DB_URL || '';
 let local = false;
 try {
   const u = new URL(dbUrl);
