@@ -474,4 +474,96 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     }));
   }, 120000);
 
+  it('measures end-to-end kitchen send of 1/5/20/50 DISTINCT raw-recipe lines and preserves re-send idempotency', async () => {
+    // All transactions are rolled back by this suite on local CI Postgres.
+    // Earlier 1/5/20/50 benchmark varied one item's QUANTITY, not distinct lines.
+    const stage = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
+    const products: string[] = [];
+    const rawIds: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const p = randomUUID();
+      await client.query(
+        "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,$2,$3,100,5,true)",
+        [p, 'FIFO Many Line ' + i, branchId],
+      );
+      products.push(p);
+      rawIds.push(await attachDirectRawComponentToProduct(
+        client, p, branchId, warehouseId, 10, 5, 1,
+      ));
+    }
+    const stockFor = async (size: number) => {
+      const res = await client.query<{ stock: string; ledger: string; sent: string; events: string }>(
+        `SELECT
+          (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_batches
+           WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=ANY($3::uuid[])) stock,
+          (SELECT count(*)::text FROM public.inventory_ledger
+           WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=ANY($3::uuid[]) AND quantity<0) ledger,
+          (SELECT count(*)::text FROM public.order_kitchen_sends WHERE order_id=$4) sent,
+          (SELECT count(*)::text FROM public.order_kitchen_inventory_events WHERE order_id=$4) events`,
+        [branchId, warehouseId, rawIds.slice(0, size), currentOrderId],
+      );
+      return res.rows[0];
+    };
+    // The order id changes within the loop; each sample starts at its own savepoint.
+    let currentOrderId = '';
+    const benchmarkSend = async (id: string) => {
+      const res = await asCashier(async () =>
+        client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
+          'EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) SELECT public.send_to_kitchen($1)',
+          [id],
+        ),
+      );
+      const statement = res.rows[0]['QUERY PLAN'][0];
+      const plan = (statement.Plan || {}) as Record<string, number>;
+      return {
+        ms: Number(statement['Execution Time'] || 0),
+        sharedHits: Number(plan['Shared Hit Blocks'] || 0),
+        walRecords: Number(plan['WAL Records'] || 0),
+        walBytes: Number(plan['WAL Bytes'] || 0),
+      };
+    };
+    const samples = [];
+    for (const size of [1, 5, 20, 50]) {
+      await client.query('SAVEPOINT fifo_distinct_kitchen_case');
+      const cart = products.slice(0, size).map(product_id => ({
+        product_id, unit_name: 'piece', quantity: 1, unit_price: 100,
+        discount_amount: 0, bonus_quantity: 0, total: 100,
+      }));
+      const created = await asCashier(async () => {
+        const res = await client.query(
+          "SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,$3,0,'amount',0,$3,$4) AS r",
+          [branchId, JSON.stringify(cart), size * 100, cashierId],
+        );
+        return res.rows[0].r;
+      });
+      expect(created.success).toBe(true);
+      currentOrderId = String(created.order_id);
+      await client.query('SAVEPOINT fifo_distinct_kitchen_send');
+      const baseline = await benchmarkSend(currentOrderId);
+      const before = await stockFor(size);
+      expect(Number(before.stock)).toBe(size * 9);
+      expect(Number(before.ledger)).toBe(size);
+      expect(Number(before.sent)).toBe(size);
+      expect(Number(before.events)).toBeGreaterThanOrEqual(size);
+
+      await client.query('ROLLBACK TO SAVEPOINT fifo_distinct_kitchen_send');
+      await client.query(stage);
+      const optimized = await benchmarkSend(currentOrderId);
+      const after = await stockFor(size);
+      expect(after).toEqual(before);
+      const noOp = await send(currentOrderId);
+      expect(noOp.success).toBe(true);
+      expect(noOp.items_sent_count).toBe(0);
+      expect(await stockFor(size)).toEqual(after);
+
+      samples.push({ distinctLines: size, baseline, optimized });
+      await client.query('ROLLBACK TO SAVEPOINT fifo_distinct_kitchen_case');
+    }
+    console.info('RAW_FIFO_DISTINCT_KITCHEN_LINES_LOCAL', JSON.stringify({
+      scope: 'Real send_to_kitchen with distinct raw-recipe products, 1 unit each, no ready-product stock',
+      samples,
+      caution: 'Single local rollback-only samples, no print-device or concurrent-operator latency',
+    }));
+  }, 180000);
+
 });
