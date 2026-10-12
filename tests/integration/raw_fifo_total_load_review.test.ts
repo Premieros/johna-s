@@ -135,7 +135,7 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
       [raw, countRaw, 'FREV-' + randomUUID(), 'FCNT-' + randomUUID(), branch]);
     await db.query(
       "INSERT INTO public.sales(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,payment_method,status,order_type) " +
-      "VALUES($1,'REV-A-'||$1::text,$3,$4,100,100,100,'cash','completed','takeaway'),($2,'REV-B-'||$2::text,$3,$4,100,100,100,'cash','completed','takeaway')",
+      "VALUES($1::uuid,'REV-A-'||($1::uuid)::text,$3,$4,100,100,100,'cash','completed','takeaway'),($2::uuid,'REV-B-'||($2::uuid)::text,$3,$4,100,100,100,'cash','completed','takeaway')",
       [sale, countSale, branch, wh1]);
     await db.query(
       "INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active) VALUES($1,'جرد','Count Reviewer','[\"inventory.count.create\",\"inventory.count.approve\",\"inventory.count.apply\"]'::jsonb,'global',true)",
