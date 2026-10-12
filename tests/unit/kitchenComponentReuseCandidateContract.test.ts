@@ -19,7 +19,8 @@ describe('unwired kitchen component reuse safety boundary',()=>{
   });
   it('bypasses planning when no exact configuration is repeated',()=>{
     expect(sql).toContain('HAVING count(*)>1');
-    expect(sql).toContain('IF v_component_plan IS NULL THEN');
+    expect(sql).toContain('IF v_component_plan IS NULL OR v_row.product_id=ANY');
+    expect(sql).toContain('v_dynamic_products');
     expect(sql).toContain('public._deduct_kitchen_raw_components(');
   });
   it('keeps snapshot inserts and branch/permission checks in dispatch',()=>{
