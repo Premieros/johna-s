@@ -216,3 +216,34 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 768 
     }
   });
 }
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 768 }]) {
+  test(`shared dialog scrolls independently and navigation recovers at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await mockAuthenticatedApp(page);
+    await login(page);
+    await page.goto('/#/categories');
+    await expect(page.getByTestId('categories-add')).toBeVisible();
+    await page.getByTestId('categories-add').click();
+    const body = page.getByTestId('modal-body');
+    await expect(body).toBeVisible();
+    await body.evaluate((element) => {
+      const spacer = document.createElement('div');
+      spacer.style.height = '2500px';
+      element.appendChild(spacer);
+    });
+    const bounds = await body.boundingBox();
+    if (!bounds) throw new Error('Dialog scroll body is absent');
+    const initialPageScroll = await page.evaluate(() => window.scrollY);
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.wheel(0, 500);
+    await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
+    expect(await page.evaluate(() => window.scrollY)).toBe(initialPageScroll);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByTestId('modal-root')).toBeHidden();
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
+    await page.getByTestId('active-orders-button').click();
+    await expect(page).toHaveURL(/#\/floor-plan$/);
+    await expect(page.getByTestId('active-orders-page')).toBeVisible();
+  });
+}

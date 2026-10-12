@@ -156,9 +156,9 @@ export function ProductConfigModal({
   };
 
   return (
-    <div data-testid="pos-product-config-modal" className="fixed inset-0 z-50 flex items-end justify-center bg-ui-text/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+    <div data-testid="pos-product-config-modal" className="fixed inset-0 z-50 flex items-end justify-center bg-ui-text/50 p-0 sm:items-center sm:p-4">
       <div className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-ui-border bg-ui-surface pb-[env(safe-area-inset-bottom)] shadow-ui-2xl sm:max-h-[86vh] sm:max-w-lg sm:rounded-2xl sm:pb-0">
-        <div className="flex items-center justify-between border-b border-ui-border px-3 py-2.5 sm:px-5 sm:py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-ui-border px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {product.image_url ? (
               <ProductImage src={product.image_url} name={product.name} className="h-9 w-9 shrink-0 rounded-xl bg-white sm:h-10 sm:w-10" imgClassName="h-9 w-9 shrink-0 rounded-xl bg-white object-contain p-0.5 sm:h-10 sm:w-10" positionX={product.image_position_x} positionY={product.image_position_y} zoom={product.image_zoom} />
@@ -173,7 +173,7 @@ export function ProductConfigModal({
           <button onClick={onClose} aria-label={isAr ? 'إغلاق' : 'Close'} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ui-subtle hover:bg-ui-page-alt hover:text-ui-text"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:space-y-4 sm:p-5">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain [touch-action:pan-x_pan-y_pinch-zoom] [-webkit-overflow-scrolling:touch] p-3 sm:space-y-4 sm:p-5">
           <div className="flex items-center justify-between gap-3 rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2">
             <label className="text-xs font-black text-ui-muted">{isAr ? 'الكمية' : 'Quantity'}</label>
             <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export function ProductConfigModal({
           {modifierError && <div className="rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs font-bold text-ui-danger">{modifierError}</div>}
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-ui-border bg-ui-page-alt px-3 py-2.5 sm:px-5 sm:py-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-ui-border bg-ui-page-alt px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="min-w-0">
             <p className="text-[9px] font-bold text-ui-subtle sm:text-[10px]">{isAr ? 'الإجمالي' : 'Total'}</p>
             <p className="truncate text-base font-black text-ui-accent sm:text-lg">{formatCurrency(lineTotal, currency, lang)}</p>

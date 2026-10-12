@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BrandLoading } from '@/components/BrandLoading';
 import { useLanguage } from '@/context/LanguageContext';
 
 type ProgressContextValue = {
@@ -66,30 +65,29 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
       {children}
       {visible && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-ui-page/95 px-6 backdrop-blur-sm"
+          className="pointer-events-none fixed inset-x-0 top-0 z-[200] px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
           role="status"
           aria-live="polite"
           aria-label={ar ? 'جارٍ تحميل الصفحة' : 'Loading page'}
           data-testid="page-progress-loader"
         >
-          <div className="w-full max-w-md rounded-3xl border border-ui-border bg-ui-surface p-6 shadow-ui-lg">
-            <div className="mb-5 flex justify-center"><BrandLoading size={72} /></div>
+          <div className="mx-auto w-full max-w-md rounded-xl border border-ui-border bg-ui-surface px-4 py-2 shadow-ui-lg">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-base font-black text-ui-text">
+                <p className="text-sm font-black text-ui-text">
                   {ar ? 'جارٍ تجهيز الصفحة' : 'Preparing your page'}
                 </p>
-                <p className="mt-1 text-sm text-ui-muted">
+                <p className="sr-only">
                   {ar ? 'النظام يعمل، لحظات ويتم عرض المحتوى.' : 'The system is working. Your content will appear shortly.'}
                 </p>
               </div>
-              <span className="min-w-16 text-end text-2xl font-black tabular-nums text-ui-primary">
+              <span className="min-w-16 text-end text-sm font-black tabular-nums text-ui-primary">
                 {Math.round(progress)}%
               </span>
             </div>
 
             <div
-              className="mt-5 h-2.5 overflow-hidden rounded-full bg-ui-page-alt"
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-ui-page-alt"
               aria-hidden="true"
             >
               <div
