@@ -317,6 +317,15 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
       [reviewProduct, warehouseId, branchId],
     );
     const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
+    // Production already has branch summaries for its material-batch groups.
+    // Seed the matching OFFICIAL row so we measure its normal fast path, not
+    // the missing-row repair fallback after a direct batch-only test fixture.
+    await client.query(
+      'INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) ' +
+      'VALUES($1,$2,100,10) ON CONFLICT(raw_material_id,branch_id) DO UPDATE ' +
+      'SET quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost',
+      [rawId, branchId],
+    );
     const readState = async (orderId: string) => {
       const r = await client.query<{
         stock: string; official: string | null; sends: string; events: string; ledger: string;
@@ -405,6 +414,15 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     // No ready-product batch: force the POS core through this product's raw
     // recipe, rather than an unrelated finished-goods shortcut.
     const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
+    // Production already has branch summaries for its material-batch groups.
+    // Seed the matching OFFICIAL row so we measure its normal fast path, not
+    // the missing-row repair fallback after a direct batch-only test fixture.
+    await client.query(
+      'INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) ' +
+      'VALUES($1,$2,100,10) ON CONFLICT(raw_material_id,branch_id) DO UPDATE ' +
+      'SET quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost',
+      [rawId, branchId],
+    );
     const staged = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
     const samples = [];
 
@@ -487,17 +505,26 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
         [p, 'FIFO Many Line ' + i, branchId],
       );
       products.push(p);
-      rawIds.push(await attachDirectRawComponentToProduct(
+      const rawId = await attachDirectRawComponentToProduct(
         client, p, branchId, warehouseId, 10, 5, 1,
-      ));
+      );
+      rawIds.push(rawId);
+      await client.query(
+        'INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) ' +
+        'VALUES($1,$2,10,5) ON CONFLICT(raw_material_id,branch_id) DO UPDATE ' +
+        'SET quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost',
+        [rawId, branchId],
+      );
     }
     // The order id changes within the loop; each sample starts at its own savepoint.
     let currentOrderId = '';
     const stockFor = async (size: number) => {
-      const res = await client.query<{ stock: string; ledger: string; sent: string; events: string }>(
+      const res = await client.query<{ stock: string; official: string; ledger: string; sent: string; events: string }>(
         `SELECT
           (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_batches
            WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=ANY($3::uuid[])) stock,
+          (SELECT COALESCE(sum(quantity),0)::text FROM public.raw_material_inventory
+           WHERE branch_id=$1 AND raw_material_id=ANY($3::uuid[])) official,
           (SELECT count(*)::text FROM public.inventory_ledger
            WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=ANY($3::uuid[]) AND quantity<0) ledger,
           (SELECT count(*)::text FROM public.order_kitchen_sends WHERE order_id=$4) sent,
@@ -542,6 +569,7 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
       const baseline = await benchmarkSend(currentOrderId);
       const before = await stockFor(size);
       expect(Number(before.stock)).toBe(size * 9);
+      expect(Number(before.official)).toBe(size * 9);
       expect(Number(before.ledger)).toBe(size);
       expect(Number(before.sent)).toBe(size);
       expect(Number(before.events)).toBeGreaterThanOrEqual(size);
@@ -560,7 +588,7 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
       await client.query('ROLLBACK TO SAVEPOINT fifo_distinct_kitchen_case');
     }
     console.info('RAW_FIFO_DISTINCT_KITCHEN_LINES_LOCAL', JSON.stringify({
-      scope: 'Real send_to_kitchen with distinct raw-recipe products, 1 unit each, no ready-product stock',
+      scope: 'Real send_to_kitchen with distinct raw-recipe products, 1 unit each, official branch balance already seeded',
       samples,
       caution: 'Single local rollback-only samples, no print-device or concurrent-operator latency',
     }));
