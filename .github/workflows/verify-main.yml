@@ -112,6 +112,14 @@ jobs:
         run: |
           set -o pipefail
           npm run test:integration 2>&1 | tee integration-test.log
+      - name: Verify shadow stock candidate on disposable local PostgreSQL (PR #493 only)
+        if: github.event_name == 'pull_request' && github.head_ref == 'perf/raw-stock-live-balance-shadow-20261012'
+        env:
+          RAW_STOCK_SHADOW_LOCAL_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Runs AFTER all normal DB fixtures against the existing CI postgres
+          # service. The candidate and fixture cannot reach Supabase production.
+          npx vitest run -c vitest.integration.config.ts tests/integration/raw_stock_shadow_local_fixture.test.ts
       - name: Upload integration failure log
         if: always()
         uses: actions/upload-artifact@v4
