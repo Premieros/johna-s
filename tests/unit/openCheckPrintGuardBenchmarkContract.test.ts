@@ -46,11 +46,16 @@ describe('open-check print guard isolated benchmark (#489)', () => {
   });
 
   it('compares exact-prefix plans both before and after the proposed index', () => {
-    expect(benchmark.match(/EXPLAIN \(ANALYZE, BUFFERS, FORMAT JSON\)/g)).toHaveLength(4);
+    expect(benchmark.match(/EXPLAIN \(ANALYZE, BUFFERS, FORMAT JSON\)/g)).toHaveLength(8);
     expect(benchmark).toContain('CREATE INDEX bench_receipt_open_check_prefix');
     expect(benchmark).toContain('ON open_check_guard_bench (branch_id, idempotency_key text_pattern_ops)');
     expect(benchmark).toContain("WHERE kind = 'receipt'");
     expect(benchmark).toContain("cp.idempotency_key LIKE 'open-check:' || c.order_id::text || ':%'");
+    expect(benchmark).toContain('PREPARE bench_open_check_lookup (uuid, uuid) AS');
+    expect(benchmark.match(/EXECUTE bench_open_check_lookup\(/g)).toHaveLength(4);
+    expect(benchmark.match(/SET LOCAL plan_cache_mode = 'force_custom_plan'/g)).toHaveLength(2);
+    expect(benchmark.match(/SET LOCAL plan_cache_mode = 'force_generic_plan'/g)).toHaveLength(2);
+    expect(benchmark).toContain('DEALLOCATE bench_open_check_lookup;');
     expect(benchmark).toContain('OPEN_CHECK_GUARD_BENCH_PARITY_FAILED');
   });
 
