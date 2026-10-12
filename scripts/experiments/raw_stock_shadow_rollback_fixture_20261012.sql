@@ -84,17 +84,25 @@ VALUES
 
 DO $check$
 BEGIN
+  -- One warehouse cache per key; branch remains the existing official table.
   IF NOT EXISTS (
-    SELECT 1 FROM private.raw_stock_branch_shadow
+    SELECT 1 FROM private.raw_stock_warehouse_shadow
     WHERE raw_material_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
       AND branch_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
-      AND quantity=12 AND positive_qty=12 AND stock_value=44
-      AND positive_value=44
+      AND warehouse_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid
+      AND quantity=5 AND positive_qty=5 AND stock_value=30
   ) OR NOT EXISTS (
-    SELECT 1 FROM private.raw_stock_branch_shadow
+    SELECT 1 FROM private.raw_stock_warehouse_shadow
+    WHERE raw_material_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
+      AND branch_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
+      AND warehouse_id='dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid
+      AND quantity=7 AND positive_qty=7 AND stock_value=14
+  ) OR NOT EXISTS (
+    SELECT 1 FROM private.raw_stock_warehouse_shadow
     WHERE raw_material_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
       AND branch_id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid
-      AND quantity=-3
+      AND warehouse_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid
+      AND quantity=-3 AND positive_qty=0 AND stock_value=0
   ) THEN RAISE EXCEPTION 'BRANCH_OR_WAREHOUSE_SCOPE_BROKEN'; END IF;
 END;
 $check$;
@@ -141,26 +149,14 @@ VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         'cccccccc-cccc-4ccc-8ccc-cccccccccccc',-99,0);
 ROLLBACK TO SAVEPOINT failed_send;
 
--- Deleting the moved batch subtracts it from branch and warehouse totals.
+-- Deleting the moved batch subtracts it from the warehouse total.
 DELETE FROM shadow_batch_fixture WHERE quantity=7;
 
--- Both branch and warehouse caches must match all four exact SUMs over
--- this synthetic batch set, including quantities <0 and 0.
+-- One warehouse cache must match all four exact SUMs, including negatives.
+-- The existing branch inventory stays the only authoritative branch cache.
 DO $verify$
 BEGIN
   IF EXISTS (
-    WITH actual AS (
-      SELECT raw_material_id, branch_id,
-        SUM(quantity) qty, SUM(quantity*unit_cost) val,
-        SUM(GREATEST(quantity,0)) posqty,
-        SUM(GREATEST(quantity,0)*unit_cost) posval
-      FROM shadow_batch_fixture GROUP BY 1,2
-    )
-    SELECT 1 FROM actual a
-    JOIN private.raw_stock_branch_shadow s USING(raw_material_id,branch_id)
-    WHERE a.qty IS DISTINCT FROM s.quantity OR a.val IS DISTINCT FROM s.stock_value
-      OR a.posqty IS DISTINCT FROM s.positive_qty OR a.posval IS DISTINCT FROM s.positive_value
-  ) OR EXISTS (
     WITH actual AS (
       SELECT raw_material_id, branch_id,warehouse_id,
         SUM(quantity) qty, SUM(quantity*unit_cost) val,
