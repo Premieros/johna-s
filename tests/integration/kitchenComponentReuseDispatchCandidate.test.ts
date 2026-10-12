@@ -345,18 +345,24 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     await client.query('DELETE FROM pg_temp.kitchen_price_context_candidate');
     for (const negative of [false,true]) {
       if (negative) await client.query("UPDATE public.raw_material_batches SET quantity=0 WHERE branch_id=$1",[branchId]);
-      for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
+      for (const [distinct,uniqueRaw] of [[false,false],[true,false],[true,true]] as const) for (const count of [1,5,20,50]) {
       const products=[];
       for (let index=0;index<count;index+=1) {
         if (!distinct) { products.push(prodB); continue; }
         const product=randomUUID();
         await client.query("INSERT INTO public.products(id,name,branch_id,sale_price,is_active) VALUES($1,$2,$3,100,true)",[product,'Bench '+product,branchId]);
-        await client.query("INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)",[product,unitB]);
+        const unit=uniqueRaw?randomUUID():unitB;
+        if (uniqueRaw) {
+          await client.query(`INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,cost_price,sale_price,is_active)
+            VALUES($1,$2,'Unique benchmark raw unit','ready',$3,50,100,true)`,[unit,'UNIQUE-'+unit,branchId]);
+          await attachRawComponentToUnit(client,unit,branchId,whId,negative?0:100,50);
+        }
+        await client.query("INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)",[product,unit]);
         products.push(product);
       }
       const created=await createOrder(itemJson(products.map((product,index)=>({product_id:product,quantity:1,notes:'bench-'+index}))));
       expect(created.success,JSON.stringify(created)).toBe(true);
-      const name=(negative?'negative-':'positive-')+(distinct?'distinct':'repeated')+'-'+count;
+      const name=(negative?'negative-':'positive-')+(uniqueRaw?'distinct-unique-raw':distinct?'distinct-shared-raw':'repeated')+'-'+count;
       measurements[name]={baseline:[],candidate:[],price:[]};
       // Warmup plus seven alternated samples. Each starts from the same state;
       // canonical price capture and FIFO stay enabled for both variants.
@@ -399,6 +405,6 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     console.info('KITCHEN_COMPONENT_REUSE_FULL_CORE_BENCHMARK '+JSON.stringify(summary));
     // Seven samples are exploratory; production tail latency, CPU and
     // contention need separate evidence. Never assert noisy wall-time ratios.
-  },120000);
+  },180000);
 
 });
