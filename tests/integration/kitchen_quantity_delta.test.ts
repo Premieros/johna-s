@@ -395,4 +395,87 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
     }));
   }, 120000);
 
+  it('checks complete direct process_sale before/after shared raw FIFO stock delta without an order send', async () => {
+    // An independent direct POS checkout, not a kitchen event or a sale-helper-only probe.
+    const reviewProduct = randomUUID();
+    await client.query(
+      "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'FIFO Direct Sale',$2,100,10,true)",
+      [reviewProduct, branchId],
+    );
+    await client.query(
+      "INSERT INTO public.inventory_batches(product_id,warehouse_id,branch_id,quantity,unit_cost) VALUES($1,$2,$3,100,10)",
+      [reviewProduct, warehouseId, branchId],
+    );
+    await client.query(
+      "INSERT INTO public.inventory(product_id,warehouse_id,branch_id,quantity) VALUES($1,$2,$3,100)",
+      [reviewProduct, warehouseId, branchId],
+    );
+    const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
+    const staged = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
+    const samples = [];
+
+    for (const quantity of [1, 5, 20]) {
+      const invoice = 'FIFO-DIRECT-' + randomUUID();
+      const cart = JSON.stringify([{
+        product_id: reviewProduct, unit_name: 'piece', quantity,
+        unit_price: 100, discount_amount: 0, bonus_quantity: 0, total: quantity * 100,
+      }]);
+      const totalAmount = quantity * 100;
+      const readState = async () => {
+        const r = await client.query<{ sold: string; raw: string; official: string | null; negative_ledger: string }>(
+          `SELECT
+             (SELECT count(*)::text FROM public.sales WHERE invoice_number=$1 AND branch_id=$2) sold,
+             (SELECT coalesce(sum(quantity),0)::text FROM public.raw_material_batches
+                WHERE raw_material_id=$3 AND branch_id=$2 AND warehouse_id=$4) raw,
+             (SELECT quantity::text FROM public.raw_material_inventory
+                WHERE raw_material_id=$3 AND branch_id=$2) official,
+             (SELECT count(*)::text FROM public.inventory_ledger
+                WHERE raw_material_id=$3 AND branch_id=$2 AND quantity<0) negative_ledger`,
+          [invoice, branchId, rawId, warehouseId],
+        );
+        return r.rows[0];
+      };
+      const checkout = async () => {
+        const res = await asCashier(async () =>
+          client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
+            `EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)
+             SELECT public.process_sale(
+               $1,$2,$3,NULL,NULL,$4,0,'amount',0,0,$4,$4,'cash','completed',
+               $5::jsonb,NULL,'takeaway',NULL,NULL)`,
+            [invoice, branchId, warehouseId, totalAmount, cart],
+          ),
+        );
+        const envelope = res.rows[0]['QUERY PLAN'][0];
+        const plan = (envelope.Plan || {}) as Record<string, number>;
+        return {
+          ms: Number(envelope['Execution Time'] || 0),
+          sharedHits: Number(plan['Shared Hit Blocks'] || 0),
+          walRecords: Number(plan['WAL Records'] || 0),
+          walBytes: Number(plan['WAL Bytes'] || 0),
+        };
+      };
+
+      await client.query('SAVEPOINT fifo_direct_checkout');
+      const baseline = await checkout();
+      const originalState = await readState();
+      expect(Number(originalState.sold)).toBe(1);
+
+      await client.query('ROLLBACK TO SAVEPOINT fifo_direct_checkout');
+      await client.query(staged);
+      const optimized = await checkout();
+      const candidateState = await readState();
+      expect(candidateState).toEqual(originalState);
+      samples.push({ quantity, baseline, optimized,
+        rawDeducted: 100 - Number(originalState.raw),
+        ledgerMovements: Number(originalState.negative_ledger) });
+      await client.query('ROLLBACK TO SAVEPOINT fifo_direct_checkout');
+    }
+
+    console.info('RAW_FIFO_REAL_DIRECT_SALE_LOCAL', JSON.stringify({
+      scope: 'Actual direct process_sale RPC without kitchen order; rollback-only local DB',
+      samples,
+      caution: 'Single samples; raw-material involvement depends on route and is reported, not assumed.',
+    }));
+  }, 120000);
+
 });
