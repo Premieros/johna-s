@@ -64,7 +64,10 @@ SELECT CASE
     'distinct_raw_count',(SELECT cardinality(ids) FROM raw_ids),
     'items',COALESCE((SELECT jsonb_agg(jsonb_build_object(
       'order_item_id',order_item_id,'product_id',product_id,'delta_quantity',delta_quantity,
-      'requires_canonical_fallback',jsonb_array_length(components)=0,'components',components
+      'requires_canonical_fallback',NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(components) c
+        WHERE abs((c->>'quantity')::numeric)>0.000001
+      ),'components',components
     ) ORDER BY order_item_id) FROM planned_items),'[]'::jsonb)
   )
 END;
