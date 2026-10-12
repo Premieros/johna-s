@@ -52,6 +52,13 @@ Tests: `tests/integration/kitchenComponentReuseDispatchCandidate.test.ts` runs o
 - لا تبنّي التحسين إذا زادت كلفة الإرسال الكلية.
 
 ### P2 — أسعار الخامات المميزة مرة في الإرسال
+**بدأ التنفيذ التجريبي المعزول؛ لا تفعيل إنتاج.**
+
+Candidate: `scripts/experiments/kitchen_component_price_reuse_dispatch_candidate_20261012.sql`. Two revoked SECURITY INVOKER entry points; no canonical function replacement or trigger DDL in this script. Disposable integration tests redirect the active capture trigger inside rollback fixtures only.
+
+Server-owned temporary context is accepted only when its owner matches the canonical dispatch owner, namespace is this backend's actual temporary namespace, client roles have no read/write access, and branch + auth actor + timestamp + transaction + fresh event id match. A client-owned namesake is ignored; the canonical reader remains the fallback. Context is cleared at each fresh multi-line dispatch; approved raw prices and explicit unknown NULL are reused within that scope. No client GUC or supplied price is trusted; no SECURITY DEFINER shortcut.
+
+New tests compare all three dispatch variants, try a client-owned forged table, check ACL, and prove new dispatch repricing versus frozen original resend. Benchmark counts actual approved-price reader calls as well as recipe resolver calls. Permission/source/as-of reader itself stays canonical; stock, FIFO and ledger writes unchanged.
 - البناء على خطة القراءة في #496 بدل استنساخها.
 - لقطة سعر معتمدة بتاريخ الإرسال لكل خامة، ثم توزيع نفس المصدر على السطور.
 - المجهول NULL؛ لا أسعار مستقبلية ولا أسعار اليوم للماضي.
@@ -92,6 +99,8 @@ Tests: `tests/integration/kitchenComponentReuseDispatchCandidate.test.ts` runs o
 - First exploratory run (Fast Verify 38306838973, DB job 115003021199) passed eight candidate tests. Repeated 50 lines: resolver calls 50→1, seven-sample median core time 188.012→155.274ms, shared hits 34402→31742, median WAL 299855→292088 bytes. Distinct configurations did not show a stable benefit; candidate now bypasses planning when all configurations are unique. Final remeasurement includes positive and negative stock, per-line ledger/effect costs and known/unknown/as-of price snapshots.
 - Added candidate-only static safety contracts; no new privileged helper or production wiring.
 - Verification caught and corrected a bypass edit scoped to the wrong SQL function body (42601), plus stale source-string direction expectations; no production effect. Rebuilt from the verified candidate baseline, restricted the replacement to the dispatch function, and asserted both helper bodies are unchanged. Direction and pointer ownership expressions are now independent. Exact new-head rerun required.
+- Corrected P1 Fast DB job 115006908978 on e8fb806fafa9485d2219e7c0878f3352f79740bb passed all eight expanded tests. Negative repeated 50: resolver 50→1, median time 196.409→169.940ms, hits 41452→38860, WAL 322404→323777 bytes (+0.43%). Positive repeated 50: 165.526→155.900ms; no stable distinct-configuration gain. P1 proves resolver reduction, NOT reduced operational writes. Seven exploratory samples; full/RLS/browser/latest P2 results still required.
+- P2 now implemented behind separate isolated entry points; measure ownership checks/temp-context overhead and do not assume it wins. P3/P4 concurrency and canonical replay drift remain open.
 - Final new-head results pending. No performance acceptance, production DDL, merge or deployment from this step.
 
 
@@ -107,7 +116,7 @@ State: **BLOCKED**
 Full Verify on exact final head + proven total-load/correctness improvement + permission/schema/concurrency reconciliation + reviewed rollout + separate owner approval. P1/P2/P3/P4 can be accepted/rejected independently. No automatic migrations from experimental scripts.
 
 ## Next action
-Complete expanded parity and full-core benchmark, inspect any regressions and record measured acceptance/rejection. Resolve sidebar gesture ownership via no-retry regression. Then P2 only after server-owned price-context design. Keep existing production stock and printing behavior.
+Complete expanded parity and full-core benchmark, inspect any regressions and record measured acceptance/rejection. Resolve sidebar gesture ownership via no-retry regression. Verify P2 security/parity and full-core total-load results, then trace and reconcile all P3/P4 writers before any stock-summary reuse or deployment. Keep existing production stock and printing behavior.
 
 ## Mandatory update protocol
 Fetch branch HEAD before every sequential write and require exact expected SHA. Record coherent changes/results. On interruption/error, re-read HEAD, this log and CURRENT_WORK_PLAN. Stop writes during exact-head verification except a real failure or explicitly directed new scope.
