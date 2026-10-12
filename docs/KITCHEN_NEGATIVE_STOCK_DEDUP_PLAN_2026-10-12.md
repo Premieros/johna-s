@@ -10,7 +10,7 @@ Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
 ## Work status
-State: **BLOCKED** for production. User authorized documenting this development branch and starting implementation. Development/testing proceeds; no production SQL, merge, deployment or real operating tests.
+State: **BLOCKED** for production. User authorized continued development and explicitly requested notification before merge. Do not merge or apply production SQL. Development/testing proceeds; no production SQL, merge, deployment or real operating tests.
 
 ## Guardrails
 - البيع بالسالب يبقى مسموحًا؛ لا نعيد فحص كفاية الرصيد أو حواجز stockMap القديمة.
@@ -39,7 +39,7 @@ main 859aa9e148077e0dd02b8f596ffb339e279a23c5. #496 merged/deployed, postmerge V
 تحديد هذا الفرع والسجل الوحيد، إغلاق الإحالة التنفيذية إلى #496 المدمج، حفظ الأدلة والقياسات السابقة. توثيق ما هو منشور وما هو تجريبي.
 
 ### P1 — مكونات الوصفات مرة لكل تكوين داخل الإرسال
-**تنفيذ تجريبي واختبارات مقارنة أضيفت؛ التحقق جارٍ.**
+**التنفيذ التجريبي قائم؛ توسعت اختبارات المقارنة والقياس، والتحقق الجديد جارٍ.**
 
 Implementation: `scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql` builds per-configuration plans and consumes them from a copied isolated canonical dispatcher. All three candidates use SECURITY INVOKER, client execution revoked; canonical FIFO and active price snapshot trigger retained. No migration or runtime wiring.
 
@@ -83,6 +83,15 @@ Tests: `tests/integration/kitchenComponentReuseDispatchCandidate.test.ts` runs o
 - سياسة طرح تدريجي واختبار/رجوع قبل أي موافقة على SQL إنتاج.
 
 ## Verification ledger
+### Follow-up execution — 2026-10-12
+- Previous exact-head 2a6ab0e4d9c7055ecfd00da4bd359a9e6b0d3faf: Full Verify 38304278383 succeeded, 1702 frontend + 1007 DB/RLS; browser 129 passed + one 390px scrolling test passed only on retry.
+- Closing sidebar remains geometrically over the document during its 200ms transform. Layout now disables pointer events immediately while closed, with explicit desktop visibility override. This is a cause hypothesis backed by a no-retry repeated close/scroll regression; new CI must prove it.
+- Added six open/close/scroll cycles each at 390px and 1366px, retries=0, with hit-test ownership assertions. No fixed sleeps or relaxed scrolling assertions.
+- Expanded P1 parity to stock batches, official balance, ledger quantity/cost aggregates and debt quantities, modifiers, invalid later-line atomic rollback, fallback and branch/auth rejection.
+- Added rollback-replayed full-core EXPLAIN ANALYZE/BUFFERS/WAL for 1/5/20/50 repeated or distinct configurations, warmup + seven alternating samples each; actual resolver call counts checked through pg_stat_xact_user_functions. Same indexes, FIFO and price capture both sides. This is core-versus-core, not outer send wrapper or end-to-end browser/print latency; small-sample empirical p95 is not production p95.
+- Final new-head results pending. No performance acceptance, production DDL, merge or deployment from this step.
+
+
 Implementation commits: be52d830063c0becba52279edb3b3f30190336ba; first parity tests c2bc78320b92c5ec5ac54c6b8eb6a6c37e74a028, fixture cleanup ef618e0a1070a01eef87c7cdc330c1886b552b0d. CI must be evaluated at the latest documentation head; pending is not green.
 
 - Main/head and open PRs read before branch creation; no unknown baseline accepted.
@@ -95,7 +104,7 @@ State: **BLOCKED**
 Full Verify on exact final head + proven total-load/correctness improvement + permission/schema/concurrency reconciliation + reviewed rollout + separate owner approval. P1/P2/P3/P4 can be accepted/rejected independently. No automatic migrations from experimental scripts.
 
 ## Next action
-Implement P1 component reuse in an unwired candidate dispatch and compare it with canonical send under identical isolated fixtures. Then P2 only after server-owned price-context design. Keep existing production stock and printing behavior.
+Complete expanded parity and full-core benchmark, inspect any regressions and record measured acceptance/rejection. Resolve sidebar gesture ownership via no-retry regression. Then P2 only after server-owned price-context design. Keep existing production stock and printing behavior.
 
 ## Mandatory update protocol
 Fetch branch HEAD before every sequential write and require exact expected SHA. Record coherent changes/results. On interruption/error, re-read HEAD, this log and CURRENT_WORK_PLAN. Stop writes during exact-head verification except a real failure or explicitly directed new scope.
