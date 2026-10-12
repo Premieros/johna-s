@@ -10,7 +10,8 @@
 
 ## Current task — approved architecture, separate nonproduction stage (2026-10-12)
 - Owner approved the **negative-first raw-stock live balance architecture**, not production SQL, paid test branches or a PR merge.
-- Draft PR #493 carries a **Stage A shadow balance proposal** in `scripts/experiments/` only, plus a rollback-only temporary-batch fixture and guarded tests. No canonical migration or live application.
+- Draft PR #493 now carries **ONE warehouse-only shadow counter** in `scripts/experiments/` (the previous duplicate branch shadow was rejected). Reuse authoritative persisted `raw_material_inventory` branch quantity; guard only the missing warehouse quantity/positive totals. Rollback-only tests. No canonical migration or live application.
+- **Owner's overriding acceptance gate is LOWER TOTAL DATABASE PRESSURE**, not just query latency. Stage A alone adds writes and must not deploy as an optimization. Compare complete Stage A+Stage B against the current system, including kitchen negatives and 1/100/2000-debt purchase/count, CPU, buffers, WAL, lock waits and p95. No merge if net load rises.
 - Current stock warehouse view is an aggregating VIEW, not a ready balance. `_raw_add`, `_raw_remove_fifo`, `apply_stock_count` and the raw stock average-cost guard have batch scans. Stage A must prove signed and positive-only balance parity and bounded overhead before a separate Stage B read switch.
 - Live workflow frequently sends kitchen orders into negative raw balances, later resolved by purchase or physical count. Preserve debt settlement, historical per-source reference/ledger costs, approvals and journals. Thousands of historic debt rows cannot be silently aggregated away.
 - Existing kitchen price Stage A/B was already completed/activated on 2026-10-11. Older historical disabled-trigger text below does not describe current production. Cashier area-print plan and print guard draft #492 remain separate.
