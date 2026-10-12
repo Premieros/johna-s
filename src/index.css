@@ -392,7 +392,7 @@
   #root {
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   [data-testid='app-header'] {
@@ -463,4 +463,18 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .premier-wait-mark, .premier-wait-orbit { animation: none; }
+}
+
+/* Keep shell clipping from creating nested vertical scroll containers.
+ * Buttons retain native gestures; feedback never intercepts an action. */
+@supports (overflow: clip) {
+  [data-testid='app-shell'] { overflow-x: clip; }
+}
+:where(button, a[href], [role='button']):not(:disabled):not([aria-disabled='true']) {
+  touch-action: manipulation;
+}
+:where(button, a[href], [role='button']):not(:disabled):not([aria-disabled='true']):active {
+  filter: brightness(0.88);
+  outline: 2px solid rgb(var(--ui-ring) / 0.65);
+  outline-offset: -2px;
 }
