@@ -59,7 +59,7 @@ describe('negative-first raw stock shadow design contract (#489)', () => {
     expect(candidate).toContain('ON CONFLICT (raw_material_id, branch_id) DO UPDATE');
     expect(candidate).toContain('ON CONFLICT (raw_material_id, branch_id, warehouse_id) DO UPDATE');
     expect(candidate).toContain('RAW_STOCK_SHADOW_BOOTSTRAP_PARITY_FAILED');
-    expect(candidate).toContain('TRG_OP'); // trigger metadata must be used for every batch event
+    expect(candidate).toContain("TG_OP = 'INSERT'"); // canonical trigger metadata spelling
   });
 
   it('refuses untracked TRUNCATE and does not replace historic costing/FIFO or POS access', () => {
