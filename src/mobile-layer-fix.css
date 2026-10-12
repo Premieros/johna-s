@@ -11,7 +11,7 @@
   #root {
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   [data-testid="app-shell"] {

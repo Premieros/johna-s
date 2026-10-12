@@ -179,3 +179,40 @@ test('phone-only bottom navigation gives way to the tablet shell at 768px', asyn
   await expect(page.getByTestId('mobile-bottom-nav')).toBeHidden();
   await expect(page.getByTestId('sidebar-open')).toBeVisible();
 });
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 768 }]) {
+  test(`document scrolling and pressed feedback remain usable at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await mockAuthenticatedApp(page);
+    await login(page);
+    await expect(page.getByTestId('app-main')).toBeVisible();
+    await expect(page.getByTestId('page-progress-loader')).toBeHidden();
+    // Give the real shell deterministic overflow independent of empty mocked reports.
+    await page.getByTestId('app-main').evaluate((element) => {
+      const spacer = document.createElement('div');
+      spacer.style.height = '3000px';
+      element.appendChild(spacer);
+    });
+    await page.mouse.move(viewport.width / 2, viewport.height / 2);
+    await page.mouse.wheel(0, 450);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    await page.mouse.wheel(0, -450);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(100);
+
+    const action = viewport.width < 1024
+      ? page.getByTestId('sidebar-open')
+      : page.getByTestId('theme-toggle');
+    await action.hover();
+    await page.mouse.down();
+    await expect.poll(() => action.evaluate((element) => getComputedStyle(element).filter)).toContain('brightness');
+    await page.mouse.up();
+    if (viewport.width < 1024) {
+      await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeVisible();
+      await page.getByTestId('sidebar-close').click();
+      await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeHidden();
+      await page.mouse.move(viewport.width / 2, viewport.height / 2);
+      await page.mouse.wheel(0, 450);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    }
+  });
+}
