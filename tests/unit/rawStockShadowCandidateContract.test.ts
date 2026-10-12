@@ -13,7 +13,7 @@ describe('negative-first raw stock shadow design contract (#489)', () => {
   it('keeps live database mutations OUT of automatically applied migrations', () => {
     expect(candidatePath).toMatch(/^scripts\/experiments\//);
     expect(fixturePath).toMatch(/^scripts\/experiments\//);
-    expect(candidate).toContain('STAGE A IS SHADOW ONLY');
+    expect(candidate).toMatch(/Stage A is SHADOW ONLY/i);
     expect(candidate).toContain('BEGIN;');
     expect(candidate).toContain('COMMIT;');
     expect(candidate).toContain("SET LOCAL lock_timeout = '2s'");
@@ -60,7 +60,7 @@ describe('negative-first raw stock shadow design contract (#489)', () => {
     expect(candidate).toContain('IF p_qty=0 AND p_value=0 AND p_positive_qty=0 AND p_positive_value=0 THEN');
     expect(candidate).not.toContain('private.raw_stock_branch_shadow');
     // One cached warehouse key write per ordinary batch mutation, not two.
-    expect((candidate.match(/INSERT INTO private\\.raw_stock_warehouse_shadow/g) || []).length).toBe(2);
+    expect(candidate.split('INSERT INTO private.raw_stock_warehouse_shadow').length - 1).toBe(2);
     expect(candidate).toContain("TG_OP = 'INSERT'"); // canonical trigger metadata spelling
   });
 
