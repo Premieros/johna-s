@@ -9,10 +9,11 @@ Last updated: 2026-10-12
 
 ## Work status
 
-State: **BLOCKED** — architecture approved; Stage A SQL and tests prepared
-as a **nonproduction experiment** only. Exact-head Full Verify, a disposable
-local PostgreSQL instance, transactional/parallel integration tests and
-recorded benchmarks are still required. **No production deployment or cutover.**
+State: **BLOCKED** — Stage A SQL and tests prepared only as a nonproduction
+experiment. Earlier exact-head Full Verify passed on the TWO-cache candidate;
+the simplified ONE-cache candidate requires a fresh exact-head Full Verify.
+Isolated functional checks do **NOT** prove total database load is lower.
+NO merge, deployment, production DDL, or live read-path cutover.
 
 ## Guardrails
 
@@ -31,9 +32,18 @@ recorded benchmarks are still required. **No production deployment or cutover.**
 ## Baseline
 
 Read-only production verification on 2026-10-12:
-- `raw_material_batches`: ~18,063 rows; ~11,430 negative rows, ~5,327 zero;
-  ~551 (material,branch,warehouse) groups and ~551 (material,branch) groups.
-  Every then-existing batch had a warehouse, but the legacy column is nullable.
+- Refreshed read-only stock sampling: 18,075 raw batch rows, 16,769
+  nonpositive (negative or depleted), only 1,306 positive; 551 distinct
+  material/branch/warehouse keys. Historical negatives are the dominant
+  workload, not an edge case.
+- All 551 persisted branch balance rows matched the SUM of raw batches:
+  no missing, extra, or unequal quantity rows. Reuse this existing official
+  `raw_material_inventory` branch balance. Do not introduce a redundant
+  branch shadow as another current-stock authority.
+- Cumulative `pg_stat_user_tables` counters at inspection recorded
+  ~49,367 raw batch UPDATEs and ~40,819 branch-inventory UPDATEs. These are
+  not recent per-hour rates, but demonstrate why a new trigger UPSERT for
+  each batch mutation is a serious write-amplification risk.
 - `raw_material_warehouse_inventory` is a **nonmaterialized VIEW** that does
   SUM(quantity), SUM(quantity*unit_cost) by warehouse on every access.
 - `raw_material_inventory` is a persisted BRANCH table, but _raw_add and
@@ -70,21 +80,24 @@ Read-only production verification on 2026-10-12:
 
 **Stage A candidate only:** `scripts/experiments/raw_stock_shadow_state_candidate_20261012.sql`
 
-- Two private, non-API state tables: one row per material/branch and one per
-  material/branch/warehouse (including negative balances), each storing
-  signed quantity/value and positive-only quantity/value.
-- One-time aggregate backfill while holding a bounded
-  SHARE ROW EXCLUSIVE batch write lock, then install an AFTER row trigger on
-  public.raw_material_batches. The trigger increments both state scopes in
-  the SAME transaction and uses final batch prices after existing BEFORE hooks.
+- **ONE** private, non-API warehouse shadow table per material/branch/warehouse;
+  the existing persisted `raw_material_inventory` table remains the only
+  authoritative branch-level balance. No second branch cache.
+- One-time aggregate backfill while holding a staging-only
+  SHARE ROW EXCLUSIVE batch write lock, then an AFTER row trigger on
+  `public.raw_material_batches`. A normal batch mutation now triggers
+  at most ONE warehouse UPSERT (previous proposal had TWO). Metadata-only
+  updates that leave quantities/values unchanged perform ZERO counter writes.
+  The delta is in the same transaction and sees final BEFORE-trigger costs.
 - Handles insert, delete, price change, negative-to-zero, positive-to-zero and
   scope moves; revokes direct anon/authenticated access, enables RLS, and
   rejects untracked TRUNCATE.
 - Stage A does **not** replace the existing warehouse view, branch stock
   write path, stock-count RPC, FIFO functions, price lookups, ledger or journals.
   This is intentional: we need parity and write-load proof first.
-- Transaction bootstrap checks all four numeric aggregates at both scopes.
-  Production cannot safely run this bootstrap without quiet-window planning.
+- Transaction bootstrap checks all four warehouse numeric aggregates.
+  Branch quantity parity was independently checked against 551 production
+  groups by read-only SQL; production bootstrap requires a new deployment plan.
 
 **Rollback-only validation:** `scripts/experiments/raw_stock_shadow_rollback_fixture_20261012.sql`.
 Temporary synthetic batch rows exercise -10 consumption then +15 purchase
@@ -103,8 +116,11 @@ which requires a pre-installed dedicated local PostgreSQL database and
   exposure, table shapes and sample cardinality using read-only SQL only.
 - Stage A candidate was committed to draft PR #493 outside canonical
   `supabase/migrations`; no production schema migration was added.
-- Exact-head GitHub CI status and isolated PostgreSQL transactional fixture
-  results are not yet verified in this log.
+- Previous draft head `e1866a863d6d6fa30d5c2c2a793e8da1eb527f87`
+  passed exact-head Full Verify, including 991 canonical DB integration
+  tests and two actual local PostgreSQL shadow fixture tests. This verified
+  the now superseded TWO-shadow proposal only; it is NOT proof the simplified
+  single-shadow head has passed. Its new CI result must be checked separately.
 - No write overhead, deadlocks, concurrency, finance parity, physical print
   or real-restaurant performance improvement has been claimed.
 
@@ -116,12 +132,20 @@ which requires a pre-installed dedicated local PostgreSQL database and
    updates, return/refund, transfers and multiple users. Record data hashes.
 2. Prove concurrent send/receipt/count, rollback, retry and source-cost
    settlement do not create stale state or deadlocks.
-3. Measure added trigger row-upsert overhead at peak writes. Do not trade
-   one historical scan for an unacceptable per-batch lock queue.
-4. Stage B, in a **separate reviewed change**, replaces only the repeated
-   batch SUMs used for the live balance by indexed single-key reads after
-   parity. It must also replace the **positive-only average guard scan**
-   consistently, respecting its existing no-positive fallback behavior.
+3. **Primary acceptance is NET DATABASE WORK REDUCTION**, not only a faster
+   SELECT. Compare baseline vs Stage A+Stage B, with identical mixes of
+   negative kitchen sends, receipts settling 1/100/2000 debts, physical
+   counts, warehouse transfers and no-op updates. Capture CPU time, shared
+   buffer hits/reads, WAL bytes, lock waits, deadlocks, p50/p95/p99, queue
+   throughput and maintenance/autovacuum burden. If aggregate write/read
+   burden rises, reject the approach and prefer smaller indexed queries.
+4. Stage B is a **separate reviewed change**: remove redundant per-warehouse
+   and per-branch batch SUMs from operation paths, read a warehouse balance
+   by PK, and update the EXISTING official branch quantity once per
+   logical operation, preserving concurrency semantics. The positive-only
+   average guard scan must also be removed *safely*, including its
+   no-positive-stock fallback. Stage A alone ADDS work; it must never be
+   deployed as an optimization by itself.
 5. Stage C, also separate, improves bounded FIFO-positive batch selection,
    priced last-known-cost lookup, and purchase/count debt settlement. The
    historical allocation per source remains exact; no asynchronous financial
@@ -135,8 +159,9 @@ which requires a pre-installed dedicated local PostgreSQL database and
 1. Run exact-head CI on draft PR #493 and correct any contract/style issue.
 2. Provision no billable infrastructure automatically. Run explicit local
    rollback-only fixture once disposable PostgreSQL is available.
-3. Benchmark with representative negative-first material counts; prepare a
-   separate Stage B plan only after measured parity and write cost.
+3. Benchmark **aggregate write + read consumption** in a negative-first
+   workload and prepare Stage B only if it lowers pressure at equal
+   correctness. A green unit/SQL fixture does not satisfy this requirement.
 4. Do not merge #493 or switch the production stock read path silently.
 
 ## Mandatory update protocol
