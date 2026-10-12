@@ -177,6 +177,6 @@ BEGIN
     'fifo_debt_ledger_id',v_oversold_ledger_id
   );
 END;
-$function$
+$function$;
 
 REVOKE ALL ON FUNCTION public._raw_remove_fifo_single_scan_candidate(uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
