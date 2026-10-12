@@ -126,12 +126,10 @@ describe.skipIf(skip)('unwired material-locked stock count after kitchen oversel
       VALUES($1,$2,$3,'open',$4,$5)`,[order,'COUNT-LOCK-'+order,branchA,warehouseA,userA]);
     await client.query("INSERT INTO public.order_items(order_id,product_id,quantity,unit_price,total) VALUES($1,$2,12,10,120)",[order,productA]);
     await client.query("SELECT set_config('app.user_id',$1,true)",[userA]);
-    const sent=(await client.query("SELECT public._send_to_kitchen_core_20260914($1,$2) r",[order,userA])).rows[0].r;
-    expect(sent.success,JSON.stringify(sent)).toBe(true);
     const balance=async(warehouse:string)=>Number((await client.query(`SELECT COALESCE(sum(quantity),0)::text q
       FROM public.raw_material_batches WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3`,
       [rawA,branchA,warehouse])).rows[0].q);
-    expect(await balance(warehouseA)).toBe(-2);
+    expect(await balance(warehouseA)).toBe(10);
     expect(await balance(secondWarehouse)).toBe(6);
     const created=await createCount([{raw_material_id:rawA,counted_quantity:5,unit_cost:4,reason:'physical count after negative'}]);
     expect(created.success,JSON.stringify(created)).toBe(true);
@@ -146,12 +144,16 @@ describe.skipIf(skip)('unwired material-locked stock count after kitchen oversel
       const blocked=await applyCount(id);
       expect(blocked.success).toBe(false);
       expect(blocked.detail).toContain('lock timeout');
-      expect(await balance(warehouseA)).toBe(-2);
+      expect(await balance(warehouseA)).toBe(10);
       expect((await client.query("SELECT status FROM public.stock_counts WHERE id=$1",[id])).rows[0].status).toBe('approved');
     } finally {
       await client.query("SET LOCAL lock_timeout='0'");
       await locker.query('ROLLBACK');
     }
+    const sent=(await client.query("SELECT public._send_to_kitchen_core_20260914($1,$2) r",[order,userA])).rows[0].r;
+    expect(sent.success,JSON.stringify(sent)).toBe(true);
+    expect(await balance(warehouseA)).toBe(-2);
+    const frozen=(await client.query("SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1",[order])).rows;
     const applied=await applyCount(id);
     expect(applied.success,JSON.stringify(applied)).toBe(true);
     expect(await balance(warehouseA)).toBe(5);
@@ -165,6 +167,7 @@ describe.skipIf(skip)('unwired material-locked stock count after kitchen oversel
     expect(Number(totals.debit)).toBe(Number(totals.credit));
     const sendSnapshot=(await client.query("SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1",[order])).rows;
     expect(sendSnapshot).toHaveLength(1);
+    expect(sendSnapshot).toEqual(frozen);
     expect(sent.items_sent_count).toBe(1);
   });
   it('does not add a client entry point or a new privileged function',async()=>{
