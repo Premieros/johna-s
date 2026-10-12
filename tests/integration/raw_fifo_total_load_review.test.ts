@@ -242,6 +242,84 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
     }));
   }, 120000);
 
+  it('settles 100 sale-origin FIFO debts with parity; optionally 2000 under explicit localhost opt-in', async () => {
+    // The heavier 2,000-debt case is intentionally NOT part of routine CI.
+    // Explicit local opt-in: RAW_FIFO_REVIEW_DEEP_BENCH=1 with a disposable DB.
+    const counts = process.env.RAW_FIFO_REVIEW_DEEP_BENCH === '1' ? [100, 2000] : [100];
+    const functionSql = readFileSync(stageA, 'utf8');
+    const start = functionSql.indexOf('CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(');
+    const optimized = functionSql.slice(start);
+    const deferred = '    -- Receipt batch update is deferred until after every source reconciliation.';
+    const baseline = optimized.replace(deferred, `    UPDATE public.raw_material_batches
+    SET quantity=GREATEST(quantity-v_take,0)
+    WHERE id=v_batch.id;`);
+    const endBlock = baseline.indexOf('  -- All debt, estimate, COGS/journal');
+    const endReturn = baseline.indexOf('  RETURN jsonb_build_object(', endBlock);
+    expect(endBlock).toBeGreaterThan(0);
+    expect(endReturn).toBeGreaterThan(endBlock);
+    const originalSettle = baseline.slice(0,endBlock) + baseline.slice(endReturn);
+
+    for (const count of counts) {
+      const stressRaw = randomUUID();
+      const stressSale = randomUUID();
+      await db.query(
+        "INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Stress raw',$3,0,true)",
+        [stressRaw, 'FIFO-STRESS-' + randomUUID(), branch],
+      );
+      await db.query(
+        "INSERT INTO public.sales(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,payment_method,status,order_type) " +
+        "VALUES($1::uuid,'STRESS-'||($1::uuid)::text,$2,$3,100,100,100,'cash','completed','takeaway')",
+        [stressSale, branch, wh1],
+      );
+
+      const run = async () => {
+        for (let i = 0; i < count; i++) {
+          const negative = await query<{ result: { success: boolean } }>(
+            "SELECT public._raw_remove_fifo($1,$2,$3,0.5,'sale','sale',$4,$5,NULL,true) AS result",
+            [stressRaw, branch, wh1, stressSale, 'STRESS-' + i],
+          );
+          expect(negative[0].result.success).toBe(true);
+        }
+        expect(await qty(stressRaw)).toBe(-count * 0.5);
+        const receipt = tally(await measured(
+          "SELECT public._raw_add($1,$2,$3,$4,7,NULL,NULL,NULL,'purchase_receipt','fifo_review',$5,'STRESS-RECEIPT',NULL)",
+          [stressRaw, branch, wh1, count, randomUUID()],
+        ));
+        const debts = await query<{ total: string; settled: string }>(
+          'SELECT COALESCE(sum(debt_quantity),0)::text total,COALESCE(sum(settled_quantity),0)::text settled ' +
+          'FROM public.raw_fifo_debts WHERE raw_material_id=$1', [stressRaw],
+        );
+        const costing = await query<{ sale_cost: string; delta: string }>(
+          "SELECT COALESCE((SELECT SUM(total_cost) FROM public.inventory_ledger WHERE raw_material_id=$1 AND entry_type='sale'),0)::text sale_cost, " +
+          "COALESCE((SELECT SUM(exact_delta) FROM public.raw_fifo_sale_cogs_adjustments WHERE sale_id=$2),0)::text delta",
+          [stressRaw,stressSale],
+        );
+        const result = {
+          stock: await qty(stressRaw),
+          debt: n(debts[0].total), settled: n(debts[0].settled),
+          saleCost: n(costing[0].sale_cost), cogsDelta: n(costing[0].delta),
+        };
+        expect(result).toEqual({
+          stock: count / 2, debt: count / 2, settled: count / 2,
+          saleCost: -(count / 2) * 7, cogsDelta: (count / 2) * 7,
+        });
+        return { result, receipt };
+      };
+
+      await db.query('SAVEPOINT fifo_stress_baseline');
+      await db.query(originalSettle);
+      const old = await run();
+      await db.query('ROLLBACK TO SAVEPOINT fifo_stress_baseline');
+      const next = await run(); // Stage A optimized function restored by savepoint rollback.
+      expect(next.result).toEqual(old.result);
+      console.info('RAW_FIFO_STRESS_LOCAL', JSON.stringify({
+        debtSources: count, baselineReceipt: old.receipt, optimizedReceipt: next.receipt,
+        scope: 'One receipt plus actual negative-sale helper calls, same FIFO index and branch-row delta',
+        caution: 'Local only; single iteration, no concurrency or production equivalence',
+      }));
+    }
+  }, 180000);
+
   it('applies an authorized physical count after negative kitchen consumption with exact debt/COGS and retry protection', async () => {
     await oversell(countRaw, 5, countSale, 'REVIEW-COUNT-SALE');
     expect(await qty(countRaw)).toBe(-5);
