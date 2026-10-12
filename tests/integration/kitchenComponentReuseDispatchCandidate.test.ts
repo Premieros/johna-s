@@ -202,7 +202,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     // Keep the same raw identity in all replays, but leave the recipe genuinely
     // unconfigured: the first canonical deduction must materialize it.
     await client.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active)
-      VALUES($1,$2,'Dynamic fallback recipe',$3,0,true)`,[autoRaw,'AUTO-PROD-'+product.replaceAll('-',''),branchId]);
+      VALUES($1,$2,'Dynamic fallback recipe',$3,0,true)`,[autoRaw,'AUTO-PROD-'+product.replace(/-/g,''),branchId]);
     await client.query(`INSERT INTO public.product_modifier_groups(id,branch_id,product_id,name,min_selections,max_selections,is_active)
       VALUES($1,$2,$3,'Dynamic extra',0,1,true)`,[group,branchId,product]);
     await client.query("INSERT INTO public.product_modifier_group_products(group_id,product_id,branch_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[group,product,branchId]);
