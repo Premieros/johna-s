@@ -287,6 +287,35 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       FROM pg_stat_xact_user_functions WHERE funcid='public.resolve_kitchen_item_raw_components(uuid,uuid,jsonb)'::regprocedure`)).rows[0].n);
     const priceCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
       FROM pg_stat_xact_user_functions WHERE funcid='public._kitchen_approved_price_candidate(uuid,uuid[],timestamp with time zone)'::regprocedure`)).rows[0].n);
+    // First creation includes real catalog cost. Keep the object afterwards,
+    // as a reused PostgREST backend would; both steady variants replay from
+    // the same stock state. This does not hide the first-use result.
+    const seed=await createOrder(itemJson([
+      {product_id:prodA,quantity:1,notes:'first context 1'},
+      {product_id:prodA,quantity:1,notes:'first context 2'},
+    ]));
+    expect(seed.success,JSON.stringify(seed)).toBe(true);
+    await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
+    const firstContext:Record<string,unknown>={};
+    for (const candidate of [false,'price'] as const) {
+      if (!candidate) await client.query('SAVEPOINT first_context_baseline');
+      try {
+        await captureTrigger(candidate==='price');
+        const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+coreName(candidate)+'($1,$2)',[seed.order_id,cashierId]);
+        const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
+        expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[seed.order_id])).rows[0].n).toBe(2);
+        firstContext[candidate==='price'?'price':'baseline']={
+          ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,wal:plan['WAL Bytes']||0,
+        };
+      } finally {
+        await captureTrigger(false);
+        if (!candidate) {
+          await client.query('ROLLBACK TO SAVEPOINT first_context_baseline');
+          await client.query('RELEASE SAVEPOINT first_context_baseline');
+        }
+      }
+    }
+    console.info('KITCHEN_PRICE_CONTEXT_FIRST_CREATION '+JSON.stringify(firstContext));
     for (const negative of [false,true]) {
       if (negative) await client.query("UPDATE public.raw_material_batches SET quantity=0 WHERE branch_id=$1",[branchId]);
       for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
