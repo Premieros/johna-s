@@ -80,6 +80,8 @@ describe('negative-first raw stock shadow design contract (#489)', () => {
     expect(fixture).toContain("quantity=-10 AND positive_qty=0");
     expect(fixture).toContain('quantity=5 AND stock_value=20 AND positive_qty=5');
     expect(fixture).toContain("SET unit_cost=6");
+    expect(fixture).toContain('NEGATIVE_PURCHASE_SETTLEMENT_NOT_FIVE');
+    expect(fixture).toContain('NEGATIVE_COUNT_ADJUSTMENT_NOT_FIVE');
     expect(fixture).toContain('SAVEPOINT failed_send;');
     expect(fixture).toContain('ROLLBACK TO SAVEPOINT failed_send;');
     expect(fixture).toContain('RAW_SHADOW_STAGE_A_TRANSACTION_PARITY_FAILED');
