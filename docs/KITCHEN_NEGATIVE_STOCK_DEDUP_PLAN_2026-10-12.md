@@ -39,7 +39,11 @@ main 859aa9e148077e0dd02b8f596ffb339e279a23c5. #496 merged/deployed, postmerge V
 تحديد هذا الفرع والسجل الوحيد، إغلاق الإحالة التنفيذية إلى #496 المدمج، حفظ الأدلة والقياسات السابقة. توثيق ما هو منشور وما هو تجريبي.
 
 ### P1 — مكونات الوصفات مرة لكل تكوين داخل الإرسال
-**بدأ التنفيذ.**
+**تنفيذ تجريبي واختبارات مقارنة أضيفت؛ التحقق جارٍ.**
+
+Implementation: `scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql` builds per-configuration plans and consumes them from a copied isolated canonical dispatcher. All three candidates use SECURITY INVOKER, client execution revoked; canonical FIFO and active price snapshot trigger retained. No migration or runtime wiring.
+
+Tests: `tests/integration/kitchenComponentReuseDispatchCandidate.test.ts` runs only on loopback disposable PostgreSQL, BEGIN/ROLLBACK and SAVEPOINT replay. Compares core-versus-core quantities, per-item sends, tickets and frozen ingredient snapshots; checks negative-first selling, resend no-op and denied client execution. This does not yet cover every modifier/error/inbound/concurrency case or establish a total-load performance gain.
 - إعادة استخدام حل مكونات المنتج والاختيارات المتطابقة ضمن دفعة إرسال واحدة.
 - حفظ هوية كل سطر وملاحظاته وكمية فرق الإرسال والتطبيع والتقريب.
 - ربط ذلك بمسار إرسال تجريبي حقيقي في قاعدة اختبار معزولة.
@@ -79,6 +83,8 @@ main 859aa9e148077e0dd02b8f596ffb339e279a23c5. #496 merged/deployed, postmerge V
 - سياسة طرح تدريجي واختبار/رجوع قبل أي موافقة على SQL إنتاج.
 
 ## Verification ledger
+Implementation commits: be52d830063c0becba52279edb3b3f30190336ba; first parity tests c2bc78320b92c5ec5ac54c6b8eb6a6c37e74a028, fixture cleanup ef618e0a1070a01eef87c7cdc330c1886b552b0d. CI must be evaluated at the latest documentation head; pending is not green.
+
 - Main/head and open PRs read before branch creation; no unknown baseline accepted.
 - Previous worklog and cancelled-scope guard reviewed. No cancelled management/treasury scope revived.
 - First implementation and executable tests will record exact results below.
