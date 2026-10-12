@@ -4,7 +4,7 @@
 -- Intended for a disposable Postgres 17 database with normal statistics.
 --
 -- Run once with a SQL client that shows EXPLAIN output. No project data is read.
--- Compare both plans (index name, buffers, filter removals) and the six results.
+-- Compare literal and prepared custom/generic plans, buffers and six parity cases.
 -- No automatic migration runner executes files under scripts/experiments.
 
 BEGIN;
@@ -91,6 +91,31 @@ SELECT EXISTS (
     AND cp.idempotency_key LIKE 'open-check:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:%'
 );
 
+-- Prepared-parameter parity: PL/pgSQL can cache custom or generic plans.
+-- A constant literal LIKE plan alone is NOT sufficient to approve the index.
+PREPARE bench_open_check_lookup (uuid, uuid) AS
+SELECT EXISTS (
+  SELECT 1 FROM open_check_guard_bench cp
+  WHERE cp.branch_id = $1
+    AND cp.kind = 'receipt'
+    AND cp.idempotency_key LIKE 'open-check:' || $2::text || ':%'
+);
+
+-- Inspect both before-index plans. The generic plan may not infer a prefix
+-- index bound when the LIKE prefix is supplied at execution time.
+SET LOCAL plan_cache_mode = 'force_custom_plan';
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+EXECUTE bench_open_check_lookup(
+  '11111111-1111-4111-8111-111111111111'::uuid,
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
+);
+SET LOCAL plan_cache_mode = 'force_generic_plan';
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+EXECUTE bench_open_check_lookup(
+  '11111111-1111-4111-8111-111111111111'::uuid,
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
+);
+
 -- Experimental TEMP index: EXACTLY the proposed #489 prefix/partial definition.
 -- It does not create any index in public.cloud_print_jobs.
 CREATE INDEX bench_receipt_open_check_prefix
@@ -131,6 +156,23 @@ SELECT EXISTS (
     AND cp.kind = 'receipt'
     AND cp.idempotency_key LIKE 'open-check:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:%'
 );
+
+-- Repeat both prepared-statement plans AFTER the temporary index.
+-- If the generic plan still scans by branch, stop: the proposed index
+-- alone may not fix the long-lived function's parameterized execution.
+SET LOCAL plan_cache_mode = 'force_custom_plan';
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+EXECUTE bench_open_check_lookup(
+  '11111111-1111-4111-8111-111111111111'::uuid,
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
+);
+SET LOCAL plan_cache_mode = 'force_generic_plan';
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+EXECUTE bench_open_check_lookup(
+  '11111111-1111-4111-8111-111111111111'::uuid,
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
+);
+DEALLOCATE bench_open_check_lookup;
 
 -- All six branch/type/print-once cases must remain the same on both sides.
 SELECT scenario,
