@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BrandLoading } from '@/components/BrandLoading';
 import { useLanguage } from '@/context/LanguageContext';
 
 type ProgressContextValue = {
@@ -73,7 +72,6 @@ export function PageLoadProgressProvider({ children }: { children: ReactNode }) 
           data-testid="page-progress-loader"
         >
           <div className="mx-auto w-full max-w-md rounded-xl border border-ui-border bg-ui-surface px-4 py-2 shadow-ui-lg">
-            <div className="hidden"><BrandLoading size={24} /></div>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-black text-ui-text">
