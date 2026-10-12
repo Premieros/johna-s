@@ -44,6 +44,9 @@ not established as the root fix for all timeouts.
   condition in the current plan; the planner scans branch entries.
 - A partial `(branch_id, idempotency_key text_pattern_ops) WHERE kind='receipt'`
   index is a candidate, not yet independently benchmarked on realistic data.
+  The SQL predicate is parameterized in PL/pgSQL, so a generic cached
+  execution plan might not derive a LIKE-prefix index range even if a
+  literal/custom plan does. This must be tested before endorsing DDL.
 - Historical FIFO cost lookups separately use `idx_inventory_ledger_raw`
   by raw material only, then filter warehouse/branch and sort.
   Read-only samples on Oct 12: a priced material scanned 2,868 index rows
@@ -57,7 +60,8 @@ not established as the root fix for all timeouts.
 
 - Added `scripts/experiments/open_check_guard_isolated_benchmark_20261012.sql`:
   temporary synthetic queue (24,000 jobs), legacy-index baseline, experimental
-  temporary receipt-prefix index, four EXPLAIN plans and six branch/type cases
+  temporary receipt-prefix index, eight EXPLAIN plans (including prepared
+  custom and generic plan-cache modes) and six branch/type cases
   checked in both phases; explicit BEGIN/ROLLBACK.
 - Added `tests/unit/openCheckPrintGuardBenchmarkContract.test.ts`: static safety,
   existing RPC policy, candidate-index and branch semantics contract.
@@ -71,14 +75,16 @@ not established as the root fix for all timeouts.
 - Verified that the first CI failure for PR #492 was the *mandatory active
   worklog branch mismatch*, not a failing performance benchmark. This log and
   `docs/CURRENT_WORK_PLAN.md` are being synchronized on the draft branch.
-- Source checks confirmed four EXPLAIN sites, six scenarios in both phases,
+- Source checks confirmed eight EXPLAIN sites (literal/custom/generic),
+  six scenarios in both phases,
   temporary objects and final rollback. **SQL benchmark has not executed yet.**
 - A green exact-head CI result is required before calling code verification done.
 
 ## Production gate
 
 - Run the synthetic script on disposable local/staging PostgreSQL and capture
-  index names, buffers and repeated before/after timings.
+  index names, buffers, custom-vs-generic parameter plans and repeated
+  before/after timings. Stop if the generic plan cannot exploit the index.
 - Repeat with realistic branch-specific queue volume and writes before a
   proposed production rollout; account for locks and index-maintenance cost.
 - Verify print-once, direct/approved reprint, different-branch denial and
