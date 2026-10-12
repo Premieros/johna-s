@@ -201,8 +201,8 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
     const avgTrigger = await query<{ tgenabled: string }>(
       "SELECT tgenabled FROM pg_trigger WHERE tgname='trg_raw_inventory_actual_avg_cost_guard'");
     expect(avgTrigger[0].tgenabled).toBe('O');
-    const shadow = await query<{ exists: string | null }>(
-      "SELECT to_regclass('private.raw_stock_warehouse_shadow')::text AS exists");
-    expect(shadow[0].exists).toBeNull();
+    const shadow = await query<{ regclass_name: string | null }>(
+      "SELECT to_regclass('private.raw_stock_warehouse_shadow')::text AS regclass_name");
+    expect(shadow[0].regclass_name).toBeNull();
   });
 });
