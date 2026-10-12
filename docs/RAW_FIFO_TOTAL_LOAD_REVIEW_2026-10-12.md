@@ -66,6 +66,22 @@ State: **BLOCKED** for production; independent review and isolated CI only.
   load, busy branch concurrency, end-to-end send/print testing are not yet validated.
 - Production RLS/schema/trigger snapshots remain unchanged by this work.
 
+- Read-only production refresh: 11,551 open debts across 135 material/branch/warehouse keys,
+  largest 2,168, p95 group size 365.5; 1,305 positive versus 16,793 nonpositive
+  raw batches, and 551 stored branch summaries.
+- CI 38242687106: verify/pages PASS, 991 established DB tests passed;
+  first candidate integration fixture failed on UUID/text parameter inference (42P08), fixed.
+- CI 38243475520: verify/pages PASS, 991 established DB tests passed;
+  candidate fixture reached an important schema drift: production `_raw_fifo_settle_receipt`
+  references `raw_fifo_debt_price_estimates` and `raw_fifo_price_fallback_runs`,
+  absent from repository canonical migration CI replay. New TEST-ONLY schema parity
+  fixture is `scripts/experiments/raw_fifo_price_estimate_parity_local_20261012.sql`,
+  executed only in rollback-only localhost tests. This DOES NOT repair the canonical
+  migration gap and must not be promoted to production.
+- To avoid misleading comparison of different historical definitions, the fixture
+  derives the original per-debt-update baseline from the same production-captured
+  settlement function used in the optimized case. Test work is still in progress.
+
 ## Production gate
 State: **BLOCKED**
 - Do not ship even if static + CI integration tests pass. Need independent staging load
