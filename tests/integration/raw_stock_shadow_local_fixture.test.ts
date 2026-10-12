@@ -66,4 +66,76 @@ describe.skipIf(!isLocal)('raw stock shadow transaction SQL (disposable local DB
     );
     expect(got.rows[0].count).toBe('0');
   });
+  it('measures TOTAL read-vs-write trade-off on synthetic negative-heavy data (diagnostic only)', async () => {
+    // No performance assertion: runner/VM conditions vary and Stage B is
+    // missing. We MUST NOT claim net DB savings from Stage A alone.
+    await client.query('BEGIN');
+    try {
+      await client.query(`
+        CREATE TEMP TABLE stock_pressure_plain (
+          raw_material_id uuid NOT NULL,
+          branch_id uuid NOT NULL,
+          warehouse_id uuid NOT NULL,
+          quantity numeric NOT NULL,
+          unit_cost numeric NOT NULL
+        ) ON COMMIT DROP;
+        CREATE TEMP TABLE stock_pressure_with_shadow
+          (LIKE stock_pressure_plain INCLUDING ALL) ON COMMIT DROP;
+        CREATE INDEX ON stock_pressure_plain (raw_material_id,branch_id,warehouse_id);
+        CREATE TRIGGER trg_stock_pressure_shadow
+        AFTER INSERT OR UPDATE OR DELETE ON stock_pressure_with_shadow
+        FOR EACH ROW EXECUTE FUNCTION private.sync_raw_stock_shadow_from_batch();
+      `);
+
+      type ExplainPlan = { 'Execution Time': number; WAL?: { 'WAL Bytes'?: number } };
+      const explain = async (sql: string): Promise<ExplainPlan> => {
+        const got = await client.query<{ 'QUERY PLAN': ExplainPlan[] }>(
+          `EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON) ${sql}`,
+        );
+        return got.rows[0]['QUERY PLAN'][0];
+      };
+      const source = `SELECT
+        '11111111-1111-4111-8111-111111111111'::uuid,
+        '22222222-2222-4222-8222-222222222222'::uuid,
+        '33333333-3333-4333-8333-333333333333'::uuid,
+        -1::numeric, 0::numeric FROM generate_series(1, 1200)`;
+
+      const baselineWrite = await explain(`INSERT INTO stock_pressure_plain
+        (raw_material_id,branch_id,warehouse_id,quantity,unit_cost) ${source}`);
+      const shadowWrite = await explain(`INSERT INTO stock_pressure_with_shadow
+        (raw_material_id,branch_id,warehouse_id,quantity,unit_cost) ${source}`);
+      const baselineRead = await explain(`
+        SELECT COALESCE(SUM(quantity),0) FROM stock_pressure_plain
+        WHERE raw_material_id='11111111-1111-4111-8111-111111111111'::uuid
+          AND branch_id='22222222-2222-4222-8222-222222222222'::uuid
+          AND warehouse_id='33333333-3333-4333-8333-333333333333'::uuid`);
+      const warehouseRead = await explain(`
+        SELECT quantity FROM private.raw_stock_warehouse_shadow
+        WHERE raw_material_id='11111111-1111-4111-8111-111111111111'::uuid
+          AND branch_id='22222222-2222-4222-8222-222222222222'::uuid
+          AND warehouse_id='33333333-3333-4333-8333-333333333333'::uuid`);
+      const stock = await client.query<{ quantity: string }>(`
+        SELECT quantity::text FROM private.raw_stock_warehouse_shadow
+        WHERE raw_material_id='11111111-1111-4111-8111-111111111111'::uuid
+          AND branch_id='22222222-2222-4222-8222-222222222222'::uuid
+          AND warehouse_id='33333333-3333-4333-8333-333333333333'::uuid`);
+      expect(stock.rows[0].quantity).toBe('-1200');
+
+      // Deliberately report *both* added write cost and potential read saving.
+      // It would be misleading to report only the faster indexed lookup.
+      console.info('RAW_STOCK_SHADOW_SYNTHETIC_PRESSURE_DIAGNOSTIC', JSON.stringify({
+        batchRows: 1200,
+        baselineWriteMs: baselineWrite['Execution Time'],
+        addedShadowWriteMs: shadowWrite['Execution Time'],
+        legacyFullSumReadMs: baselineRead['Execution Time'],
+        indexedWarehouseReadMs: warehouseRead['Execution Time'],
+        baselineWriteWalBytes: baselineWrite.WAL?.['WAL Bytes'] ?? null,
+        shadowWriteWalBytes: shadowWrite.WAL?.['WAL Bytes'] ?? null,
+        caveat: 'Not production, not a net-load benchmark: Stage B read-path rewrite absent',
+      }));
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  }, 30000);
+
 });
