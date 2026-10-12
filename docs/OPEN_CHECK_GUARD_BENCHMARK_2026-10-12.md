@@ -1,43 +1,102 @@
 # Open-check print guard investigation — 2026-10-12
 
-Issue: #489. This is a **non-production experiment**, not a deployed fix.
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Baseline: `main@6673da6db4dbd9db1e018131a3d7f15db978c022`
+Branch: `perf/open-check-guard-benchmark-20261012`
+Current PR: #492
+Last updated: 2026-10-12
 
-## Verified read-only baseline
+## Work status
 
-The current `get_open_order_print_state` query checks branch ID, receipt kind,
-and an `open-check:<order-id>:%` idempotency-key prefix. A sample production
-EXPLAIN selected the existing claim index by branch ID and then filtered
-about 6,100 other rows. Two individual executions took 20.216 ms (absent)
-and 7.081 ms (present), with more than 5,500 shared buffer hits each.
-These are single samples, not representative p95 or proof of root cause.
+State: **BLOCKED** — isolated benchmark and contract tests are prepared; an
+exact-head Full Verify and disposable local/staging PostgreSQL run remain
+necessary before recommending any real index. This is **not a deployed fix**.
 
-The October 11 timeout cluster affected printing and kitchen endpoints
-and other operations; system-wide load may also matter.
+## Guardrails
 
-## Experiment
+- No production SQL, DDL, index, trigger, price, warehouse or POS state changes.
+- No real restaurant orders, physical printer tests or synthetic cloud jobs.
+- No billable staging branch without separate owner approval.
+- Preserve the unique (branch_id,idempotency_key) queue constraint, reprint
+  approvals, FIFO locks, negative debt history and financial cost semantics.
+- Draft PR only. Do not merge/deploy just because CI eventually passes.
 
-`scripts/experiments/open_check_guard_isolated_benchmark_20261012.sql`
-builds synthetic temporary queue data, checks existing/missing receipts in
-two branches, and compares four read-only EXPLAIN plans before and after a
-temporary partial prefix index. It asserts semantic parity and rolls back.
+## Baseline
 
-The actual schema index remains a **proposal only** in
-`scripts/experiments/kitchen_fifo_print_indexes_candidate_20261011.sql`.
-No canonical migration, print logic, FIFO, or accounting is modified.
+The current `get_open_order_print_state` RPC checks branch ID, receipt kind,
+and an `open-check:<order-id>:%` idempotency-key prefix. Read-only production
+EXPLAIN chose the existing claim index by **branch ID alone** and filtered
+around 6,100 unrelated rows.
 
-## Acceptance gate
+| Individual sample | Runtime | Rows filtered | Shared buffer hits |
+| --- | ---: | ---: | ---: |
+| Absent open-check | 20.216 ms | 6,175 | 5,579 |
+| Existing open-check | 7.081 ms | 6,171 | 5,576 |
 
-Run the experiment on an independent local/staging Postgres instance;
-compare plan, buffer use, index overhead, and repeated timings. Confirm
-deduplication, cross-branch denial, kitchen isolation, and manager reprint
-behavior. An empty development database is not production-equivalent.
+These are single warm-cache measurements, not representative p50/p95.
+The Oct 11 SQLSTATE 57014 incident affected many endpoints; the index is
+not established as the root fix for all timeouts.
 
-Obtain separate approval before any billable staging environment or
-production DDL. Production deployment needs its own lock strategy,
-independent approval, rollback instructions, and exact-head green CI.
-Older candidate `SET LOCAL` statements must not be treated as a safe
-production migration script.
+## Root-cause ledger
 
-Outstanding work: independently investigate #486 scoped ingredient price
-lookups and #489 negative-stock FIFO paths. Do not modify historical costs,
-print queue state, warehouse pins, or accounting entries.
+- Prefix LIKE on the unique standard btree lacks a suitable prefix range
+  condition in the current plan; the planner scans branch entries.
+- A partial `(branch_id, idempotency_key text_pattern_ops) WHERE kind='receipt'`
+  index is a candidate, not yet independently benchmarked on realistic data.
+- Historical FIFO cost lookups separately use `idx_inventory_ledger_raw`
+  by raw material only, then filter warehouse/branch and sort.
+  Read-only samples on Oct 12: a priced material scanned 2,868 index rows
+  and returned 2,152 candidate rows (~9.9 ms execution); an unpriced material
+  filtered 2,277 rows (~5.0 ms). These are isolated leaf-query samples, not
+  measured end-to-end kitchen-send delay or authorization to create FIFO indexes.
+- HypoPG is not installed and the Supabase project has no usable independent
+  staging development branch. No production index experiment has been run.
+
+## Change ledger
+
+- Added `scripts/experiments/open_check_guard_isolated_benchmark_20261012.sql`:
+  temporary synthetic queue (24,000 jobs), legacy-index baseline, experimental
+  temporary receipt-prefix index, four EXPLAIN plans and six branch/type cases
+  checked in both phases; explicit BEGIN/ROLLBACK.
+- Added `tests/unit/openCheckPrintGuardBenchmarkContract.test.ts`: static safety,
+  existing RPC policy, candidate-index and branch semantics contract.
+- Updated this log and mandatory active-branch pointer.
+- Original real index candidates stay under `scripts/experiments/`, **outside**
+  canonical `supabase/migrations`. No application code changed.
+
+## Verification ledger
+
+- Production observations used read-only EXPLAIN and catalogue/statistics queries.
+- Verified that the first CI failure for PR #492 was the *mandatory active
+  worklog branch mismatch*, not a failing performance benchmark. This log and
+  `docs/CURRENT_WORK_PLAN.md` are being synchronized on the draft branch.
+- Source checks confirmed four EXPLAIN sites, six scenarios in both phases,
+  temporary objects and final rollback. **SQL benchmark has not executed yet.**
+- A green exact-head CI result is required before calling code verification done.
+
+## Production gate
+
+- Run the synthetic script on disposable local/staging PostgreSQL and capture
+  index names, buffers and repeated before/after timings.
+- Repeat with realistic branch-specific queue volume and writes before a
+  proposed production rollout; account for locks and index-maintenance cost.
+- Verify print-once, direct/approved reprint, different-branch denial and
+  kitchen routing on isolated DB; FIFO/price work is independent (#486).
+- For a real deployment, specify proper online index creation and rollback;
+  the older candidate's bare `SET LOCAL` is **not** a production rollout plan.
+- Separate owner approval is required for *any* production DDL.
+
+## Next action
+
+1. Restore exact-head CI by aligning the mandatory worklog branch.
+2. Review experiment outputs on a disposable local/staging database; no
+   production experiment without separate approval.
+3. Continue scoped FIFO and approved raw-price SQL profiling without writes;
+   measure before proposing one index at a time.
+
+## Mandatory update protocol
+
+Single writer. No direct `main` changes, no force push, no automatic
+production migration. Stop and reconcile branch/main drift; keep this log
+up to date with every branch change and CI gate.
