@@ -402,14 +402,8 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
       "INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'FIFO Direct Sale',$2,100,10,true)",
       [reviewProduct, branchId],
     );
-    await client.query(
-      "INSERT INTO public.inventory_batches(product_id,warehouse_id,branch_id,quantity,unit_cost) VALUES($1,$2,$3,100,10)",
-      [reviewProduct, warehouseId, branchId],
-    );
-    await client.query(
-      "INSERT INTO public.inventory(product_id,warehouse_id,branch_id,quantity) VALUES($1,$2,$3,100)",
-      [reviewProduct, warehouseId, branchId],
-    );
+    // No ready-product batch: force the POS core through this product's raw
+    // recipe, rather than an unrelated finished-goods shortcut.
     const rawId = await attachDirectRawComponentToProduct(client, reviewProduct, branchId, warehouseId, 100, 10, 1);
     const staged = readFileSync('scripts/experiments/raw_stock_official_balance_delta_candidate_20261012.sql', 'utf8');
     const samples = [];
@@ -459,6 +453,8 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
       const baseline = await checkout();
       const originalState = await readState();
       expect(Number(originalState.sold)).toBe(1);
+      expect(Number(originalState.raw)).toBe(100 - quantity);
+      expect(Number(originalState.negative_ledger)).toBeGreaterThan(0);
 
       await client.query('ROLLBACK TO SAVEPOINT fifo_direct_checkout');
       await client.query(staged);
