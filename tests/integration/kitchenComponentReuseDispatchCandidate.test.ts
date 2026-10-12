@@ -316,6 +316,8 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       }
     }
     console.info('KITCHEN_PRICE_CONTEXT_FIRST_CREATION '+JSON.stringify(firstContext));
+    // ON COMMIT DELETE ROWS leaves this object empty on the next real RPC.
+    await client.query('DELETE FROM pg_temp.kitchen_price_context_candidate');
     for (const negative of [false,true]) {
       if (negative) await client.query("UPDATE public.raw_material_batches SET quantity=0 WHERE branch_id=$1",[branchId]);
       for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
@@ -337,6 +339,11 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         await client.query('SAVEPOINT benchmark_variant');
         try {
           await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
+          // Canonical working tables are ON COMMIT DROP in production.
+          // Recreate them for BOTH variants to model the next RPC transaction,
+          // while retaining only the backend-local private price context.
+          await client.query('DROP TABLE IF EXISTS pg_temp.kns_delta');
+          await client.query('DROP TABLE IF EXISTS pg_temp.kitchen_raw_need');
           const before=await resolverCalls(), beforePrice=await priceCalls();
           const fn=coreName(candidate);
           await captureTrigger(candidate==='price');
