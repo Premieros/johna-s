@@ -491,6 +491,8 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
         client, p, branchId, warehouseId, 10, 5, 1,
       ));
     }
+    // The order id changes within the loop; each sample starts at its own savepoint.
+    let currentOrderId = '';
     const stockFor = async (size: number) => {
       const res = await client.query<{ stock: string; ledger: string; sent: string; events: string }>(
         `SELECT
@@ -504,8 +506,6 @@ describe.skipIf(skip)('KDS quantity delta sends', () => {
       );
       return res.rows[0];
     };
-    // The order id changes within the loop; each sample starts at its own savepoint.
-    let currentOrderId = '';
     const benchmarkSend = async (id: string) => {
       const res = await asCashier(async () =>
         client.query<{ 'QUERY PLAN': Array<Record<string, unknown>> }>(
