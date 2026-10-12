@@ -247,3 +247,43 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 768 
     await expect(page.getByTestId('active-orders-page')).toBeVisible();
   });
 }
+
+test.describe('sidebar gesture ownership without retries', () => {
+  test.describe.configure({ retries: 0 });
+  for (const width of [390, 1366]) {
+    test(`closed sidebar releases document gestures repeatedly at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await mockAuthenticatedApp(page);
+      await login(page);
+      await expect(page.getByTestId('page-progress-loader')).toBeHidden();
+      await page.getByTestId('app-main').evaluate((element) => {
+        const spacer = document.createElement('div');
+        spacer.style.height = '3000px';
+        element.appendChild(spacer);
+      });
+      const sidebar = page.getByTestId('app-sidebar');
+      for (let cycle = 0; cycle < 6; cycle += 1) {
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        if (width < 1024) {
+          await page.getByTestId('sidebar-open').click();
+          await expect(sidebar).toHaveCSS('pointer-events', 'auto');
+          await page.getByTestId('sidebar-close').click();
+          await expect(page.getByTestId('mobile-sidebar-backdrop')).toBeHidden();
+        } else {
+          if (cycle > 0) await page.getByTestId('desktop-sidebar-toggle').click();
+          await expect(sidebar).toHaveCSS('pointer-events', 'auto');
+          await page.getByTestId('desktop-sidebar-hide').click();
+        }
+        // Do not wait for the closing transform: closed state must release
+        // input even while the 200ms animation is still on screen.
+        await expect(sidebar).toHaveCSS('pointer-events', 'none');
+        const point = width < 1024 ? { x: width / 2, y: 422 } : { x: width - 130, y: 422 };
+        expect(await page.evaluate(({ x, y }) =>
+          !!document.elementFromPoint(x, y)?.closest('[data-testid="app-sidebar"]'), point)).toBe(false);
+        await page.mouse.move(point.x, point.y);
+        await page.mouse.wheel(0, 450);
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+      }
+    });
+  }
+});
