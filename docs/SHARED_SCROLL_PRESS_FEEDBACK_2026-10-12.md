@@ -31,7 +31,7 @@ Shared Button uses short color transitions and pressed brightness/shadow instead
 Plan changed to this single active frontend track.
 
 ## Verification ledger
-Code inspected through GitHub connector. Local clone unavailable because git transport requires credentials; no local test/browser success claimed. Full Verify CI requested by PR. Windows/mobile actual scroll and action behavior still require browser checks before merge.
+Code inspected through GitHub connector. Local clone unavailable because git transport requires credentials; no local test/browser success claimed. Added real-shell browser regressions at 390px and 1366px for wheel scrolling both directions, held press feedback, action activation and scrolling after sidebar close. These use mocked application data and no production operations. Local browser launch unavailable (Chromium executable absent). Full Verify CI requested by PR. Windows/mobile actual scroll and action behavior still require browser checks before merge.
 
 ## Production gate
 No merge until exact-head Full Verify green, actual browser scroll/press validation and owner approval.
