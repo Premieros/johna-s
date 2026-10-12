@@ -166,6 +166,8 @@ DECLARE
   v_snapshot jsonb;
   v_component_plan jsonb;
   v_plan_items jsonb;
+  v_dispatch_raw_ids uuid[];
+  v_dispatch_prices jsonb;
 BEGIN
   BEGIN
     IF NOT v_is_service_role AND auth.uid() IS NULL THEN
@@ -302,13 +304,9 @@ BEGIN
       END IF;
     END IF;
 
-    -- Plan only when an exact configuration is repeated.
-    IF EXISTS (
-      SELECT 1 FROM pg_temp.kns_delta d
-      JOIN public.order_items oi ON oi.id=d.order_item_id
-      GROUP BY oi.product_id,COALESCE(oi.modifier_option_ids,'{}'::uuid[])
-      HAVING count(*)>1
-    ) THEN
+    -- Resolve each configuration once; use that result for BOTH deduction
+    -- and one approved-price lookup across every known dispatch material.
+    IF (SELECT count(*) FROM pg_temp.kns_delta)>1 THEN
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
       'order_item_id',d.order_item_id,'product_id',oi.product_id,
       'modifier_option_ids',to_jsonb(COALESCE(oi.modifier_option_ids,'{}'::uuid[]))
@@ -319,6 +317,40 @@ BEGIN
 
     v_component_plan := public._kitchen_component_plans_candidate(v_branch_id,v_plan_items);
 
+    END IF;
+
+    IF v_component_plan IS NOT NULL AND EXISTS (
+      SELECT c.oid FROM pg_class c
+       WHERE c.oid=to_regclass('pg_temp.kitchen_price_context_candidate')
+         AND c.relnamespace=pg_my_temp_schema() AND c.relpersistence='t'
+         AND c.relowner=(SELECT proowner FROM pg_proc
+           WHERE oid='public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure)
+         AND NOT has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+         AND NOT has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+         AND NOT has_table_privilege('service_role',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+         AND has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE')
+    ) THEN
+      SELECT array_agg(DISTINCT (component->>'raw_material_id')::uuid)
+      INTO v_dispatch_raw_ids
+      FROM jsonb_each(v_component_plan->'plans') item
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(item.value->'components','[]'::jsonb)) component;
+      IF cardinality(v_dispatch_raw_ids)>0 THEN
+        BEGIN
+          SELECT COALESCE(jsonb_object_agg(p.raw_material_id::text,
+            jsonb_build_object('unit_cost',p.unit_cost,'price_source',p.price_source,'priced_at',p.priced_at)
+          ),'{}'::jsonb) INTO v_dispatch_prices
+          FROM public._kitchen_approved_price_candidate(v_branch_id,v_dispatch_raw_ids,now()) p
+          WHERE p.unit_cost>0 AND p.price_source IN ('purchase','pricing','stock_count')
+            AND p.priced_at IS NOT NULL AND p.priced_at<=now();
+          INSERT INTO pg_temp.kitchen_price_context_candidate(key,payload)
+          SELECT 'raw:'||raw_id::text,COALESCE(v_dispatch_prices->(raw_id::text),'null'::jsonb)
+          FROM unnest(v_dispatch_raw_ids) raw_id ON CONFLICT(key) DO NOTHING;
+        EXCEPTION WHEN OTHERS THEN
+          -- No partial cache on failure; per-event capture retains canonical
+          -- nonblocking lookup/failure semantics and may retry missing raws.
+          RAISE LOG 'kitchen_price_dispatch_lookup_failed order % SQLSTATE %',p_order_id,SQLSTATE;
+        END;
+      END IF;
     END IF;
 
     FOR v_row IN
