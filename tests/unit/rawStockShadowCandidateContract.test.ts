@@ -24,41 +24,43 @@ describe('negative-first raw stock shadow design contract (#489)', () => {
     expect(sql).not.toMatch(/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\./i);
   });
 
-  it('retains signed stock, valuation and positive-only figures at warehouse AND branch scope', () => {
-    for (const tableName of [
-      'private.raw_stock_branch_shadow',
-      'private.raw_stock_warehouse_shadow',
-    ]) {
-      expect(candidate).toContain(`CREATE TABLE ${tableName}`);
-      expect(candidate).toContain(`ALTER TABLE ${tableName} ENABLE ROW LEVEL SECURITY`);
-      expect(candidate).toContain(`REVOKE ALL ON ${tableName} FROM PUBLIC, anon, authenticated`);
-    }
-    expect(candidate).toContain('PRIMARY KEY (raw_material_id, branch_id)');
+  it('keeps ONE warehouse cache and reuses the official existing branch inventory', () => {
+    const table = 'private.raw_stock_warehouse_shadow';
+    expect(candidate).toContain(`CREATE TABLE ${table}`);
+    expect(candidate).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    expect(candidate).toContain(`REVOKE ALL ON ${table} FROM PUBLIC, anon, authenticated`);
+    expect(candidate).not.toContain('CREATE TABLE private.raw_stock_branch_shadow');
+    expect(candidate).not.toContain('INSERT INTO private.raw_stock_branch_shadow');
     expect(candidate).toContain('PRIMARY KEY (raw_material_id, branch_id, warehouse_id)');
     expect(candidate).toContain('SUM(quantity)');
-    expect(candidate).toContain('SUM(quantity * COALESCE(unit_cost, 0))');
-    expect(candidate).toContain('SUM(GREATEST(quantity, 0))');
-    expect(candidate).toContain('SUM(GREATEST(quantity, 0) * COALESCE(unit_cost, 0))');
+    expect(candidate).toContain('SUM(quantity*COALESCE(unit_cost,0))');
+    expect(candidate).toContain('SUM(GREATEST(quantity,0))');
+    expect(candidate).toContain('SUM(GREATEST(quantity,0)*COALESCE(unit_cost,0))');
     expect(candidate).toContain('WHERE warehouse_id IS NOT NULL');
+    expect(candidate).toContain('public.raw_material_inventory');
   });
 
   it('preserves transactionality and captures final BEFORE-trigger cost changes', () => {
     expect(candidate).toContain('CREATE TRIGGER trg_raw_stock_shadow_batch_delta');
     expect(candidate).toContain('AFTER INSERT OR UPDATE OR DELETE ON public.raw_material_batches');
     expect(candidate).toContain('private.sync_raw_stock_shadow_from_batch()');
-    expect(candidate).toContain('CREATE FUNCTION private.apply_raw_stock_shadow_delta(');
+    expect(candidate).toContain('CREATE FUNCTION private.apply_raw_stock_warehouse_delta(');
     expect(candidate).toContain('CREATE FUNCTION private.sync_raw_stock_shadow_from_batch()');
     expect(candidate).toContain('SECURITY DEFINER');
     expect(candidate).toContain('SET search_path = pg_catalog, private');
     expect(candidate).toContain('REVOKE ALL ON FUNCTION private.sync_raw_stock_shadow_from_batch()');
-    expect(candidate).toContain('REVOKE ALL ON FUNCTION private.apply_raw_stock_shadow_delta(');
+    expect(candidate).toContain('REVOKE ALL ON FUNCTION private.apply_raw_stock_warehouse_delta(');
     for (const action of ['INSERT', 'UPDATE', 'DELETE']) {
       expect(candidate).toContain(`TG_OP = '${action}'`);
     }
     expect(candidate).toContain('NEW.quantity * NEW.unit_cost - OLD.quantity * OLD.unit_cost');
-    expect(candidate).toContain('ON CONFLICT (raw_material_id, branch_id) DO UPDATE');
-    expect(candidate).toContain('ON CONFLICT (raw_material_id, branch_id, warehouse_id) DO UPDATE');
+    expect(candidate).not.toContain('ON CONFLICT (raw_material_id,branch_id) DO UPDATE');
+    expect(candidate).toContain('ON CONFLICT (raw_material_id,branch_id,warehouse_id) DO UPDATE');
     expect(candidate).toContain('RAW_STOCK_SHADOW_BOOTSTRAP_PARITY_FAILED');
+    expect(candidate).toContain('IF p_qty=0 AND p_value=0 AND p_positive_qty=0 AND p_positive_value=0 THEN');
+    expect(candidate).not.toContain('private.raw_stock_branch_shadow');
+    // One cached warehouse key write per ordinary batch mutation, not two.
+    expect((candidate.match(/INSERT INTO private\\.raw_stock_warehouse_shadow/g) || []).length).toBe(2);
     expect(candidate).toContain("TG_OP = 'INSERT'"); // canonical trigger metadata spelling
   });
 
