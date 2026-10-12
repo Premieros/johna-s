@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { Client } from 'pg';
+import pg from 'pg';
 
 // Opt-in only, after applying the candidate to a DISPOSABLE local PostgreSQL.
 // NEVER point this fixture to the live Supabase project or a hosted DB.
@@ -19,10 +19,10 @@ try {
 }
 
 describe.skipIf(!isLocal)('raw stock shadow transactional SQL fixture (local-only)', () => {
-  let client: Client;
+  let client: pg.Client;
 
   beforeAll(async () => {
-    client = new Client({ connectionString });
+    client = new pg.Client({ connectionString });
     await client.connect();
   });
 
