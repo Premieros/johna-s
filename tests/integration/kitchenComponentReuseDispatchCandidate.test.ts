@@ -22,7 +22,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   const orgId = randomUUID();
   beforeAll(async () => {
     if (skip) throw new Error('Disposable loopback database required');
-    client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN'); await client.query(readFileSync('scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
+    client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN'); await client.query(readFileSync('scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_component_price_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
     await client.query(`INSERT INTO public.organizations (id, name, slug) VALUES ($1, $2, $3)`, [orgId, '048 Org', `048-${randomUUID().slice(0,8)}`]);
     await client.query(`INSERT INTO public.branches (id, name, organization_id) VALUES ($1, $2, $3)`, [branchId, '048 Branch', orgId]);
     await client.query(`INSERT INTO public.warehouses (id, name, branch_id, is_active) VALUES ($1, $2, $3, true)`, [whId, '048 WH', branchId]);
@@ -45,10 +45,23 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   afterAll(async () => { if (client) { await client.query('ROLLBACK').catch(() => {}); await client.end(); } });
 
 
-  async function sendCore(orderId: string, candidate: boolean) {
+  type Variant = boolean | 'price';
+  async function captureTrigger(price: boolean) {
+    const fn=price?'_capture_kitchen_ingredient_prices_reuse_candidate':'_capture_kitchen_ingredient_prices';
+    await client.query('CREATE OR REPLACE TRIGGER trg_capture_kitchen_ingredient_prices BEFORE INSERT ON public.order_kitchen_inventory_events FOR EACH ROW EXECUTE FUNCTION public.'+fn+'()');
+  }
+  function coreName(candidate:Variant) {
+    return candidate==='price'?'_send_to_kitchen_component_price_reuse_candidate':
+      candidate?'_send_to_kitchen_component_reuse_candidate':'_send_to_kitchen_core_20260914';
+  }
+  async function sendCore(orderId: string, candidate: Variant) {
     await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
-    const fn=candidate ? '_send_to_kitchen_component_reuse_candidate' : '_send_to_kitchen_core_20260914';
-    return (await client.query('SELECT public.'+fn+'($1,$2) r',[orderId,cashierId])).rows[0].r;
+    if (candidate==='price') await captureTrigger(true);
+    try {
+      return (await client.query('SELECT public.'+coreName(candidate)+'($1,$2) r',[orderId,cashierId])).rows[0].r;
+    } finally {
+      if (candidate==='price') await captureTrigger(false);
+    }
   }
   async function stockState() {
     const queries = [
@@ -63,7 +76,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   }
   async function compare(orderId: string) {
     const outcomes=[];
-    for (const candidate of [false,true]) {
+    for (const candidate of [false,true,'price'] as const) {
       await client.query('SAVEPOINT dispatch_variant');
       try {
         const first=await sendCore(orderId,candidate);
@@ -89,6 +102,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       }
     }
     expect(outcomes[1]).toEqual(outcomes[0]);
+    expect(outcomes[2]).toEqual(outcomes[0]);
     return outcomes[1];
   }
   it('reuses one configuration while preserving separate item identities and canonical snapshots',async()=>{
@@ -158,7 +172,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     expect(created.success,JSON.stringify(created)).toBe(true);
     await client.query("UPDATE public.order_items SET created_at=now()-interval '1 minute' WHERE order_id=$1 AND product_id=$2",[created.order_id,prodB]);
     const before=await stockState(), results=[];
-    for (const candidate of [false,true]) {
+    for (const candidate of [false,true,'price'] as const) {
       const result=await sendCore(created.order_id,candidate);
       expect(result.success).toBe(false);
       expect(result.product_id).toBe(prodA);
@@ -167,6 +181,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       results.push(result);
     }
     expect(results[1]).toEqual(results[0]);
+    expect(results[2]).toEqual(results[0]);
   });
   it('unconfigured product retains the canonical fallback and negative debt',async()=>{
     const product=randomUUID();
@@ -184,19 +199,61 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     await client.query("INSERT INTO public.branches(id,name) VALUES($1,'Foreign reuse')",[foreign]);
     await client.query("INSERT INTO public.orders(id,order_number,branch_id,status) VALUES($1,$2,$3,'open')",[order,'FOREIGN-'+order,foreign]);
     const before=await stockState(),results=[];
-    for (const candidate of [false,true]) results.push(await sendCore(order,candidate));
+    for (const candidate of [false,true,'price'] as const) results.push(await sendCore(order,candidate));
     expect(results[0].success).toBe(false);
     expect(results[1]).toEqual(results[0]);
+    expect(results[2]).toEqual(results[0]);
     expect(await stockState()).toEqual(before);
     await client.query("SELECT set_config('app.user_id','',true)");
     const result=(await client.query("SELECT public._send_to_kitchen_component_reuse_candidate($1,NULL) r",[order])).rows[0].r;
     expect(result.success).toBe(false);
     expect(await stockState()).toEqual(before);
   });
+
+  it('a client-owned temporary namesake and forged price are ignored',async()=>{
+    await client.query('SAVEPOINT hostile_price_context');
+    try {
+      await client.query("SET LOCAL ROLE authenticated");
+      await client.query("CREATE TEMP TABLE pg_temp.kitchen_price_context_candidate(key text PRIMARY KEY,payload jsonb NOT NULL) ON COMMIT DROP");
+      await client.query(`INSERT INTO pg_temp.kitchen_price_context_candidate(key,payload)
+        VALUES('scope','{"actor_id":"forged"}'::jsonb)`);
+      await client.query("RESET ROLE");
+      const created=await createOrder(itemJson([
+        {product_id:prodA,quantity:1,notes:'hostile 1'},
+        {product_id:prodA,quantity:1,notes:'hostile 2'},
+      ]));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      const result=await compare(created.order_id);
+      expect(result.snapshots.every((event:{component_snapshot:Array<{unit_cost:number|null}>})=>
+        event.component_snapshot.every(raw=>raw.unit_cost===7))).toBe(true);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT hostile_price_context');
+      await client.query('RELEASE SAVEPOINT hostile_price_context');
+    }
+  });
+  it('the server-owned price context is unreadable by client roles and expires at rollback',async()=>{
+    await client.query('SAVEPOINT trusted_price_context');
+    try {
+      const created=await createOrder(itemJson([
+        {product_id:prodA,quantity:1,notes:'trusted 1'},
+        {product_id:prodA,quantity:1,notes:'trusted 2'},
+      ]));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      const result=await sendCore(created.order_id,'price');
+      expect(result.success,JSON.stringify(result)).toBe(true);
+      const rows=await client.query(`SELECT rolname,has_table_privilege(rolname,
+        'pg_temp.kitchen_price_context_candidate','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed
+        FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') ORDER BY rolname`);
+      expect(rows.rows.every((row:{allowed:boolean})=>!row.allowed)).toBe(true);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT trusted_price_context');
+      await client.query('RELEASE SAVEPOINT trusted_price_context');
+    }
+  });
   it('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
     await client.query("SET LOCAL track_functions='all'");
     type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number};
-    const measurements: Record<string,{baseline:Sample[];candidate:Sample[]}>={};
+    const measurements: Record<string,{baseline:Sample[];candidate:Sample[];price:Sample[]}>={};
     const quantile=(values:number[],fraction:number)=>{
       const sorted=[...values].sort((a,b)=>a-b);
       return sorted[Math.max(0,Math.ceil(sorted.length*fraction)-1)];
@@ -217,21 +274,22 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       const created=await createOrder(itemJson(products.map((product,index)=>({product_id:product,quantity:1,notes:'bench-'+index}))));
       expect(created.success,JSON.stringify(created)).toBe(true);
       const name=(negative?'negative-':'positive-')+(distinct?'distinct':'repeated')+'-'+count;
-      measurements[name]={baseline:[],candidate:[]};
+      measurements[name]={baseline:[],candidate:[],price:[]};
       // Warmup plus seven alternated samples. Each starts from the same state;
       // canonical price capture and FIFO stay enabled for both variants.
-      for (let round=0;round<8;round+=1) for (const candidate of (round%2 ? [true,false]:[false,true])) {
+      for (let round=0;round<8;round+=1) for (const candidate of (round%2 ? ['price',true,false] as const:[false,true,'price'] as const)) {
         await client.query('SAVEPOINT benchmark_variant');
         try {
           await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
           const before=await resolverCalls();
-          const fn=candidate?'_send_to_kitchen_component_reuse_candidate':'_send_to_kitchen_core_20260914';
+          const fn=coreName(candidate);
+          await captureTrigger(candidate==='price');
           const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+fn+'($1,$2)',[created.order_id,cashierId]);
           const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
           const calls=(await resolverCalls())-before;
           expect(calls).toBe(candidate && !distinct ? 1 : count);
           expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[created.order_id])).rows[0].n).toBe(count);
-          if (round>0) measurements[name][candidate?'candidate':'baseline'].push({
+          if (round>0) measurements[name][candidate==='price'?'price':candidate?'candidate':'baseline'].push({
             ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,reads:plan['Shared Read Blocks']||0,wal:plan['WAL Bytes']||0,resolverCalls:calls,
           });
         } finally {
