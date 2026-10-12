@@ -82,6 +82,14 @@ State: **BLOCKED** for production; independent review and isolated CI only.
   derives the original per-debt-update baseline from the same production-captured
   settlement function used in the optimized case. Test work is still in progress.
 
+- CI 38244665037: verify/pages PASS, 991 original DB tests passed; candidate test
+  reached both production-shaped function variants. The Stage B script failed at
+  the second concatenated CREATE because pg_get_functiondef output lacked a
+  trailing semicolon. Corrected candidate separators and added a static guard;
+  next exact-head CI must prove executable parity and capture WAL/BUFFERS.
+- Production-adjacent index DDL remains intentionally unapplied; these failures
+  are isolated CI candidate problems and NOT evidence of production regressions.
+
 ## Production gate
 State: **BLOCKED**
 - Do not ship even if static + CI integration tests pass. Need independent staging load
