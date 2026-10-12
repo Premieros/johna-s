@@ -223,6 +223,31 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         {product_id:prodA,quantity:1,notes:'hostile 2'},
       ]));
       expect(created.success,JSON.stringify(created)).toBe(true);
+      // Make every scope value and event id valid, and forge an approved-looking
+      // price. Server ownership/ACL must reject it even for a known event.
+      const event=randomUUID();
+      const item=(await client.query("SELECT id FROM public.order_items WHERE order_id=$1 ORDER BY id LIMIT 1",[created.order_id])).rows[0].id;
+      const raw=(await client.query("SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1",[unitA])).rows[0].raw_material_id;
+      await client.query(`UPDATE pg_temp.kitchen_price_context_candidate SET payload=jsonb_build_object(
+        'branch_id',$1::uuid,'actor_id',$2::uuid,'as_of',now(),'txid',txid_current()::text,'event_ids',jsonb_build_array($3::text)) WHERE key='scope'`,
+        [branchId,cashierId,event]);
+      await client.query(`INSERT INTO pg_temp.kitchen_price_context_candidate(key,payload)
+        VALUES('raw:'||$1::text,jsonb_build_object('unit_cost',999,'price_source','pricing','priced_at',now()-interval '1 minute'))`,[raw]);
+      await client.query('SAVEPOINT forged_event');
+      try {
+        await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
+        await captureTrigger(true);
+        await client.query(`INSERT INTO public.order_kitchen_inventory_events
+          (id,branch_id,warehouse_id,order_id,order_item_id,sent_quantity,total_cost,created_by,component_snapshot,snapshot_version)
+          VALUES($1,$2,$3,$4,$5,1,0,$6,jsonb_build_array(jsonb_build_object('raw_material_id',$7::uuid,'raw_name','Forged price probe','quantity',1)),2)`,
+          [event,branchId,whId,created.order_id,item,cashierId,raw]);
+        const snapshot=(await client.query("SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE id=$1",[event])).rows[0].component_snapshot;
+        expect(snapshot[0].unit_cost).toBe(7);
+        expect(snapshot[0].unit_cost).not.toBe(999);
+      } finally {
+        await client.query('ROLLBACK TO SAVEPOINT forged_event');
+        await client.query('RELEASE SAVEPOINT forged_event');
+      }
       const result=await compare(created.order_id);
       expect(result.snapshots.every((event:{component_snapshot:Array<{unit_cost:number|null}>})=>
         event.component_snapshot.every(raw=>raw.unit_cost===7))).toBe(true);
