@@ -11,7 +11,7 @@ const skip = !dbUrl || !['localhost','127.0.0.1','[::1]'].includes(new URL(dbUrl
 describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   let client: pg.Client;
   const branchId = randomUUID(); const whId = randomUUID(); const prodA = randomUUID(); const prodB = randomUUID(); const unitA = randomUUID(); const unitB = randomUUID(); const cashierId = randomUUID();
-  const itemJson = (items: Array<{ product_id: string; quantity: number; notes?: string | null }>) => JSON.stringify(items.map((it) => ({ product_id: it.product_id, unit_name: 'piece', quantity: it.quantity, unit_price: 100, discount_amount: 0, bonus_quantity: 0, total: it.quantity * 100, notes: it.notes ?? null })));
+  const itemJson = (items: Array<{ product_id: string; quantity: number; notes?: string | null; modifier_option_ids?: string[] }>) => JSON.stringify(items.map((it) => ({ product_id: it.product_id, unit_name: 'piece', quantity: it.quantity, unit_price: 100, discount_amount: 0, bonus_quantity: 0, total: it.quantity * 100, notes: it.notes ?? null, modifier_option_ids: it.modifier_option_ids ?? [] })));
   const makeTable = async (): Promise<string> => { const id = randomUUID(); await client.query(`INSERT INTO public.dining_tables (id, name, branch_id, capacity, status) VALUES ($1, $2, $3, 4, 'vacant')`, [id, `T-${id.slice(0,4)}`, branchId]); return id; };
   async function asUser<T>(fn: () => Promise<T>): Promise<T> { await client.query(`SELECT set_config('app.user_id', $1, true)`, [cashierId]); await client.query(`SET LOCAL ROLE authenticated`); try { return await fn(); } finally { await client.query('RESET ROLE').catch(() => {}); await client.query('RESET app.user_id').catch(() => {}); } }
   async function createOrder(items = itemJson([{ product_id: prodA, quantity: 1 }])) { const t = await makeTable(); return asUser(async () => { const res = await client.query(`SELECT public.create_order($1, 'dine_in', $2, NULL, 2, NULL, $3::jsonb, 100, 0, 'amount', 0, 100, $4) AS r`, [branchId, t, items, cashierId]); return res.rows[0].r; }); }
@@ -46,6 +46,17 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     const fn=candidate ? '_send_to_kitchen_component_reuse_candidate' : '_send_to_kitchen_core_20260914';
     return (await client.query('SELECT public.'+fn+'($1,$2) r',[orderId,cashierId])).rows[0].r;
   }
+  async function stockState() {
+    const queries = [
+      "SELECT raw_material_id,warehouse_id,source_type,unit_cost,sum(quantity)::text quantity,count(*)::int rows FROM public.raw_material_batches WHERE branch_id=$1 GROUP BY raw_material_id,warehouse_id,source_type,unit_cost ORDER BY raw_material_id,warehouse_id,source_type,unit_cost",
+      "SELECT raw_material_id,quantity,to_jsonb(i)->'avg_cost' avg_cost FROM public.raw_material_inventory i WHERE branch_id=$1 ORDER BY raw_material_id",
+      "SELECT raw_material_id,warehouse_id,sum(quantity)::text quantity,sum(total_cost)::text total_cost,count(*)::int rows FROM public.inventory_ledger WHERE branch_id=$1 GROUP BY raw_material_id,warehouse_id ORDER BY raw_material_id,warehouse_id",
+      "SELECT raw_material_id,warehouse_id,sum(debt_quantity)::text debt,sum(settled_quantity)::text settled,count(*)::int rows FROM public.raw_fifo_debts WHERE branch_id=$1 GROUP BY raw_material_id,warehouse_id ORDER BY raw_material_id,warehouse_id",
+    ];
+    const rows = [];
+    for (const sql of queries) rows.push((await client.query(sql,[branchId])).rows);
+    return rows;
+  }
   async function compare(orderId: string) {
     const outcomes=[];
     for (const candidate of [false,true]) {
@@ -60,7 +71,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         expect([await batchQty(unitA),await batchQty(unitB)]).toEqual(beforeResend);
         const sends=(await client.query('SELECT order_item_id,sent_quantity FROM public.order_kitchen_sends WHERE order_id=$1 ORDER BY order_item_id',[orderId])).rows;
         const snapshots=(await client.query('SELECT order_item_id,component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id',[orderId])).rows;
-        outcomes.push({qty:beforeResend,sends,snapshots,count:first.items_sent_count,
+        outcomes.push({qty:beforeResend,sends,snapshots,stock:await stockState(),count:first.items_sent_count,
           tickets:first.sent.map((row: Record<string,unknown>)=>Object.fromEntries(Object.entries(row).filter(([key])=>key!=='send_id' && key!=='kitchen_send_id')))});
       } finally {
         await client.query('ROLLBACK TO SAVEPOINT dispatch_variant');
@@ -92,4 +103,136 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       'public._send_to_kitchen_component_reuse_candidate(uuid,uuid)','EXECUTE') allowed`);
     expect(result.rows[0].allowed).toBe(false);
   });
+
+  const extraGroup=randomUUID(), extraOption=randomUUID(), badOption=randomUUID();
+  async function setupModifiers() {
+    await client.query(`INSERT INTO public.product_modifier_groups
+      (id,branch_id,product_id,name,min_selections,max_selections,is_active)
+      VALUES($1,$2,$3,'Reuse extras',0,1,true)`,[extraGroup,branchId,prodA]);
+    await client.query(`INSERT INTO public.product_modifier_group_products(group_id,product_id,branch_id)
+      VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,[extraGroup,prodA,branchId]);
+    for (const [option,name,delta] of [[extraOption,'Extra',1],[badOption,'Invalid removal',-3]] as const) {
+      await client.query(`INSERT INTO public.product_modifier_options
+        (id,branch_id,group_id,name,price_delta,is_active) VALUES($1,$2,$3,$4,0,true)`,
+        [option,branchId,extraGroup,name]);
+      await client.query(`INSERT INTO public.product_modifier_inventory_effects
+        (branch_id,option_id,target_type,inventory_unit_id,quantity_delta)
+        VALUES($1,$2,'inventory_unit',$3,$4)`,[branchId,option,unitA,delta]);
+    }
+  }
+  it('keeps modifier configurations separate while reusing identical configurations',async()=>{
+    await setupModifiers();
+    const created=await createOrder(itemJson([
+      {product_id:prodA,quantity:1,notes:'plain'},
+      {product_id:prodA,quantity:2,notes:'extra 1',modifier_option_ids:[extraOption]},
+      {product_id:prodA,quantity:3,notes:'extra 2',modifier_option_ids:[extraOption]},
+    ]));
+    expect(created.success,JSON.stringify(created)).toBe(true);
+    const plan=(await client.query(`SELECT public._kitchen_component_plans_candidate($1,
+      (SELECT jsonb_agg(jsonb_build_object('order_item_id',id,'product_id',product_id,'modifier_option_ids',to_jsonb(modifier_option_ids))) FROM public.order_items WHERE order_id=$2)) p`,
+      [branchId,created.order_id])).rows[0].p;
+    expect(plan.configuration_count).toBe(2);
+    const result=await compare(created.order_id);
+    expect(result.qty[0]).toBe(89);
+  });
+  it('an invalid later line rolls back every earlier deduction with canonical product attribution',async()=>{
+    const created=await createOrder(itemJson([
+      {product_id:prodB,quantity:2,notes:'valid first'},
+      {product_id:prodA,quantity:1,notes:'invalid second',modifier_option_ids:[badOption]},
+    ]));
+    expect(created.success,JSON.stringify(created)).toBe(true);
+    await client.query("UPDATE public.order_items SET created_at=now()-interval '1 minute' WHERE order_id=$1 AND product_id=$2",[created.order_id,prodB]);
+    const before=await stockState(), results=[];
+    for (const candidate of [false,true]) {
+      const result=await sendCore(created.order_id,candidate);
+      expect(result.success).toBe(false);
+      expect(result.product_id).toBe(prodA);
+      expect(await stockState()).toEqual(before);
+      expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE order_id=$1",[created.order_id])).rows[0].n).toBe(0);
+      results.push(result);
+    }
+    expect(results[1]).toEqual(results[0]);
+  });
+  it('unconfigured product retains the canonical fallback and negative debt',async()=>{
+    const product=randomUUID();
+    await client.query("INSERT INTO public.products(id,name,branch_id,sale_price,is_active) VALUES($1,'Reuse fallback',$2,100,true)",[product,branchId]);
+    // Resolve fallback once outside replay so both variants use the identical raw id.
+    const raw=(await client.query("SELECT public._ensure_pos_fallback_product_raw($1,$2) id",[product,branchId])).rows[0].id;
+    const created=await createOrder(itemJson([{product_id:product,quantity:3}]));
+    expect(created.success,JSON.stringify(created)).toBe(true);
+    const result=await compare(created.order_id);
+    expect(result.stock[3].find((row: {raw_material_id:string})=>row.raw_material_id===raw)?.debt).toBe('3.000000');
+    expect(result.snapshots[0].component_snapshot[0].raw_material_id).toBe(raw);
+  });
+  it('cross-branch dispatch and missing authentication are rejected before inventory work',async()=>{
+    const foreign=randomUUID(),order=randomUUID();
+    await client.query("INSERT INTO public.branches(id,name) VALUES($1,'Foreign reuse')",[foreign]);
+    await client.query("INSERT INTO public.orders(id,order_number,branch_id,status) VALUES($1,$2,$3,'open')",[order,'FOREIGN-'+order,foreign]);
+    const before=await stockState(),results=[];
+    for (const candidate of [false,true]) results.push(await sendCore(order,candidate));
+    expect(results[0].success).toBe(false);
+    expect(results[1]).toEqual(results[0]);
+    expect(await stockState()).toEqual(before);
+    await client.query("SELECT set_config('app.user_id','',true)");
+    const result=(await client.query("SELECT public._send_to_kitchen_component_reuse_candidate($1,NULL) r",[order])).rows[0].r;
+    expect(result.success).toBe(false);
+    expect(await stockState()).toEqual(before);
+  });
+  it('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
+    await client.query("SET LOCAL track_functions='all'");
+    type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number};
+    const measurements: Record<string,{baseline:Sample[];candidate:Sample[]}>={};
+    const quantile=(values:number[],fraction:number)=>{
+      const sorted=[...values].sort((a,b)=>a-b);
+      return sorted[Math.max(0,Math.ceil(sorted.length*fraction)-1)];
+    };
+    const resolverCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
+      FROM pg_stat_xact_user_functions WHERE funcid='public.resolve_kitchen_item_raw_components(uuid,uuid,jsonb)'::regprocedure`)).rows[0].n);
+    for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
+      const products=[];
+      for (let index=0;index<count;index+=1) {
+        if (!distinct) { products.push(prodB); continue; }
+        const product=randomUUID();
+        await client.query("INSERT INTO public.products(id,name,branch_id,sale_price,is_active) VALUES($1,$2,$3,100,true)",[product,'Bench '+product,branchId]);
+        await client.query("INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)",[product,unitB]);
+        products.push(product);
+      }
+      const created=await createOrder(itemJson(products.map((product,index)=>({product_id:product,quantity:1,notes:'bench-'+index}))));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      const name=(distinct?'distinct':'repeated')+'-'+count;
+      measurements[name]={baseline:[],candidate:[]};
+      // Warmup plus seven alternated samples. Each starts from the same state;
+      // canonical price capture and FIFO stay enabled for both variants.
+      for (let round=0;round<8;round+=1) for (const candidate of (round%2 ? [true,false]:[false,true])) {
+        await client.query('SAVEPOINT benchmark_variant');
+        try {
+          await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
+          const before=await resolverCalls();
+          const fn=candidate?'_send_to_kitchen_component_reuse_candidate':'_send_to_kitchen_core_20260914';
+          const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+fn+'($1,$2)',[created.order_id,cashierId]);
+          const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
+          const calls=(await resolverCalls())-before;
+          expect(calls).toBe(candidate && !distinct ? 1 : count);
+          expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[created.order_id])).rows[0].n).toBe(count);
+          if (round>0) measurements[name][candidate?'candidate':'baseline'].push({
+            ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,reads:plan['Shared Read Blocks']||0,wal:plan['WAL Bytes']||0,resolverCalls:calls,
+          });
+        } finally {
+          await client.query('ROLLBACK TO SAVEPOINT benchmark_variant');
+          await client.query('RELEASE SAVEPOINT benchmark_variant');
+        }
+      }
+    }
+    const summary=Object.fromEntries(Object.entries(measurements).map(([name,variants])=>[name,
+      Object.fromEntries(Object.entries(variants).map(([variant,samples])=>[variant,{
+        samples: samples.length,
+        p50ms:quantile(samples.map(s=>s.ms),0.5),p95ms:quantile(samples.map(s=>s.ms),0.95),
+        medianHits:quantile(samples.map(s=>s.hits),0.5),medianWal:quantile(samples.map(s=>s.wal),0.5),
+        resolverCalls:samples[0].resolverCalls,
+      }]))]));
+    console.info('KITCHEN_COMPONENT_REUSE_FULL_CORE_BENCHMARK '+JSON.stringify(summary));
+    // Seven samples are exploratory; production tail latency, CPU and
+    // contention need separate evidence. Never assert noisy wall-time ratios.
+  },120000);
+
 });
