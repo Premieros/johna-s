@@ -245,7 +245,9 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
   it('settles 100 sale-origin FIFO debts with parity; optionally 2000 under explicit localhost opt-in', async () => {
     // The heavier 2,000-debt case is intentionally NOT part of routine CI.
     // Explicit local opt-in: RAW_FIFO_REVIEW_DEEP_BENCH=1 with a disposable DB.
-    const counts = process.env.RAW_FIFO_REVIEW_DEEP_BENCH === '1' ? [100, 2000] : [100];
+    // Authorized one-time deep proof on disposable CI PostgreSQL only.
+    // Revert to RAW_FIFO_REVIEW_DEEP_BENCH opt-in after recording the result.
+    const counts = [100, 2000];
     const functionSql = readFileSync(stageA, 'utf8');
     const start = functionSql.indexOf('CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(');
     const optimized = functionSql.slice(start);
