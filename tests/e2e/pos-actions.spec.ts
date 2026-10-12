@@ -273,6 +273,34 @@ test.describe('POS action-level', () => {
     await expect(page.locator('body')).not.toHaveText(/Error Loading Data|خطأ في تحميل البيانات/i);
   });
 
+
+  test('phone product dialog keeps actions visible while long contents scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId('pos-start-quick-order').click();
+    const card = page.getByTestId('pos-product-card-'+PRODUCT_ID);
+    await card.getByRole('button', { name: /^(إضافة|Add)$/i }).click();
+    const modal = page.getByTestId('pos-product-config-modal');
+    await expect(modal).toBeVisible();
+    const body = modal.locator('.overflow-y-auto');
+    await body.evaluate((element) => {
+      const spacer = document.createElement('div');
+      spacer.style.height = '2200px';
+      element.appendChild(spacer);
+    });
+    const bounds = await body.boundingBox();
+    if (!bounds) throw new Error('Product dialog scroll body missing');
+    await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);
+    await page.mouse.wheel(0,500);
+    await expect.poll(() => body.evaluate(element=>element.scrollTop)).toBeGreaterThan(100);
+    const confirm = modal.getByRole('button', { name: /^(إضافة|Add)$/i });
+    await expect(confirm).toBeInViewport();
+    await expect(modal.getByRole('button', { name: /^(إغلاق|Close)$/i })).toBeInViewport();
+    await confirm.click();
+    await expect(modal).toBeHidden();
+    await page.getByTestId('pos-mobile-nav-order').click();
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toBeVisible();
+  });
+
   test('starts quick pickup, adds product, changes quantity, sends to kitchen, and opens payment', async ({ page }) => {
     await page.getByTestId('pos-start-quick-order').click();
     await addProduct(page);
