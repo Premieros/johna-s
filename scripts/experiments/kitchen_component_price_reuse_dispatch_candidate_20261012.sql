@@ -166,6 +166,7 @@ DECLARE
   v_snapshot jsonb;
   v_component_plan jsonb;
   v_plan_items jsonb;
+  v_dynamic_products uuid[];
   v_dispatch_raw_ids uuid[];
   v_dispatch_prices jsonb;
 BEGIN
@@ -316,6 +317,15 @@ BEGIN
     JOIN public.products p ON p.id=oi.product_id;
 
     v_component_plan := public._kitchen_component_plans_candidate(v_branch_id,v_plan_items);
+    -- The canonical fallback can CREATE this product's recipe during dispatch.
+    -- Never memoize any configuration of a product with an empty/error plan:
+    -- later lines must observe that materialized recipe and their modifiers.
+    SELECT array_agg(DISTINCT (item->>'product_id')::uuid)
+    INTO v_dynamic_products
+    FROM jsonb_array_elements(v_plan_items) item
+    WHERE COALESCE(jsonb_array_length(
+      (v_component_plan->'plans'->(item->>'order_item_id'))->'components'
+    ),0)=0;
 
     END IF;
 
@@ -371,7 +381,7 @@ BEGIN
       v_failure_error := NULL;
       v_failure_detail := NULL;
 
-      IF v_component_plan IS NULL THEN
+      IF v_component_plan IS NULL OR v_row.product_id=ANY(COALESCE(v_dynamic_products,'{}'::uuid[])) THEN
       v_inventory := public._deduct_kitchen_raw_components(
         v_row.product_id,
         v_branch_id,
