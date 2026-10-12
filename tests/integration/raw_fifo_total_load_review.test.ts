@@ -13,12 +13,19 @@ try {
     && !dbUrl.includes('supabase.co') && !dbUrl.includes('azzdesuowpdcoflmyezn');
 } catch { /* skip when not explicitly configured */ }
 
+// PostgreSQL EXPLAIN FORMAT JSON puts execution time on the statement
+// envelope, while buffer/WAL counters belong to the nested Plan root.
 type Plan = {
   'Execution Time'?: number;
-  'Shared Hit Blocks'?: number;
-  'Shared Read Blocks'?: number;
-  'Shared Written Blocks'?: number;
-  WAL?: { 'WAL Records'?: number; 'WAL Bytes'?: number };
+  Plan?: {
+    'Shared Hit Blocks'?: number;
+    'Shared Read Blocks'?: number;
+    'Shared Written Blocks'?: number;
+    'Shared Dirtied Blocks'?: number;
+    'WAL Records'?: number;
+    'WAL Bytes'?: number;
+    'WAL FPI'?: number;
+  };
 };
 const n = (v: unknown) => Number(v || 0);
 const stageA = 'scripts/experiments/raw_fifo_receipt_settle_candidate_20261012.sql';
@@ -47,11 +54,13 @@ describe.skipIf(!local)('Johnas FIFO lower-total-load review, local disposable D
 
   const tally = (p: Plan) => ({
     ms: p['Execution Time'] ?? null,
-    sharedHits: p['Shared Hit Blocks'] ?? null,
-    sharedReads: p['Shared Read Blocks'] ?? null,
-    sharedWrites: p['Shared Written Blocks'] ?? null,
-    walRecords: p.WAL?.['WAL Records'] ?? null,
-    walBytes: p.WAL?.['WAL Bytes'] ?? null,
+    sharedHits: p.Plan?.['Shared Hit Blocks'] ?? null,
+    sharedReads: p.Plan?.['Shared Read Blocks'] ?? null,
+    sharedWrites: p.Plan?.['Shared Written Blocks'] ?? null,
+    sharedDirtied: p.Plan?.['Shared Dirtied Blocks'] ?? null,
+    walRecords: p.Plan?.['WAL Records'] ?? null,
+    walBytes: p.Plan?.['WAL Bytes'] ?? null,
+    walFpi: p.Plan?.['WAL FPI'] ?? null,
   });
 
   const qty = async (rawId: string, warehouse?: string) => {
