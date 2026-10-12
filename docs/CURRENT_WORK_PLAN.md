@@ -4,9 +4,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `c9247e696c31c662328ac3e83887726877b457f2`
-- Current active branch: `fix/modal-scroll-mobile-navigation-20261012`
-- Mandatory active work log: `docs/MODAL_SCROLL_MOBILE_NAVIGATION_2026-10-12.md`
+- Latest main baseline reconciled: `859aa9e148077e0dd02b8f596ffb339e279a23c5`
+- Current active branch: `development/kitchen-negative-stock-dedup-20261012`
+- Mandatory active work log: `docs/KITCHEN_NEGATIVE_STOCK_DEDUP_PLAN_2026-10-12.md`
+
+## Owner-directed implementation — 2026-10-12
+- New single active development track: negative-stock kitchen read deduplication.
+- #496 is merged/deployed and postmerge Verify 38295468229 is Green. Its experiments are not activated.
+- #492–#494 remain historical isolated proposals, read-only inputs to this track; no simultaneous execution.
+- Preserve negative-first consumption; remove redundant reads, not branch/warehouse/auth/idempotency protections.
+- First implementation is isolated recipe/component reuse; production inventory writes remain canonical.
+- No production SQL, merge or deployment authorized by the plan/preparation request.
 
 ## Emergency production incident — 2026-10-11
 - Live PostgreSQL logs prove that the PR #482 BEFORE INSERT ingredient-price snapshot trigger can hit statement timeout inside send_to_kitchen, rolling back kitchen sends and delaying print enqueue. See `docs/KITCHEN_SEND_EMERGENCY_2026-10-11.md`.
