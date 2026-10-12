@@ -250,9 +250,34 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       await client.query('RELEASE SAVEPOINT trusted_price_context');
     }
   });
+
+  it('a new dispatch sees a new approved price while resend preserves the original snapshot',async()=>{
+    await client.query('SAVEPOINT price_scope_lifecycle');
+    try {
+      const items=itemJson([{product_id:prodA,quantity:1,notes:'scope 1'},{product_id:prodA,quantity:1,notes:'scope 2'}]);
+      const first=await createOrder(items);
+      expect(first.success,JSON.stringify(first)).toBe(true);
+      expect((await sendCore(first.order_id,'price')).success).toBe(true);
+      const frozen=(await client.query("SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id",[first.order_id])).rows;
+      const raw=(await client.query("SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1",[unitA])).rows[0].raw_material_id;
+      await client.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at)
+        VALUES($1,$2,31,'pricing','REUSE-NEW',now()-interval '1 minute')`,[raw,branchId]);
+      expect((await sendCore(first.order_id,'price')).items_sent_count).toBe(0);
+      expect((await client.query("SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id",[first.order_id])).rows).toEqual(frozen);
+      const next=await createOrder(items);
+      expect(next.success,JSON.stringify(next)).toBe(true);
+      expect((await sendCore(next.order_id,'price')).success).toBe(true);
+      const fresh=(await client.query("SELECT component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1",[next.order_id])).rows;
+      expect(fresh.every((event:{component_snapshot:Array<{unit_cost:number|null}>})=>
+        event.component_snapshot.every(raw=>raw.unit_cost===31))).toBe(true);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT price_scope_lifecycle');
+      await client.query('RELEASE SAVEPOINT price_scope_lifecycle');
+    }
+  });
   it('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
     await client.query("SET LOCAL track_functions='all'");
-    type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number};
+    type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number;priceCalls:number};
     const measurements: Record<string,{baseline:Sample[];candidate:Sample[];price:Sample[]}>={};
     const quantile=(values:number[],fraction:number)=>{
       const sorted=[...values].sort((a,b)=>a-b);
@@ -260,6 +285,8 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     };
     const resolverCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
       FROM pg_stat_xact_user_functions WHERE funcid='public.resolve_kitchen_item_raw_components(uuid,uuid,jsonb)'::regprocedure`)).rows[0].n);
+    const priceCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
+      FROM pg_stat_xact_user_functions WHERE funcid='public._kitchen_approved_price_candidate(uuid,uuid[],timestamp with time zone)'::regprocedure`)).rows[0].n);
     for (const negative of [false,true]) {
       if (negative) await client.query("UPDATE public.raw_material_batches SET quantity=0 WHERE branch_id=$1",[branchId]);
       for (const distinct of [false,true]) for (const count of [1,5,20,50]) {
@@ -281,16 +308,18 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         await client.query('SAVEPOINT benchmark_variant');
         try {
           await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
-          const before=await resolverCalls();
+          const before=await resolverCalls(), beforePrice=await priceCalls();
           const fn=coreName(candidate);
           await captureTrigger(candidate==='price');
           const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+fn+'($1,$2)',[created.order_id,cashierId]);
           const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
           const calls=(await resolverCalls())-before;
+          const priceCount=(await priceCalls())-beforePrice;
+          expect(priceCount).toBe(candidate==='price'?1:count);
           expect(calls).toBe(candidate && !distinct ? 1 : count);
           expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[created.order_id])).rows[0].n).toBe(count);
           if (round>0) measurements[name][candidate==='price'?'price':candidate?'candidate':'baseline'].push({
-            ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,reads:plan['Shared Read Blocks']||0,wal:plan['WAL Bytes']||0,resolverCalls:calls,
+            ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,reads:plan['Shared Read Blocks']||0,wal:plan['WAL Bytes']||0,resolverCalls:calls,priceCalls:priceCount,
           });
         } finally {
           await client.query('ROLLBACK TO SAVEPOINT benchmark_variant');
@@ -304,7 +333,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         samples: samples.length,
         p50ms:quantile(samples.map(s=>s.ms),0.5),p95ms:quantile(samples.map(s=>s.ms),0.95),
         medianHits:quantile(samples.map(s=>s.hits),0.5),medianReads:quantile(samples.map(s=>s.reads),0.5),medianWal:quantile(samples.map(s=>s.wal),0.5),
-        resolverCalls:samples[0].resolverCalls,
+        resolverCalls:samples[0].resolverCalls,priceCalls:samples[0].priceCalls,
       }]))]));
     console.info('KITCHEN_COMPONENT_REUSE_FULL_CORE_BENCHMARK '+JSON.stringify(summary));
     // Seven samples are exploratory; production tail latency, CPU and
