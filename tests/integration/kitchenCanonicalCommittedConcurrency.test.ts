@@ -1,4 +1,4 @@
-import { beforeAll,afterAll,describe,it,expect } from 'vitest';
+import { beforeAll,afterAll,afterEach,describe,it,expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -18,7 +18,7 @@ try {
 describe.skipIf(!enabled)('committed public kitchen binding concurrency in an owned CI database',()=>{
   let control:pg.Client,a:pg.Client,b:pg.Client,observer:pg.Client;
   const database='qa_kitchen_'+randomUUID().replace(/-/g,'');
-  let createdDatabase=false;
+  let createdDatabase=false,fixtureReady=false;
   const branch=randomUUID(),org=randomUUID(),wh=randomUUID(),raw=randomUUID(),otherRaw=randomUUID();
   const product=randomUUID(),cashier=randomUUID(),counter=randomUUID(),role='qa_counter_'+randomUUID().slice(0,8);
   let pidA:number,pidB:number;
@@ -102,8 +102,14 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     await observer.query('INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,0,7)',[raw,branch]);
     await observer.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);await observer.query('SELECT public.seed_account_mappings($1)',[branch]);
     await observer.query('UPDATE public.settings SET tax_enabled=false');
-    await observer.query('COMMIT');
+    await observer.query('COMMIT');fixtureReady=true;
   },120000);
+  afterEach(async()=>{
+    if(!fixtureReady)return;
+    for(const db of [a,b,observer])await db.query('ROLLBACK');
+    const missing=(await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NULL missing")).rows[0].missing;
+    if(missing)await observer.query(forward());
+  });
   afterAll(async()=>{
     for(const db of [a,b,observer])if(db){await db.query('ROLLBACK').catch(()=>{});await db.end().catch(()=>{});}
     if(control){
@@ -275,7 +281,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
           await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,0,7,'opening')",[mat,branch,wh,'RPC-'+mat]);
           await observer.query('INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,0,7)',[mat,branch]);
           await observer.query("INSERT INTO public.dining_tables(id,name,branch_id,capacity,status) VALUES($1,$2,$3,4,'vacant')",[table,'RPC-'+table,branch]);
-          if(history>0)await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) SELECT $1,$2,$3,'HIST-'||$1::text||'-'||g::text,0,7,'opening',now()-interval '1 year' FROM generate_series(1,$4::int) g",[mat,branch,wh,history]);
+          if(history>0)await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) SELECT $1::uuid,$2::uuid,$3::uuid,'HIST-'||$1::text||'-'||g::text,0,7,'opening',now()-interval '1 year' FROM generate_series(1,$4::int) g",[mat,branch,wh,history]);
           await observer.query('COMMIT');
           if(history>0)await observer.query('ANALYZE public.raw_material_batches');
           const items=JSON.stringify(Array.from({length:lines},(_,index)=>({product_id:prod,unit_name:'piece',quantity:1,unit_price:10,discount_amount:0,bonus_quantity:0,total:10,notes:'rpc '+index,modifier_option_ids:[]})));
