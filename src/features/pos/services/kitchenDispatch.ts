@@ -10,6 +10,7 @@ import {
 export async function dispatchKitchenStations(params: {
   orderId: string;
   branchId?: string | null;
+  allowLocalFallback?: boolean;
   items: KitchenSendItem[];
   context: LocalKitchenPrintContext;
 }): Promise<KitchenStationDispatchSummary> {
@@ -53,7 +54,9 @@ export async function dispatchKitchenStations(params: {
       };
     }
 
-    const localPrinted = await printKitchenStationsLocally(items, params.context);
+    const localPrinted = params.allowLocalFallback === false
+      ? false
+      : await printKitchenStationsLocally(items, params.context);
     return {
       station_code: station,
       item_count: items.length,
