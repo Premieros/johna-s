@@ -8,14 +8,17 @@ let local=false;
 try {const u=new URL(dbUrl);local=['localhost','127.0.0.1','[::1]'].includes(u.hostname)&&['postgres:','postgresql:'].includes(u.protocol);}catch{/* no disposable DB */}
 const candidate=readFileSync('scripts/experiments/raw_fifo_receipt_reuse_candidate_20261013.sql','utf8');
 
-// Explicit rollback-only production-shape fixture, not a schema repair.
-const paritySql="-- LOCAL CI ONLY: production-shaped estimated FIFO cost tables that are\n-- missing from the current canonical migration replay.  This is an explicit\n-- schema-drift diagnostic, NOT an authorized production migration.\n-- Execute only inside the outer rollback-only disposable localhost fixture.\n-- If a future canonical migration adds these, fail instead of masking drift.\nDO $guard$\nBEGIN\n  IF to_regclass('public.raw_fifo_price_fallback_runs') IS NOT NULL\n     OR to_regclass('public.raw_fifo_debt_price_estimates') IS NOT NULL THEN\n    RAISE EXCEPTION 'FIFO_PRICE_FALLBACK_PARITY_FIXTURE_ALREADY_PRESENT_RECONCILE_SCHEMA';\n  END IF;\nEND $guard$;\n\nCREATE TABLE public.raw_fifo_price_fallback_runs (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,\n  status text NOT NULL CHECK (status IN ('preparing','prepared','applying','applied','reversing','reversed','failed')),\n  summary jsonb,\n  created_at timestamptz NOT NULL DEFAULT now(),\n  applied_at timestamptz,\n  reversed_at timestamptz,\n  error_text text\n);\n\nCREATE TABLE public.raw_fifo_debt_price_estimates (\n  debt_id uuid PRIMARY KEY REFERENCES public.raw_fifo_debts(id) ON DELETE CASCADE,\n  source_ledger_id bigint NOT NULL UNIQUE REFERENCES public.inventory_ledger(id) ON DELETE CASCADE,\n  run_id uuid NOT NULL REFERENCES public.raw_fifo_price_fallback_runs(id) ON DELETE RESTRICT,\n  branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,\n  raw_material_id uuid NOT NULL REFERENCES public.raw_materials(id) ON DELETE CASCADE,\n  estimated_unit_cost numeric(18,6) NOT NULL CHECK (estimated_unit_cost>0),\n  original_estimated_quantity numeric(18,6) NOT NULL CHECK (original_estimated_quantity>0),\n  remaining_estimated_quantity numeric(18,6) NOT NULL CHECK (remaining_estimated_quantity>=0),\n  replaced_quantity numeric(18,6) NOT NULL DEFAULT 0 CHECK (replaced_quantity>=0),\n  zero_cost_finalized_quantity numeric(18,6) NOT NULL DEFAULT 0 CHECK (zero_cost_finalized_quantity>=0),\n  candidate_source text NOT NULL,\n  candidate_event_id text NOT NULL,\n  candidate_at timestamptz NOT NULL,\n  created_at timestamptz NOT NULL DEFAULT now(),\n  updated_at timestamptz NOT NULL DEFAULT now(),\n  CONSTRAINT raw_fifo_debt_price_estimates_quantity_limit\n    CHECK (remaining_estimated_quantity + replaced_quantity + zero_cost_finalized_quantity\n           <= original_estimated_quantity + 0.000001)\n);\nCREATE INDEX idx_raw_fifo_debt_price_estimates_run\n  ON public.raw_fifo_debt_price_estimates(run_id,branch_id,raw_material_id);\n\nALTER TABLE public.raw_fifo_price_fallback_runs ENABLE ROW LEVEL SECURITY;\nALTER TABLE public.raw_fifo_debt_price_estimates ENABLE ROW LEVEL SECURITY;\nREVOKE ALL ON public.raw_fifo_price_fallback_runs FROM PUBLIC,anon,authenticated;\nREVOKE ALL ON public.raw_fifo_debt_price_estimates FROM PUBLIC,anon,authenticated;\n";
 
 describe.skipIf(!local)('unwired receipt write reuse, production-shaped estimates',()=>{
   let db:pg.Client;
   const branch=randomUUID(),wh=randomUUID(),otherWh=randomUUID();
   beforeAll(async()=>{
-    db=openDb(dbUrl);await db.connect();await db.query('BEGIN');await db.query(paritySql);await db.query(candidate);
+    db=openDb(dbUrl);await db.connect();await db.query('BEGIN');
+    // These must come from restored canonical history; do not synthesize missing tables.
+    for(const name of ['raw_fifo_price_fallback_runs','raw_fifo_price_fallback_plan','raw_fifo_debt_price_estimates']){
+      expect((await db.query('SELECT to_regclass($1)::text relation',['public.'+name])).rows[0].relation).toBe(name);
+    }
+    await db.query(candidate);
     // Reverse only the receipt update transformation; all source/valuation logic matches live.
     const start=candidate.indexOf('    -- Defer only sale/kitchen sources');
     const end=candidate.indexOf('\n    UPDATE public.inventory_ledger',start);
@@ -154,11 +157,14 @@ describe.skipIf(!local)('unwired receipt write reuse, production-shaped estimate
     await db.query('DROP TRIGGER receipt_observe_source ON public.inventory_ledger');
   });
 
-  it('retains private invoker-only entry points and explicitly exposes the replay gap',async()=>{
+  it('retains private invoker candidates and canonical estimate table protections',async()=>{
     for(const signature of ['_raw_fifo_settle_receipt_reuse_candidate(bigint,uuid,uuid)','_raw_add_receipt_reuse_candidate(uuid,uuid,uuid,numeric,numeric,text,date,date,text,text,uuid,text,uuid)']){
       const r=(await db.query("SELECT p.prosecdef,has_function_privilege('anon',p.oid,'EXECUTE') anon,has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated,has_function_privilege('service_role',p.oid,'EXECUTE') service FROM pg_proc p WHERE p.oid=$1::regprocedure",['public.'+signature])).rows[0];
       expect(r).toEqual({prosecdef:false,anon:false,authenticated:false,service:false});
     }
-    expect(paritySql).toContain('NOT an authorized production migration');
+    for(const name of ['raw_fifo_price_fallback_runs','raw_fifo_price_fallback_plan','raw_fifo_debt_price_estimates']){
+      const row=(await db.query("SELECT c.relrowsecurity,has_table_privilege('anon',c.oid,'SELECT') anon,has_table_privilege('authenticated',c.oid,'SELECT') authenticated FROM pg_class c WHERE c.oid=$1::regclass",['public.'+name])).rows[0];
+      expect(row).toEqual({relrowsecurity:true,anon:false,authenticated:false});
+    }
   });
 });
