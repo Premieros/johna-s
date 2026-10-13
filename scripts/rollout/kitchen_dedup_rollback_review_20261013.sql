@@ -1510,7 +1510,7 @@ BEGIN
   NEW.component_snapshot := v_components;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(p_receipt_ledger_id bigint, p_receipt_batch_id uuid, p_run_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -1712,7 +1712,7 @@ BEGIN
     'remaining_receipt_quantity',v_available
   );
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public._send_to_kitchen_core_20260914(p_order_id uuid, p_sent_by uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -2085,7 +2085,7 @@ BEGIN
     );
   END;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.apply_stock_count(p_stock_count_id uuid)
  RETURNS jsonb
@@ -2294,7 +2294,7 @@ BEGIN
       );
   END;
 END;
-$function$
+$function$;
 
 DROP FUNCTION public._kitchen_dispatch_deduct_planned(uuid,uuid,uuid,numeric,jsonb,uuid,text,uuid,jsonb,jsonb);
 DROP FUNCTION public._raw_remove_fifo_negative_dispatch(uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,boolean,numeric);
