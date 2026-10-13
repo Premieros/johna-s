@@ -4,13 +4,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `19017adedb473371d76c1601159568aa8034f5ff`
-- Current active branch: `development/kitchen-sql-activation-20261013`
-- Mandatory active work log: `docs/KITCHEN_SQL_ACTIVATION_2026-10-13.md`
+- Latest main baseline reconciled: `aa3393af884986da3620c37d9bf74fc208cf84ce`
+- Current active branch: `development/kitchen-multiline-recovery-20261013`
+- Mandatory active work log: `docs/KITCHEN_MULTILINE_RECOVERY_2026-10-13.md`
 
-## Approved SQL activation — 2026-10-13
+## Emergency recovery — 2026-10-13
+- #499 is the single active track. Approved rollback20261013140753 restored service; user confirmed multi-item send works. Optimization stays disabled.
+- Confirmed table43/Cleopatra ticket enqueued to Smoha: fix authoritative print order branch and server guard. Cart/saved-order recovery included. Production print guard approval/verification still pending.
+
+## Historical approved SQL activation — 2026-10-13
 - User explicitly approved production SQL activation at15:03 Cairo. #497 already merged/deployed with postmerge tests Green.
-- #498 is the ONLY active track: test an enforceable short activation barrier and apply exact guarded package on johnas, then reconcile applied history and verify. Approval is present; technical gate remains pending.
+- #498 was the completed activation track: test an enforceable short activation barrier and apply exact guarded package on johnas, then reconcile applied history and verify. Approval is present; technical gate remains pending.
 - Earlier no-apply sections below are historical, not a revocation of this approval. No unrelated project, printing test or parallel writer.
 
 ## Owner-directed implementation — 2026-10-12
