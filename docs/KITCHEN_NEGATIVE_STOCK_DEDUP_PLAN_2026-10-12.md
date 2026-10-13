@@ -3,7 +3,7 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/kitchen-negative-stock-dedup-20261012`
 Current PR: #497
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 Execution mode: **SINGLE_WRITER**
 Parallel execution: **FORBIDDEN**
 Unexpected HEAD policy: **STOP_AND_RECONCILE**
@@ -83,6 +83,12 @@ Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of
 - التنفيذ المقاس في #494 ليس قرارًا نهائيًا؛ يقبل أو يرفض بحسب الحمل الكلي.
 
 ### P4 — الزيادات والتسويات
+**بدأ التنفيذ التجريبي المستقل 2026-10-13؛ لا تفعيل إنتاج.**
+
+`scripts/experiments/raw_fifo_receipt_reuse_candidate_20261013.sql` copies the read-only live receipt/add definitions into revoked SECURITY INVOKER candidates. No canonical replacement, new index, trigger wiring or Stage B balance deltas. Successful sale/kitchen debt reconciliations accumulate a pending receipt reduction, flushed once at completion. Before any production/transfer/other source reconciliation, pending receipt changes are flushed in canonical order: those propagation paths can mutate downstream stock and are not assumed equivalent under deferred quantity. All debt/estimate/source ledger/COGS and oversold batches still update per source.
+
+`tests/integration/rawReceiptReuseCandidate.test.ts` is loopback-only BEGIN/ROLLBACK. It explicitly installs the production-shaped missing estimate tables inside the fixture (NOT a canonical replay repair), reconstructs the otherwise identical live baseline and replays partial/zero-cost/final receipts, estimates and retry; tests later-source failure rollback and multiwarehouse isolation. A transactional audit trigger counts actual receipt batch row updates: assertions expect 6→3 across three receipts and 100→1 for a 100-source receipt. Timing/buffers/WAL are exploratory single samples with audit overhead on both sides, not performance acceptance. Verification pending on the new HEAD; do not carry forward the previous green status to these files.
+
 - تقييم Stage A في #494 مستقلًا: تحديث دفعة الاستلام مرة خارج حلقة الديون مع حفظ تسوية كل مصدر.
 - اختبار الشراء بعد السالب والجرد المعتمد بعده والنقل والمرتجع.
 - لا إعادة تسوية مرتين ولا تغيير القيود التاريخية.
@@ -98,6 +104,11 @@ Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of
 - سياسة طرح تدريجي واختبار/رجوع قبل أي موافقة على SQL إنتاج.
 
 ## Verification ledger
+### Continued execution — 2026-10-13
+- Prior HEAD ad4df5a34836c560617276e59353bd8dfa3995a7 passed Fast 38313001246 and Full 38313007263: 1708 frontend, 1018 DB/RLS and 132 Chromium, no retries.
+- P4 receipt candidates and five regression/measurement cases added. New exact-head CI required; P3 bulk balance aggregation, generic propagation parity, canonical schema drift, whole-RPC/COMMIT and concurrency acceptance remain open.
+- No merge, deploy, production SQL or restaurant test orders/prints.
+
 ### Follow-up execution — 2026-10-12
 - Previous exact-head 2a6ab0e4d9c7055ecfd00da4bd359a9e6b0d3faf: Full Verify 38304278383 succeeded, 1702 frontend + 1007 DB/RLS; browser 129 passed + one 390px scrolling test passed only on retry.
 - Closing sidebar remains geometrically over the document during its 200ms transform. Layout now disables pointer events immediately while closed, with explicit desktop visibility override. This is a cause hypothesis backed by a no-retry repeated close/scroll regression; new CI must prove it.
