@@ -10,7 +10,7 @@
 
 ## Emergency recovery — 2026-10-13
 - #499 is the single active track. Approved rollback20261013140753 restored service; user confirmed multi-item send works. Optimization stays disabled.
-- Confirmed table43/Cleopatra ticket enqueued to Smoha: fix authoritative print order branch and server guard. Cart/saved-order recovery included. Production print guard approval/verification still pending.
+- Confirmed table43/Cleopatra ticket enqueued to Smoha: fix authoritative print order branch and server guard. Cart/saved-order recovery included. Owner approved guard/deployment at17:38 Cairo; migration20261013144819 applied and verified. Only archive replay CI and publication pending.
 
 ## Historical approved SQL activation — 2026-10-13
 - User explicitly approved production SQL activation at15:03 Cairo. #497 already merged/deployed with postmerge tests Green.
