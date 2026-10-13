@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -54,7 +54,14 @@ export function usePosOrder(input: UsePosOrderInput) {
   const { user } = useAuth();
   const { show } = useToast();
 
-  const [cart, setCart] = useState<CartItem[]>(EMPTY_CART);
+  const [cart, setCartState] = useState<CartItem[]>(EMPTY_CART);
+  const cartRevisionRef = useRef(0);
+  const setCart = useCallback<Dispatch<SetStateAction<CartItem[]>>>((next) => {
+    cartRevisionRef.current += 1;
+    setCartState(next);
+  }, []);
+  const workspaceFeedbackRef = useRef({ t, show, isAr });
+  useEffect(() => { workspaceFeedbackRef.current = { t, show, isAr }; }, [t, show, isAr]);
   const [customerId, setCustomerId] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const paymentTouched = useRef(false);
@@ -127,6 +134,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       return;
     }
     let cancelled = false;
+    const requestedCartRevision = cartRevisionRef.current;
     setOrderLoading(true);
 
     void getCloudOpenOrderPrintState(orderId).then((printState) => {
@@ -138,9 +146,14 @@ export function usePosOrder(input: UsePosOrderInput) {
     fetchOrderForWorkspace(orderId)
       .then(({ order, items, products: orderProducts }) => {
         if (cancelled) return;
+        if (cartRevisionRef.current !== requestedCartRevision) {
+          setOrderLoading(false);
+          return;
+        }
         if (!order) { setOrderLoading(false); return; }
         if (order.status !== 'open' && order.status !== 'held') {
-          show(isAr ? 'لا يمكن استئناف طلب منتهي' : 'Cannot resume a completed order', 'error');
+          const feedback = workspaceFeedbackRef.current;
+          feedback.show(feedback.isAr ? 'لا يمكن استئناف طلب منتهي' : 'Cannot resume a completed order', 'error');
           setActiveOrderId(null);
           setActiveOrderNumber(null);
           setOrderLoading(false);
@@ -161,13 +174,14 @@ export function usePosOrder(input: UsePosOrderInput) {
           });
         }
         const cartItems = orderItemsToCart(items, orderProducts);
-        if (cartItems.length > 0) setCart(cartItems);
-        show(t('orderResumed'), 'success');
+        setCartState(cartItems);
+        const feedback = workspaceFeedbackRef.current;
+        feedback.show(feedback.t('orderResumed'), 'success');
         setOrderLoading(false);
       })
       .catch(() => { if (!cancelled) setOrderLoading(false); });
     return () => { cancelled = true; };
-  }, [orderId, t, show, isAr]);
+  }, [orderId, branchId, setCart]);
 
   useEffect(() => {
     if (!tableId) { setActiveTable(null); return; }
@@ -213,7 +227,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return [...prev, incoming];
     });
-  }, []);
+  }, [setCart]);
 
   const updateQty = useCallback((lineKey: string, delta: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
@@ -221,17 +235,17 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCart((prev) => prev
       .map((i) => cartLineKey(i) === lineKey ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
       .filter((i) => i.quantity > 0));
-  }, [cart]);
+  }, [setCart, cart]);
 
   const setQty = useCallback((lineKey: string, qty: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
     if (!target) return;
     setCart((prev) => prev
       .map((i) => cartLineKey(i) === lineKey ? { ...i, quantity: Math.max(1, qty) } : i));
-  }, [cart]);
+  }, [setCart, cart]);
 
-  const removeFromCart = useCallback((lineKey: string) => setCart((prev) => prev.filter((i) => cartLineKey(i) !== lineKey)), []);
-  const clearCart = useCallback(() => setCart(EMPTY_CART), []);
+  const removeFromCart = useCallback((lineKey: string) => setCart((prev) => prev.filter((i) => cartLineKey(i) !== lineKey)), [setCart]);
+  const clearCart = useCallback(() => setCart(EMPTY_CART), [setCart]);
 
   const setItemDiscount = useCallback((lineKey: string, discount: number) => {
     const item = cart.find((i) => cartLineKey(i) === lineKey);
@@ -239,7 +253,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     const lineTotal = item.quantity * item.unit_price;
     const d = computeLineDiscount(lineTotal, discount || 0);
     setCart((prev) => prev.map((i) => cartLineKey(i) === lineKey ? { ...i, discount_amount: d } : i));
-  }, [cart]);
+  }, [setCart, cart]);
 
   const replaceCartLine = useCallback((lineKey: string, nextItem: CartItem) => {
     setCart((prev) => {
@@ -254,7 +268,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       return [...withoutOld, nextItem];
     });
     return true;
-  }, []);
+  }, [setCart]);
 
   const taxRate = effSettings?.tax_enabled ? (effSettings?.tax_rate || 0) : 0;
   const totals = useMemo(
@@ -347,7 +361,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCustomerId(order.customer_id || '');
     const cartItems = orderItemsToCart(items, orderProducts);
     setCart(cartItems);
-  }, []);
+  }, [setCart]);
 
   const startTableOrder = useCallback((table: DiningTable, guests = 2) => {
     setCart(EMPTY_CART);
@@ -360,7 +374,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     setOrderNotes('');
     setDiscountAmount(0);
     setPaidAmount(0);
-  }, []);
+  }, [setCart]);
 
   const transferOrderToTable = useCallback(async (targetOrderId: string, fromTableId: string, toTableId: string): Promise<boolean> => {
     try {
@@ -468,7 +482,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(err instanceof Error ? err.message : (isAr ? 'تعذر نقل الصنف' : 'Could not move item'), 'error');
       return false;
     }
-  }, [activeOrderId, activeTable, cart, isAr, show, t]);
+  }, [setCart, activeOrderId, activeTable, cart, isAr, show, t]);
 
   const voidSentItem = useCallback(async (lineKey: string, voidQuantity: number, reason: string): Promise<boolean> => {
     if (!activeOrderId) return false;
@@ -567,7 +581,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(err instanceof Error ? err.message : 'Failed to void item', 'error');
       return false;
     }
-  }, [activeOrderId, cart, isAr, onInventoryChanged, show]);
+  }, [setCart, activeOrderId, cart, isAr, onInventoryChanged, show]);
 
   const persistCart = useCallback(async (status: 'open' | 'held'): Promise<PersistResult> => {
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
@@ -619,6 +633,10 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (error) { show(error.message, 'error', { source: error, action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
     const r = data as RpcResult | null;
     if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
+    if (r.order_id) {
+      setActiveOrderId(r.order_id);
+      setActiveOrderNumber((r as RpcResult & { order_number?: string }).order_number || null);
+    }
     return { ok: true, orderId: r.order_id || null, orderNumber: (r as RpcResult & { order_number?: string }).order_number || null };
   }, [branchId, activeOrderId, activeOrderNumber, activeTable?.id, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
 
@@ -901,7 +919,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setCompleting(false);
     }
-  }, [cart, completing, branchId, branchName, activeShift, orderType, tableId, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
+  }, [setCart, cart, completing, branchId, branchName, activeShift, orderType, tableId, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
 
   const printReceipt = useCallback(async () => {
     if (!effSettings) return;
@@ -990,7 +1008,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     setKitchenDispatch(null);
     setOpenCheckPrintLocked(false);
     setOpenCheckPrintStateReady(true);
-  }, []);
+  }, [setCart]);
 
   return {
     cart,

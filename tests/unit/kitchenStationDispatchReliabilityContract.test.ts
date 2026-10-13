@@ -9,11 +9,13 @@ const dispatchService = fs.readFileSync(path.join(root, 'src/features/pos/servic
 const cloudPrint = fs.readFileSync(path.join(root, 'src/features/pos/services/cloudPrint.ts'), 'utf8');
 
 describe('kitchen station dispatch reliability contract', () => {
-  it('passes the authoritative POS branch into kitchen dispatch', () => {
+  it('uses the saved order branch rather than the selected workspace branch', () => {
     expect(orderHook).toContain("p_branch_id: branchId");
     expect(kitchenService).toContain("p_branch_id?: string | null");
-    expect(kitchenService).toContain("branchId: p.p_branch_id");
-    expect(kitchenService).not.toContain("from('orders').select('branch_id')");
+    expect(kitchenService).toContain('branchId: orderBranchId');
+    expect(kitchenService).toContain('let orderBranchId = result.branch_id || null');
+    expect(kitchenService).not.toContain('branchId: p.p_branch_id');
+    expect(kitchenService).toContain('allowLocalFallback: orderBranchId === p.p_branch_id');
   });
 
   it('retries station enqueue with the same idempotency key', () => {
