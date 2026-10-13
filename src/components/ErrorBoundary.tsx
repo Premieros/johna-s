@@ -1,3 +1,4 @@
+import { isDynamicImportError as isStaleChunkError } from '@/lib/chunkRecovery';
 import { Component, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
@@ -8,10 +9,7 @@ interface State { error: Error | null; }
 
 const STALE_CHUNK_KEY = 'premier_stale_chunk_reload';
 
-export function isStaleChunkError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  return /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk [\w-]+ failed|ChunkLoadError/i.test(message);
-}
+export { isDynamicImportError as isStaleChunkError } from '@/lib/chunkRecovery';
 
 function staleChunkReloadAlreadyAttempted(): boolean {
   try {
@@ -66,7 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <h2 className="text-xl font-bold text-ui-text mb-2">{ar ? 'حدث خطأ' : 'Something went wrong'}</h2>
             <p className="text-sm text-ui-muted mb-4">
               {staleChunk
-                ? (ar ? 'تم نشر إصدار أحدث من التطبيق. حدّث الصفحة لتحميل الملفات الجديدة.' : 'A newer app version was deployed. Refresh to load the new files.')
+                ? (ar ? 'تعذر تحميل ملفات الشاشة. تحقق من الاتصال، ثم حدّث التطبيق إذا استمرت المشكلة.' : 'Screen files could not be loaded. Check your connection, then refresh the app if the problem continues.')
                 : userFacingErrorMessage(this.state.error, ar ? 'ar' : 'en')}
             </p>
             <button
