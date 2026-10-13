@@ -87,12 +87,13 @@ Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of
 
 `scripts/experiments/raw_fifo_receipt_reuse_candidate_20261013.sql` copies the read-only live receipt/add definitions into revoked SECURITY INVOKER candidates. No canonical replacement, new index, trigger wiring or Stage B balance deltas. Successful sale/kitchen debt reconciliations accumulate a pending receipt reduction, flushed once at completion. Before any production/transfer/other source reconciliation, pending receipt changes are flushed in canonical order: those propagation paths can mutate downstream stock and are not assumed equivalent under deferred quantity. All debt/estimate/source ledger/COGS and oversold batches still update per source.
 
-`tests/integration/rawReceiptReuseCandidate.test.ts` is loopback-only BEGIN/ROLLBACK. It explicitly installs the production-shaped missing estimate tables inside the fixture (NOT a canonical replay repair), reconstructs the otherwise identical live baseline and replays partial/zero-cost/final receipts, estimates and retry; tests later-source failure rollback and multiwarehouse isolation. A transactional audit trigger counts actual receipt batch row updates: assertions expect 6→3 across three receipts and 100→1 for a 100-source receipt. Timing/buffers/WAL are exploratory single samples with audit overhead on both sides, not performance acceptance. Verification pending on the new HEAD; do not carry forward the previous green status to these files.
+`tests/integration/rawReceiptReuseCandidate.test.ts` is loopback-only BEGIN/ROLLBACK. It requires the estimate tables from canonical migration replay, reconstructs the otherwise identical live baseline and replays partial/zero-cost/final receipts, estimates and retry; tests later-source failure rollback and multiwarehouse isolation. A transactional audit trigger counts actual receipt batch row updates: assertions expect 6→3 across three receipts and 100→1 for a 100-source receipt. Timing/buffers/WAL are exploratory single samples with audit overhead on both sides, not performance acceptance. Verification pending on the new HEAD; do not carry forward the previous green status to these files.
 
 - تقييم Stage A في #494 مستقلًا: تحديث دفعة الاستلام مرة خارج حلقة الديون مع حفظ تسوية كل مصدر.
 - اختبار الشراء بعد السالب والجرد المعتمد بعده والنقل والمرتجع.
 - لا إعادة تسوية مرتين ولا تغيير القيود التاريخية.
-- تسوية فجوة canonical migrations التي رصدها #494 قبل أي طرح، دون تكرار جداول الإنتاج.
+- Restored two historical files VERBATIM from production supabase_migrations.schema_migrations: 20260925000002_raw_fifo_prior_price_fallback and 20260925122552_raw_fifo_prior_price_prepare_null_guard. These exact versions/names are ALREADY APPLIED in production; this is repository history recovery, not newly authored privileged functions or permission bypasses. Their existing restricted service-role grants and RLS remain verbatim. No historical prepare/apply/reverse was executed, no production migration was applied. New CI must replay them and all later canonical migrations. The regression fixture no longer synthesizes any estimate tables; all three canonical tables/ACL/RLS must exist. Do not rerun historical files blindly on production, and do not infer every remaining live/replay difference is reconciled.
+- The source-boundary mixed propagation regression observes the receipt quantity before the generic reference adjustment: canonical 3 writes versus candidate 2, same error/settlement state. Actual recursive production/transfer acceptance remains open.
 
 ### P5 — قبول القياس والطرح
 - مقارنة baseline/candidate في نفس المخطط والبيانات والفهرس وبترتيب عينات متبادل.
@@ -106,7 +107,7 @@ Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of
 ## Verification ledger
 ### Continued execution — 2026-10-13
 - Prior HEAD ad4df5a34836c560617276e59353bd8dfa3995a7 passed Fast 38313001246 and Full 38313007263: 1708 frontend, 1018 DB/RLS and 132 Chromium, no retries.
-- P4 receipt candidates and five regression/measurement cases added. New exact-head CI required; P3 bulk balance aggregation, generic propagation parity, canonical schema drift, whole-RPC/COMMIT and concurrency acceptance remain open.
+- P4 receipt candidates and six regression/measurement cases added. New exact-head CI required; P3 bulk balance aggregation, production/transfer recursive propagation parity, full remaining schema audit, whole-RPC/COMMIT and concurrency acceptance remain open.
 - No merge, deploy, production SQL or restaurant test orders/prints.
 
 ### Follow-up execution — 2026-10-12
