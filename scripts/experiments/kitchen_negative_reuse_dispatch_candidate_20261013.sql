@@ -342,6 +342,8 @@ DECLARE
   v_negative_balances jsonb := '{}'::jsonb;
   v_repeated_raw_ids uuid[];
   v_lock_raw uuid;
+  v_lock_started timestamptz;
+  v_lock_timeout interval := current_setting('lock_timeout')::interval;
   v_summary_row record;
 BEGIN
   BEGIN
@@ -551,14 +553,32 @@ BEGIN
       IF cardinality(COALESCE(v_repeated_raw_ids,'{}'::uuid[]))>0 THEN
         -- Prelock ALL known materials in UUID order before any deduction.
         -- Retain these xact locks across every reuse; no shared stock cache exists.
+-- All-or-nothing admission: release this attempt's partial locks before
+    -- retrying, so an inverse-order canonical writer can finish. Never read
+    -- reusable quantities until the complete lock set is held.
+    v_lock_started := clock_timestamp();
+    LOOP
+      BEGIN
         FOR v_lock_raw IN
           SELECT DISTINCT (r->>'raw_material_id')::uuid
           FROM jsonb_each(v_component_plan->'plans') plan
           CROSS JOIN LATERAL jsonb_array_elements(plan.value->'components') r
           ORDER BY 1
         LOOP
-          PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_raw::text||':'||v_branch_id::text,0));
+          IF NOT pg_try_advisory_xact_lock(hashtextextended(v_lock_raw::text||':'||v_branch_id::text,0)) THEN
+            RAISE lock_not_available USING MESSAGE='KITCHEN_MATERIAL_ADMISSION_RETRY';
+          END IF;
         END LOOP;
+        EXIT;
+      EXCEPTION WHEN lock_not_available THEN
+        -- Exception-block rollback releases only locks acquired in this attempt.
+        IF v_lock_timeout > interval '0'
+           AND clock_timestamp()-v_lock_started >= v_lock_timeout THEN
+          RAISE lock_not_available USING MESSAGE='canceling statement due to lock timeout';
+        END IF;
+        PERFORM pg_sleep(0.005);
+      END;
+    END LOOP;
         SELECT COALESCE(jsonb_object_agg(raw_id::text,warehouse_qty),'{}'::jsonb)
         INTO v_negative_balances
         FROM (
