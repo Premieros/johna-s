@@ -67,7 +67,11 @@ New tests compare all three dispatch variants, try a client-owned forged table, 
 - حماية الرؤية المالية وRLS. لا تعطيل لملتقط الأسعار لمجرد تسريع القياس.
 
 ### P3 — الرصيد والحركة مرة لكل مفتاح مادة/فرع/مخزن
-**بدأ شرط الصحة والتزامن؛ لم يُنفّذ تجميع تحديثات الرصيد بعد.**
+**تنفيذ تجريبي لتجميع الخامات المتكررة غير الموجبة؛ لا تفعيل إنتاج ولا تجميع عام للخامات الموجبة.**
+
+New isolated script: `scripts/experiments/kitchen_negative_reuse_dispatch_candidate_20261013.sql`. Three client-revoked SECURITY INVOKER functions. Starting from the P2 dispatcher, only fixed plans with repeated raw IDs qualify. If ANY product can materialize a fallback recipe, the whole send skips this stock reuse. Known materials are locked in UUID order using the canonical material+branch advisory key before the initial read. A raw qualifies only when it has NO positive batch anywhere in the branch, not merely a negative warehouse net. Warehouse quantity is read once and carried as internal JSON through each deduction; separate OV batch, ledger before/after boundary and FIFO debt stay per source. Original oversold-price/work-authorization triggers remain enabled. Official raw_material_inventory is recomputed from canonical batches once per eligible raw at the end, under the same held locks. No competing persistent balance table, no client GUC, no quantity sufficiency gate. Positive, unique and dynamic materials use canonical FIFO/summary behavior; the original average guard remains active. In this fully nonpositive interval there is no new positive average to lose; positive-to-zero exhaustion deliberately bypasses reuse.
+
+Four additional component cases cover actual summary-write counts, ledger/effect/debt/snapshot and resend parity, another warehouse's positive batch forcing canonical behavior, last positive average on FIFO exhaustion, and private invoker ACL. The existing invalid-later-line case now begins with repeated negative deductions and checks complete rollback for all FOUR variants. Benchmark measures actual summary row writes, with an identical temporary audit trigger on all sides, 1/5/20/50 positive/negative repeated/shared/unique raw profiles, warmup plus seven alternating samples. New exact-head verification pending. Audit callback overhead is included in all measurements; this is not uninstrumented production latency.
 
 Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of a direct advisory call is not automatically an unguarded quantity write: `_fifo_adjust_warehouse_transfer_delta` changes destination batch cost and summary average under transfer/batch row locks; `update_purchase_invoice` delegates quantity reversal/replacement to canonical purchase helpers and directly rewrites created_at. Administrative seed/delete paths still need maintenance/lock reconciliation. No private cached warehouse quantity is activated.
 
@@ -106,6 +110,8 @@ Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of
 
 ## Verification ledger
 ### Continued execution — 2026-10-13
+- P4 and restored canonical FIFO history on d5e1ec201a3d6e11e574213719dafb5108bc988f passed Fast 38354663814 and Full 38354669323: 1708 frontend, 1024 DB/RLS, 132 Chromium, no retries. Archived files verified byte-for-byte against production migration statements; restored receipt body matches the live body. P4 100-source receipt: actual receipt row writes 100→1; full DB sample 60.223→51.320ms, WAL 331318→284559, shared hits 33102→26482. One instrumented isolated sample, NOT whole purchase/COMMIT or production acceptance.
+- Continued into the P3 negative-only repeated-material prototype after the full run succeeded. New head requires its own tests. P3/P4 probes do not authorize production, replace all-writer concurrency acceptance or prove maintenance writers coherent.
 - Prior HEAD ad4df5a34836c560617276e59353bd8dfa3995a7 passed Fast 38313001246 and Full 38313007263: 1708 frontend, 1018 DB/RLS and 132 Chromium, no retries.
 - P4 receipt candidates and six regression/measurement cases added. New exact-head CI required; P3 bulk balance aggregation, production/transfer recursive propagation parity, full remaining schema audit, whole-RPC/COMMIT and concurrency acceptance remain open.
 - No merge, deploy, production SQL or restaurant test orders/prints.
