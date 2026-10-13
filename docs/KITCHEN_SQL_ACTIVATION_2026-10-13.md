@@ -38,3 +38,7 @@ Finish exact-head checks. Apply approved guarded forward with tested barrier and
 
 ## Mandatory update protocol
 Fetch exact branch HEAD before EVERY sequential mutation. Stop/reconcile on drift. Stop writes during exact-head checks except real failures. Record approval, apply result and actual production version; pending is not success.
+
+
+## Full bound-schema acceptance
+Fast38395381062 passed the barrier and34 candidate cases. Before applying production, Full Verify now binds the SAME canonical forward bodies and barrier on owned localhost CI, so all existing integration/security/RLS tests exercise the deployed schema rather than an unwired baseline. Only original-versus-candidate benchmark fixture restores the archived original bodies INSIDE its BEGIN/ROLLBACK; all other tests remain bound. Owned COMMIT database handles an already-applied canonical migration by guarded rollback before its original/bound roundtrip. No source/table mutation or test assertions relaxed. New exact-head checks required. Applied migration archive/reconciliation remains pending.
