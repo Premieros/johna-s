@@ -89,6 +89,7 @@ export async function enqueueCloudKitchenPrintJobs(params: { branchId: string; i
     const idempotencyKey = `kitchen:${station}:${keySeed}`;
     const paperWidthMm = Number(params.paperWidthMm || 80);
     const payload = {
+      ...(params.context.orderId ? { order_id: params.context.orderId } : {}),
       text: buildStationTicketText(station, stationItems, params.context),
       template: buildKitchenFixedTemplate(station, stationItems, params.context, paperWidthMm),
       paperWidthMm,
