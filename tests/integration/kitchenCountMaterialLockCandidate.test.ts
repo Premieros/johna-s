@@ -175,6 +175,9 @@ describe.skipIf(skip)('unwired material-locked stock count after kitchen oversel
     expect((await client.query("SELECT has_function_privilege('authenticated','public._apply_stock_count_material_lock_candidate(uuid)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
     const def=(await client.query("SELECT pg_get_functiondef('public._apply_stock_count_material_lock_candidate(uuid)'::regprocedure) source")).rows[0].source;
     expect(def).not.toContain('SECURITY DEFINER');
-    expect(def.indexOf('pg_advisory_xact_lock')).toBeLessThan(def.indexOf('FROM public.raw_material_warehouse_inventory'));
+    expect(def.indexOf('pg_try_advisory_xact_lock')).toBeGreaterThan(0);
+    expect(def.indexOf('pg_try_advisory_xact_lock')).toBeLessThan(def.indexOf('FROM public.raw_material_warehouse_inventory'));
+    expect(def).toContain('EXCEPTION WHEN lock_not_available');
+    expect(def).toContain("current_setting('lock_timeout')");
   });
 });
