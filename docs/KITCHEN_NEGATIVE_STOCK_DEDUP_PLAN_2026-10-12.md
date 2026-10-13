@@ -109,6 +109,14 @@ Read-only live catalog audit reconfirmed 11 direct raw-batch writers. Absence of
 - سياسة طرح تدريجي واختبار/رجوع قبل أي موافقة على SQL إنتاج.
 
 ## Verification ledger
+### Canonical binding rehearsal — 2026-10-13
+- Previous exact head b5db453e9d0546f95b1ee5b5e27139dcf5c7ffd3 passed Fast 38357319642 and Full 38357325296: 1708 frontend, 1028 DB/RLS, 132 Chromium, no retries.
+- Added `scripts/experiments/kitchen_canonical_binding_rehearsal_20261013.sql`: LOCAL ONLY, not a migration or authorized production rollout. Rebinds four existing canonical function bodies to the tested candidates while retaining their live signatures/security/search_path. No new privileged function, ACL/RLS/trigger/table/index change. Dependency helpers remain revoked invokers.
+- New public wrapper fixture calls authenticated send_to_kitchen for original and bound definitions; compares stock/debt/ledger aggregates, frozen snapshots and tickets; checks resend no-op. Second session holds the exact material lock: bound send must return timeout without stock/send mutation, then succeed after release. This is lock exclusion/recovery, not committed multi-writer throughput/deadlock proof.
+- Asserts canonical function OIDs, owner, security modes, search_path and ACL remain identical; original trigger definition/OID/enabled state unchanged. SAVEPOINT rollback must restore exact original function definitions. New exact-head CI pending.
+- Production binding/rollback package, maintenance policy and full COMMIT/concurrency acceptance remain OPEN. No SQL was applied to production; read-only catalog confirmed unchanged live fingerprints before preparing rehearsal.
+
+
 ### Continued execution — 2026-10-13
 - P4 and restored canonical FIFO history on d5e1ec201a3d6e11e574213719dafb5108bc988f passed Fast 38354663814 and Full 38354669323: 1708 frontend, 1024 DB/RLS, 132 Chromium, no retries. Archived files verified byte-for-byte against production migration statements; restored receipt body matches the live body. P4 100-source receipt: actual receipt row writes 100→1; full DB sample 60.223→51.320ms, WAL 331318→284559, shared hits 33102→26482. One instrumented isolated sample, NOT whole purchase/COMMIT or production acceptance.
 - P3 exploratory Fast DB 115161485088 on 56576949e4af25b34367bed5fc99b43634eeeb3a passed parity/counter benchmark but failed two new fixture assertions: prior avg summary was never established (canonical also 0), and create_order selected the newly introduced positive warehouse (canonical also consumed there). Fixed by establishing the actual prior positive official summary and pinning replay order warehouse. No production effect; require new exact-head verification. Do not accept the failed run as green or present its timing as final acceptance.
