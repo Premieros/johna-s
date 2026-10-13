@@ -22,7 +22,16 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   const orgId = randomUUID();
   beforeAll(async () => {
     if (skip) throw new Error('Disposable loopback database required');
-    client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN'); await client.query(readFileSync('scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_component_price_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_negative_reuse_dispatch_candidate_20261013.sql','utf8')); await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
+    client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN');
+    // A migrated CI baseline uses live bindings. Benchmark the ORIGINAL body
+    // only inside this rollback fixture; all other integration tests stay bound.
+    const bound=(await client.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present;
+    if(bound){
+      await client.query("SET LOCAL app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
+      const rollback=readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8').replace(/^BEGIN;\n/m,'').replace(/^COMMIT;\n/m,'');
+      await client.query(rollback);
+    }
+    await client.query(readFileSync('scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_component_price_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_negative_reuse_dispatch_candidate_20261013.sql','utf8')); await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
     await client.query(`INSERT INTO public.organizations (id, name, slug) VALUES ($1, $2, $3)`, [orgId, '048 Org', `048-${randomUUID().slice(0,8)}`]);
     await client.query(`INSERT INTO public.branches (id, name, organization_id) VALUES ($1, $2, $3)`, [branchId, '048 Branch', orgId]);
     await client.query(`INSERT INTO public.warehouses (id, name, branch_id, is_active) VALUES ($1, $2, $3, true)`, [whId, '048 WH', branchId]);
