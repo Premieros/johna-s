@@ -10,7 +10,7 @@ Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
 ## Work status
-State: **BLOCKED** until exact-head verification and owner-approved production print guard/deployment. Production emergency rollback already approved at17:07 Cairo, applied version20261013140753, verified original four function bodies/OIDs/ACL/security and absent three optimization helpers. User confirmed multi-item send works again. Optimizations remain disabled.
+State: **BLOCKED** until exact-head verification and deployment. Owner approved the print guard and publication at17:38:54 Cairo; guard application completed and verified at17:48. Production emergency rollback already approved at17:07 Cairo, applied version20261013140753, verified original four function bodies/OIDs/ACL/security and absent three optimization helpers. User confirmed multi-item send works again. Optimizations remain disabled.
 
 ## Guardrails
 Only johnas. No unrelated project, physical test orders, prints, requeues, stock/accounting history reversal, agent reinstall, table/RLS/ACL changes or new SECURITY DEFINER bypass. Preserve original security modes and signatures. Report physical spooler handoff separately from actual paper delivery.
@@ -38,3 +38,8 @@ Finish exact-head native CI, review and deploy source-order routing/guard, verif
 
 ## Mandatory update protocol
 Fresh exact branch HEAD before every sequential GitHub mutation. Stop on drift. Freeze source writes while exact-head checks run. Record actual production version and observed effects; pending is not success. No agents or parallel writers.
+
+
+## Approved production print guard result
+Owner approval2026-10-13 17:38:54 Cairo covers guard and publication after verification. Actual migration `20261013144819_kitchen_print_source_branch_guard_20261013` applied successfully and archived verbatim (3738 characters). Expected source bodies compared byte-for-byte after application: enqueue aa538c1253cf9a4232ccbf89ee82b7cb; send wrapper a06c101f6eaa9c5f7209e0ff4280c05d. Original OIDs37484/40502, owner, ACL/search_path/security modes unchanged. All other public function fingerprints unchanged (21fa2b0f89d7e9238e9ab99e0a26113f), core remains d9d480eeaf2d1c3afecdac1666e3a0bd and optimization helpers absent. No production test/reprint or agent installation. Do not reapply this migration to production.
+Acceptance before archival HEADd19742b7eb21ff90ceec53d58669fd73ed7e14d2: Fast38414403919 GREEN; Full38414407225 GREEN (1715frontend,1042DB/RLS,132Chromium); Windows38414406882 GREEN. New exact-head archive replay checks required before merge. Worklog's pending-owner gate above is historical; approval is present. Notify owner before the authorized merge, then verify deployed assets and natural print routing.
