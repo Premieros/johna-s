@@ -10,7 +10,7 @@ Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
 ## Work status
-State: **BLOCKED** pending technical verification, NOT missing owner approval. User approved SQL activation explicitly at15:03 Cairo2026-10-13 after being told merge did not activate it. Production apply still pending.
+State: **BLOCKED** pending technical verification, NOT missing owner approval. User approved SQL activation explicitly at15:03 Cairo2026-10-13 after being told merge did not activate it. Production activation SUCCEEDED at16:22 Cairo. Actual migration version20261013132245; verbatim history archived. Remaining gate: exact-head history replay CI and merge/deploy verification.
 
 ## Guardrails
 Only johnas. No table/RLS/ACL/security redesign, printing agent/queue change, real test order/print, stock-history reversal or unrelated repository. Existing canonical security modes retained. Three private helpers remain revoked invokers.
@@ -41,4 +41,10 @@ Fetch exact branch HEAD before EVERY sequential mutation. Stop/reconcile on drif
 
 
 ## Full bound-schema acceptance
-Fast38395381062 passed the barrier and34 candidate cases. Before applying production, Full Verify now binds the SAME canonical forward bodies and barrier on owned localhost CI, so all existing integration/security/RLS tests exercise the deployed schema rather than an unwired baseline. Only original-versus-candidate benchmark fixture restores the archived original bodies INSIDE its BEGIN/ROLLBACK; all other tests remain bound. Owned COMMIT database handles an already-applied canonical migration by guarded rollback before its original/bound roundtrip. No source/table mutation or test assertions relaxed. New exact-head checks required. Applied migration archive/reconciliation remains pending.
+Fast38395381062 passed the barrier and34 candidate cases. Before applying production, Full Verify now binds the SAME canonical forward bodies and barrier on owned localhost CI, so all existing integration/security/RLS tests exercise the deployed schema rather than an unwired baseline. Only original-versus-candidate benchmark fixture restores the archived original bodies INSIDE its BEGIN/ROLLBACK; all other tests remain bound. Owned COMMIT database handles an already-applied canonical migration by guarded rollback before its original/bound roundtrip. No source/table mutation or test assertions relaxed. New exact-head checks required. Applied migration20261013132245 archived verbatim after successful activation; history replay checks pending.
+
+
+## Production activation result
+2026-10-13 16:22 Cairo: after user renewed Supabase connection, apply_migration succeeded. Version `20261013132245`, name `kitchen_dedup_activation_20261013`; one history statement exactly equals the approved 58614-character payload including same-transaction barrier. Do NOT reapply to production.
+All four original OIDs, owners, ACLs, security modes and search_path unchanged; all seven new body fingerprints match guarded rollback expectations. Three helpers invoker-only, ACL `{postgres=X/postgres}`. Broad tables, policies, triggers, constraints and all other functions fingerprints equal preflight. No production test order or physical print. Printing queue/agent/routes and all unrelated functions unchanged. Verify natural print delivery without claiming physical paper confirmation.
+Before archive: exact3382651 Fast38396310980 and Full38396319723 GREEN (34 candidate,1708 frontend,1038 DB/RLS,132 Chromium). New archive requires fresh exact-head replay checks; branch remains BLOCKED until these pass.
