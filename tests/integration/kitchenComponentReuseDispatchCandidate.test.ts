@@ -22,7 +22,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   const orgId = randomUUID();
   beforeAll(async () => {
     if (skip) throw new Error('Disposable loopback database required');
-    client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN'); await client.query(readFileSync('scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_component_price_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
+    client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN'); await client.query(readFileSync('scripts/experiments/kitchen_component_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_component_price_reuse_dispatch_candidate_20261012.sql','utf8')); await client.query(readFileSync('scripts/experiments/kitchen_negative_reuse_dispatch_candidate_20261013.sql','utf8')); await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
     await client.query(`INSERT INTO public.organizations (id, name, slug) VALUES ($1, $2, $3)`, [orgId, '048 Org', `048-${randomUUID().slice(0,8)}`]);
     await client.query(`INSERT INTO public.branches (id, name, organization_id) VALUES ($1, $2, $3)`, [branchId, '048 Branch', orgId]);
     await client.query(`INSERT INTO public.warehouses (id, name, branch_id, is_active) VALUES ($1, $2, $3, true)`, [whId, '048 WH', branchId]);
@@ -41,26 +41,29 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     await client.query(`INSERT INTO public.organization_members (organization_id, user_id, membership_role, is_active) VALUES ($1, $2, 'member', true)`, [orgId, cashierId]);
     await client.query(`INSERT INTO public.shifts (branch_id, cashier_id, opening_amount, status) VALUES ($1, $2, 0, 'open')`, [branchId, cashierId]);
     await client.query(`UPDATE public.settings SET tax_enabled = false`);
+    await client.query('CREATE TEMP TABLE stock_summary_write_audit(branch_id uuid,raw_id uuid) ON COMMIT DROP');
+    await client.query("CREATE FUNCTION pg_temp.stock_summary_write_audit() RETURNS trigger LANGUAGE plpgsql AS $audit$ BEGIN INSERT INTO pg_temp.stock_summary_write_audit VALUES(NEW.branch_id,NEW.raw_material_id); RETURN NEW; END $audit$");
+    await client.query('CREATE TRIGGER stock_summary_write_audit AFTER INSERT OR UPDATE ON public.raw_material_inventory FOR EACH ROW EXECUTE FUNCTION pg_temp.stock_summary_write_audit()');
   });
   afterAll(async () => { if (client) { await client.query('ROLLBACK').catch(() => {}); await client.end(); } });
 
 
-  type Variant = boolean | 'price';
+  type Variant = boolean | 'price' | 'stock';
   async function captureTrigger(price: boolean) {
     const fn=price?'_capture_kitchen_ingredient_prices_reuse_candidate':'_capture_kitchen_ingredient_prices';
     await client.query('CREATE OR REPLACE TRIGGER trg_capture_kitchen_ingredient_prices BEFORE INSERT ON public.order_kitchen_inventory_events FOR EACH ROW EXECUTE FUNCTION public.'+fn+'()');
   }
   function coreName(candidate:Variant) {
-    return candidate==='price'?'_send_to_kitchen_component_price_reuse_candidate':
+    return candidate==='stock'?'_send_to_kitchen_negative_reuse_candidate':candidate==='price'?'_send_to_kitchen_component_price_reuse_candidate':
       candidate?'_send_to_kitchen_component_reuse_candidate':'_send_to_kitchen_core_20260914';
   }
   async function sendCore(orderId: string, candidate: Variant) {
     await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
-    if (candidate==='price') await captureTrigger(true);
+    if (candidate==='price'||candidate==='stock') await captureTrigger(true);
     try {
       return (await client.query('SELECT public.'+coreName(candidate)+'($1,$2) r',[orderId,cashierId])).rows[0].r;
     } finally {
-      if (candidate==='price') await captureTrigger(false);
+      if (candidate==='price'||candidate==='stock') await captureTrigger(false);
     }
   }
   async function stockState() {
@@ -76,7 +79,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   }
   async function compare(orderId: string) {
     const outcomes=[];
-    for (const candidate of [false,true,'price'] as const) {
+    for (const candidate of [false,true,'price','stock'] as const) {
       await client.query('SAVEPOINT dispatch_variant');
       try {
         const first=await sendCore(orderId,candidate);
@@ -103,6 +106,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     }
     expect(outcomes[1]).toEqual(outcomes[0]);
     expect(outcomes[2]).toEqual(outcomes[0]);
+    expect(outcomes[3]).toEqual(outcomes[0]);
     return outcomes[1];
   }
   it('reuses one configuration while preserving separate item identities and canonical snapshots',async()=>{
@@ -172,7 +176,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     expect(created.success,JSON.stringify(created)).toBe(true);
     await client.query("UPDATE public.order_items SET created_at=now()-interval '1 minute' WHERE order_id=$1 AND product_id=$2",[created.order_id,prodB]);
     const before=await stockState(), results=[];
-    for (const candidate of [false,true,'price'] as const) {
+    for (const candidate of [false,true,'price','stock'] as const) {
       const result=await sendCore(created.order_id,candidate);
       expect(result.success).toBe(false);
       expect(result.product_id).toBe(prodA);
@@ -233,7 +237,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     await client.query("INSERT INTO public.branches(id,name) VALUES($1,'Foreign reuse')",[foreign]);
     await client.query("INSERT INTO public.orders(id,order_number,branch_id,status) VALUES($1,$2,$3,'open')",[order,'FOREIGN-'+order,foreign]);
     const before=await stockState(),results=[];
-    for (const candidate of [false,true,'price'] as const) results.push(await sendCore(order,candidate));
+    for (const candidate of [false,true,'price','stock'] as const) results.push(await sendCore(order,candidate));
     expect(results[0].success).toBe(false);
     expect(results[1]).toEqual(results[0]);
     expect(results[2]).toEqual(results[0]);
@@ -334,14 +338,68 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       await client.query('RELEASE SAVEPOINT price_scope_lifecycle');
     }
   });
+
+  it('reuses fully nonpositive raw quantities while preserving each ledger boundary and the last positive average',async()=>{
+    await client.query('SAVEPOINT negative_material_replay');
+    try {
+      const raw=(await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1',[unitA])).rows[0].raw_material_id;
+      await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
+      const created=await createOrder(itemJson([{product_id:prodA,quantity:2,notes:'negative 1'},{product_id:prodA,quantity:3,notes:'negative 2'},{product_id:prodB,quantity:1,notes:'other raw'}]));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      await compare(created.order_id); // Includes individual before_qty/after_qty, debts, effects, snapshots and resend.
+      const before=Number((await client.query('SELECT count(*) n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
+      const sent=await sendCore(created.order_id,'stock');
+      expect(sent.success,JSON.stringify(sent)).toBe(true);
+      const after=Number((await client.query('SELECT count(*) n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
+      expect(after-before).toBe(2); // Repeated negative raw once; the other positive raw remains canonical.
+      const summary=(await client.query('SELECT quantity,avg_cost FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId])).rows[0];
+      expect(Number(summary.quantity)).toBe(-5);expect(Number(summary.avg_cost)).toBe(50);
+    } finally {
+      await client.query('ROLLBACK TO negative_material_replay');await client.query('RELEASE negative_material_replay');
+    }
+  });
+
+  it('keeps canonical deductions when another warehouse still has positive batches',async()=>{
+    await client.query('SAVEPOINT positive_other_warehouse');
+    try {
+      const raw=(await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1',[unitA])).rows[0].raw_material_id;
+      await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
+      const other=randomUUID();
+      await client.query("INSERT INTO public.warehouses(id,name,branch_id,is_active) VALUES($1,'Positive other WH',$2,true)",[other,branchId]);
+      await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,'OTHER-POSITIVE',3,17,'opening')",[raw,branchId,other]);
+      const created=await createOrder(itemJson([{product_id:prodA,quantity:2},{product_id:prodA,quantity:3}]));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      await compare(created.order_id);
+      const before=Number((await client.query('SELECT count(*) n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
+      expect((await sendCore(created.order_id,'stock')).success).toBe(true);
+      const after=Number((await client.query('SELECT count(*) n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
+      expect(after-before).toBe(2);
+      expect(Number((await client.query('SELECT sum(quantity) q FROM public.raw_material_batches WHERE raw_material_id=$1 AND warehouse_id=$2',[raw,other])).rows[0].q)).toBe(3);
+    } finally {
+      await client.query('ROLLBACK TO positive_other_warehouse');await client.query('RELEASE positive_other_warehouse');
+    }
+  });
+
+  it('exposes no client execution or new privileged stock helper',async()=>{
+    for(const signature of [
+      '_send_to_kitchen_negative_reuse_candidate(uuid,uuid)',
+      '_raw_remove_fifo_negative_reuse_candidate(uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,boolean,numeric)',
+      '_deduct_kitchen_raw_components_negative_reuse_candidate(uuid,uuid,uuid,numeric,jsonb,uuid,text,uuid,jsonb,jsonb)',
+    ]){
+      const row=(await client.query("SELECT p.prosecdef,has_function_privilege('anon',p.oid,'EXECUTE') anon,has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated,has_function_privilege('service_role',p.oid,'EXECUTE') service FROM pg_proc p WHERE p.oid=$1::regprocedure",['public.'+signature])).rows[0];
+      expect(row).toEqual({prosecdef:false,anon:false,authenticated:false,service:false});
+    }
+  });
+
   it('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
     await client.query("SET LOCAL track_functions='all'");
-    type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number;priceCalls:number};
-    const measurements: Record<string,{baseline:Sample[];candidate:Sample[];price:Sample[]}>={};
+    type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number;priceCalls:number;summaryWrites:number};
+    const measurements: Record<string,{baseline:Sample[];candidate:Sample[];price:Sample[];stock:Sample[]}>={};
     const quantile=(values:number[],fraction:number)=>{
       const sorted=[...values].sort((a,b)=>a-b);
       return sorted[Math.max(0,Math.ceil(sorted.length*fraction)-1)];
     };
+    const summaryWrites=async()=>Number((await client.query('SELECT count(*)::int n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
     const resolverCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
       FROM pg_stat_xact_user_functions WHERE funcid='public.resolve_kitchen_item_raw_components(uuid,uuid,jsonb)'::regprocedure`)).rows[0].n);
     const priceCalls=async()=>Number((await client.query(`SELECT COALESCE(sum(calls),0)::int n
@@ -359,7 +417,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     for (const candidate of [false,'price'] as const) {
       if (!candidate) await client.query('SAVEPOINT first_context_baseline');
       try {
-        await captureTrigger(candidate==='price');
+        await captureTrigger(candidate==='price'||candidate==='stock');
         const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+coreName(candidate)+'($1,$2)',[seed.order_id,cashierId]);
         const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
         expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[seed.order_id])).rows[0].n).toBe(2);
@@ -397,10 +455,10 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       const created=await createOrder(itemJson(products.map((product,index)=>({product_id:product,quantity:1,notes:'bench-'+index}))));
       expect(created.success,JSON.stringify(created)).toBe(true);
       const name=(negative?'negative-':'positive-')+(uniqueRaw?'distinct-unique-raw':distinct?'distinct-shared-raw':'repeated')+'-'+count;
-      measurements[name]={baseline:[],candidate:[],price:[]};
+      measurements[name]={baseline:[],candidate:[],price:[],stock:[]};
       // Warmup plus seven alternated samples. Each starts from the same state;
       // canonical price capture and FIFO stay enabled for both variants.
-      for (let round=0;round<8;round+=1) for (const candidate of (round%2 ? ['price',true,false] as const:[false,true,'price'] as const)) {
+      for (let round=0;round<8;round+=1) for (const candidate of (round%2 ? ['stock','price',true,false] as const:[false,true,'price','stock'] as const)) {
         await client.query('SAVEPOINT benchmark_variant');
         try {
           await client.query("SELECT set_config('app.user_id',$1,true)",[cashierId]);
@@ -409,18 +467,20 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
           // while retaining only the backend-local private price context.
           await client.query('DROP TABLE IF EXISTS pg_temp.kns_delta');
           await client.query('DROP TABLE IF EXISTS pg_temp.kitchen_raw_need');
-          const before=await resolverCalls(), beforePrice=await priceCalls();
+          const before=await resolverCalls(), beforePrice=await priceCalls(),beforeSummary=await summaryWrites();
           const fn=coreName(candidate);
-          await captureTrigger(candidate==='price');
+          await captureTrigger(candidate==='price'||candidate==='stock');
           const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+fn+'($1,$2)',[created.order_id,cashierId]);
           const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
           const calls=(await resolverCalls())-before;
           const priceCount=(await priceCalls())-beforePrice;
-          expect(priceCount).toBe(candidate==='price'?1:count);
+          expect(priceCount).toBe(candidate==='price'||candidate==='stock'?1:count);
+          const writes=(await summaryWrites())-beforeSummary;
+          expect(writes).toBe(candidate==='stock'&&negative&&count>1&&!uniqueRaw?1:count);
           expect(calls).toBe(candidate && !distinct ? 1 : count);
           expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[created.order_id])).rows[0].n).toBe(count);
-          if (round>0) measurements[name][candidate==='price'?'price':candidate?'candidate':'baseline'].push({
-            ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,reads:plan['Shared Read Blocks']||0,wal:plan['WAL Bytes']||0,resolverCalls:calls,priceCalls:priceCount,
+          if (round>0) measurements[name][candidate==='stock'?'stock':candidate==='price'?'price':candidate?'candidate':'baseline'].push({
+            ms:explain['Execution Time'],hits:plan['Shared Hit Blocks']||0,reads:plan['Shared Read Blocks']||0,wal:plan['WAL Bytes']||0,resolverCalls:calls,priceCalls:priceCount,summaryWrites:writes,
           });
         } finally {
           await client.query('ROLLBACK TO SAVEPOINT benchmark_variant');
@@ -434,7 +494,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
         samples: samples.length,
         p50ms:quantile(samples.map(s=>s.ms),0.5),p95ms:quantile(samples.map(s=>s.ms),0.95),
         medianHits:quantile(samples.map(s=>s.hits),0.5),medianReads:quantile(samples.map(s=>s.reads),0.5),medianWal:quantile(samples.map(s=>s.wal),0.5),
-        resolverCalls:samples[0].resolverCalls,priceCalls:samples[0].priceCalls,
+        resolverCalls:samples[0].resolverCalls,priceCalls:samples[0].priceCalls,summaryWrites:samples[0].summaryWrites,
       }]))]));
     console.info('KITCHEN_COMPONENT_REUSE_FULL_CORE_BENCHMARK '+JSON.stringify(summary));
     // Seven samples are exploratory; production tail latency, CPU and
