@@ -12,7 +12,7 @@ try{
   const forward=readFileSync('scripts/rollout/kitchen_dedup_forward_review_20261013.sql','utf8');
   const rollback=readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8');
   const exists=(await db.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present;
-  if(!exists)await db.query(forward.replace('BEGIN;', 'BEGIN;\\n'+ack+'\\n'+barrier).replaceAll('\\n','\n'));
+  if(!exists)await db.query(forward.replace('BEGIN;', ['BEGIN;',ack,barrier].join(String.fromCharCode(10))));
   else{
     const guard=rollback.match(/DO \$guard\$[\s\S]*?\$guard\$;/)?.[0];
     if(!guard)throw new Error('Missing deployed definition guard');
