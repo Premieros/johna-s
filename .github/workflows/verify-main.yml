@@ -107,6 +107,8 @@ jobs:
         run: node scripts/db/apply-migration.js --file supabase/ci/seed_raw_material_branch.sql
       - name: Seed explicit Permission-First role capabilities (CI only)
         run: node scripts/db/apply-migration.js --file supabase/ci/permission_first_role_fixture.sql
+      - name: Bind approved production-equivalent kitchen bodies (owned localhost CI only)
+        run: node scripts/db/bind-approved-kitchen-ci.mjs
       - name: Run integration and security/RLS regression tests
         shell: bash
         run: |

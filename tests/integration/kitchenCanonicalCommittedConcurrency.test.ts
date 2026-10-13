@@ -25,8 +25,9 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
   const supplier=randomUUID(),unit=randomUUID(),sourceWh=randomUUID();
   let originalDefinitions:unknown[];
   const catalogSQL=`SELECT p.oid::regprocedure::text signature,pg_get_functiondef(p.oid) definition,p.prosecdef,p.proconfig,p.proacl::text acl,pg_get_userbyid(p.proowner) owner FROM pg_proc p WHERE p.oid IN ('public._capture_kitchen_ingredient_prices()'::regprocedure,'public._raw_fifo_settle_receipt(bigint,uuid,uuid)'::regprocedure,'public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure,'public.apply_stock_count(uuid)'::regprocedure) ORDER BY p.proname`;
-  const forward=()=>readFileSync('scripts/rollout/kitchen_dedup_forward_review_20261013.sql','utf8');
-  const rollback=()=>readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8');
+  const barrier=()=>readFileSync('scripts/rollout/kitchen_activation_barrier_20261013.sql','utf8');
+  const forward=()=>readFileSync('scripts/rollout/kitchen_dedup_forward_review_20261013.sql','utf8').replace('BEGIN;', 'BEGIN;\n'+barrier());
+  const rollback=()=>readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8').replace('BEGIN;', 'BEGIN;\n'+barrier());
 
   async function beginActor(db:pg.Client,user:string){
     await db.query('BEGIN');await db.query("SELECT set_config('app.user_id',$1,true)",[user]);
@@ -75,6 +76,8 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     await a.connect();await b.connect();await observer.connect();
     pidA=(await a.query('SELECT pg_backend_pid() pid')).rows[0].pid;
     pidB=(await b.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
+    if((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present)await observer.query(rollback());
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     await observer.query(forward());
@@ -363,6 +366,37 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       await observer.query('DROP TRIGGER IF EXISTS qa_inverse_gate ON public.raw_material_batches');
       await observer.query('DROP FUNCTION IF EXISTS public.qa_inverse_gate()');
     }
+  },30000);
+
+  it('refuses activation while an order writer is active and permits reads during the barrier',async()=>{
+    const id=await order(2,3),before=await quantity(),definitions=(await observer.query(catalogSQL)).rows;
+    await beginActor(a,cashier);
+    await a.query('SELECT id FROM public.orders WHERE id=$1 FOR UPDATE',[id]);
+    await b.query('BEGIN');
+    await expect(b.query(barrier())).rejects.toMatchObject({code:'55P03'});
+    await b.query('ROLLBACK');await a.query('ROLLBACK');
+    expect((await observer.query(catalogSQL)).rows).toEqual(definitions);
+    expect(await quantity()).toBe(before);
+
+    await b.query('BEGIN');await b.query(barrier());
+    // Plain reads remain available. A new operational write waits until this
+    // short activation transaction commits; no queue or print job is changed.
+    expect((await observer.query('SELECT id FROM public.orders WHERE id=$1',[id])).rows).toHaveLength(1);
+    await beginActor(a,cashier);await a.query("SET LOCAL statement_timeout='5s'");
+    const send=a.query('SELECT public.send_to_kitchen($1,$2) r',[id,cashier]).then(result=>({result}),error=>({error}));
+    try{
+      let blocked=false;const deadline=Date.now()+2000;
+      while(Date.now()<deadline){
+        const row=(await observer.query('SELECT pg_blocking_pids($1) blockers',[pidA])).rows[0];
+        if(row.blockers.includes(pidB)){blocked=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(blocked).toBe(true);
+      await b.query('COMMIT');
+      const result=await send;if('error'in result)throw result.error;
+      expect(result.result.rows[0].r).toMatchObject({success:true,items_sent_count:2});await a.query('COMMIT');
+      expect(await quantity()).toBe(before-5);
+    }finally{await b.query('ROLLBACK').catch(()=>{});await a.query('ROLLBACK').catch(()=>{});}
   },30000);
 
 });
