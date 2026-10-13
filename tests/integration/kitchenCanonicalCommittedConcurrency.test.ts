@@ -37,10 +37,10 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     try {const result=await fn();await db.query('COMMIT');return result;}
     catch(error){await db.query('ROLLBACK').catch(()=>{});throw error;}
   }
-  async function order(q1:number,q2:number){
+  async function order(q1:number,q2:number,selectedProduct=product){
     const table=randomUUID();
     await observer.query("INSERT INTO public.dining_tables(id,name,branch_id,capacity,status) VALUES($1,$2,$3,4,'vacant')",[table,'CON-'+table,branch]);
-    const items=JSON.stringify([q1,q2].map((quantity,index)=>({product_id:product,unit_name:'piece',quantity,unit_price:10,discount_amount:0,bonus_quantity:0,total:quantity*10,notes:'concurrent '+index,modifier_option_ids:[]})));
+    const items=JSON.stringify([q1,q2].map((quantity,index)=>({product_id:selectedProduct,unit_name:'piece',quantity,unit_price:10,discount_amount:0,bonus_quantity:0,total:quantity*10,notes:'concurrent '+index,modifier_option_ids:[]})));
     const r=await actor(a,cashier,async()=>(await a.query("SELECT public.create_order($1,'dine_in',$2,NULL,2,NULL,$3::jsonb,$4,0,'amount',0,$4,$5) r",[branch,table,items,(q1+q2)*10,cashier])).rows[0].r);
     expect(r.success,JSON.stringify(r)).toBe(true);
     await observer.query('UPDATE public.orders SET inventory_warehouse_id=$2 WHERE id=$1',[r.order_id,wh]);
@@ -49,8 +49,12 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
   async function waitForBlock(){
     const deadline=Date.now()+5000;
     while(Date.now()<deadline){
-      const row=(await observer.query("SELECT wait_event_type,pg_blocking_pids(pid) blockers FROM pg_stat_activity WHERE pid=$1",[pidB])).rows[0];
+      const row=(await observer.query("SELECT wait_event_type,wait_event,query,pg_blocking_pids(pid) blockers FROM pg_stat_activity WHERE pid=$1",[pidB])).rows[0];
       if(row?.wait_event_type==='Lock'&&row.blockers.includes(pidA))return;
+      if(row?.wait_event==='PgSleep'&&row.query.includes('apply_stock_count')){
+        const held=(await observer.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND locktype='advisory' AND granted AND classid::bigint=((hashtextextended($2::text||':'||$3::text,0)>>32)&4294967295) AND objid::bigint=(hashtextextended($2::text||':'||$3::text,0)&4294967295) AND objsubid=1) held",[pidA,raw,branch])).rows[0].held;
+        if(held)return; // Retry admission sleeps without retaining partial locks.
+      }
       await new Promise(resolve=>setTimeout(resolve,25));
     }
     throw new Error('Second transaction did not wait behind the expected first writer');
@@ -255,8 +259,9 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     let isBound=true;
     const results:Record<string,Record<string,{ms:number;wal:number}[]>>={};
     const median=(xs:number[])=>[...xs].sort((x,y)=>x-y)[Math.floor(xs.length/2)];
-    for(const lines of [1,5,20,50]){
-      results[String(lines)]={baseline:[],candidate:[]};
+    for(const profile of [{lines:1,history:0},{lines:5,history:0},{lines:20,history:0},{lines:50,history:0},{lines:50,history:10000}]){
+      const {lines,history}=profile,key=history?`${lines}-history-${history}`:String(lines);
+      results[key]={baseline:[],candidate:[]};
       for(let sample=-1;sample<7;sample++){
         for(const candidate of (sample%2===0?[true,false]:[false,true])){
           if(candidate!==isBound){await observer.query(candidate?forward():rollback());isBound=candidate;}
@@ -270,7 +275,9 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
           await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,0,7,'opening')",[mat,branch,wh,'RPC-'+mat]);
           await observer.query('INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,0,7)',[mat,branch]);
           await observer.query("INSERT INTO public.dining_tables(id,name,branch_id,capacity,status) VALUES($1,$2,$3,4,'vacant')",[table,'RPC-'+table,branch]);
+          if(history>0)await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,created_at) SELECT $1,$2,$3,'HIST-'||$1::text||'-'||g::text,0,7,'opening',now()-interval '1 year' FROM generate_series(1,$4::int) g",[mat,branch,wh,history]);
           await observer.query('COMMIT');
+          if(history>0)await observer.query('ANALYZE public.raw_material_batches');
           const items=JSON.stringify(Array.from({length:lines},(_,index)=>({product_id:prod,unit_name:'piece',quantity:1,unit_price:10,discount_amount:0,bonus_quantity:0,total:10,notes:'rpc '+index,modifier_option_ids:[]})));
           const created=await actor(a,cashier,async()=>(await a.query("SELECT public.create_order($1,'dine_in',$2,NULL,2,NULL,$3::jsonb,$4,0,'amount',0,$4,$5) r",[branch,table,items,lines*10,cashier])).rows[0].r);
           expect(created.success,JSON.stringify(created)).toBe(true);
@@ -295,5 +302,60 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     // WAL is instance-wide and wall time includes loopback/BEGIN/auth/COMMIT.
     // Seven samples give no production p95/p99 or CPU proof.
   },180000);
+
+  it('releases a partial sorted lock set so an inverse-order purchase can commit before send',async()=>{
+    const [low,high]=[randomUUID(),randomUUID()].sort(),prod=randomUUID(),recipe=randomUUID();
+    await observer.query('BEGIN');
+    for(const mat of [low,high]){
+      await observer.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active,unit_id) VALUES($1,$2,'Lock-order raw',$3,7,true,$4)",[mat,'LOCK-'+mat,branch,unit]);
+      await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,0,7,'opening')",[mat,branch,wh,'LOCK-'+mat]);
+      await observer.query('INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,0,7)',[mat,branch]);
+    }
+    await observer.query("INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Inverse lock product',$2,10,14,true)",[prod,branch]);
+    await observer.query("INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active) VALUES($1,$2,$3,'Two raw recipe',1,true)",[recipe,prod,branch]);
+    await observer.query('INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0),($1,$3,1,0)',[recipe,low,high]);
+    await observer.query('COMMIT');
+    const id=await order(2,3,prod),gate='qa-inverse-'+randomUUID();
+    // Pause a REAL public purchase after its first, HIGH material batch insert.
+    // The barrier only controls interleaving; canonical writer/auth code remains.
+    await observer.query("CREATE FUNCTION public.qa_inverse_gate() RETURNS trigger LANGUAGE plpgsql AS $qa$ BEGIN IF NEW.raw_material_id='"+high+"'::uuid AND NEW.source_type='purchase' THEN PERFORM pg_advisory_xact_lock(hashtextextended('"+gate+"',0)); END IF; RETURN NEW; END; $qa$;");
+    await observer.query('CREATE TRIGGER qa_inverse_gate AFTER INSERT ON public.raw_material_batches FOR EACH ROW EXECUTE FUNCTION public.qa_inverse_gate()');
+    const pidObserver=(await observer.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    await observer.query('BEGIN');await observer.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[gate]);
+    await beginActor(b,counter);await b.query("SET LOCAL statement_timeout='10s'");
+    const purchase=b.query("SELECT public.process_purchase($1,$2,$3,$4,280,0,0,280,0,'credit','completed',NULL,$5::jsonb) r",['INV-'+randomUUID(),supplier,branch,wh,JSON.stringify([high,low].map(mat=>({raw_material_id:mat,unit_name:'piece',quantity:20,unit_cost:7})))]).then(result=>({result}),error=>({error}));
+    try{
+      let gated=false;const deadline=Date.now()+5000;
+      while(Date.now()<deadline){
+        const row=(await observer.query('SELECT pg_blocking_pids($1) blockers',[pidB])).rows[0];
+        if(row.blockers.includes(pidObserver)){gated=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(gated,'Purchase must own HIGH while paused at the actual insert').toBe(true);
+      await beginActor(a,cashier);await a.query("SET LOCAL statement_timeout='10s'");
+      const send=a.query('SELECT public.send_to_kitchen($1,$2) r',[id,cashier]).then(result=>({result}),error=>({error}));
+      let retrying=false;const retryDeadline=Date.now()+5000;
+      while(Date.now()<retryDeadline){
+        const row=(await observer.query('SELECT wait_event,query FROM pg_stat_activity WHERE pid=$1',[pidA])).rows[0];
+        if(row?.wait_event==='PgSleep'&&row.query.includes('send_to_kitchen')){retrying=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(retrying,'Send must retry the incomplete lock set before reading balances').toBe(true);
+      expect((await observer.query("SELECT pg_try_advisory_xact_lock(hashtextextended($1::text||':'||$2::text,0)) available",[low,branch])).rows[0].available,'LOW must be released while HIGH is busy').toBe(true);
+      await observer.query('COMMIT'); // Release barrier and probe LOW together.
+      const received=await purchase;if('error'in received)throw received.error;
+      expect(received.result.rows[0].r.success,JSON.stringify(received.result.rows[0].r)).toBe(true);await b.query('COMMIT');
+      const sent=await send;if('error'in sent)throw sent.error;
+      expect(sent.result.rows[0].r).toMatchObject({success:true,items_sent_count:2});await a.query('COMMIT');
+      const state=(await observer.query('SELECT raw_material_id,sum(quantity) q FROM public.raw_material_batches WHERE raw_material_id=ANY($1::uuid[]) AND warehouse_id=$2 GROUP BY raw_material_id',[[low,high],wh])).rows;
+      expect(state).toHaveLength(2);expect(state.every(row=>Number(row.q)===15)).toBe(true);
+      const official=(await observer.query('SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=ANY($1::uuid[]) AND branch_id=$2',[[low,high],branch])).rows;
+      expect(official).toHaveLength(2);expect(official.every(row=>Number(row.quantity)===15)).toBe(true);
+    }finally{
+      await observer.query('ROLLBACK').catch(()=>{});await b.query('ROLLBACK').catch(()=>{});await a.query('ROLLBACK').catch(()=>{});
+      await observer.query('DROP TRIGGER IF EXISTS qa_inverse_gate ON public.raw_material_batches');
+      await observer.query('DROP FUNCTION IF EXISTS public.qa_inverse_gate()');
+    }
+  },30000);
 
 });
