@@ -129,6 +129,31 @@ describe.skipIf(!local)('unwired receipt write reuse, production-shaped estimate
     }
     await db.query('DROP TRIGGER receipt_fail_source ON public.inventory_ledger');
   });
+
+  it('flushes accumulated receipt quantity before an unsupported propagation source',async()=>{
+    const {raw,sale}=await fixture(3);
+    const source=Number((await db.query('SELECT source_ledger_id FROM public.raw_fifo_debts WHERE raw_material_id=$1 ORDER BY source_ledger_id OFFSET 1 LIMIT 1',[raw])).rows[0].source_ledger_id);
+    await db.query("UPDATE public.inventory_ledger SET reference_type='qa_unsupported' WHERE id=$1",[source]);
+    // Observe at the same source-update boundary that precedes reference propagation.
+    await db.query('CREATE TEMP TABLE receipt_observation(quantity numeric) ON COMMIT DROP');
+    await db.query("CREATE FUNCTION pg_temp.receipt_observe_source() RETURNS trigger LANGUAGE plpgsql AS $observe$ BEGIN IF NEW.id="+source+" THEN INSERT INTO pg_temp.receipt_observation SELECT quantity FROM public.raw_material_batches WHERE raw_material_id=NEW.raw_material_id AND source_type='receipt_reuse_qa'; END IF; RETURN NEW; END $observe$");
+    await db.query('CREATE TRIGGER receipt_observe_source AFTER UPDATE OF total_cost ON public.inventory_ledger FOR EACH ROW EXECUTE FUNCTION pg_temp.receipt_observe_source()');
+    const reference=randomUUID();
+    const run=async(variant:Variant)=>{
+      await receipt(variant,raw,5,7,reference);
+      expect((await db.query('SELECT quantity FROM pg_temp.receipt_observation')).rows.map(r=>Number(r.quantity))).toEqual([3]);
+      const result=await state(raw,sale);
+      expect(result.settlements.filter(r=>r.reconciliation_status==='error')).toHaveLength(1);
+      return {result,writes:await writes(raw)};
+    };
+    await db.query('SAVEPOINT receipt_propagation');
+    const old=await run('baseline');await db.query('ROLLBACK TO receipt_propagation');
+    const next=await run('reuse');expect(next.result).toEqual(old.result);
+    expect(old.writes).toBe(3);expect(next.writes).toBe(2);
+    await db.query('RELEASE receipt_propagation');
+    await db.query('DROP TRIGGER receipt_observe_source ON public.inventory_ledger');
+  });
+
   it('retains private invoker-only entry points and explicitly exposes the replay gap',async()=>{
     for(const signature of ['_raw_fifo_settle_receipt_reuse_candidate(bigint,uuid,uuid)','_raw_add_receipt_reuse_candidate(uuid,uuid,uuid,numeric,numeric,text,date,date,text,text,uuid,text,uuid)']){
       const r=(await db.query("SELECT p.prosecdef,has_function_privilege('anon',p.oid,'EXECUTE') anon,has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated,has_function_privilege('service_role',p.oid,'EXECUTE') service FROM pg_proc p WHERE p.oid=$1::regprocedure",['public.'+signature])).rows[0];
