@@ -352,9 +352,12 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     await client.query('SAVEPOINT negative_material_replay');
     try {
       const raw=(await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1',[unitA])).rows[0].raw_material_id;
+      // Establish a real prior positive summary before removing fixture stock.
+      await client.query('INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,100,50) ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET quantity=100,avg_cost=50',[raw,branchId]);
       await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
       const created=await createOrder(itemJson([{product_id:prodA,quantity:2,notes:'negative 1'},{product_id:prodA,quantity:3,notes:'negative 2'},{product_id:prodB,quantity:1,notes:'other raw'}]));
       expect(created.success,JSON.stringify(created)).toBe(true);
+      await client.query('UPDATE public.orders SET inventory_warehouse_id=$2 WHERE id=$1',[created.order_id,whId]);
       await compare(created.order_id); // Includes individual before_qty/after_qty, debts, effects, snapshots and resend.
       const before=Number((await client.query('SELECT count(*) n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
       const sent=await sendCore(created.order_id,'stock');
@@ -378,6 +381,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,'OTHER-POSITIVE',3,17,'opening')",[raw,branchId,other]);
       const created=await createOrder(itemJson([{product_id:prodA,quantity:2},{product_id:prodA,quantity:3}]));
       expect(created.success,JSON.stringify(created)).toBe(true);
+      await client.query('UPDATE public.orders SET inventory_warehouse_id=$2 WHERE id=$1',[created.order_id,whId]);
       await compare(created.order_id);
       const before=Number((await client.query('SELECT count(*) n FROM pg_temp.stock_summary_write_audit WHERE branch_id=$1',[branchId])).rows[0].n);
       expect((await sendCore(created.order_id,'stock')).success).toBe(true);
@@ -398,6 +402,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
       await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,expiry_date,source_type) VALUES($1,$2,$3,'SECOND-AVERAGE',1,8,current_date+2,'opening')",[raw,branchId,whId]);
       const created=await createOrder(itemJson([{product_id:prodA,quantity:1,notes:'first FIFO'},{product_id:prodA,quantity:1,notes:'last FIFO'},{product_id:prodA,quantity:1,notes:'now negative'}]));
       expect(created.success,JSON.stringify(created)).toBe(true);
+      await client.query('UPDATE public.orders SET inventory_warehouse_id=$2 WHERE id=$1',[created.order_id,whId]);
       await compare(created.order_id);
       expect((await sendCore(created.order_id,'stock')).success).toBe(true);
       const summary=(await client.query('SELECT quantity,avg_cost FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId])).rows[0];
