@@ -244,8 +244,56 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       expect(resent.result.rows[0].r).toMatchObject({success:true,items_sent_count:0});await b.query('COMMIT');
       expect(await quantity()).toBe(before-4);await assertOfficial();
       expect((await observer.query('SELECT count(*)::int n FROM public.order_kitchen_voids WHERE order_id=$1',[id])).rows[0].n).toBe(1);
-      expect((await observer.query('SELECT sum(sent_quantity)::numeric q FROM public.order_kitchen_sends WHERE order_id=$1',[id])).rows[0].q).toBe('4');
+      expect(Number((await observer.query('SELECT sum(sent_quantity)::numeric q FROM public.order_kitchen_sends WHERE order_id=$1',[id])).rows[0].q)).toBe(4);
     }finally{await a.query('ROLLBACK').catch(()=>{});await b.query('ROLLBACK').catch(()=>{});}
   },30000);
+
+  it('measures authenticated full send plus COMMIT on alternating isolated zero-stock material fixtures',async()=>{
+    // No audit callback, EXPLAIN or instrumentation inside the timed transaction.
+    // Each sample owns a fresh material/product/order, so neither variant inherits
+    // the previous variant's stock/debts. Same branch, indexes, prices and permissions.
+    let isBound=true;
+    const results:Record<string,Record<string,{ms:number;wal:number}[]>>={};
+    const median=(xs:number[])=>[...xs].sort((x,y)=>x-y)[Math.floor(xs.length/2)];
+    for(const lines of [1,5,20,50]){
+      results[String(lines)]={baseline:[],candidate:[]};
+      for(let sample=-1;sample<7;sample++){
+        for(const candidate of (sample%2===0?[true,false]:[false,true])){
+          if(candidate!==isBound){await observer.query(candidate?forward():rollback());isBound=candidate;}
+          const mat=randomUUID(),prod=randomUUID(),recipe=randomUUID(),table=randomUUID();
+          await observer.query('BEGIN');
+          await observer.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active,unit_id) VALUES($1,$2,'RPC raw',$3,7,true,$4)",[mat,'RPC-'+mat,branch,unit]);
+          await observer.query("INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'RPC product',$2,10,7,true)",[prod,branch]);
+          await observer.query("INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active) VALUES($1,$2,$3,'RPC recipe',1,true)",[recipe,prod,branch]);
+          await observer.query('INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)',[recipe,mat]);
+          await observer.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,7,'pricing',$3,now()-interval '1 day')",[mat,branch,'RPC-'+mat]);
+          await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,0,7,'opening')",[mat,branch,wh,'RPC-'+mat]);
+          await observer.query('INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,0,7)',[mat,branch]);
+          await observer.query("INSERT INTO public.dining_tables(id,name,branch_id,capacity,status) VALUES($1,$2,$3,4,'vacant')",[table,'RPC-'+table,branch]);
+          await observer.query('COMMIT');
+          const items=JSON.stringify(Array.from({length:lines},(_,index)=>({product_id:prod,unit_name:'piece',quantity:1,unit_price:10,discount_amount:0,bonus_quantity:0,total:10,notes:'rpc '+index,modifier_option_ids:[]})));
+          const created=await actor(a,cashier,async()=>(await a.query("SELECT public.create_order($1,'dine_in',$2,NULL,2,NULL,$3::jsonb,$4,0,'amount',0,$4,$5) r",[branch,table,items,lines*10,cashier])).rows[0].r);
+          expect(created.success,JSON.stringify(created)).toBe(true);
+          await observer.query('UPDATE public.orders SET inventory_warehouse_id=$2 WHERE id=$1',[created.order_id,wh]);
+          const lsn=(await observer.query('SELECT pg_current_wal_insert_lsn()::text lsn')).rows[0].lsn;
+          const started=performance.now();
+          const sent=await actor(a,cashier,async()=>(await a.query('SELECT public.send_to_kitchen($1,$2) r',[created.order_id,cashier])).rows[0].r);
+          const ms=performance.now()-started;
+          const wal=Number((await observer.query('SELECT pg_wal_lsn_diff(pg_current_wal_insert_lsn(),$1::pg_lsn) bytes',[lsn])).rows[0].bytes);
+          expect(sent,JSON.stringify(sent)).toMatchObject({success:true,items_sent_count:lines});
+          const state=(await observer.query('SELECT (SELECT sum(quantity) FROM public.raw_material_batches WHERE raw_material_id=$1 AND warehouse_id=$2) quantity,(SELECT sum(debt_quantity-settled_quantity) FROM public.raw_fifo_debts WHERE raw_material_id=$1) debt,(SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$3) official',[mat,wh,branch])).rows[0];
+          expect(Number(state.quantity)).toBe(-lines);expect(Number(state.debt)).toBe(lines);expect(Number(state.official)).toBe(-lines);
+          expect((await observer.query('SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE order_id=$1 AND snapshot_version=2',[created.order_id])).rows[0].n).toBe(lines);
+          if(sample>=0)results[String(lines)][candidate?'candidate':'baseline'].push({ms,wal});
+          // Restore a known bound state after each baseline; all code changes
+          // and fixture setup stay OUTSIDE timing/WAL samples.
+          if(!candidate){await observer.query(forward());isBound=true;}
+        }
+      }
+    }
+    console.info('KITCHEN_COMMITTED_PUBLIC_RPC_BENCHMARK',JSON.stringify(Object.fromEntries(Object.entries(results).map(([lines,variants])=>[lines,Object.fromEntries(Object.entries(variants).map(([variant,samples])=>[variant,{samples:samples.length,p50ms:median(samples.map(x=>x.ms)),maxMs:Math.max(...samples.map(x=>x.ms)),medianWal:median(samples.map(x=>x.wal))}]))]))));
+    // WAL is instance-wide and wall time includes loopback/BEGIN/auth/COMMIT.
+    // Seven samples give no production p95/p99 or CPU proof.
+  },180000);
 
 });
