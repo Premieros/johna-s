@@ -22,6 +22,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
   const branch=randomUUID(),org=randomUUID(),wh=randomUUID(),raw=randomUUID(),otherRaw=randomUUID();
   const product=randomUUID(),cashier=randomUUID(),counter=randomUUID(),role='qa_counter_'+randomUUID().slice(0,8);
   let pidA:number,pidB:number;
+  const supplier=randomUUID(),unit=randomUUID(),sourceWh=randomUUID();
   let originalDefinitions:unknown[];
   const catalogSQL=`SELECT p.oid::regprocedure::text signature,pg_get_functiondef(p.oid) definition,p.prosecdef,p.proconfig,p.proacl::text acl,pg_get_userbyid(p.proowner) owner FROM pg_proc p WHERE p.oid IN ('public._capture_kitchen_ingredient_prices()'::regprocedure,'public._raw_fifo_settle_receipt(bigint,uuid,uuid)'::regprocedure,'public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure,'public.apply_stock_count(uuid)'::regprocedure) ORDER BY p.proname`;
   const forward=()=>readFileSync('scripts/rollout/kitchen_dedup_forward_review_20261013.sql','utf8');
@@ -77,7 +78,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     await observer.query("INSERT INTO public.organizations(id,name,slug) VALUES($1,'Committed QA',$2)",[org,'committed-'+org]);
     await observer.query("INSERT INTO public.branches(id,name,organization_id) VALUES($1,'Committed QA',$2)",[branch,org]);
     await observer.query("INSERT INTO public.warehouses(id,name,branch_id,is_active,is_default) VALUES($1,'Committed QA',$2,true,true)",[wh,branch]);
-    await observer.query("INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active) VALUES($1,'جرد','QA Counter','[\"inventory.count.create\",\"inventory.count.approve\",\"inventory.count.apply\"]'::jsonb,'global',true)",[role]);
+    await observer.query("INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active) VALUES($1,'جرد','QA Counter','[\"inventory.count.create\",\"inventory.count.approve\",\"inventory.count.apply\",\"purchases.manage\",\"inventory.transfer.create\",\"inventory.transfer.approve\",\"pos.void\"]'::jsonb,'global',true)",[role]);
     await observer.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
     await observer.query("INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$3,'QA Cashier','cashier',$5,true),($2,$4,'QA Counter',$6,$5,true)",[cashier,counter,cashier+'@test.local',counter+'@test.local',branch,role]);
     await observer.query('ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard');
@@ -85,6 +86,10 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     await observer.query("INSERT INTO public.shifts(branch_id,cashier_id,opening_amount,status) VALUES($1,$2,0,'open')",[branch,cashier]);
     await observer.query("INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Committed product',$2,10,7,true)",[product,branch]);
     await observer.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$3,'Committed raw',$5,7,true),($2,$4,'Independent raw',$5,7,true)",[raw,otherRaw,'COM-'+raw,'COM-'+otherRaw,branch]);
+    await observer.query("INSERT INTO public.units(id,code,name,symbol,is_active) VALUES($1,$2,'Piece','piece',true)",[unit,'PCS-'+unit]);
+    await observer.query('UPDATE public.raw_materials SET unit_id=$2 WHERE id=$1',[raw,unit]);
+    await observer.query("INSERT INTO public.suppliers(id,name,branch_id,balance) VALUES($1,'Committed supplier',$2,0)",[supplier,branch]);
+    await observer.query("INSERT INTO public.warehouses(id,name,branch_id,is_active,is_default) VALUES($1,'Transfer source',$2,true,false)",[sourceWh,branch]);
     const recipe=randomUUID();
     await observer.query("INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active) VALUES($1,$2,$3,'Committed recipe',1,true)",[recipe,product,branch]);
     await observer.query('INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)',[recipe,raw]);
@@ -179,4 +184,68 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       expect(retry).toMatchObject({success:false,error:'COUNT_NOT_APPROVED'});expect(await quantity()).toBe(2);
     } finally {await a.query('ROLLBACK').catch(()=>{});await b.query('ROLLBACK').catch(()=>{});}
   },30000);
+  async function assertOfficial(){
+    const row=(await observer.query('SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2',[raw,branch])).rows[0];
+    const net=(await observer.query('SELECT COALESCE(sum(quantity),0) q FROM public.raw_material_batches WHERE raw_material_id=$1 AND branch_id=$2',[raw,branch])).rows[0];
+    expect(Number(row.quantity)).toBe(Number(net.q));
+  }
+  it('serializes a committed raw purchase after a kitchen send and keeps the purchase journal balanced',async()=>{
+    const id=await order(5,5),before=await quantity();
+    await beginActor(a,cashier);await beginActor(b,counter);
+    try{
+      expect((await a.query('SELECT public.send_to_kitchen($1,$2) r',[id,cashier])).rows[0].r.success).toBe(true);
+      const invoice='CON-PUR-'+randomUUID();
+      const items=JSON.stringify([{raw_material_id:raw,unit_name:'piece',quantity:20,unit_cost:7}]);
+      const settled=b.query("SELECT public.process_purchase($1,$2,$3,$4,140,0,0,140,0,'credit','completed',NULL,$5::jsonb) r",[invoice,supplier,branch,wh,items]).then(result=>({result}),error=>({error}));
+      await waitForBlock();await a.query('COMMIT');
+      const received=await settled;if('error'in received)throw received.error;
+      expect(received.result.rows[0].r.success,JSON.stringify(received.result.rows[0].r)).toBe(true);
+      await b.query('COMMIT');
+      expect(await quantity()).toBe(before-10+20);await assertOfficial();
+      const pid=received.result.rows[0].r.purchase_id;
+      expect((await observer.query('SELECT count(*)::int n FROM public.purchase_items WHERE purchase_id=$1 AND raw_material_id=$2',[pid,raw])).rows[0].n).toBe(1);
+      const journal=(await observer.query("SELECT count(DISTINCT j.id)::int n,sum(l.debit) dr,sum(l.credit) cr FROM public.journal_entries j JOIN public.journal_entry_lines l ON l.journal_entry_id=j.id WHERE j.reference_type='purchase' AND j.reference_id=$1",[pid])).rows[0];
+      expect(journal.n).toBe(1);expect(Number(journal.dr)).toBe(140);expect(Number(journal.cr)).toBe(140);
+      expect(Number((await observer.query('SELECT sum(debt_quantity-settled_quantity) q FROM public.raw_fifo_debts WHERE raw_material_id=$1 AND warehouse_id=$2',[raw,wh])).rows[0].q)).toBe(0);
+    }finally{await a.query('ROLLBACK').catch(()=>{});await b.query('ROLLBACK').catch(()=>{});}
+  },30000);
+
+  it('serializes transfer replenishment after a send and moves stock only once',async()=>{
+    await observer.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,20,7,'opening')",[raw,branch,sourceWh,'CON-SRC-'+randomUUID()]);
+    const created=await actor(b,counter,async()=>(await b.query('SELECT public.create_warehouse_transfer($1,$2,$3,$4::jsonb,NULL,NULL) r',[sourceWh,wh,branch,JSON.stringify([{item_type:'raw_material',item_id:raw,destination_item_id:raw,quantity:4,unit_cost:7}])])).rows[0].r);
+    expect(created.success,JSON.stringify(created)).toBe(true);
+    const id=await order(2,3),before=await quantity();
+    await beginActor(a,cashier);await beginActor(b,counter);
+    try{
+      expect((await a.query('SELECT public.send_to_kitchen($1,$2) r',[id,cashier])).rows[0].r.success).toBe(true);
+      const pending=b.query('SELECT public.approve_warehouse_transfer($1) r',[created.transfer_id]).then(result=>({result}),error=>({error}));
+      await waitForBlock();await a.query('COMMIT');
+      const moved=await pending;if('error'in moved)throw moved.error;
+      expect(moved.result.rows[0].r.success,JSON.stringify(moved.result.rows[0].r)).toBe(true);await b.query('COMMIT');
+      expect(await quantity()).toBe(before-5+4);
+      expect(Number((await observer.query('SELECT sum(quantity) q FROM public.raw_material_batches WHERE raw_material_id=$1 AND warehouse_id=$2',[raw,sourceWh])).rows[0].q)).toBe(16);
+      await assertOfficial();
+      const retry=await actor(b,counter,async()=>(await b.query('SELECT public.approve_warehouse_transfer($1) r',[created.transfer_id])).rows[0].r);
+      expect(retry).toMatchObject({success:false,error:'INVALID_STATUS'});expect(await quantity()).toBe(before-1);
+    }finally{await a.query('ROLLBACK').catch(()=>{});await b.query('ROLLBACK').catch(()=>{});}
+  },30000);
+
+  it('serializes an authorized partial void with a same-order resend without rededucting',async()=>{
+    const id=await order(2,3),before=await quantity();
+    await actor(a,cashier,async()=>{expect((await a.query('SELECT public.send_to_kitchen($1,$2) r',[id,cashier])).rows[0].r.success).toBe(true);});
+    const item=(await observer.query('SELECT id FROM public.order_items WHERE order_id=$1 ORDER BY quantity LIMIT 1',[id])).rows[0].id;
+    await beginActor(a,counter);await beginActor(b,cashier);
+    try{
+      const cancelled=(await a.query("SELECT public.cancel_sent_order_item_exact($1,$2,1,'concurrent void') r",[id,item])).rows[0].r;
+      expect(cancelled.success,JSON.stringify(cancelled)).toBe(true);
+      const pending=b.query('SELECT public.send_to_kitchen($1,$2) r',[id,cashier]).then(result=>({result}),error=>({error}));
+      await waitForBlock();await a.query('COMMIT');
+      const resent=await pending;if('error'in resent)throw resent.error;
+      expect(resent.result.rows[0].r).toMatchObject({success:true,items_sent_count:0});await b.query('COMMIT');
+      expect(await quantity()).toBe(before-4);await assertOfficial();
+      expect((await observer.query('SELECT count(*)::int n FROM public.order_kitchen_voids WHERE order_id=$1',[id])).rows[0].n).toBe(1);
+      expect((await observer.query('SELECT sum(sent_quantity)::numeric q FROM public.order_kitchen_sends WHERE order_id=$1',[id])).rows[0].q).toBe('4');
+    }finally{await a.query('ROLLBACK').catch(()=>{});await b.query('ROLLBACK').catch(()=>{});}
+  },30000);
+
 });
