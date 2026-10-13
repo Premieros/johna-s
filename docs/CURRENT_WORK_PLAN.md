@@ -4,9 +4,14 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `859aa9e148077e0dd02b8f596ffb339e279a23c5`
-- Current active branch: `development/kitchen-negative-stock-dedup-20261012`
-- Mandatory active work log: `docs/KITCHEN_NEGATIVE_STOCK_DEDUP_PLAN_2026-10-12.md`
+- Latest main baseline reconciled: `19017adedb473371d76c1601159568aa8034f5ff`
+- Current active branch: `development/kitchen-sql-activation-20261013`
+- Mandatory active work log: `docs/KITCHEN_SQL_ACTIVATION_2026-10-13.md`
+
+## Approved SQL activation — 2026-10-13
+- User explicitly approved production SQL activation at15:03 Cairo. #497 already merged/deployed with postmerge tests Green.
+- #498 is the ONLY active track: test an enforceable short activation barrier and apply exact guarded package on johnas, then reconcile applied history and verify. Approval is present; technical gate remains pending.
+- Earlier no-apply sections below are historical, not a revocation of this approval. No unrelated project, printing test or parallel writer.
 
 ## Owner-directed implementation — 2026-10-12
 - New single active development track: negative-stock kitchen read deduplication.
