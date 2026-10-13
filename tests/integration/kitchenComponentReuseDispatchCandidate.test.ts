@@ -168,8 +168,13 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     expect(result.qty[0]).toBe(89);
   });
   it('an invalid later line rolls back every earlier deduction with canonical product attribution',async()=>{
+    await client.query('SAVEPOINT negative_invalid_prefix');
+    try {
+      const raw=(await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1',[unitB])).rows[0].raw_material_id;
+      await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
     const created=await createOrder(itemJson([
       {product_id:prodB,quantity:2,notes:'valid first'},
+      {product_id:prodB,quantity:3,notes:'valid repeated before failure'},
       {product_id:prodA,quantity:1,notes:'invalid second',modifier_option_ids:[badOption]},
       {product_id:prodA,quantity:2,notes:'invalid repeated',modifier_option_ids:[badOption]},
     ]));
@@ -186,6 +191,10 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     }
     expect(results[1]).toEqual(results[0]);
     expect(results[2]).toEqual(results[0]);
+    expect(results[3]).toEqual(results[0]);
+    } finally {
+      await client.query('ROLLBACK TO negative_invalid_prefix');await client.query('RELEASE negative_invalid_prefix');
+    }
   });
   it('unconfigured product retains the canonical fallback and negative debt',async()=>{
     const product=randomUUID();
