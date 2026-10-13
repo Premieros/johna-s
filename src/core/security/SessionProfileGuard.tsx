@@ -94,7 +94,7 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
           }
 
           checkedUserIdRef.current = null;
-          await signOutRef.current();
+          await signOutRef.current({ scope: 'local' });
           return;
         }
 
