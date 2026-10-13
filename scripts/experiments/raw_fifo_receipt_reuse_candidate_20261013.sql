@@ -1,7 +1,8 @@
 -- #497 P4 isolated receipt write reuse. Not a migration; NEVER run on production.
 -- Based on read-only live canonical definitions captured 2026-10-13.
 -- No index, stock summary replacement, trigger wiring or privileged client entry.
--- Canonical migration replay lacks the live estimate tables: tests disclose that gap.
+-- Archived production migrations are restored for canonical disposable replay.
+-- This candidate is not wired by that historical restoration.
 CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt_reuse_candidate(p_receipt_ledger_id bigint, p_receipt_batch_id uuid, p_run_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
