@@ -290,7 +290,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <button data-testid="theme-toggle" type="button" onClick={toggleTheme} className="rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label={ar ? 'تغيير المظهر' : 'Toggle theme'}>
             {theme === 'light' ? <Moon className="h-4.5 w-4.5" /> : <Sun className="h-4.5 w-4.5" />}
           </button>
-          <button data-testid="sign-out-button" type="button" onClick={signOut} className="rounded-xl p-2 text-ui-subtle transition-colors hover:bg-ui-danger-soft hover:text-ui-danger" aria-label={ar ? 'تسجيل الخروج' : 'Sign out'}>
+          <button data-testid="sign-out-button" type="button" onClick={() => void signOut()} className="rounded-xl p-2 text-ui-subtle transition-colors hover:bg-ui-danger-soft hover:text-ui-danger" aria-label={ar ? 'تسجيل الخروج' : 'Sign out'}>
             <LogOut className="h-4.5 w-4.5" />
           </button>
         </div>
@@ -369,7 +369,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <button
                 data-testid="mobile-sign-out"
                 type="button"
-                onClick={signOut}
+                onClick={() => void signOut()}
                 className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-ui-danger/30 bg-ui-danger-soft text-xs font-bold text-ui-danger"
               >
                 <LogOut className="h-4 w-4" />
