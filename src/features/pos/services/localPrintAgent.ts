@@ -12,6 +12,7 @@ export interface PrinterRouteConfig {
 }
 
 export interface LocalKitchenPrintContext {
+  orderId?: string;
   orderNumber?: string | null;
   tableName?: string | null;
   orderType?: string | null;
