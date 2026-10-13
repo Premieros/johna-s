@@ -6,6 +6,7 @@
 CREATE OR REPLACE FUNCTION public._raw_remove_fifo_negative_reuse_candidate(p_raw_material_id uuid, p_branch_id uuid, p_warehouse_id uuid, p_qty numeric, p_entry_type text DEFAULT 'production'::text, p_reference_type text DEFAULT NULL::text, p_reference_id uuid DEFAULT NULL::uuid, p_reference_number text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid, p_allow_negative boolean DEFAULT false, p_start_warehouse_qty numeric DEFAULT NULL)
  RETURNS jsonb
  LANGUAGE plpgsql
+ SECURITY INVOKER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
@@ -44,7 +45,7 @@ BEGIN
     hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0)
   );
 
-  IF p_allow_negative IS NOT TRUE OR p_start_warehouse_qty IS NULL THEN
+  IF p_allow_negative IS NOT TRUE OR p_start_warehouse_qty IS NULL OR p_start_warehouse_qty>0 THEN
     RETURN jsonb_build_object('success',false,'error','NEGATIVE_REUSE_CONTEXT_REQUIRED');
   END IF;
   v_running:=p_start_warehouse_qty;
