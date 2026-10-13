@@ -22,6 +22,10 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
   const branch=randomUUID(),org=randomUUID(),wh=randomUUID(),raw=randomUUID(),otherRaw=randomUUID();
   const product=randomUUID(),cashier=randomUUID(),counter=randomUUID(),role='qa_counter_'+randomUUID().slice(0,8);
   let pidA:number,pidB:number;
+  let originalDefinitions:unknown[];
+  const catalogSQL=`SELECT p.oid::regprocedure::text signature,pg_get_functiondef(p.oid) definition,p.prosecdef,p.proconfig,p.proacl::text acl,pg_get_userbyid(p.proowner) owner FROM pg_proc p WHERE p.oid IN ('public._capture_kitchen_ingredient_prices()'::regprocedure,'public._raw_fifo_settle_receipt(bigint,uuid,uuid)'::regprocedure,'public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure,'public.apply_stock_count(uuid)'::regprocedure) ORDER BY p.proname`;
+  const forward=()=>readFileSync('scripts/rollout/kitchen_dedup_forward_review_20261013.sql','utf8');
+  const rollback=()=>readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8');
 
   async function beginActor(db:pg.Client,user:string){
     await db.query('BEGIN');await db.query("SELECT set_config('app.user_id',$1,true)",[user]);
@@ -66,15 +70,10 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     await a.connect();await b.connect();await observer.connect();
     pidA=(await a.query('SELECT pg_backend_pid() pid')).rows[0].pid;
     pidB=(await b.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    originalDefinitions=(await observer.query(catalogSQL)).rows;
+    await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
+    await observer.query(forward());
     await observer.query('BEGIN');
-    for(const path of [
-      'kitchen_component_reuse_dispatch_candidate_20261012.sql',
-      'kitchen_component_price_reuse_dispatch_candidate_20261012.sql',
-      'kitchen_negative_reuse_dispatch_candidate_20261013.sql',
-      'kitchen_stock_count_material_lock_candidate_20261012.sql',
-      'raw_fifo_receipt_reuse_candidate_20261013.sql',
-      'kitchen_canonical_binding_rehearsal_20261013.sql',
-    ])await observer.query(readFileSync('scripts/experiments/'+path,'utf8'));
     await observer.query("INSERT INTO public.organizations(id,name,slug) VALUES($1,'Committed QA',$2)",[org,'committed-'+org]);
     await observer.query("INSERT INTO public.branches(id,name,organization_id) VALUES($1,'Committed QA',$2)",[branch,org]);
     await observer.query("INSERT INTO public.warehouses(id,name,branch_id,is_active,is_default) VALUES($1,'Committed QA',$2,true,true)",[wh,branch]);
@@ -102,6 +101,30 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       if(createdDatabase)await control.query('DROP DATABASE "'+database+'" WITH (FORCE)');
       await control.end();
     }
+  },30000);
+
+  it('fails closed on drift and restores exact original code and ACL before reactivation',async()=>{
+    const before=await quantity();
+    const bound=(await observer.query(catalogSQL)).rows;
+    await observer.query("SET app.kitchen_rollout_ack='missing'");
+    await expect(observer.query(rollback())).rejects.toThrow('KITCHEN_ROLLOUT_NOT_ACKNOWLEDGED');
+    await observer.query('ROLLBACK');
+    expect((await observer.query(catalogSQL)).rows).toEqual(bound);
+    await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
+    await observer.query(rollback());
+    expect((await observer.query(catalogSQL)).rows).toEqual(originalDefinitions);
+    expect(await quantity()).toBe(before);
+    expect((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') helper")).rows[0].helper).toBeNull();
+    // Drift must be rejected atomically before any private helper is installed.
+    await observer.query('ALTER FUNCTION public.apply_stock_count(uuid) SET search_path TO public');
+    await expect(observer.query(forward())).rejects.toThrow('KITCHEN_CANONICAL_DRIFT');
+    await observer.query('ROLLBACK');
+    expect((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') helper")).rows[0].helper).toBeNull();
+    await observer.query("ALTER FUNCTION public.apply_stock_count(uuid) SET search_path TO public,pg_temp");
+    expect((await observer.query(catalogSQL)).rows).toEqual(originalDefinitions);
+    await observer.query(forward());
+    expect((await observer.query(catalogSQL)).rows).toEqual(bound);
+    expect(await quantity()).toBe(before);
   },30000);
 
   it('commits concurrent sends for the SAME order without duplicate deductions or sends',async()=>{
