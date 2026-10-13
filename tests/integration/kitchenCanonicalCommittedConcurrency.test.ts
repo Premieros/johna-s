@@ -76,6 +76,8 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     await a.connect();await b.connect();await observer.connect();
     pidA=(await a.query('SELECT pg_backend_pid() pid')).rows[0].pid;
     pidB=(await b.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
+    if((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present)await observer.query(rollback());
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     await observer.query(forward());
