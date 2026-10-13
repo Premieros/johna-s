@@ -423,6 +423,72 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     }
   });
 
+
+  it('rehearses canonical binding through authenticated send_to_kitchen, lock exclusion and code rollback',async()=>{
+    await client.query('SAVEPOINT public_binding_fixture');
+    const signatures=[
+      'public._send_to_kitchen_core_20260914(uuid,uuid)',
+      'public._capture_kitchen_ingredient_prices()',
+      'public.apply_stock_count(uuid)',
+      'public._raw_fifo_settle_receipt(bigint,uuid,uuid)',
+    ];
+    const metadata=async()=>(await client.query("SELECT s.signature,p.oid,p.prosecdef,p.proconfig,p.proacl::text acl,pg_get_userbyid(p.proowner) owner FROM unnest($1::text[]) s(signature) JOIN pg_proc p ON p.oid=s.signature::regprocedure ORDER BY s.signature",[signatures])).rows;
+    const definitions=async()=>(await client.query("SELECT s.signature,pg_get_functiondef(s.signature::regprocedure) definition FROM unnest($1::text[]) s(signature) ORDER BY s.signature",[signatures])).rows;
+    const original=await definitions(),attrs=await metadata();
+    const trigger=async()=>(await client.query("SELECT tgfoid,tgenabled,pg_get_triggerdef(oid) definition FROM pg_trigger WHERE tgname='trg_capture_kitchen_ingredient_prices'")).rows;
+    const originalTrigger=await trigger();
+    const outcomes=[];
+    try {
+      const raw=(await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1',[unitA])).rows[0].raw_material_id;
+      await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
+      const created=await createOrder(itemJson([{product_id:prodA,quantity:2,notes:'public 1'},{product_id:prodA,quantity:3,notes:'public 2'},{product_id:prodB,quantity:1,notes:'public other'}]));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      await client.query('UPDATE public.orders SET inventory_warehouse_id=$2 WHERE id=$1',[created.order_id,whId]);
+      for(const bound of [false,true]){
+        await client.query('SAVEPOINT public_binding_variant');
+        try {
+          if(bound){
+            await client.query(readFileSync('scripts/experiments/kitchen_stock_count_material_lock_candidate_20261012.sql','utf8'));
+            await client.query(readFileSync('scripts/experiments/raw_fifo_receipt_reuse_candidate_20261013.sql','utf8'));
+            await client.query(readFileSync('scripts/experiments/kitchen_canonical_binding_rehearsal_20261013.sql','utf8'));
+            expect(await metadata()).toEqual(attrs);
+            expect(await trigger()).toEqual(originalTrigger);
+            const locker=openDb(dbUrl!);
+            await locker.connect();await locker.query('BEGIN');
+            try {
+              expect((await locker.query("SELECT pg_try_advisory_xact_lock(hashtextextended($1::text||':'||$2::text,0)) locked",[raw,branchId])).rows[0].locked).toBe(true);
+              await client.query("SET LOCAL lock_timeout='150ms'");
+              const before=await stockState();
+              const blocked=await asUser(async()=>(await client.query('SELECT public.send_to_kitchen($1,$2) r',[created.order_id,cashierId])).rows[0].r);
+              expect(blocked.success).toBe(false);expect(blocked.detail).toContain('lock timeout');
+              expect(await stockState()).toEqual(before);
+              expect((await client.query('SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1',[created.order_id])).rows[0].n).toBe(0);
+            } finally {
+              await client.query("SET LOCAL lock_timeout='0'");
+              await locker.query('ROLLBACK');await locker.end();
+            }
+          }
+          const first=await asUser(async()=>(await client.query('SELECT public.send_to_kitchen($1,$2) r',[created.order_id,cashierId])).rows[0].r);
+          expect(first.success,JSON.stringify(first)).toBe(true);expect(first.items_sent_count).toBe(3);
+          const frozen=(await client.query('SELECT order_item_id,total_cost,component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id',[created.order_id])).rows;
+          const stock=await stockState();
+          const retry=await asUser(async()=>(await client.query('SELECT public.send_to_kitchen($1,$2) r',[created.order_id,cashierId])).rows[0].r);
+          expect(retry.success).toBe(true);expect(retry.items_sent_count).toBe(0);
+          expect(await stockState()).toEqual(stock);
+          expect((await client.query('SELECT order_item_id,total_cost,component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1 ORDER BY order_item_id',[created.order_id])).rows).toEqual(frozen);
+          outcomes.push({stock,frozen,tickets:first.sent.map((row:Record<string,unknown>)=>Object.fromEntries(Object.entries(row).filter(([key])=>key!=='send_id'&&key!=='kitchen_send_id')))});
+        } finally {
+          await client.query('ROLLBACK TO public_binding_variant');await client.query('RELEASE public_binding_variant');
+        }
+        expect(await definitions()).toEqual(original);
+        expect(await metadata()).toEqual(attrs);expect(await trigger()).toEqual(originalTrigger);
+      }
+      expect(outcomes[1]).toEqual(outcomes[0]);
+    } finally {
+      await client.query('ROLLBACK TO public_binding_fixture');await client.query('RELEASE public_binding_fixture');
+    }
+  });
+
   it('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
     await client.query("SET LOCAL track_functions='all'");
     type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number;priceCalls:number;summaryWrites:number};
