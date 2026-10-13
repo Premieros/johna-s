@@ -417,7 +417,7 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     for (const candidate of [false,'price'] as const) {
       if (!candidate) await client.query('SAVEPOINT first_context_baseline');
       try {
-        await captureTrigger(candidate==='price'||candidate==='stock');
+        await captureTrigger(candidate==='price');
         const result=await client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.'+coreName(candidate)+'($1,$2)',[seed.order_id,cashierId]);
         const explain=result.rows[0]['QUERY PLAN'][0],plan=explain.Plan;
         expect((await client.query("SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1",[seed.order_id])).rows[0].n).toBe(2);
