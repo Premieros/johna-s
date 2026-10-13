@@ -1,5 +1,6 @@
 import type { KitchenSendItem, KitchenSendResult } from '../types';
 import { rpc } from '@/api/rpc';
+import { supabase } from '@/api';
 import { dispatchKitchenStations } from './kitchenDispatch';
 
 const activeSendLocks = new Set<string>();
@@ -24,7 +25,7 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
   try {
     const rpcRes = await rpc<{
       success: boolean; error?: string; detail?: string; order_id?: string; order_number?: string | null;
-      table_name?: string | null; order_type?: string | null; guest_count?: number | null; warehouse_id?: string | null;
+      table_name?: string | null; order_type?: string | null; guest_count?: number | null; warehouse_id?: string | null; branch_id?: string | null;
       sent?: KitchenSendItem[]; items_sent_count?: number; items_processed?: number; all_sent?: boolean;
       inventory_deducted?: boolean; product_id?: string | null; product_name?: string | null;
     }>('send_to_kitchen', { p_order_id: orderId, p_sent_by: p.p_sent_by || null });
@@ -36,7 +37,19 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
     const rawSentItems = result.sent || [];
     let dispatch;
     if (rawSentItems.length > 0 && typeof window !== 'undefined') {
+      let orderBranchId = result.branch_id || null;
+      // Compatibility with the previous RPC: resolve this exact saved order,
+      // never the currently selected workspace branch.
+      if (!orderBranchId) {
+        const { data, error } = await supabase.from('orders').select('branch_id').eq('id', orderId).maybeSingle();
+        if (!error) orderBranchId = data?.branch_id || null;
+      }
+      if (!orderBranchId) {
+        return { success: true, order_id: orderId, sent: rawSentItems, items_sent_count: result.items_sent_count ?? rawSentItems.length,
+          all_sent: result.all_sent ?? true, dispatch: { status: 'failed', stations: [], failed_stations: [], missing_station_items: rawSentItems.length } };
+      }
       const context = {
+        orderId: result.order_id || orderId,
         orderNumber: result.order_number || result.order_id || orderId,
         tableName: result.table_name || null,
         orderType: result.order_type || null,
@@ -45,7 +58,8 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
       };
       dispatch = await dispatchKitchenStations({
         orderId,
-        branchId: p.p_branch_id,
+        branchId: orderBranchId,
+        allowLocalFallback: orderBranchId === p.p_branch_id,
         items: rawSentItems,
         context,
       });
