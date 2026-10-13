@@ -12,7 +12,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: { code: string; message: string } | null }>;
   signInWithUsername: (username: string, pin: string) => Promise<{ error: { code: string; message: string } | null }>;
-  signOut: () => Promise<void>;
+  signOut: (options?: { scope: 'local' | 'global' }) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           retryTimer = null;
           clearAuthState();
           setLoading(false);
-          await supabase.auth.signOut().catch(() => {});
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
           return;
         }
 
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (!profile) {
           clearAuthState();
-          await supabase.auth.signOut().catch(() => {});
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
           return { error: { code: 'session_expired', message: 'Session expired and could not be refreshed.' } };
         }
       } else {
@@ -228,8 +228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return verifySignedInProfile();
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut().catch(() => {});
+  const signOut = async (options?: { scope: 'local' | 'global' }) => {
+    await supabase.auth.signOut(options).catch(() => {});
     clearAuthState();
   };
 
@@ -252,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       clearAuthState();
-      await supabase.auth.signOut().catch(() => {});
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     }
   };
 
