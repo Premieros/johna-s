@@ -380,6 +380,24 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     }
   });
 
+
+  it('keeps the canonical last positive average when a repeated raw runs out during the send',async()=>{
+    await client.query('SAVEPOINT positive_exhaustion');
+    try {
+      const raw=(await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1',[unitA])).rows[0].raw_material_id;
+      await client.query("UPDATE public.raw_material_batches SET quantity=1,unit_cost=2,expiry_date=current_date+1 WHERE raw_material_id=$1 AND branch_id=$2",[raw,branchId]);
+      await client.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,expiry_date,source_type) VALUES($1,$2,$3,'SECOND-AVERAGE',1,8,current_date+2,'opening')",[raw,branchId,whId]);
+      const created=await createOrder(itemJson([{product_id:prodA,quantity:1,notes:'first FIFO'},{product_id:prodA,quantity:1,notes:'last FIFO'},{product_id:prodA,quantity:1,notes:'now negative'}]));
+      expect(created.success,JSON.stringify(created)).toBe(true);
+      await compare(created.order_id);
+      expect((await sendCore(created.order_id,'stock')).success).toBe(true);
+      const summary=(await client.query('SELECT quantity,avg_cost FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId])).rows[0];
+      expect(Number(summary.quantity)).toBe(-1);expect(Number(summary.avg_cost)).toBe(8);
+    } finally {
+      await client.query('ROLLBACK TO positive_exhaustion');await client.query('RELEASE positive_exhaustion');
+    }
+  });
+
   it('exposes no client execution or new privileged stock helper',async()=>{
     for(const signature of [
       '_send_to_kitchen_negative_reuse_candidate(uuid,uuid)',
