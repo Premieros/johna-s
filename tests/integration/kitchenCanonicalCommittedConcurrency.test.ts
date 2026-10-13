@@ -297,13 +297,14 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
           const state=(await observer.query('SELECT (SELECT sum(quantity) FROM public.raw_material_batches WHERE raw_material_id=$1 AND warehouse_id=$2) quantity,(SELECT sum(debt_quantity-settled_quantity) FROM public.raw_fifo_debts WHERE raw_material_id=$1) debt,(SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$3) official',[mat,wh,branch])).rows[0];
           expect(Number(state.quantity)).toBe(-lines);expect(Number(state.debt)).toBe(lines);expect(Number(state.official)).toBe(-lines);
           expect((await observer.query('SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE order_id=$1 AND snapshot_version=2',[created.order_id])).rows[0].n).toBe(lines);
-          if(sample>=0)results[String(lines)][candidate?'candidate':'baseline'].push({ms,wal});
+          if(sample>=0)results[key][candidate?'candidate':'baseline'].push({ms,wal});
           // Restore a known bound state after each baseline; all code changes
           // and fixture setup stay OUTSIDE timing/WAL samples.
           if(!candidate){await observer.query(forward());isBound=true;}
         }
       }
     }
+    for(const variants of Object.values(results))for(const samples of Object.values(variants))expect(samples).toHaveLength(7);
     console.info('KITCHEN_COMMITTED_PUBLIC_RPC_BENCHMARK',JSON.stringify(Object.fromEntries(Object.entries(results).map(([lines,variants])=>[lines,Object.fromEntries(Object.entries(variants).map(([variant,samples])=>[variant,{samples:samples.length,p50ms:median(samples.map(x=>x.ms)),maxMs:Math.max(...samples.map(x=>x.ms)),medianWal:median(samples.map(x=>x.wal))}]))]))));
     // WAL is instance-wide and wall time includes loopback/BEGIN/auth/COMMIT.
     // Seven samples give no production p95/p99 or CPU proof.
