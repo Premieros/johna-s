@@ -12,8 +12,12 @@ describe('staged kitchen atomic print handoff contract', () => {
   });
 
   it('only enqueues the committed send delta, with exactly the existing branch/idempotency boundary', () => {
-    expect(candidate).toContain("v_result := public._send_to_kitchen_core_20260914(p_order_id,p_sent_by);");
-    expect(candidate).toContain("PERFORM private._enqueue_kitchen_sent_delta(");
+    expect(candidate).toContain('v_result := public.send_to_kitchen(p_order_id,p_sent_by);');
+    expect(candidate).toContain('CREATE OR REPLACE FUNCTION public.send_to_kitchen_with_print(');
+    expect(candidate).not.toContain('CREATE OR REPLACE FUNCTION public.send_to_kitchen(p_order_id');
+    expect(candidate).toContain('v_count := private._enqueue_kitchen_sent_delta(');
+    expect(candidate).toContain("print_queue_state','client_fallback'");
+    expect(candidate).toContain("print_queue_state','client_only'");
     expect(candidate).toContain("'kitchen:' || v_station || ':' || v_key");
     expect(candidate).toContain('ON CONFLICT (branch_id,idempotency_key) DO NOTHING;');
     expect(candidate).toContain("RAISE EXCEPTION 'KITCHEN_PRINT_ORDER_BRANCH_MISMATCH'");
