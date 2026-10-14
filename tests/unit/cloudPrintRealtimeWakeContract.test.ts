@@ -10,7 +10,8 @@ describe('web cloud print realtime wake contract', () => {
   it('removes the historical 700ms idle claim loop', () => {
     expect(source).not.toContain('POLL_INTERVAL_MS = 700');
     expect(source).not.toContain('setTimeout(() => void poll(), 700');
-    expect(source).toContain('const REALTIME_RECONCILE_INTERVAL_MS = 60_000;');
+    expect(source).toContain('const REALTIME_RECONCILE_INTERVAL_MS = 5_000;');
+    expect(source).toContain('Realtime can miss wake events during brief disconnects');
     expect(source).toContain('const DISCONNECTED_POLL_INTERVAL_MS = 5_000;');
     expect(source).toContain('const BUSY_RETRY_INTERVAL_MS = 250;');
   });
