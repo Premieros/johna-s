@@ -3,10 +3,10 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/database-read-recovery-20261014`
 Current PR: #501
-Last updated: 2026-10-14 owner-directed preparation
+Last updated: 2026-10-14 owner-directed frontend read reduction
 
 ## Work status
-Owner says "اكمل" after #500 delivery. Continue remaining kitchen/payment timeout investigation and index preparation. No production SQL/index activation, merge or publication is authorized by this continuation.
+Owner requests lower database consumption and then "اريد التعديل بدون التاثير علي النظام". Implement two frontend display-read reductions on the same #501 branch. No production SQL/index activation, merge or publication is authorized by this implementation request. Six-index package stays HELD after ~47% purchase WAL amplification.
 
 ## Guardrails
 One active development branch, this repository/database only. No production test orders, prints, requeues, agent changes, historical repricing, FIFO/settlement rewrite, grants/RLS/functions/triggers changes or security bypass. Never catch QUERY_CANCELED to make a timed-out operation look successful. The rolled-back kitchen optimization stays disabled.
@@ -19,6 +19,11 @@ main `7ee483788037dfc0c50a759f4fbef9d2f35e5789`; #500 deployed and postmerge 174
 Canonical settlement joins already have order/item/event indexes. No reproduced evidence justifies changing payment arithmetic or authorization. Permission-denied events occur after missing auth sessions; do not widen grants. audit_log RLS errors and invalid realtime filter are separate open investigations.
 The capture trigger's OTHERS handler deliberately excludes query cancellation; masking that exception would also mask operator cancellations. No change is prepared to this handler.
 Representative existing last-known-cost read on one material with3023ledger rows used3279buffers/251.973ms; privileged approved-price read of two materials used2492buffers/137.371ms. Single warm read-only samples, not authenticated production p95. Existing print baseline from #500 scanned7182rows/6099buffers. No production data was changed.
+
+## Frontend read reduction — authorized2026-10-14
+ApprovalInbox has independent approval/print-alert read queues. Normal first-attempt print events do not read either queue; failures/recovery/previously visible/unknown events reconcile alerts only. Approval events and decisions reconcile approvals only. Reads pause while hidden, resume on visibility and reconcile on reconnect. Errors retain existing alerts; scope changes cancel pending results.
+Printer monitor keeps visible5s cadence, uses one active read/one trailing refresh, pauses hidden reads and clears/discards prior branch/account responses. Display-only projection selects status fields and payload->>text needed for existing order/table labels, excluding HTML/templates/other print execution payload. No new request, cross-user label cache, schema, DB write or agent protocol. Prior rows remain visible with a read error.
+Actual latest150-row readonly JSON sample: full list326198bytes versus display projection144395bytes (~56% smaller). This measures JSON representation of one sample, not overall database CPU or billed egress. Tests must prove100normal print events generate0notification rereads, failures/recovery survive, monitor labels/cadence/scopes/errors and hidden-page behavior. Exact-head full CI remains required before merge.
 
 ## Change ledger
 A six-index review manifest reuses the existing print-prefix, recent relevant-alert, last-known FIFO issue/receipt/batch proposals, and adds a partial approved-purchase lookup. No competing stock/price source, function rewrite or canonical migration.
@@ -34,7 +39,7 @@ State: **BLOCKED**
 No database connection secret is available in this execution environment. The Supabase connector can still do read-only inspection; its suitability for top-level concurrent DDL is not assumed. No production CREATE/DROP attempt is used to test that capability. Production activation needs final explicit approval, a suitable dedicated verified connection, exact manifest/head reconciliation and resource assessment.
 
 ## Next action
-Allocate draft PR, reconcile the mandatory active plan/log with its real number, run exact-head Fast/Full CI. Inspect measured read gain and write overhead. Keep production unchanged; report concrete result and remaining access/resource limits before any activation request.
+Run exact-head Full CI for the frontend changes, including native business and browser regressions. Record final validation in #501 metadata and seek separate frontend merge/publication approval. Six-index package is not recommended for activation; no production DB change.
 
 ## Mandatory update protocol
 Fetch branch/main before GitHub mutation; stop/reconcile on drift. No direct main write/force push. Record final exact-head validation and approvals in PR metadata without adding untested code commits.

@@ -10,7 +10,7 @@
 
 ## Database read recovery — 2026-10-14
 - Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.
-- Continue read-only kitchen/payment timeout diagnosis. Prepare reviewed partial indexes and native concurrent-writer/price/as-of/RLS/snapshot parity tests.
+- Owner redirects #501 to reducing total DB consumption: implement frontend notification and print-monitor read reduction only. Six-index proposal is HELD after measured purchase WAL amplification; no activation. Preserve actual print agent/claim/ack loop and all kitchen/stock/accounting writers.
 - No production index/SQL apply, canonical migration, function/RLS/accounting/agent change, operation replay or live test orders/prints. The earlier kitchen dedup rollout stays disabled.
 - Final exact-head Full Verify and explicit owner production/index approval plus a suitable verified dedicated connection are required. Do not mask query cancellations or claim payment timeouts fixed without evidence.
 

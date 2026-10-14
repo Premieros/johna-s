@@ -3,19 +3,19 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalInbox } from '@/components/ApprovalInbox';
 const m = vi.hoisted(() => ({
-  user: { id: 'operator', branch_id: 'A' }, print: vi.fn(), or: vi.fn(), rpc: vi.fn(), callbacks: [] as Array<() => void>,
+  user: { id: 'operator', branch_id: 'A' }, print: vi.fn(), or: vi.fn(), rpc: vi.fn(), callbacks: [] as Array<(payload?: {new?: Record<string, unknown>; old?: Record<string, unknown>}) => void>, statuses: [] as Array<(status: string) => void>,
 }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: m.user }) }));
 vi.mock('@/lib/permissions', () => ({ useCan: () => () => true }));
 vi.mock('@/api', () => ({ supabase: {
   rpc: m.rpc,
   from: () => { const q = { select: () => q, eq: () => q, in: () => q, or: (x: string) => { m.or(x); return q; }, gte: () => q, order: () => q, limit: m.print }; return q; },
-  channel: () => { const c = { on: (_kind: string, _filter: unknown, cb: () => void) => { m.callbacks.push(cb); return c; }, subscribe: vi.fn() }; return c; },
+  channel: () => { const c = { on: (_kind: string, _filter: unknown, cb: (payload?: {new?: Record<string, unknown>; old?: Record<string, unknown>}) => void) => { m.callbacks.push(cb); return c; }, subscribe: (cb: (status: string) => void) => { m.statuses.push(cb); } }; return c; },
   removeChannel: vi.fn().mockResolvedValue(undefined),
 } }));
 const alert = { id: 'job', kind: 'receipt', station_code: 'cashier', status: 'failed', attempts: 5, last_error: 'route', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-beforeEach(() => { vi.clearAllMocks(); m.callbacks.length = 0; m.user = { id: 'operator', branch_id: 'A' }; m.rpc.mockResolvedValue({ data: [], error: null }); m.print.mockResolvedValue({ data: [], error: null }); localStorage.clear(); });
-afterEach(cleanup);
+beforeEach(() => { vi.clearAllMocks(); m.callbacks.length = 0; m.statuses.length = 0; m.user = { id: 'operator', branch_id: 'A' }; m.rpc.mockResolvedValue({ data: [], error: null }); m.print.mockResolvedValue({ data: [], error: null }); localStorage.clear(); });
+afterEach(() => { cleanup(); Reflect.deleteProperty(document, 'hidden'); vi.unstubAllGlobals(); });
 describe('approval inbox read recovery', () => {
   it('filters ordinary successes before the server limit and serializes realtime bursts', async () => {
     let finish!: (x: unknown) => void;
@@ -35,6 +35,41 @@ describe('approval inbox read recovery', () => {
     await act(async () => { m.callbacks[1](); });
     await waitFor(() => expect(m.print).toHaveBeenCalledTimes(2));
     expect(screen.getByTestId('system-alerts-count')).toHaveTextContent('1');
+  });
+  it('normal print bursts perform zero approval or alert rereads', async () => {
+    render(<ApprovalInbox ar={false} />);
+    await waitFor(() => expect(m.print).toHaveBeenCalledOnce());
+    await act(async () => { for (let i=0;i<100;i++) m.callbacks[1]({new:{id:'normal-'+i,status:'submitted',attempts:1},old:{id:'normal-'+i}}); });
+    expect(m.print).toHaveBeenCalledOnce();
+    expect(m.rpc).toHaveBeenCalledOnce();
+    await act(async () => { m.callbacks[0](); });
+    await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(2));
+    expect(m.print).toHaveBeenCalledOnce();
+  });
+  it('failures and recovery refresh alerts without querying approvals', async () => {
+    m.print.mockResolvedValue({data:[alert],error:null});
+    const screen=render(<ApprovalInbox ar={false} />);
+    await waitFor(() => expect(screen.getByTestId('system-alerts-count')).toHaveTextContent('1'));
+    await act(async () => {m.callbacks[1]({new:{...alert,status:'submitted',attempts:2},old:{id:alert.id}});});
+    await waitFor(() => expect(m.print).toHaveBeenCalledTimes(2));
+    expect(m.rpc).toHaveBeenCalledOnce();
+    // Delete or a formerly known alert leaving the relevant states must reconcile.
+    m.print.mockResolvedValue({data:[],error:null});
+    await act(async () => {m.callbacks[1]({new:{id:alert.id,status:'pending',attempts:1},old:{id:alert.id}});});
+    await waitFor(() => expect(screen.queryByTestId('system-alerts-count')).not.toBeInTheDocument());
+  });
+  it('pauses reads while hidden and reconciles on return and reconnect', async () => {
+    render(<ApprovalInbox ar={false} />);
+    await waitFor(() => expect(m.print).toHaveBeenCalledOnce());
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    await act(async () => {m.callbacks[0]();m.callbacks[1]({new:alert});});
+    expect(m.print).toHaveBeenCalledOnce();expect(m.rpc).toHaveBeenCalledOnce();
+    Object.defineProperty(document,'hidden',{configurable:true,value:false});
+    await act(async () => {document.dispatchEvent(new Event('visibilitychange'));});
+    await waitFor(() => expect(m.print).toHaveBeenCalledTimes(2));
+    await act(async () => {m.statuses[0]('SUBSCRIBED');m.statuses[0]('SUBSCRIBED');});
+    await waitFor(() => expect(m.print).toHaveBeenCalledTimes(3));
+    expect(m.rpc).toHaveBeenCalledTimes(3);
   });
   it('discards results from the previous branch and works in StrictMode', async () => {
     let finish!: (x: unknown) => void;
