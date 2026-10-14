@@ -23,12 +23,21 @@ export async function sendOrderToKitchen(p: { p_order_id: string; p_sent_by?: st
 
   activeSendLocks.add(orderId);
   try {
-    const rpcRes = await rpc<{
+    type KitchenSendRpcResponse = {
       success: boolean; error?: string; detail?: string; order_id?: string; order_number?: string | null;
       table_name?: string | null; order_type?: string | null; guest_count?: number | null; warehouse_id?: string | null; branch_id?: string | null;
       sent?: KitchenSendItem[]; items_sent_count?: number; items_processed?: number; all_sent?: boolean;
       inventory_deducted?: boolean; product_id?: string | null; product_name?: string | null;
-    }>('send_to_kitchen', { p_order_id: orderId, p_sent_by: p.p_sent_by || null });
+    };
+    const sendArgs = { p_order_id: orderId, p_sent_by: p.p_sent_by || null };
+    let rpcRes = await rpc<KitchenSendRpcResponse>('send_to_kitchen', sendArgs);
+    // 57014 is a PostgreSQL statement timeout: that statement's transaction was
+    // aborted, so exactly one bounded retry cannot duplicate its stock effects.
+    // Never retry connection/transport errors with an ambiguous commit outcome.
+    if (rpcRes.error?.code === '57014') {
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+      rpcRes = await rpc<KitchenSendRpcResponse>('send_to_kitchen', sendArgs);
+    }
 
     if (rpcRes.error) return { success: false, error: 'KITCHEN_SEND_FAILED', detail: rpcRes.error.message };
     const result = rpcRes.data;
