@@ -38,7 +38,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); }
   });
 
-  async function enqueue(branch: string, order: string, body = sent) {
+  async function enqueue(branch: string, order: string, body: object = sent) {
     return (await db.query(
       'SELECT private._enqueue_kitchen_sent_delta($1,$2,$3,$4::jsonb) n',
       [branch, order, ids.users.cashier, JSON.stringify(body)],
@@ -96,6 +96,6 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
   it('does not enqueue for a no-delta retry or fabricate prints for empty sends', async () => {
     expect(await enqueue(ids.branchA, ids.rows.orders.own, {
       success: true, items_sent_count: 0, sent: [],
-    } as typeof sent)).toBe(0);
+    })).toBe(0);
   });
 });
