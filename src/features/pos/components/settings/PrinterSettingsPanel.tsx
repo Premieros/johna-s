@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createReadRefreshQueue } from '@/lib/readRefreshQueue';
 import { AlertTriangle, Cloud, Coffee, Printer, Receipt, RefreshCw, Save, TestTube2, UtensilsCrossed, WalletCards } from 'lucide-react';
 import { catalog } from '@/api/domains/catalog';
 import { Button } from '@/components/Button';
 import { Select } from '@/components/Input';
 import { useToast } from '@/components/Toast';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { useBranches } from '@/hooks/useBranches';
 import { useCan } from '@/lib/permissions';
 import {
@@ -25,9 +27,9 @@ import {
 import {
   getCloudPrintAgentBranchId,
   isCloudPrintAgentEnabled,
-  listCloudPrintQueue,
+  listCloudPrintQueueSummary,
   saveCloudPrintAgentConfig,
-  type CloudPrintQueueRow,
+  type CloudPrintQueueSummary,
 } from '../../services/cloudPrint';
 
 interface PrinterSettingsPanelProps {
@@ -90,6 +92,7 @@ function friendlyPrintError(error: string, isAr: boolean): string {
 }
 
 export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPanelProps) {
+  const { user } = useAuth();
   const can = useCan();
   const canManagePrinters = can('settings.manage');
   const { branches } = useBranches();
@@ -109,7 +112,7 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
   const [refreshing, setRefreshing] = useState(false);
   const [testingStation, setTestingStation] = useState<string | null>(null);
   const [testingDrawer, setTestingDrawer] = useState(false);
-  const [queueJobs, setQueueJobs] = useState<CloudPrintQueueRow[]>([]);
+  const [queueJobs, setQueueJobs] = useState<CloudPrintQueueSummary[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState<'all' | 'pending' | 'active' | 'submitted' | 'failed'>('pending');
@@ -149,7 +152,9 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
     return [CASHIER_STATION, ...dynamicStations];
   }, [branchStations, selectedBranchId, stationLoadFailed]);
 
-  const loadPrintQueue = useCallback(async () => {
+  const queueReadRef = useRef<ReturnType<typeof createReadRefreshQueue> | null>(null);
+  const readPrintQueue = useCallback(async (isCurrent: () => boolean) => {
+    if (document.hidden) return;
     if (!canManagePrinters || !selectedBranchId) {
       setQueueJobs([]);
       setQueueError(null);
@@ -157,23 +162,38 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
     }
     setQueueLoading(true);
     try {
-      const jobs = await listCloudPrintQueue(selectedBranchId, 150);
+      const jobs = await listCloudPrintQueueSummary(selectedBranchId, 150);
+      if (!isCurrent()) return;
       setQueueJobs(jobs);
       setQueueError(null);
     } catch (error) {
-      setQueueJobs([]);
+      if (!isCurrent()) return;
       setQueueError(error instanceof Error ? error.message : String(error));
     } finally {
-      setQueueLoading(false);
+      if (isCurrent()) setQueueLoading(false);
     }
   }, [canManagePrinters, selectedBranchId]);
 
+  const loadPrintQueue = useCallback(() => queueReadRef.current?.request() ?? Promise.resolve(), []);
+
   useEffect(() => {
-    if (!canManagePrinters || !selectedBranchId) return;
+    setQueueJobs([]);
+    setQueueError(null);
+    setQueueLoading(false);
+    const queue = createReadRefreshQueue(readPrintQueue);
+    queueReadRef.current = queue;
+    if (!canManagePrinters || !selectedBranchId) return () => { queue.cancel(); };
     void loadPrintQueue();
     const timer = window.setInterval(() => void loadPrintQueue(), 5000);
-    return () => window.clearInterval(timer);
-  }, [canManagePrinters, loadPrintQueue, selectedBranchId]);
+    const onVisible = () => { if (!document.hidden) void loadPrintQueue(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      queue.cancel();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      if (queueReadRef.current === queue) queueReadRef.current = null;
+    };
+  }, [canManagePrinters, loadPrintQueue, readPrintQueue, selectedBranchId, user?.id, user?.branch_id]);
 
   const queueCounts = useMemo(() => {
     const counts = { pending: 0, active: 0, submitted: 0, failed: 0 };
@@ -192,8 +212,8 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
     return job.status === queueFilter;
   }), [queueFilter, queueJobs]);
 
-  const queueJobLabel = useCallback((job: CloudPrintQueueRow) => {
-    const text = String(job.payload?.text || '');
+  const queueJobLabel = useCallback((job: CloudPrintQueueSummary) => {
+    const text = String(job.ticket_text || '');
     const order = text.match(/طلب:\s*([^\r\n]+)/)?.[1]?.trim();
     const table = text.match(/طاولة:\s*([^\r\n]+)/)?.[1]?.trim();
     return { order: order || '—', table: table || '—' };

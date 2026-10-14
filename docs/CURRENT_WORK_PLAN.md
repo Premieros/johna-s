@@ -4,11 +4,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `46f1277b543da6b8f223e8d87be28c95357888b8`
-- Current active branch: `development/session-chunk-recovery-20261013`
-- Mandatory active work log: `docs/SESSION_CHUNK_RECOVERY_2026-10-13.md`
+- Latest main baseline reconciled: `7ee483788037dfc0c50a759f4fbef9d2f35e5789`
+- Current active branch: `development/database-read-recovery-20261014`
+- Mandatory active work log: `docs/DATABASE_READ_RECOVERY_2026-10-14.md`
 
-## Session and screen recovery — 2026-10-13 / 2026-10-14
+## Database read recovery — 2026-10-14
+- Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.
+- Owner redirects #501 to reducing total DB consumption: implement frontend notification and print-monitor read reduction only. Six-index proposal is HELD after measured purchase WAL amplification; no activation. Preserve actual print agent/claim/ack loop and all kitchen/stock/accounting writers.
+- No production index/SQL apply, canonical migration, function/RLS/accounting/agent change, operation replay or live test orders/prints. The earlier kitchen dedup rollout stays disabled.
+- Final exact-head Full Verify and explicit owner production/index approval plus a suitable verified dedicated connection are required. Do not mask query cancellations or claim payment timeouts fixed without evidence.
+
+## Historical session and screen recovery — 2026-10-13 / 2026-10-14
 - Owner directs continuing investigation/preparation after live log review. Frontend-only draft; publication requires separate approval after exact-head checks.
 - #499 merged/deployed as46f1277; postmerge1715 frontend/1042 DB/132 Chromium Green. Guard already applied; optimization remains disabled.
 - Owner requests actual repairs2026-10-14:distinguish unavailable refresh from revoked session, guard stale auth/branch responses, bound notification refreshes and stage two print read indexes. Preserve explicit logout/account disable, all operational writers/printing and original chunk-causality HOLD. No production apply/merge without final approval.

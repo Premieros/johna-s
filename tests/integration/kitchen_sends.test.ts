@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
 import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures';
+import { indexes } from '../../scripts/db/read-index-review.mjs';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -567,5 +568,51 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
       );
     }
   });
+
+
+  it.skipIf(!dbUrl || !['localhost','127.0.0.1','[::1]'].includes(new URL(dbUrl).hostname))(
+    'compares complete canonical negative kitchen and payment work with read indexes', async () => {
+      await client.query('SAVEPOINT full_index_workload');
+      try {
+        const raw = (await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1 LIMIT 1',[unitA])).rows[0].raw_material_id;
+        await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
+        await client.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,batch_number,created_at)
+          SELECT $1,$2,$3,-1,50,-50,'adjustment','benchmark','REAL-HISTORY',now()-interval '2 days' FROM generate_series(1,3000)`,[raw,branchId,whId]);
+        await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,7,'pricing','INDEX-WORKLOAD',now()-interval '1 hour')",[raw,branchId]);
+        await client.query('ALTER TABLE public.order_kitchen_inventory_events ENABLE TRIGGER trg_capture_kitchen_ingredient_prices');
+        const items=itemJson(Array.from({length:20},(_,i)=>({product_id:prodA,quantity:1,notes:'index-line-'+i})));
+        async function run() {
+          await client.query('SAVEPOINT index_rpc_sample');
+          try {
+            const created=await createOrder(items);
+            expect(created.success,JSON.stringify(created)).toBe(true);
+            const order=created.order_id;
+            const send=await asUser(async()=>client.query('EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.send_to_kitchen($1)',[order]));
+            const events=(await client.query('SELECT count(*)::int n,sum(total_cost)::text cost FROM public.order_kitchen_inventory_events WHERE order_id=$1',[order])).rows[0];
+            expect(events.n).toBe(20);
+            expect(await batchQty(unitA)).toBe(-20);
+            const invoice='INDEX-PAY-'+randomUUID();
+            const pay=await asUser(async()=>client.query(`EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON) SELECT public.process_sale($1,$2,$3,NULL,NULL,2000,0,'amount',0,0,2000,2000,'cash','completed',$4::jsonb,NULL,'dine_in',NULL,$5)`,[invoice,branchId,whId,items,order]));
+            const sale=(await client.query('SELECT id,subtotal,total,paid_amount,status FROM public.sales WHERE invoice_number=$1',[invoice])).rows[0];
+            expect(sale).toBeTruthy();
+            expect(sale.status).toBe('completed');
+            expect((await client.query('SELECT count(*)::int n FROM public.sale_items WHERE sale_id=$1',[sale.id])).rows[0].n).toBe(20);
+            expect(await batchQty(unitA)).toBe(-20); // settlement must not consume twice
+            const snapshots=(await client.query(`SELECT jsonb_agg(jsonb_build_object('raw_material_id',c->>'raw_material_id','quantity',c->>'quantity','unit_cost',c->>'unit_cost','extended_cost',c->>'extended_cost','price_source',c->>'price_source') ORDER BY c::text) components
+              FROM public.order_kitchen_inventory_events e CROSS JOIN LATERAL jsonb_array_elements(e.component_snapshot)c WHERE e.order_id=$1`,[order])).rows[0].components;
+            const metrics=(r:pg.QueryResult)=>{const p=r.rows[0]['QUERY PLAN'][0];return {ms:p['Execution Time'],buffers:p.Plan['Shared Hit Blocks']+p.Plan['Shared Read Blocks'],wal_bytes:p.Plan['WAL Bytes']};};
+            return {business:{events,snapshots,subtotal:sale.subtotal,total:sale.total,paid:sale.paid_amount},send:metrics(send),pay:metrics(pay)};
+          } finally {await client.query('ROLLBACK TO SAVEPOINT index_rpc_sample');}
+        }
+        await run();
+        const before=[];for(let i=0;i<3;i++)before.push(await run());
+        for(const index of indexes)await client.query(index.sql);
+        await run();
+        const after=[];for(let i=0;i<3;i++)after.push(await run());
+        for(const result of [...before,...after])expect(result.business).toEqual(before[0].business);
+        console.info('READ_INDEX_CANONICAL_RPC_LOCAL '+JSON.stringify({source:'owned localhost synthetic 3000 history/20 negative lines, EXPLAIN execution not HTTP/COMMIT/physical printing',before:before.map(x=>({send:x.send,pay:x.pay})),after:after.map(x=>({send:x.send,pay:x.pay}))}));
+      } finally {await client.query('ROLLBACK TO SAVEPOINT full_index_workload');}
+    },120000,
+  );
 
 });

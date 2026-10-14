@@ -28,6 +28,21 @@ export interface CloudPrintQueueRow extends CloudPrintJob {
   updated_at?: string | null;
 }
 type RpcResult = { success?: boolean; error?: string; detail?: string; job_id?: string; status?: string; jobs?: CloudPrintJob[] };
+export type CloudPrintQueueSummary = Pick<CloudPrintQueueRow,
+  'id' | 'kind' | 'station_code' | 'status' | 'attempts' | 'last_error' | 'created_at' | 'updated_at'> & { ticket_text: string | null };
+
+// Display only: the monitor needs text labels, never HTML/templates or execution payloads.
+export async function listCloudPrintQueueSummary(branchId: string, limit = 150): Promise<CloudPrintQueueSummary[]> {
+  const scopedBranchId = safeText(branchId);
+  if (!scopedBranchId) return [];
+  const { data, error } = await supabase.from('cloud_print_jobs')
+    .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at,ticket_text:payload->>text')
+    .eq('branch_id', scopedBranchId)
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(250, Number(limit) || 150)));
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as CloudPrintQueueSummary[];
+}
 const safeText = (value: unknown) => String(value ?? '').trim();
 const KITCHEN_ENQUEUE_MAX_ATTEMPTS = 3;
 const KITCHEN_ENQUEUE_RETRY_MS = 250;
