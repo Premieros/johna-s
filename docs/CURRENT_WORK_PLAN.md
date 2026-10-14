@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `7ee483788037dfc0c50a759f4fbef9d2f35e5789`
-- Current active branch: `development/database-read-recovery-20261014`
-- Mandatory active work log: `docs/DATABASE_READ_RECOVERY_2026-10-14.md`
+- Latest main baseline reconciled: `ac88b0ce`
+- Current active branch: `hotfix/kds-unfinished-visible-20261014`
+- Mandatory active work log: `docs/KDS_VISIBILITY_RECOVERY_2026-10-14.md`
 
 ## Database read recovery — 2026-10-14
 - Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.

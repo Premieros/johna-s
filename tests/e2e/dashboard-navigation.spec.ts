@@ -323,7 +323,7 @@ test.describe('dashboard and navigation actions', () => {
     await expect(page.getByRole('table').getByText('SHARED-INVOICE', { exact: true })).toBeVisible();
   });
 
-  test('KDS separates 40-minute work and completed history and finishes only an empty voided order on phone and desktop', async ({ page }) => {
+  test('KDS keeps overdue work visible and separates completed history and finishes only an empty voided order on phone and desktop', async ({ page }) => {
     const branch = '00000000-0000-0000-0000-000000000010';
     let finished = false;
     const historyReads: Record<string, unknown>[] = [];
@@ -361,7 +361,7 @@ test.describe('dashboard and navigation actions', () => {
       await page.goto('/#/kitchen-display');
       await page.reload();
       await expect(page.getByText('#RECENT-KDS', { exact: true })).toBeVisible();
-      await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('#VOIDED-KDS', { exact: true })).toBeVisible();
       expect(historyReads.length).toBe(historyCount);
       await page.getByRole('tab', { name: /تجاوزت 40 دقيقة|Over 40 minutes/ }).click();
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toBeVisible();
