@@ -11,7 +11,7 @@
 ## Emergency print reliability — 2026-10-14
 - Owner requests urgent print fixes, no Windows-agent changes and no unnecessary long tests.
 - Production read indexes already applied and verified: `20261014184308_emergency_receipt_open_check_pattern_index_20261014` and `20261014184418_emergency_print_alert_read_index_20261014`. Both are narrow, additive indexes; no order/stock/FIFO/accounting updates.
-- This branch bounds web print-agent reconciliation to 5s for missed Realtime signals, preserves wake/claim/ack and targets exact-head CI before merge. Underlying `send_to_kitchen` inventory timeout remains an independent issue; no blanket success claim.
+- This branch bounds web print-agent reconciliation to 5s for missed Realtime signals and retries only confirmed transaction-aborted `57014` kitchen RPCs once; unknown commit outcomes are never retried. Existing wake/claim/ack, stock, accounting and send RPC authority are unchanged. Exact-head CI remains required; underlying `send_to_kitchen` inventory timeout is an independent issue and no blanket success is claimed.
 - Never automatically reprint old tickets or assume submitted means paper. Review ~12 rather than ~1 idle claim checks/min per connected agent after deploy; rollback the web tweak if its database load is harmful.
 
 ## Database read recovery — 2026-10-14
