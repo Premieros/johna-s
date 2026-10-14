@@ -213,6 +213,65 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     }
   });
 
+  it('incremental quantity uses a new idempotency key without replaying an earlier ticket', async () => {
+    await db.query('SAVEPOINT incremental_kitchen_send');
+    try {
+      const order = ids.rows.orders.own;
+      const first = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(first.error).toBeUndefined();
+      const sent1 = first.rows[0].r as {
+        success: boolean; print_queue_state: string; items_sent_count: number;
+        sent: Array<{ send_id: string; station_code: string; quantity: number; current_quantity: number }>;
+      };
+      expect(sent1.success, JSON.stringify(sent1)).toBe(true);
+      expect(sent1.print_queue_state).toBe('queued');
+      expect(sent1.items_sent_count).toBe(1);
+      expect(Number(sent1.sent[0].quantity)).toBe(1);
+      const identity = sent1.sent[0].send_id;
+      const station = sent1.sent[0].station_code;
+      const firstKey = `kitchen:${station}:${identity}:1`;
+
+      // A positive increase is allowed; this test never edits a live order.
+      const updated = await db.query(
+        'UPDATE public.order_items SET quantity=2,total=20 WHERE order_id=$1 RETURNING id',
+        [order],
+      );
+      expect(updated.rowCount).toBe(1);
+
+      const second = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(second.error).toBeUndefined();
+      const sent2 = second.rows[0].r as typeof sent1;
+      expect(sent2.success, JSON.stringify(sent2)).toBe(true);
+      expect(sent2.print_queue_state).toBe('queued');
+      expect(sent2.items_sent_count).toBe(1);
+      expect(Number(sent2.sent[0].quantity)).toBe(1);
+      expect(Number(sent2.sent[0].current_quantity)).toBe(2);
+      expect(sent2.sent[0].send_id).toBe(identity);
+      const secondKey = `kitchen:${station}:${identity}:2`;
+      const jobs = (await db.query(
+        'SELECT idempotency_key,payload FROM public.cloud_print_jobs WHERE branch_id=$1 AND idempotency_key=ANY($2::text[]) ORDER BY idempotency_key',
+        [ids.branchA, [firstKey, secondKey]],
+      )).rows;
+      expect(jobs).toHaveLength(2);
+      expect(jobs.map((job) => job.idempotency_key).sort()).toEqual([firstKey, secondKey].sort());
+      expect(jobs.every((job) => job.payload.template.items.length === 1)).toBe(true);
+      expect(jobs.every((job) => job.payload.template.items[0].qty === '1')).toBe(true);
+
+      const again = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(again.error).toBeUndefined();
+      expect((again.rows[0].r as { items_sent_count: number }).items_sent_count).toBe(0);
+      expect((await db.query(
+        'SELECT count(*)::int n FROM public.cloud_print_jobs WHERE branch_id=$1 AND idempotency_key=ANY($2::text[])',
+        [ids.branchA, [firstKey, secondKey]],
+      )).rows[0].n).toBe(2);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT incremental_kitchen_send');
+    }
+  });
+
   it('a failed cloud enqueue rolls back the real kitchen send and does not deduct stock', async () => {
     await db.query('SAVEPOINT failed_print_handoff');
     try {
