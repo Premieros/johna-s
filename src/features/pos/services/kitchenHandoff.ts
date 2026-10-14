@@ -36,15 +36,22 @@ function displayKitchenInstructions(item: KitchenSendItem): KitchenSendItem {
     : item;
 }
 
-export function isKitchenHandoffOptedIn(): boolean {
-  return import.meta.env.VITE_KITCHEN_ATOMIC_PRINT_HANDOFF === 'true';
+export function isKitchenHandoffOptedIn(branchId?: string | null): boolean {
+  // A global opt-in alone is never enough: a controlled rollout must explicitly
+  // name the branch, otherwise an enabled build would switch ALL active stores.
+  if (import.meta.env.VITE_KITCHEN_ATOMIC_PRINT_HANDOFF !== 'true') return false;
+  const branch = String(branchId || '').trim().toLowerCase();
+  if (!branch) return false;
+  return String(import.meta.env.VITE_KITCHEN_ATOMIC_PRINT_BRANCH_IDS || '')
+    .split(',')
+    .some((allowed) => allowed.trim().toLowerCase() === branch);
 }
 
 export async function sendOrderToKitchen(p: HandoffParams): Promise<KitchenSendResult> {
   const legacyParams = {
     p_order_id: p.p_order_id, p_sent_by: p.p_sent_by, p_branch_id: p.p_branch_id,
   };
-  if (!isKitchenHandoffOptedIn()) return sendLegacyOrderToKitchen(legacyParams);
+  if (!isKitchenHandoffOptedIn(p.p_branch_id)) return sendLegacyOrderToKitchen(legacyParams);
   if (!p.p_order_id) return { success: false, error: 'NO_ORDER_ID', detail: 'Order ID is required' };
   if (optInSendingOrders.has(p.p_order_id)) {
     return { success: false, error: 'SEND_IN_PROGRESS', detail: 'Kitchen send is already in progress for this order' };
