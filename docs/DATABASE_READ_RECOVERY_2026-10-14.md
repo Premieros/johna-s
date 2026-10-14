@@ -27,7 +27,7 @@ Catalog digests compare function definitions/owners/ACLs, policies, trigger flag
 Target validation tests reject foreign projects, other databases, transaction pooler, unverified TLS, unapproved production and shared localhost databases. Native concurrency proof uses a newly owned/disposed CI database; canonical fixture parity checks prices/as-of/RLS/frozen snapshots and FIFO cost.
 
 ## Verification ledger
-Local target guard3tests passed; typecheck/lint and native CI pending. Concurrent writer proof, canonical snapshot/cost parity and read/write EXPLAIN WAL samples must finish before any rollout recommendation. Six indexes may increase write work; do not claim lower total database load from read timing alone.
+Local target guard3tests, typecheck/lint and all1744unit tests passed at `dde303cb`. Its native Fast CI passed17price/concurrency tests: read buffers1482→16; 64-row purchase WAL median45570→66514bytes (~46% higher), execution median0.887→1.052ms. Synthetic warm samples, not production p95 or net-load proof. Concurrent enqueue/update succeeded while the index build waited for a writer; price/as-of/branch-denial/frozen snapshot/FIFO parity remained unchanged. A full canonical20-line negative-stock send/payment diagnostic is added next; final exact-head full CI remains required. Do not recommend all six indexes solely from read gains.
 
 ## Production gate
 State: **BLOCKED**
