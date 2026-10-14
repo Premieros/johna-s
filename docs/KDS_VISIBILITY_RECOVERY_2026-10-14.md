@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/kds-unfinished-visible-20261014`
-Current PR: #501 (merged baseline; emergency follow-up PR pending)
+Current PR: #502
 Last updated: 2026-10-14 20:36 Cairo
 
 ## Work status
@@ -22,7 +22,7 @@ Read-only noon-to20:31 Cairo sample:108kitchen jobs submitted, maximum creation-
 Keep all server-returned unfinished cards in the default tab. Retain overdue subset as an optional filter and original elapsed age. No added query or changed refresh cadence. Add component coverage for an old order receiving new items and the40-minute boundary; update desktop/mobile browser expectations.
 
 ## Verification ledger
-Targeted17component/unit checks passed. Full local suite:362files/1758tests passed, application/test typecheck passed, lint0errors(14existing warnings), production build passed. Browser test could not start because preview server fails with uv_interface_addresses in this environment; no browser pass claimed. Full exact-head CI required before merge.
+Targeted17component/unit checks passed. Full local suite:362files/1758tests passed, application/test typecheck passed, lint0errors(14existing warnings), production build passed. Browser test could not start because preview server fails with uv_interface_addresses in this environment; no browser pass claimed. First CI passed1758frontend/1048DB tests and131browser tests; one browser failure was an ambiguous Arabic completed-tab locator matching the new unfinished-tab name. Anchor the exact completed label; no application code change. Repeat exact-head CI before merge.
 
 ## Production gate
 State: **BLOCKED** pending exact-head CI only. Owner explicitly approved upload to Premieros/johna-s, merge and publication at20:40 Cairo. Earlier publication approval block is resolved. Owner repair authorization is present; no additional database authorization is inferred. Emergency rollback of this frontend change uses the retained baseline ref and normal deployment without operational replay.

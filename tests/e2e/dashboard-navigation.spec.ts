@@ -369,7 +369,7 @@ test.describe('dashboard and navigation actions', () => {
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
       expect(finishReads[finishReads.length - 1]).toEqual({ p_order_id: 'empty', p_branch_id: branch });
       expect(ordinaryStatusWrites).toBe(0);
-      await page.getByRole('tab', { name: /منتهية|Completed/ }).click();
+      await page.getByRole('tab', { name: /^(منتهية|Completed)$/ }).click();
       await expect(page.getByText('#DONE-0', { exact: true })).toBeVisible();
       const pager = page.getByRole('navigation', { name: /صفحات الطلبات المنتهية|Completed order pages/ });
       await expect(pager).toContainText('205');
