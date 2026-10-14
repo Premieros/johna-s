@@ -20,7 +20,7 @@ beforeEach(()=>{
  mocks.finishEmpty.mockReset().mockResolvedValue({data:{success:true,changed:true},error:null});
 });
 afterEach(()=>{delete (document as unknown as {hidden?:boolean}).hidden;vi.useRealTimers();});
-describe('KDS 40-minute display archive',()=>{
+describe('KDS unfinished queue visibility',()=>{
  it('stops ten background polls and refreshes current state on return',async()=>{
   vi.useFakeTimers();let hidden=false;Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
   render(<KitchenDisplayPage/>);await act(async()=>{await Promise.resolve();await Promise.resolve();});
@@ -31,10 +31,10 @@ describe('KDS 40-minute display archive',()=>{
   expect(mocks.rpc.mock.calls.filter(([name])=>name==='get_kitchen_queue')).toHaveLength(calls+1);
   expect(mocks.setStatus).not.toHaveBeenCalled();
  });
- it('separates active and expired cards without changing statuses and reads completed history lazily',async()=>{
+ it('keeps overdue work visible by default, filters overdue cards, and reads completed history lazily',async()=>{
   render(<KitchenDisplayPage/>);
   expect(await screen.findByText('#RECENT')).toBeVisible();
-  expect(screen.queryByText('#OLDER')).not.toBeInTheDocument();
+  expect(screen.getByText('#OLDER')).toBeVisible();
   expect(mocks.history).not.toHaveBeenCalled(); expect(mocks.setStatus).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('tab',{name:/Over 40 minutes/}));
   expect(screen.getByText('#OLDER')).toBeVisible(); expect(screen.queryByText('#RECENT')).not.toBeInTheDocument();
@@ -53,13 +53,25 @@ describe('KDS 40-minute display archive',()=>{
   await waitFor(()=>expect(screen.queryByText('#VOIDED')).not.toBeInTheDocument());
   expect(mocks.finishEmpty).toHaveBeenCalledWith({p_order_id:'VOIDED',p_branch_id:'a'});expect(mocks.setStatus).not.toHaveBeenCalled();
  });
- it('moves a card at exactly 40 minutes using a local timer without fetching or serving',async()=>{
+ it('keeps a card visible at exactly 40 minutes without fetching or serving',async()=>{
   vi.useFakeTimers(); mocks.rpc.mockImplementation(async(name:string)=>({data:name==='get_kitchen_queue'?[queueRow('BOUNDARY',2399)]:[],error:null}));
   render(<KitchenDisplayPage/>); await act(async()=>{await Promise.resolve();await Promise.resolve();});
   expect(screen.getByText('#BOUNDARY')).toBeVisible();const count=mocks.rpc.mock.calls.length;
   await act(async()=>{vi.advanceTimersByTime(1000);});
-  expect(screen.queryByText('#BOUNDARY')).not.toBeInTheDocument();expect(mocks.rpc).toHaveBeenCalledTimes(count);expect(mocks.setStatus).not.toHaveBeenCalled();
+  expect(screen.getByText('#BOUNDARY')).toBeVisible();expect(mocks.rpc).toHaveBeenCalledTimes(count);expect(mocks.setStatus).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('tab',{name:/Over 40 minutes/}));expect(screen.getByText('#BOUNDARY')).toBeVisible();
+ });
+ it('shows newly sent items on an hours-old order after refresh without changing or resending it',async()=>{
+  const oldRow={...queueRow('TABLE45',4*3600),items:[{product_name:'Existing item',quantity:1}]};
+  mocks.rpc.mockImplementation(async(name:string)=>({data:name==='get_kitchen_queue'?[oldRow]:[],error:null}));
+  render(<KitchenDisplayPage/>);
+  expect(await screen.findByText('Existing item')).toBeVisible();
+  oldRow.items.push({product_name:'New kitchen addition',quantity:2});
+  await act(async()=>{mocks.refresh();});
+  expect(await screen.findByText('New kitchen addition')).toBeVisible();
+  expect(screen.getByRole('tab',{name:/All unfinished/})).toHaveAttribute('aria-selected','true');
+  expect(mocks.setStatus).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.every(([name])=>['get_kitchen_queue','get_my_kitchen_stations'].includes(name))).toBe(true);
  });
  it('shows completed read errors and retry, with no misleading successful empty history',async()=>{
   mocks.history.mockResolvedValueOnce({data:null,error:{message:'NETWORK_ERROR'}});

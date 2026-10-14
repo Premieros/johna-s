@@ -82,7 +82,9 @@ export function KitchenDisplayPage() {
     return () => { scopeRef.current = ''; };
   }, [scopeKey]);
   const expiredItems = items.filter(item => isKitchenQueueExpired(item, now));
-  const activeItems = items.filter(item => !isKitchenQueueExpired(item, now));
+  // Age is an overdue filter, never a reason to hide unfinished kitchen work.
+  // The server timestamp can predate newly sent additions to the same order.
+  const activeItems = items;
   const visibleItems = view === 'expired' ? expiredItems : activeItems;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -260,11 +262,11 @@ export function KitchenDisplayPage() {
         </div>
 
         <div role="tablist" aria-label={ar ? 'عرض طلبات المطبخ' : 'Kitchen order views'} className="flex flex-wrap gap-2">
-          <button role="tab" aria-selected={view === 'active'} onClick={() => setView('active')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'نشطة' : 'Active'} ({activeItems.length})</button>
+          <button role="tab" aria-selected={view === 'active'} onClick={() => setView('active')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'كل غير المنتهية' : 'All unfinished'} ({activeItems.length})</button>
           <button role="tab" aria-selected={view === 'expired'} onClick={() => setView('expired')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'تجاوزت 40 دقيقة' : 'Over 40 minutes'} ({expiredItems.length})</button>
           <button role="tab" aria-selected={view === 'completed'} onClick={() => setView('completed')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'منتهية' : 'Completed'}</button>
         </div>
-        {view === 'active' && <p className="text-xs text-ui-muted">{ar ? 'تنتقل الطلبات تلقائيًا إلى «تجاوزت 40 دقيقة» بعد 40 دقيقة من إرسالها للمطبخ.' : 'Orders move to Over 40 minutes after 40 minutes from kitchen dispatch.'}</p>}
+        {view === 'active' && <p className="text-xs text-ui-muted">{ar ? 'تبقى جميع الطلبات غير المنتهية ظاهرة هنا، بما فيها الإضافات الجديدة للطلبات القديمة. تبويب «تجاوزت 40 دقيقة» للفرز فقط.' : 'All unfinished orders stay visible here, including new additions to older orders. Over 40 minutes is an additional filter only.'}</p>}
         {view === 'expired' && <p className="text-sm text-ui-warning">{ar ? 'هذه الطلبات تجاوزت مدة العرض ولم يتم تسجيلها كمنتهية. يمكن إكمال تجهيزها من هنا.' : 'These orders exceeded the display window and remain unfinished. You can continue preparing them here.'}</p>}
         {view === 'completed' && branchFilter && canViewKds && <KitchenCompletedHistory key={`${branchFilter}:${station}`} branchId={branchFilter} station={station} ar={ar} />}
 
@@ -342,7 +344,7 @@ export function KitchenDisplayPage() {
         </div>}
 
         {!loading && !items.length && !loadError && view !== 'completed' && <div className="text-center py-16 text-ui-muted"><ChefHat className="h-12 w-12 mx-auto mb-3 opacity-30" /><div className="text-lg">{ar ? 'لا توجد طلبات ضمن المحطات المسموح بها' : 'No orders in your allowed stations'}</div></div>}
-        {!loading && items.length > 0 && !visibleItems.length && view !== 'completed' && <p className="py-8 text-center text-ui-muted">{view === 'active' ? (ar ? 'لا توجد طلبات نشطة خلال آخر 40 دقيقة' : 'No active orders within the last 40 minutes') : (ar ? 'لا توجد طلبات تجاوزت 40 دقيقة' : 'No orders over 40 minutes')}</p>}
+        {!loading && items.length > 0 && !visibleItems.length && view !== 'completed' && <p className="py-8 text-center text-ui-muted">{view === 'active' ? (ar ? 'لا توجد طلبات غير منتهية' : 'No unfinished orders') : (ar ? 'لا توجد طلبات تجاوزت 40 دقيقة' : 'No orders over 40 minutes')}</p>}
       </div>
     </DesignSurface>
   );
