@@ -55,7 +55,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     )).rows[0].n as number;
   }
 
-  it('preserves the production kitchen send signature and security metadata', async () => {
+  it('preserves the original kitchen send and exposes only an opt-in print RPC', async () => {
     const r = await db.query(
       "SELECT oid::regprocedure::text name,prosecdef,proconfig FROM pg_proc WHERE oid='public.send_to_kitchen(uuid,uuid)'::regprocedure",
     );
@@ -65,9 +65,14 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     const body = (await db.query(
       "SELECT prosrc FROM pg_proc WHERE oid='public.send_to_kitchen(uuid,uuid)'::regprocedure",
     )).rows[0].prosrc as string;
-    expect(body.indexOf('_send_to_kitchen_core_20260914')).toBeLessThan(
-      body.indexOf('PERFORM private._enqueue_kitchen_sent_delta'),
-    );
+    expect(body).toContain('_send_to_kitchen_core_20260914');
+    expect(body).not.toContain('PERFORM private._enqueue_kitchen_sent_delta');
+    const opt = (await db.query(
+      "SELECT prosrc,prosecdef FROM pg_proc WHERE oid='public.send_to_kitchen_with_print(uuid,uuid,boolean)'::regprocedure",
+    )).rows[0];
+    expect(opt.prosecdef).toBe(true);
+    expect(opt.prosrc).toContain('public.send_to_kitchen(p_order_id,p_sent_by)');
+    expect(opt.prosrc).toContain("print_queue_state','client_fallback'");
   });
 
   it('queues one formatted durable station ticket and never duplicates its identity on retry', async () => {
@@ -178,7 +183,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     try {
       const order = ids.rows.orders.own;
       const first = await runAsPersist(db, ids.users.cashier,
-        'SELECT public.send_to_kitchen($1) r', [order]);
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
       expect(first.error).toBeUndefined();
       const result = first.rows[0].r as {
         success: boolean; error?: string; items_sent_count: number;
@@ -196,7 +201,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
       expect(persisted[0].kind).toBe('kitchen');
       expect(persisted[0].payload.order_id).toBe(order);
       const again = await runAsPersist(db, ids.users.cashier,
-        'SELECT public.send_to_kitchen($1) r', [order]);
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
       expect(again.error).toBeUndefined();
       expect((again.rows[0].r as { items_sent_count: number }).items_sent_count).toBe(0);
       expect((await db.query(
@@ -218,8 +223,20 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
         EXECUTE FUNCTION pg_temp.fail_atomic_print_test()`);
       const order = ids.rows.orders.own;
       const send = await runAsPersist(db, ids.users.cashier,
-        'SELECT public.send_to_kitchen($1) r', [order]);
-      expect(send.error).toMatch(/SIMULATED_PRINT_QUEUE_FAILURE/);
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(send.error).toBeUndefined();
+      const result = send.rows[0].r as {
+        success: boolean; print_queue_state: string; print_queue_warning?: string;
+      };
+      expect(result.success).toBe(true);
+      expect(result.print_queue_state).toBe('client_fallback');
+      expect(result.print_queue_warning).toBe('DURABLE_KITCHEN_PRINT_ENQUEUE_FAILED');
+      // The print failure is isolated: kitchen consumption still commits inside
+      // this test savepoint and legacy browser dispatch is still available.
+      expect((await db.query(
+        'SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1',
+        [order],
+      )).rows[0].n).toBe(1);
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT failed_print_handoff');
     }
@@ -231,6 +248,24 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
       'SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE order_id=$1',
       [ids.rows.orders.own],
     )).rows[0].n).toBe(0);
+  });
+
+  it('leaves the canonical send path untouched and English tickets on existing browser dispatch', async () => {
+    await db.query('SAVEPOINT english_client_only');
+    try {
+      const order = ids.rows.orders.own;
+      const english = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,false) r', [order]);
+      expect(english.error).toBeUndefined();
+      expect((english.rows[0].r as { success: boolean }).success).toBe(true);
+      expect((english.rows[0].r as { print_queue_state: string }).print_queue_state).toBe('client_only');
+      expect((await db.query(
+        "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1",
+        [order],
+      )).rows[0].n).toBe(0);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT english_client_only');
+    }
   });
 
   it('does not enqueue for a no-delta retry or fabricate prints for empty sends', async () => {
