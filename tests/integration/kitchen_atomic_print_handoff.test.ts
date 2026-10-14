@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
 import { seedRlsFixture, type RlsIds } from './rls';
+import { buildKitchenFixedTemplate } from '@/features/pos/services/localPrintAgent';
+import type { KitchenSendItem } from '@/features/pos/types';
 
 const url = getDbUrl();
 const local = Boolean(url) && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname);
@@ -31,6 +33,10 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     await db.connect();
     await db.query('BEGIN');
     ids = await seedRlsFixture(db);
+    await db.query(
+      "INSERT INTO public.kitchen_stations(branch_id,code,name_ar,name_en,is_active) VALUES ($1,'بار','بار','Bar',true),($1,'kit','مطبخ','Kitchen',true)",
+      [ids.branchA],
+    );
     // Rollback-only experiment. Never touch the production database.
     await db.query(readFileSync(sqlPath, 'utf8'));
   });
@@ -77,6 +83,21 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     expect(jobs[0].payload.template.items).toHaveLength(2);
     expect(jobs[0].payload.text).toContain('بدون سكر');
     expect(jobs[0].payload.text).toContain('Coffee');
+    expect(jobs[0].payload.text).toContain('ملاحظة: بدون سكر');
+    const frontend = buildKitchenFixedTemplate(
+      'بار', sent.sent as unknown as KitchenSendItem[],
+      { orderId: order, orderNumber: sent.order_number,
+        tableName: sent.table_name, orderType: sent.order_type,
+        guestCount: sent.guest_count, isAr: true },
+    );
+    // Timestamps may cross a minute while this test runs; every other printed
+    // field must match the existing frontend formatter exactly.
+    const normalize = (value: typeof frontend) => ({
+      ...value,
+      meta: value.meta.map((row) => row.label === 'التاريخ'
+        ? { ...row, value: '<current-time>' } : row),
+    });
+    expect(normalize(jobs[0].payload.template)).toEqual(normalize(frontend));
   });
 
   it('rejects wrong-branch ticket injection and leaves no foreign queue row', async () => {
@@ -91,6 +112,60 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
       [ids.branchB, ids.rows.orders.own],
     )).rows[0].n;
     expect(n).toBe(0);
+  });
+
+
+  it('rejects a missing or unconfigured station without silently losing that item', async () => {
+    const order = ids.rows.orders.own;
+    await db.query('SAVEPOINT missing_station');
+    try {
+      await expect(enqueue(ids.branchA, order, {
+        ...sent, sent: [{ ...sent.sent[0], station_code: null }],
+      })).rejects.toThrow(/KITCHEN_PRINT_STATION_MISSING/);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT missing_station');
+    }
+    await db.query('SAVEPOINT inactive_station');
+    try {
+      await expect(enqueue(ids.branchA, order, {
+        ...sent, sent: [{ ...sent.sent[0], station_code: 'not-configured' }],
+      })).rejects.toThrow(/KITCHEN_PRINT_STATION_BRANCH_OR_ACTIVE_MISMATCH/);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT inactive_station');
+    }
+  });
+
+  it('makes one idempotent job for each new station without reusing another station ticket', async () => {
+    const order = ids.rows.orders.own;
+    const split = { ...sent, sent: [
+      { ...sent.sent[0], station_code: 'kit' },
+      { ...sent.sent[1], station_code: 'بار' },
+    ] };
+    expect(await enqueue(ids.branchA, order, split)).toBe(2);
+    expect(await enqueue(ids.branchA, order, split)).toBe(2);
+    const barKey = 'kitchen:بار:' + sendOne + ':2';
+    const kitKey = 'kitchen:kit:' + sendTwo + ':1';
+    const jobs = (await db.query(
+      'SELECT idempotency_key,station_code,payload FROM public.cloud_print_jobs WHERE branch_id=$1 AND idempotency_key=ANY($2::text[]) ORDER BY station_code',
+      [ids.branchA, [barKey, kitKey]],
+    )).rows;
+    expect(jobs).toHaveLength(2);
+    expect(jobs.map((row) => row.idempotency_key).sort()).toEqual([barKey, kitKey].sort());
+    expect(jobs.every((row) => row.payload.template.items.length === 1)).toBe(true);
+  });
+
+  it('does not expose the privileged helper to an authenticated caller', async () => {
+    await db.query('SAVEPOINT direct_call');
+    try {
+      await db.query("SELECT set_config('app.user_id',$1,true)", [ids.users.cashier]);
+      await db.query('SET LOCAL ROLE authenticated');
+      await expect(db.query(
+        'SELECT private._enqueue_kitchen_sent_delta($1,$2,$3,$4::jsonb)',
+        [ids.branchA, ids.rows.orders.own, ids.users.cashier, JSON.stringify(sent)],
+      )).rejects.toThrow(/permission denied/i);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT direct_call');
+    }
   });
 
   it('does not enqueue for a no-delta retry or fabricate prints for empty sends', async () => {
