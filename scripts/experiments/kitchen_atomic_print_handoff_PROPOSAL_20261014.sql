@@ -151,6 +151,12 @@ BEGIN
 END;
 $atomic_print$;
 
+-- The private schema grants authenticated USAGE in this project. Explicitly
+-- remove default PUBLIC EXECUTE: only the postgres-owned SECURITY DEFINER
+-- kitchen wrapper may invoke this helper, never an arbitrary user payload.
+REVOKE ALL ON FUNCTION private._enqueue_kitchen_sent_delta(uuid,uuid,uuid,jsonb)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 -- The original SECURITY DEFINER wrapper, with the only added call immediately
 -- after the canonical core. No core/FIFO/stock, guards, grants, or ACL changes.
 
