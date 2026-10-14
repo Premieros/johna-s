@@ -28,6 +28,20 @@ READ ONLY Supabase logs (trailing 24h): 42 Postgres statement cancellations/time
 **Gate:** no all-branch global enablement. Even a build with `VITE_KITCHEN_ATOMIC_PRINT_HANDOFF=true` does NOT opt in unless `VITE_KITCHEN_ATOMIC_PRINT_BRANCH_IDS` explicitly contains that saved POS branch ID. Start with a single approved pilot branch after new SQL has been installed separately; with either env unset the old route remains active. Roll back by removing pilot branch from the configured allowlist and deploying that client configuration (the legacy public.send_to_kitchen remains unchanged). Live production SQL and stock remain untouched during this staging.
 Before pilot require measured isolated end-to-end response latency, supported operational window, exact branch + locale verification and explicit approval; never claim this flag can be toggled remotely without rebuilding.
 
+## Emergency stop design — 2026-10-15, staging only
+
+The **new** private.kitchen_print_handoff_rollout gate table in the SQL experiment is default-deny and inaccessible to anon/authenticated/service_role; an expiry limits any pilot automatically. Even if a pilot frontend has both VITE flags set, the opt-in RPC returns `client_fallback` (the existing browser station dispatcher) whenever the DB gate is disabled, absent, or expired. The original `public.send_to_kitchen(uuid,uuid)` is still used internally and unchanged.
+
+A tested, one-statement remote stop for a pilot branch is:
+```sql
+UPDATE private.kitchen_print_handoff_rollout
+SET enabled = false, expires_at = now(), changed_at = now()
+WHERE branch_id = '<the verified pilot branch UUID>'::uuid;
+```
+Use this **only if the new SQL experiment has already been separately deployed**. This stops subsequent handoffs, not already-in-flight requests, printer jobs already queued or completed, and is not a guarantee of immediate network/POS recovery. Set a short pilot expiry (5 minutes) and verify reverting to legacy client fallback by read-only checks; never reprint historical/unknown outcomes.
+
+Before enabling any pilot, require exact-head isolated RLS/rollback tests of this gate, representative send-to-kitchen latency/load evidence, production schema ACL review, one pilot branch, documented live monitoring, and an operator capable of confirming physical tickets. Never enable without rollback visibility; assistant is not a continuously running production watchdog.
+
 ## Production gate
 State: **BLOCKED**.
 Merge requires owner approval AFTER all CI succeeds. Merging a build with both feature flags unset does not enable new print routing; actual DB SQL activation requires a SEPARATE, explicitly approved production action. Verify that production build environment does not set VITE_KITCHEN_ATOMIC_PRINT_HANDOFF or a pilot branch ID. Never combine merge approval with database rollout approval.
