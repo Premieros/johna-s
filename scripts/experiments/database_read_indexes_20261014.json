@@ -1,0 +1,32 @@
+[
+  {
+    "name": "idx_cloud_print_receipt_open_check_lookup",
+    "table": "cloud_print_jobs",
+    "sql": "CREATE INDEX idx_cloud_print_receipt_open_check_lookup\n  ON public.cloud_print_jobs (branch_id, idempotency_key text_pattern_ops)\n  WHERE kind = 'receipt';"
+  },
+  {
+    "name": "idx_inventory_ledger_fifo_known_cost_recent",
+    "table": "inventory_ledger",
+    "sql": "CREATE INDEX idx_inventory_ledger_fifo_known_cost_recent\n  ON public.inventory_ledger\n    (raw_material_id, branch_id, warehouse_id,\n     created_at DESC NULLS LAST, id DESC)\n  INCLUDE (unit_cost)\n  WHERE quantity < 0\n    AND COALESCE(unit_cost, 0) > 0\n    AND COALESCE(batch_number, '') NOT LIKE 'OV-%';"
+  },
+  {
+    "name": "idx_inventory_ledger_receipt_known_cost_recent",
+    "table": "inventory_ledger",
+    "sql": "CREATE INDEX idx_inventory_ledger_receipt_known_cost_recent\n  ON public.inventory_ledger\n    (raw_material_id, branch_id, warehouse_id,\n     created_at DESC NULLS LAST, id DESC)\n  INCLUDE (unit_cost)\n  WHERE quantity > 0\n    AND COALESCE(unit_cost, 0) > 0\n    AND (\n      COALESCE(entry_type, '') = 'purchase'\n      OR COALESCE(reference_type, '') IN ('purchase', 'purchase_receipt')\n    );"
+  },
+  {
+    "name": "idx_raw_batches_known_cost_recent",
+    "table": "raw_material_batches",
+    "sql": "CREATE INDEX idx_raw_batches_known_cost_recent\n  ON public.raw_material_batches\n    (raw_material_id, branch_id, warehouse_id,\n     created_at DESC NULLS LAST, id DESC)\n  INCLUDE (unit_cost)\n  WHERE COALESCE(unit_cost, 0) > 0\n    AND COALESCE(source_type, '') NOT LIKE '%_oversold';"
+  },
+  {
+    "name": "idx_cloud_print_alerts_recent",
+    "table": "cloud_print_jobs",
+    "sql": "CREATE INDEX idx_cloud_print_alerts_recent\n  ON public.cloud_print_jobs (branch_id, updated_at DESC)\n  WHERE status = 'failed' OR (status = 'submitted' AND attempts > 1);"
+  },
+  {
+    "name": "idx_inventory_ledger_kitchen_approved_receipt",
+    "table": "inventory_ledger",
+    "sql": "CREATE INDEX idx_inventory_ledger_kitchen_approved_receipt ON public.inventory_ledger (raw_material_id, branch_id, created_at DESC NULLS LAST) INCLUDE (reference_id, unit_cost, id) WHERE reference_type = 'purchase' AND entry_type = 'purchase' AND COALESCE(unit_cost, 0) > 0;"
+  }
+]

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { indexes, securityCatalog } from '../../scripts/db/read-index-review.mjs';
 
 // This suite must run against disposable CI/staging DB only. It creates the
 // experimental function and fixtures inside BEGIN/ROLLBACK. It never enables
@@ -536,4 +537,55 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     },
     120_000, // explicit local 36k-row EXPLAIN diagnostic, not a live latency gate
   );
+
+  it.skipIf(!dbUrl || !['localhost','127.0.0.1','[::1]'].includes(new URL(dbUrl).hostname))(
+    'preserves approved/as-of/branch prices and frozen snapshots with reviewed read indexes',
+    async () => {
+      await client.query('SAVEPOINT reviewed_indexes');
+      const ids = [material,purchasedMaterial,legacyMaterial,tiedMaterial,noApprovedPrice];
+      async function readState() {
+        const approved = [await prices(branchA,ids,asOf),await prices(branchA,ids,afterFuture)];
+        const costs = (await client.query('SELECT id,public._raw_last_known_fifo_cost(id,$1,$2) cost FROM unnest($3::uuid[]) id ORDER BY id', [branchA,warehouseA,ids])).rows;
+        await client.query("SELECT set_config('app.user_id',$1,true)",[deniedBranchUser]);
+        await client.query('SET LOCAL ROLE authenticated');
+        let denied;
+        try { denied = await prices(branchA,ids,asOf); }
+        finally { await client.query('RESET ROLE'); await client.query('RESET app.user_id'); }
+        const snapshots = (await client.query('SELECT component_snapshot FROM pg_temp.kitchen_price_capture_probe ORDER BY created_at')).rows;
+        return { approved,costs,denied,snapshots };
+      }
+      async function sample() {
+        const p = (await client.query('EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) SELECT public._raw_last_known_fifo_cost($1,$2,$3)', [purchasedMaterial,branchA,warehouseA])).rows[0]['QUERY PLAN'][0];
+        return {ms:p['Execution Time'],buffers:p.Plan['Shared Hit Blocks']+p.Plan['Shared Read Blocks']};
+      }
+      async function writeSample() {
+        await client.query('SAVEPOINT sampled_receipt_write');
+        try {
+          const p = (await client.query(`EXPLAIN (ANALYZE,BUFFERS,WAL,FORMAT JSON)
+            INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,reference_number)
+            SELECT $1,$2,$3,1,2,2,'purchase','purchase',$4,'INDEX-WRITE-SAMPLE' FROM generate_series(1,64)`,[purchasedMaterial,branchA,warehouseA,purchase])).rows[0]['QUERY PLAN'][0];
+          return {ms:p['Execution Time'],wal_bytes:p.Plan['WAL Bytes']};
+        } finally { await client.query('ROLLBACK TO SAVEPOINT sampled_receipt_write'); }
+      }
+      try {
+        const security = (await client.query(securityCatalog)).rows;
+        const before = await readState();
+        expect(before.denied).toEqual([]);
+        expect(before.approved[0].find(x => x.raw_material_id === noApprovedPrice)).toBeUndefined();
+        await sample();
+        const baseline = []; for(let i=0;i<5;i++)baseline.push(await sample());
+        await writeSample();
+        const writesBefore = []; for(let i=0;i<5;i++)writesBefore.push(await writeSample());
+        for (const index of indexes) await client.query(index.sql);
+        expect(await readState()).toEqual(before);
+        expect((await client.query(securityCatalog)).rows).toEqual(security);
+        await sample();
+        const candidate = []; for(let i=0;i<5;i++)candidate.push(await sample());
+        await writeSample();
+        const writesAfter = []; for(let i=0;i<5;i++)writesAfter.push(await writeSample());
+        console.info('READ_INDEX_LOCAL_COST_SAMPLE '+JSON.stringify({source:'owned localhost synthetic fixture; not production/RLS p95',baseline,candidate,writesBefore,writesAfter}));
+      } finally { await client.query('ROLLBACK TO SAVEPOINT reviewed_indexes'); }
+    },120000,
+  );
+
 });
