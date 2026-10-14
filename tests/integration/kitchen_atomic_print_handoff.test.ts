@@ -212,8 +212,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     await db.query('SAVEPOINT failed_print_handoff');
     try {
       await db.query(`CREATE FUNCTION pg_temp.fail_atomic_print_test()
-        RETURNS trigger LANGUAGE plpgsql AS $
-        BEGIN RAISE EXCEPTION 'SIMULATED_PRINT_QUEUE_FAILURE'; END $`);
+        RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''SIMULATED_PRINT_QUEUE_FAILURE''; END'`);
       await db.query(`CREATE TRIGGER test_atomic_print_failure
         BEFORE INSERT ON public.cloud_print_jobs FOR EACH ROW
         EXECUTE FUNCTION pg_temp.fail_atomic_print_test()`);
