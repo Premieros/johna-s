@@ -4,9 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3f704f4a`
-- Current active branch: `development/ci-concurrent-verification-20261014`
-- Mandatory active work log: `docs/CI_VERIFICATION_LATENCY_2026-10-14.md`
+- Latest main baseline reconciled: `8fffc3d3`
+- Current active branch: `hotfix/print-wake-reconcile-20261014`
+- Mandatory active work log: `docs/EMERGENCY_PRINT_RECOVERY_2026-10-14.md`
+
+## Emergency print reliability — 2026-10-14
+- Owner requests urgent print fixes, no Windows-agent changes and no unnecessary long tests.
+- Production read indexes already applied and verified: `20261014184308_emergency_receipt_open_check_pattern_index_20261014` and `20261014184418_emergency_print_alert_read_index_20261014`. Both are narrow, additive indexes; no order/stock/FIFO/accounting updates.
+- This branch bounds web print-agent reconciliation to 5s for missed Realtime signals, preserves wake/claim/ack and targets exact-head CI before merge. Underlying `send_to_kitchen` inventory timeout remains an independent issue; no blanket success claim.
+- Never automatically reprint old tickets or assume submitted means paper. Review ~12 rather than ~1 idle claim checks/min per connected agent after deploy; rollback the web tweak if its database load is harmful.
 
 ## Database read recovery — 2026-10-14
 - Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.
