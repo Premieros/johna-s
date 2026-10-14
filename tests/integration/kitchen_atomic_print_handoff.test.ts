@@ -254,6 +254,10 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     await db.query('SAVEPOINT english_client_only');
     try {
       const order = ids.rows.orders.own;
+      const priorCount = (await db.query(
+        "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1",
+        [order],
+      )).rows[0].n as number;
       const english = await runAsPersist(db, ids.users.cashier,
         'SELECT public.send_to_kitchen_with_print($1,NULL,false) r', [order]);
       expect(english.error).toBeUndefined();
@@ -262,7 +266,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
       expect((await db.query(
         "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1",
         [order],
-      )).rows[0].n).toBe(0);
+      )).rows[0].n).toBe(priorCount);
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT english_client_only');
     }
