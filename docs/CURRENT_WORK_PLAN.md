@@ -4,9 +4,14 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `aa3393af884986da3620c37d9bf74fc208cf84ce`
-- Current active branch: `development/kitchen-multiline-recovery-20261013`
-- Mandatory active work log: `docs/KITCHEN_MULTILINE_RECOVERY_2026-10-13.md`
+- Latest main baseline reconciled: `46f1277b543da6b8f223e8d87be28c95357888b8`
+- Current active branch: `development/session-chunk-recovery-20261013`
+- Mandatory active work log: `docs/SESSION_CHUNK_RECOVERY_2026-10-13.md`
+
+## Session and screen recovery — 2026-10-13 / 2026-10-14
+- Owner directs continuing investigation/preparation after live log review. Frontend-only draft; publication requires separate approval after exact-head checks.
+- #499 merged/deployed as46f1277; postmerge1715 frontend/1042 DB/132 Chromium Green. Guard already applied; optimization remains disabled.
+- Owner requests actual repairs2026-10-14:distinguish unavailable refresh from revoked session, guard stale auth/branch responses, bound notification refreshes and stage two print read indexes. Preserve explicit logout/account disable, all operational writers/printing and original chunk-causality HOLD. No production apply/merge without final approval.
 
 ## Emergency recovery — 2026-10-13
 - #499 is the single active track. Approved rollback20261013140753 restored service; user confirmed multi-item send works. Optimization stays disabled.

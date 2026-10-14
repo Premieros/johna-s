@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bell, Check, CheckCircle2, Printer, X } from 'lucide-react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCan } from '@/lib/permissions';
+import { createReadRefreshQueue } from '@/lib/readRefreshQueue';
 
 type ApprovalRequest = {
   id: string;
@@ -162,7 +163,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
     setReadAlertKeys(stored.read);
   }, [alertStorageKey]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isCurrent: () => boolean) => {
     if (!allowed || !user?.id) return;
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -172,13 +173,14 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
           .from('cloud_print_jobs')
           .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at')
           .eq('branch_id', user.branch_id)
-          .in('status', ['failed', 'submitted'])
+          .or('status.eq.failed,and(status.eq.submitted,attempts.gt.1)')
           .gte('updated_at', since)
           .order('updated_at', { ascending: false })
           .limit(40)
       : Promise.resolve({ data: [], error: null });
 
     const [approvalsResult, printResult] = await Promise.all([approvalsPromise, printPromise]);
+    if (!isCurrent()) return;
 
     const approvalRows = ((approvalsResult.data ?? []) as Array<{
       source_type: string;
@@ -209,7 +211,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
 
     const requesterIds = Array.from(new Set(approvalRows.map((item) => item.requester_id).filter(Boolean)));
     let requesterNames: Record<string, string> = {};
-    if (requesterIds.length > 0) {
+    if (!approvalsResult.error && requesterIds.length > 0) {
       const { data: requesterRows } = await supabase
         .from('users')
         .select('id,full_name,username,email')
@@ -221,38 +223,47 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
         ]),
       );
     }
-    setItems(approvalRows.map((item) => ({
-      ...item,
-      requester_name: requesterNames[item.requester_id] || null,
-    })));
+    if (!isCurrent()) return;
+    if (!approvalsResult.error) {
+      setItems(approvalRows.map((item) => ({
+        ...item,
+        requester_name: requesterNames[item.requester_id] || null,
+      })));
+    }
     const recent = ((printResult.data ?? []) as PrintAlert[])
       .filter((item) => item.status === 'failed' || (item.status === 'submitted' && item.attempts > 1))
       .slice(0, 20);
-    setPrintAlerts(recent);
+    if (!printResult.error) setPrintAlerts(recent);
   }, [allowed, user?.branch_id, user?.id]);
 
+  const refreshQueueRef = useRef<ReturnType<typeof createReadRefreshQueue> | null>(null);
   useEffect(() => {
-    void load();
-    if (!allowed || !user?.id) return;
+    const refreshQueue = createReadRefreshQueue(load);
+    refreshQueueRef.current = refreshQueue;
+    setItems([]);
+    setPrintAlerts([]);
+    const refresh = () => { void refreshQueue.request().catch(() => {}); };
+    refresh();
+    if (!allowed || !user?.id) return () => refreshQueue.cancel();
 
     let channel = supabase
       .channel(`approval-inbox-${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'approval_requests' },
-        () => void load(),
+        refresh,
       );
 
     if (user.branch_id) {
       channel = channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'cloud_print_jobs', filter: `branch_id=eq.${user.branch_id}` },
-        () => void load(),
+        refresh,
       );
     }
 
     channel.subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { refreshQueue.cancel(); void supabase.removeChannel(channel); };
   }, [allowed, user?.branch_id, user?.id, load]);
 
   const decide = async (id: string, approve: boolean) => {
@@ -263,7 +274,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
         p_approve: approve,
         p_note: null,
       });
-      await load();
+      await refreshQueueRef.current?.request();
     } finally {
       setBusy(null);
     }

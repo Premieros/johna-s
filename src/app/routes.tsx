@@ -1,4 +1,6 @@
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy as reactLazy, type ReactNode } from 'react';
+import { retryModuleLoad } from '@/lib/chunkRecovery';
+const lazy: typeof reactLazy = (load) => reactLazy(() => retryModuleLoad(load));
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useRoles } from '../context/RolesContext';

@@ -1,3 +1,5 @@
+import { isDynamicImportError } from './chunkRecovery';
+
 export type ErrorLanguage = 'ar' | 'en';
 
 const ARABIC_RE = /[\u0600-\u06FF]/;
@@ -414,6 +416,12 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
     return lang === 'ar'
       ? 'تعذر إكمال العملية. حاول مرة أخرى، وإذا استمرت المشكلة تواصل مع مسؤول النظام.'
       : 'The action could not be completed. Retry, and contact the system administrator if the problem continues.';
+  }
+
+  if (isDynamicImportError(text) || text === 'CHUNK_LOAD_ERROR') {
+    return lang === 'ar'
+      ? 'تعذر تحميل جزء من الشاشة. تحقق من الاتصال وحاول مجددًا. احفظ التعديلات قبل تحديث الصفحة.'
+      : 'Part of the screen could not be loaded. Check your connection and retry. Save changes before refreshing the page.';
   }
 
   const assignPermission = text.match(/cannot assign role containing permission\s+([a-z0-9_.-]+)/i);
