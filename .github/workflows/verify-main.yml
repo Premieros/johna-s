@@ -19,6 +19,9 @@ env:
   VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
   VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'dummy_anon_key_for_ci_build' }}
 
+# Each suite owns its runner and fixtures. Browser requests are mocked and do not
+# consume the database job. Keep every suite mandatory; remove only scheduling
+# dependencies so elapsed verification time is the slowest suite, not their sum.
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -37,14 +40,12 @@ jobs:
       - name: Verify frontend API contract is current
         run: node scripts/db/gen-contract.js --check
       - run: npm run lint
-      - run: npm run typecheck
       - name: Typecheck application and test suites
         run: npm run typecheck:all
       - run: npm run test:unit
       - run: npm run build
 
   pages-continuity:
-    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,7 +67,6 @@ jobs:
           deployment-branch: main
 
   db:
-    needs: verify
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -123,7 +123,6 @@ jobs:
           retention-days: 3
 
   browser-smoke:
-    needs: [verify, db]
     runs-on: ubuntu-latest
     env:
       SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
