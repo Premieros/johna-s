@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `development/database-read-recovery-20261014`
-Current PR: pending allocation
+Current PR: #501
 Last updated: 2026-10-14 owner-directed preparation
 
 ## Work status
