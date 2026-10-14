@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/kitchen-atomic-print-handoff-20261014`
-Current PR: #505
+Current PR: #506
 Last updated: 2026-10-14 Cairo
 
 ## Work status
