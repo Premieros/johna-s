@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import * as api from '../api';
 import type { AppUser } from '../lib/types';
 import { isAuthSessionError } from '../lib/authSessionError';
+import { refreshAuthSession } from '../lib/refreshAuthSession';
 
 interface AuthContextValue {
   session: Session | null;
@@ -33,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const loadUser = useCallback(async (activeSession: Session | null): Promise<AppUser | null> => {
+  const loadUser = useCallback(async (activeSession: Session | null, isCurrent: () => boolean = () => true): Promise<AppUser | null> => {
     if (!activeSession?.user?.id) {
       clearAuthState();
       return null;
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', activeSession.user.id)
       .maybeSingle();
 
+    if (!isCurrent()) return null;
     if (error) {
       throw error;
     }
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
     let retryTimer: number | null = null;
+    let hydrationVersion = 0;
 
     const hydrateSession = async (
       activeSession: Session | null,
@@ -79,23 +82,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       allowRefresh = true
     ): Promise<void> => {
       if (!mounted) return;
+      const version = ++hydrationVersion;
+      const isCurrent = () => mounted && hydrationVersion === version;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      retryTimer = null;
       if (!activeSession) {
         clearAuthState();
         setLoading(false);
         return;
       }
 
+      if (user?.id === activeSession.user.id) {
+        setSession(activeSession);
+        setLoading(false);
+        return;
+      }
       try {
-        await loadUser(activeSession);
-        if (mounted) setLoading(false);
+        await loadUser(activeSession, isCurrent);
+        if (isCurrent()) setLoading(false);
       } catch (error) {
-        if (!mounted) return;
+        if (!isCurrent()) return;
 
         if (isAuthSessionError(error)) {
           if (allowRefresh) {
-            const { data, error: refreshError } = await supabase.auth.refreshSession();
-            const refreshedSession = data.session;
-            if (!refreshError && refreshedSession) {
+            const recovery = await refreshAuthSession(() => supabase.auth.refreshSession());
+            if (!isCurrent()) return;
+            if (recovery.status === 'unavailable') {
+              setLoading(!(user?.id && user.id === activeSession.user.id));
+              retryTimer = window.setTimeout(() => {
+                void hydrateSession(activeSession, Math.min(retryDelay * 2, PROFILE_RETRY_MAX_MS), true);
+              }, retryDelay);
+              return;
+            }
+            if (recovery.status === 'refreshed') {
+              const refreshedSession = recovery.session;
               setSession(refreshedSession);
               await hydrateSession(refreshedSession, PROFILE_RETRY_INITIAL_MS, false);
               return;
@@ -121,8 +141,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const initialVersion = hydrationVersion;
     void supabase.auth.getSession()
       .then(({ data: { session: activeSession } }) => {
+        if (!mounted || hydrationVersion !== initialVersion) return;
         void hydrateSession(activeSession);
       })
       .catch(() => {
@@ -132,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: subscriptionHandle } = supabase.auth.onAuthStateChange((event, activeSession) => {
       if (!mounted) return;
       if (event === 'SIGNED_OUT' || !activeSession) {
+        hydrationVersion += 1;
         if (retryTimer !== null) window.clearTimeout(retryTimer);
         retryTimer = null;
         clearAuthState();
@@ -151,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      hydrationVersion += 1;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       subscriptionHandle.subscription.unsubscribe();
     };
@@ -166,12 +190,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile = await loadUser(activeSession);
     } catch (error) {
       if (isAuthSessionError(error)) {
-        const { data, error: refreshError } = await supabase.auth.refreshSession();
-        const refreshedSession = data.session;
-        if (!refreshError && refreshedSession) {
+        const recovery = await refreshAuthSession(() => supabase.auth.refreshSession());
+        if (recovery.status === 'unavailable') {
+          return { error: { code: 'profile_check_unavailable', message: 'Could not verify the application profile. Please retry.' } };
+        }
+        if (recovery.status === 'refreshed') {
+          const refreshedSession = recovery.session;
           try {
             profile = await loadUser(refreshedSession);
-          } catch {
+          } catch (profileError) {
+            if (!isAuthSessionError(profileError)) {
+              return { error: { code: 'profile_check_unavailable', message: 'Could not verify the application profile. Please retry.' } };
+            }
             profile = null;
           }
         }
@@ -240,12 +270,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       if (!isAuthSessionError(error)) return;
 
-      const { data, error: refreshError } = await supabase.auth.refreshSession();
-      if (!refreshError && data.session) {
+      const recovery = await refreshAuthSession(() => supabase.auth.refreshSession());
+      if (recovery.status === 'unavailable') return;
+      if (recovery.status === 'refreshed') {
         try {
-          await loadUser(data.session);
+          await loadUser(recovery.session);
           return;
-        } catch {
+        } catch (profileError) {
+          if (!isAuthSessionError(profileError)) return;
           // Fall through to a clean sign-out when the refreshed token is still
           // rejected by the profile read.
         }

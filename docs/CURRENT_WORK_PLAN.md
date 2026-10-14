@@ -8,10 +8,10 @@
 - Current active branch: `development/session-chunk-recovery-20261013`
 - Mandatory active work log: `docs/SESSION_CHUNK_RECOVERY_2026-10-13.md`
 
-## Session and screen recovery — 2026-10-13
+## Session and screen recovery — 2026-10-13 / 2026-10-14
 - Owner directs continuing investigation/preparation after live log review. Frontend-only draft; publication requires separate approval after exact-head checks.
 - #499 merged/deployed as46f1277; postmerge1715 frontend/1042 DB/132 Chromium Green. Guard already applied; optimization remains disabled.
-- Isolate expired-session cleanup to the affected device, preserve explicit logout/account disable, bounded module-load retry only; no operation replay.
+- Owner requests actual repairs2026-10-14:distinguish unavailable refresh from revoked session, guard stale auth/branch responses, bound notification refreshes and stage two print read indexes. Preserve explicit logout/account disable, all operational writers/printing and original chunk-causality HOLD. No production apply/merge without final approval.
 
 ## Emergency recovery — 2026-10-13
 - #499 is the single active track. Approved rollback20261013140753 restored service; user confirmed multi-item send works. Optimization stays disabled.

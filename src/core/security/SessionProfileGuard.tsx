@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { isAuthSessionError } from '@/lib/authSessionError';
+import { refreshAuthSession } from '@/lib/refreshAuthSession';
 
 const VERIFIED_PROFILE_KEY = 'premier_verified_profile_id';
 const PROFILE_REVALIDATION_RETRY_MS = 5_000;
@@ -75,19 +76,35 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
     let retryTimer: number | null = null;
 
     const revalidateProfile = async (allowRefresh = true): Promise<void> => {
+      if (cancelled) return;
       const { data, error } = await supabase
         .from('users')
         .select('id, is_active')
         .eq('id', sessionUserId)
-        .maybeSingle();
+        .maybeSingle()
+        .then((result) => result, (error: unknown) => ({ data: null, error }));
 
       if (cancelled) return;
+
+      const retry = () => {
+        checkedUserIdRef.current = null;
+        retryTimer = window.setTimeout(() => {
+          if (cancelled) return;
+          checkedUserIdRef.current = sessionUserId;
+          void revalidateProfile(true);
+        }, PROFILE_REVALIDATION_RETRY_MS);
+      };
 
       if (error) {
         if (isAuthSessionError(error)) {
           if (allowRefresh) {
-            const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-            if (!refreshError && refreshed.session) {
+            const recovery = await refreshAuthSession(() => supabase.auth.refreshSession());
+            if (cancelled) return;
+            if (recovery.status === 'unavailable') {
+              retry();
+              return;
+            }
+            if (recovery.status === 'refreshed') {
               void revalidateProfile(false);
               return;
             }
@@ -101,18 +118,14 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
         // This guard is intentionally fail-safe for transport failures:
         // RLS still protects every request, while a temporary network/PostgREST
         // error must not destroy the user's valid Supabase session.
-        checkedUserIdRef.current = null;
-        retryTimer = window.setTimeout(() => {
-          if (cancelled) return;
-          checkedUserIdRef.current = sessionUserId;
-          void revalidateProfile(true);
-        }, PROFILE_REVALIDATION_RETRY_MS);
+        retry();
         return;
       }
 
       if (!data || data.is_active === false) {
         checkedUserIdRef.current = null;
         await clearOfflineReadCache();
+        if (cancelled) return;
         try { localStorage.removeItem(VERIFIED_PROFILE_KEY); } catch { /* ignore storage errors */ }
         await signOutRef.current();
         return;
@@ -130,6 +143,7 @@ export function SessionProfileGuard({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      if (checkedUserIdRef.current === sessionUserId) checkedUserIdRef.current = null;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
   }, [session?.user?.id, user?.id]);
