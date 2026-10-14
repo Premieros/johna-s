@@ -65,6 +65,8 @@ export interface KitchenSendResult {
   error?: string;
   detail?: string;
   dispatch?: KitchenStationDispatchSummary;
+  /** Prevent automatic duplicate paper when the server print may already exist. */
+  suppress_kitchen_browser_popup?: boolean;
 }
 
 export interface PosRealtimeData {
