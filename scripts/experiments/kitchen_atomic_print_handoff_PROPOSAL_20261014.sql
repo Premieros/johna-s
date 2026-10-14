@@ -23,6 +23,7 @@ DECLARE
   v_ticket jsonb;
   v_count integer := 0;
   v_stamp text;
+  v_order_type_label text;
 BEGIN
   IF p_order_id IS NULL OR p_branch_id IS NULL OR p_actor_id IS NULL THEN
     RAISE EXCEPTION 'KITCHEN_PRINT_MISSING_CONTEXT';
@@ -39,7 +40,23 @@ BEGIN
      OR jsonb_array_length(p_send->'sent') = 0 THEN
     RAISE EXCEPTION 'KITCHEN_PRINT_MISSING_SENT_DELTA';
   END IF;
+  -- Never silently drop a confirmed kitchen delta that has no printer station.
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_send->'sent') item
+    WHERE NULLIF(btrim(COALESCE(item->>'station_code','')),'') IS NULL
+  ) THEN
+    RAISE EXCEPTION 'KITCHEN_PRINT_STATION_MISSING';
+  END IF;
   v_stamp := to_char(timezone('Africa/Cairo', now()), 'YYYY-MM-DD HH24:MI');
+  v_order_type_label := CASE lower(regexp_replace(btrim(COALESCE(p_send->>'order_type','')), '[ -]+', '_', 'g'))
+    WHEN 'dine_in' THEN 'داخل الصالة'
+    WHEN 'takeaway' THEN 'تيك أواي'
+    WHEN 'take_away' THEN 'تيك أواي'
+    WHEN 'drive_thru' THEN 'درايف ثرو'
+    WHEN 'delivery' THEN 'توصيل'
+    WHEN 'quick_order' THEN 'طلب سريع'
+    ELSE NULLIF(btrim(COALESCE(p_send->>'order_type','')),'')
+  END;
 
   FOR v_station, v_group IN
     SELECT btrim(item->>'station_code') AS station,
@@ -48,6 +65,14 @@ BEGIN
     WHERE NULLIF(btrim(COALESCE(item->>'station_code','')),'') IS NOT NULL
     GROUP BY btrim(item->>'station_code')
   LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM public.kitchen_stations ks
+      WHERE ks.branch_id = p_branch_id
+        AND lower(btrim(ks.code)) = lower(v_station)
+        AND ks.is_active
+    ) THEN
+      RAISE EXCEPTION 'KITCHEN_PRINT_STATION_BRANCH_OR_ACTIVE_MISMATCH';
+    END IF;
     -- The number before ':' must match the browser Number(current_quantity)
     -- formatting, not raw NUMERIC(14,4) scale.
     SELECT string_agg(
@@ -71,9 +96,11 @@ BEGIN
 
     SELECT COALESCE(string_agg(
       ((item->>'quantity')::numeric::double precision)::text ||
-      ' × ' || COALESCE(NULLIF(item->>'product_name',''),'—') ||
+      ' x ' || COALESCE(NULLIF(item->>'product_name',''),'—') ||
       COALESCE(
-        (SELECT ' • ' || string_agg(COALESCE(NULLIF(m->>'option_name',''),m->>'option_name_en'), ' • ')
+        (SELECT E'\r\n' || string_agg(
+           '+ ' || COALESCE(NULLIF(m->>'option_name',''),m->>'option_name_en'),
+           E'\r\n')
          FROM jsonb_array_elements(
            CASE WHEN jsonb_typeof(item->'modifiers')='array'
              THEN item->'modifiers' ELSE '[]'::jsonb END
@@ -82,9 +109,9 @@ BEGIN
         ''
       ) ||
       CASE WHEN NULLIF(btrim(COALESCE(item->>'notes','')),'') IS NOT NULL
-        THEN ' • ' || btrim(item->>'notes') ELSE '' END,
-      E'\n' ORDER BY ord),''), COALESCE(jsonb_agg(
-      jsonb_build_object(
+        THEN E'\r\nملاحظة: ' || btrim(item->>'notes') ELSE '' END,
+      E'\r\n' ORDER BY ord),''), COALESCE(jsonb_agg(
+      jsonb_strip_nulls(jsonb_build_object(
         'qty', ((item->>'quantity')::numeric::double precision)::text,
         'name', COALESCE(NULLIF(item->>'product_name',''),'—'),
         'notes', NULLIF(btrim(COALESCE(item->>'notes','')),''),
@@ -96,28 +123,28 @@ BEGIN
           ) m
           WHERE COALESCE(NULLIF(m->>'option_name',''),m->>'option_name_en') IS NOT NULL
         ),'[]'::jsonb)
-      ) ORDER BY ord
+      )) ORDER BY ord
     ),'[]'::jsonb)
     INTO v_item_text, v_template_items
     FROM jsonb_array_elements(v_group) WITH ORDINALITY AS i(item,ord);
 
-    v_text := concat_ws(E'\n',
+    v_text := concat_ws(E'\r\n',
       'تذكرة المطبخ','المحطة',v_station,repeat('-',32),
       'الطلب: ' || COALESCE(NULLIF(p_send->>'order_number',''),p_order_id::text),
       CASE WHEN NULLIF(p_send->>'table_name','') IS NOT NULL
         THEN 'الطاولة: ' || (p_send->>'table_name') END,
       CASE WHEN NULLIF(p_send->>'order_type','') IS NOT NULL
-        THEN 'النوع: ' || (p_send->>'order_type') END,
+        THEN 'النوع: ' || v_order_type_label END,
       'الوقت: ' || to_char(timezone('Africa/Cairo',now()),'HH24:MI'),
       CASE WHEN NULLIF(p_send->>'guest_count','') IS NOT NULL
         THEN 'الأفراد: ' || (p_send->>'guest_count') END,
-      repeat('-',32),'الأصناف',v_item_text,repeat('-',32));
+      repeat('-',32),'الأصناف',v_item_text,repeat('-',32),'');
 
     v_meta := jsonb_build_array(
       jsonb_build_object('label','رقم الطلب','value',
         COALESCE(NULLIF(p_send->>'order_number',''),p_order_id::text),'emphasis',true),
       jsonb_build_object('label','التاريخ','value',v_stamp),
-      jsonb_build_object('label','النوع','value',COALESCE(p_send->>'order_type','—'))
+      jsonb_build_object('label','النوع','value',COALESCE(v_order_type_label,'—'))
     );
     IF NULLIF(p_send->>'table_name','') IS NOT NULL THEN
       v_meta := v_meta || jsonb_build_array(
