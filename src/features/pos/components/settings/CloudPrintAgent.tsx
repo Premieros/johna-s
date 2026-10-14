@@ -18,7 +18,9 @@ import {
   isSilentPrintEnabled,
 } from '../../services/localPrintAgent';
 
-const REALTIME_RECONCILE_INTERVAL_MS = 60_000;
+// Reconcile missed Realtime wake events quickly enough for kitchen service.
+// Claims remain serialized, and this timer runs only while an enabled agent is idle.
+const REALTIME_RECONCILE_INTERVAL_MS = 8_000;
 const DISCONNECTED_POLL_INTERVAL_MS = 5_000;
 const BUSY_RETRY_INTERVAL_MS = 250;
 const TRANSPORT_CHECK_INTERVAL_MS = 5_000;
