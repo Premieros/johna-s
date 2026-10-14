@@ -4,9 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3f704f4a`
-- Current active branch: `development/ci-concurrent-verification-20261014`
-- Mandatory active work log: `docs/CI_VERIFICATION_LATENCY_2026-10-14.md`
+- Latest main baseline reconciled: `8fffc3d3`
+- Current active branch: `hotfix/kitchen-atomic-print-handoff-20261014`
+- Mandatory active work log: `docs/KITCHEN_ATOMIC_PRINT_HANDOFF_2026-10-14.md`
+
+## Current emergency staging: atomic kitchen print handoff — 2026-10-14
+- This isolated candidate attempts to eliminate the gap between successful kitchen send and durable cloud print job creation. It is outside canonical migrations, **not applied** to production and must not change the V8 Windows agent or replay old orders.
+- Active branch `hotfix/kitchen-atomic-print-handoff-20261014`; targeted proof in `tests/integration/kitchen_atomic_print_handoff.test.ts`. A queued job uses the established sorted per-station send-id/quantity identity; frontend enqueue must remain idempotent and never print twice.
+- Rollout explicitly BLOCKED until exact isolated send/void/FIFO/authorization/template/performance proof and separately reviewed migration. The latest live 4h sample had 0 missing cloud jobs across 54 kitchen-sent orders; last-hour Smoha claim p95 ~11.8s remains a separate symptom.
+- No production SQL/indexes, orders, printers, financial transactions or Windows code changed by this track. Browser polling proposal #504 remains closed. Documentation: `docs/KITCHEN_ATOMIC_PRINT_HANDOFF_2026-10-14.md`.
 
 ## Database read recovery — 2026-10-14
 - Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.
