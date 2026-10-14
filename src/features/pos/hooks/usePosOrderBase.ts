@@ -12,7 +12,7 @@ import { resolveOrderBindingForSave } from '../utils/orderBinding';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart, sameCartConfiguration } from '../utils/cart';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
-import { sendOrderToKitchen } from '../services/kitchen';
+import { sendOrderToKitchen } from '../services/kitchenHandoff';
 import { enqueueCloudOpenOrderPrint, getCloudOpenOrderPrintState } from '../services/cloudPrint';
 import { createSaleOperationKey, processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
 import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
@@ -688,7 +688,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       const { ok, orderId: targetOrderId, orderNumber: targetOrderNumber } = await persistCart('open');
       if (!ok || !targetOrderId) return false;
 
-      const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId });
+      const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId, p_is_ar: isAr });
       if (!res.success) {
         if (res.error === 'ORDER_OPERATOR_REQUIRED') {
           show(

@@ -7,8 +7,17 @@ const orderHook = fs.readFileSync(path.join(root, 'src/features/pos/hooks/usePos
 const kitchenService = fs.readFileSync(path.join(root, 'src/features/pos/services/kitchen.ts'), 'utf8');
 const dispatchService = fs.readFileSync(path.join(root, 'src/features/pos/services/kitchenDispatch.ts'), 'utf8');
 const cloudPrint = fs.readFileSync(path.join(root, 'src/features/pos/services/cloudPrint.ts'), 'utf8');
+const handoff = fs.readFileSync(path.join(root, 'src/features/pos/services/kitchenHandoff.ts'), 'utf8');
 
 describe('kitchen station dispatch reliability contract', () => {
+  it('keeps opt-in disabled and sends from the correct UI language', () => {
+    expect(orderHook).toContain("from '../services/kitchenHandoff'");
+    expect(orderHook).toContain('p_is_ar: isAr');
+    expect(handoff).toContain("VITE_KITCHEN_ATOMIC_PRINT_HANDOFF === 'true'");
+    expect(handoff).toContain("if (!isKitchenHandoffOptedIn()) return sendLegacyOrderToKitchen(legacyParams)");
+    expect(handoff).toContain("result.print_queue_state === 'queued'");
+  });
+
   it('uses the saved order branch rather than the selected workspace branch', () => {
     expect(orderHook).toContain("p_branch_id: branchId");
     expect(kitchenService).toContain("p_branch_id?: string | null");
