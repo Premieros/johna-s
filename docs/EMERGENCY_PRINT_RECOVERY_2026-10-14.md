@@ -24,7 +24,8 @@ main `8fffc3d3` (#503). Supabase project `azzdesuowpdcoflmyezn`. Observed Smoha 
 - Production migration `20261014184308_emergency_receipt_open_check_pattern_index_20261014`: partial receipt prefix lookup index only; applied with 1.5s lock and 15s statement timeouts.
 - Production migration `20261014184418_emergency_print_alert_read_index_20261014`: partial recent-alert index only; same bounded lock/statement constraints.
 - Web source: subscribed print agent reconciliation 60s to 5s with existing Realtime wake and queue claim/ack untouched.
-- Focused wake source contract updated. Retain automatic browser / DB CI gates; no new bespoke long performance tests.
+- POS kitchen send source: one 250ms-delayed retry only for `rpc.error.code === '57014'`, which proves the PostgreSQL transaction was aborted; never retry unknown transport/commit outcomes. Existing authoritative inventory/send/print RPCs unchanged.
+- Focused wake source contract updated and three short behavioral kitchen RPC retry tests added (success on second attempt, unknown network failure no retry, repeated 57014 stops after one retry). Retain automatic browser / DB CI gates; no new bespoke long performance tests.
 
 ## Verification ledger
 Production indexes exist; post-index EXPLAIN selects `idx_cloud_print_receipt_open_check_lookup` (estimated total cost 2.51) and `idx_cloud_print_alerts_recent` (cost 3.22). No live paper or post-index production p95 guarantee. CI must validate exact updated head; a first attempt failed only because the previous active branch was still declared in the work plan.
@@ -33,7 +34,7 @@ Production indexes exist; post-index EXPLAIN selects `idx_cloud_print_receipt_op
 State: **BLOCKED** pending exact-head CI and merge/deploy. The two index migrations were applied successfully directly in the selected production project, then verified read-only. No kitchen/inventory DDL, Windows changes or manual replays. Owner requested urgent repair and shorter tests; do not weaken mandatory correctness checks.
 
 ## Next action
-Update mandatory active branch reference, verify focused source and exact-head CI; publish web fix if green. Review remaining kitchen-send timeouts independently, and obtain real-device evidence only if paper is still absent. Do not automatically replay historical kitchen tickets.
+Update mandatory active branch reference, verify focused source and exact-head CI; publish web fix if green. Review remaining kitchen-send timeouts independently (client bounded retry is mitigation, not permanent SQL performance fix), and obtain real-device evidence only if paper is still absent. Do not automatically replay historical kitchen tickets.
 
 ## Mandatory update protocol
 Single writer. Confirm main/branch before merge; no direct main writes or force pushes. Keep applied migration versions in sync with canonical history. Stop on unexpected schema or main drift; never replace production order, FIFO or accounting records.
