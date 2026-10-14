@@ -46,6 +46,26 @@ describe('approval inbox read recovery', () => {
     await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(2));
     expect(m.print).toHaveBeenCalledOnce();
   });
+  it('retries failed alert reads on the next event before suppressing normal jobs', async () => {
+    m.print.mockRejectedValueOnce(new Error('network')).mockResolvedValue({data:[alert],error:null});
+    const screen=render(<ApprovalInbox ar={false} />);
+    await waitFor(() => expect(m.print).toHaveBeenCalledOnce());
+    await act(async () => {m.callbacks[1]({new:{id:'ordinary',status:'submitted',attempts:1}});});
+    await waitFor(() => expect(screen.getByTestId('system-alerts-count')).toHaveTextContent('1'));
+    expect(m.print).toHaveBeenCalledTimes(2);expect(m.rpc).toHaveBeenCalledOnce();
+    await act(async () => {m.callbacks[1]({new:{id:'another-ordinary',status:'submitted',attempts:1}});});
+    expect(m.print).toHaveBeenCalledTimes(2);
+  });
+  it('retries an unavailable approval list without unnecessarily rereading print alerts', async () => {
+    m.rpc.mockResolvedValueOnce({data:null,error:{code:'57014'}}).mockResolvedValue({data:[],error:null});
+    render(<ApprovalInbox ar={false} />);
+    await waitFor(() => expect(m.print).toHaveBeenCalledOnce());
+    await act(async () => {m.callbacks[1]({new:{id:'ordinary',status:'submitted',attempts:1}});});
+    await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(2));
+    expect(m.print).toHaveBeenCalledOnce();
+    await act(async () => {m.callbacks[1]({new:{id:'another-ordinary',status:'submitted',attempts:1}});});
+    expect(m.rpc).toHaveBeenCalledTimes(2);
+  });
   it('failures and recovery refresh alerts without querying approvals', async () => {
     m.print.mockResolvedValue({data:[alert],error:null});
     const screen=render(<ApprovalInbox ar={false} />);

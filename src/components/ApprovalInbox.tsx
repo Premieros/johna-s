@@ -164,77 +164,93 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
   }, [alertStorageKey]);
 
   const knownPrintAlerts = useRef(new Set<string>());
+  const printReadNeedsRetry = useRef(false);
+  const approvalReadNeedsRetry = useRef(false);
   const loadApprovals = useCallback(async (isCurrent: () => boolean) => {
     if (!allowed || !user?.id || document.hidden) return;
-    const approvalsResult = await supabase.rpc('get_operational_approval_queue', { p_branch_id: null });
-    if (!isCurrent()) return;
+    try {
+      const approvalsResult = await supabase.rpc('get_operational_approval_queue', { p_branch_id: null });
+      if (!isCurrent()) return;
+      if (approvalsResult.error) { approvalReadNeedsRetry.current = true; return; }
+      approvalReadNeedsRetry.current = false;
 
-    const approvalRows = ((approvalsResult.data ?? []) as Array<{
-      source_type: string;
-      source_id: string;
-      title: string;
-      status: string;
-      requested_by: string | null;
-      requested_at: string;
-      payload: {
-        entity_type?: string;
-        entity_id?: string | null;
-        reason?: string;
-        payload?: Record<string, unknown>;
-      };
-    }>)
-      .filter((item) => item.source_type === 'manager_approval')
-      .map((item) => ({
-        id: item.source_id,
-        action_type: item.title,
-        entity_type: item.payload?.entity_type || '',
-        entity_id: item.payload?.entity_id || null,
-        payload: item.payload?.payload || {},
-        reason: item.payload?.reason || '',
-        status: item.status,
-        created_at: item.requested_at,
-        requester_id: item.requested_by || '',
-      })) as ApprovalRequest[];
+      const approvalRows = ((approvalsResult.data ?? []) as Array<{
+        source_type: string;
+        source_id: string;
+        title: string;
+        status: string;
+        requested_by: string | null;
+        requested_at: string;
+        payload: {
+          entity_type?: string;
+          entity_id?: string | null;
+          reason?: string;
+          payload?: Record<string, unknown>;
+        };
+      }>)
+        .filter((item) => item.source_type === 'manager_approval')
+        .map((item) => ({
+          id: item.source_id,
+          action_type: item.title,
+          entity_type: item.payload?.entity_type || '',
+          entity_id: item.payload?.entity_id || null,
+          payload: item.payload?.payload || {},
+          reason: item.payload?.reason || '',
+          status: item.status,
+          created_at: item.requested_at,
+          requester_id: item.requested_by || '',
+        })) as ApprovalRequest[];
 
-    const requesterIds = Array.from(new Set(approvalRows.map((item) => item.requester_id).filter(Boolean)));
-    let requesterNames: Record<string, string> = {};
-    if (!approvalsResult.error && requesterIds.length > 0) {
-      const { data: requesterRows } = await supabase
-        .from('users')
-        .select('id,full_name,username,email')
-        .in('id', requesterIds);
-      requesterNames = Object.fromEntries(
-        (requesterRows ?? [] as RequesterDisplayRow[]).map((row) => [
-          String(row.id),
-          String(row.full_name || row.username || row.email || '').trim(),
-        ]),
-      );
-    }
-    if (!isCurrent()) return;
-    if (!approvalsResult.error) {
-      setItems(approvalRows.map((item) => ({
-        ...item,
-        requester_name: requesterNames[item.requester_id] || null,
-      })));
+      const requesterIds = Array.from(new Set(approvalRows.map((item) => item.requester_id).filter(Boolean)));
+      let requesterNames: Record<string, string> = {};
+      if (!approvalsResult.error && requesterIds.length > 0) {
+        const { data: requesterRows } = await supabase
+          .from('users')
+          .select('id,full_name,username,email')
+          .in('id', requesterIds);
+        requesterNames = Object.fromEntries(
+          (requesterRows ?? [] as RequesterDisplayRow[]).map((row) => [
+            String(row.id),
+            String(row.full_name || row.username || row.email || '').trim(),
+          ]),
+        );
+      }
+      if (!isCurrent()) return;
+      if (!approvalsResult.error) {
+        setItems(approvalRows.map((item) => ({
+          ...item,
+          requester_name: requesterNames[item.requester_id] || null,
+        })));
+      }
+    } catch (error) {
+      if (isCurrent()) approvalReadNeedsRetry.current = true;
+      throw error;
     }
   }, [allowed, user?.id]);
 
   const loadPrintAlerts = useCallback(async (isCurrent: () => boolean) => {
     if (!allowed || !user?.id || !user.branch_id || document.hidden) return;
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const printResult = await supabase.from('cloud_print_jobs')
-      .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at')
-      .eq('branch_id', user.branch_id)
-      .or('status.eq.failed,and(status.eq.submitted,attempts.gt.1)')
-      .gte('updated_at', since)
-      .order('updated_at', { ascending: false })
-      .limit(40);
-    if (!isCurrent() || printResult.error) return;
-    const recent = ((printResult.data ?? []) as PrintAlert[])
-      .filter((item) => item.status === 'failed' || (item.status === 'submitted' && item.attempts > 1))
-      .slice(0, 20);
-    knownPrintAlerts.current = new Set(recent.map((item) => item.id));
-    setPrintAlerts(recent);
+    try {
+      const printResult = await supabase.from('cloud_print_jobs')
+        .select('id,kind,station_code,status,attempts,last_error,created_at,updated_at')
+        .eq('branch_id', user.branch_id)
+        .or('status.eq.failed,and(status.eq.submitted,attempts.gt.1)')
+        .gte('updated_at', since)
+        .order('updated_at', { ascending: false })
+        .limit(40);
+      if (!isCurrent()) return;
+      if (printResult.error) { printReadNeedsRetry.current = true; return; }
+      printReadNeedsRetry.current = false;
+      const recent = ((printResult.data ?? []) as PrintAlert[])
+        .filter((item) => item.status === 'failed' || (item.status === 'submitted' && item.attempts > 1))
+        .slice(0, 20);
+      knownPrintAlerts.current = new Set(recent.map((item) => item.id));
+      setPrintAlerts(recent);
+    } catch (error) {
+      if (isCurrent()) printReadNeedsRetry.current = true;
+      throw error;
+    }
   }, [allowed, user?.branch_id, user?.id]);
 
   const refreshQueueRef = useRef<ReturnType<typeof createReadRefreshQueue> | null>(null);
@@ -245,6 +261,8 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
     setItems([]);
     setPrintAlerts([]);
     knownPrintAlerts.current = new Set();
+    printReadNeedsRetry.current = false;
+    approvalReadNeedsRetry.current = false;
     const refresh = () => { if (!document.hidden) void refreshQueue.request().catch(() => {}); };
     const refreshPrint = () => { if (!document.hidden) void printQueue.request().catch(() => {}); };
     const refreshAll = () => { refresh(); refreshPrint(); };
@@ -264,13 +282,14 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'cloud_print_jobs', filter: `branch_id=eq.${user.branch_id}` },
         (payload) => {
+          if (approvalReadNeedsRetry.current) refresh();
           const row = (payload?.new || {}) as Partial<PrintAlert>;
           const old = (payload?.old || {}) as Partial<PrintAlert>;
           const relevant = (item: Partial<PrintAlert>) => item.status === 'failed'
             || (item.status === 'submitted' && Number(item.attempts) > 1);
           // Unknown/delete payloads and previously visible alerts must reconcile.
           // Ordinary first-attempt jobs do not affect the alert list.
-          if (relevant(row) || relevant(old)
+          if (printReadNeedsRetry.current || relevant(row) || relevant(old)
             || knownPrintAlerts.current.has(String(row.id || old.id || ''))
             || (row.status === 'submitted' && row.attempts == null)
             || (!row.status && !old.status)) refreshPrint();
