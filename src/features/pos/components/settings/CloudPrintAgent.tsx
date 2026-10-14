@@ -18,7 +18,9 @@ import {
   isSilentPrintEnabled,
 } from '../../services/localPrintAgent';
 
-const REALTIME_RECONCILE_INTERVAL_MS = 60_000;
+// Realtime can miss wake events during brief disconnects; recover queued tickets promptly.
+// Keep a bounded 5s safety sweep instead of a 60s blind spot (no Windows service changes).
+const REALTIME_RECONCILE_INTERVAL_MS = 5_000;
 const DISCONNECTED_POLL_INTERVAL_MS = 5_000;
 const BUSY_RETRY_INTERVAL_MS = 250;
 const TRANSPORT_CHECK_INTERVAL_MS = 5_000;
