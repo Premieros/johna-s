@@ -3,7 +3,7 @@ import { rpc } from '@/api/rpc';
 import { supabase } from '@/api';
 import { sendOrderToKitchen as sendLegacyOrderToKitchen } from './kitchen';
 import { dispatchKitchenStations } from './kitchenDispatch';
-import { groupKitchenItemsByStation, suppressNextKitchenBrowserPopup } from './localPrintAgent';
+import { groupKitchenItemsByStation } from './localPrintAgent';
 
 // OFF in all current builds. A later, reviewed release must explicitly set
 // VITE_KITCHEN_ATOMIC_PRINT_HANDOFF=true *after* the optional SQL RPC is installed.
@@ -97,7 +97,8 @@ export async function sendOrderToKitchen(p: HandoffParams): Promise<KitchenSendR
           failed_stations: confirmed ? [] : stations,
           missing_station_items: missing,
         };
-        if (confirmed) suppressNextKitchenBrowserPopup();
+        // The POS hook skips the automatic browser print explicitly.
+        // Never hijack window.open: unrelated windows must keep working.
       } else if (orderBranchId && (
         result.print_queue_state === 'client_fallback' || result.print_queue_state === 'client_only'
       )) {
@@ -139,6 +140,11 @@ export async function sendOrderToKitchen(p: HandoffParams): Promise<KitchenSendR
       items_sent_count: result.items_sent_count ?? result.items_processed ?? sent.length,
       all_sent: result.all_sent ?? true,
       dispatch,
+      // Any server-queued or unrecognized status may already have printed.
+      // Only an explicit fallback/client-only response permits browser print.
+      suppress_kitchen_browser_popup: !(
+        result.print_queue_state === 'client_fallback' || result.print_queue_state === 'client_only'
+      ),
     };
   } catch (error) {
     return { success: false, error: 'KITCHEN_SEND_FAILED',

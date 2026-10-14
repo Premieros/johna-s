@@ -727,7 +727,8 @@ export function usePosOrder(input: UsePosOrderInput) {
         } else {
           show(`${t('sendToKitchen')} (${sentCount})`, 'success');
         }
-        if (effSettings) {
+        // A server-queued or ambiguous print outcome must never open another ticket.
+        if (effSettings && !res.suppress_kitchen_browser_popup) {
           const html = buildKitchenTicketHtml({
             orderNumber: targetOrderNumber || activeOrderNumber,
             tableName: activeTable?.name || null,

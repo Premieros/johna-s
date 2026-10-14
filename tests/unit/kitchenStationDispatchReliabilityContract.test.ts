@@ -16,6 +16,8 @@ describe('kitchen station dispatch reliability contract', () => {
     expect(handoff).toContain("VITE_KITCHEN_ATOMIC_PRINT_HANDOFF === 'true'");
     expect(handoff).toContain("if (!isKitchenHandoffOptedIn()) return sendLegacyOrderToKitchen(legacyParams)");
     expect(handoff).toContain("result.print_queue_state === 'queued'");
+    expect(orderHook).toContain('effSettings && !res.suppress_kitchen_browser_popup');
+    expect(handoff).not.toContain('suppressNextKitchenBrowserPopup');
   });
 
   it('uses the saved order branch rather than the selected workspace branch', () => {

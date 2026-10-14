@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   legacy: vi.fn(),
   rpc: vi.fn(),
   dispatch: vi.fn(),
-  popup: vi.fn(),
   from: vi.fn(),
 }));
 vi.mock('@/api/rpc', () => ({ rpc: mocks.rpc }));
@@ -13,7 +12,6 @@ vi.mock('@/api', () => ({ supabase: { from: mocks.from } }));
 vi.mock('@/features/pos/services/kitchen', () => ({ sendOrderToKitchen: mocks.legacy }));
 vi.mock('@/features/pos/services/kitchenDispatch', () => ({ dispatchKitchenStations: mocks.dispatch }));
 vi.mock('@/features/pos/services/localPrintAgent', () => ({
-  suppressNextKitchenBrowserPopup: mocks.popup,
   groupKitchenItemsByStation: (items: KitchenSendItem[]) => {
     const groups: Record<string, KitchenSendItem[]> = {};
     for (const item of items) {
@@ -53,7 +51,6 @@ describe('disabled-by-default kitchen handoff integration', () => {
     expect(mocks.legacy).toHaveBeenCalledOnce();
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.dispatch).not.toHaveBeenCalled();
-    expect(mocks.popup).not.toHaveBeenCalled();
   });
 
   it('accepts fully confirmed server tickets without a second enqueue or local paper', async () => {
@@ -66,7 +63,7 @@ describe('disabled-by-default kitchen handoff integration', () => {
     expect(r.dispatch?.stations.map((s) => s.state)).toEqual(['queued', 'queued']);
     expect(mocks.legacy).not.toHaveBeenCalled();
     expect(mocks.dispatch).not.toHaveBeenCalled();
-    expect(mocks.popup).toHaveBeenCalledOnce();
+    expect(r.suppress_kitchen_browser_popup).toBe(true);
   });
 
   it('routes server failure to the existing station fallback with saved order branch', async () => {
@@ -74,22 +71,22 @@ describe('disabled-by-default kitchen handoff integration', () => {
     mocks.rpc.mockResolvedValue({ data: result('client_fallback'), error: null });
     const r = await sendOrderToKitchen(params);
     expect(r.success).toBe(true);
+    expect(r.suppress_kitchen_browser_popup).toBe(false);
     expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({
       branchId: 'test-branch', allowLocalFallback: true, items,
       context: expect.objectContaining({ isAr: true }),
     }));
-    expect(mocks.popup).not.toHaveBeenCalled();
   });
 
   it('preserves English browser printing and never requests server Arabic ticket', async () => {
     vi.stubEnv('VITE_KITCHEN_ATOMIC_PRINT_HANDOFF', 'true');
     mocks.rpc.mockResolvedValue({ data: result('client_only'), error: null });
-    await sendOrderToKitchen({ ...params, p_is_ar: false });
+    const r = await sendOrderToKitchen({ ...params, p_is_ar: false });
+    expect(r.suppress_kitchen_browser_popup).toBe(false);
     expect(mocks.rpc).toHaveBeenCalledWith('send_to_kitchen_with_print', expect.objectContaining({ p_is_ar: false }));
     expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({
       context: expect.objectContaining({ isAr: false }),
     }));
-    expect(mocks.popup).not.toHaveBeenCalled();
   });
 
   it('does not attempt a second print when server acknowledgement is inconsistent', async () => {
@@ -98,8 +95,18 @@ describe('disabled-by-default kitchen handoff integration', () => {
     const r = await sendOrderToKitchen(params);
     expect(r.success).toBe(true);
     expect(r.dispatch?.status).toBe('failed');
+    expect(r.suppress_kitchen_browser_popup).toBe(true);
     expect(mocks.dispatch).not.toHaveBeenCalled();
-    expect(mocks.popup).not.toHaveBeenCalled();
+  });
+
+  it('suppresses any unknown print outcome instead of risking duplicate paper', async () => {
+    vi.stubEnv('VITE_KITCHEN_ATOMIC_PRINT_HANDOFF', 'true');
+    mocks.rpc.mockResolvedValue({ data: result('unexpected'), error: null });
+    const r = await sendOrderToKitchen(params);
+    expect(r.success).toBe(true);
+    expect(r.dispatch?.status).toBe('failed');
+    expect(r.suppress_kitchen_browser_popup).toBe(true);
+    expect(mocks.dispatch).not.toHaveBeenCalled();
   });
 
   it('falls back to canonical send ONLY on known missing-RPC errors', async () => {
