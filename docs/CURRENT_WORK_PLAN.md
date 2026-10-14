@@ -4,9 +4,16 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `3f704f4a`
-- Current active branch: `development/ci-concurrent-verification-20261014`
-- Mandatory active work log: `docs/CI_VERIFICATION_LATENCY_2026-10-14.md`
+- Latest main baseline reconciled: `8fffc3d3`
+- Current active branch: `hotfix/print-wake-emergency-20261014`
+- Mandatory active work log: `docs/PRINT_WAKE_EMERGENCY_2026-10-14.md`
+
+## Emergency print wake mitigation — 2026-10-14
+- Owner reports urgent missing/delayed kitchen tickets and explicitly requires avoiding additional operational problems and needless CI repeats. Active scoped PR #504; no Windows agent code/install change, no database migration/index apply, no production print requeue.
+- Connected browser print-agent missed-Realtime safety reconciliation is shortened 60s to 8s. This **does not** solve confirmed send_to_kitchen timeouts or prove physical paper output. Keep idempotent dispatch, original branch routes, station serialization and 5s disconnected retry.
+- Read-only current symptoms: 46 statement timeouts in 24h including 6 kitchen sends; Smoha queue claim p95 ~11s and two Cleopatra kitchen sends with no matching cloud job (local fallback unknown). Do not replay historical tickets.
+- First PR #504 exact-head CI had DB/browser/pages green and Windows build green; frontend verify failed only stale mandatory work-log branch. Corrected here; **do not merge** until new exact-head mandatory checks pass and release is authorized.
+- Additional connected idle claims may increase query rate; if operational DB pressure worsens, revert only this frontend timer. Critical server-side speedup remains staged for isolated tests and separate review. Details: `docs/PRINT_WAKE_EMERGENCY_2026-10-14.md`.
 
 ## Database read recovery — 2026-10-14
 - Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.
