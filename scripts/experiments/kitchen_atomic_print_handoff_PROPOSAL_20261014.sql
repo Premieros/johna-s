@@ -4,8 +4,9 @@
 -- Transactional print-handoff candidate: authoritative kitchen delta -> durable
 -- cloud print job in the SAME transaction; no Windows or client API change.
 -- Existing kitchen identity: kitchen:<station>:<sorted send_id:current_quantity>.
--- Error in queue insertion aborts the send transaction instead of recording
--- "sent" without a printable job. No implicit reprint of historic orders.
+-- The opt-in RPC catches queue insertion failure and falls back to the
+-- existing browser dispatch without rolling back a successful kitchen send.
+-- No implicit replay of historic or ambiguous orders.
 CREATE OR REPLACE FUNCTION private._enqueue_kitchen_sent_delta(
   p_branch_id uuid, p_order_id uuid, p_actor_id uuid, p_send jsonb
 ) RETURNS integer LANGUAGE plpgsql SECURITY INVOKER
@@ -184,113 +185,60 @@ $atomic_print$;
 REVOKE ALL ON FUNCTION private._enqueue_kitchen_sent_delta(uuid,uuid,uuid,jsonb)
   FROM PUBLIC, anon, authenticated, service_role;
 
--- The original SECURITY DEFINER wrapper, with the only added call immediately
--- after the canonical core. No core/FIFO/stock, guards, grants, or ACL changes.
-
-CREATE OR REPLACE FUNCTION public.send_to_kitchen(p_order_id uuid, p_sent_by uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
-AS $function$
+-- NEW OPT-IN RPC ONLY. The existing public.send_to_kitchen(uuid,uuid) is
+-- intentionally NEVER replaced. Old clients and inventory behavior do not change.
+-- The opt-in client passes the actual UI language. Because the approved SQL
+-- formatter currently matches Arabic only, English retains client-only
+-- dispatch rather than receiving an incorrectly translated kitchen ticket.
+CREATE OR REPLACE FUNCTION public.send_to_kitchen_with_print(
+  p_order_id uuid, p_sent_by uuid, p_is_ar boolean
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO 'public','pg_temp'
+AS $optional_handoff$
 DECLARE
-  v_uid uuid := auth.uid();
-  v_order public.orders%ROWTYPE;
-  v_is_service_role boolean := COALESCE(current_setting('role',true),'')='service_role';
-  v_was_served boolean := false;
   v_result jsonb;
+  v_uid uuid := auth.uid();
+  v_count integer;
 BEGIN
-  IF v_is_service_role THEN
-    SELECT * INTO v_order FROM public.orders WHERE id = p_order_id;
-    IF v_order.id IS NULL THEN
-      RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND');
-    END IF;
-  ELSE
-    IF v_uid IS NULL THEN
-      RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
-    END IF;
-    IF NOT public.can_permission('pos.send_kitchen') THEN
-      RETURN jsonb_build_object(
-        'success',false,'error','PERMISSION_DENIED',
-        'permission','pos.send_kitchen'
-      );
-    END IF;
-
-    SELECT * INTO v_order
-    FROM public.orders
-    WHERE id=p_order_id;
-
-    IF v_order.id IS NULL THEN
-      RETURN jsonb_build_object('success',false,'error','ORDER_NOT_FOUND');
-    END IF;
-    IF NOT public.user_may_access_branch(v_order.branch_id) THEN
-      RETURN jsonb_build_object('success',false,'error','BRANCH_MISMATCH');
-    END IF;
-    IF v_order.status NOT IN ('open','held') THEN
-      RETURN jsonb_build_object('success',false,'error','ORDER_NOT_EDITABLE');
-    END IF;
-
-    IF v_order.cashier_id IS DISTINCT FROM v_uid THEN
-      PERFORM set_config('app.pos_action_authorized','1',true);
-      PERFORM set_config('app.pos_action_actor_id',v_uid::text,true);
-      PERFORM set_config('app.pos_action_order_id',p_order_id::text,true);
-      PERFORM set_config('app.pos_action_permission','pos.send_kitchen',true);
-    END IF;
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
   END IF;
-
-  v_was_served := v_order.kitchen_status = 'served';
-
-  IF v_was_served THEN
-    CREATE TEMP TABLE IF NOT EXISTS pg_temp.kns_served_before (
-      order_item_id uuid PRIMARY KEY,
-      sent_quantity numeric(14,4) NOT NULL
-    ) ON COMMIT DROP;
-    TRUNCATE pg_temp.kns_served_before;
-
-    INSERT INTO pg_temp.kns_served_before(order_item_id, sent_quantity)
-    SELECT oi.id, COALESCE(oks.sent_quantity, 0)
-    FROM public.order_items oi
-    LEFT JOIN public.order_kitchen_sends oks ON oks.order_item_id = oi.id
-    WHERE oi.order_id = p_order_id
-      AND COALESCE(oks.sent_quantity, 0) > 0;
+  IF p_is_ar IS NULL THEN
+    RETURN jsonb_build_object('success',false,'error','PRINT_LANGUAGE_REQUIRED');
   END IF;
-
-  v_result := public._send_to_kitchen_core_20260914(p_order_id,p_sent_by);
-
-  -- The kitchen print intent is inserted in this same order/inventory transaction.
-  -- The browser's existing per-station idempotency key resolves to this job;
-  -- it cannot create a second physical print task.
-  IF v_uid IS NOT NULL
-     AND COALESCE((v_result->>'success')::boolean, false)
-     AND COALESCE((v_result->>'items_sent_count')::integer, 0) > 0 THEN
-    PERFORM private._enqueue_kitchen_sent_delta(
-      v_order.branch_id, p_order_id, v_uid, v_result
+  -- The existing canonical function owns all permissions, branch, price,
+  -- warehouse, inventory, FIFO, cancellation and served-order invariants.
+  v_result := public.send_to_kitchen(p_order_id,p_sent_by);
+  IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
+    RETURN v_result;
+  END IF;
+  IF COALESCE((v_result->>'items_sent_count')::integer,0) = 0 THEN
+    RETURN v_result || jsonb_build_object('print_queue_state','not_needed');
+  END IF;
+  IF NOT p_is_ar THEN
+    RETURN v_result || jsonb_build_object(
+      'print_queue_state','client_only','print_queue_warning','ENGLISH_TICKET_USE_EXISTING_CLIENT'
     );
   END IF;
-
-  IF v_was_served
-     AND COALESCE((v_result->>'success')::boolean, false)
-     AND COALESCE((v_result->>'items_sent_count')::integer, 0) > 0 THEN
-    INSERT INTO public.order_kitchen_served_quantities(
-      order_id,
-      order_item_id,
-      served_quantity,
-      served_at
-    )
-    SELECT p_order_id, b.order_item_id, b.sent_quantity, now()
-    FROM pg_temp.kns_served_before b
-    ON CONFLICT (order_id, order_item_id) DO UPDATE
-    SET served_quantity = EXCLUDED.served_quantity,
-        served_at = EXCLUDED.served_at;
-
-    UPDATE public.orders
-    SET kitchen_status = 'sent',
-        kitchen_sent_at = now(),
-        updated_at = now()
-    WHERE id = p_order_id;
-  END IF;
-
-  RETURN v_result || jsonb_build_object('branch_id',v_order.branch_id);
+  -- Isolate the optional queue insert in its own PL/pgSQL subtransaction.
+  -- A queue error MUST NOT roll back the successful kitchen send/stock effects.
+  BEGIN
+    v_count := private._enqueue_kitchen_sent_delta(
+      (v_result->>'branch_id')::uuid,p_order_id,v_uid,v_result
+    );
+    RETURN v_result || jsonb_build_object(
+      'print_queue_state','queued','print_queue_jobs',v_count
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RETURN v_result || jsonb_build_object(
+      'print_queue_state','client_fallback',
+      'print_queue_warning','DURABLE_KITCHEN_PRINT_ENQUEUE_FAILED'
+    );
+  END;
 END;
-$function$
-
+$optional_handoff$;
+REVOKE ALL ON FUNCTION public.send_to_kitchen_with_print(uuid,uuid,boolean)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.send_to_kitchen_with_print(uuid,uuid,boolean)
+  TO authenticated;
