@@ -42,6 +42,12 @@ Use this **only if the new SQL experiment has already been separately deployed**
 
 Before enabling any pilot, require exact-head isolated RLS/rollback tests of this gate, representative send-to-kitchen latency/load evidence, production schema ACL review, one pilot branch, documented live monitoring, and an operator capable of confirming physical tickets. Never enable without rollback visibility; assistant is not a continuously running production watchdog.
 
+### Bounded queue lock handling — staged only
+
+The optional queue helper now temporarily sets `lock_timeout=250ms` **after** the canonical `send_to_kitchen` returns, restores the preexisting setting on success, and relies on the inner exception subtransaction to restore it on a 55P03 queue-lock failure. In that case the existing browser dispatcher gets `client_fallback` instead of waiting indefinitely on the print queue. CI tests check both ordinary queue success and a simulated SQLSTATE 55P03 queue insert failure, and the lock GUC is restored.
+
+**This is not a global RPC deadline.** PostgreSQL `query_canceled (57014)` is not caught by `WHEN OTHERS`, and synchronous print format/insert can still add CPU/transaction time. Production pilot stays BLOCKED without a bounded-latency measurement and the default-off expiring remote stop.
+
 ## Production gate
 State: **BLOCKED**.
 Merge requires owner approval AFTER all CI succeeds. Merging a build with both feature flags unset does not enable new print routing; actual DB SQL activation requires a SEPARATE, explicitly approved production action. Verify that production build environment does not set VITE_KITCHEN_ATOMIC_PRINT_HANDOFF or a pilot branch ID. Never combine merge approval with database rollout approval.

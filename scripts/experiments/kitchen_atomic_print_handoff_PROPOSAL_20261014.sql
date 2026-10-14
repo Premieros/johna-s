@@ -215,6 +215,7 @@ DECLARE
   v_result jsonb;
   v_uid uuid := auth.uid();
   v_count integer;
+  v_prior_lock_timeout text;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
@@ -253,13 +254,22 @@ BEGIN
         'print_queue_warning','SERVER_KITCHEN_PRINT_HANDOFF_DISABLED'
       );
     END IF;
+    -- Do not let print-queue row/index locks hold the kitchen RPC for seconds.
+    -- This bounds LOCK WAITS only, never the canonical send or CPU time.
+    -- On exception this subtransaction restores the GUC automatically.
+    v_prior_lock_timeout := current_setting('lock_timeout');
+    PERFORM set_config('lock_timeout','250ms',true);
     v_count := private._enqueue_kitchen_sent_delta(
       (v_result->>'branch_id')::uuid,p_order_id,v_uid,v_result
     );
+    PERFORM set_config('lock_timeout',v_prior_lock_timeout,true);
     RETURN v_result || jsonb_build_object(
       'print_queue_state','queued','print_queue_jobs',v_count
     );
   EXCEPTION WHEN OTHERS THEN
+    -- Includes lock_not_available (55P03), but NOT query_canceled (57014).
+    -- PostgreSQL statement cancellation can still abort the full RPC:
+    -- do not authorize a pilot based on this fallback alone.
     RETURN v_result || jsonb_build_object(
       'print_queue_state','client_fallback',
       'print_queue_warning','DURABLE_KITCHEN_PRINT_ENQUEUE_FAILED'
