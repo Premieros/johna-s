@@ -1,9 +1,9 @@
 # Kitchen print handoff emergency — staging only
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `hotfix/kitchen-atomic-print-handoff-20261014`
-Current PR: #506
-Last updated: 2026-10-14 Cairo
+Branch: `hotfix/kitchen-atomic-remote-stop-20261015`
+Current PR: #507
+Last updated: 2026-10-15 Cairo
 
 ## Work status
 State: **BLOCKED**. Optional non-disruptive server-side print handoff experiment, not deployed.
@@ -12,7 +12,7 @@ State: **BLOCKED**. Optional non-disruptive server-side print handoff experiment
 No production SQL, sales/stock changes, installed Windows agent changes, automatic reprints, or live test orders. No unsupported performance claim. Preserve idempotent cloud print jobs and branch authorization.
 
 ## Baseline
-main 8fffc3d3. PR #504 browser polling change was closed without merge. The two earlier missing kitchen cloud tickets were not replayed.
+main af02abe15 (PR #506 merged, opt-in still OFF in production build). PR #504 browser polling change was closed without merge. The two earlier missing kitchen cloud tickets were not replayed.
 
 ## Root-cause ledger
 The authoritative kitchen send commits before the browser independently calls enqueue_cloud_kitchen_print. A closed browser or failed handoff can leave a sent order without a cloud ticket. The installed V8 agents are not being changed.
