@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
-import { seedRlsFixture, type RlsIds } from './rls';
+import { seedRlsFixture, runAsPersist, type RlsIds } from './rls';
 import { buildKitchenFixedTemplate } from '@/features/pos/services/localPrintAgent';
 import type { KitchenSendItem } from '@/features/pos/types';
 
@@ -33,10 +33,14 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     await db.connect();
     await db.query('BEGIN');
     ids = await seedRlsFixture(db);
-    await db.query(
-      "INSERT INTO public.kitchen_stations(branch_id,code,name_ar,name_en,is_active) VALUES ($1,'بار','بار','Bar',true),($1,'kit','مطبخ','Kitchen',true)",
+    const stations = await db.query<{ id: string; code: string }>(
+      "INSERT INTO public.kitchen_stations(branch_id,code,name_ar,name_en,is_active) VALUES ($1,'بار','بار','Bar',true),($1,'kit','مطبخ','Kitchen',true) RETURNING id,code",
       [ids.branchA],
     );
+    const bar = stations.rows.find((row) => row.code === 'بار')?.id;
+    expect(bar).toBeTruthy();
+    await db.query('UPDATE public.categories SET kitchen_station_id=$1 WHERE id=$2', [bar, ids.catA]);
+    await db.query('UPDATE public.products SET category_id=$1 WHERE id=$2', [ids.catA, ids.prodA]);
     // Rollback-only experiment. Never touch the production database.
     await db.query(readFileSync(sqlPath, 'utf8'));
   });
@@ -166,6 +170,68 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT direct_call');
     }
+  });
+
+
+  it('the real send_to_kitchen RPC atomically creates one durable ticket and a repeat does not resubmit', async () => {
+    await db.query('SAVEPOINT real_kitchen_send');
+    try {
+      const order = ids.rows.orders.own;
+      const first = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen($1) r', [order]);
+      expect(first.error).toBeUndefined();
+      const result = first.rows[0].r as {
+        success: boolean; error?: string; items_sent_count: number;
+        sent: Array<{ send_id: string; current_quantity: number; station_code: string }>;
+      };
+      expect(result.success, JSON.stringify(result)).toBe(true);
+      expect(result.items_sent_count).toBe(1);
+      const exactKey = 'kitchen:' + result.sent[0].station_code + ':'
+        + result.sent[0].send_id + ':' + Number(result.sent[0].current_quantity);
+      const persisted = (await db.query(
+        'SELECT kind,station_code,status,payload FROM public.cloud_print_jobs WHERE branch_id=$1 AND idempotency_key=$2',
+        [ids.branchA, exactKey],
+      )).rows;
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0].kind).toBe('kitchen');
+      expect(persisted[0].payload.order_id).toBe(order);
+      const again = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen($1) r', [order]);
+      expect(again.error).toBeUndefined();
+      expect((again.rows[0].r as { items_sent_count: number }).items_sent_count).toBe(0);
+      expect((await db.query(
+        'SELECT count(*)::int n FROM public.cloud_print_jobs WHERE branch_id=$1 AND idempotency_key=$2',
+        [ids.branchA, exactKey],
+      )).rows[0].n).toBe(1);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT real_kitchen_send');
+    }
+  });
+
+  it('a failed cloud enqueue rolls back the real kitchen send and does not deduct stock', async () => {
+    await db.query('SAVEPOINT failed_print_handoff');
+    try {
+      await db.query(`CREATE FUNCTION pg_temp.fail_atomic_print_test()
+        RETURNS trigger LANGUAGE plpgsql AS $
+        BEGIN RAISE EXCEPTION 'SIMULATED_PRINT_QUEUE_FAILURE'; END $`);
+      await db.query(`CREATE TRIGGER test_atomic_print_failure
+        BEFORE INSERT ON public.cloud_print_jobs FOR EACH ROW
+        EXECUTE FUNCTION pg_temp.fail_atomic_print_test()`);
+      const order = ids.rows.orders.own;
+      const send = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen($1) r', [order]);
+      expect(send.error).toMatch(/SIMULATED_PRINT_QUEUE_FAILURE/);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT failed_print_handoff');
+    }
+    expect((await db.query(
+      'SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1',
+      [ids.rows.orders.own],
+    )).rows[0].n).toBe(0);
+    expect((await db.query(
+      'SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE order_id=$1',
+      [ids.rows.orders.own],
+    )).rows[0].n).toBe(0);
   });
 
   it('does not enqueue for a no-delta retry or fabricate prints for empty sends', async () => {
