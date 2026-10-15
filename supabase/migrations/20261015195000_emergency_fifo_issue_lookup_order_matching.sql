@@ -1,6 +1,6 @@
 -- Emergency follow-up: preserve values and remove proven repeated work.
 SET lock_timeout = '2s';
-SET statement_timeout = '15s';
+SET statement_timeout = '5s';
 DO $guard$ BEGIN
   IF md5(pg_get_functiondef('public._raw_last_known_fifo_cost(uuid,uuid,uuid)'::regprocedure)) <> '6e70ec55b033454f4084266b13651cf7'
      OR md5(pg_get_functiondef('public.update_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,text)'::regprocedure)) <> '4f98bda4ad3d8bb4b060abb792d4f3f5' THEN

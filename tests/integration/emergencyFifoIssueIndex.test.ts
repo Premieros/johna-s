@@ -57,6 +57,13 @@ describe.skipIf(!owned)('emergency FIFO issue index: owned disposable DB only', 
         AND il.quantity<0 AND COALESCE(il.unit_cost,0)>0 AND COALESCE(il.batch_number,'') NOT LIKE 'OV-%'
       ORDER BY il.created_at DESC NULLS LAST,il.id DESC LIMIT 1`,args)).rows[0]['QUERY PLAN'][0];
     expect(JSON.stringify(plan)).toContain('idx_inventory_ledger_fifo_known_cost_recent');
+    await db.query('SAVEPOINT exact_emergency_restore');
+    try {
+      await db.query(readFileSync('scripts/rollback/emergency_fifo_issue_lookup_order_matching_20261015.sql', 'utf8'));
+      expect(await cost()).toBe(expected);
+      expect((await db.query("SELECT to_regclass('public.idx_inventory_ledger_fifo_known_cost_recent') AS idx")).rows[0].idx).toBeNull();
+    } finally { await db.query('ROLLBACK TO SAVEPOINT exact_emergency_restore'); await db.query('RELEASE SAVEPOINT exact_emergency_restore'); }
+    expect(await cost()).toBe(expected);
     console.info('EMERGENCY_FIFO_ISSUE_INDEX '+JSON.stringify({source:'owned localhost synthetic fixture; not production p95',before,after,writesBefore,writesAfter,lookup:plan}));
   }, 120000);
 });
