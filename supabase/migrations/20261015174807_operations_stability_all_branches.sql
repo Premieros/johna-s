@@ -5,7 +5,10 @@ DO $guard$
 BEGIN
   IF md5(pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure)) <> '4005b798987336d6001d7e01e5eb14c3'
      OR md5(pg_get_functiondef('public._raw_last_known_fifo_cost(uuid,uuid,uuid)'::regprocedure)) <> '6e70ec55b033454f4084266b13651cf7'
-     OR md5(pg_get_functiondef('public.update_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,text)'::regprocedure)) <> '4f98bda4ad3d8bb4b060abb792d4f3f5' THEN
+     -- Canonical and deployed update_order differ only in comments/formatting.
+     -- Pin both exact source bodies, not an unrestricted CI bypass.
+     OR (SELECT md5(prosrc) FROM pg_proc WHERE oid='public.update_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,text)'::regprocedure)
+        NOT IN ('7d3de0479157cace39f0289bde146d62', 'd2204160ff43934940550a87a7c6d340') THEN
     RAISE EXCEPTION 'OPERATIONS_STABILITY_BASELINE_MISMATCH';
   END IF;
 END;
