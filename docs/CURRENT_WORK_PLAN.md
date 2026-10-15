@@ -4,9 +4,9 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `af02abe15` (#506 merged; GitHub Pages deployed successfully)
-- Current active branch: `hotfix/kitchen-atomic-remote-stop-20261015`
-- Mandatory active work log: `docs/KITCHEN_ATOMIC_PRINT_HANDOFF_2026-10-14.md`
+- Latest main baseline reconciled: `693cd639a2` (#507 Smouha build deployed; server pilot OFF)
+- Current active branch: `hotfix/costing-detail-timeout-batch-20261015`
+- Mandatory active work log: `docs/DB_COST_DETAIL_TIMEOUT_20261015.md`
 
 ## Current emergency staging: atomic kitchen print handoff — 2026-10-14
 - This isolated candidate attempts to eliminate the gap between successful kitchen send and durable cloud print job creation. It is outside canonical migrations, **not applied** to production and must not change the V8 Windows agent or replay old orders.

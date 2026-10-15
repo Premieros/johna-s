@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
 
@@ -460,4 +461,35 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     } finally { await client.query('ROLLBACK TO SAVEPOINT known_raw_zero_valuation'); }
   });
 
+  it('batched product detail has identical full JSON for authorized and denied scopes (rollback only)', async () => {
+    const cases = [
+      { user: managerId, product: prodId, branch: branchA },
+      { user: managerId, product: prodNoRecipe, branch: branchA },
+      { user: adminId, product: prodId, branch: branchA },
+      { user: managerBId, product: prodId, branch: branchA },
+      { user: managerId, product: randomUUID(), branch: branchA },
+    ];
+    const read = async (u: string, p: string, b: string) =>
+      asUser(u, async () => (await client.query<{ result: unknown }>(
+        'SELECT public.get_product_costing_detail($1,$2) result', [p,b],
+      )).rows[0].result);
+    const before = [];
+    for (const c of cases) before.push(await read(c.user,c.product,c.branch));
+    await client.query('SAVEPOINT batched_detail_candidate');
+    try {
+      const sql = readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql', 'utf8');
+      await client.query(sql);
+      const after = [];
+      for (const c of cases) after.push(await read(c.user,c.product,c.branch));
+      expect(after).toEqual(before);
+      const def = (await client.query(
+        "SELECT pg_get_functiondef('public.get_product_costing_detail(uuid,uuid)'::regprocedure) source",
+      )).rows[0].source as string;
+      expect(def).toContain('raw_prices AS MATERIALIZED');
+      expect(def).toContain("'{}'::uuid[]");
+      expect(def).not.toContain('public._raw_cost_context_for_costing(rl.raw_material_id');
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT batched_detail_candidate');
+    }
+  });
 });
