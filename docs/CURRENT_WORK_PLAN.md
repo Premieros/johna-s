@@ -4,9 +4,12 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `322348f3d772341cce7484f793dfec94cf0b533b` (#508 merged after exact-head verification; kitchen handoff still OFF)
-- Current active branch: `feat/sage-openmercato-identity-export-20261015`
-- Mandatory active work log: `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md`
+- Latest main baseline reconciled: `6e4792e38c6a62aa4446a1976fb93b8b23ebc973` (#509 preserved)
+- Current active branch: `hotfix/closing-report-materials-20261015`
+- Mandatory active work log: `docs/CLOSING_REPORT_MATERIALS_20261015.md`
+
+## Owner-directed operational repairs — safe independent release
+The owner requests fixing all verified failures for Smouha and Cleopatra. Candidate #510 passed exact-head Full Verify (1795 frontend,1071 DB,132 Chromium) but Supabase declined the production migration without a reason. Original production function hashes remain unchanged. Do not bypass that decline. #510 is staged, not executable. Release only its independent frontend thermal report/shift audit changes in #511, with fresh exact-head verification and no SQL/agent changes. Prior export-only scope below is historical. Maintain one sequential writer and preserve #508/#509 and print idempotency.
 
 ## Owner-approved scope switch — Sage identity export — 2026-10-15
 - Owner explicitly approved making **Sage ↔ Open Mercato integration** the next active development track in this conversation. This updates the single-writer gate first, before feature changes; other hotfix/benchmark PRs remain non-executable unless separately activated.
