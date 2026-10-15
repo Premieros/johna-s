@@ -24,6 +24,7 @@ Main `6e4792e38c6a62aa4446a1976fb93b8b23ebc973`. Cost detail `732777a33b67f9a6c1
 - Smouha afternoon print wait p95 11.05s versus Cleopatra 1.27s. Both-branch DB wake trigger, publication and branch RLS are present; no pending jobs at inspection, all 286 afternoon jobs submitted with attempts=1. Windows version/config cannot be proved from server sessions. Do not alter RPC contracts or pretend a client repair was installed.
 
 ## Change ledger
+- Canonical migration filename is aligned with the authoritative applied Supabase version `20261015183017`; SQL bytes remain identical to the preapproved tested source (previous staging filename20261015174807). No remote history editing or SQL reapplication.
 - Narrow same-status KDS bookkeeping exception restricted to kds_update, accessible branch/station and kitchen-only fields.
 - Same source SQL predicates/order and numeric output; lazy COALESCE of four existing single-row FIFO source reads. No inventory writer/index changes.
 - update_order matched-ID temporary relation replaced by an initially empty per-call UUID array; all identity/sent-quantity checks and existing transaction/row locks retained. No temporary schema notification for matching.
