@@ -84,7 +84,7 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
       `INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active)
        VALUES
        ($1,$5,'Priced raw', $6,999,true),
-       ($2,$7,'No-approved raw', $6,999,true),
+       ($2,$7,'No-approved raw', $6,0,true),
        ($3,$8,'Other-branch raw', $9,999,true),
        ($4,$10,'Purchased raw', $6,999,true)`,
       [
@@ -382,7 +382,7 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     const oldRaw=randomUUID(),oldPurchase=randomUUID(),oldUser=randomUUID();
     const oldTime=new Date(t0.getTime()-30*24*60*60_000);
     await client.query(
-      "INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost,is_active) VALUES($1,$2,'Historic candidate raw',$3,$4,999,true)",
+      "INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost,is_active) VALUES($1,$2,'Historic candidate raw',$3,$4,0,true)",
       [oldRaw,'historic-'+oldRaw.slice(0,8),branchA,kgStockUnit],
     );
     await client.query(

@@ -32,22 +32,29 @@ parent status/financial/source visibility is checked at read time. Legacy receip
 are suppressed by any canonical purchase ledger and normalized with the existing helper.
 Keep dated price entries rather than one mutable latest row: different roles can legitimately
 see different financial sources and past dispatch times must not take future prices.
-Two private trigger-only maintenance definers have no app/service/public EXECUTE, fixed
+Three private trigger-only maintenance definers have no app/service/public EXECUTE, fixed
 search_path and no input arguments; they mirror only attached source rows. They never
 expose a privileged read API. The projection has SELECT-only RLS; explicit purchase
 financial checks also remain in nested existing definers. No new role capability.
-Price-source tables receive the only new triggers. Ledger WHEN excludes all FIFO issue,
+Existing positive last-batch/inventory/catalog fallback prices are preserved ONCE
+as owner-approved starting manual prices, dated at cutover to avoid retrospectively
+pricing old kitchen dispatches. Unknown/zero stays unpriced. Actual positive catalog
+price edits/imports create dated manual price records; existing explicit pricing RPC
+is deduplicated. No names-only/no-op/received-quantity/return-amount cache writes.
+Price-source tables and actual positive manual catalog price changes receive new triggers. Ledger WHEN excludes all FIFO issue,
 oversold and reconciliation writes. Purchase/count business functions remain byte-identical.
 
 ## Verification ledger
 Pending exact-head localhost regression, branches/financial RLS, source lifecycle,
 normalization, as-of snapshot parity, indexed work, writes, concurrency and rollback.
-Application/test typechecks passed before final fixture addition; rerun required.
+Application/test typechecks and 22 targeted reader tests pass. First CI exposed a fixture status typo and a missing rollback statement separator; both corrected before any production change. Expanded exact-head verification is pending.
 
 ## Production gate
 Blocked until exact-head Full Verify and scoped behavioral tests pass. Owner approval
 covers migration/merge/deploy after evidence. Guarded rollback restores both exact original
-resolvers and removes only the new private projection and its maintenance triggers.
+resolvers, removes only exact cutover starting-price records, and removes the new
+private projection and maintenance triggers. Genuine later user price changes and
+all operational cost snapshots remain.
 
 ## Next action
 Run complete CI, resolve demonstrated failures, rehearse rollback, then apply/verify both

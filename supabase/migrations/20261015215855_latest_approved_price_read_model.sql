@@ -42,11 +42,16 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public,pg_t
  WHEN p_kind IN ('inventory_ledger','purchase_items') THEN EXISTS (
   SELECT 1 FROM public.purchases p WHERE p.id=p_parent_id AND p.branch_id=p_branch AND p.status='completed'
   AND ((auth.uid() IS NULL AND current_user IN ('postgres','service_role')) OR private.financial_row_visible(p.id,p.branch_id,p.created_at))
+  AND CASE WHEN p_kind='inventory_ledger' THEN EXISTS (
+   SELECT 1 FROM public.inventory_ledger il WHERE il.id=p_source_id::bigint AND il.reference_id=p.id
+    AND il.reference_type='purchase' AND il.entry_type='purchase' AND il.raw_material_id=p_raw AND il.branch_id=p_branch)
+  ELSE EXISTS (SELECT 1 FROM public.purchase_items pi WHERE pi.id=p_source_id::uuid AND pi.purchase_id=p.id AND pi.raw_material_id=p_raw) END
   AND (p_kind<>'purchase_items' OR NOT EXISTS (
    SELECT 1 FROM public.inventory_ledger il WHERE il.reference_id=p.id AND il.reference_type='purchase'
     AND il.entry_type='purchase' AND il.raw_material_id=p_raw)))
  WHEN p_kind='stock_count_items' THEN EXISTS (
-  SELECT 1 FROM public.stock_counts sc WHERE sc.id=p_parent_id AND sc.branch_id=p_branch AND sc.status='applied')
+  SELECT 1 FROM public.stock_counts sc JOIN public.stock_count_items sci ON sci.stock_count_id=sc.id
+  WHERE sc.id=p_parent_id AND sc.branch_id=p_branch AND sc.status='applied' AND sci.id=p_source_id::uuid AND sci.raw_material_id=p_raw)
  WHEN p_kind='raw_material_price_events' THEN EXISTS (
   SELECT 1 FROM public.raw_material_price_events pe WHERE pe.id=p_source_id::uuid AND pe.raw_material_id=p_raw AND pe.branch_id=p_branch)
  ELSE false END;
@@ -67,6 +72,9 @@ BEGIN
  IF TG_OP='DELETE' THEN
   DELETE FROM private.raw_approved_price_read_model WHERE source_kind=TG_TABLE_NAME AND source_id=to_jsonb(OLD)->>'id';
   RETURN OLD;
+ END IF;
+ IF TG_OP='UPDATE' AND to_jsonb(OLD)->>'id' IS DISTINCT FROM to_jsonb(NEW)->>'id' THEN
+  DELETE FROM private.raw_approved_price_read_model WHERE source_kind=TG_TABLE_NAME AND source_id=to_jsonb(OLD)->>'id';
  END IF;
  v:=to_jsonb(NEW); v_created:=(v->>'created_at')::timestamptz;
  v_cost:=(v->>'unit_cost')::numeric;
@@ -128,15 +136,19 @@ REVOKE ALL ON FUNCTION private.sync_raw_approved_price_parent() FROM PUBLIC,anon
 -- Do not attach a generic ledger trigger to FIFO issues or debt reconciliation.
 CREATE TRIGGER raw_price_source_insert AFTER INSERT ON public.inventory_ledger FOR EACH ROW
  WHEN(NEW.entry_type='purchase' AND NEW.reference_type='purchase' AND NEW.raw_material_id IS NOT NULL) EXECUTE FUNCTION private.sync_raw_approved_price_source();
-CREATE TRIGGER raw_price_source_update AFTER UPDATE OF raw_material_id,branch_id,unit_cost,created_at,reference_number,reference_id,reference_type,entry_type ON public.inventory_ledger FOR EACH ROW
+CREATE TRIGGER raw_price_source_update AFTER UPDATE OF id,raw_material_id,branch_id,unit_cost,created_at,reference_number,reference_id,reference_type,entry_type ON public.inventory_ledger FOR EACH ROW
  WHEN((OLD.entry_type='purchase' AND OLD.reference_type='purchase') OR(NEW.entry_type='purchase' AND NEW.reference_type='purchase')) EXECUTE FUNCTION private.sync_raw_approved_price_source();
 CREATE TRIGGER raw_price_source_delete AFTER DELETE ON public.inventory_ledger FOR EACH ROW
  WHEN(OLD.entry_type='purchase' AND OLD.reference_type='purchase') EXECUTE FUNCTION private.sync_raw_approved_price_source();
-DO $triggers$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['purchase_items','stock_count_items','raw_material_price_events'] LOOP
-  EXECUTE format('CREATE TRIGGER raw_price_source_sync AFTER INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_source()',t);
- END LOOP;
-END $triggers$;
+CREATE TRIGGER raw_price_source_sync AFTER INSERT OR DELETE ON public.purchase_items FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_source();
+CREATE TRIGGER raw_price_source_change AFTER UPDATE OF id,raw_material_id,purchase_id,unit_name,quantity,unit_cost,created_at ON public.purchase_items FOR EACH ROW
+ WHEN(ROW(OLD.id,OLD.raw_material_id,OLD.purchase_id,OLD.unit_name,OLD.quantity,OLD.unit_cost,OLD.created_at) IS DISTINCT FROM ROW(NEW.id,NEW.raw_material_id,NEW.purchase_id,NEW.unit_name,NEW.quantity,NEW.unit_cost,NEW.created_at)) EXECUTE FUNCTION private.sync_raw_approved_price_source();
+CREATE TRIGGER raw_price_source_sync AFTER INSERT OR DELETE ON public.stock_count_items FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_source();
+CREATE TRIGGER raw_price_source_change AFTER UPDATE OF id,raw_material_id,stock_count_id,unit_cost ON public.stock_count_items FOR EACH ROW
+ WHEN(ROW(OLD.id,OLD.raw_material_id,OLD.stock_count_id,OLD.unit_cost) IS DISTINCT FROM ROW(NEW.id,NEW.raw_material_id,NEW.stock_count_id,NEW.unit_cost)) EXECUTE FUNCTION private.sync_raw_approved_price_source();
+CREATE TRIGGER raw_price_source_sync AFTER INSERT OR DELETE ON public.raw_material_price_events FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_source();
+CREATE TRIGGER raw_price_source_change AFTER UPDATE OF id,raw_material_id,branch_id,unit_cost,priced_at,reference_number ON public.raw_material_price_events FOR EACH ROW
+ WHEN(ROW(OLD.id,OLD.raw_material_id,OLD.branch_id,OLD.unit_cost,OLD.priced_at,OLD.reference_number) IS DISTINCT FROM ROW(NEW.id,NEW.raw_material_id,NEW.branch_id,NEW.unit_cost,NEW.priced_at,NEW.reference_number)) EXECUTE FUNCTION private.sync_raw_approved_price_source();
 CREATE TRIGGER raw_price_parent_update AFTER UPDATE OF approved_at,created_at,branch_id,invoice_number ON public.purchases FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_parent();
 CREATE TRIGGER raw_price_parent_delete AFTER DELETE ON public.purchases FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_parent();
 CREATE TRIGGER raw_price_parent_update AFTER UPDATE OF applied_at,approved_at,created_at,branch_id,count_number ON public.stock_counts FOR EACH ROW EXECUTE FUNCTION private.sync_raw_approved_price_parent();
@@ -156,6 +168,38 @@ INSERT INTO private.raw_approved_price_read_model(source_kind,source_id,raw_mate
  UNION ALL
  SELECT 'raw_material_price_events',pe.id::text,pe.raw_material_id,pe.branch_id,pe.unit_cost,pe.priced_at,pe.reference_number,NULL::uuid,1,NULL::timestamptz,NULL::numeric,NULL::text
  FROM public.raw_material_price_events pe WHERE pe.unit_cost>0;
+-- Preserve existing positive fallback prices exactly once at cutover. These are
+-- explicit owner-approved starting prices, dated NOW so old dispatches are never
+-- retrospectively given a price. No stock/COGS/default_cost is updated.
+INSERT INTO public.raw_material_price_events(id,raw_material_id,branch_id,unit_cost,source,reference_number,detail,priced_at)
+ SELECT md5('latest-approved-start-20261016:'||p.raw_material_id::text)::uuid,p.raw_material_id,p.branch_id,p.unit_cost,'pricing',
+  'PRICE-START-20261016-'||p.raw_material_id::text,
+  'Owner-approved starting last known price; original source: '||p.price_source,clock_timestamp()
+ FROM public.get_raw_material_current_prices(NULL,NULL) p
+ WHERE p.unit_cost>0 AND p.price_source IN('last_batch','inventory_average','default_cost');
+
+-- The existing raw-material editor/import exposes default_cost as a manual
+-- reference price. Capture actual price changes, not name edits or repeated
+-- set_raw_material_price updates (that RPC already inserts a dated price).
+CREATE FUNCTION private.capture_raw_catalog_price()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $f$
+BEGIN
+ IF NEW.branch_id IS NULL OR COALESCE(round(NEW.default_cost,6),0)<=0 THEN RETURN NEW; END IF;
+ IF EXISTS(SELECT 1 FROM public.raw_material_price_events pe
+  WHERE pe.raw_material_id=NEW.id AND pe.branch_id=NEW.branch_id
+   AND pe.unit_cost=round(NEW.default_cost,6) AND pe.priced_at>=transaction_timestamp()
+   AND pe.created_by IS NOT DISTINCT FROM auth.uid()) THEN RETURN NEW; END IF;
+ INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,detail,priced_at,created_by)
+ VALUES(NEW.id,NEW.branch_id,round(NEW.default_cost,6),'pricing','PRICE-CATALOG-'||gen_random_uuid()::text,
+  'Manual reference price entered on raw-material catalog',clock_timestamp(),auth.uid());
+ RETURN NEW;
+END $f$;
+REVOKE ALL ON FUNCTION private.capture_raw_catalog_price() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER raw_catalog_price_insert AFTER INSERT ON public.raw_materials FOR EACH ROW
+ WHEN(NEW.default_cost>0) EXECUTE FUNCTION private.capture_raw_catalog_price();
+CREATE TRIGGER raw_catalog_price_update AFTER UPDATE OF default_cost,branch_id ON public.raw_materials FOR EACH ROW
+ WHEN(NEW.default_cost>0 AND (OLD.default_cost IS DISTINCT FROM NEW.default_cost OR OLD.branch_id IS DISTINCT FROM NEW.branch_id)) EXECUTE FUNCTION private.capture_raw_catalog_price();
+
 ANALYZE private.raw_approved_price_read_model;
 
 CREATE FUNCTION private.latest_approved_raw_prices(p_branch_id uuid,p_raw_material_ids uuid[],p_as_of timestamptz)

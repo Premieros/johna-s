@@ -298,12 +298,24 @@ DROP TRIGGER raw_price_source_insert ON public.inventory_ledger;
 DROP TRIGGER raw_price_source_update ON public.inventory_ledger;
 DROP TRIGGER raw_price_source_delete ON public.inventory_ledger;
 DROP TRIGGER raw_price_source_sync ON public.purchase_items;
+DROP TRIGGER raw_price_source_change ON public.purchase_items;
 DROP TRIGGER raw_price_source_sync ON public.stock_count_items;
+DROP TRIGGER raw_price_source_change ON public.stock_count_items;
 DROP TRIGGER raw_price_source_sync ON public.raw_material_price_events;
+DROP TRIGGER raw_price_source_change ON public.raw_material_price_events;
 DROP TRIGGER raw_price_parent_update ON public.purchases;
 DROP TRIGGER raw_price_parent_delete ON public.purchases;
 DROP TRIGGER raw_price_parent_update ON public.stock_counts;
 DROP TRIGGER raw_price_parent_delete ON public.stock_counts;
+DROP TRIGGER raw_catalog_price_insert ON public.raw_materials;
+DROP TRIGGER raw_catalog_price_update ON public.raw_materials;
+DROP FUNCTION private.capture_raw_catalog_price();
+-- Remove only the exact imported starting-price records; retain genuine later
+-- user pricing/catalog edits and every saved operational snapshot.
+DELETE FROM public.raw_material_price_events pe
+ WHERE pe.id=md5('latest-approved-start-20261016:'||pe.raw_material_id::text)::uuid
+ AND pe.reference_number='PRICE-START-20261016-'||pe.raw_material_id::text
+ AND pe.detail LIKE 'Owner-approved starting last known price; original source: %';
 DROP FUNCTION private.latest_approved_raw_prices(uuid,uuid[],timestamptz);
 DROP TABLE private.raw_approved_price_read_model;
 DROP FUNCTION private.raw_approved_price_visible(text,text,uuid,uuid,uuid);

@@ -69,6 +69,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await client.query(`INSERT INTO public.recipes (id, product_id, branch_id, name, yield_quantity, is_active) VALUES ($1, $2, $3, 'Recipe', 2, true)`, [recipeId, prodId, branchA]);
     await client.query(`INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 1, 10)`, [recipeId, rmId]);
     await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, quantity, unit_cost, source_type) VALUES ($1, $2, 10, 20, 'purchase')`, [rmId, branchA]);
+    // Current recipe estimates use an explicit approved price, independent of stock layers.
+    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number) VALUES($1,$2,20,'COST-RECIPE-PRICE')",[rmId,branchA]);
     // Real receipt flows maintain the inventory valuation row alongside FIFO layers.
     await client.query(`INSERT INTO public.raw_material_inventory (raw_material_id, branch_id, quantity, avg_cost) VALUES ($1,$2,10,20)`, [rmId, branchA]);
     await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, is_active) VALUES ($1, $2, 'Cost Component Group', 'manufactured', $3, true)`, [componentUnitId, `CG-${componentUnitId.slice(0, 8)}`, branchA]);
@@ -109,7 +111,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     }
   });
 
-  it('get_costing_overview: recipe cost math (avg batch cost x (1 + wastage) x qty)', async () => {
+  it('get_costing_overview: recipe cost math (latest approved price x (1 + wastage) x qty)', async () => {
     const overview = await asUser(adminId, async () =>
       rows<{ product_id: string; actual_cost: string; theoretical_cost: string; sale_price: string; recipe_item_count: string }>(
         `SELECT product_id, actual_cost, theoretical_cost, sale_price, recipe_item_count FROM public.get_costing_overview(NULL) WHERE product_id = $1`, [prodId],
@@ -169,7 +171,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(adminB.length).toBe(0);
   });
 
-  it('get_product_costing_detail: recipe lines, batch-cost fallback and error on missing product', async () => {
+  it('get_product_costing_detail: recipe lines, latest approved price and error on missing product', async () => {
     const detail = await asUser(managerId, async () =>
       rows<{ r: { success: boolean; product_name: string; theoretical_cost: number; actual_cost: number; recipe_items: Array<{ line_cost: number; unit_cost: number; component_group_id?: string | null; component_group_name?: string | null; component_group_quantity?: number | null }>; history: unknown[] } }>(
         `SELECT public.get_product_costing_detail($1, NULL) AS r`, [prodId],
