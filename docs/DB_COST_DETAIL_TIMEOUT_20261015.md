@@ -18,7 +18,7 @@ At 06:01 and 06:05 UTC 2026-10-15 seven /costing TIMEOUT_ERROR reports. Producti
 ## Verification ledger
 Integration test compares exact JSON before/after candidate for authorized/unauthorized, recipe/no recipe and absent products, with rollback-only savepoint. On 2026-10-15: user approved a limited safely reversible Smoha pilot. Re-run exact-head CI on gated branch-swap parity test. Prior global trial test alone does not prove the branch gate. Await representative latency, snapshot original function, zero backpressure/DDL lock budget and monitored rollback.
 ## Production gate
-BLOCKED pending tests and measured speed. Owner approved Smoha-only gated pilot but NOT global cross-branch function changes. Never silently apply before gates. Preserve old live function until parity and representative benchmark; review global 57014 separately. Any approved future function replacement needs short lock_timeout and verified rollback.
+BLOCKED pending tests and measured speed. Owner approved Smoha-only gated pilot but NOT global cross-branch function changes. Never silently apply before gates. Preserve old live function until parity and representative benchmark; review global 57014 separately. Rollback source: `scripts/rollback/get_product_costing_detail_original_20261015.sql` (live pre-change pg_get_functiondef, MD5 `666844cc8f86f35152828e9ff799031b`). Any future function replacement needs short lock_timeout and verified restoration of that MD5.
 ## Next action
 Verify CI for draft PR, inspect failing tests, evaluate safe deployment only after fully green.
 ## Mandatory update protocol
