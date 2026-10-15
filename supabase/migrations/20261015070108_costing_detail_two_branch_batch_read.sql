@@ -175,8 +175,6 @@ BEGIN
     'history', v_history
   );
 END;
-$function$
-
-
+$function$;
 
 COMMIT;
