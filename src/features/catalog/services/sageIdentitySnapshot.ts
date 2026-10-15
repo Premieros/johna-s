@@ -1,4 +1,5 @@
 import type { Product } from '@/lib/types';
+import { supabase } from '@/api';
 import {
   buildSageCatalogIdentityExport,
   SAGE_CATALOG_IDENTITY_EXPORT_LIMIT,
@@ -6,6 +7,15 @@ import {
 } from '../lib/sageCatalogIdentityExport';
 
 type SourceProduct = Pick<Product, 'id' | 'name' | 'sku' | 'branch_id' | 'product_type' | 'is_active'>;
+
+/** The only Supabase count read for this export lives in a feature service. */
+export async function countSageProductsInBranch(branchId: string): Promise<number | null> {
+  const { count, error } = await supabase.from('products')
+    .select('id', { count: 'exact', head: true }).eq('branch_id', branchId);
+  if (error) throw error;
+  return count;
+}
+
 
 /**
  * A read-only two-pass export: count (via authenticated Supabase RLS), then
