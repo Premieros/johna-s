@@ -1,9 +1,9 @@
 # Kitchen print handoff emergency — staging only
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `hotfix/kitchen-atomic-print-handoff-20261014`
-Current PR: #506
-Last updated: 2026-10-14 Cairo
+Branch: `hotfix/kitchen-atomic-remote-stop-20261015`
+Current PR: #507
+Last updated: 2026-10-15 Cairo
 
 ## Work status
 State: **BLOCKED**. Optional non-disruptive server-side print handoff experiment, not deployed.
@@ -12,7 +12,7 @@ State: **BLOCKED**. Optional non-disruptive server-side print handoff experiment
 No production SQL, sales/stock changes, installed Windows agent changes, automatic reprints, or live test orders. No unsupported performance claim. Preserve idempotent cloud print jobs and branch authorization.
 
 ## Baseline
-main 8fffc3d3. PR #504 browser polling change was closed without merge. The two earlier missing kitchen cloud tickets were not replayed.
+main af02abe15 (PR #506 merged, opt-in still OFF in production build). PR #504 browser polling change was closed without merge. The two earlier missing kitchen cloud tickets were not replayed.
 
 ## Root-cause ledger
 The authoritative kitchen send commits before the browser independently calls enqueue_cloud_kitchen_print. A closed browser or failed handoff can leave a sent order without a cloud ticket. The installed V8 agents are not being changed.
@@ -27,6 +27,29 @@ Isolated PostgreSQL integration: original RPC invariance, branch/auth, real incr
 READ ONLY Supabase logs (trailing 24h): 42 Postgres statement cancellations/timeout messages across DB traffic; kitchen RPC response origin p95 ~2,928 ms, max ~41,846 ms (268 calls); client kitchen enqueue origin p95 ~765 ms, max ~9,723 ms (261 calls). These are **separate** timings and must not be naively added as a guaranteed server-side measurement. They show a material tail-latency risk if synchronous server queue work is added after the existing kitchen send: `EXCEPTION WHEN OTHERS` does not protect the overall transaction from external Postgres statement cancellation. No production latency safety claim from isolated DB tests.
 **Gate:** no all-branch global enablement. Even a build with `VITE_KITCHEN_ATOMIC_PRINT_HANDOFF=true` does NOT opt in unless `VITE_KITCHEN_ATOMIC_PRINT_BRANCH_IDS` explicitly contains that saved POS branch ID. Start with a single approved pilot branch after new SQL has been installed separately; with either env unset the old route remains active. Roll back by removing pilot branch from the configured allowlist and deploying that client configuration (the legacy public.send_to_kitchen remains unchanged). Live production SQL and stock remain untouched during this staging.
 Before pilot require measured isolated end-to-end response latency, supported operational window, exact branch + locale verification and explicit approval; never claim this flag can be toggled remotely without rebuilding.
+
+## Emergency stop design — 2026-10-15, staging only
+
+The **new** private.kitchen_print_handoff_rollout gate table in the SQL experiment is default-deny and inaccessible to anon/authenticated/service_role; an expiry limits any pilot automatically. Even if a pilot frontend has both VITE flags set, the opt-in RPC returns `client_fallback` (the existing browser station dispatcher) whenever the DB gate is disabled, absent, or expired. The original `public.send_to_kitchen(uuid,uuid)` is still used internally and unchanged.
+
+A tested, one-statement remote stop for a pilot branch is:
+```sql
+UPDATE private.kitchen_print_handoff_rollout
+SET enabled = false, expires_at = now(), changed_at = now()
+WHERE branch_id = '<the verified pilot branch UUID>'::uuid;
+```
+Use this **only if the new SQL experiment has already been separately deployed**. This stops subsequent handoffs, not already-in-flight requests, printer jobs already queued or completed, and is not a guarantee of immediate network/POS recovery. Set a short pilot expiry (5 minutes) and verify reverting to legacy client fallback by read-only checks; never reprint historical/unknown outcomes.
+
+Before enabling any pilot, require exact-head isolated RLS/rollback tests of this gate, representative send-to-kitchen latency/load evidence, production schema ACL review, one pilot branch, documented live monitoring, and an operator capable of confirming physical tickets. Never enable without rollback visibility; assistant is not a continuously running production watchdog.
+
+### Bounded queue lock handling — staged only
+
+The optional queue helper now temporarily sets `lock_timeout=250ms` **after** the canonical `send_to_kitchen` returns, restores the preexisting setting on success, and relies on the inner exception subtransaction to restore it on a 55P03 queue-lock failure. In that case the existing browser dispatcher gets `client_fallback` instead of waiting indefinitely on the print queue. CI tests check both ordinary queue success and a simulated SQLSTATE 55P03 queue insert failure, and the lock GUC is restored.
+
+**This is not a global RPC deadline.** PostgreSQL `query_canceled (57014)` is not caught by `WHEN OTHERS`, and synchronous print format/insert can still add CPU/transaction time. Production pilot stays BLOCKED without a bounded-latency measurement and the default-off expiring remote stop.
+
+## Authorized scope — Smoha pilot only
+Owner explicitly authorized a limited rollout to **فرع نادي سموحة** (`19c3fd23-d784-455b-8840-f4f2ac619651`), not Cleopatra (`279e6662-e901-40b2-9170-7dda0b471ba7`). The GitHub Pages workflow stages the build-time allowlist only for Smoha; the SQL kill-switch gate is installed with zero active branches, default deny. Do not enable the server gate until GitHub Pages deployment succeeds and current Smoha kitchen traffic can be observed; the operator at Smoha must verify printed paper. A 5-minute DB gate lease expires automatically; any unexpected delay, missing station ticket or duplicate must trigger immediate gate disable with the admin UPDATE already documented. Only subsequent RPCs are stopped. No Windows agent change, order replay, or Cleopatra switch.
 
 ## Production gate
 State: **BLOCKED**.

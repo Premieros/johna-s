@@ -7,6 +7,21 @@
 -- The opt-in RPC catches queue insertion failure and falls back to the
 -- existing browser dispatch without rolling back a successful kitchen send.
 -- No implicit replay of historic or ambiguous orders.
+-- Emergency remote stop for the opt-in RPC. This lives in an unexposed
+-- schema and starts DISABLED for every branch, even if a frontend is flagged on.
+-- A rollout row must be explicitly enabled with a short expiry (e.g. 5 min).
+-- Stop an active pilot with a single admin UPDATE enabled=false, expires_at=now().
+-- No grants to clients, no writes to kitchen/inventory/accounting records.
+CREATE TABLE IF NOT EXISTS private.kitchen_print_handoff_rollout (
+  branch_id uuid PRIMARY KEY,
+  enabled boolean NOT NULL DEFAULT false,
+  expires_at timestamptz NOT NULL DEFAULT now(),
+  changed_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE private.kitchen_print_handoff_rollout ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE private.kitchen_print_handoff_rollout
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION private._enqueue_kitchen_sent_delta(
   p_branch_id uuid, p_order_id uuid, p_actor_id uuid, p_send jsonb
 ) RETURNS integer LANGUAGE plpgsql SECURITY INVOKER
@@ -200,6 +215,7 @@ DECLARE
   v_result jsonb;
   v_uid uuid := auth.uid();
   v_count integer;
+  v_prior_lock_timeout text;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
@@ -223,14 +239,37 @@ BEGIN
   END IF;
   -- Isolate the optional queue insert in its own PL/pgSQL subtransaction.
   -- A queue error MUST NOT roll back the successful kitchen send/stock effects.
+  -- Remote stop is evaluated AFTER the canonical send; if disabled/expired,
+  -- the existing client will enqueue that SAME delta through the legacy path.
+  -- No queue helper or additional printer operation is performed here.
   BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM private.kitchen_print_handoff_rollout rollout
+      WHERE rollout.branch_id = (v_result->>'branch_id')::uuid
+        AND rollout.enabled IS TRUE
+        AND rollout.expires_at > clock_timestamp()
+    ) THEN
+      RETURN v_result || jsonb_build_object(
+        'print_queue_state','client_fallback',
+        'print_queue_warning','SERVER_KITCHEN_PRINT_HANDOFF_DISABLED'
+      );
+    END IF;
+    -- Do not let print-queue row/index locks hold the kitchen RPC for seconds.
+    -- This bounds LOCK WAITS only, never the canonical send or CPU time.
+    -- On exception this subtransaction restores the GUC automatically.
+    v_prior_lock_timeout := current_setting('lock_timeout');
+    PERFORM set_config('lock_timeout','250ms',true);
     v_count := private._enqueue_kitchen_sent_delta(
       (v_result->>'branch_id')::uuid,p_order_id,v_uid,v_result
     );
+    PERFORM set_config('lock_timeout',v_prior_lock_timeout,true);
     RETURN v_result || jsonb_build_object(
       'print_queue_state','queued','print_queue_jobs',v_count
     );
   EXCEPTION WHEN OTHERS THEN
+    -- Includes lock_not_available (55P03), but NOT query_canceled (57014).
+    -- PostgreSQL statement cancellation can still abort the full RPC:
+    -- do not authorize a pilot based on this fallback alone.
     RETURN v_result || jsonb_build_object(
       'print_queue_state','client_fallback',
       'print_queue_warning','DURABLE_KITCHEN_PRINT_ENQUEUE_FAILED'

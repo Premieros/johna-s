@@ -43,6 +43,12 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     await db.query('UPDATE public.products SET category_id=$1 WHERE id=$2', [ids.catA, ids.prodA]);
     // Rollback-only experiment. Never touch the production database.
     await db.query(readFileSync(sqlPath, 'utf8'));
+    // CI-only short-lived pilot; all database changes are rolled back in afterAll.
+    // Production remains OFF because rollout table has no enabled rows.
+    await db.query(
+      "INSERT INTO private.kitchen_print_handoff_rollout(branch_id,enabled,expires_at) VALUES ($1,true,now()+interval '15 minutes')",
+      [ids.branchA],
+    );
   });
   afterAll(async () => {
     if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); }
@@ -178,6 +184,70 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
   });
 
 
+  it('remote stop falls back to existing browser printing without a cloud ticket', async () => {
+    await db.query('SAVEPOINT disabled_rollout');
+    try {
+      await db.query(
+        "UPDATE private.kitchen_print_handoff_rollout SET enabled=false,expires_at=now(),changed_at=now() WHERE branch_id=$1",
+        [ids.branchA],
+      );
+      const order = ids.rows.orders.own;
+      const countBefore = (await db.query(
+        "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1", [order],
+      )).rows[0].n;
+      const send = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(send.error).toBeUndefined();
+      const r = send.rows[0].r as { success: boolean; items_sent_count: number; print_queue_state: string; print_queue_warning: string };
+      expect(r.success, JSON.stringify(r)).toBe(true);
+      expect(r.items_sent_count).toBe(1);
+      expect(r.print_queue_state).toBe('client_fallback');
+      expect(r.print_queue_warning).toBe('SERVER_KITCHEN_PRINT_HANDOFF_DISABLED');
+      const countAfter = (await db.query(
+        "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1", [order],
+      )).rows[0].n;
+      expect(countAfter).toBe(countBefore);
+      expect((await db.query('SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1', [order])).rows[0].n).toBe(1);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT disabled_rollout');
+    }
+  });
+
+  it('auto-expired pilot falls back without enqueuing even if enabled=true', async () => {
+    await db.query('SAVEPOINT expired_rollout');
+    try {
+      await db.query(
+        "UPDATE private.kitchen_print_handoff_rollout SET enabled=true,expires_at=now()-interval '1 second' WHERE branch_id=$1",
+        [ids.branchA],
+      );
+      const order = ids.rows.orders.own;
+      const countBefore = (await db.query(
+        "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1", [order],
+      )).rows[0].n;
+      const send = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(send.error).toBeUndefined();
+      expect((send.rows[0].r as { print_queue_state: string }).print_queue_state).toBe('client_fallback');
+      const countAfter = (await db.query(
+        "SELECT count(*)::int n FROM public.cloud_print_jobs WHERE kind='kitchen' AND payload->>'order_id'=$1", [order],
+      )).rows[0].n;
+      expect(countAfter).toBe(countBefore);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT expired_rollout');
+    }
+  });
+
+  it('does not allow an authenticated role to change or read the server rollout gate', async () => {
+    await db.query('SAVEPOINT denied_server_toggle');
+    try {
+      await db.query("SELECT set_config('app.user_id',$1,true)", [ids.users.cashier]);
+      await db.query('SET LOCAL ROLE authenticated');
+      await expect(db.query('SELECT branch_id FROM private.kitchen_print_handoff_rollout')).rejects.toThrow(/permission denied/i);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT denied_server_toggle');
+    }
+  });
+
   it('the real send_to_kitchen RPC atomically creates one durable ticket and a repeat does not resubmit', async () => {
     await db.query('SAVEPOINT real_kitchen_send');
     try {
@@ -272,7 +342,7 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
     }
   });
 
-  it('a failed cloud enqueue rolls back the real kitchen send and does not deduct stock', async () => {
+  it('a cloud enqueue failure preserves kitchen send and returns client fallback', async () => {
     await db.query('SAVEPOINT failed_print_handoff');
     try {
       await db.query(`CREATE FUNCTION pg_temp.fail_atomic_print_test()
@@ -307,6 +377,48 @@ describe.skipIf(!local)('staged atomic kitchen print handoff (ROLLBACK ONLY)', (
       'SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE order_id=$1',
       [ids.rows.orders.own],
     )).rows[0].n).toBe(0);
+  });
+
+  it('returns safe fallback when a print queue insert raises SQLSTATE 55P03', async () => {
+    await db.query('SAVEPOINT print_lock_unavailable');
+    try {
+      const before = (await db.query('SHOW lock_timeout')).rows[0].lock_timeout;
+      await db.query(
+        "CREATE FUNCTION pg_temp.reject_atomic_print_lock_test() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION USING ERRCODE = ''55P03'', MESSAGE = ''SIMULATED_QUEUE_LOCK_WAIT''; END'",
+      );
+      await db.query(
+        'CREATE TRIGGER test_atomic_print_lock_unavailable BEFORE INSERT ON public.cloud_print_jobs FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_atomic_print_lock_test()',
+      );
+      const order = ids.rows.orders.own;
+      const result = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(result.error).toBeUndefined();
+      const send = result.rows[0].r as { success: boolean; items_sent_count: number; print_queue_state: string };
+      expect(send.success).toBe(true);
+      expect(send.items_sent_count).toBe(1);
+      expect(send.print_queue_state).toBe('client_fallback');
+      expect((await db.query('SHOW lock_timeout')).rows[0].lock_timeout).toBe(before);
+      expect((await db.query(
+        'SELECT count(*)::int n FROM public.order_kitchen_sends WHERE order_id=$1', [order],
+      )).rows[0].n).toBe(1);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT print_lock_unavailable');
+    }
+  });
+
+  it('restores lock_timeout after successful optional cloud queue insertion', async () => {
+    await db.query('SAVEPOINT print_lock_success');
+    try {
+      const before = (await db.query('SHOW lock_timeout')).rows[0].lock_timeout;
+      const order = ids.rows.orders.own;
+      const result = await runAsPersist(db, ids.users.cashier,
+        'SELECT public.send_to_kitchen_with_print($1,NULL,true) r', [order]);
+      expect(result.error).toBeUndefined();
+      expect((result.rows[0].r as { print_queue_state: string }).print_queue_state).toBe('queued');
+      expect((await db.query('SHOW lock_timeout')).rows[0].lock_timeout).toBe(before);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT print_lock_success');
+    }
   });
 
   it('leaves the canonical send path untouched and English tickets on existing browser dispatch', async () => {

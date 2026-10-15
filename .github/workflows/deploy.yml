@@ -19,6 +19,11 @@ env:
   SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
   VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
   VITE_WORK_AUTHORIZATION_GATE: "1"
+  # PILOT: ONLY Smoha; Cleopatra remains on legacy send. Server database
+  # gate starts OFF and must be separately leased for <=5 minutes.
+  # Rollback: disable the server lease immediately; then remove these flags.
+  VITE_KITCHEN_ATOMIC_PRINT_HANDOFF: "true"
+  VITE_KITCHEN_ATOMIC_PRINT_BRANCH_IDS: "19c3fd23-d784-455b-8840-f4f2ac619651"
 
 jobs:
   build:
