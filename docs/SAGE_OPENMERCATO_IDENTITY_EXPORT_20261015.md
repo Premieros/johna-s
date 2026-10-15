@@ -42,9 +42,13 @@ Write mode: **SEQUENTIAL_ONLY**
 7. `730a5224e7523438b052f09dfecedc83af4a52cf`: wired Products download through scope-fenced snapshot service.
 8. `daf5d2da609f89457f65c6a7c0965b1a4d9a9be7`: added unit tests for count mismatch, in-flight branch/user change, row limit, RLS error and foreign-branch rows.
 9. Draft PR #509 created from the exact reconciled feature branch; final PR-number update is this log-only commit. Next: exact-head CI; no more writes unless the checks identify a real failure.
+10. Exact-head Full Verify `38701607377` on `5bbebef6ab36843bdbf568940c1e9c8b5e0a9e42`: Pages continuity, DB/security/RLS and Playwright browser-smoke **SUCCESS**; main Verify **FAILED** 3 of 1787 unit tests. Two violations of page-data access boundary (inline Supabase count in ProductsPage), plus one mistaken test expectation lambda. These failures explicitly authorize the following corrective writes.
+11. `a6bbca1754bae0fdbc4c35bf828de4a5abc35791`: relocated count query into existing catalog feature service, preserving authenticated RLS path.
+12. `32a4786b619df861c5e61df1d3d8f5db2db6e9e4`: ProductsPage now consumes count service instead of direct Supabase.
+13. `53bd4168e35e9f3280eb1383e965b045954b9113`: repaired test to assert returned empty products, not a callback. New exact-head full Verify required before any release.
 
 ## Verification ledger
-Implemented projection, UI and fetch verification on feature branch. Pending exact-head Jest/unit tests, TypeScript, lint, build and repository full Verify on the committed code. No genuine live Sage export has been downloaded and checked yet. Do not claim source completeness without it.
+First exact-head full Verify failed only on the 3 logged unit assertions (2 architecture boundary, 1 mistaken empty-array expectation); other three jobs passed. Corrections staged; rerun exact-head Full Verify required. No genuine live Sage export has been downloaded and checked yet. Do not claim source completeness without it.
 
 ## Production gate
 **HOLD**. This scope approval does not authorize production merge, Supabase writes, migrations, cloud agent changes, live order/print tests or cross-DB sync.
