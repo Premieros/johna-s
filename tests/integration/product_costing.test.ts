@@ -64,13 +64,13 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await client.query(`INSERT INTO public.branches (id, name, organization_id) VALUES ($1, $2, $3), ($4, $5, $6)`, [branchA, 'Cost A', orgId, branchB, 'Cost B', orgId]);
     await client.query(`INSERT INTO public.warehouses (id, name, branch_id, is_active) VALUES ($1, $2, $3, true)`, [whId, 'Cost WH', branchA]);
     await client.query(`INSERT INTO public.products (id, name, branch_id, sale_price, cost_price, is_active) VALUES ($1, $2, $3, 100, 30, true), ($4, $5, $6, 80, 20, true)`, [prodId, 'Cost Product', branchA, prodNoRecipe, 'Cost NoRecipe', branchA]);
-    await client.query(`INSERT INTO public.raw_materials (id, code, name, branch_id, default_cost, is_active) VALUES ($1, $2, $3, $4, 15, true)`, [rmId, `RM-${rmId.slice(0, 8)}`, 'Cost Raw', branchA]);
+    await client.query(`INSERT INTO public.raw_materials (id, code, name, branch_id, default_cost, is_active) VALUES ($1, $2, $3, $4, 0, true)`, [rmId, `RM-${rmId.slice(0, 8)}`, 'Cost Raw', branchA]);
     await client.query(`INSERT INTO public.suppliers (id, name, branch_id, balance) VALUES ($1, $2, $3, 0)`, [supplierA, 'Cost Supplier', branchA]);
     await client.query(`INSERT INTO public.recipes (id, product_id, branch_id, name, yield_quantity, is_active) VALUES ($1, $2, $3, 'Recipe', 2, true)`, [recipeId, prodId, branchA]);
     await client.query(`INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 1, 10)`, [recipeId, rmId]);
     await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, quantity, unit_cost, source_type) VALUES ($1, $2, 10, 20, 'purchase')`, [rmId, branchA]);
     // Current recipe estimates use an explicit approved price, independent of stock layers.
-    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number) VALUES($1,$2,20,'COST-RECIPE-PRICE')",[rmId,branchA]);
+    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,20,'COST-RECIPE-PRICE',clock_timestamp()-interval '1 day')",[rmId,branchA]);
     // Real receipt flows maintain the inventory valuation row alongside FIFO layers.
     await client.query(`INSERT INTO public.raw_material_inventory (raw_material_id, branch_id, quantity, avg_cost) VALUES ($1,$2,10,20)`, [rmId, branchA]);
     await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, is_active) VALUES ($1, $2, 'Cost Component Group', 'manufactured', $3, true)`, [componentUnitId, `CG-${componentUnitId.slice(0, 8)}`, branchA]);
@@ -202,7 +202,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(missing[0].r.error).toBe('PRODUCT_NOT_FOUND');
   });
 
-  it('costing uses actual FIFO inventory valuation while purchase/count reference history stays separately auditable', async () => {
+  it('costing uses latest approved prices while actual FIFO inventory valuation stays unchanged', async () => {
     const purchaseId = randomUUID();
     const countId = randomUUID();
 
@@ -275,7 +275,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(Number(overview[0].previous_cost)).toBe(24);
     expect(overview[0].price_source).toBe('stock_count');
     expect(overview[0].reference_number).toBe('RAW-COST-SC');
-    expect(Number(overview[0].event_count)).toBe(2);
+    expect(Number(overview[0].event_count)).toBe(3);
 
     const history = await asUser(managerId, async () =>
       rows<{ unit_cost: string; previous_cost: string | null; price_source: string; reference_number: string }>(
@@ -284,7 +284,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
         [rmId, branchA],
       ),
     );
-    expect(history).toHaveLength(2);
+    expect(history).toHaveLength(3);
     expect(Number(history[0].unit_cost)).toBe(28);
     expect(Number(history[0].previous_cost)).toBe(24);
     expect(history[0].price_source).toBe('stock_count');

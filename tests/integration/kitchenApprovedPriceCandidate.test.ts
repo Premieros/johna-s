@@ -83,10 +83,10 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     await client.query(
       `INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active)
        VALUES
-       ($1,$5,'Priced raw', $6,999,true),
+       ($1,$5,'Priced raw', $6,0,true),
        ($2,$7,'No-approved raw', $6,0,true),
-       ($3,$8,'Other-branch raw', $9,999,true),
-       ($4,$10,'Purchased raw', $6,999,true)`,
+       ($3,$8,'Other-branch raw', $9,0,true),
+       ($4,$10,'Purchased raw', $6,0,true)`,
       [
         material, noApprovedPrice, foreignMaterial, purchasedMaterial,
         `price-${material.slice(0,8)}`, branchA,
@@ -104,8 +104,8 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     await client.query(
       `INSERT INTO public.raw_materials
           (id,code,name,branch_id,unit_id,default_cost,is_active)
-       VALUES ($1,$3,'Legacy purchase material',$5,$6,777,true),
-              ($2,$4,'Tie resolution material',$5,$6,777,true)`,
+       VALUES ($1,$3,'Legacy purchase material',$5,$6,0,true),
+              ($2,$4,'Tie resolution material',$5,$6,0,true)`,
       [
         legacyMaterial, tiedMaterial,
         `legacy-${legacyMaterial.slice(0,8)}`,
