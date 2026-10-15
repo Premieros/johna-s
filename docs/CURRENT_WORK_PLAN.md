@@ -8,6 +8,11 @@
 - Current active branch: `hotfix/costing-detail-timeout-batch-20261015`
 - Mandatory active work log: `docs/DB_COST_DETAIL_TIMEOUT_20261015.md`
 
+## Smouha-only costing-detail pilot — 2026-10-15
+- Owner approved narrow, revertible read-only performance improvement; production public.get_product_costing_detail replaced with gate `v_scope = '19c3fd23-d784-455b-8840-f4f2ac619651'`. Other branches use the unchanged legacy raw-price branch.
+- Production baseline MD5 `666844cc8f86f35152828e9ff799031b`, active scoped function MD5 `59cff14b68b5eaf49f648bdc49ba1568`. Original definition saved in `scripts/rollback/get_product_costing_detail_original_20261015.sql`.
+- Authenticated production test: Avocado 3147 → 1131ms, exact JSON hash match; Chicken Fajita >6500ms timeout → 3480ms, success. Full run 38692765646 green 4/4. Broad SQLSTATE 57014 affecting other pages is NOT resolved and requires separate diagnosis. No kitchen, stock, FIFO, sales, accounting, Windows agent or print-gate changes. Further rollout BLOCKED pending live-load evidence. PR #508 remains draft.
+
 ## Current emergency staging: atomic kitchen print handoff — 2026-10-14
 - This isolated candidate attempts to eliminate the gap between successful kitchen send and durable cloud print job creation. It is outside canonical migrations, **not applied** to production and must not change the V8 Windows agent or replay old orders.
 - Active branch `hotfix/kitchen-atomic-remote-stop-20261015` (draft #507, remote stop); targeted proof in `tests/integration/kitchen_atomic_print_handoff.test.ts`. A queued job uses the established sorted per-station send-id/quantity identity; frontend enqueue must remain idempotent and never print twice.
