@@ -4,9 +4,12 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `322348f3d772341cce7484f793dfec94cf0b533b` (#508 merged after exact-head verification; kitchen handoff still OFF)
-- Current active branch: `feat/sage-openmercato-identity-export-20261015`
-- Mandatory active work log: `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md`
+- Latest main baseline reconciled: `6e4792e38c6a62aa4446a1976fb93b8b23ebc973` (#509 preserved)
+- Current active branch: `hotfix/operations-stability-all-20261015`
+- Mandatory active work log: `docs/OPERATIONS_STABILITY_ALL_20261015.md`
+
+## Owner-directed operations repair — 2026-10-15
+The owner explicitly requests fixing all verified operational failures, stability verification and closing-report raw materials for Smouha and Cleopatra. This supersedes the earlier export-only active scope. Single sequential writer; preserve #508/#509. Prepare, test and apply safe repairs with measured verification and immediate rollback on proven regression. No live sale/stock/print replay or agent replacement. Historical scope restrictions below describe their own previous tracks.
 
 ## Owner-approved scope switch — Sage identity export — 2026-10-15
 - Owner explicitly approved making **Sage ↔ Open Mercato integration** the next active development track in this conversation. This updates the single-writer gate first, before feature changes; other hotfix/benchmark PRs remain non-executable unless separately activated.
