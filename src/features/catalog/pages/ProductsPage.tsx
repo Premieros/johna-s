@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Download, Upload, Barcode as BarcodeIcon, QrCode, Move } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
 import { DesignSearch } from '@/components/design/DesignSearch';
@@ -27,6 +28,7 @@ import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductRecipeCost } from '@/features/catalog/components/ProductRecipeCost';
 import { loadProductCurrentCosts } from '@/features/costing/services/productCurrentCostData';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
+import { buildSageCatalogIdentityExport, SAGE_CATALOG_IDENTITY_EXPORT_LIMIT } from '../lib/sageCatalogIdentityExport';
 import type { Product, Category, ProductUnit, ProductComponentInput } from '@/lib/types';
 import { deleteProductRecord, importProductRecords, loadProductCategories, loadProductEditorData, loadProductStockComponents, replaceLegacyProductComponents, updateProductRecord, type ProductLinkedInventoryUnit as LinkedInventoryUnit, type ProductManufacturedInventoryUnit as ManufacturedInventoryUnit, type ProductRawMaterialOption as RawMaterialOption, type ProductStockComponent } from '../services/productPageData';
 
@@ -37,12 +39,17 @@ type OperationalIngredient = { raw_material_id: string; quantity: number; wastag
 export function ProductsPage() {
   const { t, lang } = useLanguage();
   const { show } = useToast();
+  const { user } = useAuth();
   const costErrorToast = useRef(show);
   costErrorToast.current = show;
   const can = useCan();
   const canViewCurrentCosts = can('reports.costing');
   const branchFilter = useBranchFilter();
   const [search, setSearch] = useState('');
+  const [exportingIdentities, setExportingIdentities] = useState(false);
+  const identityExportBusy = useRef(false);
+  // Read the latest scope after each await, not the stale state captured when clicked.
+  const identityExportScope = useRef({ branchId: '', search: '', userId: '' });
   const { rows: products, loading, total, hasMore, loadMore, loadingMore, refresh: reloadProducts, fetchAll: fetchAllProducts } = usePaginatedRows<Product>({
     table: 'products',
     select: '*',
@@ -64,6 +71,7 @@ export function ProductsPage() {
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
+  identityExportScope.current = { branchId: branchFilter ?? '', search, userId: user?.id ?? '' };
   const branchLabel = (id: string | null | undefined) => branches.find((b) => b.id === id)?.name || '';
   const productCategoryName = (product: Product) => categories.find((item) => item.id === product.category_id)?.name || product.category?.name || '';
 
@@ -318,6 +326,69 @@ export function ProductsPage() {
     exportToExcel(all.map(p => ({ Name: p.name, NameEn: p.name_en || '', Barcode: p.barcode || '', SKU: p.sku || '', ProductType: p.product_type || 'ready', CostPrice: p.cost_price, CurrentUnitCost: currentCosts[p.id] ?? null, SalePrice: p.sale_price, WholesalePrice: p.wholesale_price, Category: productCategoryName(p), Active: p.is_active, LowStockThreshold: p.low_stock_threshold, MinStock: p.min_stock ?? 0, MaxStock: p.max_stock ?? 0, ReorderPoint: p.reorder_point ?? 0 })), 'products');
   };
 
+  const handleIdentityExport = async () => {
+    if (identityExportBusy.current || !can('products.export')) return;
+    const active = identityExportScope.current;
+    const branchId = active.branchId;
+    if (!active.userId || !branchId || active.search.trim()) {
+      show(lang === 'ar'
+        ? 'اختر فرعًا واحدًا وامسح البحث قبل تصدير هوية المنتجات كاملة.'
+        : 'Select exactly one branch and clear the search before exporting its product identities.', 'error');
+      return;
+    }
+    identityExportBusy.current = true;
+    setExportingIdentities(true);
+    try {
+      const sameScope = () => {
+        const current = identityExportScope.current;
+        if (current.branchId !== branchId || current.userId !== active.userId ||
+            current.search.trim() !== '') {
+          throw new Error(lang === 'ar'
+            ? 'تغيّر الفرع أو البحث أو الحساب أثناء القراءة؛ أُلغِي التصدير حفاظًا على البيانات.'
+            : 'Branch, search, or user changed while reading; identity export was cancelled.');
+        }
+      };
+      sameScope();
+      // Count and read through the signed-in user's own RLS-protected client.
+      // A mismatch fails closed instead of producing a misleading truncated file.
+      const { count, error: countError } = await api.supabase.from('products')
+        .select('id', { count: 'exact', head: true }).eq('branch_id', branchId);
+      if (countError || count === null) throw countError ?? new Error('Source row count unavailable');
+      sameScope();
+      if (count > SAGE_CATALOG_IDENTITY_EXPORT_LIMIT) throw new Error('Identity export row limit exceeded');
+      const all = await fetchAllProducts();
+      sameScope();
+      if (all.length !== count) {
+        throw new Error(lang === 'ar'
+          ? 'عدد المنتجات المقروءة لا يطابق قاعدة البيانات؛ لم يُنشأ ملف ناقص.'
+          : 'Read count did not match database count; no partial file was created.');
+      }
+      const preview = buildSageCatalogIdentityExport(all, branchId);
+      sameScope();
+      const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(preview, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      }));
+      try {
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `sage-products-identity-${branchId}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+      show(lang === 'ar'
+        ? `تم تنزيل معرّفات ${preview.products.length} منتجًا من الفرع المحدد (قراءة فقط).`
+        : `Downloaded ${preview.products.length} branch-scoped product identities (read-only).`, 'success');
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      identityExportBusy.current = false;
+      setExportingIdentities(false);
+    }
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     if (!branchFilter) { show(lang === 'ar' ? 'اختر الفرع قبل استيراد المنتجات' : 'Select a branch before importing products', 'error'); e.target.value = ''; return; }
@@ -356,7 +427,8 @@ export function ProductsPage() {
 
   return (
     <DesignSurface testId="products-page">
-      <DesignPageHeader title={t('products')} actions={<>{can('products.import') && <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} data-testid="products-import" />}{can('products.import') && <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} data-testid="products-import-button"><Upload className="w-4 h-4" /> {t('importExcel')}</Button>}{can('products.export') && <Button variant="outline" size="sm" onClick={handleExport} data-testid="products-export"><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}{can('products.create') && <Button size="sm" onClick={openAdd} data-testid="products-add"><Plus className="w-4 h-4" /> {t('add')}</Button>}</>} />
+      <DesignPageHeader title={t('products')} actions={<>{can('products.import') && <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} data-testid="products-import" />}{can('products.import') && <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} data-testid="products-import-button"><Upload className="w-4 h-4" /> {t('importExcel')}</Button>}{can('products.export') && <Button variant="outline" size="sm" onClick={handleExport} data-testid="products-export"><Download className="w-4 h-4" /> {t('exportExcel')}</Button>}{can('products.export') && <Button variant="outline" size="sm" disabled={exportingIdentities} onClick={() => void handleIdentityExport()} data-testid="products-export-identity"><Download className="w-4 h-4" /> {lang === 'ar' ? 'تصدير هوية JSON' : 'Export identity JSON'}</Button>}{can('products.create') && <Button size="sm" onClick={openAdd} data-testid="products-add"><Plus className="w-4 h-4" /> {t('add')}</Button>}</>} />
+      {can('products.export') && <p className="px-2 text-xs text-ui-subtle" data-testid="products-export-identity-hint">{lang === 'ar' ? 'التصدير الجديد للقراءة فقط: اختر فرعًا محددًا وامسح البحث أولاً. يحفظ معرف المنتج والفرع والنوع والحالة فقط، ولا يشمل الأسعار أو المخزون.' : 'Read-only identity export: choose one branch and clear search first. Includes product/branch IDs, type and status, never prices or inventory.'}</p>}
       <DesignPanel testId="products-search-panel"><DesignSearch value={search} onChange={setSearch} placeholder={t('search')} label={t('search')} testId="products-search" /></DesignPanel>
       <DesignPanel testId="products-table-panel"><DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t('noData')} onRowClick={can('products.edit') ? openEdit : undefined} /><DesignPagination loaded={products.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></DesignPanel>
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('edit') : t('add')} size="xl">
