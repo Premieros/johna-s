@@ -1,6 +1,6 @@
--- SMOUHA-ONLY read-only detail candidate. No live writes or inventory mutations.
+-- Two-branch read-only detail candidate. No business writes or inventory mutations.
 -- BACKUP the current production pg_get_functiondef before installation.
--- Original per-line pricing path stays in the ELSE arm for all other branches.
+-- Original per-line pricing path stays in the ELSE arm for any other branch.
 -- Do not execute without passing branch-swap parity tests + performance gate.
 CREATE OR REPLACE FUNCTION public.get_product_costing_detail(p_product_id uuid, p_branch_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -77,9 +77,10 @@ BEGIN
   JOIN public.products cp ON cp.id = pc.component_product_id
   WHERE pc.product_id = p_product_id;
 
-  -- Controlled rollout: only the verified Smouha branch gets the batched read.
-  -- Cleopatra and every other branch retain the byte-equivalent original path.
-  IF v_scope = '19c3fd23-d784-455b-8840-f4f2ac619651'::uuid THEN
+  -- Explicit branch allowlist; evaluate the branch of the authorized product.
+  -- Any other branch retains the original per-line pricing path.
+  IF v_scope IN ('19c3fd23-d784-455b-8840-f4f2ac619651'::uuid,
+                 '279e6662-e901-40b2-9170-7dda0b471ba7'::uuid) THEN
     WITH raw_lines AS MATERIALIZED (
       SELECT * FROM public._costing_product_raw_lines(p_product_id,v_scope)
     ), raw_prices AS MATERIALIZED (
