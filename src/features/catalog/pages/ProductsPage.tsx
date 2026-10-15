@@ -28,7 +28,7 @@ import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductRecipeCost } from '@/features/catalog/components/ProductRecipeCost';
 import { loadProductCurrentCosts } from '@/features/costing/services/productCurrentCostData';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
-import { buildSageCatalogIdentityExport, SAGE_CATALOG_IDENTITY_EXPORT_LIMIT } from '../lib/sageCatalogIdentityExport';
+import { loadSageIdentitySnapshot } from '../services/sageIdentitySnapshot';
 import type { Product, Category, ProductUnit, ProductComponentInput } from '@/lib/types';
 import { deleteProductRecord, importProductRecords, loadProductCategories, loadProductEditorData, loadProductStockComponents, replaceLegacyProductComponents, updateProductRecord, type ProductLinkedInventoryUnit as LinkedInventoryUnit, type ProductManufacturedInventoryUnit as ManufacturedInventoryUnit, type ProductRawMaterialOption as RawMaterialOption, type ProductStockComponent } from '../services/productPageData';
 
@@ -339,32 +339,21 @@ export function ProductsPage() {
     identityExportBusy.current = true;
     setExportingIdentities(true);
     try {
-      const sameScope = () => {
-        const current = identityExportScope.current;
-        if (current.branchId !== branchId || current.userId !== active.userId ||
-            current.search.trim() !== '') {
-          throw new Error(lang === 'ar'
-            ? 'تغيّر الفرع أو البحث أو الحساب أثناء القراءة؛ أُلغِي التصدير حفاظًا على البيانات.'
-            : 'Branch, search, or user changed while reading; identity export was cancelled.');
-        }
-      };
-      sameScope();
-      // Count and read through the signed-in user's own RLS-protected client.
-      // A mismatch fails closed instead of producing a misleading truncated file.
-      const { count, error: countError } = await api.supabase.from('products')
-        .select('id', { count: 'exact', head: true }).eq('branch_id', branchId);
-      if (countError || count === null) throw countError ?? new Error('Source row count unavailable');
-      sameScope();
-      if (count > SAGE_CATALOG_IDENTITY_EXPORT_LIMIT) throw new Error('Identity export row limit exceeded');
-      const all = await fetchAllProducts();
-      sameScope();
-      if (all.length !== count) {
-        throw new Error(lang === 'ar'
-          ? 'عدد المنتجات المقروءة لا يطابق قاعدة البيانات؛ لم يُنشأ ملف ناقص.'
-          : 'Read count did not match database count; no partial file was created.');
-      }
-      const preview = buildSageCatalogIdentityExport(all, branchId);
-      sameScope();
+      const preview = await loadSageIdentitySnapshot({
+        branchId,
+        hasUnchangedScope: () => {
+          const current = identityExportScope.current;
+          return current.branchId === branchId &&
+            current.userId === active.userId && !current.search.trim();
+        },
+        countBranchProducts: async (id) => {
+          const { count, error } = await api.supabase.from('products')
+            .select('id', { count: 'exact', head: true }).eq('branch_id', id);
+          if (error) throw error;
+          return count;
+        },
+        fetchAllProducts,
+      });
       const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(preview, null, 2)], {
         type: 'application/json;charset=utf-8',
       }));
