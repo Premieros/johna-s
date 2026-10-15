@@ -266,6 +266,21 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     // Each sample owns a fresh material/product/order, so neither variant inherits
     // the previous variant's stock/debts. Same branch, indexes, prices and permissions.
     let isBound=true;
+    // The committed history fixture can trigger background maintenance in this
+    // owned database. Keep the actual NOWAIT rollout barrier unchanged; retry
+    // only its failed admission, before any timed actor transaction starts.
+    async function benchmarkBinding(sql:string){
+      const deadline=Date.now()+5000;
+      for(;;){
+        try {await observer.query(sql);return;}
+        catch(error){
+          if((error as {code?:string}).code!=='55P03')throw error;
+          await observer.query('ROLLBACK');
+          if(Date.now()>=deadline)throw error;
+          await new Promise(resolve=>setTimeout(resolve,25));
+        }
+      }
+    }
     const results:Record<string,Record<string,{ms:number;wal:number}[]>>={};
     const median=(xs:number[])=>[...xs].sort((x,y)=>x-y)[Math.floor(xs.length/2)];
     for(const profile of [{lines:1,history:0},{lines:5,history:0},{lines:20,history:0},{lines:50,history:0},{lines:50,history:10000}]){
@@ -273,7 +288,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       results[key]={baseline:[],candidate:[]};
       for(let sample=-1;sample<7;sample++){
         for(const candidate of (sample%2===0?[true,false]:[false,true])){
-          if(candidate!==isBound){await observer.query(candidate?forward():rollback());isBound=candidate;}
+          if(candidate!==isBound){await benchmarkBinding(candidate?forward():rollback());isBound=candidate;}
           const mat=randomUUID(),prod=randomUUID(),recipe=randomUUID(),table=randomUUID();
           await observer.query('BEGIN');
           await observer.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active,unit_id) VALUES($1,$2,'RPC raw',$3,7,true,$4)",[mat,'RPC-'+mat,branch,unit]);
@@ -303,7 +318,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
           if(sample>=0)results[key][candidate?'candidate':'baseline'].push({ms,wal});
           // Restore a known bound state after each baseline; all code changes
           // and fixture setup stay OUTSIDE timing/WAL samples.
-          if(!candidate){await observer.query(forward());isBound=true;}
+          if(!candidate){await benchmarkBinding(forward());isBound=true;}
         }
       }
     }
