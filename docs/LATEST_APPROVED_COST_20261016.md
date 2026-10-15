@@ -41,6 +41,10 @@ as owner-approved starting manual prices, dated at cutover to avoid retrospectiv
 pricing old kitchen dispatches. Unknown/zero stays unpriced. Actual positive catalog
 price edits/imports create dated manual price records; existing explicit pricing RPC
 is deduplicated. No names-only/no-op/received-quantity/return-amount cache writes.
+Catalog writes are briefly locked with a two-second lock budget during cutover.
+The old current-price map is read once and reused for starting prices; an exact
+numeric comparison of EVERY material runs before COMMIT. Any missing/changed price
+aborts the whole migration. No repeated preflight history scan is necessary.
 Price-source tables and actual positive manual catalog price changes receive new triggers. Ledger WHEN excludes all FIFO issue,
 oversold and reconciliation writes. Purchase/count business functions remain byte-identical.
 

@@ -2,12 +2,16 @@
 -- Promotion requires localhost regression, security, performance and rollback proof.
 BEGIN;
 SET LOCAL lock_timeout='2s';
-SET LOCAL statement_timeout='15s';
+SET LOCAL statement_timeout='5s';
 DO $guard$ BEGIN
  IF md5(pg_get_functiondef('public.get_raw_material_current_prices(uuid,uuid[])'::regprocedure))<>'c883a34810a148b89f8fb3d7069220c2'
  OR md5(pg_get_functiondef('public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)'::regprocedure))<>'cc3b92de1c8c95471fcfee7372fcccf2'
  THEN RAISE EXCEPTION 'LATEST_PRICE_BASELINE_CHANGED'; END IF;
 END $guard$;
+
+-- Freeze catalog edits during the one-time cutover; ordinary reads stay available.
+-- Two-second lock timeout aborts atomically if an active writer cannot finish.
+LOCK TABLE public.raw_materials IN SHARE ROW EXCLUSIVE MODE;
 
 -- A compact price-only projection, not a copy of FIFO batches/issues. Keeping
 -- approved source identities preserves per-user financial visibility, old as-of
@@ -171,11 +175,13 @@ INSERT INTO private.raw_approved_price_read_model(source_kind,source_id,raw_mate
 -- Preserve existing positive fallback prices exactly once at cutover. These are
 -- explicit owner-approved starting prices, dated NOW so old dispatches are never
 -- retrospectively given a price. No stock/COGS/default_cost is updated.
+CREATE TEMP TABLE latest_approved_price_cutover_expected ON COMMIT DROP AS
+ SELECT * FROM public.get_raw_material_current_prices(NULL,NULL);
 INSERT INTO public.raw_material_price_events(id,raw_material_id,branch_id,unit_cost,source,reference_number,detail,priced_at)
  SELECT md5('latest-approved-start-20261016:'||p.raw_material_id::text)::uuid,p.raw_material_id,p.branch_id,p.unit_cost,'pricing',
   'PRICE-START-20261016-'||p.raw_material_id::text,
   'Owner-approved starting last known price; original source: '||p.price_source,clock_timestamp()
- FROM public.get_raw_material_current_prices(NULL,NULL) p
+ FROM pg_temp.latest_approved_price_cutover_expected p
  WHERE p.unit_cost>0 AND p.price_source IN('last_batch','inventory_average','default_cost');
 
 -- The existing raw-material editor/import exposes default_cost as a manual
@@ -233,4 +239,14 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public,pg_temp AS $function
  SELECT p.* FROM private.latest_approved_raw_prices(p_branch_id,p_raw_material_ids,p_as_of) p
  WHERE p_branch_id IS NOT NULL AND p_raw_material_ids IS NOT NULL AND p_as_of IS NOT NULL AND p.unit_cost>0;
 $function$;
+-- Compare numeric prices for EVERY material while source/catalog writes remain
+-- locked. If any known price is lost or changed, roll the entire migration back.
+DO $parity$ BEGIN
+ IF EXISTS(
+  SELECT 1 FROM pg_temp.latest_approved_price_cutover_expected e
+  FULL JOIN public.get_raw_material_current_prices(NULL,NULL) n
+   ON n.raw_material_id=e.raw_material_id AND n.branch_id IS NOT DISTINCT FROM e.branch_id
+  WHERE e.raw_material_id IS NULL OR n.raw_material_id IS NULL OR e.unit_cost IS DISTINCT FROM n.unit_cost
+ ) THEN RAISE EXCEPTION 'LATEST_PRICE_CUTOVER_PARITY_FAILED'; END IF;
+END $parity$;
 COMMIT;
