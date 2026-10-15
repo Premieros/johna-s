@@ -28,7 +28,7 @@ import { ProductImage } from '@/features/catalog/components/ProductImage';
 import { ProductRecipeCost } from '@/features/catalog/components/ProductRecipeCost';
 import { loadProductCurrentCosts } from '@/features/costing/services/productCurrentCostData';
 import { ProductImageAdjustModal, type ProductImageView } from '@/features/catalog/components/ProductImageAdjustModal';
-import { loadSageIdentitySnapshot } from '../services/sageIdentitySnapshot';
+import { countSageProductsInBranch, loadSageIdentitySnapshot } from '../services/sageIdentitySnapshot';
 import type { Product, Category, ProductUnit, ProductComponentInput } from '@/lib/types';
 import { deleteProductRecord, importProductRecords, loadProductCategories, loadProductEditorData, loadProductStockComponents, replaceLegacyProductComponents, updateProductRecord, type ProductLinkedInventoryUnit as LinkedInventoryUnit, type ProductManufacturedInventoryUnit as ManufacturedInventoryUnit, type ProductRawMaterialOption as RawMaterialOption, type ProductStockComponent } from '../services/productPageData';
 
@@ -346,12 +346,7 @@ export function ProductsPage() {
           return current.branchId === branchId &&
             current.userId === active.userId && !current.search.trim();
         },
-        countBranchProducts: async (id) => {
-          const { count, error } = await api.supabase.from('products')
-            .select('id', { count: 'exact', head: true }).eq('branch_id', id);
-          if (error) throw error;
-          return count;
-        },
+        countBranchProducts: countSageProductsInBranch,
         fetchAllProducts,
       });
       const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(preview, null, 2)], {
