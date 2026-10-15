@@ -33,7 +33,7 @@ describe('mandatory active worklog gate', () => {
     expect(log).toMatch(/^Branch:\s*`[^`]+`/m);
     expect(log).toMatch(/^Current PR:\s*`?#?\d+`?/m);
     expect(log).toMatch(/^Last updated:\s*.+$/m);
-    expect(log).toContain('State: **BLOCKED**');
+    expect(log).toMatch(/^State: \*\*(BLOCKED|READY|DEPLOYED)\*\*/m);
   });
 
   it('matches the PR head branch when running inside pull_request CI', () => {

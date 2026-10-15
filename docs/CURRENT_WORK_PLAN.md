@@ -4,9 +4,16 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `af02abe15` (#506 merged; GitHub Pages deployed successfully)
-- Current active branch: `hotfix/kitchen-atomic-remote-stop-20261015`
-- Mandatory active work log: `docs/KITCHEN_ATOMIC_PRINT_HANDOFF_2026-10-14.md`
+- Latest main baseline reconciled: `693cd639a2` (#507 Smouha build deployed; server pilot OFF)
+- Current active branch: `hotfix/costing-detail-timeout-batch-20261015`
+- Mandatory active work log: `docs/DB_COST_DETAIL_TIMEOUT_20261015.md`
+
+## Released costing read repair — both branches — 2026-10-15
+- Applied production migration `20261015071859_costing_detail_two_branch_batch_read`: detail price fields and internal recipe estimates batch the same existing raw-price resolver, preserving values, precision, nulls, permissions and response JSON.
+- Smouha and Cleopatra are covered. Current detail MD5 `732777a33b67f9a6c1da8de4fa0a0431`; recipe helper MD5 `8b0bc11afaab1a9a967589aa90159e55`.
+- Immediate authenticated same-user reads: Smouha Avocado 1280→290ms, Cleopatra Avocado 2467→231ms, Smouha Chicken Fajita 3222→253ms, with identical full JSON for all three. Cleopatra Chicken Fajita improved from >6500ms safety timeout to 304ms, retaining all compared raw contexts and original aggregate cost (complete old JSON unavailable).
+- Functional/recovery source `a068a58f`, full run `38697228401` green 4/4, 1068 DB tests including 16 targeted costing tests and exact rollback rehearsal. Final merge and post-merge status: see PR #508 and Actions. No claim of peak-load/global timeout cure.
+- Guarded recovery: `scripts/rollback/costing_batch_restore_smouha_pilot_20261015.sql`, restoring the prior Smouha-only pilot and original recipe helper. No kitchen/print/Windows/FIFO/stock/accounting/settlement changes; print handoff server gate remains OFF. Existing print read indexes already cover both branches.
 
 ## Current emergency staging: atomic kitchen print handoff — 2026-10-14
 - This isolated candidate attempts to eliminate the gap between successful kitchen send and durable cloud print job creation. It is outside canonical migrations, **not applied** to production and must not change the V8 Windows agent or replay old orders.
