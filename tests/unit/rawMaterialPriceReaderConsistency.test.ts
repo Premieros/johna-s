@@ -15,7 +15,7 @@ const consumers = [
   'src/features/costing/pages/CostingCenterPage.tsx',
   'src/features/trade/services/shiftClosingReport.ts',
 ];
-describe('FIFO-first material price reader contract', () => {
+describe('latest-approved material price reader contract', () => {
   it.each(consumers)('%s uses the unified price display reader', (path) => {
     const content = readFileSync(path, 'utf8');
     expect(content).toContain('loadRawMaterialDisplayPrices');

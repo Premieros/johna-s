@@ -59,6 +59,8 @@ describe.skipIf(skip)('raw-material stock count lifecycle', () => {
        VALUES ($1,$2,'Count Raw',$3,4,true)`,
       [rawMaterialId, `RAW-${randomUUID().slice(0, 8)}`, branchId],
     );
+    // Model an existing catalog price from before this count transaction.
+    await client.query("UPDATE public.raw_material_price_events SET priced_at=now()-interval '1 day' WHERE raw_material_id=$1 AND reference_number LIKE 'PRICE-CATALOG-%'",[rawMaterialId]);
     await client.query(
       `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
        VALUES ($1,$2,'Count Admin','super_admin',$3,true)`,

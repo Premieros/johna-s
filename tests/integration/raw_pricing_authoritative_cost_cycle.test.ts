@@ -333,7 +333,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(hidden.cost_reference).toBeNull();
   });
 
-  it('matches the previous complete price and valuation results for events and every fallback', async () => {
+  it('keeps explicit manual prices authoritative over inventory averages and retains previous resolver parity', async () => {
     const fallbackIds = [randomUUID(), randomUUID(), randomUUID()];
     for (const [index, id] of fallbackIds.entries()) {
       await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active)
@@ -352,7 +352,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
       return { prices, value };
     });
     const updated = [await snapshot(managerUser), await snapshot(viewerUser)];
-    expect(fallbackIds.map(id => Number(updated[0].prices.find(row => row.raw_material_id === id)?.unit_cost))).toEqual([7, 9, 11]);
+    expect(fallbackIds.map(id => Number(updated[0].prices.find(row => row.raw_material_id === id)?.unit_cost))).toEqual([7, 7, 7]);
     await client.query('SAVEPOINT price_read_parity');
     try {
       await client.query(readFileSync('supabase/rollback/20261009001500_raw_price_read_reuse.sql', 'utf8'));
