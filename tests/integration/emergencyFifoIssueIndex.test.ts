@@ -10,7 +10,7 @@ describe.skipIf(!owned)('emergency FIFO issue index: owned disposable DB only', 
   let db: pg.Client;
   const branch = randomUUID(), warehouse = randomUUID(), raw = randomUUID();
   const old = readFileSync('scripts/rollback/operations_stability_original_functions_20261015.sql', 'utf8');
-  const candidate = readFileSync('supabase/migrations/20261015195000_emergency_fifo_issue_lookup_order_matching.sql', 'utf8');
+  const candidate = readFileSync('supabase/migrations/20261015200700_emergency_fifo_issue_lookup_order_matching.sql', 'utf8');
   const fn = (s: string) => s.slice(s.indexOf('CREATE OR REPLACE FUNCTION public._raw_last_known_fifo_cost'), s.indexOf('CREATE OR REPLACE FUNCTION public.update_order'));
   const indexSql = candidate.slice(candidate.indexOf('CREATE INDEX '), candidate.indexOf('CREATE OR REPLACE FUNCTION'));
   beforeAll(async () => {
