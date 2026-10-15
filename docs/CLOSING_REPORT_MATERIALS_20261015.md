@@ -29,6 +29,8 @@ Main `6e4792e38c6a62aa4446a1976fb93b8b23ebc973` includes #508 costing read repai
 Functional tests verify Arabic/English material output, decimal quantities, unlike units, separate actual/estimated prices, totals, unchanged drawer data, branch attribution, error handling and enqueue-before-audit order. These sources passed the #510 full suite; fresh exact-head checks required for the extracted frontend-only head. No live sale or print test is performed.
 
 ## Production gate
+Follow-up 2026-10-15 21:29 Cairo: owner explicitly approved re-requesting #510. Same Supabase tool applied the exact tested SQL successfully as migration20261015183017. Original decline was respected until reapproval. Active follow-up is `docs/OPERATIONS_STABILITY_ALL_20261015.md`; earlier blocked statements below describe the initial frontend-only release boundary.
+
 No Merge ولا Production migration before verification. This release includes no migration; exact-head Full Verify gates frontend publication. The previously declined database action remains blocked and must not be rerouted through execute_sql or another credential/path.
 
 ## Next action

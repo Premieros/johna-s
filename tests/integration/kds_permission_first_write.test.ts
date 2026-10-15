@@ -78,7 +78,7 @@ describe.skipIf(skip)('KDS permission-first write boundary', () => {
     );
     await client.query(
       `UPDATE public.roles
-       SET permissions = COALESCE(permissions, '[]'::jsonb) || '["pos.kds_view","pos.kds_update"]'::jsonb,
+       SET permissions = (COALESCE(permissions, '[]'::jsonb) - 'pos.order.edit' - 'pos.send_kitchen') || '["pos.kds_view","pos.kds_update"]'::jsonb,
            updated_at = now()
        WHERE role = 'production_manager'`,
     );
@@ -154,6 +154,23 @@ describe.skipIf(skip)('KDS permission-first write boundary', () => {
       await expectDbError(
         () => client.query(`SELECT public.set_kitchen_status($1, 'cooking')`, [orderOtherBranch]),
         'BRANCH_MISMATCH',
+      );
+    });
+  });
+
+  it('repeating cooking, ready and served works without broad order edit rights', async () => {
+    // Exercise the permission guard itself, beyond the independent owner guard.
+    await client.query('UPDATE public.orders SET cashier_id=$1 WHERE id=$2', [writerUser,orderAllowed]);
+    await asUser(writerUser, async () => {
+      for (const status of ['cooking', 'ready', 'served']) {
+        await client.query('SELECT public.set_kitchen_status($1,$2)', [orderAllowed, status]);
+        await client.query('SELECT public.set_kitchen_status($1,$2)', [orderAllowed, status]);
+        const result = await client.query('SELECT kitchen_status FROM public.orders WHERE id=$1', [orderAllowed]);
+        expect(result.rows[0].kitchen_status).toBe(status);
+      }
+      await expectDbError(
+        () => client.query("UPDATE public.orders SET notes='unauthorized edit' WHERE id=$1", [orderAllowed]),
+        'PERMISSION_DENIED:pos.order.edit',
       );
     });
   });

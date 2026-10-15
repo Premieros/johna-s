@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
 
@@ -233,6 +234,39 @@ describe.skipIf(skip)('update_order + occupancy guards (046 C2/H2/M4)', () => {
     expect(changed.success).toBe(false);
     expect(changed.error).toBe('TABLE_ORDER_TYPE_MISMATCH');
     expect(await tableStatus(t)).toBe('occupied');
+  });
+
+  it('matches duplicate lines once per call and preserves original results after removing temporary DDL', async () => {
+    const created = await createOrder(null, 'takeaway');
+    expect(created.success).toBe(true);
+    const orderId = created.order_id!;
+    await client.query(`INSERT INTO public.order_items(order_id,product_id,unit_name,quantity,unit_price,total)
+      VALUES($1,$2,'piece',1,100,100)`, [orderId,prodId]);
+    const payload = JSON.stringify([2,3].map(quantity => ({
+      product_id: prodId, unit_name: 'piece', quantity, unit_price: 100,
+      discount_amount: 0, bonus_quantity: 0, total: quantity * 100,
+    })));
+    const run = async () => {
+      const result = await asUser(() => client.query(
+        "SELECT public.update_order($1,'takeaway',NULL,NULL,1,NULL,$2::jsonb,500,0,'amount',0,500,'held') r", [orderId,payload],
+      ));
+      expect(result.rows[0].r.success).toBe(true);
+      const rows = (await client.query('SELECT id,quantity,total FROM public.order_items WHERE order_id=$1 ORDER BY id', [orderId])).rows;
+      expect(rows).toHaveLength(2);
+      expect(rows.map(row => Number(row.quantity)).sort()).toEqual([2,3]);
+      return { result: result.rows[0].r, rows };
+    };
+    const optimized = await run();
+    expect(await run()).toEqual(optimized); // empty matching set on every invocation
+    await client.query('SAVEPOINT original_update_order');
+    try {
+      await client.query(readFileSync('scripts/rollback/operations_stability_original_functions_20261015.sql', 'utf8'));
+      expect(await run()).toEqual(optimized);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT original_update_order');
+      await client.query('RELEASE SAVEPOINT original_update_order');
+    }
+    expect(await run()).toEqual(optimized);
   });
 
   it('explicit detach_order remains the supported way to free a table-bound order', async () => {
