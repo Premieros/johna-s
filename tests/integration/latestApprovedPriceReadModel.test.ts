@@ -58,6 +58,18 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   }finally{await db.query('ROLLBACK TO mutations');await db.query('RELEASE mutations');}
   expect((await prices()).find(x=>x.raw_material_id===raw)?.unit_cost).toBe('20.000000');
  });
+ it('preserves an undated known purchase price for current displays without inventing a historical dispatch date',async()=>{
+  await db.query('SAVEPOINT undated_price');
+  try{
+   const material=randomUUID(),parent=randomUUID();
+   await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,unit_id,default_cost) VALUES($1,$2,'Undated price',$3,$4,0)",[material,randomUUID(),a,unit]);
+   await db.query("INSERT INTO public.purchases(id,invoice_number,branch_id,subtotal,total,paid_amount,status,created_at,approved_at) VALUES($1,'UNDATED-PRICE',$2,13.4,13.4,0,'completed',NULL,NULL)",[parent,a]);
+   await db.query("INSERT INTO public.purchase_items(purchase_id,raw_material_id,unit_name,quantity,unit_cost,total,created_at) VALUES($1,$2,'g',1,13.4,13.4,NULL)",[parent,material]);
+   expect((await prices('get_raw_material_current_prices',a,[material]))[0]).toMatchObject({unit_cost:'13.400000',priced_at:null,price_source:'purchase'});
+   expect(await prices('_kitchen_approved_price_candidate',a,[material])).toEqual(await prices('qa_original_kitchen_price',a,[material]));
+   expect(await prices('_kitchen_approved_price_candidate',a,[material])).toEqual([]);
+  }finally{await db.query('ROLLBACK TO undated_price');await db.query('RELEASE undated_price');}
+ });
  it('rehearses guarded rollback without changing FIFO or accounting functions',async()=>{
   const fingerprint=async()=>(await db.query("SELECT md5(string_agg(pg_get_functiondef(p.oid),E'\\n' ORDER BY p.oid)) hash FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN('_raw_remove_fifo','_deduct_kitchen_raw_components','_send_to_kitchen_core_20260914','claim_cloud_print_jobs','process_sale_idempotent')")).rows[0].hash;
   const before=await fingerprint();

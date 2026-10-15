@@ -1,7 +1,7 @@
 BEGIN;
 SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='15s';
-DO $guard$ BEGIN IF md5((SELECT prosrc FROM pg_proc WHERE oid='public.get_raw_material_current_prices(uuid,uuid[])'::regprocedure))<>'d51ef659328749e0d649bbe27637cfb7' OR md5((SELECT prosrc FROM pg_proc WHERE oid='public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)'::regprocedure))<>'390ac9e0b2c230ab1f96528c244524cd' THEN RAISE EXCEPTION 'LATEST_PRICE_ROLLBACK_BASELINE_CHANGED'; END IF; END $guard$;
+DO $guard$ BEGIN IF md5((SELECT prosrc FROM pg_proc WHERE oid='public.get_raw_material_current_prices(uuid,uuid[])'::regprocedure))<>'171d4b0b49a859768836d459a24064fb' OR md5((SELECT prosrc FROM pg_proc WHERE oid='public._kitchen_approved_price_candidate(uuid,uuid[],timestamptz)'::regprocedure))<>'390ac9e0b2c230ab1f96528c244524cd' THEN RAISE EXCEPTION 'LATEST_PRICE_ROLLBACK_BASELINE_CHANGED'; END IF; END $guard$;
 CREATE OR REPLACE FUNCTION public._kitchen_approved_price_candidate(p_branch_id uuid, p_raw_material_ids uuid[], p_as_of timestamp with time zone)
  RETURNS TABLE(raw_material_id uuid, branch_id uuid, unit_cost numeric, price_source text, priced_at timestamp with time zone, reference_number text)
  LANGUAGE sql

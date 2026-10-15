@@ -213,7 +213,7 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public,pg_temp AS $f$
    c.priced_at,c.reference_number
   FROM private.raw_approved_price_read_model c
   LEFT JOIN LATERAL(SELECT public._normalize_raw_purchase_uom(c.raw_material_id,c.purchase_quantity,c.unit_cost,c.purchase_unit) AS value WHERE c.source_kind='purchase_items') norm ON true
-  WHERE c.branch_id=rm.branch_id AND c.raw_material_id=rm.id AND c.priced_at<=p_as_of
+  WHERE c.branch_id=rm.branch_id AND c.raw_material_id=rm.id AND (p_as_of IS NULL OR c.priced_at<=p_as_of)
    AND private.raw_approved_price_visible(c.source_kind,c.source_id,c.parent_id,c.raw_material_id,c.branch_id)
    AND (c.source_kind<>'purchase_items' OR (COALESCE((norm.value->>'success')::boolean,false) AND COALESCE((norm.value->>'stock_unit_cost')::numeric,0)>0))
   ORDER BY c.priced_at DESC NULLS LAST,c.source_rank,c.reference_number DESC NULLS LAST,c.event_id DESC LIMIT 1
@@ -225,7 +225,7 @@ GRANT EXECUTE ON FUNCTION private.latest_approved_raw_prices(uuid,uuid[],timesta
 CREATE OR REPLACE FUNCTION public.get_raw_material_current_prices(p_branch_id uuid DEFAULT NULL,p_raw_material_ids uuid[] DEFAULT NULL)
 RETURNS TABLE(raw_material_id uuid,branch_id uuid,unit_cost numeric,price_source text,priced_at timestamptz,reference_number text)
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public,pg_temp AS $function$
- SELECT * FROM private.latest_approved_raw_prices(p_branch_id,p_raw_material_ids,'infinity'::timestamptz);
+ SELECT * FROM private.latest_approved_raw_prices(p_branch_id,p_raw_material_ids,NULL::timestamptz);
 $function$;
 CREATE OR REPLACE FUNCTION public._kitchen_approved_price_candidate(p_branch_id uuid,p_raw_material_ids uuid[],p_as_of timestamptz)
 RETURNS TABLE(raw_material_id uuid,branch_id uuid,unit_cost numeric,price_source text,priced_at timestamptz,reference_number text)
