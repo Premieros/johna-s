@@ -34,8 +34,10 @@ Write mode: **SEQUENTIAL_ONLY**
 
 ## Change ledger
 1. `8f92019d884e340c4d3a618d44d8562f6a5774e9`: switched unified work plan to the new single writer after explicit owner approval.
-2. New active log established. Next stage: pure typed safe export projection and an explicit UI download button from Sage Products with scope confirmation.
-3. Follow each completed logical write group with the sequential execution log; update PR number after creating draft PR.
+2. `981d23c05890cd7458724303fb605eb626188e99`: mandatory active log created under the new single-writer plan.
+3. `3cebba05c98cdd831e34e83e012da9e59a9c7943`: versioned, fail-closed, branch-scoped product UUID JSON projection created. No DB calls or writes.
+4. `0b24ea97b8376ee30a4a22842018f8fae5511218`: focused identity/scope/no-SKU/privacy unit tests created. Next stage: explicit authorized UI export and completeness verification.
+5. Follow each completed logical write group with the sequential execution log; update PR number after creating draft PR.
 
 ## Verification ledger
 Pending exact-head Jest/unit tests, TypeScript, lint, build and repository full Verify on the committed code. No genuine live Sage export has been downloaded and checked yet. Do not claim source completeness without it.
