@@ -532,16 +532,52 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
           (await client.query('SELECT public.get_product_costing_detail($1,$2) result',[c.product,c.branch])).rows[0].result));
         return results;
       };
+      await client.query(readFileSync('scripts/rollback/product_recipe_cost_original_20261015.sql','utf8'));
       const before = await read();
       expect(before[0]).toMatchObject({success:true,product_id:productB});
       expect((before[0] as {recipe_items:unknown[]}).recipe_items).toHaveLength(1);
       const sql = readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql','utf8')
         .replace("'19c3fd23-d784-455b-8840-f4f2ac619651'::uuid",`'${branchA}'::uuid`)
         .replace("'279e6662-e901-40b2-9170-7dda0b471ba7'::uuid",`'${branchB}'::uuid`);
+      await client.query(readFileSync('scripts/experiments/product_recipe_cost_batch_PROPOSAL_20261015.sql','utf8'));
       await client.query(sql);
       expect(await read()).toEqual(before);
     } finally {
       await client.query('ROLLBACK TO SAVEPOINT second_branch_detail');
+    }
+  });
+
+  it('batch recipe helper preserves full JSON, nested lines, missing prices, null scope and empty groups', async () => {
+    await client.query('SAVEPOINT batch_recipe_helper');
+    try {
+      await client.query(readFileSync('scripts/rollback/product_recipe_cost_original_20261015.sql','utf8'));
+      const read = async () => {
+        const result: unknown[] = [];
+        for (const branch of [branchA,null]) {
+          for (const product of [prodId,prodNoRecipe]) {
+            result.push(await asUser(managerId,async()=>
+              (await client.query('SELECT public.get_product_costing_detail($1,$2) result',[product,branch])).rows[0].result));
+          }
+        }
+        return result;
+      };
+      const candidate=readFileSync('scripts/experiments/product_recipe_cost_batch_PROPOSAL_20261015.sql','utf8');
+      const before=await read();
+      await client.query(candidate);
+      expect(await read()).toEqual(before);
+
+      // A raw-less manufactured link must still make actual cost unknown.
+      const emptyGroup=randomUUID();
+      await client.query(`INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,is_active)
+        VALUES($1,$2,'Empty batch parity group','manufactured',$3,true)`,[emptyGroup,`EB-${emptyGroup.slice(0,8)}`,branchA]);
+      await client.query(`INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)`,[prodId,emptyGroup]);
+      await client.query(readFileSync('scripts/rollback/product_recipe_cost_original_20261015.sql','utf8'));
+      const emptyBefore=await read();
+      expect((emptyBefore[0] as {actual_cost:unknown}).actual_cost).toBeNull();
+      await client.query(candidate);
+      expect(await read()).toEqual(emptyBefore);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT batch_recipe_helper');
     }
   });
 });
