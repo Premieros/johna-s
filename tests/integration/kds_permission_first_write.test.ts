@@ -159,6 +159,8 @@ describe.skipIf(skip)('KDS permission-first write boundary', () => {
   });
 
   it('repeating cooking, ready and served works without broad order edit rights', async () => {
+    // Exercise the permission guard itself, beyond the independent owner guard.
+    await client.query('UPDATE public.orders SET cashier_id=$1 WHERE id=$2', [writerUser,orderAllowed]);
     await asUser(writerUser, async () => {
       for (const status of ['cooking', 'ready', 'served']) {
         await client.query('SELECT public.set_kitchen_status($1,$2)', [orderAllowed, status]);

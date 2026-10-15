@@ -29,6 +29,7 @@ Main `6e4792e38c6a62aa4446a1976fb93b8b23ebc973`. Cost detail `732777a33b67f9a6c1
 - update_order matched-ID temporary relation replaced by an initially empty per-call UUID array; all identity/sent-quantity checks and existing transaction/row locks retained. No temporary schema notification for matching.
 - Thermal text includes per-material quantity/unit, actual and estimated costs and total displayed cost, without changing drawer math or job identity.
 - Client audit accepts operation branch, shift open/close pass exact branch, daily close uses existing details.branch_id. Local session identity, RLS retained, sanitized insert-error warning. Other unscoped legacy audit callers are not claimed repaired.
+- Queue the automatic idempotent closing report before optional client audit I/O, so audit latency cannot delay report creation.
 
 ## Verification ledger
 1,793 frontend tests passed; application/test TypeScript, changed-file lint and API contract passed. First full run 38781292977 stopped at the baseline guard: canonical update_order has the same SQL with different comments/layout from production. Pin both exact source-body hashes, with a token/literal equivalence test; no CI bypass. New DB tests cover repeated cooking/ready/served without edit/send permission, denied business edits, branch/station denial, source precedence, oversold exclusions, warehouse boundaries, duplicate line matching and original-function rollback parity. Exact-head DB/browser proof pending. No production changes yet.
@@ -36,6 +37,8 @@ Main `6e4792e38c6a62aa4446a1976fb93b8b23ebc973`. Cost detail `732777a33b67f9a6c1
 Bounded live read-only old/candidate comparisons: three material/branch/warehouse contexts returned exactly 0, 5.250000 and 12.430000 for both. Three alternating EXPLAIN samples per reader/context: Smouha priced read median 8.769→4.875ms, buffer hits 1969→886; Cleopatra 1.492→1.141ms, hits 380→180. Unpriced fallback scans all sources as before (2165→2159 hits), timings noisy ~9ms. No peak-load or overall FIFO timeout cure is claimed.
 
 ## Production gate
+Fast Verify 38781814132 applied the migration and passed pricing/rollback and update-order tests. The KDS repeat transitions passed, but its forbidden-notes assertion reached the independent ownership denial before the expected permission denial. Give that isolated fixture to its writer so the test proves the narrower permission guard too; do not change production authorization. Fresh exact-head Full Verify required.
+
 No Merge ولا Production migration before exact-head Full Verify, observed parity/performance and safe rollback. User has authorized fixing all verified problems; do not request redundant routine permission. A passing unit suite is not evidence of deployed stability. Claim/start/complete signatures and fingerprints must remain untouched.
 
 ## Next action

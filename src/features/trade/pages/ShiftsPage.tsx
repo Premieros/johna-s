@@ -189,6 +189,13 @@ export function ShiftsPage() {
 
   const finishClose = async (res: ShiftCloseResult, preservedOpenOrders: boolean) => {
     if (!closeTarget) return;
+    // Queue the durable, idempotent report before optional client audit I/O.
+    const zQueued = await enqueueAutomaticShiftZReport({
+      shiftId: closeTarget.id,
+      branchId: closeTarget.branch_id,
+      currency,
+      lang,
+    });
     await logAudit('update', 'shifts', closeTarget.id, {
       expected: res.expected,
       actual: res.actual,
@@ -200,12 +207,6 @@ export function ShiftsPage() {
       next_shift_opening_amount: res.next_shift_opening_amount ?? null,
     }, closeTarget.branch_id);
 
-    const zQueued = await enqueueAutomaticShiftZReport({
-      shiftId: closeTarget.id,
-      branchId: closeTarget.branch_id,
-      currency,
-      lang,
-    });
     if (!zQueued.accepted) {
       show(
         isAr
