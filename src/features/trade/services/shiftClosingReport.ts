@@ -468,6 +468,20 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
       : 'Full invoice detail is available in the A4 report',
   );
 
+  rows.push(line, isAr ? 'الخامات المستهلكة / MATERIALS' : 'MATERIALS CONSUMED');
+  for (const material of summary.ingredientsConsumed || []) {
+    rows.push(
+      String(material.materialName).replace(/[\r\n]+/g, ' '),
+      `${isAr ? 'الكمية' : 'Quantity'}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
+      `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)}`,
+      `${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
+    );
+  }
+  rows.push(
+    `${isAr ? 'إجمالي تكلفة الخامات' : 'Total material cost'}: ${money((summary.ingredientsConsumed || []).reduce((total, material) => total + material.displayedCost, 0))}`,
+    isAr ? 'تكلفة الخامات لا تخصم من النقدية' : 'Material cost does not reduce drawer cash',
+  );
+
   return rows.join('\r\n');
 }
 
