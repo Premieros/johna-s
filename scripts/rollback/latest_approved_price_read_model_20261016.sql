@@ -146,7 +146,7 @@ AS $function$
     AND p_raw_material_ids IS NOT NULL
     AND rm.branch_id=p_branch_id
     AND rm.id=ANY(p_raw_material_ids);
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.get_raw_material_current_prices(p_branch_id uuid DEFAULT NULL::uuid, p_raw_material_ids uuid[] DEFAULT NULL::uuid[])
@@ -291,7 +291,7 @@ AS $function$
       AND COALESCE(rb.source_type,'') NOT LIKE '%oversold%'
     ORDER BY rb.created_at DESC NULLS LAST,rb.id DESC LIMIT 1
   ) b ON e.unit_cost IS NULL;
-$function$
+$function$;
 
 
 DROP TRIGGER raw_price_source_insert ON public.inventory_ledger;

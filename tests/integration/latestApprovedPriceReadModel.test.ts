@@ -48,7 +48,8 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   try{
    await db.query('UPDATE public.raw_material_price_events SET unit_cost=21 WHERE id=$1',[manual]);expect((await parity())[0].unit_cost).toBe('21.000000');
    await db.query('DELETE FROM public.raw_material_price_events WHERE id=$1',[manual]);expect((await parity())[0].unit_cost).toBe('15.000000');
-   await db.query("UPDATE public.stock_counts SET status='cancelled' WHERE id=$1",[count]);expect((await parity())[0].unit_cost).toBe('12.345679');
+   await db.query("UPDATE public.stock_counts SET applied_at='2026-10-06T12:00:00Z',count_number='PRICE-COUNT-UPDATED' WHERE id=$1",[count]);expect((await parity())[0].reference_number).toBe('PRICE-COUNT-UPDATED');
+   await db.query("UPDATE public.stock_counts SET status='rejected' WHERE id=$1",[count]);expect((await parity())[0].unit_cost).toBe('12.345679');
    await db.query("UPDATE public.purchases SET status='cancelled' WHERE id=$1",[purchase]);expect(await parity()).toHaveLength(0);
    await db.query("UPDATE public.purchases SET status='completed',approved_at='2026-10-04T12:00:00Z',invoice_number='PRICE-UPDATED' WHERE id=$1",[purchase]);expect((await parity())[0]).toMatchObject({unit_cost:'12.345679',reference_number:'PRICE-UPDATED'});
    await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,1,31.25,31.25,'purchase','purchase',$4,'2026-10-05T12:00:00Z')",[raw,a,w,purchase]);expect((await parity())[0].unit_cost).toBe('31.250000');
@@ -81,6 +82,39 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   expect(JSON.stringify(indexed)).toContain('raw_approved_price_latest');
   console.info('LATEST_APPROVED_PRICE_PLAN '+JSON.stringify({source:'owned localhost 1500 purchase prices + 3000 FIFO issues; no production latency claim',before,after,indexed}));
  });
+ it('does not add FIFO issue WAL and lets independent concurrent prices commit without a last-price row lock',async()=>{
+  const issue=async()=>{
+   await db.query('SAVEPOINT issue_wal');
+   try{return(await db.query("EXPLAIN(ANALYZE,WAL,FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,batch_number) SELECT $1,$2,$3,-1,8,-8,'sale','PRICE-WAL-'||g FROM generate_series(1,64)g",[raw,a,w])).rows[0]['QUERY PLAN'][0].Plan['WAL Bytes'];}
+   finally{await db.query('ROLLBACK TO issue_wal');await db.query('RELEASE issue_wal');}
+  };
+  const median=(a:number[])=>[...a].sort((a,b)=>a-b)[Math.floor(a.length/2)];
+  await db.query('SAVEPOINT no_price_triggers');
+  let old:number[]=[];
+  try{for(const t of['raw_price_source_insert','raw_price_source_update','raw_price_source_delete'])await db.query('ALTER TABLE public.inventory_ledger DISABLE TRIGGER '+t);await issue();old=[await issue()];for(let i=0;i<4;i++)old.push(await issue());}
+  finally{await db.query('ROLLBACK TO no_price_triggers');await db.query('RELEASE no_price_triggers');}
+  await issue();const next:number[]=[];for(let i=0;i<5;i++)next.push(await issue());
+  expect(median(next)).toBeLessThanOrEqual(median(old)*1.05);
+  console.info('LATEST_PRICE_ISSUE_WAL '+JSON.stringify({old,next}));
+  const first=openDb(url!),second=openDb(url!),branch=randomUUID(),material=randomUUID(),id1=randomUUID(),id2=randomUUID();
+  await first.connect();await second.connect();
+  try{
+   await first.query("INSERT INTO public.branches(id,name) VALUES($1,'Owned concurrency price fixture')",[branch]);
+   await first.query("INSERT INTO public.raw_materials(id,code,name,branch_id) VALUES($1,$2,'Concurrent price',$3)",[material,randomUUID(),branch]);
+   await first.query('BEGIN');
+   await first.query("INSERT INTO public.raw_material_price_events(id,raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,$3,41,'CONCURRENT-1','2026-10-10T12:00:00Z')",[id1,material,branch]);
+   await second.query("SET statement_timeout='2s'");
+   await second.query("INSERT INTO public.raw_material_price_events(id,raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,$3,42,'CONCURRENT-2','2026-10-11T12:00:00Z')",[id2,material,branch]);
+   await first.query('COMMIT');
+   expect(Number((await second.query('SELECT unit_cost FROM public.get_raw_material_current_prices($1,$2)',[branch,[material]])).rows[0].unit_cost)).toBe(42);
+  }finally{
+   await first.query('ROLLBACK').catch(()=>{});
+   await first.query('DELETE FROM public.raw_material_price_events WHERE raw_material_id=$1',[material]);
+   await first.query('DELETE FROM public.raw_materials WHERE id=$1',[material]);
+   await first.query('DELETE FROM public.branches WHERE id=$1',[branch]);
+   await first.end();await second.end();
+  }
+ });
  it('preserves branch/source visibility and rejects cache writes and maintenance calls by application roles',async()=>{
   await db.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
   await db.query("INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active) VALUES('latest_price_reader','قارئ سعر','Price Reader','[\"raw_materials.view\",\"reports.costing\",\"history.unlimited\"]',true) ON CONFLICT(role) DO UPDATE SET permissions=EXCLUDED.permissions");
@@ -88,6 +122,19 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   await db.query("SELECT set_config('app.user_id',$1,true)",[viewer]);await db.query('SET LOCAL ROLE authenticated');
   try{expect(await prices('get_raw_material_current_prices',b,[foreign])).toEqual([]);expect((await prices()).find(x=>x.raw_material_id===raw)?.unit_cost).toBe('20.000000');await parity();}
   finally{await db.query('RESET ROLE');await db.query('RESET app.user_id');}
+  await db.query('SAVEPOINT limited_history');
+  try{
+   await db.query("UPDATE public.roles SET permissions='[\"raw_materials.view\",\"reports.costing\"]'::jsonb WHERE role='latest_price_reader'");
+   await db.query('DELETE FROM public.raw_material_price_events WHERE id=$1',[manual]);
+   await db.query("UPDATE public.stock_counts SET status='rejected' WHERE id=$1",[count]);
+   await db.query("SELECT set_config('app.user_id',$1,true)",[viewer]);await db.query('SET LOCAL ROLE authenticated');
+   const original=await parity();
+   const current=(await prices()).find(x=>x.raw_material_id===raw);
+   expect(current?.unit_cost??null).toBe(original[0]?.unit_cost??null);
+   // Nested existing definer must retain explicit purchase history visibility.
+   const context=(await db.query('SELECT public._raw_cost_context_for_costing($1,$2) value',[raw,a])).rows[0].value;
+   expect(Number(context.unit_cost)).toBe(Number(original[0]?.unit_cost??0));
+  }finally{await db.query('ROLLBACK TO limited_history');await db.query('RELEASE limited_history');await db.query('RESET ROLE');await db.query('RESET app.user_id');}
   const privileges=(await db.query("SELECT has_table_privilege('authenticated','private.raw_approved_price_read_model','INSERT') writes,has_function_privilege('authenticated','private.sync_raw_approved_price_source()','EXECUTE') maintenance,has_table_privilege('anon','private.raw_approved_price_read_model','SELECT') anon")).rows[0];expect(privileges).toEqual({writes:false,maintenance:false,anon:false});
  });
 });
