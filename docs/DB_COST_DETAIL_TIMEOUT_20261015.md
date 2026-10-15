@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/costing-detail-timeout-batch-20261015`
-Current PR: #0
+Current PR: #508
 Last updated: 2026-10-15 Cairo
 
 ## Work status
