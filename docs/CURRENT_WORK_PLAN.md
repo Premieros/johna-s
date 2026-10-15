@@ -4,9 +4,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `693cd639a2` (#507 Smouha build deployed; server pilot OFF)
-- Current active branch: `hotfix/costing-detail-timeout-batch-20261015`
-- Mandatory active work log: `docs/DB_COST_DETAIL_TIMEOUT_20261015.md`
+- Latest main baseline reconciled: `322348f3d772341cce7484f793dfec94cf0b533b` (#508 merged after exact-head verification; kitchen handoff still OFF)
+- Current active branch: `feat/sage-openmercato-identity-export-20261015`
+- Mandatory active work log: `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md`
+
+## Owner-approved scope switch — Sage identity export — 2026-10-15
+- Owner explicitly approved making **Sage ↔ Open Mercato integration** the next active development track in this conversation. This updates the single-writer gate first, before feature changes; other hotfix/benchmark PRs remain non-executable unless separately activated.
+- Prior costing PR #508 is merged on main at `322348f3d772341cce7484f793dfec94cf0b533b` after verification; kitchen PR #507 is merged at `693cd639a28fc2655941d6bc26fcd8a8d78f9be3`. Preserve both results, and keep the experimental kitchen print handoff **OFF**.
+- Stage only **authorized, branch-scoped, read-only identity-preserving product JSON export** in Sage with same-browser download (product ID, branch ID, name, SKU, product type and active state). No Supabase mutation, schema/RLS, prices, stock, recipes, printing, Windows agent or business transactions.
+- Target format is compatible with Open Mercato's existing local JSON catalog parity reader. Export must reject missing branch selection, changed branch scope and incomplete pages. No SKU synthesis or automatic imports.
+- This approval is for the development track and a draft PR, **not** a production merge, Sage DB migration, cross-database credential connection or live rollout. Gate release on exact-head Verify and separate owner production approval.
+- Mandatory sequential HEAD fence and all prior recovery protocols still apply. New active log: `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md`.
 
 ## Released costing read repair — both branches — 2026-10-15
 - Applied production migration `20261015071859_costing_detail_two_branch_batch_read`: detail price fields and internal recipe estimates batch the same existing raw-price resolver, preserving values, precision, nulls, permissions and response JSON.
