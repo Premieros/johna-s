@@ -580,4 +580,21 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       await client.query('ROLLBACK TO SAVEPOINT batch_recipe_helper');
     }
   });
+
+  it('rehearses the exact guarded production rollback without committing fixture changes', async () => {
+    await client.query('SAVEPOINT costing_release_rollback');
+    try {
+      await client.query(readFileSync('scripts/experiments/product_recipe_cost_batch_PROPOSAL_20261015.sql','utf8'));
+      await client.query(readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql','utf8'));
+      const rollback=readFileSync('scripts/rollback/costing_batch_restore_smouha_pilot_20261015.sql','utf8')
+        .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
+      await client.query(rollback);
+      const hashes=(await client.query(`SELECT
+        md5(pg_get_functiondef('public.get_product_costing_detail(uuid,uuid)'::regprocedure)) detail,
+        md5(pg_get_functiondef('public._product_recipe_cost(uuid,uuid)'::regprocedure)) recipe`)).rows[0];
+      expect(hashes).toEqual({detail:'59cff14b68b5eaf49f648bdc49ba1568',recipe:'756e10880d1cbcc18d56daf482062206'});
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT costing_release_rollback');
+    }
+  });
 });
