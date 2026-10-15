@@ -542,6 +542,9 @@ describe.skipIf(!dbUrl)('bounded approved ingredient prices (experimental, #486)
     'preserves approved/as-of/branch prices and frozen snapshots with reviewed read indexes',
     async () => {
       await client.query('SAVEPOINT reviewed_indexes');
+      // Rehearse the historical six-index proposal against its original baseline.
+      // This localhost-only savepoint restores the now-canonical issue index.
+      await client.query('DROP INDEX public.idx_inventory_ledger_fifo_known_cost_recent');
       const ids = [material,purchasedMaterial,legacyMaterial,tiedMaterial,noApprovedPrice];
       async function readState() {
         const approved = [await prices(branchA,ids,asOf),await prices(branchA,ids,afterFuture)];

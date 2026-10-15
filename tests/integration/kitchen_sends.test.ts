@@ -574,6 +574,9 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
     'compares complete canonical negative kitchen and payment work with read indexes', async () => {
       await client.query('SAVEPOINT full_index_workload');
       try {
+        // Keep this historical six-index experiment's no-index baseline;
+        // rollback restores the canonical issue index in this localhost fixture.
+        await client.query('DROP INDEX public.idx_inventory_ledger_fifo_known_cost_recent');
         const raw = (await client.query('SELECT raw_material_id FROM public.inventory_unit_recipes WHERE unit_id=$1 LIMIT 1',[unitA])).rows[0].raw_material_id;
         await client.query('UPDATE public.raw_material_batches SET quantity=0 WHERE raw_material_id=$1 AND branch_id=$2',[raw,branchId]);
         await client.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,batch_number,created_at)
