@@ -1,8 +1,8 @@
 # Both-branch operational stability repair
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `hotfix/operations-stability-all-20261015`
-Current PR: #510
+Branch: `hotfix/emergency-restore-order-fifo-20261015`
+Current PR: #512
 Last updated: 2026-10-15 Cairo
 
 ## Work status
@@ -51,3 +51,13 @@ Complete source reconciliation and fresh CI, merge the unchanged functional data
 
 ## Mandatory update protocol
 السجل هو المرجع الإجباري للعمل؛ CI يجب أن يفشل إذا اختلف الفرع أو نقص التوثيق؛ لا Merge ولا Production migration قبل التحقق. Record every change/check and reconcile HEAD before sequential publication.
+
+## Emergency response — 22:23 Cairo
+Owner explicitly requested immediate repair or emergency rollback. New 57014 failures began22:03 across kitchen send/status, settlement, dashboard and ordinary reads; no blocking PIDs found in two snapshots. Traces include unchanged raw FIFO SUM, approved ingredient price snapshot and permission reads; causality to #510 is unproven. At22:24:58 migration20261015192458 restored exactly the captured original update_order and _raw_last_known_fifo_cost definitions as a bounded emergency precaution. Guard pins installed candidate hashes and uses3s lock timeout. Verified original hashes4f98bda4ad3d8bb4b060abb792d4f3f5 and6e70ec55b033454f4084266b13651cf7. Narrow KDS permission repair retained; V7 claim hash230529255ab7fe21df1eb1ca0f07f1b6 unchanged. No order, stock, accounting or print job replay; thermal report repair retained. Post-rollback incident observation ongoing; do not declare recovery from migration success alone.
+
+## Evidence-driven emergency follow-up — 22:45 Cairo
+After emergency restore did not resolve the incident, owner requests continuing directly through the DB connection. No more broad log scans. Read-only EXPLAIN of the restored FIFO reader for one real Smouha material inspected3203 ledger matches twice plus717 batches,1984 buffer hits,973.756ms execution. Existing single-column raw index cannot satisfy the exact branch/warehouse/latest-real-issue ORDER BY. A single partial issue index is selected; unlike the held six-index package it excludes all positive purchase receipts and synthetic OV debt rows. Reuse the exact already-tested lazy reader and UUID-array order matcher from #510, without any writer/core/printing changes. No raw receipt/batch index or bulk balance rewrite is activated. Add a localhost-only3000-row plan/result/WAL comparison before production. Remaining historical batch SUM and kitchen_raw_need temporary DDL are not declared solved.
+
+## Follow-up applied — 23:07 Cairo
+Exact functional source51c9c81e234e828c66bda4a0d5acdd11a84906f8 passed Full Verify38798485486 all4 jobs (1795 frontend,1072 DB,132 browser). Fast40 targeted tests passed; guarded restore rehearsed. Prior two full attempts failed only in owned benchmark NOWAIT admission; the benchmark now rolls back and retries only55P03 admission for5s outside timed transactions. Live rollout scripts/barriers/assertions unchanged.
+Production migration20261015200700_emergency_fifo_issue_lookup_order_matching applied successfully. Only one issue index plus exact tested FIFO reader and UUID-array matcher. Original and installed prices compared in the SAME SQL snapshot remain5.250000,12.430000,0 in two branches. Other public/private functions, policies, triggers, table security and changed-function ACL/owner/security/search_path hashes are identical before/after. Canonical filename reconciled to the authoritative remote version without changing SQL bytes or remote history. Remaining source reconciliation verification, merge and natural traffic observation continue; no universal timeout cure claimed.
