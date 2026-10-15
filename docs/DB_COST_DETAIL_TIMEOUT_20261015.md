@@ -1,37 +1,55 @@
-# Database costing detail timeout containment — 2026-10-15
+# Database costing timeout repair — 2026-10-15
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/costing-detail-timeout-batch-20261015`
 Current PR: #508
-Last updated: 2026-10-15 Cairo
+Last updated: 2026-10-15 10:20 Cairo / 07:20 UTC
 
 ## Work status
-State: **BLOCKED** for expansion beyond Smouha and for claiming a global cure. Authorized Smouha-only read-function pilot ACTIVE in production, installed 2026-10-15 06:39:08 UTC; existing formula is retained for all other branches. Safe rollback captured below.
-## Guardrails
-No changes to Windows, kitchen, POS transactions, warehouse, stock, FIFO, accounting records, access grants or permissions; preserve cross-branch isolation.
-## Baseline
-Main `693cd639a28fc2655941d6bc26fcd8a8d78f9be3`. Screenshot reveals timeout toast despite visible rows.
-## Root-cause ledger
-At 06:01 and 06:05 UTC 2026-10-15 seven /costing TIMEOUT_ERROR reports. Production Postgres logs SQLSTATE 57014 in get_product_costing_detail via _raw_cost_context_for_costing -> get_raw_material_current_prices -> private.financial_row_visible. In 11-min window: 3 HTTP 500s averaging ~8224ms and 3 successful detail requests. 24h saw 45 PostgreSQL 57014 cancellations across multiple endpoints (POS, cloud print, dashboard, costing). This is a specific contributor, not a global fix.
-## Change ledger
-`scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql`: same product-detail SQL with strict Smouha-only `IF v_scope = '19c3fd23-d784-455b-8840-f4f2ac619651'::uuid` gate; original SQL preserved verbatim in ELSE, but ONE branch-scoped, DISTINCT raw-id array price resolver evaluated as MATERIALIZED CTE. Empty array is `'{}'::uuid[]` not null, to avoid full price scan. Keep response JSON fields and all auth guards.
-## Verification ledger
-Owner authorized limited revertible Smouha-only release. Exact-head d8f0aaad full CI run 38692765646: 4/4 SUCCESS including db, 13/13 modified product-costing parity tests, browser, app, and pages-continuity. Production baseline function MD5 666844cc8f86f35152828e9ff799031b, deployed scoped variant MD5 59cff14b68b5eaf49f648bdc49ba1568. Rollback file byte-identical to baseline.
-At deployment, zero long business transactions or lock waiters; first SQL statement had only a missing terminator and was rolled back without changing baseline; corrected application committed with transactional lock_timeout=300ms/statement_timeout=2500ms. Verified original SECURITY DEFINER/STABLE/search_path grants retained; anon denied.
-Authenticated SAME-user Smoha read checks, 6500ms safety: Avocado before 3147ms, after 1131ms, FULL JSON md5 same f3608481ea599d13e4804e4d9a088f9c; Chicken Fajita with 22 raw lines before 6500ms timeout, after 3480ms success. At 06:41:43 UTC zero new Smouha timeout telemetry, blocked queries, or long business queries; log sample after deployment had zero HTTP 500 and 57014 but ALSO zero user PostgREST costing calls, so NO proof under live peak traffic. Global POS/print/report 57014 remains OUT OF SCOPE.
-## Production gate
-Expansion BLOCKED. Smouha-only read pilot is live, not full cure. No global promotion before representative real-traffic monitoring. If timeout or data mismatch is observed, restore exact backup SQL within short-lock-timeout transaction and verify baseline MD5. Never replay POS orders or touch print agents. Preserve old live function until parity and representative benchmark; review global 57014 separately. Rollback source: `scripts/rollback/get_product_costing_detail_original_20261015.sql` (live pre-change pg_get_functiondef, MD5 `666844cc8f86f35152828e9ff799031b`). Any future function replacement needs short lock_timeout and verified restoration of that MD5.
-## Next action
-Observe real Smouha costing-detail requests and unrelated global 57014 separately; revert this read-only function if it worsens errors/cost parity. Keep draft PR unmerged pending live-traffic evidence; do not infer cure of all pages.
+State: **DEPLOYED** for the verified database read repair in both Smouha and Cleopatra, applied at 07:18:59 UTC. GitHub merge/publish remains subject to exact-head checks. This is not proof that every historical timeout is cured or that peak-load latency has been measured.
 
-## Resumed verification — 2026-10-15 07:02 UTC
-- Owner now authorizes safe scope expansion to both existing branches after independent verification. Live source confirms the Smouha-only pilot hash above, not the legacy function. Main is still `693cd639a28fc2655941d6bc26fcd8a8d78f9be3`; exact-head Verify main `38694067326` finished success, all four suites.
-- Cleopatra is `279e6662-e901-40b2-9170-7dda0b471ba7`; Smouha is `19c3fd23-d784-455b-8840-f4f2ac619651`. Print handoff rollout remains `enabled=false`, expired; no gate or dispatcher change is proposed.
-- Separate recovery snapshot: `scripts/rollback/get_product_costing_detail_smouha_pilot_20261015.sql`, live pilot hash `59cff14b68b5eaf49f648bdc49ba1568`. Original pre-pilot rollback is also retained.
-- Read-only authenticated Cleopatra baseline: Avocado (5 raw lines) 2490ms, JSON MD5 `2d2d1cbbd8737b3edc3cf8c9b0e6ded6`; Chicken Fajita (22 raw lines) exceeded the deliberately lower 6500ms safety cutoff. This cancellation is an assistant diagnostic, not a new customer incident.
-- The broad 24h timeouts include a burst before the receipt and print-alert read indexes were installed at 2026-10-14 18:43/18:44 UTC. Both indexes are now valid/ready and cover both branches. They must not be attributed to this new costing change.
-- Real traffic 06:39:09–07:01 UTC: orders 24 calls, p95 323ms; cloud_print_jobs 14 calls, p95 270ms; claim_cloud_print_jobs 11 calls, p95 509ms; open-order print state 7 calls, p95 158ms; dashboard snapshot 6 calls, p95 689ms. No HTTP 5xx in these groups. There were no costing detail requests: no peak-load claim is justified.
-- Candidate now explicitly allowlists both branches, retaining the original ELSE for any future branch. Added second-branch positive recipe JSON parity, omitted-branch scope and reciprocal denial coverage. Canonical migration `20261015070108_costing_detail_two_branch_batch_read.sql` is PREPARED, NOT APPLIED. Release is blocked until candidate verification and branch-specific live read parity/performance.
-- Follow-up source review: `_product_bom_cost` delegates verbatim to `_product_recipe_cost`, so detail computes the recipe estimate twice, and that helper still calls the same single-raw price resolver per recipe line. Candidate additionally batches that internal read while preserving the helper's null/empty/manufactured fallback, full-precision sum and final rounding. Original helper snapshot hash `756e10880d1cbcc18d56daf482062206`, stored in `scripts/rollback/product_recipe_cost_original_20261015.sql`; no ACL, language, volatility or security-mode changes. It is only referenced by the product detail and BOM-cost helper in live function source. Added full-response parity against the original helper, including missing-price and empty-group cases; final exact-head CI must pass again.
+## Guardrails
+Preserve complete costing JSON, raw-price precedence, full-precision sums and final rounding, null/empty/manufactured fallback, permissions and branch isolation. No business data, table, constraint, RLS, ACL, FIFO, inventory, accounting, settlement, sale, kitchen-send, queue-write or Windows agent changes. Existing SECURITY DEFINER modes are retained, never added as a permission workaround. Kitchen print handoff remains OFF.
+
+## Baseline
+Main and deployed app before this work: `693cd639a28fc2655941d6bc26fcd8a8d78f9be3`; deployment run `38678488570` and main verification `38678488551` succeeded.
+PR resumed at `67764021c527a5bba97347d8160dfa14d5b3541b`, whose four CI suites had completed successfully (`38694067326`). Contrary to the initial handoff, production already had the Smouha-only pilot installed at 06:39:08 UTC, MD5 `59cff14b68b5eaf49f648bdc49ba1568`; the pre-pilot original was `666844cc8f86f35152828e9ff799031b`. The original recipe-helper MD5 was `756e10880d1cbcc18d56daf482062206`.
+
+## Root-cause ledger
+Repeated `_raw_cost_context_for_costing` calls evaluated the same raw-price history and financial visibility checks per line and per output field. The detail also calculates actual and theoretical costs through `_product_recipe_cost` (the BOM helper delegates to it), and that helper still resolved prices separately per raw line. The repair batches both layers without replacing their pricing source.
+Broader 24h PostgreSQL 57014 included POS, print, order and dashboard requests, with a burst before the receipt/open-check and print-alert indexes were installed at 2026-10-14 18:43/18:44 UTC. Both indexes are valid/ready and cover both branches. Do not attribute those older incidents to this new release.
+
+## Change ledger
+- `_product_recipe_cost(uuid,uuid)`: MATERIALIZED raw lines and one DISTINCT raw-id array price resolution per call; retain the original CASE, numeric multiplication, final SUM/round, empty manufactured group and no-recipe fallback. New MD5 `8b0bc11afaab1a9a967589aa90159e55`.
+- `get_product_costing_detail(uuid,uuid)`: one MATERIALIZED batch for detail price fields, explicitly enabled for Smouha `19c3fd23-d784-455b-8840-f4f2ac619651` and Cleopatra `279e6662-e901-40b2-9170-7dda0b471ba7`. Retain the legacy ELSE for any other branch, all response fields and auth guards. New MD5 `732777a33b67f9a6c1da8de4fa0a0431`.
+- Applied migration: `20261015071859_costing_detail_two_branch_batch_read`; canonical portable function definitions use the SAME version returned by production, replacing the earlier unshipped local filename. Do not apply an equivalent second migration. Live installation additionally checked exact old/new function hashes, kitchen/print baseline hashes and denied anonymous/internal-helper grants in the transaction; lock_timeout=300ms, statement_timeout=2500ms. Preflight had zero long client queries or lock waiters.
+- A missing function terminator in the first local CI migration candidate failed before any production application and was corrected. The final source and recovery rehearsal passed before release.
+
+## Verification ledger
+Exact functional/recovery head `a068a58f5c39bd4893e9cc45134b9da9a5bb7630`: full Verify main `38697228401` SUCCESS in all four suites: app, 1068 DB integration/security tests, Chromium and Pages continuity. Fast Verify `38697223364` also passed; 16 product-costing tests include full JSON parity against original SQL, second-branch positive/null-scope reads, reciprocal denials, missing prices, empty groups and actual guarded rollback execution. Local mandatory-log/costing contract tests: 14 passed. No fixture or test order was written to production.
+Production read-only comparisons: 20 distinct Chicken Fajita raw prices per branch matched original price/source/time/reference/detail exactly; full helper estimates matched in both branches. Helpers were tested in their existing definer execution context, without granting helper execution to authenticated users.
+
+Immediate same-user production RPC measurements (server execution only, not network or paper):
+
+| Branch / product | Before ms | After ms | Parity |
+| --- | ---: | ---: | --- |
+| Smouha / Avocado | 1280 | 290 | identical complete JSON, MD5 f3608481ea599d13e4804e4d9a088f9c |
+| Cleopatra / Avocado | 2467 | 231 | identical complete JSON, MD5 2d2d1cbbd8737b3edc3cf8c9b0e6ded6 |
+| Smouha / Chicken Fajita, 22 lines | 3222 | 253 | identical complete JSON, MD5 76aa40b72dd9caf47578beab90bab619 |
+| Cleopatra / Chicken Fajita, 22 lines | >6500 safety cutoff | 304 | original helper cost hash 591500e2035070b925e49f226dea3dac retained; 20 raw contexts identical; full old response unavailable because of timeout |
+
+The Cleopatra cutoff and the earlier denied direct-helper diagnostic are assistant tests, not customer incidents. Do not claim old complete JSON parity for the timed-out Cleopatra heavy request.
+Post-apply signatures, volatility, search_path and ACL retained. `send_to_kitchen` MD5 `1ab4553a87e353c7478c0343973e865f`, print claim `230529255ab7fe21df1eb1ca0f07f1b6`, open-order print state `c0651d6504587d2ecc6cb2ae257d5da1` unchanged.
+Real traffic before this application (06:39:09–07:01 UTC): orders 24 calls p95 323ms; cloud jobs 14 calls p95 270ms; print claim 11 calls p95 509ms; open-order print state 7 calls p95 158ms; dashboard 6 calls p95 689ms; no HTTP 5xx in these groups. No costing-detail user calls in that interval. These are limited samples, not peak-load proof.
+
+## Production gate
+Database rollout is applied and the immediate data/performance checks passed for both branches. No print rollout activation, order replay or printer tests. Merge/publish requires final exact-head checks; post-merge verification must also pass. Check real traffic after release separately and never claim physical paper from submitted state alone.
+
+## Next action
+Finish final documentation/migration-version verification, merge/publish after green, and inspect post-release real traffic for both branches. Preserve the existing 8-second authenticated timeout. If a cost mismatch or attributable latency/error regression is proven, run the guarded recovery below; do not blindly revert unrelated application writes or change another project.
+
+## Recovery
+`scripts/rollback/costing_batch_restore_smouha_pilot_20261015.sql` restores BOTH original recipe helper and the last-known Smouha-only detail pilot in a single short-lock transaction, guards against source drift, then verifies original hashes. This exact script was rehearsed inside a rollback-only CI savepoint. Individual snapshots and the original pre-pilot detail source are retained. The assistant is not a continuously running production monitor after this turn.
+
 ## Mandatory update protocol
 السجل هو المرجع الإجباري للعمل؛ CI يجب أن يفشل إذا اختلف الفرع أو نقص التوثيق؛ لا Merge ولا Production migration قبل التحقق.
