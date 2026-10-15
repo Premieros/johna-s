@@ -1,10 +1,7 @@
--- STAGED ONLY, 2026-10-15. NOT a production migration; source is production pg_get_functiondef.
--- Read-only product costing detail: batch the authoritative price resolver for DISTINCT
--- recipe raw IDs once instead of running full financial permissioned pricing per raw line.
--- Preserve the same price sources, ordering, cost metadata, branch and user permissions.
--- Coalesce to an EMPTY UUID ARRAY, NEVER NULL, on no-recipe products.
--- No writes to sales, costing, stock, kitchen, FIFO or ledger; ACLs unchanged.
--- Only apply to production after exact-output parity and latency verification.
+-- SMOUHA-ONLY read-only detail candidate. No live writes or inventory mutations.
+-- BACKUP the current production pg_get_functiondef before installation.
+-- Original per-line pricing path stays in the ELSE arm for all other branches.
+-- Do not execute without passing branch-swap parity tests + performance gate.
 CREATE OR REPLACE FUNCTION public.get_product_costing_detail(p_product_id uuid, p_branch_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -80,37 +77,70 @@ BEGIN
   JOIN public.products cp ON cp.id = pc.component_product_id
   WHERE pc.product_id = p_product_id;
 
-  WITH raw_lines AS MATERIALIZED (
-    SELECT * FROM public._costing_product_raw_lines(p_product_id,v_scope)
-  ), raw_prices AS MATERIALIZED (
-    SELECT price.* FROM public.get_raw_material_current_prices(
-      v_scope,
-      (SELECT COALESCE(array_agg(DISTINCT rl.raw_material_id), '{}'::uuid[]) FROM raw_lines rl)
-    ) price
-  )
-  SELECT COALESCE(jsonb_agg(jsonb_build_object(
-    'raw_material_id', rm.id,
-    'raw_material_name', COALESCE(NULLIF(btrim(rm.name), ''), 'Raw Material'),
-    'quantity', rl.quantity,
-    'wastage_percent', rl.wastage_percent,
-    'unit_cost', COALESCE(price.unit_cost, 0),
-    'line_cost', round(
-      rl.quantity * (1 + COALESCE(rl.wastage_percent, 0) / 100.0)
-      * COALESCE(price.unit_cost, 0),
-      2
-    ),
-    'cost_source', COALESCE(price.price_source, 'unpriced'),
-    'cost_priced_at', price.priced_at,
-    'cost_reference', price.reference_number,
-    'cost_detail', 'Latest known price; current costing estimate',
-    'component_group_id', rl.component_group_id,
-    'component_group_name', rl.component_group_name,
-    'component_group_quantity', rl.component_group_quantity
-  ) ORDER BY rl.component_group_name NULLS FIRST, rm.name), '[]'::jsonb)
-  INTO v_recipe
-  FROM raw_lines rl
-  JOIN public.raw_materials rm ON rm.id = rl.raw_material_id
-  LEFT JOIN raw_prices price ON price.raw_material_id = rl.raw_material_id;
+  -- Controlled rollout: only the verified Smouha branch gets the batched read.
+  -- Cleopatra and every other branch retain the byte-equivalent original path.
+  IF v_scope = '19c3fd23-d784-455b-8840-f4f2ac619651'::uuid THEN
+    WITH raw_lines AS MATERIALIZED (
+      SELECT * FROM public._costing_product_raw_lines(p_product_id,v_scope)
+    ), raw_prices AS MATERIALIZED (
+      SELECT price.* FROM public.get_raw_material_current_prices(
+        v_scope,
+        (SELECT COALESCE(array_agg(DISTINCT rl.raw_material_id), '{}'::uuid[]) FROM raw_lines rl)
+      ) price
+    )
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'raw_material_id', rm.id,
+      'raw_material_name', COALESCE(NULLIF(btrim(rm.name), ''), 'Raw Material'),
+      'quantity', rl.quantity,
+      'wastage_percent', rl.wastage_percent,
+      'unit_cost', COALESCE(price.unit_cost, 0),
+      'line_cost', round(
+        rl.quantity * (1 + COALESCE(rl.wastage_percent, 0) / 100.0)
+        * COALESCE(price.unit_cost, 0),
+        2
+      ),
+      'cost_source', COALESCE(price.price_source, 'unpriced'),
+      'cost_priced_at', price.priced_at,
+      'cost_reference', price.reference_number,
+      'cost_detail', 'Latest known price; current costing estimate',
+      'component_group_id', rl.component_group_id,
+      'component_group_name', rl.component_group_name,
+      'component_group_quantity', rl.component_group_quantity
+    ) ORDER BY rl.component_group_name NULLS FIRST, rm.name), '[]'::jsonb)
+    INTO v_recipe
+    FROM raw_lines rl
+    JOIN public.raw_materials rm ON rm.id = rl.raw_material_id
+    LEFT JOIN raw_prices price ON price.raw_material_id = rl.raw_material_id;
+  ELSE
+    WITH raw_lines AS (
+      SELECT * FROM public._costing_product_raw_lines(p_product_id,(SELECT p.branch_id FROM public.products p WHERE p.id=p_product_id))
+    )
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'raw_material_id', rm.id,
+      'raw_material_name', COALESCE(NULLIF(btrim(rm.name), ''), 'Raw Material'),
+      'quantity', rl.quantity,
+      'wastage_percent', rl.wastage_percent,
+      'unit_cost', COALESCE((ctx.context->>'unit_cost')::numeric, 0),
+      'line_cost', round(
+        rl.quantity * (1 + COALESCE(rl.wastage_percent, 0) / 100.0)
+        * COALESCE((ctx.context->>'unit_cost')::numeric, 0),
+        2
+      ),
+      'cost_source', ctx.context->>'source',
+      'cost_priced_at', ctx.context->>'priced_at',
+      'cost_reference', ctx.context->>'reference_number',
+      'cost_detail', ctx.context->>'detail',
+      'component_group_id', rl.component_group_id,
+      'component_group_name', rl.component_group_name,
+      'component_group_quantity', rl.component_group_quantity
+    ) ORDER BY rl.component_group_name NULLS FIRST, rm.name), '[]'::jsonb)
+    INTO v_recipe
+    FROM raw_lines rl
+    JOIN public.raw_materials rm ON rm.id = rl.raw_material_id
+    CROSS JOIN LATERAL (
+      SELECT public._raw_cost_context_for_costing(rl.raw_material_id, v_scope) AS context
+    ) ctx;
+  END IF;
 
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'id', ch.id,
@@ -143,4 +173,5 @@ BEGIN
   );
 END;
 $function$
+
 

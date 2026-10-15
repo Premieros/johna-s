@@ -468,6 +468,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       { user: adminId, product: prodId, branch: branchA },
       { user: managerBId, product: prodId, branch: branchA },
       { user: managerId, product: randomUUID(), branch: branchA },
+      { user: managerBId, product: randomUUID(), branch: branchB },
     ];
     const read = async (u: string, p: string, b: string) =>
       asUser(u, async () => (await client.query<{ result: unknown }>(
@@ -478,7 +479,14 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await client.query('SAVEPOINT batched_detail_candidate');
     try {
       const sql = readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql', 'utf8');
-      await client.query(sql);
+      // Only this rollback-only fixture branch may use the optimized route:
+      // the real production Smouha UUID must never be used in local fixture tests.
+      expect(sql).toContain("IF v_scope = '19c3fd23-d784-455b-8840-f4f2ac619651'::uuid THEN");
+      const fixtureSql = sql.replace(
+        "'19c3fd23-d784-455b-8840-f4f2ac619651'::uuid",
+        "'" + branchA + "'::uuid",
+      );
+      await client.query(fixtureSql);
       const after = [];
       for (const c of cases) after.push(await read(c.user,c.product,c.branch));
       expect(after).toEqual(before);
@@ -487,7 +495,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
       )).rows[0].source as string;
       expect(def).toContain('raw_prices AS MATERIALIZED');
       expect(def).toContain("'{}'::uuid[]");
-      expect(def).not.toContain('public._raw_cost_context_for_costing(rl.raw_material_id');
+      expect(def).toContain('public._raw_cost_context_for_costing(rl.raw_material_id');
+      expect(def).toContain('IF v_scope =');
     } finally {
       await client.query('ROLLBACK TO SAVEPOINT batched_detail_candidate');
     }
