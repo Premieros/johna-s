@@ -37,16 +37,20 @@ Write mode: **SEQUENTIAL_ONLY**
 2. `981d23c05890cd7458724303fb605eb626188e99`: mandatory active log created under the new single-writer plan.
 3. `3cebba05c98cdd831e34e83e012da9e59a9c7943`: versioned, fail-closed, branch-scoped product UUID JSON projection created. No DB calls or writes.
 4. `0b24ea97b8376ee30a4a22842018f8fae5511218`: focused identity/scope/no-SKU/privacy unit tests created. Next stage: explicit authorized UI export and completeness verification.
+5. `f3fe839d4f3a3302da866c470fc8a987aeb255b1`: added a separate download button in the existing Sage Products page, requiring `products.export`, selected branch and cleared search; captures user/branch/search scope and reports failures without creating a partial file.
+6. `80958104276105ce445c40e33b5e75d46627174a`: added read-only snapshot count-vs-data reconciliation with fail-closed scope checks at each await.
+7. `730a5224e7523438b052f09dfecedc83af4a52cf`: wired Products download through scope-fenced snapshot service.
+8. `daf5d2da609f89457f65c6a7c0965b1a4d9a9be7`: added unit tests for count mismatch, in-flight branch/user change, row limit, RLS error and foreign-branch rows.
 5. Follow each completed logical write group with the sequential execution log; update PR number after creating draft PR.
 
 ## Verification ledger
-Pending exact-head Jest/unit tests, TypeScript, lint, build and repository full Verify on the committed code. No genuine live Sage export has been downloaded and checked yet. Do not claim source completeness without it.
+Implemented projection, UI and fetch verification on feature branch. Pending exact-head Jest/unit tests, TypeScript, lint, build and repository full Verify on the committed code. No genuine live Sage export has been downloaded and checked yet. Do not claim source completeness without it.
 
 ## Production gate
 **HOLD**. This scope approval does not authorize production merge, Supabase writes, migrations, cloud agent changes, live order/print tests or cross-DB sync.
 
 ## Next action
-Implement a versioned `[{ id, name, sku, branch_id, product_type, is_active }]` JSON array export in Sage's existing authorized Products screen; preserve branch ID without guessing; require explicit export click, empty search and current branch, and fail closed on stale scope. Add focused unit tests, then run exact-head full CI and keep PR as draft.
+Complete the draft PR metadata, run exact-head full CI/Verify and keep the feature out of production until explicit separate release authorization. Confirm an authenticated per-branch download on real Sage data after approval.
 
 ## Mandatory update protocol
 السجل هو المرجع الإجباري للعمل؛ CI يجب أن يفشل إذا اختلف الفرع أو نقص التوثيق؛ لا Merge ولا Production migration قبل التحقق.
