@@ -6,7 +6,8 @@ Current PR: `#513`
 Last updated: 2026-10-16 Cairo
 
 ## Work status
-State: **DATABASE APPLIED; FRONTEND RELEASE PENDING**
+State: **READY**
+Database applied; frontend release pending.
 Owner approved implementation and rollout at 00:53 Cairo. Exact-head verification gates production.
 
 ## Guardrails
@@ -57,7 +58,7 @@ Synthetic price lookup: 15051 to 37 buffer reads, 53.444ms to 0.925ms; this is a
 controlled fixture, not a production peak latency guarantee. Actual FIFO issue WAL
 median changed about 1% in the fixture, within its 5% tolerance.
 
-## Production application
+## Production gate
 Owner approval at 00:53 Cairo covers migration, merge and deployment after verification.
 Applied at 2026-10-16 01:34 Cairo as 20261015223414_latest_approved_price_read_model.
 SQL SHA256: 083e7a374b8fa23b8e4b48237c5f337ec5f5f9917d18be5776506ffda830b0af.
@@ -69,7 +70,7 @@ were present in this short observation window; this does not prove peak stabilit
 The source migration filename is reconciled to the server-assigned version without
 changing or reapplying SQL. Frontend publication remains pending.
 
-## Recovery and next action
+## Next action
 Guarded rollback restores both exact original resolvers and removes only exact
 cutover starting-price records plus the new private projection and triggers.
 Genuine later user price changes and every operational snapshot remain.
