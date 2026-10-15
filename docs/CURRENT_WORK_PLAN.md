@@ -5,7 +5,7 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `b640022353f840a9ebda68365aa3f28b25cae13b` (#511 released and post-merge verified)
-- Current active branch: `hotfix/operations-stability-all-20261015`
+- Current active branch: `hotfix/emergency-restore-order-fifo-20261015`
 - Mandatory active work log: `docs/OPERATIONS_STABILITY_ALL_20261015.md`
 
 ## Explicit approved database rollout — 2026-10-15 21:29 Cairo
