@@ -6,6 +6,7 @@
 - Production branch: `main`
 - Latest main baseline reconciled: `91801e73b0f168f6acabf6a7b2fde61ea8b7147e` (#512 verified and deployed)
 - Current active branch: `feature/latest-approved-cost-20261016`
+- Database latest-price read model applied 2026-10-16 01:34 Cairo as `20261015223414`; source f73a92ce Full Verify Green. Frontend release pending; see active log.
 - Mandatory active work log: `docs/LATEST_APPROVED_COST_20261016.md`
 
 ## Explicit approved database rollout — 2026-10-15 21:29 Cairo

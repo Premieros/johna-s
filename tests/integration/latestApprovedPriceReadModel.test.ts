@@ -92,7 +92,7 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
    await db.query('UPDATE public.raw_materials SET default_cost=17 WHERE id=$1',[empty]);
    expect((await prices()).find(x=>x.raw_material_id===empty)?.unit_cost).toBe('17.000000');
    const before=(await db.query('SELECT clock_timestamp() t')).rows[0].t;
-   await db.query(sql('supabase/migrations/20261015215855_latest_approved_price_read_model.sql'));
+   await db.query(sql('supabase/migrations/20261015223414_latest_approved_price_read_model.sql'));
    expect((await prices()).find(x=>x.raw_material_id===empty)?.unit_cost).toBe('17.000000');
    expect((await db.query('SELECT * FROM public._kitchen_approved_price_candidate($1,$2,$3)',[a,[empty],before])).rows).toEqual([]);
    expect((await db.query('SELECT * FROM public._kitchen_approved_price_candidate($1,$2,clock_timestamp())',[a,[empty]])).rows[0].unit_cost).toBe('17.000000');
