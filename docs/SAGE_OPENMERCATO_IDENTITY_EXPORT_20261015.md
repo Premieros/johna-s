@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/sage-openmercato-identity-export-20261015`
-Current PR: #0
+Current PR: #509
 Last updated: 2026-10-15 Cairo
 
 ## Work status
@@ -41,7 +41,7 @@ Write mode: **SEQUENTIAL_ONLY**
 6. `80958104276105ce445c40e33b5e75d46627174a`: added read-only snapshot count-vs-data reconciliation with fail-closed scope checks at each await.
 7. `730a5224e7523438b052f09dfecedc83af4a52cf`: wired Products download through scope-fenced snapshot service.
 8. `daf5d2da609f89457f65c6a7c0965b1a4d9a9be7`: added unit tests for count mismatch, in-flight branch/user change, row limit, RLS error and foreign-branch rows.
-5. Follow each completed logical write group with the sequential execution log; update PR number after creating draft PR.
+9. Draft PR #509 created from the exact reconciled feature branch; final PR-number update is this log-only commit. Next: exact-head CI; no more writes unless the checks identify a real failure.
 
 ## Verification ledger
 Implemented projection, UI and fetch verification on feature branch. Pending exact-head Jest/unit tests, TypeScript, lint, build and repository full Verify on the committed code. No genuine live Sage export has been downloaded and checked yet. Do not claim source completeness without it.
