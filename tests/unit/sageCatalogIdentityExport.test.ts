@@ -76,7 +76,7 @@ describe('Sage branch identity export contract', () => {
   });
 
   it('rejects oversized data without silently trimming, but allows empty branch exports', () => {
-    expect(() => buildSageCatalogIdentityExport([], BRANCH_A).products).toEqual([]);
+    expect(buildSageCatalogIdentityExport([], BRANCH_A).products).toEqual([]);
     expect(() => buildSageCatalogIdentityExport(
       Array.from({ length: SAGE_CATALOG_IDENTITY_EXPORT_LIMIT + 1 }, (_, i) => makeRow(i + 1)),
       BRANCH_A,
