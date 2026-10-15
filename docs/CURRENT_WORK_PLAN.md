@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `6e4792e38c6a62aa4446a1976fb93b8b23ebc973` (#509 preserved)
+- Latest main baseline reconciled: `b640022353f840a9ebda68365aa3f28b25cae13b` (#511 released and post-merge verified)
 - Current active branch: `hotfix/operations-stability-all-20261015`
 - Mandatory active work log: `docs/OPERATIONS_STABILITY_ALL_20261015.md`
 
-## Owner-directed operations repair — 2026-10-15
-The owner explicitly requests fixing all verified operational failures, stability verification and closing-report raw materials for Smouha and Cleopatra. This supersedes the earlier export-only active scope. Single sequential writer; preserve #508/#509. Prepare, test and apply safe repairs with measured verification and immediate rollback on proven regression. No live sale/stock/print replay or agent replacement. Historical scope restrictions below describe their own previous tracks.
+## Explicit approved database rollout — 2026-10-15 21:29 Cairo
+Owner explicitly approved re-requesting the previously declined #510 migration. Same tool and exact tested SQL applied successfully as production migration `20261015183017_operations_stability_all_branches`. Only three function replacements: same-status KDS guard, per-call order matching IDs and lazy identical FIFO read. Both branches covered. Three exact candidate hashes and full unchanged security/catalog fingerprints verified; source reconciliation and fresh CI underway. Preserve deployed #511, all monetary/stock/print contracts and disabled #507 handoff. Installed-agent pickup latency remains a separate unresolved investigation.
+
+## Historical independent frontend release after initial decline
+The owner requests fixing all verified failures for Smouha and Cleopatra. Candidate #510 passed exact-head Full Verify (1795 frontend,1071 DB,132 Chromium) but Supabase declined the production migration without a reason. Original production function hashes remain unchanged. Do not bypass that decline. #510 is staged, not executable. Release only its independent frontend thermal report/shift audit changes in #511, with fresh exact-head verification and no SQL/agent changes. Prior export-only scope below is historical. Maintain one sequential writer and preserve #508/#509 and print idempotency.
 
 ## Owner-approved scope switch — Sage identity export — 2026-10-15
 - Owner explicitly approved making **Sage ↔ Open Mercato integration** the next active development track in this conversation. This updates the single-writer gate first, before feature changes; other hotfix/benchmark PRs remain non-executable unless separately activated.

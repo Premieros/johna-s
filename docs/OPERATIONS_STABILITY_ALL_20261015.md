@@ -6,7 +6,7 @@ Current PR: #510
 Last updated: 2026-10-15 Cairo
 
 ## Work status
-State: **BLOCKED** pending exact-head full verification, rollback rehearsal and bounded production comparison.
+State: **DEPLOYED** in production after exact-head verification, rollback rehearsal and explicit owner reapproval; source reconciliation/CI and natural-traffic observation continue.
 Execution mode: **SINGLE_WRITER**; sequential writes only. Unexpected HEAD: stop and reconcile.
 
 ## Guardrails
@@ -32,17 +32,21 @@ Main `6e4792e38c6a62aa4446a1976fb93b8b23ebc973`. Cost detail `732777a33b67f9a6c1
 - Queue the automatic idempotent closing report before optional client audit I/O, so audit latency cannot delay report creation.
 
 ## Verification ledger
-1,793 frontend tests passed; application/test TypeScript, changed-file lint and API contract passed. First full run 38781292977 stopped at the baseline guard: canonical update_order has the same SQL with different comments/layout from production. Pin both exact source-body hashes, with a token/literal equivalence test; no CI bypass. New DB tests cover repeated cooking/ready/served without edit/send permission, denied business edits, branch/station denial, source precedence, oversold exclusions, warehouse boundaries, duplicate line matching and original-function rollback parity. Exact-head DB/browser proof pending. No production changes yet.
+Exact source `4326b17c91864af088544ff9466035c69bb74c38`, Full Verify 38782209302 SUCCESS:1795 frontend,1071 DB/security/RLS,132 Chromium tests; Fast Verify 38782196520 SUCCESS. Covers repeated cooking/ready/served without edit/send rights, denied business edits, branch/station denial, FIFO source precedence/oversold exclusions/warehouse boundaries, duplicate-line re-save, and exact original-definition rollback parity. Canonical/deployed update_order comment/layout differences are exact-body pinned and token-equivalence tested.
+
+Frontend subset #511 released separately at `b640022353f840a9ebda68365aa3f28b25cae13b`; post-merge Full Verify 38785028564 and Pages 38785028521 SUCCESS. Thermal material section, preserved automatic identity and audit failure handling verified in public deployed assets. No forced live close/print/order was used.
+
+After owner reapproval at21:29 Cairo, production migration `20261015183017_operations_stability_all_branches` applied successfully via the same Supabase migration tool. Installed hashes: permission trigger `03e28d99fcec1b031e69a14fee5eb9c7`, FIFO reader `fdde2b31a97ec9b8398ac03b7b07a3b0`, update_order `97cb1b42057f0faf373f561ea4fd97fc`. All match exact tested SQL. Other functions, policies, trigger definitions, constraints, table ACL/RLS and changed-function ACL/owner/security/search_path fingerprints unchanged. Live post-apply sample prices remain exactly0,5.250000,12.430000. Natural operational traffic, not artificial order/print replays, is the next observation boundary.
 
 Bounded live read-only old/candidate comparisons: three material/branch/warehouse contexts returned exactly 0, 5.250000 and 12.430000 for both. Three alternating EXPLAIN samples per reader/context: Smouha priced read median 8.769→4.875ms, buffer hits 1969→886; Cleopatra 1.492→1.141ms, hits 380→180. Unpriced fallback scans all sources as before (2165→2159 hits), timings noisy ~9ms. No peak-load or overall FIFO timeout cure is claimed.
 
 ## Production gate
-Fast Verify 38781814132 applied the migration and passed pricing/rollback and update-order tests. The KDS repeat transitions passed, but its forbidden-notes assertion reached the independent ownership denial before the expected permission denial. Give that isolated fixture to its writer so the test proves the narrower permission guard too; do not change production authorization. Fresh exact-head Full Verify required.
+Initial production request was declined without a reason. No alternate path was used. After explicit owner approval to re-request at21:29 Cairo, the same exact tested migration succeeded. Source is now being reconciled with released main/#511; functional SQL/tests remain unchanged, with fresh exact-head checks before merge.
 
 No Merge ولا Production migration before exact-head Full Verify, observed parity/performance and safe rollback. User has authorized fixing all verified problems; do not request redundant routine permission. A passing unit suite is not evidence of deployed stability. Claim/start/complete signatures and fingerprints must remain untouched.
 
 ## Next action
-Complete tests and open draft PR, run full CI, compare bounded live read-only original/candidate prices and security metadata, then apply verified migration/release and monitor. Establish installed-agent evidence before any Windows-specific remediation.
+Complete source reconciliation and fresh CI, merge the unchanged functional database repair, and inspect post-apply reads/real operational results. Roll back immediately on proven regression using the captured original definitions after checking the installed hashes. Establish installed-agent evidence before any Windows-specific remediation; pickup latency is not declared fixed.
 
 ## Mandatory update protocol
 السجل هو المرجع الإجباري للعمل؛ CI يجب أن يفشل إذا اختلف الفرع أو نقص التوثيق؛ لا Merge ولا Production migration قبل التحقق. Record every change/check and reconcile HEAD before sequential publication.
