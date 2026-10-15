@@ -48,6 +48,9 @@ The optional queue helper now temporarily sets `lock_timeout=250ms` **after** th
 
 **This is not a global RPC deadline.** PostgreSQL `query_canceled (57014)` is not caught by `WHEN OTHERS`, and synchronous print format/insert can still add CPU/transaction time. Production pilot stays BLOCKED without a bounded-latency measurement and the default-off expiring remote stop.
 
+## Authorized scope — Smoha pilot only
+Owner explicitly authorized a limited rollout to **فرع نادي سموحة** (`19c3fd23-d784-455b-8840-f4f2ac619651`), not Cleopatra (`279e6662-e901-40b2-9170-7dda0b471ba7`). The GitHub Pages workflow stages the build-time allowlist only for Smoha; the SQL kill-switch gate is installed with zero active branches, default deny. Do not enable the server gate until GitHub Pages deployment succeeds and current Smoha kitchen traffic can be observed; the operator at Smoha must verify printed paper. A 5-minute DB gate lease expires automatically; any unexpected delay, missing station ticket or duplicate must trigger immediate gate disable with the admin UPDATE already documented. Only subsequent RPCs are stopped. No Windows agent change, order replay, or Cleopatra switch.
+
 ## Production gate
 State: **BLOCKED**.
 Merge requires owner approval AFTER all CI succeeds. Merging a build with both feature flags unset does not enable new print routing; actual DB SQL activation requires a SEPARATE, explicitly approved production action. Verify that production build environment does not set VITE_KITCHEN_ATOMIC_PRINT_HANDOFF or a pilot branch ID. Never combine merge approval with database rollout approval.
