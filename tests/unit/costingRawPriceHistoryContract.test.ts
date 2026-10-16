@@ -28,6 +28,8 @@ describe('costing latest raw-material price contract', () => {
     expect(page).toContain('getRawMaterialCostHistory');
     expect(page).toContain("isAr ? 'آخر سعر مرجعي / وحدة' : 'Latest reference / unit'");
     expect(page).toContain("isAr ? 'القيمة الفعلية' : 'Actual value'");
+    expect(page).toContain("tab === 'valuation'");
+    expect(page).toContain('raw-latest-price-table');
     expect(page).toContain("isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)'");
     expect(page).toContain("isAr ? 'تكلفة السالب التقديرية' : 'Estimated negative cost'");
     expect(page).toContain("isAr ? 'عجز المخزون الحالي (تقديري)' : 'Current stock shortage (estimated)'");

@@ -131,6 +131,11 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       integerColumns: [],
     },
     raw_material_current_cost: {
+      columns: [branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'), pick(lang, 'آخر سعر معتمد / وحدة', 'Latest Approved Unit Price'), pick(lang, 'مصدر السعر', 'Price Source'), pick(lang, 'تاريخ السعر', 'Price Date'), pick(lang, 'رقم المستند', 'Document')],
+      columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30 },
+      integerColumns: [],
+    },
+    raw_material_valuation: {
       columns: [
         branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
         pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'سعر الخامة المعتمد (مركز التكلفة)', 'Canonical Raw Cost (Costing Center)'),

@@ -5,9 +5,9 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `91801e73b0f168f6acabf6a7b2fde61ea8b7147e` (#512 verified and deployed)
-- Current active branch: `feature/latest-approved-cost-20261016`
+- Current active branch: `fix/latest-price-screens-load-20261016`
 - Database latest-price read model applied 2026-10-16 01:34 Cairo as `20261015223414`; source f73a92ce Full Verify Green. Frontend release pending; see active log.
-- Mandatory active work log: `docs/LATEST_APPROVED_COST_20261016.md`
+- Mandatory active work log: `docs/LATEST_PRICE_SCREENS_20261016.md`
 
 ## Explicit approved database rollout — 2026-10-15 21:29 Cairo
 Owner explicitly approved re-requesting the previously declined #510 migration. Same tool and exact tested SQL applied successfully as production migration `20261015183017_operations_stability_all_branches`. Only three function replacements: same-status KDS guard, per-call order matching IDs and lazy identical FIFO read. Both branches covered. Three exact candidate hashes and full unchanged security/catalog fingerprints verified; source reconciliation and fresh CI underway. Preserve deployed #511, all monetary/stock/print contracts and disabled #507 handoff. Installed-agent pickup latency remains a separate unresolved investigation.

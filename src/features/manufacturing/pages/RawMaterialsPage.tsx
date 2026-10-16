@@ -1,6 +1,6 @@
 import { rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
 import { rawFifoCost } from '@/features/costing/services/rawFifoCostData';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Edit2, Boxes, Layers, Trash2 } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -61,6 +61,7 @@ export function RawMaterialsPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [stockBranch, setStockBranch] = useState(branchFilter || '');
 
@@ -71,22 +72,32 @@ export function RawMaterialsPage() {
   const [adjustReason, setAdjustReason] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  async function loadMeta() {
-    setLoading(true);
+  const metaRequest = useRef(0);
+  const loadMeta = useCallback(async () => {
+    const generation = ++metaRequest.current;
+    setLoading(true); setMetaError(null);
     try {
-      const meta = await loadRawMaterialMeta();
+      const meta = await loadRawMaterialMeta(branchFilter, tab);
+      if (generation !== metaRequest.current) return;
       setInventory(meta.inventory);
       setCurrentPrices(rawCurrentPriceMap(meta.currentPrices));
       setBatches(meta.batches);
       setUnits(meta.units);
       setBranches(meta.branches);
     } catch (error) {
-      show(error instanceof Error ? error.message : String(error), 'error');
+      if (generation !== metaRequest.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setMetaError(message); show(message, 'error');
     } finally {
-      setLoading(false);
+      if (generation === metaRequest.current) setLoading(false);
     }
-  }
-  useEffect(() => { loadMeta(); }, []);
+  }, [branchFilter, tab, show]);
+  useEffect(() => {
+    setCurrentPrices({}); setInventory([]); setBatches([]);
+    setStockBranch(branchFilter || '');
+    void loadMeta();
+    return () => { metaRequest.current += 1; };
+  }, [loadMeta, branchFilter]);
 
   const branchLabel = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
   const unitForId = (id: string | null | undefined) => units.find((u) => u.id === id);
@@ -250,9 +261,9 @@ export function RawMaterialsPage() {
       {tab === 'materials' && <DesignPanel testId="raw-materials-search-panel"><DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="raw-materials-search" /></DesignPanel>}
 
       <DesignPanel testId="raw-materials-table-panel">
-        {tab === 'materials' && <><DataTable columns={materialColumns} data={filteredMaterials} loading={materialsLoading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={materials.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></>}
-        {tab === 'stock' && <DataTable columns={stockColumns} data={filteredStock} loading={loading} error={error} emptyMessage={t('noData')} />}
-        {tab === 'batches' && <DataTable columns={batchColumns} data={filteredBatches} loading={loading} error={error} emptyMessage={t('noData')} />}
+        {tab === 'materials' && <><DataTable columns={materialColumns} data={filteredMaterials} loading={materialsLoading || loading} error={error || metaError} emptyMessage={t('noData')} /><DesignPagination loaded={materials.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></>}
+        {tab === 'stock' && <DataTable columns={stockColumns} data={filteredStock} loading={loading} error={error || metaError} emptyMessage={t('noData')} />}
+        {tab === 'batches' && <DataTable columns={batchColumns} data={filteredBatches} loading={loading} error={error || metaError} emptyMessage={t('noData')} />}
       </DesignPanel>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id ? t('editRawMaterial') : t('addRawMaterial')} size="lg">

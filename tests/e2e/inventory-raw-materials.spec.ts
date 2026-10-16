@@ -119,3 +119,52 @@ test('inventory shows catalog raw materials even when no balance row exists', as
   await expect(page.getByTestId(`raw-stock-row-raw-zero-balance-${WAREHOUSE_ID}`)).toContainText('سكر');
   await expect(page.getByTestId(`raw-stock-row-raw-zero-balance-${WAREHOUSE_ID}`)).toContainText(/رصيد صفر|Zero balance/);
 });
+
+async function mockLatestPrices(page: Page) {
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_raw_material_current_prices**`, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([
+      { raw_material_id: 'raw-with-balance', branch_id: BRANCH_ID, unit_cost: 12.5, price_source: 'pricing', priced_at: '2026-10-16T00:00:00Z', reference_number: 'PRICE-1' },
+      { raw_material_id: 'raw-zero-balance', branch_id: BRANCH_ID, unit_cost: null, price_source: 'unpriced', priced_at: null, reference_number: null },
+    ]),
+  }));
+}
+
+function isValuationOrBatchRead(value: string): boolean {
+  const url = new URL(value);
+  if (url.pathname.endsWith('/rpc/get_raw_material_cost_valuation_overview') || url.pathname.endsWith('/raw_material_batches')) return true;
+  // The shared low-stock notifier can read branch quantities on any page. It
+  // neither prices materials nor loads the inventory metadata/valuation under test.
+  const columns = url.searchParams.get('select') || '';
+  return url.pathname.endsWith('/raw_material_inventory') && (columns.includes('avg_cost') || columns.includes('*'));
+}
+
+test('current raw prices render without FIFO valuation reads', async ({ page }) => {
+  await mockInventoryBackend(page);
+  await mockLatestPrices(page);
+  const expensiveReads: string[] = [];
+  page.on('request', request => {
+    if (isValuationOrBatchRead(request.url())) expensiveReads.push(request.url());
+  });
+  await login(page);
+  await page.goto('/#/costing');
+  await page.getByRole('button', { name: /^(أسعار الخامات|Raw Material Prices)$/ }).click();
+  await page.getByTestId('costing-run-report').click();
+  const prices = page.getByTestId('raw-latest-price-table');
+  await expect(prices).toBeVisible();
+  await expect(prices.getByRole('cell', { name: /12.5 EGP/ })).toBeVisible();
+  await expect(prices.getByRole('cell', { name: /غير مسعّرة|Unpriced/ }).first()).toBeVisible();
+  expect(expensiveReads).toEqual([]);
+});
+
+test('raw material catalog prices skip inventory metadata and batch history', async ({ page }) => {
+  await mockInventoryBackend(page);
+  await mockLatestPrices(page);
+  const expensiveReads: string[] = [];
+  page.on('request', request => {
+    if (isValuationOrBatchRead(request.url())) expensiveReads.push(request.url());
+  });
+  await login(page);
+  await page.goto('/#/raw-materials');
+  await expect(page.getByTestId('raw-materials-page').getByRole('cell', { name: '12.5', exact: true })).toBeVisible();
+  expect(expensiveReads).toEqual([]);
+});
