@@ -18,6 +18,7 @@ describe.skipIf(!local)('installed agent report pages and latest raw cost — ow
   await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,'Priced raw',$3,0),($4,$5,'Unpriced raw',$3,0)",[raw,randomUUID(),ids.branchA,missing,randomUUID()]);
   await db.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,17,'LATEST-CONSUMPTION',clock_timestamp())",[raw,ids.branchA]);
   for(const material of [raw,missing]) await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,-2,999,-1998,'sale','sale',$4,$5)",[material,ids.branchA,ids.whA,ids.saleA,randomUUID()]);
+  await db.query("INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,-3,999) ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET quantity=-3,avg_cost=999",[raw,ids.branchA]);
   // Fixed real branch is isolated to this localhost transaction, no production call.
   await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Smouha report fixture')",[smouha]);
  },60000);
@@ -51,7 +52,8 @@ describe.skipIf(!local)('installed agent report pages and latest raw cost — ow
   expect(result.rows.find(r=>r.raw_material_id===raw)).toMatchObject({consumed_quantity:'2.000000',displayed_cost:'34.00',price_missing:false,pricing_basis:'latest_approved'});
   expect(result.rows.find(r=>r.raw_material_id===missing)).toMatchObject({price_missing:true});
   const values=await runAs(db,ids.users.branch_manager,'select * from public.get_raw_material_latest_valuation($1) where raw_material_id=$2',[ids.branchA,raw]);expect(values.error).toBeUndefined();
-  expect(values.rows[0]).toMatchObject({latest_cost:'17.000000',estimated_net_stock_value:'-34.00',price_missing:false});
+  expect(Number(values.rows[0]?.stock_quantity)).toBe(-3);
+  expect(values.rows[0]).toMatchObject({latest_cost:'17.000000',estimated_net_stock_value:'-51.00',price_missing:false});
   expect((await db.query('select count(*)::int n,sum(quantity)::text qty from public.inventory_ledger')).rows).toEqual(before);
  });
  it('denies unauthorized/foreign branch reads and anonymous function access',async()=>{
