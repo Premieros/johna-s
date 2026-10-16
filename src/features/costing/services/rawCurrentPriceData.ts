@@ -36,12 +36,13 @@ export async function loadRawCurrentPrices(branchId: string | null, rawIds: stri
   }
   const rows: RawCurrentPriceRow[] = [];
   const selected = [...ids].sort();
+  // The indexed price projection supports one bounded500-row branch read.
   // Sequential batches limit database pressure. A failed batch rejects the
   // whole read; no partial price map or invented zero reaches the caller.
-  for (let from = 0; from < selected.length; from += 100) {
+  for (let from = 0; from < selected.length; from += 500) {
     const result = await supabase.rpc('get_raw_material_current_prices', {
       p_branch_id: branchId,
-      p_raw_material_ids: selected.slice(from, from + 100),
+      p_raw_material_ids: selected.slice(from, from + 500),
     }).order('raw_material_id');
     if (result.error) throw result.error;
     rows.push(...((result.data || []) as RawCurrentPriceRow[]));

@@ -1,28 +1,35 @@
 import { loadRawMaterialDisplayPrices, type RawCurrentPriceRow } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
+import { fetchAllReportRows } from '@/features/reporting/fetchAllReportRows';
 import type { Branch, RawMaterialBatch, RawMaterialInventory, Unit } from '@/lib/types';
 
-export async function loadRawMaterialMeta(): Promise<{
+export async function loadRawMaterialMeta(branchId: string | null = null, tab: 'materials' | 'stock' | 'batches' = 'materials'): Promise<{
   inventory: RawMaterialInventory[];
   currentPrices: RawCurrentPriceRow[];
   batches: RawMaterialBatch[];
   units: Unit[];
   branches: Branch[];
 }> {
-  const [inventoryResult, batchesResult, unitsResult, branchesResult, currentPrices] = await Promise.all([
-    supabase.from('raw_material_inventory').select('*, raw_material:raw_materials(*), branch:branches(*)').order('updated_at', { ascending: false }),
-    supabase.from('raw_material_batches').select('*, raw_material:raw_materials(*), branch:branches(*)').order('created_at', { ascending: false }),
+  let inventoryQuery = supabase.from('raw_material_inventory').select('*, raw_material:raw_materials(*), branch:branches(*)').order('updated_at', { ascending: false }).order('id');
+  let batchQuery = supabase.from('raw_material_batches').select('*, raw_material:raw_materials(*), branch:branches(*)').order('created_at', { ascending: false }).order('id');
+  if (branchId) {
+    inventoryQuery = inventoryQuery.eq('branch_id', branchId);
+    batchQuery = batchQuery.eq('branch_id', branchId);
+  }
+  const [inventory, batches, unitsResult, branchesResult, currentPrices] = await Promise.all([
+    tab === 'stock' ? fetchAllReportRows(inventoryQuery) : Promise.resolve([]),
+    tab === 'batches' ? fetchAllReportRows(batchQuery) : Promise.resolve([]),
     supabase.from('measurement_units').select('*').eq('is_active', true).order('name'),
     supabase.from('branches').select('*').eq('is_active', true).order('name'),
-    loadRawMaterialDisplayPrices(null),
+    tab !== 'batches' ? loadRawMaterialDisplayPrices(branchId) : Promise.resolve([]),
   ]);
 
-  const error = inventoryResult.error || batchesResult.error || unitsResult.error || branchesResult.error;
+  const error = unitsResult.error || branchesResult.error;
   if (error) throw error;
   return {
     currentPrices,
-    inventory: (inventoryResult.data as RawMaterialInventory[]) || [],
-    batches: (batchesResult.data as RawMaterialBatch[]) || [],
+    inventory: (inventory as RawMaterialInventory[]) || [],
+    batches: (batches as RawMaterialBatch[]) || [],
     units: (unitsResult.data as Unit[]) || [],
     branches: (branchesResult.data as Branch[]) || [],
   };

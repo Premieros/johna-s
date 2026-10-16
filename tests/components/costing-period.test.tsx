@@ -2,9 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CostingCenterPage } from '@/features/costing/pages/CostingCenterPage';
-const mocks = vi.hoisted(() => ({ overview: vi.fn(), rawOverview: vi.fn(), fifo: vi.fn(), prices: vi.fn(), historical: vi.fn(), supplierOptions: vi.fn(), unitOptions: vi.fn(), supplierImpact: vi.fn(), summary: vi.fn(), consumption: vi.fn(), orders: vi.fn(), branches: [{ id: 'a', name: 'A' }], show: vi.fn(), t: (key: string) => key }));
+const mocks = vi.hoisted(() => ({ latest: vi.fn(), overview: vi.fn(), rawOverview: vi.fn(), fifo: vi.fn(), prices: vi.fn(), historical: vi.fn(), supplierOptions: vi.fn(), unitOptions: vi.fn(), supplierImpact: vi.fn(), summary: vi.fn(), consumption: vi.fn(), orders: vi.fn(), branches: [{ id: 'a', name: 'A' }], show: vi.fn(), t: (key: string) => key }));
+vi.mock('@/features/costing/services/rawLatestPriceData', () => ({ loadRawLatestPriceRows: mocks.latest }));
 vi.mock('@/features/costing/services/rawFifoCostData', () => ({ loadRawFifoCosts: mocks.fifo, rawFifoCostMap: () => ({}) }));
-vi.mock('@/features/costing/services/rawCurrentPriceData', () => ({ loadRawCurrentPrices: mocks.prices, rawCurrentPriceMap: () => ({}) }));
+vi.mock('@/features/costing/services/rawCurrentPriceData', () => ({ loadRawMaterialDisplayPrices: mocks.prices, rawCurrentPriceMap: () => ({}) }));
 vi.mock('@/api', () => ({ costing: {
   getOverview: mocks.overview, getRawMaterialCostOverview: mocks.rawOverview,
   getSupplierPriceImpact: mocks.supplierImpact, getSalesSummary: mocks.summary, getRawConsumptionCostBreakdown: mocks.consumption, getOrderMargin: mocks.orders,
@@ -17,6 +18,7 @@ vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ minDate: u
 vi.mock('@/features/costing/services/costingSelectors', () => ({ loadCostingBranches: async () => mocks.branches, loadCostingSuppliers: mocks.supplierOptions, loadRawMaterialUnitDisplayMap: mocks.unitOptions }));
 vi.mock('@/features/costing/components/CostBreakdownButton', () => ({ CostBreakdownButton: () => null }));
 beforeEach(() => {
+  mocks.latest.mockReset().mockResolvedValue([]);
   mocks.overview.mockReset().mockResolvedValue({ data: [] });
   mocks.rawOverview.mockReset().mockResolvedValue({ data: [] });
   mocks.fifo.mockReset().mockResolvedValue([]);
@@ -42,9 +44,41 @@ describe('costing selected-period reports', () => {
     expect(mocks.overview).toHaveBeenCalledOnce();
     expect(mocks.fifo).not.toHaveBeenCalled(); expect(mocks.prices).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Raw Material Prices' }));
-    expect(mocks.rawOverview).toHaveBeenCalledOnce();
+    expect(mocks.rawOverview).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();
   });
+  it('loads latest prices without stock/FIFO/history RPCs and preserves unknown prices', async () => {
+    mocks.latest.mockResolvedValue([
+      { raw_material_id: 'r', raw_material_name: 'Egg', raw_material_code: 'E', branch_id: 'a', latest_cost: 3.6, price_source: 'pricing', priced_at: null, reference_number: null },
+      { raw_material_id: 'u', raw_material_name: 'Unknown', raw_material_code: 'U', branch_id: 'a', latest_cost: null, price_source: 'unpriced', priced_at: null, reference_number: null },
+    ]);
+    render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
+    await screen.findByRole('option', { name: 'A' });
+    fireEvent.click(screen.getByRole('button', { name: 'Raw Material Prices' }));
+    expect(mocks.latest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('costing-run-report'));
+    await screen.findByTestId('raw-latest-price-table');
+    expect(mocks.latest).toHaveBeenCalledExactlyOnceWith('a');
+    expect(mocks.rawOverview).not.toHaveBeenCalled();
+    expect(mocks.fifo).not.toHaveBeenCalled();
+    expect(mocks.historical).not.toHaveBeenCalled();
+    expect(screen.getAllByText('3.6 EGP').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Unpriced').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Current inventory cost (FIFO)')).toBeNull();
+  });
+
+  it('loads accounting valuation only after its own explicit request', async () => {
+    render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
+    await screen.findByRole('option', { name: 'A' });
+    fireEvent.click(screen.getByRole('button', { name: 'Inventory accounting valuation' }));
+    expect(mocks.rawOverview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('costing-run-report'));
+    await screen.findByTestId('raw-material-cost-table');
+    expect(mocks.rawOverview).toHaveBeenCalledExactlyOnceWith({ p_branch_id: 'a' });
+    expect(mocks.fifo).toHaveBeenCalledExactlyOnceWith('a');
+    expect(mocks.latest).not.toHaveBeenCalled();
+  });
+
   it('waits for current reads before historical pricing and avoids stale follow-up reads', async () => {
     let finish!: (value: unknown) => void;
     mocks.summary.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
@@ -56,7 +90,7 @@ describe('costing selected-period reports', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Raw Material Prices' }));
     fireEvent.click(screen.getByTestId('costing-run-report'));
     finish({ data: { cogs: 12, net_sales: 100, sales_count: 1, ratio: 12 } });
-    await waitFor(() => expect(mocks.unitOptions).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.latest).toHaveBeenCalled());
     expect(mocks.historical).not.toHaveBeenCalled();
   });
 
@@ -88,7 +122,8 @@ describe('costing selected-period reports', () => {
     expect(mocks.unitOptions).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Raw Material Prices' }));
     fireEvent.click(screen.getByTestId('costing-run-report'));
-    await waitFor(() => expect(mocks.unitOptions).toHaveBeenCalledWith('a'));
+    await waitFor(() => expect(mocks.latest).toHaveBeenCalledWith('a'));
+    expect(mocks.unitOptions).not.toHaveBeenCalled();
     expect(mocks.summary).toHaveBeenCalledTimes(1);
     expect(mocks.supplierOptions).not.toHaveBeenCalled();
   });
@@ -106,7 +141,7 @@ describe('costing selected-period reports', () => {
     fireEvent.click(screen.getByTestId('costing-run-report'));
     await waitFor(() => expect(mocks.consumption).toHaveBeenLastCalledWith({ p_branch_id: 'a', p_from: '2026-08-31T21:00:00.000Z', p_to: '2026-09-30T20:59:59.999Z' }));
     expect((await screen.findAllByText('Sugar')).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Actual cost').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Recorded accounting cost').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Estimated cost').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'orderMargin' }));
     fireEvent.click(screen.getByTestId('costing-run-report'));

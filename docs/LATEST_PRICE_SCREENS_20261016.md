@@ -1,0 +1,46 @@
+# Latest-price screens and loading — active work log
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `fix/latest-price-screens-load-20261016`
+Current PR: `#0`
+Last updated: 2026-10-16 Cairo
+
+## Work status
+State: **BLOCKED**
+PR number pending creation. User requests consistent latest-price displays and less loading.
+
+## Guardrails
+One writer; only this repository/database. Frontend-only. Preserve current prices,
+historical snapshots, FIFO/accounting writers, RLS, stock, sale and print contracts.
+No real purchases/sales/prints. No production merge/deployment before review approval.
+
+## Baseline
+Main c6f625820d1fa44b95424332a962e1c665109327, #513 applied and deployed.
+Live samples: Smouha egg3.60 matches raw catalog, new purchase and recipe;
+Cleopatra egg4.33 matches raw catalog/new purchase. Classic Omelate28.34 matches recipe.
+
+## Root-cause ledger
+Raw-material metadata loads all batches/inventory even on the prices tab and blocks
+unit/branch/price display on those reads. Costing raw-prices requests full stock
+valuation and an extra FIFO inventory read before latest prices. Overview also
+waits for unrelated raw stock valuation. The shared price reader makes five
+sequential100-row RPCs for a403-material branch despite the indexed reader.
+
+## Change ledger
+Prepare compact current-price display, separate explicit inventory valuation,
+lazy branch-scoped raw inventory/batch loading and bounded500-row pricing batches.
+Use clear recorded accounting cost labels. Historical reports keep as-of snapshots.
+
+## Verification ledger
+Pending behavioral load/call-budget, null-price, branch isolation, stale result,
+application/type/build and browser verification.
+
+## Production gate
+Frontend release blocked pending exact-head checks and owner review approval.
+No SQL migration. Rollback is previous frontend build; #513 DB remains compatible.
+
+## Next action
+Implement and verify; publish one draft PR with exact evidence and ask before merge.
+
+## Mandatory update protocol
+Verify main and repo identity; keep one writer; record all outcomes and next step.

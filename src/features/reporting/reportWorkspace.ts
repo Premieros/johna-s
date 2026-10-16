@@ -19,7 +19,7 @@ export const BASIC_REPORTS: BasicReport[] = [
   { key: 'purchases', ar: 'المشتريات', en: 'Purchases', descriptionAr: 'فواتير المشتريات والموردون ومرتجعات الشراء', descriptionEn: 'Purchase invoices, suppliers and purchase returns', views: [op('purchases', 'فواتير المشتريات', 'Purchase invoices')] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', descriptionAr: 'التفاصيل والتصنيفات وملخص الفترة', descriptionEn: 'Details, categories and period totals', views: [op('expenses', 'تفاصيل المصروفات', 'Expense details')] },
   { key: 'inventory', ar: 'المخزون', en: 'Inventory', descriptionAr: 'الأرصدة الحالية والتاريخية والحركة والنواقص والهالك', descriptionEn: 'Current & historical balances, movements, shortages and waste', views: [
-    op('inventory', 'الأرصدة الحالية', 'Current balances'), op('inventory_as_of', 'أرصدة الخامات بتاريخ', 'Material balances as of date'),
+    op('inventory', 'الأرصدة الحالية', 'Current balances'), op('raw_material_valuation', 'تقييم الخامات المحاسبي', 'Raw material accounting valuation'), op('inventory_as_of', 'أرصدة الخامات بتاريخ', 'Material balances as of date'),
     op('raw_material_consumption', 'حركة واستهلاك الخامات', 'Material movements & consumption'), financial('inventory_movement', 'كشف حركة صنف', 'Item statement'),
     op('low_stock', 'النواقص', 'Shortages'), op('production_waste', 'الهالك', 'Waste'), op('component_consumption', 'استهلاك المكونات', 'Component consumption'),
   ] },

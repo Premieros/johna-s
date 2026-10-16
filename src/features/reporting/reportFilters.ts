@@ -21,6 +21,7 @@ export type ReportType =
   | 'production_waste'
   | 'raw_material_consumption'
   | 'raw_material_current_cost'
+  | 'raw_material_valuation'
   | 'raw_material_financial'
   | 'sales_component_reconciliation'
   | 'daily_closing_range'
@@ -74,7 +75,7 @@ export const ALL_REPORT_TYPES: ReportType[] = [
   'sales_costs', 'inventory_as_of', 'sales_by_station', 'sales', 'sales_by_payment', 'sales_by_employee', 'sales_by_product', 'detailed_invoices',
   'purchases', 'expenses', 'profit', 'inventory', 'component_consumption', 'recipe_costs',
   'top_consumed_components', 'top_consumed_products', 'low_stock',
-  'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption', 'raw_material_current_cost', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
+  'cashier_performance', 'returns', 'production_waste', 'raw_material_consumption', 'raw_material_current_cost', 'raw_material_valuation', 'raw_material_financial', 'sales_component_reconciliation', 'daily_closing_range', 'financial_reconciliation',
 ];
 
 export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
@@ -104,6 +105,7 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
   production_waste: ['warehouse', 'product'],
   raw_material_consumption: [],
   raw_material_current_cost: [],
+  raw_material_valuation: [],
   raw_material_financial: [],
   sales_component_reconciliation: [],
   daily_closing_range: [],

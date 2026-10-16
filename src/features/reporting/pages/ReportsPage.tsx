@@ -1,3 +1,4 @@
+import { loadRawLatestPriceRows } from '@/features/costing/services/rawLatestPriceData';
 import { readReportBranches } from '../services/readReportBranches';
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
@@ -975,6 +976,22 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         count: output.length,
       });
     } else if (reportType === 'raw_material_current_cost') {
+      const targetBranches = effectiveBranchFilter ? branches.filter(branch => branch.id === effectiveBranchFilter) : branches;
+      const results = await readReportBranches(targetBranches, async branch => ({ branchId: branch.id, rows: await loadRawLatestPriceRows(branch.id) }), signal);
+      const rows = results.flatMap(({ branchId, rows: prices }) => prices.map(row => withBranch(branchId, {
+        [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name,
+        [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
+        [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name,
+        [lang === 'ar' ? 'آخر سعر معتمد / وحدة' : 'Latest Approved Unit Price']: row.latest_cost ?? (lang === 'ar' ? 'غير مسعّرة' : 'Unpriced'),
+        [lang === 'ar' ? 'مصدر السعر' : 'Price Source']: row.price_source,
+        [lang === 'ar' ? 'تاريخ السعر' : 'Price Date']: row.priced_at ? formatDate(row.priced_at, lang) : '',
+        [lang === 'ar' ? 'رقم المستند' : 'Document']: row.reference_number || '',
+      })));
+      if (rows.length > MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
+      setData(rows); setChartData([]);
+      // Unit prices for different materials/units cannot form a meaningful money total.
+      setSummary({ total: 0, count: rows.length });
+    } else if (reportType === 'raw_material_valuation') {
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
@@ -1200,7 +1217,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   if (can('reports.costing') || canFinancial) {
     reportTypes.push(
       { key: 'raw_material_consumption', label: lang === 'ar' ? 'حركة واستهلاك الخامات' : 'Raw Material Consumption', icon: <Layers className="w-4 h-4" /> },
-      { key: 'raw_material_current_cost', label: lang === 'ar' ? 'تكلفة الخامات الحالية' : 'Current Raw Material Cost', icon: <Package className="w-4 h-4" /> },
+      { key: 'raw_material_current_cost', label: lang === 'ar' ? 'أسعار الخامات الحالية' : 'Current Raw Material Prices', icon: <Package className="w-4 h-4" /> },
+      { key: 'raw_material_valuation', label: lang === 'ar' ? 'تقييم الخامات المحاسبي' : 'Raw Material Accounting Valuation', icon: <Package className="w-4 h-4" /> },
       { key: 'sales_component_reconciliation', label: lang === 'ar' ? 'مطابقة المبيعات مع استهلاك المكونات' : 'Sales vs Component Consumption', icon: <BarChart3 className="w-4 h-4" /> },
     );
   }
@@ -1439,6 +1457,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         filterLabel={filterLabel}
         allLabel={allLabel}
         filterDimensions={REPORT_FILTER_DIMS[reportType]}
+        showTotal={reportType !== 'raw_material_current_cost'}
         total={summary.total}
         count={summary.count}
         currency={currency}

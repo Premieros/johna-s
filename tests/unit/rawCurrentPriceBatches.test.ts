@@ -11,18 +11,23 @@ beforeEach(() => {
 });
 describe('bounded authoritative current-price reads', () => {
   it('returns every price in bounded requests and deduplicates supplied identities', async () => {
-    const ids = Array.from({ length: 205 }, (_, i) => `r${i}`);
+    const ids = Array.from({ length: 1005 }, (_, i) => `r${i}`);
     const rows = await loadRawCurrentPrices('branch', [...ids, ids[0]]);
-    expect(rows).toHaveLength(205);
-    expect(new Set(rows.map(row => row.raw_material_id)).size).toBe(205);
+    expect(rows).toHaveLength(1005);
+    expect(new Set(rows.map(row => row.raw_material_id)).size).toBe(1005);
     expect(mocks.rpc).toHaveBeenCalledTimes(3);
-    expect(mocks.rpc.mock.calls.map(call => call[1].p_raw_material_ids.length)).toEqual([100, 100, 5]);
+    expect(mocks.rpc.mock.calls.map(call => call[1].p_raw_material_ids.length)).toEqual([500, 500, 5]);
     expect(mocks.from).not.toHaveBeenCalled();
+  });
+  it('prices a whole403-material branch in one indexed RPC', async () => {
+    await loadRawCurrentPrices('branch', Array.from({ length: 403 }, (_, i) => `r${i}`));
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.rpc.mock.calls[0][1].p_raw_material_ids).toHaveLength(403);
   });
   it('rejects an incomplete read instead of returning prices from successful batches', async () => {
     const error = { code: '57014', message: 'timeout' };
     mocks.rpc.mockImplementationOnce((_name, args) => ({ order: async () => ({ data: args.p_raw_material_ids.map((id: string) => ({ raw_material_id: id })), error: null }) })).mockImplementationOnce(() => ({ order: async () => ({ data: null, error }) }));
-    await expect(loadRawCurrentPrices('branch', Array.from({ length: 105 }, (_, i) => `r${i}`))).rejects.toEqual(error);
+    await expect(loadRawCurrentPrices('branch', Array.from({ length: 505 }, (_, i) => `r${i}`))).rejects.toEqual(error);
   });
   it('enumerates only the requested branch before pricing and skips empty selections', async () => {
     expect(await loadRawCurrentPrices('branch', [])).toEqual([]);

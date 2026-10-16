@@ -107,7 +107,8 @@ vi.mock('@/context/SettingsContext', () => ({
 }));
 vi.mock('@/context/RolesContext', () => ({ useRoles: () => appMocks.roles }));
 vi.mock('@/context/ThemeContext', () => ({ useTheme: () => appMocks.theme }));
-vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: () => {} }) }));
+const toastMock = vi.hoisted(() => ({ show: vi.fn() }));
+vi.mock('@/components/Toast', () => ({ useToast: () => toastMock }));
 
 import {
   DesignSurface,
