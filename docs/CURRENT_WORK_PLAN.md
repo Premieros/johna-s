@@ -4,10 +4,17 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `e1c7f4ca4ee53a651170a19516fad7a0bfdd6cb6` (#514 verified and deployed)
-- Current active branch: `fix/gregorian-dates-20261016`
-- Database latest-price read model applied 2026-10-16 01:34 Cairo as `20261015223414`; source f73a92ce Full Verify Green. Frontend #513/#514 deployed and verified; see their PR release ledgers.
-- Mandatory active work log: `docs/GREGORIAN_DATES_20261016.md`
+- Latest main baseline reconciled: `184933269a10315ace4f97188edef1c676f23735` (#515 Gregorian dates merged, full Verify and Pages SUCCESS)
+- Current active branch: `fix/remove-mistaken-sage-identity-export-20261016`
+- Database latest-price read model `20261015223414` and #513/#514/#515 release code must remain completely unchanged.
+- Mandatory active work log: `docs/REMOVE_MISTAKEN_SAGE_IDENTITY_EXPORT_20261016.md`
+
+## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
+- The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.
+- Previous active Gregorian UI branch #515 merged as `184933269a10315ace4f97188edef1c676f23735`, with post-merge Verify + Pages SUCCESS. Its scope is closed; this corrective task is the sole active writer, not a parallel task.
+- Remove only `products-export-identity` button and accompanying new authorization/download code, its two helper modules and two dedicated unit test files. Preserve existing Excel import/export, product edit, category, recipes, warehouse, costs and permissions. Preserve all operational PRs #510–#515 and all production Supabase data.
+- Historical records of PR #509 remain audit evidence; do not rewrite its commit or Git history. Add a review/rollback entry in `docs/REMOVE_MISTAKEN_SAGE_IDENTITY_EXPORT_20261016.md`.
+- No DB calls (except existing unrelated app code), no schema/RLS changes, migrations, local/Windows print-agent changes, business transactions, third-party sync, production merge or deployment. Before eventual release: exact-head Full Verify, review diff against #509, and separate user approval.
 
 ## Explicit approved database rollout — 2026-10-15 21:29 Cairo
 Owner explicitly approved re-requesting the previously declined #510 migration. Same tool and exact tested SQL applied successfully as production migration `20261015183017_operations_stability_all_branches`. Only three function replacements: same-status KDS guard, per-call order matching IDs and lazy identical FIFO read. Both branches covered. Three exact candidate hashes and full unchanged security/catalog fingerprints verified; source reconciliation and fresh CI underway. Preserve deployed #511, all monetary/stock/print contracts and disabled #507 handoff. Installed-agent pickup latency remains a separate unresolved investigation.
