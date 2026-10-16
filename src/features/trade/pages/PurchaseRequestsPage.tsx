@@ -209,7 +209,7 @@ export function PurchaseRequestsPage() {
             </Select>
             <div>
               <label className="block text-xs font-medium text-ui-muted mb-1">{t('expectedDate')}</label>
-              <input type="date" value={form.expected_date} onChange={(e) => setForm({ ...form, expected_date: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
+              <input lang="en-GB-u-ca-gregory" dir="ltr" type="date" value={form.expected_date} onChange={(e) => setForm({ ...form, expected_date: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
             </div>
           </div>
 

@@ -484,8 +484,8 @@ export function CostingCenterPage() {
           event.preventDefault();
           runReport();
         }}>
-          <label className="text-sm text-ui-text">{isAr ? 'من تاريخ' : 'From date'}<input data-testid="costing-from" type="date" required value={draftFrom} onChange={(event) => setDraftFrom(event.target.value)} className="block rounded-lg border border-ui-border bg-ui-page px-3 py-2" /></label>
-          <label className="text-sm text-ui-text">{isAr ? 'إلى تاريخ' : 'To date'}<input data-testid="costing-to" type="date" required min={draftFrom} value={draftTo} onChange={(event) => setDraftTo(event.target.value)} className="block rounded-lg border border-ui-border bg-ui-page px-3 py-2" /></label>
+          <label className="text-sm text-ui-text">{isAr ? 'من تاريخ' : 'From date'}<input lang="en-GB-u-ca-gregory" dir="ltr" data-testid="costing-from" type="date" required value={draftFrom} onChange={(event) => setDraftFrom(event.target.value)} className="block rounded-lg border border-ui-border bg-ui-page px-3 py-2" /></label>
+          <label className="text-sm text-ui-text">{isAr ? 'إلى تاريخ' : 'To date'}<input lang="en-GB-u-ca-gregory" dir="ltr" data-testid="costing-to" type="date" required min={draftFrom} value={draftTo} onChange={(event) => setDraftTo(event.target.value)} className="block rounded-lg border border-ui-border bg-ui-page px-3 py-2" /></label>
           <Select label={t('branch')} value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="">{t('allBranches')}</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select>
         </form>
         <p className="mt-2 text-sm text-ui-muted">{fromDate} — {toDate}</p>

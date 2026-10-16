@@ -60,7 +60,7 @@ export async function exportToExcelAdvanced(options: ExcelExportOptions): Promis
       summaryRows.push([lang === 'ar' ? 'مصدر الأرقام' : 'Number source', sourceNote]);
     }
     summaryRows.push([
-      `${lang === 'ar' ? 'تاريخ الإنشاء' : 'Generated at'}: ${new Date().toLocaleString()}`,
+      `${lang === 'ar' ? 'تاريخ الإنشاء' : 'Generated at'}: ${new Date().toLocaleString(lang === 'ar' ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory')}`,
       '',
     ]);
 
