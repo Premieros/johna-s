@@ -37,6 +37,8 @@ Owner explicitly identified the accidental #509 changes to Johna's and authorize
 
 ## Change ledger
 1. `71936770fc648c68d8369b1c6d5171c39e6c8374`: changed current work plan FIRST, after verifying #515 merged and complete; new active sole writer identified.
+2. `7a98e70bd33ef689321ca344792b423a9b818881`: created mandatory single-writer correction log.
+3. `23cc31caa5e14d540ebd8de5c0e4f5a07c52c7e3`: removed only the #509 identity UI/hook/handler from the *latest* ProductsPage, preserving the original Excel import/export and all post-#509 product functionality. Identity-only helper modules still pending deletion.
 
 ## Verification ledger
 Pending focused diff, exact-head automated checks and PR review. Not yet safe to deploy.
