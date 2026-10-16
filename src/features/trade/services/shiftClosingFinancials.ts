@@ -307,6 +307,8 @@ export async function fetchShiftClosingReportServer(shiftId: string): Promise<Sh
         actualCost: Number(row.actual_cost || 0),
         estimatedCost: Number(row.estimated_cost || 0),
         displayedCost: Number(row.displayed_cost || 0),
+        pricingBasis: row.pricing_basis === 'latest_approved' ? 'latest_approved' : undefined,
+        priceMissing: row.price_missing === true,
       });
     }
   }
@@ -501,6 +503,8 @@ export async function fetchShiftClosingDetailsSafe(shiftId: string, branchId?: s
         actualCost: Number(row.actual_cost || 0),
         estimatedCost: Number(row.estimated_cost || 0),
         displayedCost: Number(row.displayed_cost || 0),
+        pricingBasis: row.pricing_basis === 'latest_approved' ? 'latest_approved' : undefined,
+        priceMissing: row.price_missing === true,
       });
     }
   }

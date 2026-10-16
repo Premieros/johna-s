@@ -70,12 +70,13 @@ describe('costing selected-period reports', () => {
   it('loads accounting valuation only after its own explicit request', async () => {
     render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
     await screen.findByRole('option', { name: 'A' });
-    fireEvent.click(screen.getByRole('button', { name: 'Inventory accounting valuation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inventory at latest price' }));
     expect(mocks.rawOverview).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('costing-run-report'));
     await screen.findByTestId('raw-material-cost-table');
     expect(mocks.rawOverview).toHaveBeenCalledExactlyOnceWith({ p_branch_id: 'a' });
-    expect(mocks.fifo).toHaveBeenCalledExactlyOnceWith('a');
+    expect(mocks.fifo).not.toHaveBeenCalled();
+    expect(mocks.prices).not.toHaveBeenCalled();
     expect(mocks.latest).not.toHaveBeenCalled();
   });
 
@@ -141,8 +142,8 @@ describe('costing selected-period reports', () => {
     fireEvent.click(screen.getByTestId('costing-run-report'));
     await waitFor(() => expect(mocks.consumption).toHaveBeenLastCalledWith({ p_branch_id: 'a', p_from: '2026-08-31T21:00:00.000Z', p_to: '2026-09-30T20:59:59.999Z' }));
     expect((await screen.findAllByText('Sugar')).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Recorded accounting cost').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Estimated cost').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Latest-price cost').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Estimated cost')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'orderMargin' }));
     fireEvent.click(screen.getByTestId('costing-run-report'));
     await waitFor(() => expect(mocks.orders).toHaveBeenLastCalledWith({ p_branch_id: 'a', p_from: '2026-09-01', p_to: '2026-09-30' }));
