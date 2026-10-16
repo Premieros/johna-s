@@ -40,7 +40,11 @@ for current prices, retained manual report gates and separate valuation behavior
 Full local application suite passed:1802 tests/371 files. Application/test typechecks,
 lint0errors/13existing warnings and production build passed. Exact-head CI pending.
 Local Playwright hit environment network-interface and missing browser-binary limits;
-GitHub browser verification remains mandatory. Tests use stable toast mocks matching
+GitHub verification e4f2d39 passed1081 DB/1802 app tests; browser133 passed and
+one price-budget test retried because it included the shared quantity-only stock
+notifier in its valuation budget. Classify actual valuation/metadata and batch
+reads precisely; the separate notification quantity read remains unchanged.
+Fresh final-head browser verification remains mandatory. Tests use stable toast mocks matching
 the real provider; no runtime permission or accounting behavior was weakened.
 
 ## Production gate

