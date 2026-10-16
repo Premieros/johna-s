@@ -37,16 +37,25 @@ export async function runParity({ url, key, contract, fetchImpl = fetch }) {
     if (res.status !== 200) throw new Error(`Unverifiable ${name}: HTTP ${res.status}`);
     return res.json();
   }
-  const metadata = await call(METADATA_RPC, { p_contract: { rpcs: contract.rpcs, tables: contract.tables } });
+  // PL/pgSQL helper references are resolved at runtime. Frontend RPC presence
+  // alone did not detect a missing report normalizer on production (#520).
+  const rpcs = [...contract.rpcs];
+  if (rpcs.some(rpc => rpc.name === 'enqueue_cloud_report_print')) {
+    for (const helper of [
+      { name: '_normalize_thermal_print_payload', params: ['payload'] },
+      { name: 'split_legacy_report_text', params: ['text'] },
+    ]) if (!rpcs.some(rpc => rpc.name === helper.name)) rpcs.push(helper);
+  }
+  const metadata = await call(METADATA_RPC, { p_contract: { rpcs, tables: contract.tables } });
   if (metadata?.version !== 1 || metadata.valid !== true) throw new Error('Invalid metadata contract');
   const missing = [
-    ...validateResults(metadata.rpcs, contract.rpcs, 'rpc'),
+    ...validateResults(metadata.rpcs, rpcs, 'rpc'),
     ...validateResults(metadata.tables, contract.tables, 'table'),
   ];
   if (missing.length) throw new Error(`Missing or ambiguous database contract: ${missing.join(', ')}`);
   const schema = await call(SCHEMA_SENTINEL_RPC, {});
   if (schema !== true) throw new Error(`Missing/failed schema contract: ${SCHEMA_SENTINEL_RPC}`);
-  return { rpcs: contract.rpcs.length, tables: contract.tables.length, requests: 2 };
+  return { rpcs: rpcs.length, tables: contract.tables.length, requests: 2 };
 }
 
 async function main() {

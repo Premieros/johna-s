@@ -26,6 +26,23 @@ describe('data-free deployment parity gate', () => {
     expect(f.calls[0].body).toEqual({ p_contract: contract });
     expect(f.calls[1].body).toEqual({});
   });
+  it('blocks a report deployment when its runtime normalizer is missing without probing print routes', async () => {
+    const reportContract = { rpcs: [{ name: 'enqueue_cloud_report_print', params: ['branch_id', 'payload', 'idempotency_key'] }], tables: ['orders'] };
+    const calls: string[] = [];
+    await expect(runParity({ url: 'https://example.invalid', key: 'test', contract: reportContract,
+      fetchImpl: async (url: string, options: { body: string }) => {
+        calls.push(url);
+        const { p_contract } = JSON.parse(options.body);
+        expect(p_contract.rpcs).toEqual(expect.arrayContaining([
+          { name: '_normalize_thermal_print_payload', params: ['payload'] },
+          { name: 'split_legacy_report_text', params: ['text'] },
+        ]));
+        return { status: 200, json: async () => ({ version: 1, valid: true,
+          rpcs: p_contract.rpcs.map((r: { name: string }) => ({ name: r.name, present: r.name !== '_normalize_thermal_print_payload' })),
+          tables: [{ name: 'orders', present: true }] }) };
+      } })).rejects.toThrow('_normalize_thermal_print_payload');
+    expect(calls).toEqual(['https://example.invalid/rest/v1/rpc/_production_api_contract_v1']);
+  });
   it.each([400, 401, 403, 404, 500, 503])('blocks HTTP %i without operational fallback', async status => {
     const f = fixture(good, true, status);
     await expect(f.run()).rejects.toThrow('Unverifiable');
