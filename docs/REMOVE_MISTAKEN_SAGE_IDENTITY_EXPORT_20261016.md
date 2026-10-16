@@ -3,18 +3,28 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/remove-mistaken-sage-identity-export-20261016`
 Baseline main: `184933269a10315ace4f97188edef1c676f23735` (#515)
-Current PR: PENDING
-Date: 2026-10-16
+Current PR: #516
+Last updated: 2026-10-16
 
 ## Work status
-State: **STAGED FOR REVIEW ONLY / NO MERGE / NO DEPLOY**
+State: **BLOCKED** — review-only removal; NO MERGE / NO DEPLOY
 Execution mode: **SINGLE_WRITER**
 Parallel execution: **FORBIDDEN**
 Unexpected HEAD policy: **STOP_AND_RECONCILE**
 Write mode: **SEQUENTIAL_ONLY**
 
+## Guardrails
+- Strictly code-only; delete the accidental #509 JSON export and its exclusive tests. No database or network write, migration, inventory, sale, costing or printing change.
+- Keep all later main commits (#510–#515). No release without explicit owner approval.
+
 ## Owner intent
 Owner explicitly identified the accidental #509 changes to Johna's and authorized **preparation of a precise code removal** after the already-current merge, without any production merge or deployment. Do not misinterpret this as permission to revert all of Johna's or to transfer data to `Premieros/.com`.
+
+## Baseline
+
+## Root-cause ledger
+- The #509 export was built in the **wrong project**; the intended target is Premieros/.com, not Johna's.
+- Broad rollback would lose independent later fixes and is disallowed. Selective removal is the safe approach.
 
 ## Baseline, audit and known boundaries
 - #509 merged at `6e4792e38c6a62aa4446a1976fb93b8b23ebc973`. Its seven touched paths: `docs/CURRENT_WORK_PLAN.md`, `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md`, `src/features/catalog/pages/ProductsPage.tsx`, two new code modules and two new dedicated tests.
@@ -32,6 +42,11 @@ Owner explicitly identified the accidental #509 changes to Johna's and authorize
 3. Keep `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md` as **historical audit only**, never as active work. Preserve all other project docs and CI history.
 4. Update this active log and keep the PR in **Draft** with an exact diff review.
 
+## Verification ledger
+- Draft PR #516 opened at `3693c44c9c2dd1992613a6a5b57371712c489d4a` (current head before this log correction). Branch diff restricted to two documentation files, original ProductsPage removal, and deletion of four #509-only modules/tests.
+- First full PR Verify `38898051206` failed mandatory active worklog structural test because required headings/state metadata were missing; corrective log-only commit now aligns with the repository contract. Fast Verify and remaining full checks must rerun on new exact head.
+- No evidence of new production activity or database writes from this correction; no authenticated real-world regression walkthrough has been claimed.
+
 ## Production gate
 **HOLD**. No production merge or deployment without distinct explicit approval following successful exact-head Full Verify, architecture/security, DB/RLS, browser, and continuity checks. Do not touch stock, sales, accounting, kitchens, costing, printing or any data.
 
@@ -47,3 +62,9 @@ Owner explicitly identified the accidental #509 changes to Johna's and authorize
 
 ## Verification ledger
 Runtime additions removed; awaiting exact diff review and exact-head Full Verify after opening Draft PR. NO production release authorization.
+
+## Next action
+Wait for new exact-head Full Verify, DB/RLS and browser-smoke and independent diff review. Keep #516 Draft and never merge/deploy without owner release authorization.
+
+## Mandatory update protocol
+This log is mandatory for the active single writer. السجل هو المرجع الإجباري للعمل؛ CI يجب أن يفشل عند اختلاف النطاق؛ لا Merge ولا Production migration قبل التحقق وموافقة منفصلة.
