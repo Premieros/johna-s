@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/gregorian-dates-20261016`
-Current PR: 0 (pending creation)
+Current PR: #515
 Last updated: 2026-10-16
 
 ## Work status
@@ -22,7 +22,7 @@ Shared formatDate/formatDateTime used ar-SA, whose default calendar is Hijri. Le
 Pin shared date/date-time displays to Gregorian with Arabic month names and Latin digits. Pin legacy default-locale dates to explicit Gregorian Arabic/English locales. Give shared and direct native date/datetime inputs an English Gregorian language hint and LTR direction; preserve ISO values, constraints and event handlers. Already Gregorian ar-EG/en date paths and print transport remain unchanged. Native picker appearance remains browser/OS controlled; no claim of overriding system calendars.
 
 ## Verification ledger
-Targeted: 23 tests passed, including Gregorian Arabic year/month, leap day and ISO filter round-trip/min/max inside an ar-SA document. Typecheck, lint and build in progress. Full exact-head CI pending. Physical iOS/Android/Windows picker matrix not performed.
+Targeted: 23 tests passed, including Gregorian Arabic year/month, leap day and ISO filter round-trip/min/max inside an ar-SA document. Application/test typechecks and lint passed (0 errors, 13 existing warnings). Production build passed. Full exact-head CI pending. Physical iOS/Android/Windows picker matrix not performed.
 
 ## Production gate
 No merge/deploy authorized by this implementation request. Require exact-head green checks and explicit owner approval. No SQL migration needed.
