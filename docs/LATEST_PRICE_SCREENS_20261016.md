@@ -2,12 +2,12 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/latest-price-screens-load-20261016`
-Current PR: `#0`
+Current PR: `#514`
 Last updated: 2026-10-16 Cairo
 
 ## Work status
 State: **BLOCKED**
-PR number pending creation. User requests consistent latest-price displays and less loading.
+Draft PR#514. User requests consistent latest-price displays and less loading.
 
 ## Guardrails
 One writer; only this repository/database. Frontend-only. Preserve current prices,
@@ -27,13 +27,20 @@ waits for unrelated raw stock valuation. The shared price reader makes five
 sequential100-row RPCs for a403-material branch despite the indexed reader.
 
 ## Change ledger
-Prepare compact current-price display, separate explicit inventory valuation,
-lazy branch-scoped raw inventory/batch loading and bounded500-row pricing batches.
+Compact current-price displays in Costing Center and Reports share one reader.
+Full existing FIFO/debt valuation remains available only in its explicit report/tab.
+Raw-material inventory/batches load only for their selected tab and branch.
+Indexed price requests use bounded500-row batches:403 materials now use one RPC,
+not five. Overview omits unrelated stock valuation.
 Use clear recorded accounting cost labels. Historical reports keep as-of snapshots.
 
 ## Verification ledger
-Pending behavioral load/call-budget, null-price, branch isolation, stale result,
-application/type/build and browser verification.
+83 targeted component/service/smoke tests passed, including zero valuation reads
+for current prices, retained manual report gates and separate valuation behavior.
+Application/test typechecks and production build passed. Full exact-head CI pending.
+Local Playwright server bootstrap hit an environment network-interface error;
+GitHub browser verification remains mandatory. Tests use stable toast mocks matching
+the real provider; no runtime permission or accounting behavior was weakened.
 
 ## Production gate
 Frontend release blocked pending exact-head checks and owner review approval.
