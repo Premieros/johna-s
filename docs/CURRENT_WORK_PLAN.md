@@ -4,10 +4,10 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `32562318d23dccd7ab91034ab38b29098efc882d` (#516 selective removal; preserve #513–#515)
-- Current active branch: `fix/screen-audit-repairs-20261016`
-- Mandatory active work log: `docs/SCREEN_AUDIT_REPAIRS_20261016.md`
-- Owner directs sequential screen repairs; two-cashier area routing is deferred. Owner clarified new area creation must accept a table count, atomically through existing floor-plan permissions. Stage this additive feature and verify the expanded batch; owner explicitly approved the tested migration, merge and deployment at18:04 Cairo. Applied only the additive area-creation RPC as20261016150535; preserve existing tables/orders/printing and verify the reconciled head before merge.
+- Latest main baseline reconciled: `41c6ee2de0ae7875e31c2155a8a23a5cbbd6c7f1` (#517 merged/deployed under owner18:04 Cairo approval)
+- Current active branch: `fix/recipe-quantity-unit-label-20261016`
+- Mandatory active work log: `docs/RECIPE_QUANTITY_UNIT_LABEL_20261016.md`
+- Correct the remaining editable recipe quantity label case found in postdeploy review of the already-approved unit display repair. One presentation-only expression, same quantity value/onChange/payload. No database or printing changes. Exact-head Full Verify before this corrective merge; owner approval for the completed #517 display scope already granted.
 
 ## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
 - The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.
