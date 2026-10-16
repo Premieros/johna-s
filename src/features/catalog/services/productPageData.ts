@@ -2,7 +2,7 @@ import { supabase } from '@/api';
 import type { Category, ProductComponentInput, ProductUnit } from '@/lib/types';
 
 export type ProductStockComponent = { product_id: string; name: string; total: number; cost_price: number };
-export type ProductRawMaterialOption = { id: string; name: string; branch_id: string | null };
+export type ProductRawMaterialOption = { id: string; name: string; branch_id: string | null; unit?: { name: string; symbol: string | null } | null };
 export type ProductLinkedInventoryUnit = { unit_id: string; quantity: number; unit?: { id: string; name: string; unit_type: 'ready' | 'manufactured'; cost_price: number } | null };
 export type ProductManufacturedInventoryUnit = { id: string; name: string; unit_type: 'manufactured'; cost_price: number; branch_id: string | null };
 
@@ -53,7 +53,7 @@ export async function loadProductEditorData(params: {
     supabase.from('product_units').select('*').eq('product_id', params.productId),
     supabase.from('product_components').select('component_product_id, quantity').eq('product_id', params.productId),
     params.branchId
-      ? supabase.from('raw_materials').select('id,name,branch_id').eq('branch_id', params.branchId).eq('is_active', true).order('name')
+      ? supabase.from('raw_materials').select('id,name,branch_id,unit:units(name,symbol)').eq('branch_id', params.branchId).eq('is_active', true).order('name')
       : Promise.resolve({ data: [], error: null }),
     supabase.from('product_unit_links').select('unit_id,quantity,unit:inventory_units(id,name,unit_type,cost_price)').eq('product_id', params.productId),
     params.branchId
@@ -67,7 +67,7 @@ export async function loadProductEditorData(params: {
       component_product_id: component.component_product_id,
       quantity: Number(component.quantity) || 1,
     }))),
-    rawMaterials: (rawMaterialsResult.data || []) as ProductRawMaterialOption[],
+    rawMaterials: (rawMaterialsResult.data || []) as unknown as ProductRawMaterialOption[],
     inventoryLinks: (((inventoryLinksResult.data || []) as unknown as ProductLinkedInventoryUnit[]).map((row) => ({
       ...row,
       quantity: Number(row.quantity) || 0,

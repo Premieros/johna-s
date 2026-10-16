@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, Users, UtensilsCrossed, Clock,
@@ -19,6 +19,7 @@ import { Modal } from '@/components/Modal';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import type { DiningArea, DiningTable, Order, OrderType, RpcResult } from '@/lib/types';
 import { useActiveOrders } from '../hooks/useActiveOrders';
+import { DiningAreaCreateModal } from '../components/floor/DiningAreaCreateModal';
 import { TableFloorPlan } from '../components/floor/TableFloorPlan';
 import { STATUS_STYLES } from '../utils/orderTypes';
 import { orderTypeLabel } from '../utils/format';
@@ -61,12 +62,13 @@ export function ActiveOrdersPage() {
   const [mainAreaCount, setMainAreaCount] = useState(50);
   const [mainAreaCountSaving, setMainAreaCountSaving] = useState(false);
 
-  const [areaName, setAreaName] = useState('');
   const [tableForm, setTableForm] = useState({
     name: '', capacity: 4, area_id: '', x: 0, y: 0, w: 120, h: 80,
   });
 
   const effectiveBranch = branchFilter || user?.branch_id || '';
+  const currentBranch = useRef(effectiveBranch);
+  currentBranch.current = effectiveBranch;
   const canManage = can('floor_plan.manage');
   const canCreateOrder = can('pos.order.create');
   const canPayOrder = can('pos.payment.take');
@@ -78,11 +80,13 @@ export function ActiveOrdersPage() {
 
   const loadAreas = async () => {
     if (!effectiveBranch) { setAreas([]); return; }
+    const requestedBranch = effectiveBranch;
     setAreasLoading(true);
     try {
-      setAreas(await loadDiningAreas(effectiveBranch));
+      const nextAreas = await loadDiningAreas(requestedBranch);
+      if (currentBranch.current === requestedBranch) setAreas(nextAreas);
     } finally {
-      setAreasLoading(false);
+      if (currentBranch.current === requestedBranch) setAreasLoading(false);
     }
   };
 
@@ -199,20 +203,6 @@ export function ActiveOrdersPage() {
       show(status === 'cancelled' ? t('cancelOrder') : t('saveSuccess'), 'success');
     }
     setBusy(false);
-  };
-
-  const createArea = async () => {
-    if (!areaName.trim()) { show(t('required'), 'error'); return; }
-    try {
-      await createDiningArea({ branchId: effectiveBranch, name: areaName.trim() });
-    } catch (error) {
-      show(userFacingErrorMessage(error, isAr ? 'ar' : 'en'), 'error');
-      return;
-    }
-    show(t('saveSuccess'), 'success');
-    setAreaName('');
-    setAreaModal(false);
-    await loadAreas();
   };
 
   const openAddTable = (areaId = '') => {
@@ -590,15 +580,8 @@ export function ActiveOrdersPage() {
         </div>
       </Modal>
 
-      <Modal open={areaModal} onClose={() => setAreaModal(false)} title={t('addArea')} size="sm">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ui-muted mb-1.5">{t('areaName')}</label>
-            <input value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={isAr ? 'مثال: التراس' : 'e.g. Terrace'} className="w-full px-3 py-2.5 rounded-xl border border-ui-border bg-ui-surface-raised text-sm text-ui-text focus:ring-2 focus:ring-ui-ring" />
-          </div>
-          <Button className="w-full" onClick={createArea}>{t('saveSuccess')}</Button>
-        </div>
-      </Modal>
+      <DiningAreaCreateModal open={areaModal} branchId={effectiveBranch} createArea={createDiningArea}
+        onClose={() => setAreaModal(false)} onCreated={loadAreas} />
 
       <Modal open={tableModal} onClose={() => { setTableModal(false); setEditTarget(null); }} title={editTarget ? `${isAr ? 'تعديل' : 'Edit'} ${editTarget.name}` : t('addTable')} size="md">
         <div className="space-y-4">

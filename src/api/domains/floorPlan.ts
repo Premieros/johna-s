@@ -7,6 +7,9 @@ const isServiceOrderType = (orderType?: OrderType): orderType is 'delivery' | 'd
   orderType === 'delivery' || orderType === 'drive_thru';
 
 export const floorPlan = {
+  createAreaWithTables(p: { p_branch_id: string; p_name: string; p_table_count: number }): ApiResult<RpcResult & { area_id?: string; table_count?: number }> {
+    return rpc<RpcResult & { area_id?: string; table_count?: number }>('floor_plan_create_area_with_tables', p);
+  },
   async setCheckoutDiscount(p: {
     p_order_id: string;
     p_discount_amount: number;

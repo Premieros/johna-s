@@ -126,9 +126,10 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   console.info('LATEST_APPROVED_PRICE_PLAN '+JSON.stringify({source:'owned localhost 1500 purchase prices + 3000 FIFO issues; no production latency claim',before,after,indexed}));
  });
  it('does not add FIFO issue WAL and lets independent concurrent prices commit without a last-price row lock',async()=>{
+  const walDiagnostics:Record<string,number>[]=[];
   const issue=async()=>{
    await db.query('SAVEPOINT issue_wal');
-   try{return(await db.query("EXPLAIN(ANALYZE,WAL,FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,batch_number) SELECT $1,$2,$3,-1,8,-8,'sale','PRICE-WAL-'||g FROM generate_series(1,64)g",[raw,a,w])).rows[0]['QUERY PLAN'][0].Plan['WAL Bytes'];}
+   try{const plan=(await db.query("EXPLAIN(ANALYZE,WAL,BUFFERS,FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,batch_number) SELECT $1,$2,$3,-1,8,-8,'sale','PRICE-WAL-'||g FROM generate_series(1,64)g",[raw,a,w])).rows[0]['QUERY PLAN'][0].Plan;walDiagnostics.push({bytes:plan['WAL Bytes'],records:plan['WAL Records'],fpi:plan['WAL FPI'],dirtied:plan['Shared Dirtied Blocks']});return plan['WAL Bytes'];}
    finally{await db.query('ROLLBACK TO issue_wal');await db.query('RELEASE issue_wal');}
   };
   const median=(a:number[])=>[...a].sort((a,b)=>a-b)[Math.floor(a.length/2)];
@@ -137,8 +138,8 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   try{for(const t of['raw_price_source_insert','raw_price_source_update','raw_price_source_delete'])await db.query('ALTER TABLE public.inventory_ledger DISABLE TRIGGER '+t);await issue();old=[await issue()];for(let i=0;i<4;i++)old.push(await issue());}
   finally{await db.query('ROLLBACK TO no_price_triggers');await db.query('RELEASE no_price_triggers');}
   await issue();const next:number[]=[];for(let i=0;i<5;i++)next.push(await issue());
+  console.info('LATEST_PRICE_ISSUE_WAL '+JSON.stringify({old,next,walDiagnostics}));
   expect(median(next)).toBeLessThanOrEqual(median(old)*1.05);
-  console.info('LATEST_PRICE_ISSUE_WAL '+JSON.stringify({old,next}));
   const first=openDb(url!),second=openDb(url!),branch=randomUUID(),material=randomUUID(),id1=randomUUID(),id2=randomUUID();
   await first.connect();await second.connect();
   try{

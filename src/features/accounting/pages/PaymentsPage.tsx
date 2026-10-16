@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { HandCoins, Phone, User, Building2 } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -29,7 +30,13 @@ export function PaymentsPage() {
   const history = useHistoryAccess();
   const can = useCan();
   const { effectiveSettings } = useSettings();
-  const [tab, setTab] = useState<Tab>('ar');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: Tab = searchParams.get('tab') === 'ap' ? 'ap' : 'ar';
+  const setTab = (next: Tab) => setSearchParams((previous) => {
+    const params = new URLSearchParams(previous);
+    params.set('tab', next);
+    return params;
+  });
   const [rows, setRows] = useState<ArAgingRow[]>([]);
   const [apRows, setApRows] = useState<ApAgingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -264,18 +271,20 @@ export function PaymentsPage() {
       </div>
 
       {tab === 'ar' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <StatCard title={t('openBalance')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.open_amount), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="red" />
           <StatCard title={t('days30')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_0_30), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
+          <StatCard title={t('days60')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_31_60), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
           <StatCard title={t('days90')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_61_90), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="blue" />
           <StatCard title={t('days90Plus')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_90_plus), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="purple" />
         </div>
       )}
 
       {tab === 'ap' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <StatCard title={t('apTotal')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.open_amount), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="red" />
           <StatCard title={t('days30')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_0_30), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="amber" />
+          <StatCard title={t('days60')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_31_60), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="amber" />
           <StatCard title={t('days90')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_61_90), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="blue" />
           <StatCard title={t('days90Plus')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_90_plus), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="purple" />
         </div>

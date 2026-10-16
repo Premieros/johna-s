@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import * as api from '@/api';
@@ -31,7 +31,11 @@ export function LowStockAlertsPage() {
   const branchFilter = useBranchFilter();
 
   const [rows, setRows] = useState<LowStockAlertRow[]>([]);
-  const [summary, setSummary] = useState<{ out_count?: number; low_count?: number; ok_count?: number }>({});
+  const summary = {
+    out_count: rows.filter((row) => row.status === 'out').length,
+    low_count: rows.filter((row) => row.status === 'low').length,
+    ok_count: rows.filter((row) => row.status === 'ok').length,
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -58,29 +62,33 @@ export function LowStockAlertsPage() {
     notes: '',
   });
 
+  const loadGeneration = useRef(0);
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    setRows([]);
     setLoading(true);
     setError(null);
     const options = await loadLowStockOptions();
+    if (generation !== loadGeneration.current) return;
     if (options.branchError) { setError(options.branchError.message); setLoading(false); show(options.branchError.message, 'error'); return; }
     const b = options.branches;
     setBranches(b);
     setWarehouses(options.warehouses);
     setSuppliers(options.suppliers);
-    let effBranch = branchId;
+    let effBranch = branchFilter || branchId;
     if (!effBranch && b.length === 1) { effBranch = b[0].id; setBranchId(effBranch); }
 
-    const [alerts, sum] = await Promise.all([
-      api.inventory.getLowStockAlerts({ p_branch_id: effBranch || null, p_warehouse_id: warehouseId || null }),
-      api.inventory.getLowStockSummary({ p_branch_id: effBranch || null, p_warehouse_id: warehouseId || null }),
-    ]);
-    if (alerts.error || sum.error) { setError(alerts.error?.message || sum.error?.message || t('error')); setLoading(false); return; }
+    const alerts = await api.inventory.getLowStockAlerts({ p_branch_id: effBranch || null, p_warehouse_id: warehouseId || null });
+    if (generation !== loadGeneration.current) return;
+    if (alerts.error) { setError(alerts.error.message || t('error')); setLoading(false); return; }
     setRows(alerts.data || []);
-    setSummary(sum.data || {});
     setLoading(false);
-  }, [branchId, warehouseId, show, t]);
+  }, [branchFilter, branchId, warehouseId, show, t]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => { loadGeneration.current += 1; };
+  }, [load]);
 
   const filtered = rows.map((r) => ({
     ...r,
