@@ -4,8 +4,8 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/screen-audit-repairs-20261016`
-Current PR: #0
-Last updated: 2026-10-16 17:35 Africa/Cairo
+Current PR: #517
+Last updated: 2026-10-16 17:38 Africa/Cairo
 State: **BLOCKED**
 
 ## Guardrails
@@ -25,7 +25,7 @@ Reconciled main `32562318d23dccd7ab91034ab38b29098efc882d`: #516 removes only th
 Implemented bounded debounced server search (100 rows + existing lookahead), measurement-unit metadata in the existing editor read, labels for existing/new recipe quantities without conversions, counts derived from canonical alert rows with stale-response rejection, supplier URL tab navigation and missing aging bucket cards. No production changes.
 
 ## Verification ledger
-Local application/test typecheck, full lint (0 errors; 13 existing warnings), API contract and build passed. Initial new test fixtures needed stable mock translation identity, treasury-read mock and an accessible table-cell selector; production code was not weakened. Focused behavioral regressions pass after fixture corrections. Full suite and exact-head Full Verify pending.
+Local application/test typecheck, full lint (0 errors; 13 existing warnings), API contract and build passed. Initial new test fixtures needed stable mock translation identity, treasury-read mock and an accessible table-cell selector; production code was not weakened. Focused behavioral regressions pass after fixture corrections. Initial full suite: 1794 passed / 2 failed (new raw-search test matched hidden filter/mobile markup instead of accessible table cells). Corrected the test selector; all 10 focused tests pass. Final exact-head Full Verify pending.
 
 ## Production gate
 BLOCKED: no production merge/deploy approval for this batch. Changes use shared pages for both branches. No live sale, recipe save or print test.
