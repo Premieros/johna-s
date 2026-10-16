@@ -4,7 +4,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/smouha-zreport-cashier-areas-20261016`
-Current PR: #0 (preparing)
+Current PR: #519
 Last updated: 2026-10-16
 State: **BLOCKED**
 
@@ -23,7 +23,7 @@ New opt-in station/area settings tables and invoker RPCs with branch/permission/
 Rollback source definitions saved in scripts/rollback/cashier_area_routing_restore_20261016.sql; disable routing and drain queued second-station jobs with compatible agent before agent rollback.
 
 ## Verification ledger
-Focused UI/material/agent/worklog tests: 26 passed. Full app + test typechecks pass; initial PromiseLike catch and integration result typing errors corrected. Targeted ESLint passes. Windows offline render/pagination tests added (527 Arabic lines, 58/80mm, final-line ink and exact source coverage); Windows build pending. New localhost-only DB tests cover fallback, branch/permission failures, forged routing payload, actual open/sale enqueue, pending-job reuse, primary Z. No operational writes or physical tests.
+Focused UI/material/agent/worklog tests: 26 passed. Full app + test typechecks pass; initial PromiseLike catch and integration result typing errors corrected. Targeted ESLint passes. Windows offline render/pagination tests added (527 Arabic lines, 58/80mm, final-line ink and exact source coverage); Windows build 38926593978 and offline render tests SUCCESS. First Full Verify: app/pages/browser SUCCESS; DB 1090 passed, one new report-destination test rejected its fixture user for missing existing shifts.report.shift permission. Corrected the fixture permission only; production permission checks unchanged. Fresh frozen-head Full Verify pending. Owner reports original manufacturer printer driver; exact model remains unknown. New localhost-only DB tests cover fallback, branch/permission failures, forged routing payload, actual open/sale enqueue, pending-job reuse, primary Z. No operational writes or physical tests.
 
 ## Production gate
 BLOCKED pending exact-head app/DB/browser/Windows build checks, review of report transport and two-printer routing, executable SHA256 and owner rollout approval. DB station configuration stays inactive by default. No historical jobs modified.

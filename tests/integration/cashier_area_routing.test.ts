@@ -15,7 +15,7 @@ describe.skipIf(!local)('cashier areas — isolated localhost only', () => {
     'select public.save_cashier_area_settings($1,$2,$3,$4) r', [branch, 'Outdoor cashier', enabled, areas]);
   beforeAll(async () => {
     db = openDb(url!); await db.connect(); await db.query('BEGIN'); ids = await seedRlsFixture(db);
-    await db.query(`UPDATE public.roles SET permissions=permissions || '["settings.manage","pos.receipt.print","pos.reprint"]'::jsonb WHERE role='branch_manager'`);
+    await db.query(`UPDATE public.roles SET permissions=permissions || '["settings.manage","pos.receipt.print","pos.reprint","shifts.report.shift"]'::jsonb WHERE role='branch_manager'`);
     await db.query(`UPDATE public.roles SET permissions=permissions - 'settings.manage' WHERE role='cashier'`);
     areaA = (await db.query("insert into public.dining_areas(branch_id,name,is_default) values($1,'Outside',false) returning id", [ids.branchA])).rows[0].id;
     areaB = (await db.query("insert into public.dining_areas(branch_id,name,is_default) values($1,'Other',false) returning id", [ids.branchB])).rows[0].id;
@@ -65,7 +65,7 @@ describe.skipIf(!local)('cashier areas — isolated localhost only', () => {
     for (const [branch, table] of [[ids.branchA, null], [ids.branchB, tableA]])
       expect(await run(ids.users.super_admin, 'select public.resolve_cashier_area_station($1,$2) r', [branch, table])).toBe('cashier');
     const report = await run(ids.users.branch_manager, 'select public.enqueue_cloud_report_print($1,$2,$3) r', [ids.branchA, { text: 'Z summary' }, `report:${randomUUID()}`]);
-    expect(report.success).toBe(true);
+    expect(report).toMatchObject({ success: true, station_code: 'cashier' });
     expect((await db.query('select station_code from public.cloud_print_jobs where id=$1', [report.job_id])).rows[0].station_code).toBe('cashier');
     const row = (await db.query("select prosecdef,has_function_privilege('anon',oid,'execute') anon from pg_proc where oid='public.save_cashier_area_settings(uuid,text,boolean,uuid[])'::regprocedure")).rows[0];
     expect(row).toEqual({ prosecdef: false, anon: false });
