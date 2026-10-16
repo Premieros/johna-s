@@ -4,7 +4,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/recipe-quantity-unit-label-20261016`
-Current PR: #0
+Current PR: #518
 Last updated: 2026-10-16 18:17 Africa/Cairo
 State: **BLOCKED**
 
