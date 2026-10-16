@@ -4,10 +4,10 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `41c6ee2de0ae7875e31c2155a8a23a5cbbd6c7f1` (#517 merged/deployed under owner18:04 Cairo approval)
-- Current active branch: `fix/recipe-quantity-unit-label-20261016`
-- Mandatory active work log: `docs/RECIPE_QUANTITY_UNIT_LABEL_20261016.md`
-- Correct the remaining editable recipe quantity label case found in postdeploy review of the already-approved unit display repair. One presentation-only expression, same quantity value/onChange/payload. No database or printing changes. Exact-head Full Verify before this corrective merge; owner approval for the completed #517 display scope already granted.
+- Latest main baseline reconciled: `c21c7b772789e46f0e8d62711902d1a6c43e4e50` (#517/#518 deployed, exact-head and postmerge checks green)
+- Current active branch: `fix/smouha-zreport-cashier-areas-20261016`
+- Mandatory active work log: `docs/SMOUHA_ZREPORT_CASHIER_AREAS_20261016.md`
+- Owner requests Z-report gibberish/long-paper repair first, then Smouha agent with two cashier printers and system area routing. Owner confirms ONE Windows computer and TWO printers. Preserve kitchen/bar and frozen claim/start/complete protocol; no second queue consumer, replay, or physical tests. Stage and verify before rollout approval.
 
 ## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
 - The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.

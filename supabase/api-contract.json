@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-16T14:54:06.354Z",
+  "generated_at": "2026-10-16T15:45:14.937Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -463,6 +463,12 @@
         "branch_id",
         "from_date",
         "to_date"
+      ]
+    },
+    {
+      "name": "get_cashier_area_settings",
+      "params": [
+        "branch_id"
       ]
     },
     {
@@ -1276,6 +1282,15 @@
       "params": [
         "expense_id",
         "reason"
+      ]
+    },
+    {
+      "name": "save_cashier_area_settings",
+      "params": [
+        "area_ids",
+        "branch_id",
+        "enabled",
+        "name"
       ]
     },
     {

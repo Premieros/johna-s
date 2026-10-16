@@ -369,7 +369,14 @@ internal sealed class CloudPrintWorker : IDisposable
 
                 for (var copy = 0; copy < copies; copy++)
                 {
-                    if (FixedTemplateRenderer.TryGetTemplate(
+                    if (job.Kind.Equals("report", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var text = ReadPayloadText(job.Payload);
+                        if (string.IsNullOrWhiteSpace(text))
+                            throw new InvalidOperationException("PRINT_REPORT_TEXT_MISSING");
+                        await _printer.PrintReportAsync(printerName, text, width).ConfigureAwait(false);
+                    }
+                    else if (FixedTemplateRenderer.TryGetTemplate(
                             job.Payload,
                             out var template))
                     {

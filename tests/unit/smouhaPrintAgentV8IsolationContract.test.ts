@@ -16,7 +16,7 @@ describe('Smouha Print Agent V8.1 Lite isolation and query budget', () => {
     const project = read('print-agent-v8/PremierSmouhaFormPrintAgentV08.csproj');
     const workflow = read('.github/workflows/smouha-print-agent-v8-build.yml');
     expect(project).toContain('<SelfContained>false</SelfContained>');
-    expect(project).toContain('<Version>8.1.0</Version>');
+    expect(project).toContain('<Version>8.2.0</Version>');
     expect(workflow).toContain('--self-contained false');
     expect(workflow).toContain('Windows Desktop Runtime 8 x64');
   });

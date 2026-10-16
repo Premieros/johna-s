@@ -471,10 +471,8 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
   rows.push(line, isAr ? 'الخامات المستهلكة / MATERIALS' : 'MATERIALS CONSUMED');
   for (const material of summary.ingredientsConsumed || []) {
     rows.push(
-      String(material.materialName).replace(/[\r\n]+/g, ' '),
-      `${isAr ? 'الكمية' : 'Quantity'}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
-      `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)}`,
-      `${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
+      `${String(material.materialName).replace(/[\r\n]+/g, ' ')}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
+      `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)} | ${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
     );
   }
   rows.push(

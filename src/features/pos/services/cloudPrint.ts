@@ -158,9 +158,9 @@ export async function enqueueCloudOpenOrderPrint(params: { orderId: string; payl
     p_idempotency_key: params.idempotencyKey,
   });
   if (error) return { accepted: false, error: error.message };
-  const result = (data ?? {}) as RpcResult;
+  const result = (data ?? {}) as RpcResult & { station_code?: string };
   return result.success
-    ? { accepted: true, jobId: result.job_id, stationCode: 'cashier' }
+    ? { accepted: true, jobId: result.job_id, stationCode: typeof result.station_code === 'string' ? result.station_code : 'cashier' }
     : { accepted: false, error: result.error || result.detail || 'CLOUD_PRINT_ENQUEUE_FAILED' };
 }
 

@@ -35,6 +35,15 @@ describe('thermal closing materials', () => {
     expect(text).not.toContain('<html');
   });
 
+  it('keeps every material with two source lines rather than four and identical totals', () => {
+    const materials = Array.from({ length: 120 }, (_, i) => ({ ...summary.ingredientsConsumed![0], materialId: String(i), materialName: `Material ${i}` }));
+    const text = buildThermalZReportText({ ...summary, ingredientsConsumed: materials }, 'EGP', 'en');
+    expect(text.split('\r\n').length).toBeLessThan(300);
+    for (let i = 0; i < 120; i++) expect(text).toContain(`Material ${i}: 1.2345 kg`);
+    expect(text).toContain('120 EGP | Estimated: 28.14 EGP');
+    expect(text).toContain('17,776.8 EGP');
+  });
+
   it('keeps zero consumption distinct from missing report data and never combines unlike quantities', () => {
     const text = buildThermalZReportText({ ...summary, ingredientsConsumed: [] }, 'EGP', 'en');
     expect(text).toContain('Total material cost: 0 EGP');
