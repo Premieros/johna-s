@@ -23,13 +23,13 @@ WAL benchmark savepoint rollback leaves physical heap/index state and identity p
 Candidate migration adds two authorized read-only operational RPCs: consumption aggregates visible period quantities first then prices distinct raws; stock valuation reads only compact branch balances and latest-price projection. Existing historical valuation RPCs and business writers remain unchanged. Costing period/current-value tab and closing reports use latest-price reads, explicit missing-price markers and labels. Smouha report enqueue now creates bounded320-character/12-newline standard-text pages atomically, ordered with microsecond created_at offsets; same-key root dedup prevents replay of old reports. Claim/start/complete unchanged. WAL test now asserts zero price-trigger calls/rows on issues, with an eligible purchase positive control; total WAL samples remain diagnostic, and concurrency has its own test.
 
 ## Verification ledger
-Read-only production baseline above. Full app/test typechecks and targeted lint passed;18 targeted UI/report/worklog tests passed, including explicit latest-price and missing-price rendering. A further full-queue read found no pending/claimed/printing or retryable-failed jobs in either branch. New owned-localhost integration tests cover page bounds/order/content/idempotency/collision rollback, last-price versus historical cost, unknown price, permissions and no quantity mutation. Full exact-head CI pending.
+Read-only production baseline above. Full app/test typechecks and targeted lint passed;18 targeted UI/report/worklog tests passed, including explicit latest-price and missing-price rendering. A further full-queue read found no pending/claimed/printing or retryable-failed jobs in either branch. New owned-localhost integration tests cover page bounds/order/content/idempotency/collision rollback, last-price versus historical cost, unknown price, permissions and no quantity mutation. Full CI at d49a15: DB and Pages continuity passed; app had1814 passing and1 stale source-contract failure requiring a removed duplicate price fetch. Updated that contract to assert the compact latest-price valuation RPC and absence of FIFO reads;14 targeted reader tests pass. Full exact-head CI pending on the correction.
 
 ## Production gate
 Owner authorizes repair now while retaining current printing. Require exact-head CI before SQL apply, reconcile actual migration history and re-verify before merge/deploy. No extra physical job or historical replay for verification.
 
 ## Next action
-Implement/test bounded report pages and latest-price consumption, with read/permission/value tests and WAL causality proof.
+Finish exact-head CI, apply the tested migration, reconcile its actual production version, re-verify and release. No production changes applied yet.
 
 ## Mandatory update protocol
 One writer. Unexpected remote head STOP_AND_RECONCILE. Update log and PR ledger as gates change. Do not hide failed WAL samples or re-run until green; explain replacement invariant and positive control.
