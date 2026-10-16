@@ -14,6 +14,7 @@ internal sealed class SetupForm : Form
     private readonly ComboBox _kitchen = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _bar = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _cash = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _cash2 = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox _queueEnabled = new()
     {
         Text = "تفعيل استهلاك طابور Production (أوقف V7 أولاً)",
@@ -43,9 +44,9 @@ internal sealed class SetupForm : Form
         _printer = printer;
         _config = config;
 
-        Text = "Smouha Form Print Agent V8.1 Lite — إعداد";
+        Text = "Smouha Form Print Agent V8.2 Lite — إعداد";
         Width = 760;
-        Height = 610;
+        Height = 660;
         StartPosition = FormStartPosition.CenterScreen;
         RightToLeft = RightToLeft.Yes;
         RightToLeftLayout = true;
@@ -56,7 +57,7 @@ internal sealed class SetupForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(18),
             ColumnCount = 2,
-            RowCount = 12,
+            RowCount = 13,
             AutoScroll = true
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
@@ -116,6 +117,7 @@ internal sealed class SetupForm : Form
         panel.Controls.Add(_status, 1, 9);
         panel.Controls.Add(_save, 1, 10);
 
+        AddRow(panel, 11, "كاشير ثانٍ / cashier_2", _cash2);
         Controls.Add(panel);
 
         Load += (_, _) => LoadPrinters();
@@ -145,9 +147,10 @@ internal sealed class SetupForm : Form
     private void LoadPrinters()
     {
         var printers = _printer.GetPrinters();
-        foreach (var combo in new[] { _kitchen, _bar, _cash })
+        foreach (var combo in new[] { _kitchen, _bar, _cash, _cash2 })
         {
             combo.Items.Clear();
+            if (combo == _cash2) combo.Items.Add("— غير مفعّل —");
             combo.Items.AddRange(printers.Cast<object>().ToArray());
         }
 
@@ -158,6 +161,8 @@ internal sealed class SetupForm : Form
         SelectRoute(_kitchen, "kit", "main", "مطبخ");
         SelectRoute(_bar, "بار", "bar");
         SelectRoute(_cash, "كاش", "cashier", "receipt");
+        _cash2.SelectedIndex = 0;
+        SelectRoute(_cash2, "cashier_2");
 
         _status.Text =
             $"{printers.Count} طابعة مثبتة في Windows — الطابور " +
@@ -253,6 +258,10 @@ internal sealed class SetupForm : Form
             _config.Routes["كاش"] = _cash.SelectedItem.ToString()!;
             _config.Routes["cashier"] = _cash.SelectedItem.ToString()!;
             _config.Routes["receipt"] = _cash.SelectedItem.ToString()!;
+            if (_cash2.SelectedIndex > 0)
+                _config.Routes["cashier_2"] = _cash2.SelectedItem!.ToString()!;
+            else
+                _config.Routes.Remove("cashier_2");
             _config.QueueEnabled = _queueEnabled.Checked;
             _config.UseRealtimeWake = _realtime.Checked;
             _config.ReconcileSeconds = 300;

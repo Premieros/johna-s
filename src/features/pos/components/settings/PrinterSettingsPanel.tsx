@@ -1,3 +1,4 @@
+import { CashierAreaSettings } from './CashierAreaSettings';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createReadRefreshQueue } from '@/lib/readRefreshQueue';
 import { AlertTriangle, Cloud, Coffee, Printer, Receipt, RefreshCw, Save, TestTube2, UtensilsCrossed, WalletCards } from 'lucide-react';
@@ -364,6 +365,10 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
           {stationLoadFailed ? <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-700">{isAr ? 'Fallback للمسارات القديمة مؤقتًا' : 'Temporary legacy route fallback'}</span> : null}
         </div>
       </div>
+
+      {canManagePrinters && selectedBranchId && (
+        <CashierAreaSettings key={`${user?.id}:${selectedBranchId}`} branchId={selectedBranchId} isAr={isAr} />
+      )}
 
       {isRunningInElectron() && (
         <div className="rounded-2xl border border-ui-border bg-ui-surface p-4">

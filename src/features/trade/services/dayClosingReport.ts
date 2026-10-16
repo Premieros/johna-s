@@ -1,3 +1,5 @@
+import { loadClosingProducts } from './closingProducts';
+import type { ShiftClosingSummary } from './shiftClosingReport';
 import { supabase, costing as costingApi } from '@/api';
 import { escapeHtml, formatCurrency, formatDateTime } from '@/lib/format';
 import type { Language } from '@/lib/types';
@@ -53,6 +55,7 @@ export interface DayClosingReport {
     userId: string; displayName: string; invoiceCount: number; salesTotal: number; discounts: number; returns: number;
     expenses: number; cashPurchases: number;
   }>;
+  productsSold: ShiftClosingSummary['productsSold'];
   rawMaterials: Array<{
     materialId: string; materialName: string; unit: string; quantity: number;
     actualQuantity: number; estimatedQuantity: number;
@@ -69,6 +72,11 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
   const raw = data as Record<string, unknown> | null;
   if (!raw?.success) throw new Error(String(raw?.detail || raw?.error || 'Could not load day closing report'));
 
+  const productSaleIds = Array.isArray(raw.sales_details)
+    ? raw.sales_details.filter((row: Record<string, unknown>) => !['voided', 'cancelled', 'draft'].includes(String(row.status || '')))
+      .map((row: Record<string, unknown>) => s(row.sale_id)).filter(Boolean)
+    : [];
+  const productsSold = await loadClosingProducts(branchId, productSaleIds);
   const rawMaterials: DayClosingReport['rawMaterials'] = [];
   const rawWindowStart = s(raw.window_start);
   const rawWindowEnd = s(raw.window_end);
@@ -95,6 +103,7 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
   }
 
   return {
+    productsSold,
     branchId: s(raw.branch_id),
     branchName: s(raw.branch_name),
     businessDate: s(raw.business_date || businessDate),
@@ -223,6 +232,11 @@ ${report.historicalReconciled ? `<div style="margin-top:10px;padding:10px;border
 <h2>${isAr ? 'كل مستخدم — التفاصيل' : 'Every user — details'}</h2>
 <table><thead><tr><th>${isAr ? 'المستخدم' : 'User'}</th><th class="num">${isAr ? 'الفواتير' : 'Invoices'}</th><th class="num">${isAr ? 'المبيعات' : 'Sales'}</th><th class="num">${isAr ? 'الخصومات' : 'Discounts'}</th><th class="num">${isAr ? 'المرتجعات' : 'Returns'}</th><th class="num">${isAr ? 'المصروفات' : 'Expenses'}</th><th class="num">${isAr ? 'مشتريات كاش' : 'Cash purchases'}</th></tr></thead>
 <tbody>${report.users.map(x=>`<tr><td>${escapeHtml(x.displayName)}</td><td class="num">${x.invoiceCount}</td><td class="num">${money(x.salesTotal)}</td><td class="num">${money(x.discounts)}</td><td class="num">${money(x.returns)}</td><td class="num">${money(x.expenses)}</td><td class="num">${money(x.cashPurchases)}</td></tr>`).join('')}</tbody></table>
+
+<h2>${isAr ? 'المنتجات والأصناف المباعة' : 'Products sold'}</h2>
+<table><thead><tr><th>${isAr ? 'المنتج' : 'Product'}</th><th class="num">${isAr ? 'صافي الكمية' : 'Net quantity'}</th><th class="num">${isAr ? 'صافي قيمة البنود' : 'Net line value'}</th></tr></thead>
+<tbody>${report.productsSold.length ? report.productsSold.map(p => `<tr><td>${escapeHtml(p.productName)}</td><td class="num">${p.quantity} ${escapeHtml(p.unitName)}</td><td class="num">${money(p.total)}</td></tr>`).join('') : `<tr><td colspan="3">${isAr ? 'لا توجد منتجات مباعة في فواتير هذا اليوم' : 'No sold products in this day’s invoices'}</td></tr>`}</tbody></table>
+<p style="font-size:10px">${isAr ? 'الكميات وقيم البنود بعد المرتجعات المسجلة؛ إجماليات اليوم المالية معروضة في الملخص.' : 'Quantities and line values reflect recorded returns; financial day totals are shown in the summary.'}</p>
 
 ${report.rawMaterials.length > 0 ? `
 <h2>${isAr ? 'المواد الخام المستهلكة' : 'Raw materials consumed'}</h2>

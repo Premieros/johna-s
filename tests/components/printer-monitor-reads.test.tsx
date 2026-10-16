@@ -7,7 +7,7 @@ vi.mock('@/lib/permissions',()=>({useCan:()=>()=>true}));
 vi.mock('@/hooks/useBranches',()=>({useBranches:()=>({branches:m.branches})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/components/Toast',()=>({useToast:()=>({show:vi.fn()})}));
-vi.mock('@/api/domains/catalog',()=>({catalog:{getKitchenStationAssignments:vi.fn().mockResolvedValue({data:[],error:null})}}));
+vi.mock('@/api/domains/catalog',()=>({catalog:{getCashierAreaSettings:vi.fn().mockResolvedValue({data:{success:true,station:null,areas:[]},error:null}),getKitchenStationAssignments:vi.fn().mockResolvedValue({data:[],error:null})}}));
 vi.mock('@/features/pos/services/cloudPrint',()=>({listCloudPrintQueueSummary:m.read,getCloudPrintAgentBranchId:()=>'',isCloudPrintAgentEnabled:()=>true,saveCloudPrintAgentConfig:vi.fn()}));
 vi.mock('@/features/pos/services/localPrintAgent',()=>({
   applyLocalPrinterRoutes:vi.fn(),executeCashDrawerKick:vi.fn(),executeSilentPrintDetailed:vi.fn(),

@@ -468,13 +468,17 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
       : 'Full invoice detail is available in the A4 report',
   );
 
+  rows.push(line, isAr ? 'المنتجات المباعة / PRODUCTS' : 'PRODUCTS SOLD');
+  for (const product of summary.productsSold || []) {
+    rows.push(`${String(product.productName).replace(/[\r\n]+/g, ' ')} | ${zThermalNumber(product.quantity, 4)} ${product.unitName} | ${money(product.total)}`);
+  }
+  if (!summary.productsSold?.length) rows.push(isAr ? 'لا توجد منتجات مباعة' : 'No products sold');
+
   rows.push(line, isAr ? 'الخامات المستهلكة / MATERIALS' : 'MATERIALS CONSUMED');
   for (const material of summary.ingredientsConsumed || []) {
     rows.push(
-      String(material.materialName).replace(/[\r\n]+/g, ' '),
-      `${isAr ? 'الكمية' : 'Quantity'}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
-      `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)}`,
-      `${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
+      `${String(material.materialName).replace(/[\r\n]+/g, ' ')}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
+      `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)} | ${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
     );
   }
   rows.push(
