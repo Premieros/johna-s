@@ -468,6 +468,12 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
       : 'Full invoice detail is available in the A4 report',
   );
 
+  rows.push(line, isAr ? 'المنتجات المباعة / PRODUCTS' : 'PRODUCTS SOLD');
+  for (const product of summary.productsSold || []) {
+    rows.push(`${String(product.productName).replace(/[\r\n]+/g, ' ')} | ${zThermalNumber(product.quantity, 4)} ${product.unitName} | ${money(product.total)}`);
+  }
+  if (!summary.productsSold?.length) rows.push(isAr ? 'لا توجد منتجات مباعة' : 'No products sold');
+
   rows.push(line, isAr ? 'الخامات المستهلكة / MATERIALS' : 'MATERIALS CONSUMED');
   for (const material of summary.ingredientsConsumed || []) {
     rows.push(

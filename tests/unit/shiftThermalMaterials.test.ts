@@ -10,7 +10,7 @@ const summary: ShiftClosingSummary = {
   totalInvoices: 2, grossSales: 300, totalDiscounts: 0, returns: 0, voids: 0, expenses: 50,
   drawerExpenses: 50, netRevenue: 250, totalTaxes: 0, netSales: 300, avgTicket: 150,
   orderTypes: [], paymentMethods: [{ method: 'cash', label: 'Cash', count: 2, total: 300 }],
-  productsSold: [], ingredientsConsumed: [
+  productsSold: [{ productId: 'burger', productName: 'Burger', quantity: 2, unitName: 'piece', total: 40 }], ingredientsConsumed: [
     { materialId: 'a', materialName: 'دجاج', quantity: 1.2345, unit: 'kg', actualQuantity: 1,
       estimatedQuantity: .2345, actualCost: 120, estimatedCost: 28.14, displayedCost: 148.14 },
     { materialId: 'b', materialName: 'Sauce\nSpecial', quantity: 250, unit: 'g', actualQuantity: 250,
@@ -22,6 +22,7 @@ describe('thermal closing materials', () => {
   it.each(['ar', 'en'] as const)('includes authoritative quantities and separate actual/estimated costs (%s)', (lang) => {
     const before = structuredClone(summary);
     const text = buildThermalZReportText(summary, 'EGP', lang);
+    expect(text).toContain('Burger | 2 piece | 40 EGP');
     expect(text).toContain('دجاج');
     expect(text).toContain('1.2345 kg');
     expect(text).toContain('250 g');
