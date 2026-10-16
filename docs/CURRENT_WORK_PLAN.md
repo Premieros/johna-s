@@ -4,10 +4,10 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `184933269a10315ace4f97188edef1c676f23735` (#515 Gregorian dates merged, full Verify and Pages SUCCESS)
-- Current active branch: `fix/remove-mistaken-sage-identity-export-20261016`
-- Database latest-price read model `20261015223414` and #513/#514/#515 release code must remain completely unchanged.
-- Mandatory active work log: `docs/REMOVE_MISTAKEN_SAGE_IDENTITY_EXPORT_20261016.md`
+- Latest main baseline reconciled: `32562318d23dccd7ab91034ab38b29098efc882d` (#516 selective removal; preserve #513–#515)
+- Current active branch: `fix/screen-audit-repairs-20261016`
+- Mandatory active work log: `docs/SCREEN_AUDIT_REPAIRS_20261016.md`
+- Owner directs sequential screen repairs; two-cashier area routing is deferred. Prepare and verify this frontend-only batch; no production merge or deployment until owner approval.
 
 ## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
 - The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.

@@ -48,11 +48,18 @@ export function RawMaterialsPage() {
   const branchFilter = useBranchFilter();
 
   const [tab, setTab] = useState<Tab>('materials');
+  const [search, setSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchTerm(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   const { rows: materials, loading: materialsLoading, error, total, hasMore, loadMore, loadingMore, refresh: reloadMaterials } = usePaginatedRows<RawMaterial>({
     table: 'raw_materials',
     select: '*',
     order: { column: 'name', ascending: true },
     branch_id: branchFilter,
+    search: { term: searchTerm, columns: ['name', 'code', 'category'] },
     pageSize: 100,
   });
   const [currentPrices, setCurrentPrices] = useState<Record<string, number | null>>({});
@@ -62,7 +69,6 @@ export function RawMaterialsPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [metaError, setMetaError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
   const [stockBranch, setStockBranch] = useState(branchFilter || '');
 
   const [form, setForm] = useState<MaterialForm>(EMPTY_FORM);
@@ -107,11 +113,7 @@ export function RawMaterialsPage() {
     return unit ? (measurementUnitLabel(unit) || unit.name) : '-';
   };
 
-  const filteredMaterials = materials.filter((m) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return m.name.toLowerCase().includes(q) || (m.code || '').toLowerCase().includes(q) || (m.category || '').toLowerCase().includes(q);
-  });
+  const filteredMaterials = materials;
 
   const filteredStock = inventory.filter((i) => !stockBranch || i.branch_id === stockBranch);
   const filteredBatches = batches.filter((b) => !stockBranch || b.branch_id === stockBranch);
