@@ -4,10 +4,10 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `c21c7b772789e46f0e8d62711902d1a6c43e4e50` (#517/#518 deployed, exact-head and postmerge checks green)
-- Current active branch: `fix/smouha-zreport-cashier-areas-20261016`
-- Mandatory active work log: `docs/SMOUHA_ZREPORT_CASHIER_AREAS_20261016.md`
-- Owner requests Z-report gibberish/long-paper repair first, then Smouha agent with two cashier printers and system area routing. Owner confirms ONE Windows computer and TWO printers. Preserve kitchen/bar and frozen claim/start/complete protocol; no second queue consumer, replay, or physical tests. Owner approved rollout 2026-10-16 19:01 Cairo with no disruption to current printing. Keep secondary station disabled and current agent untouched. Add sold-product sections to thermal shift/day report; preserve canonical money totals. Migration applied once as 20261016160559; reconcile source and re-verify before merge/deploy.
+- Latest main baseline reconciled: `4b31f2412eadf624ecb1d6f32cfdf54469c37614` (#519 deployed)
+- Current active branch: `fix/legacy-zreport-bounded-pages-20261017`
+- Mandatory active work log: `docs/LEGACY_ZREPORT_BOUNDED_PAGES_20261017.md`
+- Owner directs repair NOW while retaining installed Windows agent, then explicitly requests last approved raw prices rather than heavy FIFO costing. Bound future report payloads atomically and idempotently at enqueue. Value operational consumption quantities at latest approved raw price once per consumed material. Preserve historical stock/accounting transactions and all quantity writers. No agent/claim/start/complete/kitchen/bar changes or replay. Fix noisy CI FIFO issue measurement using zero projection-trigger calls/writes with a purchase positive control, not arbitrary WAL median thresholds.
 
 ## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
 - The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.
