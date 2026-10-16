@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
@@ -23,6 +24,20 @@ describe.skipIf(!local)('installed agent report pages and latest raw cost — ow
   await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Smouha report fixture')",[smouha]);
  },60000);
  afterAll(async()=>{if(db){await db.query('ROLLBACK').catch(()=>{});await db.end();}});
+ it('detects and repairs the production-only missing normalizer before restoring bounded enqueues',async()=>{
+  await db.query('SAVEPOINT missing_report_helper');
+  try {
+   await db.query('DROP FUNCTION public._normalize_thermal_print_payload(jsonb)');
+   const metadata=await db.query("select public._production_api_contract_v1($1::jsonb) r",[JSON.stringify({rpcs:[{name:'_normalize_thermal_print_payload',params:['payload']}],tables:['cloud_print_jobs']})]);
+   expect(metadata.rows[0].r.rpcs[0].present).toBe(false);
+   const failed=await runAs(db,ids.users.super_admin,'select public.enqueue_cloud_report_print($1,$2,$3)',[smouha,{text:'Never committed'},randomUUID()]);
+   expect(failed.error).toMatch(/_normalize_thermal_print_payload.*does not exist/);
+   const file=readdirSync('supabase/migrations').find(name=>name.endsWith('_report_normalizer_production_dependency.sql'))!;
+   await db.query(readFileSync('supabase/migrations/'+file,'utf8'));
+   const repaired=await call(ids.users.super_admin,'select public.enqueue_cloud_report_print($1,$2,$3) r',[smouha,{text:'Repaired report\n'.repeat(60)},randomUUID()]);
+   expect(repaired.success).toBe(true);expect(Number(repaired.pages)).toBeGreaterThan(1);
+  } finally { await db.query('ROLLBACK TO SAVEPOINT missing_report_helper');await db.query('RELEASE SAVEPOINT missing_report_helper'); }
+ });
  it('keeps every character of a long Arabic report, caps each part and orders/idempotently creates the whole batch',async()=>{
   const text=Array.from({length:341},(_,i)=>`خامة ${i} | الكمية 1.2345 | 17 EGP`).join('\r\n');const key='qa-report:'+randomUUID();
   const result=await call(ids.users.super_admin,'select public.enqueue_cloud_report_print($1,$2,$3) r',[smouha,{text,paperWidthMm:80,copies:1},key]);
