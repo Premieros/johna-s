@@ -70,6 +70,19 @@ describe('formatNumber', () => {
 });
 
 describe('formatDate / formatDateTime', () => {
+  it('shows the Gregorian year and Arabic month rather than a Hijri date', () => {
+    const date = new Date(2026, 9, 16, 12, 30);
+    expect(formatDate(date, 'ar')).toBe('16 أكتوبر 2026');
+    expect(formatDateTime(date, 'ar')).toContain('16 أكتوبر 2026');
+    expect(formatDate(date)).not.toMatch(/144[0-9]|١٤٤/);
+  });
+
+  it('keeps Gregorian leap day in both display languages', () => {
+    const date = new Date(2024, 1, 29, 12);
+    expect(formatDate(date, 'ar')).toBe('29 فبراير 2024');
+    expect(formatDate(date, 'en')).toContain('2024');
+  });
+
   it('formats a date for English locale', () => {
     const out = formatDate('2026-01-15', 'en');
     expect(out).toContain('2026');

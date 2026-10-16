@@ -265,7 +265,7 @@ export function RfqsPage() {
             </Select>
             <div>
               <label className="block text-xs font-medium text-ui-muted mb-1">{t('dueDate')}</label>
-              <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
+              <input lang="en-GB-u-ca-gregory" dir="ltr" type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
             </div>
             <input type="text" placeholder={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
           </div>
@@ -320,7 +320,7 @@ export function RfqsPage() {
               </Select>
               <div>
                 <label className="block text-xs font-medium text-ui-muted mb-1">{t('validUntil')}</label>
-                <input type="date" value={quoteForm.valid_until} onChange={(e) => setQuoteForm({ ...quoteForm, valid_until: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
+                <input lang="en-GB-u-ca-gregory" dir="ltr" type="date" value={quoteForm.valid_until} onChange={(e) => setQuoteForm({ ...quoteForm, valid_until: e.target.value })} className="w-full rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
               </div>
               <input type="number" placeholder={t('deliveryDays')} value={quoteForm.delivery_days} onChange={(e) => setQuoteForm({ ...quoteForm, delivery_days: e.target.value })} className="rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
               <input type="text" placeholder={t('notes')} value={quoteForm.notes} onChange={(e) => setQuoteForm({ ...quoteForm, notes: e.target.value })} className="rounded-md border border-ui-border bg-ui-surface px-2 py-1.5 text-sm" />
