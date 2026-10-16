@@ -125,11 +125,11 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   expect(JSON.stringify(indexed)).toContain('raw_approved_price_latest');
   console.info('LATEST_APPROVED_PRICE_PLAN '+JSON.stringify({source:'owned localhost 1500 purchase prices + 3000 FIFO issues; no production latency claim',before,after,indexed}));
  });
- it('does not add FIFO issue WAL and lets independent concurrent prices commit without a last-price row lock',async()=>{
+ it('keeps FIFO issues outside price triggers with an eligible purchase positive control',async()=>{
   const walDiagnostics:Record<string,number>[]=[];
   const issue=async()=>{
    await db.query('SAVEPOINT issue_wal');
-   try{const plan=(await db.query("EXPLAIN(ANALYZE,WAL,BUFFERS,FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,batch_number) SELECT $1,$2,$3,-1,8,-8,'sale','PRICE-WAL-'||g FROM generate_series(1,64)g",[raw,a,w])).rows[0]['QUERY PLAN'][0].Plan;walDiagnostics.push({bytes:plan['WAL Bytes'],records:plan['WAL Records'],fpi:plan['WAL FPI'],dirtied:plan['Shared Dirtied Blocks']});return plan['WAL Bytes'];}
+   try{const explained=(await db.query("EXPLAIN(ANALYZE,WAL,BUFFERS,FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,batch_number) SELECT $1,$2,$3,-1,8,-8,'sale','PRICE-WAL-'||g FROM generate_series(1,64)g",[raw,a,w])).rows[0]['QUERY PLAN'][0];const plan=explained.Plan;expect((explained.Triggers||[]).filter((t:Record<string,unknown>)=>String(t['Trigger Name']).startsWith('raw_price_source_')).reduce((n:number,t:Record<string,unknown>)=>n+Number(t.Calls||0),0)).toBe(0);expect((await db.query("SELECT count(*)::int n FROM private.raw_approved_price_read_model WHERE raw_material_id=$1 AND source_kind='inventory_ledger'",[raw])).rows[0].n).toBe(0);walDiagnostics.push({bytes:plan['WAL Bytes'],records:plan['WAL Records'],fpi:plan['WAL FPI'],dirtied:plan['Shared Dirtied Blocks']});return plan['WAL Bytes'];}
    finally{await db.query('ROLLBACK TO issue_wal');await db.query('RELEASE issue_wal');}
   };
   const median=(a:number[])=>[...a].sort((a,b)=>a-b)[Math.floor(a.length/2)];
@@ -139,7 +139,21 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   finally{await db.query('ROLLBACK TO no_price_triggers');await db.query('RELEASE no_price_triggers');}
   await issue();const next:number[]=[];for(let i=0;i<5;i++)next.push(await issue());
   console.info('LATEST_PRICE_ISSUE_WAL '+JSON.stringify({old,next,walDiagnostics}));
-  expect(median(next)).toBeLessThanOrEqual(median(old)*1.05);
+  // Same-heap rolled-back inserts do not restore physical page/index state or
+  // identity progression. Total heap WAL is diagnostic, not an attribution of
+  // writes to a purchase-only trigger. Assert the exact intended zero-call and
+  // zero-projection-row invariant above; prove the detector below with a purchase.
+  console.info('LATEST_PRICE_WAL_MEDIANS '+JSON.stringify({disabled:median(old),enabled:median(next)}));
+  const enabled=(await db.query("SELECT tgenabled FROM pg_trigger WHERE tgrelid='public.inventory_ledger'::regclass AND tgname='raw_price_source_insert'")).rows[0];
+  expect(enabled.tgenabled).toBe('O');
+  await db.query('SAVEPOINT price_positive_control');
+  try {
+   const control=(await db.query("EXPLAIN(ANALYZE,WAL,BUFFERS,FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,1,8,8,'purchase','purchase',$4,'PRICE-WAL-CONTROL')",[raw,a,w,purchase])).rows[0]['QUERY PLAN'][0];
+   expect(control.Triggers.find((t:Record<string,unknown>)=>t['Trigger Name']==='raw_price_source_insert')?.Calls).toBe(1);
+   expect((await db.query("SELECT count(*)::int n FROM private.raw_approved_price_read_model WHERE raw_material_id=$1 AND source_kind='inventory_ledger'",[raw])).rows[0].n).toBe(1);
+  } finally { await db.query('ROLLBACK TO price_positive_control'); await db.query('RELEASE price_positive_control'); }
+ });
+ it('lets independent concurrent prices commit without a last-price row lock',async()=>{
   const first=openDb(url!),second=openDb(url!),branch=randomUUID(),material=randomUUID(),id1=randomUUID(),id2=randomUUID();
   await first.connect();await second.connect();
   try{

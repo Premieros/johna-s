@@ -60,6 +60,7 @@ export interface DayClosingReport {
     materialId: string; materialName: string; unit: string; quantity: number;
     actualQuantity: number; estimatedQuantity: number;
     actualCost: number; estimatedCost: number; displayedCost: number;
+    pricingBasis?: 'latest_approved'; priceMissing?: boolean;
   }>;
 }
 
@@ -98,6 +99,8 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
         actualCost: n(row.actual_cost),
         estimatedCost: n(row.estimated_cost),
         displayedCost: n(row.displayed_cost),
+        pricingBasis: row.pricing_basis === 'latest_approved' ? 'latest_approved' : undefined,
+        priceMissing: row.price_missing === true,
       });
     }
   }
@@ -182,6 +185,7 @@ export async function fetchDayClosingReportServer(branchId: string, businessDate
 
 export function buildA4DayClosingReportHtml(report: DayClosingReport, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
+  const latestRawPricing = report.rawMaterials.some(m => m.pricingBasis === 'latest_approved');
   const dir = isAr ? 'rtl' : 'ltr';
   const money = (v: number) => formatCurrency(v, currency, lang);
   return `<!doctype html><html dir="${dir}" lang="${isAr ? 'ar' : 'en'}"><head><meta charset="utf-8">
@@ -243,20 +247,20 @@ ${report.rawMaterials.length > 0 ? `
 <table><thead><tr>
 <th>${isAr ? 'الخامة' : 'Material'}</th>
 <th class="num">${isAr ? 'الكمية' : 'Quantity'}</th>
-<th class="num">${isAr ? 'التكلفة الفعلية' : 'Actual cost'}</th>
-<th class="num">${isAr ? 'السالب التقديري' : 'Negative estimate'}</th>
-<th class="num">${isAr ? 'الإجمالي المعروض' : 'Displayed total'}</th>
+${!latestRawPricing ? `<th class="num">${isAr ? 'التكلفة الفعلية' : 'Actual cost'}</th>` : ''}
+${!latestRawPricing ? `<th class="num">${isAr ? 'السالب التقديري' : 'Negative estimate'}</th>` : ''}
+<th class="num">${latestRawPricing ? (isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost') : (isAr ? 'الإجمالي المعروض' : 'Displayed total')}</th>
 </tr></thead><tbody>
 ${report.rawMaterials.map(x=>`<tr>
 <td>${escapeHtml(x.materialName)}</td>
 <td class="num">${x.quantity} ${escapeHtml(x.unit)}</td>
-<td class="num">${money(x.actualCost)}</td>
-<td class="num">${x.estimatedQuantity > 0 ? money(x.estimatedCost) : '-'}</td>
-<td class="num strong">${money(x.displayedCost)}</td>
+${!latestRawPricing ? `<td class="num">${money(x.actualCost)}</td>` : ''}
+${!latestRawPricing ? `<td class="num">${x.estimatedQuantity > 0 ? money(x.estimatedCost) : '-'}</td>` : ''}
+<td class="num strong">${x.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : money(x.displayedCost)}</td>
 </tr>`).join('')}
 </tbody></table>
 <div style="font-size:10px;color:#6b7280;margin-top:-10px;margin-bottom:16px;">
-${isAr ? 'التكلفة الفعلية لا تشمل الجزء السالب غير المسوّى؛ الجزء السالب يظهر كتقدير مستقل حتى وصول الشراء وتسوية FIFO.' : 'Actual cost excludes unsettled negative stock; negative consumption is shown separately as an estimate until a purchase settles FIFO.'}
+${latestRawPricing ? (isAr ? 'التكلفة التشغيلية = الكمية المستهلكة × آخر سعر معتمد. الخامات بلا سعر تظهر غير مسعرة. لا تغيير في النقدية أو القيود المسجلة.' : 'Operational cost = consumed quantity × latest approved price. Missing prices are marked unpriced. Cash and posted journals are unchanged.') : (isAr ? 'التكلفة الفعلية لا تشمل الجزء السالب غير المسوّى؛ الجزء السالب يظهر كتقدير مستقل حتى وصول الشراء وتسوية FIFO.' : 'Actual cost excludes unsettled negative stock; negative consumption is shown separately as an estimate until a purchase settles FIFO.')}
 </div>
 ` : ''}
 

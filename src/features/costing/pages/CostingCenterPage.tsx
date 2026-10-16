@@ -1,8 +1,6 @@
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
 import { loadRawLatestPriceRows, type RawLatestPriceRow } from '../services/rawLatestPriceData';
-import { loadRawMaterialDisplayPrices, rawCurrentPriceMap } from '../services/rawCurrentPriceData';
-import { loadRawFifoCosts, rawFifoCostMap } from '../services/rawFifoCostData';
 import { businessDateISO, reportDateRangeUtc } from '@/lib/businessTime';
 import { supplementHistoricalMargins, type HistoricalOrderMargin } from '../services/historicalCostEstimates';
 import type { RawConsumptionCostBreakdownRow } from '@/api/domains/costing';
@@ -207,12 +205,7 @@ export function CostingCenterPage() {
         show(res.error.message, 'error');
         return;
       }
-      const fifoRows = await loadRawFifoCosts(effBranch);
-      if (requestId !== request.current) return;
-      const priceRows = await loadRawMaterialDisplayPrices(effBranch);
-      if (requestId !== request.current) return;
-      const costs = rawFifoCostMap(fifoRows); const prices = rawCurrentPriceMap(priceRows);
-      setRawCosts((res.data || []).map((row) => ({ ...row, fifo_cost: costs[row.raw_material_id] ?? null, current_price: prices[row.raw_material_id] ?? null })));
+      setRawCosts((res.data || []).map(row => ({ ...row, current_price: row.price_missing ? null : row.latest_cost })));
       setLoadedScope(reportScope);
       setLoading(false);
     } catch (error) {
@@ -244,6 +237,7 @@ export function CostingCenterPage() {
       results.flatMap((result) => result.data || []).forEach((row) => {
         const value = rows.get(row.raw_material_id) || { ...row, consumed_quantity: 0, actual_quantity: 0, estimated_quantity: 0, actual_cost: 0, estimated_cost: 0, displayed_cost: 0 };
         for (const field of ['consumed_quantity', 'actual_quantity', 'estimated_quantity', 'actual_cost', 'estimated_cost', 'displayed_cost'] as const) value[field] += Number(row[field] || 0);
+        value.price_missing = value.price_missing || row.price_missing;
         rows.set(row.raw_material_id, value);
       });
       setPeriodRows([...rows.values()]);
@@ -434,18 +428,13 @@ export function CostingCenterPage() {
     { key: 'history', header: isAr ? 'التاريخ' : 'History', render: row => <Button variant="outline" size="sm" onClick={event => { event.stopPropagation(); void openRawHistory(row); }}><History className="w-4 h-4" />{isAr ? 'عرض' : 'View'}</Button> },
   ];
 
-  const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string; fifo_cost?: number | null; current_price?: number | null }>[] = [
-    { key: 'raw', header: t('rawMaterial'), render: (r) => <div><p className="font-semibold text-ui-text">{r.raw_material_name}</p><p className="text-xs text-ui-subtle">{r.raw_material_code || '-'}</p></div> },
-    { key: 'stock', header: isAr ? 'الرصيد' : 'Stock', render: (r) => <span className={`font-semibold ${Number(r.stock_quantity) < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(r.stock_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang })}</span> },
-    { key: 'current_price', header: isAr ? 'آخر سعر معتمد / وحدة' : 'Latest approved price / unit', render: (r) => r.current_price == null ? '-' : rawUnitMoney(r.current_price) },
-    { key: 'fifo', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (r) => r.fifo_cost == null ? '-' : rawUnitMoney(r.fifo_cost) },
-    { key: 'latest', header: isAr ? 'آخر سعر مرجعي / وحدة' : 'Latest reference / unit', render: (r) => <div><span className="font-bold text-ui-text">{rawUnitMoney(r.latest_cost)}</span>{rawUnitLabel(r.raw_material_id) && <p className="text-[10px] text-ui-subtle">/ {rawUnitLabel(r.raw_material_id)}</p>}</div> },
-    { key: 'actualValue', header: isAr ? 'القيمة الفعلية' : 'Actual value', render: (r) => <div><span className="font-bold text-ui-text">{money(r.actual_stock_value)}</span><p className="text-[10px] text-ui-subtle">{isAr ? 'المخزون الموجب فقط' : 'Positive stock only'}</p></div> },
-    { key: 'negativeEstimate', header: isAr ? 'تكلفة السالب التقديرية' : 'Estimated negative cost', render: (r) => Number(r.negative_quantity) <= 0 ? '-' : <div><span className="font-bold text-ui-warning">{money(r.estimated_negative_value)}</span><p className="text-[10px] text-ui-subtle">{formatRawMaterialQuantity(r.negative_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang })}</p></div> },
-    { key: 'netEstimate', header: isAr ? 'القيمة مع احتساب السالب' : 'Value incl. negative', render: (r) => <span className={`font-bold ${Number(r.estimated_net_stock_value) < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{money(r.estimated_net_stock_value)}</span> },
-    { key: 'source', header: isAr ? 'مصدر السعر' : 'Price source', render: (r) => rawPriceSourcePill(r.price_source) },
-    { key: 'date', header: isAr ? 'تاريخ السعر' : 'Price date', render: (r) => r.priced_at ? formatDateTime(r.priced_at, lang) : '-' },
-    { key: 'history', header: isAr ? 'التاريخ' : 'History', render: (r) => <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void openRawHistory(r); }}><History className="w-4 h-4" /> {formatNumber(r.event_count, 0)}</Button> },
+  const rawCostColumns: Column<RawMaterialCostOverviewRow & { id: string; current_price?: number | null }>[] = [
+    { key: 'raw', header: t('rawMaterial'), render: r => <div>{r.raw_material_name}<p className="text-xs text-ui-subtle">{r.raw_material_code || '-'}</p></div> },
+    { key: 'stock', header: isAr ? 'الرصيد' : 'Stock', render: r => formatRawMaterialQuantity(r.stock_quantity, rawMaterialUnits[r.raw_material_id], { preferGrams: true, lang }) },
+    { key: 'current_price', header: isAr ? 'آخر سعر معتمد / وحدة' : 'Latest approved price / unit', render: r => r.price_missing ? (isAr ? 'غير مسعر' : 'Unpriced') : rawUnitMoney(r.latest_cost) },
+    { key: 'value', header: isAr ? 'قيمة الرصيد بآخر سعر' : 'Stock value at latest price', render: r => r.price_missing ? (isAr ? 'غير مسعر' : 'Unpriced') : money(r.estimated_net_stock_value) },
+    { key: 'source', header: isAr ? 'مصدر السعر' : 'Price source', render: r => rawPriceSourcePill(r.price_source) },
+    { key: 'date', header: isAr ? 'تاريخ السعر' : 'Price date', render: r => r.priced_at ? formatDateTime(r.priced_at, lang) : '-' },
   ];
 
   const rawHistoryColumns: Column<RawMaterialCostHistoryRow & { id: string }>[] = [
@@ -461,19 +450,19 @@ export function CostingCenterPage() {
   const tabBtn = (key: Tab, label: string) => <button onClick={() => setTab(key)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${tab === key ? 'bg-ui-primary text-ui-primary-fg shadow-lg shadow-ui-primary/25 scale-[1.02]' : 'liquid-glass text-ui-text hover:border-ui-primary/40 hover:bg-ui-surface/90'}`}>{label}</button>;
 
   const handleExportOverview = () => exportToExcel(filteredOverview.map((r) => ({ Product: r.product_name, Barcode: r.barcode || '', SKU: r.sku || '', Category: r.category_name || '', Type: r.product_type, SalePrice: r.sale_price, CurrentUnitCost: r.actual_cost ?? (isAr ? 'غير مكتملة' : 'Incomplete') })), 'costing-overview');
-  const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, CurrentFifoUnitCost: r.fifo_cost ?? '', LatestKnownUnitPrice: r.current_price ?? '', LatestReferenceUnitCost: r.latest_cost, ActualPositiveStockValue: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
+  const handleExportRawCosts = () => exportToExcel(filteredRawCosts.map((r) => ({ RawMaterial: r.raw_material_name, Code: r.raw_material_code || '', StockQuantity: r.stock_quantity, LatestKnownUnitPrice: r.current_price ?? '', LatestReferenceUnitCost: r.latest_cost, PositiveStockValueAtLatestPrice: r.actual_stock_value, NegativeQuantity: r.negative_quantity, EstimatedNegativeCost: r.estimated_negative_value, UnpricedNegativeQuantity: r.unpriced_negative_quantity, EstimatedValueIncludingNegative: r.estimated_net_stock_value, PreviousCost: r.previous_cost ?? '', ChangePct: r.change_pct ?? '', Source: rawPriceSourceLabel(r.price_source), PriceDate: r.priced_at || '', Reference: r.reference_number || '', Detail: r.source_detail || '' })), 'raw-material-cost-valuation');
   const handleExportOrders = () => exportToExcel(orders.map((r) => ({ Invoice: r.invoice_number, Date: r.sale_date, Total: r.total, Discount: r.discount_amount, ActualCOGS: r.cogs, EstimatedSupplement: r.estimated_cost, TotalCost: r.displayed_cost, GrossMargin: r.displayed_margin, UnpricedMovements: r.unpriced_movements })), 'order-margin');
   const handleExportSupplier = () => exportToExcel(supplierImpact.map((r) => ({ Item: r.item_name, Type: r.item_type, FirstCost: r.first_cost, LastCost: r.last_cost, AvgCost: r.avg_cost, ChangePct: r.change_pct, PurchaseCount: r.purchase_count })), 'supplier-price-impact');
 
   return (
     <DesignSurface testId="costing-center-page">
-      <DesignPageHeader title={t('costingCenter')} subtitle={isAr ? 'تكلفة المنتجات وربحية المبيعات وآخر أسعار الخامات' : 'Product costing, sales margin and latest raw-material prices'} actions={<Button variant="outline" size="sm" disabled={!hasReport || loading} onClick={() => { if (tab === 'overview') handleExportOverview(); else if (tab === 'raw_prices') exportToExcel(filteredLatestPrices.map(row => ({ RawMaterial: row.raw_material_name, Code: row.raw_material_code || '', LatestApprovedUnitPrice: row.latest_cost ?? '', Source: rawPriceSourceLabel(row.price_source), PriceDate: row.priced_at || '', Reference: row.reference_number || '' })), 'latest-raw-prices'); else if (tab === 'valuation') handleExportRawCosts(); else if (tab === 'orders') handleExportOrders(); else if (tab === 'period') exportToExcel(periodRows.map((row) => ({ RawMaterial: row.raw_material_name, Unit: row.unit_name, ConsumedQuantity: row.consumed_quantity, ActualCost: row.actual_cost, EstimatedCost: row.estimated_cost, TotalCost: row.displayed_cost, From: fromDate, To: toDate })), 'costing-period'); else handleExportSupplier(); }}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+      <DesignPageHeader title={t('costingCenter')} subtitle={isAr ? 'تكلفة المنتجات وربحية المبيعات وآخر أسعار الخامات' : 'Product costing, sales margin and latest raw-material prices'} actions={<Button variant="outline" size="sm" disabled={!hasReport || loading} onClick={() => { if (tab === 'overview') handleExportOverview(); else if (tab === 'raw_prices') exportToExcel(filteredLatestPrices.map(row => ({ RawMaterial: row.raw_material_name, Code: row.raw_material_code || '', LatestApprovedUnitPrice: row.latest_cost ?? '', Source: rawPriceSourceLabel(row.price_source), PriceDate: row.priced_at || '', Reference: row.reference_number || '' })), 'latest-raw-prices'); else if (tab === 'valuation') handleExportRawCosts(); else if (tab === 'orders') handleExportOrders(); else if (tab === 'period') exportToExcel(periodRows.map((row) => ({ RawMaterial: row.raw_material_name, Unit: row.unit_name, ConsumedQuantity: row.consumed_quantity, LatestPriceCost: row.price_missing ? '' : row.displayed_cost, PriceMissing: row.price_missing || false, From: fromDate, To: toDate })), 'costing-period'); else handleExportSupplier(); }}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
 
       <div className="flex gap-1.5 liquid-glass rounded-2xl p-1.5 w-full flex-wrap mb-4" role="tablist">
         {tabBtn('period', isAr ? 'تكلفة فترة' : 'Period cost')}
         {tabBtn('overview', t('costingOverview'))}
         {tabBtn('raw_prices', isAr ? 'أسعار الخامات' : 'Raw Material Prices')}
-        {tabBtn('valuation', isAr ? 'تقييم المخزون المحاسبي' : 'Inventory accounting valuation')}
+        {tabBtn('valuation', isAr ? 'قيمة المخزون بآخر سعر' : 'Inventory at latest price')}
         {tabBtn('orders', t('orderMargin'))}
         {tabBtn('supplier', t('supplierImpact'))}
       </div>
@@ -495,16 +484,14 @@ export function CostingCenterPage() {
       <p className="mb-3 text-xs text-ui-muted">{isAr ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
       {!hasReport && <DesignPanel testId="costing-report-status"><p className="py-8 text-center">{loading ? t('loading') : error || (isAr ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.')}</p></DesignPanel>}
       {hasReport && tab === 'period' && <DesignPanel testId="costing-period-report">
-        <p className="mb-3 text-sm text-ui-muted">{isAr ? 'تكلفة استهلاك الخامات خلال الفترة، مع فصل التكلفة الفعلية عن التقديرية.' : 'Raw-material consumption cost during the period, separating actual and estimated cost.'}</p>
+        <p className="mb-3 text-sm text-ui-muted">{isAr ? 'تكلفة استهلاك الخامات خلال الفترة = الكمية × آخر سعر معتمد للخامة.' : 'Raw-material period consumption cost = quantity × latest approved raw price.'}</p>
         <DataTable columns={[
           { key: 'raw_material_name', header: t('rawMaterial') },
           { key: 'unit_name', header: isAr ? 'الوحدة' : 'Unit' },
           { key: 'consumed_quantity', header: isAr ? 'الكمية المستهلكة' : 'Consumed quantity', render: (row: RawConsumptionCostBreakdownRow) => formatNumber(row.consumed_quantity, 4) },
-          { key: 'actual_cost', header: isAr ? 'التكلفة المحاسبية المسجلة' : 'Recorded accounting cost', render: (row: RawConsumptionCostBreakdownRow) => money(row.actual_cost) },
-          { key: 'estimated_cost', header: isAr ? 'التكلفة التقديرية' : 'Estimated cost', render: (row: RawConsumptionCostBreakdownRow) => money(row.estimated_cost) },
-          { key: 'displayed_cost', header: isAr ? 'الإجمالي' : 'Total', render: (row: RawConsumptionCostBreakdownRow) => money(row.displayed_cost) },
+          { key: 'displayed_cost', header: isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost', render: (row: RawConsumptionCostBreakdownRow) => row.price_missing ? (isAr ? 'غير مسعر' : 'Unpriced') : money(row.displayed_cost) },
         ]} data={periodRows.map((row) => ({ ...row, id: row.raw_material_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
-        <p className="mt-3 font-bold text-ui-text">{isAr ? 'إجمالي تكلفة الفترة: ' : 'Total period cost: '}{money(periodRows.reduce((total, row) => total + Number(row.displayed_cost), 0))}</p>
+        <p className="mt-3 font-bold text-ui-text">{isAr ? 'إجمالي تكلفة الفترة: ' : 'Total period cost: '}{money(periodRows.reduce((total, row) => total + Number(row.displayed_cost), 0))}{periodRows.some(row => row.price_missing) && <span className="ms-2 text-ui-danger">{isAr ? 'إجمالي جزئي: توجد خامات غير مسعرة' : 'Partial total: some materials are unpriced'}</span>}</p>
       </DesignPanel>}
 
       {hasReport && tab === 'overview' && <>
@@ -542,8 +529,8 @@ export function CostingCenterPage() {
             <p className="font-semibold text-ui-text">{isAr ? 'قاعدة احتساب تكلفة الخامة' : 'Raw-material costing rule'}</p>
             <p className="mt-1">
               {isAr
-                ? 'التكلفة الفعلية تُحسب من الرصيد الموجب وFIFO الحقيقي فقط ولا تتأثر بالسالب. عند نفاد الخامة يُسعّر الرصيد السالب مؤقتًا بآخر سعر معروف ويظهر منفصلًا كتقدير حتى تصل المشتريات الفعلية وتتم تسوية FIFO.'
-                : 'Actual cost uses positive stock and settled FIFO only and is never changed by negative stock. When stock is exhausted, the negative balance is temporarily valued at the latest known price and shown separately as an estimate until a real purchase settles FIFO.'}
+                ? 'قيمة المخزون التشغيلية = الرصيد الحالي × آخر سعر معتمد للخامة. الخامات بلا سعر تظهر غير مسعرة. القيود المحاسبية المسجلة لا تتغير.'
+                : 'Operational inventory value uses the current balance and latest approved price only. Missing prices stay unpriced; posted accounting entries are unchanged.'}
             </p>
           </div>
         </DesignPanel>

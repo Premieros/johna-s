@@ -12,7 +12,6 @@ const consumers = [
   'src/features/import-export/validation-context-service.ts',
   'src/features/import-export/export-service.ts',
   'src/features/trade/pages/PurchasesPage.tsx',
-  'src/features/costing/pages/CostingCenterPage.tsx',
   'src/features/trade/services/shiftClosingReport.ts',
 ];
 describe('latest-approved material price reader contract', () => {
@@ -20,6 +19,14 @@ describe('latest-approved material price reader contract', () => {
     const content = readFileSync(path, 'utf8');
     expect(content).toContain('loadRawMaterialDisplayPrices');
     expect(content).not.toMatch(/\bloadRawCurrentPrices\b/);
+  });
+  it('costing uses latest-price rows and compact latest-price stock valuation', () => {
+    const page = readFileSync('src/features/costing/pages/CostingCenterPage.tsx', 'utf8');
+    const api = readFileSync('src/api/domains/costing.ts', 'utf8');
+    expect(page).toContain('loadRawLatestPriceRows');
+    expect(page).toContain('getRawMaterialCostOverview');
+    expect(api).toContain("rpc('get_raw_material_latest_valuation', p)");
+    expect(page).not.toMatch(/\b(loadRawCurrentPrices|loadRawFifoCosts)\b/);
   });
   it('sales reports use immutable kitchen cost snapshots rather than current price readers', () => {
     const content = readFileSync('src/features/reporting/services/stationSalesReport.ts', 'utf8');

@@ -45,6 +45,16 @@ describe('thermal closing materials', () => {
     expect(text).toContain('17,776.8 EGP');
   });
 
+  it('labels latest-price consumption and missing prices without presenting a fake zero', () => {
+    const row = { ...summary.ingredientsConsumed[0], pricingBasis: 'latest_approved' as const, priceMissing: false, displayedCost: 34 };
+    const text = buildThermalZReportText({ ...summary, ingredientsConsumed: [row] }, 'EGP', 'en');
+    expect(text).toContain('Latest price cost: 34 EGP');
+    expect(text).not.toContain('Estimated:');
+    const unknown = buildThermalZReportText({ ...summary, ingredientsConsumed: [{ ...row, priceMissing: true, displayedCost: 0 }] }, 'EGP', 'en');
+    expect(unknown).toContain('Latest price cost: Unpriced');
+    expect(unknown).toContain('Partial total: some materials are unpriced');
+  });
+
   it('keeps zero consumption distinct from missing report data and never combines unlike quantities', () => {
     const text = buildThermalZReportText({ ...summary, ingredientsConsumed: [] }, 'EGP', 'en');
     expect(text).toContain('Total material cost: 0 EGP');

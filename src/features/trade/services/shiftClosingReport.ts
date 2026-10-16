@@ -128,6 +128,8 @@ export interface ShiftClosingSummary {
     actualCost: number;
     estimatedCost: number;
     displayedCost: number;
+    pricingBasis?: 'latest_approved';
+    priceMissing?: boolean;
   }[];
 }
 
@@ -478,11 +480,14 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
   for (const material of summary.ingredientsConsumed || []) {
     rows.push(
       `${String(material.materialName).replace(/[\r\n]+/g, ' ')}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
-      `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)} | ${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
+      material.pricingBasis === 'latest_approved'
+        ? `${isAr ? 'بآخر سعر' : 'Latest price cost'}: ${material.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : money(material.displayedCost)}`
+        : `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)} | ${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
     );
   }
   rows.push(
     `${isAr ? 'إجمالي تكلفة الخامات' : 'Total material cost'}: ${money((summary.ingredientsConsumed || []).reduce((total, material) => total + material.displayedCost, 0))}`,
+    ...((summary.ingredientsConsumed || []).some(m => m.priceMissing) ? [isAr ? 'الإجمالي جزئي: توجد خامات غير مسعرة' : 'Partial total: some materials are unpriced'] : []),
     isAr ? 'تكلفة الخامات لا تخصم من النقدية' : 'Material cost does not reduce drawer cash',
   );
 
@@ -491,6 +496,7 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
 
 export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
+  const latestRawPricing = summary.ingredientsConsumed.some(m => m.pricingBasis === 'latest_approved');
   const dir = isAr ? 'rtl' : 'ltr';
 
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
@@ -739,9 +745,9 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
         <tr>
           <th style="text-align: ${isAr ? 'right' : 'left'};">${isAr ? 'المادة' : 'Material'}</th>
           <th class="text-center">${isAr ? 'الكمية' : 'Qty'}</th>
-          <th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>
-          <th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>
-          <th class="text-end">${isAr ? 'الإجمالي المعروض' : 'Displayed Total'}</th>
+          ${!latestRawPricing ? `<th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>` : ''}
+          ${!latestRawPricing ? `<th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>` : ''}
+          <th class="text-end">${latestRawPricing ? (isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost') : (isAr ? 'الإجمالي المعروض' : 'Displayed Total')}</th>
         </tr>
       </thead>
       <tbody>
@@ -749,9 +755,9 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
           <tr>
             <td>${escapeHtml(m.materialName)}</td>
             <td class="text-center font-bold">${m.quantity} ${escapeHtml(m.unit)}</td>
-            <td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>
-            <td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>
-            <td class="text-end font-bold">${formatCurrency(m.displayedCost, currency, lang)}</td>
+            ${!latestRawPricing ? `<td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>` : ''}
+            ${!latestRawPricing ? `<td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>` : ''}
+            <td class="text-end font-bold">${m.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : formatCurrency(m.displayedCost, currency, lang)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -772,6 +778,7 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
  */
 export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
+  const latestRawPricing = summary.ingredientsConsumed.some(m => m.pricingBasis === 'latest_approved');
   const dir = isAr ? 'rtl' : 'ltr';
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
   const paymentSummary = summarizeShiftPayments(summary.paymentMethods);
@@ -1081,9 +1088,9 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
           <tr>
             <th>${isAr ? 'المادة الخام / المكون' : 'Raw Material'}</th>
             <th class="text-center">${isAr ? 'الكمية المستهلكة' : 'Consumed Qty'}</th>
-            <th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>
-            <th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>
-            <th class="text-end">${isAr ? 'الإجمالي المعروض' : 'Displayed Total'}</th>
+            ${!latestRawPricing ? `<th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>` : ''}
+            ${!latestRawPricing ? `<th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>` : ''}
+            <th class="text-end">${latestRawPricing ? (isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost') : (isAr ? 'الإجمالي المعروض' : 'Displayed Total')}</th>
           </tr>
         </thead>
         <tbody>
@@ -1091,9 +1098,9 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
             <tr>
               <td>${escapeHtml(m.materialName)}</td>
               <td class="text-center font-bold">${m.quantity} ${escapeHtml(m.unit)}</td>
-              <td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>
-              <td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>
-              <td class="text-end font-bold">${formatCurrency(m.displayedCost, currency, lang)}</td>
+              ${!latestRawPricing ? `<td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>` : ''}
+              ${!latestRawPricing ? `<td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>` : ''}
+              <td class="text-end font-bold">${m.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : formatCurrency(m.displayedCost, currency, lang)}</td>
             </tr>
           `).join('')}
         </tbody>
