@@ -360,8 +360,7 @@ export function CostingCenterPage() {
   const rawUnitMoney = (v: number | undefined | null) => {
     if (v == null) return isAr ? 'غير مسعّرة' : 'Unpriced';
     const value = Number(v);
-    const decimals = Math.abs(value) > 0 && Math.abs(value) < 1 ? 6 : 2;
-    return `${formatNumber(value, decimals)} EGP`;
+    return `${formatNumber(value, 6)} EGP`;
   };
   const rawUnitLabel = (rawMaterialId: string) => {
     const unit = rawMaterialUnits[rawMaterialId];

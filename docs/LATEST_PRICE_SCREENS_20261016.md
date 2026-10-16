@@ -37,8 +37,9 @@ Use clear recorded accounting cost labels. Historical reports keep as-of snapsho
 ## Verification ledger
 83 targeted component/service/smoke tests passed, including zero valuation reads
 for current prices, retained manual report gates and separate valuation behavior.
-Application/test typechecks and production build passed. Full exact-head CI pending.
-Local Playwright server bootstrap hit an environment network-interface error;
+Full local application suite passed:1802 tests/371 files. Application/test typechecks,
+lint0errors/13existing warnings and production build passed. Exact-head CI pending.
+Local Playwright hit environment network-interface and missing browser-binary limits;
 GitHub browser verification remains mandatory. Tests use stable toast mocks matching
 the real provider; no runtime permission or accounting behavior was weakened.
 
