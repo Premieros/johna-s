@@ -237,7 +237,7 @@ export function RawMaterialBranchStockPanel() {
                       {showBranchColumn && <td className="px-3 py-2 text-ui-muted">{branchName}</td>}
                       <td className="px-3 py-2 text-ui-muted">{row.warehouse_name}</td>
                       <td className="px-3 py-2 text-ui-muted">{unit}</td>
-                      <td className="px-3 py-2 text-end font-bold text-ui-text">{formatRawMaterialQuantity(quantity, measurementUnit, { lang })}</td>
+                      <td className="px-3 py-2 text-end font-bold text-ui-text">{quantity === 0 ? '0' : formatRawMaterialQuantity(quantity, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2 text-end text-ui-muted">{formatRawMaterialQuantity(minimum, measurementUnit, { lang })}</td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${quantity <= 0 ? 'bg-ui-danger-soft text-ui-danger' : low ? 'bg-ui-warning-soft text-ui-warning' : 'bg-ui-success-soft text-ui-success'}`}>

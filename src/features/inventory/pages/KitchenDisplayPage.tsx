@@ -267,7 +267,8 @@ export function KitchenDisplayPage() {
           <button role="tab" aria-selected={view === 'completed'} onClick={() => setView('completed')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'منتهية' : 'Completed'}</button>
         </div>
         {view === 'active' && <p className="text-xs text-ui-muted">{ar ? 'تبقى جميع الطلبات غير المنتهية ظاهرة هنا، بما فيها الإضافات الجديدة للطلبات القديمة. تبويب «تجاوزت 40 دقيقة» للفرز فقط.' : 'All unfinished orders stay visible here, including new additions to older orders. Over 40 minutes is an additional filter only.'}</p>}
-        {view === 'expired' && <p className="text-sm text-ui-warning">{ar ? 'هذه الطلبات تجاوزت مدة العرض ولم يتم تسجيلها كمنتهية. يمكن إكمال تجهيزها من هنا.' : 'These orders exceeded the display window and remain unfinished. You can continue preparing them here.'}</p>}
+        {view === 'active' && expiredItems.length > 0 && <p className="rounded-xl border border-ui-warning/30 bg-ui-warning-soft p-3 text-sm text-ui-warning" role="status">{ar ? `${expiredItems.length} بطاقة تجاوزت 40 دقيقة دون تسجيل التقديم. قد تشمل طلبات مدفوعة؛ راجع تبويب التأخير قبل تحديث الحالة.` : `${expiredItems.length} cards exceeded 40 minutes without being marked served. They may include paid orders; review the overdue tab before updating their state.`}</p>}
+        {view === 'expired' && <p className="text-sm text-ui-warning">{ar ? 'هذه الطلبات تجاوزت 40 دقيقة دون تسجيل التقديم. راجع حالتها الفعلية قبل تحديثها؛ اكتمال الدفع لا يعني اكتمال التحضير.' : 'These orders exceeded 40 minutes without being marked served. Check their actual preparation state before updating them; payment does not confirm preparation.'}</p>}
         {view === 'completed' && branchFilter && canViewKds && <KitchenCompletedHistory key={`${branchFilter}:${station}`} branchId={branchFilter} station={station} ar={ar} />}
 
         {loadError && (

@@ -159,12 +159,12 @@ function Metric({ testId, icon: Icon, title, value, display, previous, href, ar,
   const change = value !== null && previous !== null && previous > 0 ? ((value - previous) / previous) * 100 : null;
   const positive = (change ?? 0) >= 0;
   const content = <>
-    <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{href && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
-    <p className="mt-5 text-sm font-semibold text-ui-muted">{title}</p><p className="mt-1 text-3xl font-extrabold tracking-tight text-ui-text tabular-nums">{display}</p>
+    <div className="flex items-start justify-between"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-ui-primary-soft text-ui-primary"><Icon className="h-5 w-5" /></div>{href && <ArrowUpRight className="h-4 w-4 text-ui-subtle" />}</div>
+    <p className="mt-3 text-sm font-semibold text-ui-muted">{title}</p><p className="mt-1 text-3xl font-extrabold tracking-tight text-ui-text tabular-nums">{display}</p>
     {detail && <div className="mt-2 text-xs font-semibold text-ui-muted">{detail}</div>}
     <div className="mt-2 flex items-center gap-2 text-xs">{change === null ? <span className="text-ui-subtle">—</span> : <span className={`inline-flex items-center gap-0.5 font-bold ${positive ? 'text-ui-success' : 'text-ui-danger'}`}>{positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}{formatPercent(Math.abs(change), 1)}</span>}<span className="text-ui-subtle">{ar ? 'مقارنة بالفترة السابقة' : 'vs previous period'}</span></div>
   </>;
-  const className = `ui-accent-card ui-accent-primary rounded-3xl border border-ui-border bg-ui-surface p-5 shadow-ui ${href ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
+  const className = `ui-accent-card ui-accent-primary rounded-3xl border border-ui-border bg-ui-surface p-4 shadow-ui ${href ? 'group transition hover:-translate-y-0.5 hover:shadow-ui-lg' : ''}`;
   if (!href) return <div data-testid={testId} className={className}>{content}</div>;
   return <Link data-testid={testId} to={href} className={className}>{content}</Link>;
 }
