@@ -54,9 +54,11 @@ export type Permission =
   | 'users.view' | 'users.manage'
   | 'audit.view'
   | 'settings.manage'
+  | 'support.manage'
   | 'branches.manage';
 
 export const ALL_PERMISSIONS: Permission[] = [
+  'support.manage',
   'dashboard.view', 'history.unlimited',
   'pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take',
   'pos.order.split', 'pos.order.transfer', 'pos.receipt.print',
@@ -92,6 +94,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 ];
 
 export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> = {
+  'support.manage': { ar: 'الانضمام لجلسات الدعم المباشر', en: 'Join live support sessions' },
   'dashboard.view': { ar: 'عرض لوحة التحكم', en: 'View Dashboard' },
   'history.unlimited': { ar: 'عرض السجل التاريخي الكامل', en: 'View Unlimited Historical Data' },
   'pos.view': { ar: 'عرض شاشة نقطة البيع', en: 'View POS' },
@@ -242,7 +245,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'shifts', ar: 'الشيفتات', en: 'Shifts', permissions: ['shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close'] },
   { key: 'approvals', ar: 'الموافقات', en: 'Approvals', permissions: ['approvals.review', 'approvals.override', 'approvals.policy.manage', 'work.authorization.approve', 'work.authorization.manage', 'work.authorization.bypass'] },
   { key: 'reports', ar: 'التقارير', en: 'Reports', permissions: ['reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export'] },
-  { key: 'admin', ar: 'الإدارة', en: 'Administration', permissions: ['users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage', 'audit.view', 'settings.manage', 'branches.manage'] },
+  { key: 'admin', ar: 'الإدارة', en: 'Administration', permissions: ['support.manage', 'users.view', 'users.manage', 'users.create', 'users.branches.manage', 'roles.permissions.manage', 'audit.view', 'settings.manage', 'branches.manage'] },
 ];
 
 export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
@@ -374,6 +377,7 @@ export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
       .permissions.filter(
         (permission) =>
           permission === 'settings.manage'
+          || permission === 'support.manage'
           || permission === 'branches.manage'
           || permission === 'audit.view',
       ),

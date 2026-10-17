@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Activity,
@@ -45,6 +45,9 @@ import {
 } from '../services/superAdminConsoleData';
 import { setOrganizationActive, updateSuperAdminUser } from '../services/superAdminConsoleActions';
 
+import { SUPPORT_ENABLED } from '@/features/support/protocol';
+const SupportAdminPanel = lazy(() => import('@/features/support/SupportAdminPanel'));
+
 type SuperTab =
   | 'tenants'
   | 'system_controls'
@@ -52,7 +55,8 @@ type SuperTab =
   | 'branches_override'
   | 'roles'
   | 'users_audit'
-  | 'health';
+  | 'health'
+  | 'support';
 
 interface SuperAdminConsoleProps {
   defaultTab?: SuperTab;
@@ -347,6 +351,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     { key: 'branches_override', label: ar ? 'تخصيصات الفروع' : 'Branch Overrides', icon: <SlidersHorizontal className="w-4 h-4" /> },
     { key: 'roles', label: ar ? 'مصفوفة الأدوار والصلاحيات' : 'RBAC Roles & Matrix', icon: <ShieldCheck className="w-4 h-4" /> },
     { key: 'users_audit', label: ar ? 'المستخدمون وسجل التدقيق' : 'Users & Audit Log', icon: <Users className="w-4 h-4" /> },
+    ...(SUPPORT_ENABLED ? [{ key: 'support' as const, label: ar ? 'الدعم المباشر' : 'Live Support', icon: <Activity className="w-4 h-4" /> }] : []),
     { key: 'health', label: ar ? 'صحة وتشخيص النظام' : 'System Diagnostics', icon: <Activity className="w-4 h-4" /> },
   ];
 
@@ -962,6 +967,8 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
       {/* ───────────────────────────────────────────────────────────── */}
       {/* TAB 7: صحة وتشخيص النظام (Diagnostics)                        */}
       {/* ───────────────────────────────────────────────────────────── */}
+      {SUPPORT_ENABLED && activeTab === 'support' && <Suspense fallback={<p>جارٍ فتح الدعم…</p>}><SupportAdminPanel /></Suspense>}
+
       {activeTab === 'health' && (
         <div className="space-y-5 animate-fade-in">
           <Card className="p-6 space-y-4">
