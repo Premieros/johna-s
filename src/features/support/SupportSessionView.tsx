@@ -26,6 +26,7 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
   const video = useRef<HTMLVideoElement>(null);
   const control = useRef(false);
   const ended = useRef(false);
+  const consentEpoch = useRef(0);
   const path = useRef(location.pathname);
   const navigateRef = useRef(navigate);
   const onEndRef = useRef(onEnd);
@@ -36,6 +37,7 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
   const stopRef = useRef<() => void>(() => {});
   function stopLocal() {
     control.current = false;
+    ++consentEpoch.current;
     ended.current = true;
     channel.current?.close(); channel.current = null;
     stream.current?.getTracks().forEach(t => t.stop()); stream.current = null;
@@ -145,7 +147,7 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
     setBusy(true); setError('');
     try {
       const media = await captureOwnTab(() => stopRef.current());
-      if (ended.current) { media.getTracks().forEach(t => t.stop()); return; }
+      if (ended.current || !SUPPORT_ROUTES.has(path.current) || document.querySelector('input[type="password"], [data-support-private]')) { media.getTracks().forEach(t => t.stop()); return; }
       stream.current = media;
       const sender = peer.current?.getTransceivers().find(t => t.receiver.track.kind === 'video')?.sender;
       // The viewer's offer may arrive after the user grants capture.
@@ -158,13 +160,15 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
     finally { setBusy(false); }
   }
   async function grantControl() {
+    const epoch = ++consentEpoch.current;
     try {
       await audit(initial.id, 'control_granted');
-      if (ended.current || !sharing || channel.current?.readyState !== 'open') return;
+      if (epoch !== consentEpoch.current || ended.current || !sharing || !stream.current || !SUPPORT_ROUTES.has(path.current) || channel.current?.readyState !== 'open') return;
       control.current = true; setControlEnabled(true); setControlAsked(false); channel.current.send('control-granted');
     } catch { setError('تعذر تسجيل موافقة التحكم'); }
   }
   function revoke() {
+    ++consentEpoch.current;
     control.current = false; setControlEnabled(false); setControlAsked(false);
     if (channel.current?.readyState === 'open') channel.current.send('control-revoked');
     void audit(initial.id, 'control_revoked').catch(() => {});
