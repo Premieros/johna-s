@@ -5,9 +5,11 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `4b31f2412eadf624ecb1d6f32cfdf54469c37614` (#519 deployed)
-- Current active branch: `fix/safe-operational-ui-clarity-20261017`
-- Mandatory active work log: `docs/SAFE_OPERATIONAL_UI_CLARITY_20261017.md`
+- Current active branch: `feature/live-support-consent-20261017`
+- Mandatory active work log: `docs/LIVE_SUPPORT_20261017.md`
 - Owner directs repair NOW while retaining installed Windows agent, then explicitly requests last approved raw prices rather than heavy FIFO costing. Bound future report payloads atomically and idempotently at enqueue. Value operational consumption quantities at latest approved raw price once per consumed material. Preserve historical stock/accounting transactions and all quantity writers. No agent/claim/start/complete/kitchen/bar changes or replay. Fix noisy CI FIFO issue measurement using zero projection-trigger calls/writes with a purchase positive control, not arbitrary WAL median thresholds.
+
+- Current user-approved scope: staged, opt-in live support with employee consent, permission-scoped manager join, tab-only viewing and restricted navigation/scroll control. Flag OFF; no production release or DB apply. Prior normalizer scope is historical.
 
 ## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
 - The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.
