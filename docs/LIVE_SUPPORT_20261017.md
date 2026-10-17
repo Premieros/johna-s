@@ -28,7 +28,7 @@ New capability: support currently cannot join a consented employee tab. Web scre
 - Staged schema in supabase/migrations/20261017121208_live_support_consent_staged.sql; generated with Supabase CLI and only applied to fresh CI. Never applied to production. Uses SECURITY INVOKER with RLS and existing branch/permission authority. Append-only audit, no new definer bypass.
 
 ## Verification ledger
-Local app/test typecheck, production build and lint passed (13 existing warnings, no errors); 22 protocol/worklog tests and 19 protocol/disabled-launcher tests passed. Exact-head CI, fresh DB integration/RLS, feature-enabled browser and two-device acceptance remain pending. Tests must cover authorized claim/consent, unauthorized branch/user denial, sender spoofing, expiry/end, blocked commands and inactive launcher's zero side effects.
+Local app/test typecheck, production build and lint passed (13 existing warnings, no errors); 26 dedicated support tests passed across protocol, exact-tab capture, disabled launcher and employee consent/stop boundaries; four worklog checks also passed. Exact-head CI, fresh DB integration/RLS, feature-enabled browser and two-device acceptance remain pending. Tests must cover authorized claim/consent, unauthorized branch/user denial, sender spoofing, expiry/end, blocked commands and inactive launcher's zero side effects.
 
 ## Production gate
 No Merge ولا Production migration before explicit owner approval and complete verification.

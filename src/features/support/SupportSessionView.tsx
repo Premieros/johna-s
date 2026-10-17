@@ -33,7 +33,7 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
   navigateRef.current = navigate;
   onEndRef.current = onEnd;
   path.current = location.pathname;
-  const allowed = viewer ? can('support.manage') : branchId === initial.branch_id;
+  const allowed = viewer ? can('support.manage') && user?.id === initial.operator_id : user?.id === initial.requester_id && branchId === initial.branch_id;
   const stopRef = useRef<() => void>(() => {});
   function stopLocal() {
     control.current = false;
@@ -53,6 +53,7 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
   };
   useEffect(() => {
     if (!allowed || !user || !sessionIsLive(initial)) { stopRef.current(); return; }
+    ended.current = false;
     let cancelled = false;
     let cursor = 0;
     let reading = false;
@@ -144,10 +145,11 @@ export default function SupportSessionView({ initial, viewer, onEnd }: { initial
   async function share() {
     if (busy || !SUPPORT_ROUTES.has(path.current)) return;
     if (document.querySelector('input[type="password"], [data-support-private]')) { setError('أغلق الحقول الخاصة قبل المشاركة'); return; }
+    const epoch = consentEpoch.current;
     setBusy(true); setError('');
     try {
       const media = await captureOwnTab(() => stopRef.current());
-      if (ended.current || !SUPPORT_ROUTES.has(path.current) || document.querySelector('input[type="password"], [data-support-private]')) { media.getTracks().forEach(t => t.stop()); return; }
+      if (epoch !== consentEpoch.current || ended.current || !SUPPORT_ROUTES.has(path.current) || document.querySelector('input[type="password"], [data-support-private]')) { media.getTracks().forEach(t => t.stop()); return; }
       stream.current = media;
       const sender = peer.current?.getTransceivers().find(t => t.receiver.track.kind === 'video')?.sender;
       // The viewer's offer may arrive after the user grants capture.
