@@ -377,6 +377,7 @@ export const OPERATIONAL_PERMISSION_SECTIONS: PermissionGroup[] = [
       .permissions.filter(
         (permission) =>
           permission === 'settings.manage'
+          || permission === 'support.manage'
           || permission === 'branches.manage'
           || permission === 'audit.view',
       ),
