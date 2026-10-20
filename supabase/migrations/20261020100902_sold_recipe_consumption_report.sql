@@ -36,8 +36,8 @@ BEGIN
   SELECT product_id,SUM(n) n FROM unit_options GROUP BY product_id
  ), normalized_units AS MATERIALIZED (
   SELECT u.*,CASE WHEN o.n=1 AND o.factor>0 THEN o.factor
-   WHEN c.n IS NULL THEN 1::numeric
-   WHEN u.unit_name='piece' AND EXISTS(SELECT 1 FROM public.product_units b WHERE b.product_id=u.product_id AND b.is_base AND b.conversion_factor=1) THEN 1::numeric
+   WHEN c.n IS NULL AND u.unit_name='piece' THEN 1::numeric
+   WHEN o.n IS NULL AND u.unit_name='piece' AND EXISTS(SELECT 1 FROM public.product_units b WHERE b.product_id=u.product_id AND b.is_base AND b.conversion_factor=1) THEN 1::numeric
    END factor
   FROM sold_units u LEFT JOIN unit_options o ON o.product_id=u.product_id AND o.unit_name=u.unit_name
   LEFT JOIN unit_counts c ON c.product_id=u.product_id

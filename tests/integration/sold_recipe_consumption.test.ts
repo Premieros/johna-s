@@ -61,6 +61,15 @@ describe.skipIf(!local)('sold current-recipe consumption — owned localhost',()
   try{
    await db.query("UPDATE public.sale_items SET unit_name='unknown-unit' WHERE sale_id=$1",[ids.saleA]);
    expect(value(await report()).summary).toMatchObject({invalid_unit_count:1,complete:false});
+   await db.query("INSERT INTO public.product_units(product_id,unit_name,conversion_factor,is_base) VALUES($1,'piece',2,false)",[ids.prodA]);
+   await db.query("UPDATE public.sale_items SET unit_name='piece' WHERE sale_id=$1",[ids.saleA]);
+   expect(value(await report()).summary).toMatchObject({invalid_unit_count:1,complete:false});
+   await db.query("DELETE FROM public.product_units WHERE product_id=$1 AND unit_name='piece' AND conversion_factor=2",[ids.prodA]);
+   await db.query('SAVEPOINT no_unit_configuration');
+   await db.query('DELETE FROM public.product_units WHERE product_id=$1',[ids.prodA]);
+   await db.query("UPDATE public.sale_items SET unit_name='box' WHERE sale_id=$1",[ids.saleA]);
+   expect(value(await report()).summary).toMatchObject({invalid_unit_count:1,complete:false});
+   await db.query('ROLLBACK TO SAVEPOINT no_unit_configuration');
    await db.query("UPDATE public.sale_items SET unit_name='box' WHERE sale_id=$1",[ids.saleA]);
    await db.query('INSERT INTO public.inventory_unit_recipe_units(unit_id,component_unit_id,quantity,wastage_percent) VALUES($1,$2,1,0)',[child,parent]);
    expect(value(await report()).summary).toMatchObject({missing_recipe_count:1,complete:false});
