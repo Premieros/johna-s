@@ -1,3 +1,4 @@
+import '../reportGrid.css';
 import { MonthCloseReview } from '../MonthCloseReview';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
@@ -59,9 +60,9 @@ export function ReportsCenterPage() {
     else if (view.type) fallback.set('type', view.type);
     return <Navigate to={`/reports?${fallback}`} replace />;
   }
-  return <div ref={root} data-testid="unified-reports-center" className={`space-y-3 bg-ui-page ${expanded ? 'h-screen overflow-auto p-4' : ''}`}>
+  return <div ref={root} data-testid="unified-reports-center" className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'h-screen overflow-auto p-4' : ''}`}>
     <div className="grid min-w-0 gap-4 grid-cols-1">
-      <aside className="space-y-3" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
+      <details className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2"><summary className="cursor-pointer text-sm font-semibold">{ar ? 'اختيار التقرير' : 'Choose report'} · {ar ? report.ar : report.en}</summary><aside className="mt-2 space-y-2" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
         <div className="relative max-w-sm">
           <Search className="pointer-events-none absolute start-3 top-3 h-4 w-4 text-ui-muted" />
           <input type="search" aria-label={ar ? 'بحث في التقارير' : 'Search reports'} placeholder={ar ? 'ابحث عن تقرير أو عرض' : 'Find a report or view'} value={search} onChange={event => setSearch(event.target.value)} className="h-10 w-full rounded-lg border border-ui-border bg-ui-surface ps-9 pe-3 text-sm" />
@@ -73,17 +74,15 @@ export function ReportsCenterPage() {
         </nav>
         {!visible.length && <p role="status" className="text-sm text-ui-muted">{ar ? 'لا توجد نتائج مطابقة.' : 'No matching results.'}</p>}
         {!!query && <div className="space-y-1">{visible.flatMap(item => item.views).map(item => <button type="button" key={item.key} onClick={() => select(item)} className="block w-full rounded px-2 py-2 text-start text-sm text-ui-primary">{ar ? item.ar : item.en}</button>)}</div>}
-      </aside>
+      </aside></details>
       <main className="min-w-0 space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-ui-border bg-ui-surface p-4">
-          <div><h2 className="text-xl font-bold">{ar ? report.ar : report.en}</h2><p className="mt-1 text-sm text-ui-muted">{ar ? report.descriptionAr : report.descriptionEn}</p></div>
-          <label className="min-w-56 text-sm font-semibold">{ar ? 'طريقة العرض' : 'Report view'}
-            <select aria-label={ar ? 'طريقة العرض' : 'Report view'} value={view.key} onChange={event => { const target = report.views.find(item => item.key === event.target.value); if (target) select(target); }} className="mt-1 block h-10 w-full rounded-lg border border-ui-border bg-ui-page-alt px-3 font-normal">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-lg font-bold">{ar ? view.ar : view.en}</h1>
+          <div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-xs font-semibold">{ar ? 'طريقة العرض' : 'Report view'}
+            <select aria-label={ar ? 'طريقة العرض' : 'Report view'} value={view.key} onChange={event => { const target = report.views.find(item => item.key === event.target.value); if (target) select(target); }} className="h-9 max-w-64 rounded-lg border border-ui-border bg-ui-page-alt px-2 font-normal">
               {report.views.map(item => <option key={item.key} value={item.key}>{ar ? item.ar : item.en}</option>)}
             </select>
-          </label>
-        </div>
-        <div className="flex justify-end"><button type="button" onClick={()=>void toggleScreen()} className="rounded border border-ui-border px-3 py-2 text-sm font-bold">{ar ? (expanded?'إنهاء ملء الشاشة':'ملء الشاشة') : (expanded?'Exit full screen':'Full screen')}</button></div>
+          </label><button type="button" onClick={()=>void toggleScreen()} className="rounded border border-ui-border px-3 py-2 text-sm font-bold">{ar ? (expanded?'إنهاء ملء الشاشة':'ملء الشاشة') : (expanded?'Exit full screen':'Full screen')}</button></div></div>
         {screenError && <p role="status">{ar?'يمكنك استخدام F11 لملء شاشة المتصفح.':'Use F11 to expand the browser window.'}</p>}
         {view.key==='month_review' ? <MonthCloseReview views={reports.flatMap(item=>item.views)} onSelect={select} /> : view.type==='component_consumption' ? <Suspense fallback={<p role="status">{ar?'جارٍ فتح التقرير…':'Opening report…'}</p>}><ConsumptionReportPage /></Suspense> : view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} key={view.key} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
       </main>

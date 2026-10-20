@@ -27,3 +27,11 @@ No Merge ولا Production migration before separate owner release approval and 
 Draft PR #524 is open. Initial full CI exercised existing 1097 DB cases successfully; fix new fixture cast, verify remaining new cases, and rerun on final candidate. Rollback was rehearsed in embedded PostgreSQL and restored exact original function body hashes; no production change.
 ## Mandatory update protocol
 Update this ledger with every implementation/verification outcome. Record actual skipped/failed checks. Never claim physical print confirmation from queue status.
+
+### Compact spreadsheet report layout (owner request, 20 October)
+
+- Collapsed report discovery and date/filter controls preserve available options without extra reads. The active report title, view picker, Run and export controls remain accessible.
+- Scoped report grid styling adds dense bordered cells, alternating rows, two-axis scrolling, a sticky column header and a frozen visible primary identifier; RTL uses logical inline positioning. Operational/consumption identifiers follow the description even after column ordering. Financial tables retain their existing accounting arithmetic.
+- Full report totals/counts remain visible in a sticky footer for operational and consumption tables, taken from their existing complete-result summaries, never a visible-page sum. Unit prices are not summed. Analysis totals use only additive column contracts and filtered full data; unknown amounts remain unavailable.
+- Existing mobile report cards are retained. Fullscreen expands the report viewport; report styling does not affect POS tables or print-agent behavior. No database migration, RLS, stock, accounting or printing changes were added for this layout request.
+- Focused UI/analysis/source/primary-column checks passed 41/41 in 6.26s; app/test typechecking, ESLint (zero errors, two pre-existing financial hook warnings) and production build passed. Exact-head CI status is recorded in PR #524. Browser regression now additionally checks frozen identifiers, complete-result footer and vertical header stability in the existing pagination case (no new long-running browser scenario).

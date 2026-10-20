@@ -1,3 +1,4 @@
+import { primaryReportColumn } from '../reportGrid';
 import { loadRawLatestPriceRows } from '@/features/costing/services/rawLatestPriceData';
 import { readReportBranches } from '../services/readReportBranches';
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
@@ -1284,6 +1285,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
   const allColumns = orderReportColumns(data.length > 0 ? Object.keys(data[0]) : [], columnOrder);
   const columns = visibleColumns ? allColumns.filter((column) => visibleColumns.includes(column)) : allColumns;
+  const primaryColumn = primaryReportColumn(columns);
   const hiddenCount = visibleColumns ? allColumns.length - columns.length : 0;
   const reportMobilePrimaryColumns = columns.slice(0, 4);
   const reportMobileSecondaryColumns = columns.slice(4);
@@ -1388,7 +1390,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
   return (
     <div>
-      <PageHeader title={workspaceTitle || t('reports')} actions={
+      <div className={controlledReportType ? 'report-actions-only' : undefined}><PageHeader title={workspaceTitle || t('reports')} actions={
         <div className="flex flex-wrap gap-2">
           <ColumnPicker
             columns={allColumns}
@@ -1404,7 +1406,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
           {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><Printer className="w-4 h-4" /> {t('print')}</Button>}
         </div>
-      } />
+      } /></div>
 
       {exporting && <p role="status" className="mb-3 text-sm">{lang === 'ar' ? 'جاري تجهيز التقرير الكامل…' : 'Preparing complete report…'}</p>}
       {data.length > 0 && columns.length === 0 && <p role="status" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'اختر عمودًا واحدًا على الأقل للعرض والتصدير من قائمة الأعمدة.' : 'Choose at least one column to display and export from Columns.'}</p>}
@@ -1484,8 +1486,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       {reportType === 'sales_by_station' && <details className="mb-3 text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'تفاصيل حساب المبيعات والتكلفة' : 'Sales and cost calculation details'}</summary><p data-testid="station-sales-source-note">{getReportExcelProfile(reportType, lang).sourceNote}</p></details>}
 
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
-      <Button variant="outline" disabled={loading} onClick={() => runReport(true)}>{lang === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button>
-      <p className="mb-3 text-xs text-ui-muted">{lang === 'ar' ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
+      <div className="flex flex-wrap items-center gap-2 text-xs"><Button size="sm" variant="outline" disabled={loading} onClick={() => runReport(true)}>{lang === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button>
+      <details className="text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'معلومات التحديث' : 'Refresh details'}</summary><p>{lang === 'ar' ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p></details></div>
       <ReportWorkbench type={reportType} lang={lang} scope={reportReader} userId={user?.id || ''}
         rows={data} complete={!snapshot?.serverPaged} unavailable={!snapshot || loading || !!reportError}
         currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
@@ -1494,7 +1496,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async range => (await metricSource.read(range)).metrics! : undefined}
         loadComparison={async range => (await reportSource.read(range)).rows}
         onOpen={open => setWorkbenchScope(() => open ? reportReader : null)} />
-      {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
+      {!workbenchActive && (<Card className="p-0 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
         ) : reportError ? (
@@ -1546,11 +1548,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
               ))}
             </div>
 
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-sm">
+            <div className="report-grid hidden sm:block" data-explicit-primary="true">
+              <table className="w-full text-sm" aria-label={workspaceTitle || t('reports')}>
                 <thead>
                   <tr className="border-b border-ui-border">
-                    {columns.map((key) => <th key={key} className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{key}</th>)}
+                    {columns.map((key) => <th key={key} data-primary={key===primaryColumn} scope="col" className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{key}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -1559,7 +1561,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
                       {columns.map((key, columnIndex) => {
                         const value = row[key];
                         return (
-                          <td key={columnIndex} className="px-4 py-3 text-ui-text">
+                          <td key={columnIndex} data-primary={key===primaryColumn} className="px-4 py-3 text-ui-text">
                             {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
                           </td>
                         );
@@ -1567,7 +1569,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
                     </tr>
                   ))}
                 </tbody>
-                {reportType === 'sales_by_station' && <tfoot><tr className="border-t border-ui-border font-bold">{columns.map(key => <td key={key} className="px-4 py-3">{typeof stationTotals(data)[key] === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(Number(stationTotals(data)[key]), currency, lang) : String(stationTotals(data)[key] ?? '')}</td>)}</tr></tfoot>}
+                <tfoot>{reportType === 'sales_by_station' && <tr>{columns.map(key => <td key={key}>{typeof stationTotals(data)[key] === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(Number(stationTotals(data)[key]), currency, lang) : String(stationTotals(data)[key] ?? '')}</td>)}</tr>}
+                  <tr><td colSpan={Math.max(1, columns.length)} data-testid="report-grand-total">{lang === 'ar' ? 'إجمالي التقرير الكامل' : 'Full report total'} · {t('count')}: {summary.count}{reportType !== 'raw_material_current_cost' && <> · {t('total')}: {formatFinancialCurrency(summary.total, currency, lang)}</>}</td></tr>
+                </tfoot>
               </table>
             </div>
           </div>

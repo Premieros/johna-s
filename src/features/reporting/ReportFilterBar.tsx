@@ -117,7 +117,7 @@ export function ReportFilterBar({
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <details className="report-filters"><summary className="cursor-pointer text-sm font-semibold">{lang === 'ar' ? 'الفترة والفلاتر' : 'Period & filters'} · {from} — {to}{pendingChanges ? (lang === 'ar' ? ' · تعديلات غير مطبقة' : ' · Unapplied changes') : ''}</summary><div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {showDate && !asOfDate && (
             <div>
               <label className="mb-1 block text-xs font-medium text-ui-muted">{t('filterByPeriod')}</label>
@@ -204,6 +204,7 @@ export function ReportFilterBar({
           ))}
           </div>
         </details>}
+        </details>
         <div className="flex flex-col gap-2 border-t border-ui-border pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {showTotal && <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
