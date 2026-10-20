@@ -6,6 +6,9 @@ Current PR: `524`
 Last updated: 2026-10-20
 State: **BLOCKED**
 
+## Owner correction — 2026-10-20 09:56 Cairo
+Missing prices must be numeric zero in rows, totals and exports. Use the canonical latest approved raw price from purchase, pricing or applied stock count; show source/date. This supersedes earlier purchase-only and null-price descriptions below. No production release approval has been given.
+
 ## Work status
 Owner approved implementation of reviewed reporting plan. Production release not yet requested.
 ## Guardrails

@@ -2,7 +2,7 @@
 SET lock_timeout='2s';
 SET statement_timeout='15s';
 -- The existing price projection and its RLS remain the source; FIFO is not read.
-CREATE FUNCTION public.get_consumption_purchase_report(
+CREATE FUNCTION public.get_consumption_latest_report(
  p_branch_id uuid, p_from_date date, p_to_date date, p_group_by text DEFAULT 'material',
  p_search text DEFAULT '', p_include_waste boolean DEFAULT false,
  p_page integer DEFAULT 0, p_page_size integer DEFAULT 100
@@ -45,28 +45,16 @@ BEGIN
  ), materials AS MATERIALIZED (
   SELECT DISTINCT branch_id,raw_material_id FROM quantities
  ), prices AS MATERIALIZED (
-  SELECT m.branch_id,m.raw_material_id,w.unit_cost,w.priced_at,w.reference_number
-  FROM materials m LEFT JOIN LATERAL (
-   SELECT CASE WHEN c.source_kind='purchase_items' THEN (norm.value->>'stock_unit_cost')::numeric ELSE c.unit_cost END AS unit_cost,
-    c.priced_at,c.reference_number
-   FROM private.raw_approved_price_read_model c
-   LEFT JOIN LATERAL (SELECT public._normalize_raw_purchase_uom(c.raw_material_id,c.purchase_quantity,c.unit_cost,c.purchase_unit) value
-    WHERE c.source_kind='purchase_items') norm ON true
-   WHERE c.branch_id=m.branch_id AND c.raw_material_id=m.raw_material_id
-    AND c.source_kind IN ('inventory_ledger','purchase_items')
-    AND c.priced_at<=statement_timestamp()
-    AND private.raw_approved_price_visible(c.source_kind,c.source_id,c.parent_id,c.raw_material_id,c.branch_id)
-    AND (c.source_kind<>'purchase_items' OR (COALESCE((norm.value->>'success')::boolean,false)
-      AND COALESCE((norm.value->>'stock_unit_cost')::numeric,0)>0))
-   ORDER BY c.priced_at DESC NULLS LAST,c.source_rank,c.reference_number DESC NULLS LAST,c.event_id DESC LIMIT 1
-  ) w ON true
+  SELECT cp.* FROM public.get_raw_material_current_prices(
+   p_branch_id,ARRAY(SELECT DISTINCT raw_material_id FROM materials)
+  ) cp
  ), rows AS MATERIALIZED (
   SELECT q.branch_id,q.raw_material_id,pr.id product_id,b.name branch_name,rm.name raw_material_name,rm.code raw_material_code,
    pr.name product_name,COALESCE(mu.symbol,mu.code,mu.name,'') unit_name,
    q.consumed_quantity,q.returned_quantity,q.waste_quantity,
    q.consumed_quantity-q.returned_quantity+q.waste_quantity net_quantity,
-   cp.unit_cost last_purchase_price,cp.priced_at price_date,cp.reference_number purchase_reference,
-   (q.consumed_quantity-q.returned_quantity+q.waste_quantity)*cp.unit_cost consumption_value,
+   COALESCE(cp.unit_cost,0) unit_price,COALESCE(cp.price_source,'unpriced') price_source,cp.priced_at price_date,cp.reference_number price_reference,
+   (q.consumed_quantity-q.returned_quantity+q.waste_quantity)*COALESCE(cp.unit_cost,0) consumption_value,
    cp.unit_cost IS NULL price_missing
   FROM quantities q JOIN public.raw_materials rm ON rm.id=q.raw_material_id AND rm.branch_id=q.branch_id
   JOIN public.branches b ON b.id=q.branch_id
@@ -84,11 +72,11 @@ BEGIN
    'unpriced_count',count(*) FILTER(WHERE price_missing),
    'unattributed_count',count(*) FILTER(WHERE p_group_by='product' AND product_id IS NULL),
    'complete',count(*) FILTER(WHERE price_missing)=0) FROM rows),
-  'pricing_basis','latest_completed_purchase','from',v_from,'to',v_to,'generated_at',statement_timestamp()) INTO v_result;
+  'pricing_basis','latest_approved','from',v_from,'to',v_to,'generated_at',statement_timestamp()) INTO v_result;
  RETURN v_result;
 END $function$;
-REVOKE ALL ON FUNCTION public.get_consumption_purchase_report(uuid,date,date,text,text,boolean,integer,integer) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.get_consumption_purchase_report(uuid,date,date,text,text,boolean,integer,integer) TO authenticated;
+REVOKE ALL ON FUNCTION public.get_consumption_latest_report(uuid,date,date,text,text,boolean,integer,integer) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_consumption_latest_report(uuid,date,date,text,text,boolean,integer,integer) TO authenticated;
 
 -- Edit only the creation checks in existing guarded functions. Do not replace
 -- writers, money calculations, RLS, triggers, action contexts or print paths.

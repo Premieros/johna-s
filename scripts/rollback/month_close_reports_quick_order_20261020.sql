@@ -36,6 +36,6 @@ BEGIN
  v_def:=replace(v_def,v_old,v_new);
  EXECUTE v_def;
 END $restore$;
-DROP FUNCTION public.get_consumption_purchase_report(uuid,date,date,text,text,boolean,integer,integer);
+DROP FUNCTION public.get_consumption_latest_report(uuid,date,date,text,text,boolean,integer,integer);
 NOTIFY pgrst,'reload schema';
 COMMIT;

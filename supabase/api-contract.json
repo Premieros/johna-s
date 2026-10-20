@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-20T06:13:57.675Z",
+  "generated_at": "2026-10-20T06:58:53.626Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -472,7 +472,7 @@
       ]
     },
     {
-      "name": "get_consumption_purchase_report",
+      "name": "get_consumption_latest_report",
       "params": [
         "branch_id",
         "from_date",
