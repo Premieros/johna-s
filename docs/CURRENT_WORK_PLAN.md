@@ -4,10 +4,13 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `6d9cf06bbd2572a525e2b4419bdf971437265c1b` (#522 merged; this task has not changed production)
-- Current active branch: `feature/reports-month-close-quick-orders-20261020`
-- Mandatory active work log: `docs/MONTH_CLOSE_REPORTS_20261020.md`
+- Latest main baseline reconciled: `2d41146d013481cbaaeefad4e1d7c0f1f116cbcd` (#524 merged/deployed with owner approval)
+- Current active branch: `fix/consumption-rls-timeout-20261020`
+- Mandatory active work log: `docs/CONSUMPTION_RLS_TIMEOUT_20261020.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
+
+## Report-read incident — 2026-10-20
+- Sole active task: #525 removes only the duplicate financial visibility predicate in the new consumption report, preserving restrictive RLS and adding a per-call fail-closed policy check. No policy/writer/printing changes. Prior report rebuild is complete. Exact-head CI and the production approval gate remain required.
 
 ## Owner-approved reporting rebuild — 2026-10-20
 - Single active writer on main baseline `6d9cf06bbd2572a525e2b4419bdf971437265c1b`.

@@ -82,6 +82,16 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
  async function create(type: string|null='takeaway',branch=ids.branchA,table: string|null=null,discount=0) {
   return runAs(db,ids.users.cashier,`select public.create_order($1,$2,$3,p_items:=$4::jsonb,p_cashier_id:=$5,p_discount_amount:=$6) r`,[branch,type,table,JSON.stringify([{product_id:ids.prodA,quantity:1,unit_price:20,total:20}]),ids.users.cashier,discount]);
  }
+ it('honors restrictive ledger RLS without a duplicate report predicate and fails closed if it changes',async()=>{
+  await db.query('SAVEPOINT report_rls_probe');
+  try {
+   await db.query(`CREATE POLICY qa_consumption_hidden_raw ON public.inventory_ledger AS RESTRICTIVE FOR SELECT TO authenticated USING (raw_material_id IS DISTINCT FROM '${missing}'::uuid)`);
+   const result=await report();expect(result.error).toBeUndefined();
+   expect((result.rows[0].r as ConsumptionLatestResult).summary).toMatchObject({count:1,unpriced_count:0,total:4495.5});
+   await db.query('ALTER POLICY financial_visibility_inventory_ledger ON public.inventory_ledger USING (true)');
+   expect((await report()).error).toContain('CONSUMPTION_RLS_BASELINE_CHANGED');
+  } finally {await db.query('ROLLBACK TO SAVEPOINT report_rls_probe');await db.query('RELEASE SAVEPOINT report_rls_probe');}
+ });
  it('creates a complete quick order including items and derived totals without general create/edit',async()=>{
   const result=await create();expect(result.error).toBeUndefined();expect(result.rows[0].r).toMatchObject({success:true});
   // runAs intentionally rolls back each assertion: no business rows are retained.
