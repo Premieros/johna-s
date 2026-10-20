@@ -488,7 +488,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
 
   return (
     <DesignSurface testId="financial-reports-page">
-      <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" disabled={loading || !!reportError || loadedReportScope !== reportScope} onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+      <div className={hideViewPicker ? 'report-actions-only' : undefined}><DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" disabled={loading || !!reportError || loadedReportScope !== reportScope} onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} /></div>
 
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
@@ -498,7 +498,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </div>
       )}
 
-      <DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
+      <details className="mb-2"><summary className="cursor-pointer text-sm font-semibold">{isAr ? 'الفترة والفلاتر' : 'Period & filters'} · {from} — {to}</summary><DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">
           {!hideViewPicker && (
             <div className="flex flex-wrap gap-2">
@@ -555,9 +555,9 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
             )}
           </div>
         </div>
-      </DesignPanel>
+      </DesignPanel></details>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-2">
         <Button data-testid="financial-run-report" disabled={loading || !effectiveBranchFilter || (['ledger', 'treasury_statement', 'inventory_movement', 'party_statement'].includes(view) && loadedSelectorContextKey !== selectorContextKey)} onClick={() => void load()}>{isAr ? 'عرض التقرير' : 'Run report'}</Button>
         <Button variant="outline" disabled={loading || loadedReportScope !== reportScope} onClick={() => { clearReportRequestCache(); void load(); }}>{isAr ? 'تحديث التقرير' : 'Refresh report'}</Button>
       </div>
@@ -578,7 +578,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-ui-danger-soft text-ui-danger"><BadgeAlert className="w-4 h-4" /> {t('notBalanced')}</span>
             )}
           </div>
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -616,7 +616,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </Card>
       ) : view === 'ledger' ? (
         <Card className="p-4">
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -657,7 +657,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 {summaryCard(isAr ? 'رصيد آخر المدة' : 'Closing balance', treasuryStmt.closing_balance)}
               </div>
               <p className="text-sm text-ui-muted mb-3">{isAr ? 'هذا كشف حركة مفهوم للبنك أو الخزنة: الوارد يزيد الرصيد والمنصرف يخفضه. لا توجد تسمية Credit كطريقة دفع.' : 'Readable bank/treasury movement: inflow increases balance and outflow decreases it.'}</p>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-ui-border">
                     <th className="px-3 py-3 text-start">{t('date')}</th>
@@ -695,7 +695,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'إجمالي المنصرف' : 'Total out'}</p><p className="text-lg font-bold mt-1 text-ui-danger">{inventoryStmt.total_out}</p></div>
                 <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'الرصيد الحالي للفترة' : 'Closing qty'}</p><p className="text-lg font-bold mt-1">{inventoryStmt.closing_quantity}</p></div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-ui-border">
                     <th className="px-3 py-3 text-start">{t('date')}</th>
@@ -735,7 +735,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
               {summaryCard(t('netIncome'), income.net_income, income.net_income >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger')}
             </div>
           )}
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <tbody>
                 {incomeRows.map((r) => (
@@ -772,7 +772,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </Card>
       ) : view === 'ar_aging' ? (
         <Card className="p-4">
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -804,7 +804,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </Card>
       ) : view === 'ap_aging' ? (
         <Card className="p-4">
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -847,7 +847,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   <p className="text-lg font-bold mt-1 text-ui-text dark:text-white">{formatDate(agingSummary.as_of, lang)}</p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-ui-border">
@@ -881,7 +881,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       ) : view === 'cash_flow' ? (
         <Card className="p-4">
           <p className="mb-4 text-sm text-ui-muted">{isAr ? 'ملخص من نفس القيود اليومية المستخدمة في كشف حساب البنك والخزنة. الوارد = مدين حساب الخزنة، والمنصرف = دائن حساب الخزنة.' : 'Summary from the same journal source used by bank/treasury statements.'}</p>
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -919,7 +919,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   <p className="text-lg font-bold mt-1 text-ui-text dark:text-white">{formatDate(to, lang)}</p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-ui-border">

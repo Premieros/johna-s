@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-16T21:57:51.056Z",
+  "generated_at": "2026-10-20T06:58:53.626Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -469,6 +469,19 @@
       "name": "get_cashier_area_settings",
       "params": [
         "branch_id"
+      ]
+    },
+    {
+      "name": "get_consumption_latest_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "group_by",
+        "include_waste",
+        "page",
+        "page_size",
+        "search",
+        "to_date"
       ]
     },
     {

@@ -147,8 +147,9 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportInventoryLoadersSource).toContain('fetchAllReportRows');
     expect(reportsSource).toContain('withBranch(row.branchId, {');
     expect(reportsSource).toContain('productBranches.get(row.product_id)');
-    expect(reportsSource).toContain('subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}`');
-    expect(reportsSource).toContain('`${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}`');
+    // Keep branch/period mandatory while allowing additional context such as receipt time.
+    expect(reportsSource).toContain('subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}');
+    expect(reportsSource).toContain('`${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}');
   });
 
   it('provides compact grouped navigation and column customization', () => {

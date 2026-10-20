@@ -204,6 +204,16 @@ test.describe('dashboard and navigation actions', () => {
       const results = width < 640 ? page.getByTestId('reports-mobile-results') : page.getByRole('table');
       await expect(results.getByText('PAGE-0', { exact: true })).toBeVisible();
       expect(reads[reads.length - 1]?.p_page_size).toBe(100);
+      if (width >= 640) {
+        const grid = page.locator('.report-grid').filter({ has: results });
+        await expect(grid.locator('thead')).toHaveCSS('position', 'sticky');
+        await expect(results.getByText('PAGE-0', { exact: true })).toHaveAttribute('data-primary', 'true');
+        await expect(results.getByText('PAGE-0', { exact: true })).toHaveCSS('position', 'sticky');
+        await expect(page.getByTestId('report-grand-total')).toContainText('205');
+        const top = await grid.locator('thead').evaluate(el => el.getBoundingClientRect().top);
+        await grid.evaluate(el => { el.scrollTop = 350; });
+        expect(Math.abs((await grid.locator('thead').evaluate(el => el.getBoundingClientRect().top)) - top)).toBeLessThan(2);
+      }
       const pager = page.getByRole('navigation', { name: /صفحات التقرير|Report pages/ });
       await expect(pager).toContainText('205');
       await pager.getByRole('button', { name: /التالي|Next/ }).click();

@@ -10,7 +10,7 @@ describe('ReportsPage compact tabular contract (PR6)', () => {
     expect(source).not.toContain("from 'recharts'");
     expect(source).not.toContain('<ResponsiveContainer');
     expect(source).not.toContain('<PieChart');
-    expect(source).toContain('<table className="w-full text-sm">');
+    expect(source).toMatch(/<table\b[^>]*className="w-full text-sm"[^>]*>/);
   });
 
   it('preserves filters, shared branch context and export/print actions', () => {

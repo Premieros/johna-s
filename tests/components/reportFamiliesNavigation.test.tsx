@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'reader', role: 'manager' } }) }));
+vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => 'branch-a' }));
+vi.mock('@/hooks/useReportPermissionVersion', () => ({ useReportPermissionVersion: () => 1 }));
 const permissions = vi.hoisted(() => new Set<string>());
 vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => permissions.has(permission) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en' }) }));
@@ -50,4 +53,13 @@ describe('basic report navigation', () => {
     open('/reports?type=' + legacy);
     expect(screen.getByTestId('operational-report').textContent).toBe(current);
   });
+  it('opens the same selected month in a review report without claiming completion', () => {
+    open('/reports?type=month_review');
+    expect(screen.getByTestId('month-close-review')).toBeTruthy();
+    expect(screen.getByText(/not confirmation of a completed close/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Review month'), { target: { value: '2026-09' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open report' })[0]);
+    expect(screen.getByTestId('operational-report').textContent).toBe('sales');
+  });
+
 });
