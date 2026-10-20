@@ -17,6 +17,7 @@ describe.skipIf(!local)('sold current-recipe consumption — owned localhost',()
   await db.query(`UPDATE public.products SET name=$1 WHERE id=$2`,[prefix+' product',ids.prodA]);
   await db.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,$3,$4,0),($5,$6,$7,$4,0)`,[raw,randomUUID(),prefix+' meat',ids.branchA,missing,randomUUID(),prefix+' salt']);
   await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,350,'INITIAL',now())`,[raw,ids.branchA]);
+  await db.query('DELETE FROM public.recipes WHERE product_id=$1',[ids.prodA]);
   await db.query(`INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active) VALUES($1,$2,$3,$4,2,true)`,[recipe,ids.prodA,ids.branchA,prefix]);
   await db.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,0.3,10),($1,$3,0.2,0)`,[recipe,raw,missing]);
   await db.query(`INSERT INTO public.inventory_units(id,code,name,branch_id,unit_type,is_active) VALUES($1,$2,$3,$4,'manufactured',true),($5,$6,$7,$4,'manufactured',true)`,[parent,randomUUID(),prefix+' parent',ids.branchA,child,randomUUID(),prefix+' child']);
