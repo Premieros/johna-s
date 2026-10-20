@@ -13,7 +13,7 @@ const reportRpcs = new Set([
   'get_costing_overview', 'get_product_costing_detail', 'get_cost_history', 'get_supplier_price_impact',
   'get_order_margin', 'get_costing_sales_summary', 'get_historical_sale_cost_estimates',
   'get_raw_material_cost_valuation_overview', 'get_raw_material_cost_history', 'get_raw_consumption_cost_breakdown',
-  'get_raw_material_current_prices', 'get_consumption_latest_report',
+  'get_raw_material_current_prices', 'get_consumption_latest_report', 'get_sold_recipe_consumption_report',
 ]);
 interface Snapshot { body: ArrayBuffer; status: number; statusText: string; headers: [string, string][]; }
 const responseFrom = (snapshot: Snapshot) => new Response(snapshot.body.slice(0), snapshot);

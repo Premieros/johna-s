@@ -4,13 +4,13 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `44a8b9f72e56d63386490719321c0995076ccc73` (#525 merged/deployed, all gates green)
-- Current active branch: `fix/report-filters-totals-20261020`
-- Mandatory active work log: `docs/REPORT_FILTERS_TOTALS_20261020.md`
+- Latest main baseline reconciled: `99deb5813eedb6554fffbf64ad8100f134428276` (#526 merged/deployed, all gates green)
+- Current active branch: `feature/sold-recipe-consumption-20261020`
+- Mandatory active work log: `docs/SOLD_RECIPE_CONSUMPTION_20261020.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active reporting corrections — 2026-10-20
-Owner requests inspecting/fixing aligned totals, useful filters, missing date ranges and purchase material/category reporting. Single writer; prepare review candidate with focused checks. No production merge/migration without separate release approval. Preserve deployed #524/#525 and all operational/printing/security behavior. Prior incident is complete; its release ledger is PR #525.
+## Active sold-recipe cost report — 2026-10-20
+Owner approves preparing sold products × current canonical recipes × latest approved prices, with minimal reads and no sale/printing overhead. Use one batch read on explicit request; no materialized cache table or trigger. Preserve actual inventory/accounting and historical snapshots. #526 is complete; see its PR release ledger. Separate production release approval is required.
 
 ## Owner-approved reporting rebuild — 2026-10-20
 - Single active writer on main baseline `6d9cf06bbd2572a525e2b4419bdf971437265c1b`.

@@ -22,10 +22,10 @@ describe('shared authoritative report requests', () => {
     const changed = options(); changed.body = JSON.stringify({ p_branch_id: 'a', p_from: '2026-10-01', p_to: '2026-10-08' });
     await cache.fetch(url, changed); expect(base).toHaveBeenCalledTimes(4);
   });
-  it('shares consumption reads without evicting unrelated read-only report snapshots', async () => {
+  it.each(['get_consumption_latest_report','get_sold_recipe_consumption_report'])('shares %s reads without evicting unrelated read-only report snapshots', async (rpc) => {
     const base=vi.fn(async()=>Response.json({rows:[],summary:{count:0,total:0}}));
     const cache=createReportRequestCache(base);
-    const consumption='https://example.test/rest/v1/rpc/get_consumption_latest_report';
+    const consumption='https://example.test/rest/v1/rpc/'+rpc;
     await cache.fetch(url,options());
     await Promise.all([cache.fetch(consumption,options()),cache.fetch(consumption,options())]);
     await cache.fetch(consumption,options()); await cache.fetch(url,options());

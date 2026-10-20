@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feature/sold-recipe-consumption-20261020`
-Current PR: pending
+Current PR: #527
 Last updated: 2026-10-20
 State: **BLOCKED**
 
@@ -18,7 +18,7 @@ October Smoha actual ledger consumption includes historical Mini Burger quantiti
 ## Change ledger
 Reuse sales/sale_items, canonical recipe/group tables and the existing approved-price projection. Aggregate sold quantities before expanding recipes; materialize one set of required products and raws, and read prices once. A new guarded SECURITY INVOKER report handles manual paging/export in one bounded read, with full-result totals and explicit missing recipe/price/unit diagnostics. No new cache table, trigger or sale-side computation. Current recipes and latest prices explicitly revalue historical sales; operation-time snapshots remain untouched.
 ## Verification ledger
-Pending focused tests, parity with the existing canonical recipe helper, extra restrictive-policy denial and bounded page/export checks. Supabase CLI unavailable; generate the unapplied migration with current UTC filename. No production mutation or full-month repeated probes.
+Focused component/cache tests: 17 passed. Embedded PostgreSQL executes the actual new migration, compares quantities with the unchanged canonical costing helper, covers yield/direct+group waste, unit conversion, refunds, material/product/full-page totals, missing-price zero, cycle/invalid-unit warnings, caller RLS and exact report removal on rollback. Application/test TypeScript passed. Added owned-localhost integration fixtures for full canonical schema; required CI pending. Synthetic proof is not a production latency claim. Supabase CLI unavailable; generate the unapplied migration with current UTC filename. No production mutation or full-month repeated probes.
 ## Production gate
 لا Merge ولا Production migration before exact-head required checks and owner release approval. Candidate UNAPPLIED.
 ## Next action

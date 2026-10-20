@@ -15,7 +15,7 @@ export const REPORT_DATA_CONTRACTS: Record<ReportType, ReportDataContract> = {
   sales_by_station: { source: 'get_operational_report_dataset (settled invoices / complete items); kitchen events / inventory_ledger for costing', grainAr: 'بند فاتورة موزّع قبل الفلترة', grainEn: 'Invoice line allocated before filtering' },
   sales_by_product: { source: 'get_operational_report_dataset (whole-invoice allocations)', grainAr: 'فرع ومعرف منتج ووحدة بيع', grainEn: 'Branch, product ID and sale unit' },
   detailed_invoices: { source: 'get_operational_report_dataset (invoice headers)', grainAr: 'فاتورة مبيعات', grainEn: 'Sales invoice' },
-  component_consumption: { source: 'stock_transactions (component_flow sale)', grainAr: 'مكوّن وفرع', grainEn: 'Component and branch' },
+  component_consumption: { source: 'get_sold_recipe_consumption_report / net sales / current recipes / approved raw price projection', grainAr: 'خامة وفرع، واختياريًا منتج؛ وصفة وسعر حاليان', grainEn: 'Material and branch, optionally product; current recipe and price' },
   recipe_costs: { source: 'product costing', grainAr: 'منتج وفرع وتكلفة حالية', grainEn: 'Product and branch, current cost' },
   top_consumed_components: { source: 'stock_transactions (component_flow sale)', grainAr: 'مكوّن وفرع', grainEn: 'Component and branch' },
   top_consumed_products: { source: 'get_operational_report_dataset (allocated product lines)', grainAr: 'منتج وفرع ووحدة بيع', grainEn: 'Product, branch and sale unit' },
