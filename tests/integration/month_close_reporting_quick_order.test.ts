@@ -15,7 +15,8 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   await db.query("SET LOCAL statement_timeout='8s'");ids=await seedRlsFixture(db);
   await db.query(`UPDATE public.roles SET permissions=permissions || '["reports.view","reports.costing","history.unlimited"]'::jsonb WHERE role='branch_manager'`);
   await db.query(`UPDATE public.roles SET permissions='["pos.view","pos.order.quick_create"]'::jsonb WHERE role='cashier'`);
-  await db.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,$3,$4,777),($5,$6,$7,$4,777)`,[raw,randomUUID(),prefix+' priced',ids.branchA,missing,randomUUID(),prefix+' missing']);
+  // A positive catalog cost creates a real pricing event; start unpriced so only the explicit source fixtures compete.
+  await db.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,$3,$4,0),($5,$6,$7,$4,0)`,[raw,randomUUID(),prefix+' priced',ids.branchA,missing,randomUUID(),prefix+' missing']);
   await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number,created_at)
    VALUES($1,$2,$3,5,10,50,'purchase','purchase',$4,$5,now()-interval '1 hour')`,[raw,ids.branchA,ids.whA,ids.purchA,randomUUID()]);
   await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,999,'NEWER-PRICING',now()-interval '10 minutes')`,[raw,ids.branchA]);
