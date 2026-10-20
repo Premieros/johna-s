@@ -5,6 +5,7 @@ import { rpc } from '../rpc';
 export type OperationalReportPage = {
   rows: Record<string, unknown>[];
   summary: { total: number; count: number };
+  metrics?: Record<string, number>;
 };
 
 export type OperationalStockSource = Record<'rawRows' | 'unitRows' | 'rawMasters' | 'rawBalances' | 'unitMasters' | 'unitBatches', Record<string, unknown>[]>;
@@ -27,7 +28,7 @@ export const reporting = {
   getOperationalStockSource(p: { p_branch_id: string | null; p_warehouse_id: string | null; p_low_stock: boolean }, signal?: AbortSignal): ApiResult<OperationalStockSource> { return rpc('get_operational_stock_source', p, signal); },
   getOperationalReportMetrics(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<Record<string, number>> { return rpc('get_operational_report_metrics', p, signal); },
   getOperationalReportDataset(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<OperationalReportPage> { return rpc('get_operational_report_dataset', p, signal); },
-  getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number; p_from_ts: string; p_to_exclusive_ts: string }): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p); },
+  getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p, signal); },
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }, signal?: AbortSignal): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p, signal); },
   getTrialBalanceSummary(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceSummary> { return rpc('get_trial_balance_summary', p); },
   getGeneralLedger(p: { p_branch_id: string | null; p_account_id: string | null; p_from_date: string | null; p_to_date: string | null }, signal?: AbortSignal): ApiResult<GeneralLedgerRow[]> { return rpc('get_general_ledger', p, signal); },

@@ -3,7 +3,7 @@ import { loadExpenseCategoryOptions, loadReportFilterOptions } from '@/features/
 const state = vi.hoisted(() => ({ results: {} as Record<string, { data: unknown[] | null; error: unknown }>, tables: [] as string[] }));
 vi.mock('@/api', () => ({ supabase: { from: (table: string) => {
   state.tables.push(table);
-  return { select: () => ({ eq: () => Promise.resolve(state.results[table] || { data: [], error: null }) }) };
+  return { select: () => ({ in: () => Promise.resolve(state.results[table] || { data: [], error: null }) }) };
 } } }));
 const flags = { warehouse: true, cashier: false, customer: false, supplier: false, product: false, category: false, table: false };
 beforeEach(() => { state.results = {}; state.tables = []; });

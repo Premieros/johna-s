@@ -1,19 +1,31 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ branch: 'A', income: vi.fn() }));
-vi.mock('@/api', () => ({ reporting: { getIncomeStatement: mocks.income } }));
+const mocks = vi.hoisted(() => ({ branch: 'A', income: vi.fn(), party: vi.fn(), excel: vi.fn() }));
+vi.mock('@/api', () => ({ reporting: { getIncomeStatement: mocks.income, getPartyStatement:mocks.party } }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'reader' } }) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ unlimited: true, clampRange: (from: string, to: string) => ({ from, to }) }) }));
-vi.mock('@/lib/excel', () => ({ exportToExcelAdvanced: vi.fn() }));
+vi.mock('@/lib/excel', () => ({ exportToExcelAdvanced: mocks.excel }));
+vi.mock('@/features/accounting/services/financialReportSelectors',()=>({loadPartyStatementOptions:async()=>[{id:'customer',name:'Customer'}]}));
 import { FinancialReportsPage } from '@/features/accounting/pages/FinancialReportsPage';
 const data = { revenue: 123, discount: 0, net_revenue: 123, cogs: 0, gross_profit: 123, expenses: 0, net_income: 123 };
 const page = () => <MemoryRouter initialEntries={['/?view=income&from=2026-10-01&to=2026-10-07']}><FinancialReportsPage /></MemoryRouter>;
-beforeEach(() => { mocks.branch = 'A'; mocks.income.mockReset(); });
+beforeEach(() => { mocks.branch = 'A'; mocks.income.mockReset();mocks.party.mockReset();mocks.excel.mockReset(); });
 describe('financial canonical report reads', () => {
+  it('allows a party statement period and aligns debit/credit with the closing balance in table and export',async()=>{
+    mocks.party.mockResolvedValue({data:{opening:5,rows:[{line_id:'a',entry_date:'2026-10-01',entry_number:'1',description:'First',debit:10,credit:2,balance:13},{line_id:'b',entry_date:'2026-10-02',entry_number:'2',description:'Second',debit:3,credit:1,balance:15}]},error:null});
+    render(<MemoryRouter initialEntries={['/?view=party_statement&from=2026-10-01&to=2026-10-07']}><FinancialReportsPage/></MemoryRouter>);
+    expect(screen.getByLabelText('from')).toBeVisible();expect(screen.getByLabelText('to')).toBeVisible();
+    await waitFor(()=>expect(screen.getByRole('option',{name:'Customer'})).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('from'),{target:{value:'2026-09-01'}});fireEvent.change(screen.getByLabelText('selectParty'),{target:{value:'customer'}});
+    fireEvent.click(screen.getByTestId('financial-run-report'));await screen.findByText('Second');
+    expect(mocks.party.mock.calls[0][0]).toMatchObject({p_from_date:'2026-09-01',p_to_date:'2026-10-07'});
+    const cells=screen.getByRole('table').querySelector('tfoot')!.querySelectorAll('td');expect(cells).toHaveLength(6);expect(cells[3].textContent).toMatch(/13/);expect(cells[4].textContent).toMatch(/3/);expect(cells[5].textContent).toMatch(/15/);
+    fireEvent.click(screen.getByRole('button',{name:'exportExcel'}));expect(mocks.excel.mock.calls[0][0].totalRow).toEqual({Debit:13,Credit:3,Balance:15});
+  });
   it('shows an API failure and blocks exporting old or empty results', async () => {
     mocks.income.mockResolvedValue({ data: null, error: { message: 'SOURCE_FAILED' } });
     render(page());

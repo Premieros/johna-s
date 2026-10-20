@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/report-filters-totals-20261020`
-Current PR: pending
+Current PR: `526`
 Last updated: 2026-10-20
 State: **BLOCKED**
 
@@ -18,10 +18,13 @@ Operational and consumption footers use a colspan summary instead of aligned cel
 ## Change ledger
 Prepare aligned full-result additive column totals, visible period controls and useful scoped filters, purchase material/category/supplier views through the existing bounded caller-RLS source. Material line values use recorded line returns, explicitly before invoice-level discount/tax. Current balance reports remain as-of/current, not falsely period-filtered.
 ## Verification ledger
-Pending focused behavior/type/lint/build checks and isolated SQL caller-RLS proof. No production probes for this candidate.
+228 focused reporting tests passed; app/test types and production build passed. First focused assertions were updated for the deliberately added print total row and aligned consumption export key; the new page-alignment test required the mock to supply the real RPC's full metrics instead of inventing a page subtotal. No assertion weakened. Mandatory log gate awaited the actual PR number and is being rerun now.
+Isolated PostgreSQL uses the real existing reader plus the candidate migration as authenticated: invoice totals 180 versus explicitly named recorded line values 260 before invoice-level discount/tax; material/category/supplier filters, cross-page/full metrics, export source, foreign-branch denial and an extra restrictive line policy all passed. Rollback restored the exact original function hash. Canonical DB/RLS integration is included for CI. No production performance or browser-visual claim.
+Changed-file lint: 0 errors, two existing FinancialReportsPage dependency warnings. React review: manual requests retained, stable primitive filter-scope key, request cancellation forwarded, controls labelled, footer cells follow visible/reordered columns, no new dependency or shared UI/operational component changes.
+Supabase CLI remains unavailable; UTC migration filename generated locally for the unapplied review candidate, as in #525. No CLI install or telemetry retry. Required production approval remains separate.
 ## Production gate
 No Merge ولا Production migration until reviewed exact-head required checks and explicit owner release approval. Candidate migration is UNAPPLIED.
 ## Next action
-Implement and inspect reporting behavior, then prepare a concrete PR with findings and verification.
+Run exact-head CI on PR #526, resolve actual failures without weakening gates, then request approval for the concrete read-only report migration plus frontend release.
 ## Mandatory update protocol
 Record failures and limitations honestly. Update this log/PR body before release. Do not weaken required gates or sum mixed units/prices/balances as if additive.
