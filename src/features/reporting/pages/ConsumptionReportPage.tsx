@@ -81,12 +81,11 @@ export function ConsumptionReportPage() {
   setBusy(true);setError(null);
   try {
    if(result.result.summary.count>MAX_REPORT_SOURCE_ROWS) throw new Error('REPORT_SOURCE_LIMIT');
-   const rows: ConsumptionLatestRow[]=[];
-   for(let page=0;rows.length<result.result.summary.count;page++) {
-    const data=await fetchPage(result.query,page,500,controller.signal);
-    if(JSON.stringify(data.summary)!==JSON.stringify(result.result.summary) || !data.rows.length) throw new Error(text('تغيرت البيانات؛ أعد عرض التقرير قبل التصدير','Data changed; refresh before exporting'));
-    rows.push(...data.rows);
-   }
+   // One bounded export read: repeating small pages would recompute the entire
+   // aggregation/summary for every page. Screen reads stay at 100 rows.
+   const data=await fetchPage(result.query,0,Math.max(1,result.result.summary.count),controller.signal);
+   if(JSON.stringify(data.summary)!==JSON.stringify(result.result.summary) || data.rows.length!==data.summary.count) throw new Error(text('تغيرت البيانات؛ أعد عرض التقرير قبل التصدير','Data changed; refresh before exporting'));
+   const rows=data.rows;
    if(liveScope.current!==requestScope || controller.signal.aborted) { win?.close();return; }
    const output=records(rows);
    const note=`${result.query.from} — ${result.query.to} · ${text('صافي الاستهلاك × آخر سعر معتمد من شراء أو تسعير أو جرد؛ الخامة بلا سعر تُحسب بصفر','Net consumption × latest approved purchase, pricing or stock-count price; missing prices count as zero')}`;

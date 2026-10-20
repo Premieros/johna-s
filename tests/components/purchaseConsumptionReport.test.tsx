@@ -46,6 +46,17 @@ describe('latest-approved-price consumption workspace',()=>{
   state.load.mockResolvedValue({data:{...data,summary:{...summary,total:1}},error:null});fireEvent.click(screen.getByRole('button',{name:'Excel'}));
   await screen.findByRole('alert');expect(state.excel).toHaveBeenCalledTimes(1);
  });
+ it('exports 1001 rows in one bounded read, rejects oversized results before requesting them',async()=>{
+  const summary={...data.summary,count:1001,total:45045};
+  state.load.mockResolvedValueOnce({data:{...data,summary},error:null}).mockResolvedValueOnce({data:{...data,rows:Array.from({length:1001},(_,i)=>({...row,raw_material_id:String(i)})),summary},error:null});
+  open();fireEvent.click(screen.getByRole('button',{name:'Run report'}));await screen.findByText('Flour');
+  fireEvent.click(screen.getByRole('button',{name:'Excel'}));await waitFor(()=>expect(state.excel).toHaveBeenCalledOnce());
+  expect(state.load).toHaveBeenCalledTimes(2);expect(state.load.mock.calls[1][0]).toMatchObject({p_page:0,p_page_size:1001});
+  expect(state.excel.mock.calls[0][0].data).toHaveLength(1001);
+  state.load.mockResolvedValueOnce({data:{...data,summary:{...summary,count:5001}},error:null});
+  fireEvent.click(screen.getByRole('button',{name:'Run report'}));await waitFor(()=>expect(screen.getByTestId('consumption-grand-total').textContent).toContain('5001'));
+  fireEvent.click(screen.getByRole('button',{name:'Excel'}));await screen.findByRole('alert');expect(state.load).toHaveBeenCalledTimes(3);expect(state.excel).toHaveBeenCalledOnce();
+ });
  it('denies the report without costing permission',()=>{
   state.permissions.delete('reports.costing');open();expect(screen.getByRole('alert').textContent).toContain('permission');expect(state.load).not.toHaveBeenCalled();
  });

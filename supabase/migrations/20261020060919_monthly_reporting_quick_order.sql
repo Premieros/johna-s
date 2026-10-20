@@ -18,17 +18,21 @@ BEGIN
   RAISE EXCEPTION 'BRANCH_ACCESS_DENIED'; END IF;
  IF v_from IS NULL OR v_to IS NULL OR v_to<v_from OR v_to-v_from>366 THEN RAISE EXCEPTION 'INVALID_RANGE'; END IF;
  IF p_group_by IS NULL OR p_group_by NOT IN ('material','product') OR p_page IS NULL OR p_page<0
-  OR p_page_size IS NULL OR p_page_size NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'INVALID_REPORT_OPTIONS'; END IF;
+  OR p_page_size IS NULL OR p_page_size NOT BETWEEN 1 AND 5000 THEN RAISE EXCEPTION 'INVALID_REPORT_OPTIONS'; END IF;
+ -- Screen reads use 100 rows. A user-requested bounded export uses one aggregate
+ -- pass (up to 5000 result rows), instead of recomputing all totals per export page.
  WITH movements AS MATERIALIZED (
   SELECT il.branch_id,il.raw_material_id,il.quantity,
    CASE WHEN p_group_by='product' THEN oi.product_id END AS product_id,
    il.entry_type
   FROM public.inventory_ledger il
-  LEFT JOIN public.order_kitchen_inventory_events e ON il.reference_type='kitchen_send'
+  LEFT JOIN public.order_kitchen_inventory_events e ON p_group_by='product' AND il.reference_type='kitchen_send'
    AND e.id=il.reference_id AND e.branch_id=il.branch_id
   LEFT JOIN public.order_items oi ON oi.id=e.order_item_id AND oi.order_id=e.order_id
-  WHERE (p_branch_id IS NULL OR il.branch_id=p_branch_id)
-   AND public.user_may_access_branch(il.branch_id)
+  WHERE il.branch_id=ANY(ARRAY(
+   SELECT rb.id FROM public.branches rb
+   WHERE (p_branch_id IS NULL OR rb.id=p_branch_id) AND public.user_may_access_branch(rb.id)
+  ))
    AND il.raw_material_id IS NOT NULL
    AND il.created_at >= (v_from::timestamp AT TIME ZONE 'Africa/Cairo')
    AND il.created_at < ((v_to+1)::timestamp AT TIME ZONE 'Africa/Cairo')

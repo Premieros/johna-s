@@ -22,6 +22,16 @@ describe('shared authoritative report requests', () => {
     const changed = options(); changed.body = JSON.stringify({ p_branch_id: 'a', p_from: '2026-10-01', p_to: '2026-10-08' });
     await cache.fetch(url, changed); expect(base).toHaveBeenCalledTimes(4);
   });
+  it('shares consumption reads without evicting unrelated read-only report snapshots', async () => {
+    const base=vi.fn(async()=>Response.json({rows:[],summary:{count:0,total:0}}));
+    const cache=createReportRequestCache(base);
+    const consumption='https://example.test/rest/v1/rpc/get_consumption_latest_report';
+    await cache.fetch(url,options());
+    await Promise.all([cache.fetch(consumption,options()),cache.fetch(consumption,options())]);
+    await cache.fetch(consumption,options()); await cache.fetch(url,options());
+    expect(base).toHaveBeenCalledTimes(2);
+    await cache.fetch(consumption,options('other-branch'));expect(base).toHaveBeenCalledTimes(3);
+  });
   it('expires results, supports forced refresh and bounds retained reports', async () => {
     let now = 0; const base = vi.fn(async () => response()); const cache = createReportRequestCache(base, { now: () => now, ttl: 10, maxEntries: 2 });
     await cache.fetch(url, options()); now = 11; await cache.fetch(url, options()); expect(base).toHaveBeenCalledTimes(2);

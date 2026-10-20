@@ -28,7 +28,7 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   }
  });
  afterAll(async()=>{if(db){await db.query('ROLLBACK').catch(()=>{});await db.end();}});
- async function report(group='material',waste=false,page=0,size=100,user=ids.users.branch_manager,branch=ids.branchA) {
+ async function report(group='material',waste=false,page=0,size=100,user=ids.users.branch_manager,branch:string|null=ids.branchA) {
   return runAs(db,user,`SELECT public.get_consumption_latest_report($1,CURRENT_DATE-1,CURRENT_DATE+1,$2,$3,$4,$5,$6) r`,[branch,group,prefix,waste,page,size]);
  }
  it('nets refunds/voids once, uses the latest approved price and makes missing amounts numeric zero',async()=>{
@@ -74,6 +74,9 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   expect((await report('material',false,0,100,ids.users.cashier)).error).toContain('PERMISSION_DENIED');
   expect((await report('material',false,0,100,ids.users.branch_manager,ids.branchB)).error).toBe('BRANCH_ACCESS_DENIED');
   expect((await report('invalid')).error).toBe('INVALID_REPORT_OPTIONS');
+  expect((await report('material',false,0,5001)).error).toBe('INVALID_REPORT_OPTIONS');
+  expect(((await report('material',false,0,5000)).rows[0].r as ConsumptionLatestResult).summary).toEqual(first.summary);
+  expect(((await report('material',false,0,100,ids.users.branch_manager,null)).rows[0].r as ConsumptionLatestResult).summary).toEqual(first.summary);
   expect((await db.query("select has_function_privilege('anon','public.get_consumption_latest_report(uuid,date,date,text,text,boolean,integer,integer)','execute') allowed")).rows[0].allowed).toBe(false);
  });
  async function create(type: string|null='takeaway',branch=ids.branchA,table: string|null=null,discount=0) {
