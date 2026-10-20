@@ -59,12 +59,12 @@ BEGIN
    ORDER BY c.priced_at DESC NULLS LAST,c.source_rank,c.reference_number DESC NULLS LAST,c.event_id DESC LIMIT 1
   ) w ON true
  ), rows AS MATERIALIZED (
-  SELECT q.branch_id,q.raw_material_id,q.product_id,b.name branch_name,rm.name raw_material_name,rm.code raw_material_code,
+  SELECT q.branch_id,q.raw_material_id,pr.id product_id,b.name branch_name,rm.name raw_material_name,rm.code raw_material_code,
    pr.name product_name,COALESCE(mu.symbol,mu.code,mu.name,'') unit_name,
    q.consumed_quantity,q.returned_quantity,q.waste_quantity,
    q.consumed_quantity-q.returned_quantity+q.waste_quantity net_quantity,
    cp.unit_cost last_purchase_price,cp.priced_at price_date,cp.reference_number purchase_reference,
-   round((q.consumed_quantity-q.returned_quantity+q.waste_quantity)*cp.unit_cost,2) consumption_value,
+   (q.consumed_quantity-q.returned_quantity+q.waste_quantity)*cp.unit_cost consumption_value,
    cp.unit_cost IS NULL price_missing
   FROM quantities q JOIN public.raw_materials rm ON rm.id=q.raw_material_id AND rm.branch_id=q.branch_id
   JOIN public.branches b ON b.id=q.branch_id
@@ -78,7 +78,7 @@ BEGIN
   LIMIT p_page_size OFFSET (p_page::bigint*p_page_size)
  )
  SELECT jsonb_build_object('rows',COALESCE((SELECT jsonb_agg(to_jsonb(p)) FROM page p),'[]'::jsonb),
-  'summary',(SELECT jsonb_build_object('count',count(*),'total',COALESCE(sum(consumption_value),0),
+  'summary',(SELECT jsonb_build_object('count',count(*),'total',round(COALESCE(sum(consumption_value),0),2),
    'unpriced_count',count(*) FILTER(WHERE price_missing),
    'unattributed_count',count(*) FILTER(WHERE p_group_by='product' AND product_id IS NULL),
    'complete',count(*) FILTER(WHERE price_missing)=0) FROM rows),

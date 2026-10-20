@@ -7,6 +7,7 @@ import { useCan } from '@/lib/permissions';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
+import { useSettings } from '@/context/SettingsContext';
 import { todayISO } from '@/lib/format';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { exportToExcelAdvanced } from '@/lib/excel';
@@ -25,6 +26,8 @@ const validDate = (value: string | null) => value && /^\d{4}-\d{2}-\d{2}$/.test(
 export function ConsumptionReportPage() {
  const { lang } = useLanguage(); const ar = lang === 'ar'; const can = useCan();
  const { user } = useAuth(); const branch = useBranchFilter(); const history = useHistoryAccess();
+ const { effectiveSettings } = useSettings();
+ const currency = effectiveSettings(branch)?.currency || 'EGP';
  const permissionVersion = useReportPermissionVersion(); const [params] = useSearchParams();
  const allowed = can('reports.view') && can('reports.costing');
  const scope = JSON.stringify([branch,user?.id,user?.role,permissionVersion,allowed,history.unlimited,lang]);
@@ -99,7 +102,7 @@ export function ConsumptionReportPage() {
   <form onSubmit={event=>{event.preventDefault();void run();}} className="flex flex-wrap items-end gap-3 rounded-xl border border-ui-border bg-ui-surface p-3">
    <label>{text('من','From')}<input aria-label={text('من','From')} type="date" value={query.from} onChange={event=>edit({from:event.target.value})} className="block rounded border border-ui-border bg-ui-surface p-2" /></label>
    <label>{text('إلى','To')}<input aria-label={text('إلى','To')} type="date" value={query.to} onChange={event=>edit({to:event.target.value})} className="block rounded border border-ui-border bg-ui-surface p-2" /></label>
-   <label>{text('العرض حسب','Group by')}<select value={query.group} onChange={event=>edit({group:event.target.value as Query['group']})} className="block rounded border border-ui-border bg-ui-surface p-2"><option value="material">{text('الخامة','Material')}</option><option value="product">{text('المنتج والخامة','Product and material')}</option></select></label>
+   <label>{text('العرض حسب','Group by')}<select aria-label={text('العرض حسب','Group by')} value={query.group} onChange={event=>edit({group:event.target.value as Query['group']})} className="block rounded border border-ui-border bg-ui-surface p-2"><option value="material">{text('الخامة','Material')}</option><option value="product">{text('المنتج والخامة','Product and material')}</option></select></label>
    <label className="flex-1">{text('بحث بالخامة أو المنتج أو الكود','Material, product or code')}<input type="search" value={query.search} onChange={event=>edit({search:event.target.value})} className="block w-full min-w-40 rounded border border-ui-border bg-ui-surface p-2" /></label>
    <label><input type="checkbox" checked={query.waste} onChange={event=>edit({waste:event.target.checked})} /> {text('إضافة الهالك','Include waste')}</label>
    <Button type="submit" disabled={busy}>{busy?text('جارٍ التحميل…','Loading…'):text('عرض التقرير','Run report')}</Button>
@@ -108,7 +111,7 @@ export function ConsumptionReportPage() {
   {!!error && <p role="alert" className="text-ui-danger">{userFacingErrorMessage(error,lang)}</p>}
   {result && <>
    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-    <p>{result.query.from} — {result.query.to} · {text('عدد الصفوف','Rows')}: {result.result.summary.count} · <strong>{text(result.result.summary.complete?'إجمالي قيمة الاستهلاك':'إجمالي المسعّر فقط',result.result.summary.complete?'Total consumption value':'Priced subtotal only')}: {number(result.result.summary.total)}</strong></p>
+    <p>{result.query.from} — {result.query.to} · {text('عدد الصفوف','Rows')}: {result.result.summary.count} · <strong>{text(result.result.summary.complete?'إجمالي قيمة الاستهلاك':'إجمالي المسعّر فقط',result.result.summary.complete?'Total consumption value':'Priced subtotal only')}: {number(result.result.summary.total)} {currency}</strong></p>
     <div className="flex gap-2"><ColumnPicker columns={keys.map(key=>labels[key])} visibleColumns={visibleColumns} onToggle={key=>toggleColumn(key,keys.map(item=>labels[item]))} hiddenCount={keys.length-columns.length} onShowAll={showAllColumns} onMove={(key,direction)=>moveColumn(key,direction,keys.map(item=>labels[item]))} onResetOrder={resetColumnOrder} lang={lang} />
     {can('reports.export') && <Button variant="outline" disabled={busy || !columns.length} onClick={()=>void exportAll('excel')}>Excel</Button>}
     {can('reports.print') && <Button variant="outline" disabled={busy || !columns.length} onClick={()=>void exportAll('print')}>{text('طباعة / PDF','Print / PDF')}</Button>}</div>

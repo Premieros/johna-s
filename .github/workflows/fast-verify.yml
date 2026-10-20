@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: fast-verify-${{ github.ref }}
@@ -25,6 +26,7 @@ jobs:
   scope:
     runs-on: ubuntu-latest
     outputs:
+      full_verify_on_pr: ${{ steps.pr.outputs.full_verify_on_pr }}
       app_changed: ${{ steps.plan.outputs.app_changed }}
       db_changed: ${{ steps.plan.outputs.db_changed }}
       integration_tests: ${{ steps.plan.outputs.integration_tests }}
@@ -35,13 +37,33 @@ jobs:
           fetch-depth: 0
       - name: Fetch main baseline
         run: git fetch --no-tags origin main
+      # Full Verify is mandatory on main/master PRs and already runs app + DB.
+      # Avoid paying twice for the same head. API failures run the fast checks.
+      - name: Detect same-head full PR verification
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          duplicate=false
+          if [ "$EVENT_NAME" = "push" ]; then
+            if count=$(gh api --method GET "repos/$GH_REPO/pulls" -f state=open -f "head=$OWNER:$HEAD_BRANCH" --jq "map(select(.head.sha == \"$HEAD_SHA\" and (.base.ref == \"main\" or .base.ref == \"master\"))) | length"); then
+              if [ "$count" -gt 0 ]; then duplicate=true; fi
+            fi
+          fi
+          echo "full_verify_on_pr=$duplicate" >> "$GITHUB_OUTPUT"
       - name: Determine Fast Verify scope
         id: plan
         run: node scripts/ci/fast-verify-plan.mjs
 
   app:
     needs: scope
-    if: needs.scope.outputs.app_changed == 'true'
+    if: needs.scope.outputs.app_changed == 'true' && needs.scope.outputs.full_verify_on_pr != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +86,7 @@ jobs:
 
   db:
     needs: scope
-    if: needs.scope.outputs.db_changed == 'true'
+    if: needs.scope.outputs.db_changed == 'true' && needs.scope.outputs.full_verify_on_pr != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -116,6 +138,7 @@ jobs:
     steps:
       - name: Fast Verify summary
         run: |
+          echo "Same-head mandatory Full Verify on PR: ${{ needs.scope.outputs.full_verify_on_pr }}"
           echo "Changed files: ${{ needs.scope.outputs.changed_count }}"
           echo "App checks requested: ${{ needs.scope.outputs.app_changed }}"
           echo "DB checks requested: ${{ needs.scope.outputs.db_changed }}"

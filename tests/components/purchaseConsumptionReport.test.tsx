@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 const state=vi.hoisted(()=>({branch:'branch-a',permissions:new Set(['reports.view','reports.costing','reports.export']),load:vi.fn(),excel:vi.fn()}));
 vi.mock('@/api',()=>({reporting:{getConsumptionPurchaseReport:state.load}}));
+vi.mock('@/context/SettingsContext',()=>({useSettings:()=>({effectiveSettings:()=>({currency:'EGP'})})}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:{id:'reader',role:'manager'}})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/lib/permissions',()=>({useCan:()=>(p:string)=>state.permissions.has(p)}));

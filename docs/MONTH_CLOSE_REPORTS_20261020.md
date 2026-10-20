@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feature/reports-month-close-quick-orders-20261020`
-Current PR: `0`
+Current PR: `524`
 Last updated: 2026-10-20
 State: **BLOCKED**
 
@@ -17,10 +17,10 @@ Consumption views currently mix stored cost and latest approved price; approved 
 ## Change ledger
 Implemented purchase-only consumption RPC (SECURITY INVOKER, existing RLS, server paging/full totals), net refund/void movements, explicit missing prices and unassigned product rows. New quick-create capability applies only to own open takeaway orders with no table; nested initial item-total recalculation is narrowly allowed. Seven wide primary workspaces, full-screen control and month checklist preserve existing report routes. Fixed hasUnsentItems memo dependency on authoritative/session send rows. No automatic permission grants.
 ## Verification ledger
-Focused UI/permissions/navigation: 42 passed in 1.91s. App/test typecheck passed. Build passed in 14.30s. Full app suite: 1822 passed, 2 brittle source-order assertions failed; both corrected to the intended permission/navigation contracts, 11/11 focused rerun passed in 0.98s. Embedded PostgreSQL proof passed purchase-only pricing, net refunds, quick-only creation with nested totals, type/null denial and report permission denial; full canonical RLS/operational DB suite remains a CI gate. Lint passed. No arbitrary sleeps or weakened assertions.
+Focused UI/permissions/navigation: 42 passed in 1.91s. App/test typecheck passed. Build passed in 14.30s. Full app suite: 1822 passed, 2 brittle source-order assertions failed; both corrected to the intended permission/navigation contracts, 11/11 focused rerun passed in 0.98s. Embedded PostgreSQL proof passed purchase-only pricing, net refunds, quick-only creation with nested totals, type/null denial and report permission denial; first full CI canonical DB run: 1097 existing tests passed, new fixture setup failed on ambiguous numeric parameter inference (integer vs numeric), corrected with an explicit numeric cast. New behavioral cases rerun pending. Lint passed. No arbitrary sleeps or weakened assertions. Fast Verify now avoids duplicate app/DB jobs only when an open main/master PR points to the identical pushed head; manual runs and API failure retain fast checks. Full Verify remains mandatory.
 ## Production gate
 No Merge ولا Production migration before separate owner release approval and exact-head required checks. No changes to installed Windows agent.
 ## Next action
-Open draft PR, run required full CI once on the candidate. Review integration results and prepare exact rollback before requesting production release.
+Draft PR #524 is open. Initial full CI exercised existing 1097 DB cases successfully; fix new fixture cast, verify remaining new cases, and rerun on final candidate. Rollback was rehearsed in embedded PostgreSQL and restored exact original function body hashes; no production change.
 ## Mandatory update protocol
 Update this ledger with every implementation/verification outcome. Record actual skipped/failed checks. Never claim physical print confirmation from queue status.

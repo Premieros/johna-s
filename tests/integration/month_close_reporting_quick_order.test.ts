@@ -23,7 +23,7 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   await db.query(`INSERT INTO public.order_items(id,order_id,product_id,quantity,unit_price,total) VALUES($1,$2,$3,2,10,20)`,[item,order,ids.prodA]);
   await db.query(`INSERT INTO public.order_kitchen_inventory_events(id,branch_id,warehouse_id,order_id,order_item_id,sent_quantity) VALUES($1,$2,$3,$4,$5,2)`,[event,ids.branchA,ids.whA,order,item]);
   for(const [material,qty,type,ref,refId] of [[raw,-4,'sale','sale',ids.saleA],[raw,1,'refund','sale',ids.saleA],[raw,-2,'kitchen_send','kitchen_send',event],[raw,0.5,'kitchen_void','kitchen_send',event],[raw,-1,'waste','sale',ids.saleA],[missing,-2,'sale','sale',ids.saleA]] as const) {
-   await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,$4,888,$4*888,$5,$6,$7,$8)`,[material,ids.branchA,ids.whA,qty,type,ref,refId,randomUUID()]);
+   await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,$4::numeric,888,$4::numeric*888,$5,$6,$7,$8)`,[material,ids.branchA,ids.whA,qty,type,ref,refId,randomUUID()]);
   }
  });
  afterAll(async()=>{if(db){await db.query('ROLLBACK').catch(()=>{});await db.end();}});
@@ -43,6 +43,15 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   expect(data.rows.find(row=>row.product_id===ids.prodA)).toMatchObject({raw_material_id:raw,net_quantity:1.5,consumption_value:15});
   expect(data.rows.find(row=>row.raw_material_id===raw && !row.product_id)).toMatchObject({net_quantity:3,consumption_value:30});
   expect(data.summary.total).toBe(45);expect(data.summary.unattributed_count).toBe(2);
+ });
+ it('rounds only the final value so product grouping cannot change the report total',async()=>{
+  await db.query('SAVEPOINT fractional_consumption');
+  try {
+   for(const product of [ids.prodA,null]) await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,product_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,$4,-0.0005,10,-0.005,'sale','sale',$5,$6)`,[raw,product,ids.branchA,ids.whA,ids.saleA,randomUUID()]);
+   const material=(await report()).rows[0].r as ConsumptionPurchaseResult;
+   const byProduct=(await report('product')).rows[0].r as ConsumptionPurchaseResult;
+   expect(material.summary.total).toBe(45.01);expect(byProduct.summary.total).toBe(material.summary.total);
+  } finally {await db.query('ROLLBACK TO SAVEPOINT fractional_consumption');await db.query('RELEASE SAVEPOINT fractional_consumption');}
  });
  it('paginates details while retaining complete totals and enforces permission/branch/options',async()=>{
   const first=(await report('material',false,0,1)).rows[0].r as ConsumptionPurchaseResult;
