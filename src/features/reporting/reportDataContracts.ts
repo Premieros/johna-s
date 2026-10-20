@@ -79,6 +79,6 @@ export function analysisColumns(type: ReportType, rows: Record<string, unknown>[
   return Object.keys(rows[0] || {}).map(key => {
     const id = map.get(key) || `${type}:${key}`;
     const numeric = rows.some(row => typeof row[key] === 'number');
-    return { id, key, numeric, aggregation: numeric && additive.has(id) ? 'sum' : 'none' };
+    return { id, key, numeric, aggregation: numeric && additive.has(id) && !(type==='sales_by_payment' && id==='Invoices') ? 'sum' : 'none' };
   });
 }
