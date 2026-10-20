@@ -2,7 +2,7 @@ import { fireEvent,render,screen,waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 const state=vi.hoisted(()=>({branch:'branch-a',permissions:new Set(['reports.view','reports.costing','reports.export']),load:vi.fn(),excel:vi.fn()}));
-vi.mock('@/api',()=>({reporting:{getConsumptionLatestReport:state.load}}));
+vi.mock('@/api',()=>({reporting:{getSoldRecipeConsumptionReport:state.load}}));
 vi.mock('@/context/SettingsContext',()=>({useSettings:()=>({effectiveSettings:()=>({currency:'EGP'})})}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:{id:'reader',role:'manager'}})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
@@ -12,7 +12,7 @@ vi.mock('@/hooks/useReportPermissionVersion',()=>({useReportPermissionVersion:()
 vi.mock('@/lib/excel',()=>({exportToExcelAdvanced:state.excel}));
 import { ConsumptionReportPage } from '@/features/reporting/pages/ConsumptionReportPage';
 const row={branch_id:'branch-a',branch_name:'A',raw_material_id:'raw',raw_material_name:'Flour',raw_material_code:'F',product_id:null,product_name:null,unit_name:'kg',consumed_quantity:6,returned_quantity:1.5,waste_quantity:0,net_quantity:4.5,unit_price:10,price_source:'pricing',price_date:null,price_reference:'P1',consumption_value:45,price_missing:false};
-const data={rows:[row],summary:{count:1,total:45,unpriced_count:0,unattributed_count:0,complete:true},pricing_basis:'latest_approved',from:'2026-10-01',to:'2026-10-31',generated_at:'2026-10-20'};
+const data={rows:[row],summary:{count:1,total:45,unpriced_count:0,unattributed_count:0,complete:true},pricing_basis:'current_recipe_latest_approved',from:'2026-10-01',to:'2026-10-31',generated_at:'2026-10-20'};
 const open=()=>render(<MemoryRouter initialEntries={['/reports?from=2026-10-01&to=2026-10-31']}><ConsumptionReportPage /></MemoryRouter>);
 beforeEach(()=>{state.branch='branch-a';state.permissions=new Set(['reports.view','reports.costing','reports.export']);state.load.mockReset().mockResolvedValue({data,error:null});state.excel.mockReset();localStorage.clear();});
 describe('latest-approved-price consumption workspace',()=>{
@@ -42,7 +42,7 @@ describe('latest-approved-price consumption workspace',()=>{
   await waitFor(()=>expect(state.excel).toHaveBeenCalledTimes(1));expect(state.excel.mock.calls[0][0].data).toHaveLength(101);
   expect(screen.getByTestId('consumption-grand-total').textContent).toContain('4,545');
   expect(screen.getByText('Flour').getAttribute('data-primary')).toBe('true');
-  expect(state.excel.mock.calls[0][0]).toMatchObject({title:'Consumption at latest approved price',totalRow:{'Consumption value':4545,'Rows counted with zero price':0}});
+  expect(state.excel.mock.calls[0][0]).toMatchObject({title:'Sold-item consumption at current recipes',totalRow:{'Consumption value':4545,'Rows counted with zero price':0}});
   state.load.mockResolvedValue({data:{...data,summary:{...summary,total:1}},error:null});fireEvent.click(screen.getByRole('button',{name:'Excel'}));
   await screen.findByRole('alert');expect(state.excel).toHaveBeenCalledTimes(1);
  });
@@ -56,6 +56,13 @@ describe('latest-approved-price consumption workspace',()=>{
   state.load.mockResolvedValueOnce({data:{...data,summary:{...summary,count:5001}},error:null});
   fireEvent.click(screen.getByRole('button',{name:'Run report'}));await waitFor(()=>expect(screen.getByTestId('consumption-grand-total').textContent).toContain('5001'));
   fireEvent.click(screen.getByRole('button',{name:'Excel'}));await screen.findByRole('alert');expect(state.load).toHaveBeenCalledTimes(3);expect(state.excel).toHaveBeenCalledOnce();
+ });
+ it('warns about missing recipes separately from missing prices and shows product quantities only in product view',async()=>{
+  state.load.mockResolvedValue({data:{...data,rows:[{...row,product_name:'Burger',product_sold_quantity:3}],summary:{...data.summary,complete:false,missing_recipe_count:1,invalid_unit_count:1},recipe_issues:[{product_name:'Missing burger'}]},error:null});
+  open();fireEvent.change(screen.getByLabelText('Group by'),{target:{value:'product'}});fireEvent.click(screen.getByRole('button',{name:'Run report'}));
+  await screen.findByText(/Partial total/);expect(screen.getByText(/Missing burger/)).toBeTruthy();expect(screen.queryByText(/Rows counted with zero price/)).toBeNull();
+  expect(screen.getByText('Net sold in base product unit')).toBeTruthy();expect(screen.queryByLabelText('Include waste')).toBeNull();
+  expect(state.load.mock.calls[0][0]).not.toHaveProperty('p_include_waste');
  });
  it('denies the report without costing permission',()=>{
   state.permissions.delete('reports.costing');open();expect(screen.getByRole('alert').textContent).toContain('permission');expect(state.load).not.toHaveBeenCalled();

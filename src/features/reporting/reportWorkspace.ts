@@ -12,8 +12,8 @@ export const BASIC_REPORTS: BasicReport[] = [
     op('sales', 'الفواتير', 'Invoices'), op('sales_by_product', 'ملخص الأصناف', 'Item summary'),
     op('sales_by_station', 'تفاصيل الأصناف والمحطات', 'Items & stations'), op('cashier_performance', 'أداء الموظفين', 'Employee performance'), op('returns', 'المرتجعات', 'Returns'),
   ] },
-  { key: 'consumption', ar: 'استهلاك الخامات وتكلفته', en: 'Material Consumption & Cost', descriptionAr: 'صافي الاستهلاك الفعلي بالخامـة أو المنتج × آخر سعر معتمد من شراء أو تسعير أو جرد، وبلا سعر يُحسب بصفر', descriptionEn: 'Net recorded consumption by material or product × latest approved price from purchase, pricing or stock count; missing prices count as zero', views: [
-    op('component_consumption', 'الاستهلاك بآخر سعر معتمد', 'Consumption at latest price'),
+  { key: 'consumption', ar: 'استهلاك الخامات وتكلفته', en: 'Material Consumption & Cost', descriptionAr: 'صافي المباع × الوصفة الحالية × آخر سعر معتمد؛ بالخامـة أو المنتج، وبلا سعر يُحسب بصفر', descriptionEn: 'Net sold × current recipes × latest approved price, by material or product; missing prices count as zero', views: [
+    op('component_consumption', 'استهلاك المباع بالوصفة الحالية', 'Sold-item consumption at current recipes'),
     op('raw_material_current_cost', 'الأسعار المعتمدة الحالية ومصادرها', 'Current approved prices and sources'),
     op('recipe_costs', 'تكلفة الوصفة الحالية', 'Current recipe cost'), op('sales_component_reconciliation', 'مطابقة النظري والفعلي', 'Theoretical vs actual reconciliation'),
   ] },

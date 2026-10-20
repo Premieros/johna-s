@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-20T06:58:53.626Z",
+  "generated_at": "2026-10-20T10:14:48.114Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -833,6 +833,18 @@
       "name": "get_shift_sale_tenders",
       "params": [
         "shift_id"
+      ]
+    },
+    {
+      "name": "get_sold_recipe_consumption_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "group_by",
+        "page",
+        "page_size",
+        "search",
+        "to_date"
       ]
     },
     {
