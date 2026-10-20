@@ -114,7 +114,7 @@ export function ConsumptionReportPage() {
   {!!error && <p role="alert" className="text-ui-danger">{userFacingErrorMessage(error,lang)}</p>}
   {result && <>
    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-    <p>{result.query.from} — {result.query.to} · {text('عدد الصفوف','Rows')}: {result.result.summary.count} · <strong>{text('إجمالي قيمة الاستهلاك','Total consumption value')}: {number(result.result.summary.total)} {currency}</strong></p>
+    <p>{result.query.from} — {result.query.to} · {text('وقت استخراج البيانات','Data generated')}: {new Date(result.result.generated_at).toLocaleString(lang,{timeZone:'Africa/Cairo'})} · {text('عدد الصفوف','Rows')}: {result.result.summary.count} · <strong>{text('إجمالي قيمة الاستهلاك','Total consumption value')}: {number(result.result.summary.total)} {currency}</strong></p>
     <div className="flex gap-2"><ColumnPicker columns={keys.map(key=>labels[key])} visibleColumns={visibleColumns} onToggle={key=>toggleColumn(key,keys.map(item=>labels[item]))} hiddenCount={keys.length-columns.length} onShowAll={showAllColumns} onMove={(key,direction)=>moveColumn(key,direction,keys.map(item=>labels[item]))} onResetOrder={resetColumnOrder} lang={lang} />
     {can('reports.export') && <Button variant="outline" disabled={busy || !columns.length} onClick={()=>void exportAll('excel')}>Excel</Button>}
     {can('reports.print') && <Button variant="outline" disabled={busy || !columns.length} onClick={()=>void exportAll('print')}>{text('طباعة / PDF','Print / PDF')}</Button>}</div>

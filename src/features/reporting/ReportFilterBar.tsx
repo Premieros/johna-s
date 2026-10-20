@@ -34,6 +34,8 @@ export interface ReportFilterBarProps {
   filterDimensions: ReportFilterKey[];
   total: number;
   showTotal?: boolean;
+  totalLabel?: string;
+  countLabel?: string;
   count: number;
   currency: string;
   lang: Language;
@@ -70,6 +72,8 @@ export function ReportFilterBar({
   filterDimensions,
   total,
   showTotal = true,
+  totalLabel,
+  countLabel,
   count,
   currency,
   lang,
@@ -208,11 +212,11 @@ export function ReportFilterBar({
         <div className="flex flex-col gap-2 border-t border-ui-border pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {showTotal && <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
-              <span className="text-ui-muted">{t('total')}: </span>
+              <span className="text-ui-muted">{totalLabel || t('total')}: </span>
               <span className="font-extrabold tabular-nums text-ui-accent">{loading || unavailable ? '—' : formatCurrency(total, currency, lang)}</span>
             </div>}
             <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
-              <span className="text-ui-muted">{t('count')}: </span>
+              <span className="text-ui-muted">{countLabel || t('count')}: </span>
               <span className="font-extrabold tabular-nums text-ui-text">{loading || unavailable ? '—' : count}</span>
             </div>
             {pendingChanges && (

@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   branches: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
   loadSales: vi.fn(),
   materialBalances: vi.fn(),
+  rawFinancial: vi.fn(),
+  reconciliation: vi.fn(),
   stationLines: vi.fn(),
   fullSales: vi.fn(),
   loadOptions: vi.fn(),
@@ -18,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   visibleColumns: null as string[] | null,
   columnOrder: undefined as string[] | undefined,
 }));
-vi.mock('@/api', () => ({ supabase: {}, costing: {}, reporting: { getRawMaterialConsumptionReport: mocks.materialBalances } }));
+vi.mock('@/api', () => ({ supabase: {}, costing: {}, reporting: { getRawMaterialConsumptionReport: mocks.materialBalances, getRawMaterialFinancialReport:mocks.rawFinancial, getSalesComponentReconciliationReport:mocks.reconciliation } }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: mocks.userId } }) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
@@ -56,6 +58,18 @@ afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); mocks.visibleColumns = null; mocks.columnOrder = undefined; vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it.each(['raw_material_financial','sales_component_reconciliation'] as const)('keeps %s branch summaries out of details, analysis and exported data',async type=>{
+    const source=type==='raw_material_financial'?mocks.rawFinancial:mocks.reconciliation;
+    source.mockResolvedValue({data:{summary:{net_sales:100,opening_inventory_value:30,purchases_value:10,sales_consumption_value:20,closing_inventory_value:20,gross_profit:80,theoretical_value:20,actual_value:15,value_difference:5,mismatched_raws:1},rows:[{raw_material_name:'Ingredient A',opening_value:10,sales_consumption_value:5,theoretical_value:5,actual_value:4},{raw_material_name:'Ingredient B',opening_value:20,sales_consumption_value:15,theoretical_value:15,actual_value:11}]},error:null});
+    render(page({controlledReportType:type}));fireEvent.click(screen.getByRole('button',{name:'Run report'}));
+    const table=await screen.findByRole('table');expect(within(table).queryByText('Period Total')).toBeNull();
+    expect(within(table).getByText('Ingredient A')).toBeTruthy();expect(within(table).getByText('Ingredient B')).toBeTruthy();
+    expect(screen.getByText('Period summary by branch — separate from details')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'exportExcel'}));await waitFor(()=>expect(mocks.excel).toHaveBeenCalledOnce());
+    expect(mocks.excel.mock.calls[0][0].data).toHaveLength(2);
+    expect(mocks.excel.mock.calls[0][0].totalRow).toHaveProperty(type==='raw_material_financial'?'1. A · Opening Value':'1. A · Theoretical Value',type==='raw_material_financial'?30:20);
+    expect(source).toHaveBeenCalledOnce();
+  });
   it('does not request results on mount, filter changes or a report-type change', async () => {
     mocks.loadSales.mockResolvedValue([sale('manual')]);
     const view = render(page());
@@ -66,6 +80,11 @@ describe('report read stability', () => {
     expect(mocks.loadSales).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('report-result-context').textContent).toContain('2026-10-01');
+    fireEvent.change(screen.getByLabelText('From'),{target:{value:'2026-09-01'}});
+    expect(screen.getByTestId('report-result-context').textContent).toContain('2026-10-01');
+    expect(screen.getByTestId('report-result-context').textContent).toContain('New filters are not applied');
+    expect(mocks.loadSales).toHaveBeenCalledOnce();
     view.rerender(page({ controlledReportType: 'sales_costs' }));
     expect(mocks.stationLines).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();

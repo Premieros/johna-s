@@ -39,6 +39,7 @@ describe('reportExport (ERP-01 §6 output)', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue({ document: { write, close } } as unknown as Window);
     openPrintWindow({
       title: 'Sales <Report>',
+      summary: {'A <branch>':'20 & 30'},
       subtitle: '2026-01-01 - 2026-01-31',
       headers: ['Product', 'Qty'],
       rows: [['Koshari & Co.', '3']],
@@ -49,6 +50,9 @@ describe('reportExport (ERP-01 §6 output)', () => {
     expect(html).toContain('Sales &lt;Report&gt;');
     expect(html).toContain('dir="rtl"');
     expect(html).toContain('<table>');
+    expect(html).toContain('A &lt;branch&gt;');
+    expect(html).toContain('20 &amp; 30');
+    expect(html.indexOf('<dl>')).toBeLessThan(html.indexOf('<table>'));
     expect(html).toContain('Koshari &amp; Co.');
     expect(close).toHaveBeenCalled();
     vi.restoreAllMocks();

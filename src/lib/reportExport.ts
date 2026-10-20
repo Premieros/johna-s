@@ -39,12 +39,14 @@ export interface PrintReportOptions {
   headers: string[];
   rows: string[][];
   lang?: 'ar' | 'en';
+  summary?: Record<string,unknown>;
 }
 
 export function openPrintWindow(options: PrintReportOptions, reservedWindow?: Window | null): void {
   const dir = options.lang === 'ar' ? 'rtl' : 'ltr';
   const title = escapeHtml(options.title);
   const subtitle = options.subtitle ? `<p class="subtitle">${escapeHtml(options.subtitle)}</p>` : '';
+  const summary=options.summary && Object.keys(options.summary).length ? `<section><h2>${options.lang==='ar'?'ملخص منفصل عن التفاصيل':'Summary separate from details'}</h2><dl>${Object.entries(options.summary).map(([key,value])=>`<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value??''))}</dd>`).join('')}</dl></section>` : '';
   const head = options.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
   const body = options.rows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
   // A caller loading a complete report asynchronously reserves this during the
@@ -65,7 +67,7 @@ export function openPrintWindow(options: PrintReportOptions, reservedWindow?: Wi
   tr:nth-child(even) td { background: #fafbfc; }
   @media print { body { margin: 12px; } }
 </style></head>
-<body><h1>${title}</h1>${subtitle}
+<body><h1>${title}</h1>${subtitle}${summary}
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
 <script>window.onload = function(){ window.focus(); window.print(); };</script>
 </body></html>`,

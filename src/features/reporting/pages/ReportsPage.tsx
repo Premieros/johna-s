@@ -1,3 +1,4 @@
+import { flattenReportSummaries, reportSummaryPresentation } from '../reportSummaryPresentation';
 import { primaryReportColumn } from '../reportGrid';
 import { loadRawLatestPriceRows } from '@/features/costing/services/rawLatestPriceData';
 import { readReportBranches } from '../services/readReportBranches';
@@ -59,7 +60,7 @@ import {
 } from '../numericIntegrity';
 
 const EMPTY_REPORT_ROWS: Record<string, unknown>[] = [];
-interface ReportSnapshot { rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; metrics?: Record<string, number>; }
+interface ReportSnapshot { branchSummaries?: Record<string,unknown>[]; receivedAt?: string; rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; metrics?: Record<string, number>; }
 
 type FinancialReportType = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
@@ -273,6 +274,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
   async function loadReport(page = 0, full = false, signal?: AbortSignal, range?: { from: string; to: string }, metricsOnly = false): Promise<ReportSnapshot> {
     let resultRows: Record<string, unknown>[] = [];
+    const branchSummaries: Record<string,unknown>[]=[];
     let resultSummary = { total: 0, count: 0 };
     const setData = (rows: Record<string, unknown>[]) => { resultRows = rows; };
     const setSummary = (value: { total: number; count: number }) => { resultSummary = value; };
@@ -1040,8 +1042,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           p_from_date: allowed.from,
           p_to_date: allowed.to,
         });
-        if (result.error) throw result.error;
-        const payload = (result.data || {}) as Record<string, unknown>;
+        const payload = requireReportData(result,signal) as Record<string,unknown>;
+        if (!payload.summary || typeof payload.summary!=='object' || !Array.isArray(payload.rows)) throw new Error('REPORT_SOURCE_INVALID');
         return {
           branchId: branch.id,
           summary: (payload.summary || {}) as Record<string, unknown>,
@@ -1071,7 +1073,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [lang === 'ar' ? 'كمية آخر المدة' : 'Closing Qty']: Number(row.closing_quantity || 0),
           [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(row.closing_value || 0),
         }));
-        return [summaryRow, ...detailRows];
+        branchSummaries.push(summaryRow);
+        return detailRows;
       });
       setData(rows);
       setChartData([]);
@@ -1089,8 +1092,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           p_from_date: allowed.from,
           p_to_date: allowed.to,
         });
-        if (result.error) throw result.error;
-        const payload = (result.data || {}) as Record<string, unknown>;
+        const payload = requireReportData(result,signal) as Record<string,unknown>;
+        if (!payload.summary || typeof payload.summary!=='object' || !Array.isArray(payload.rows)) throw new Error('REPORT_SOURCE_INVALID');
         return {
           branchId: branch.id,
           summary: (payload.summary || {}) as Record<string, unknown>,
@@ -1132,7 +1135,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [lang === 'ar' ? 'مصدر التسعير' : 'Price Source']: row.price_source || '',
           [lang === 'ar' ? 'الحالة' : 'Status']: row.status || '',
         }));
-        return [summaryRow, ...detailRows];
+        branchSummaries.push(summaryRow);
+        return detailRows;
       });
       setData(rows);
       setChartData([]);
@@ -1164,7 +1168,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost']) })));
       setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost'] || 0), 0), count: rows.length });
     }
-    return { rows: resultRows, summary: corePage?.summary ?? resultSummary, serverPaged: !!corePage, from: allowed.from, to: allowed.to };
+    return { branchSummaries, receivedAt:new Date().toISOString(), rows: resultRows, summary: corePage?.summary ?? resultSummary, serverPaged: !!corePage, from: allowed.from, to: allowed.to };
   }
 
   const handleExportExcel = async (complete: ReportSnapshot) => {
@@ -1177,7 +1181,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: complete.summary.count,
       }
       : {
-        [lang === 'ar' ? 'الإجمالي' : 'Total']: complete.summary.total,
+        ...(reportSummaryPresentation(reportType,lang).showTotal ? {[reportSummaryPresentation(reportType,lang).label]: complete.summary.total} : {}),
         [lang === 'ar' ? 'عدد السجلات' : 'Record Count']: complete.summary.count,
       };
     await exportToExcelAdvanced({
@@ -1185,8 +1189,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       filename: `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`,
       sheetName: (reportTypes.find((row) => row.key === reportType)?.label ?? reportType).slice(0, 31),
       title: reportTypes.find((row) => row.key === reportType)?.label ?? reportType,
-      subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}`,
-      totalRow,
+      subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${new Date(complete.receivedAt).toLocaleString(lang,{timeZone:'Africa/Cairo'})}` : ''}`,
+      totalRow: {...totalRow,...flattenReportSummaries(complete.branchSummaries || [])},
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
       columns,
@@ -1282,6 +1286,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     lang === 'ar' ? 'فرق القيمة' : 'Value Difference',
   ];
 
+  const presentation = reportSummaryPresentation(reportType,lang);
+  const summaryEntries = flattenReportSummaries(snapshot?.branchSummaries || []);
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
   const allColumns = orderReportColumns(data.length > 0 ? Object.keys(data[0]) : [], columnOrder);
   const columns = visibleColumns ? allColumns.filter((column) => visibleColumns.includes(column)) : allColumns;
@@ -1358,7 +1364,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       return String(value ?? '');
     }));
     if (reportType === 'sales_by_station') { const totals = stationTotals(complete.rows); rows.push(headers.map(header => String(totals[header] ?? ''))); }
-    openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}`, headers, rows, lang: lang as 'ar' | 'en' }, reservedWindow);
+    openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${new Date(complete.receivedAt).toLocaleString(lang,{timeZone:'Africa/Cairo'})}` : ''}`, headers, rows, summary:flattenReportSummaries(complete.branchSummaries || []), lang: lang as 'ar' | 'en' }, reservedWindow);
   };
 
   const exportComplete = async (kind: 'excel' | 'csv' | 'print') => {
@@ -1459,7 +1465,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         filterLabel={filterLabel}
         allLabel={allLabel}
         filterDimensions={REPORT_FILTER_DIMS[reportType]}
-        showTotal={reportType !== 'raw_material_current_cost'}
+        showTotal={presentation.showTotal}
+        totalLabel={presentation.label}
+        countLabel={presentation.countLabel}
         total={summary.total}
         count={summary.count}
         currency={currency}
@@ -1474,6 +1482,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         unavailable={!snapshot || !!reportError}
         pendingChanges={filtersDirty}
       />
+
+      {snapshot && <p data-testid="report-result-context" className="my-2 text-xs text-ui-muted">{lang==='ar'?'فترة النتيجة':'Result period'}: {snapshot.from} — {snapshot.to} · {reportBranchLabel}{snapshot.receivedAt && <> · {lang==='ar'?'استلام النتيجة':'Result received'}: {new Date(snapshot.receivedAt).toLocaleString(lang,{timeZone:'Africa/Cairo'})}</>}{filtersDirty && <> · {lang==='ar'?'الفلاتر الجديدة لم تطبق على هذه النتيجة':'New filters are not applied to this result'}</>}</p>}
+      {presentation.basis && <p className="my-2 text-xs text-ui-muted">{presentation.basis}</p>}
+      {Object.keys(summaryEntries).length>0 && <details className="my-2 rounded border border-ui-border p-2"><summary className="cursor-pointer text-sm font-semibold">{lang==='ar'?'ملخص الفترة حسب الفرع — منفصل عن التفاصيل':'Period summary by branch — separate from details'}</summary><dl className="grid gap-2 p-2 sm:grid-cols-2">{Object.entries(summaryEntries).map(([key,value])=><div key={key}><dt className="text-xs text-ui-muted">{key}</dt><dd className="font-semibold tabular-nums">{typeof value==='number'?new Intl.NumberFormat(lang,{maximumFractionDigits:2}).format(value):String(value)}</dd></div>)}</dl></details>}
 
       {(reportType === 'sales_costs' || reportType === 'sales_by_station') && canStationCost && (
         <p className="mb-3 text-sm text-ui-muted" data-testid="station-cost-mode">
@@ -1570,7 +1582,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
                   ))}
                 </tbody>
                 <tfoot>{reportType === 'sales_by_station' && <tr>{columns.map(key => <td key={key}>{typeof stationTotals(data)[key] === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(Number(stationTotals(data)[key]), currency, lang) : String(stationTotals(data)[key] ?? '')}</td>)}</tr>}
-                  <tr><td colSpan={Math.max(1, columns.length)} data-testid="report-grand-total">{lang === 'ar' ? 'إجمالي التقرير الكامل' : 'Full report total'} · {t('count')}: {summary.count}{reportType !== 'raw_material_current_cost' && <> · {t('total')}: {formatFinancialCurrency(summary.total, currency, lang)}</>}</td></tr>
+                  <tr><td colSpan={Math.max(1, columns.length)} data-testid="report-grand-total">{lang === 'ar' ? 'إجمالي التقرير الكامل' : 'Full report total'} · {presentation.countLabel}: {summary.count}{presentation.showTotal && <> · {presentation.label}: {formatFinancialCurrency(summary.total, currency, lang)}</>}</td></tr>
                 </tfoot>
               </table>
             </div>
