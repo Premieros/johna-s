@@ -47,7 +47,7 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
  it('rounds only the final value so product grouping cannot change the report total',async()=>{
   await db.query('SAVEPOINT fractional_consumption');
   try {
-   for(const product of [ids.prodA,null]) await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,product_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,$4,-0.0005,10,-0.005,'sale','sale',$5,$6)`,[raw,product,ids.branchA,ids.whA,ids.saleA,randomUUID()]);
+   for(const [type,reference] of [['sale',ids.saleA],['kitchen_send',event]]) await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,-0.0005,10,-0.005,$4,$4,$5,$6)`,[raw,ids.branchA,ids.whA,type,reference,randomUUID()]);
    const material=(await report()).rows[0].r as ConsumptionPurchaseResult;
    const byProduct=(await report('product')).rows[0].r as ConsumptionPurchaseResult;
    expect(material.summary.total).toBe(45.01);expect(byProduct.summary.total).toBe(material.summary.total);
@@ -62,8 +62,8 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   expect((await report('invalid')).error).toBe('INVALID_REPORT_OPTIONS');
   expect((await db.query("select has_function_privilege('anon','public.get_consumption_purchase_report(uuid,date,date,text,text,boolean,integer,integer)','execute') allowed")).rows[0].allowed).toBe(false);
  });
- async function create(type: string|null='takeaway',branch=ids.branchA,table: string|null=null) {
-  return runAs(db,ids.users.cashier,`select public.create_order($1,$2,$3,p_items:=$4::jsonb,p_cashier_id:=$5) r`,[branch,type,table,JSON.stringify([{product_id:ids.prodA,quantity:1,unit_price:20,total:20}]),ids.users.cashier]);
+ async function create(type: string|null='takeaway',branch=ids.branchA,table: string|null=null,discount=0) {
+  return runAs(db,ids.users.cashier,`select public.create_order($1,$2,$3,p_items:=$4::jsonb,p_cashier_id:=$5,p_discount_amount:=$6) r`,[branch,type,table,JSON.stringify([{product_id:ids.prodA,quantity:1,unit_price:20,total:20}]),ids.users.cashier,discount]);
  }
  it('creates a complete quick order including items and derived totals without general create/edit',async()=>{
   const result=await create();expect(result.error).toBeUndefined();expect(result.rows[0].r).toMatchObject({success:true});
@@ -72,6 +72,7 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
  it('rejects other order types, null-type bypass, table binding and foreign branch',async()=>{
   for(const type of ['dine_in','delivery','drive_thru',null]) expect((await create(type)).rows[0].r).toMatchObject({success:false,error:'PERMISSION_DENIED'});
   expect((await create('takeaway',ids.branchA,randomUUID())).rows[0].r).toMatchObject({success:false,error:'PERMISSION_DENIED'});
+  expect((await create('takeaway',ids.branchA,null,1)).rows[0].r).toMatchObject({success:false,error:'PERMISSION_DENIED'});
   expect((await create('takeaway',ids.branchB)).rows[0].r).toMatchObject({success:false,error:'BRANCH_MISMATCH'});
   const update=await runAs(db,ids.users.cashier,'UPDATE public.orders SET order_type=\'delivery\' WHERE id=$1',[order]);
   expect(update.error).toContain('PERMISSION_DENIED');

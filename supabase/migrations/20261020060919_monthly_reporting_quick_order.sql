@@ -1,4 +1,6 @@
 -- Development candidate. No production apply without the release gate.
+SET lock_timeout='2s';
+SET statement_timeout='15s';
 -- The existing price projection and its RLS remain the source; FIFO is not read.
 CREATE FUNCTION public.get_consumption_purchase_report(
  p_branch_id uuid, p_from_date date, p_to_date date, p_group_by text DEFAULT 'material',
@@ -19,7 +21,7 @@ BEGIN
   OR p_page_size IS NULL OR p_page_size NOT BETWEEN 1 AND 500 THEN RAISE EXCEPTION 'INVALID_REPORT_OPTIONS'; END IF;
  WITH movements AS MATERIALIZED (
   SELECT il.branch_id,il.raw_material_id,il.quantity,
-   CASE WHEN p_group_by='product' THEN COALESCE(oi.product_id,il.product_id) END AS product_id,
+   CASE WHEN p_group_by='product' THEN oi.product_id END AS product_id,
    il.entry_type
   FROM public.inventory_ledger il
   LEFT JOIN public.order_kitchen_inventory_events e ON il.reference_type='kitchen_send'
@@ -95,16 +97,16 @@ DECLARE v_def text; v_old text; v_new text;
 BEGIN
  v_def:=pg_get_functiondef('public.create_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,uuid)'::regprocedure);
  v_old:='IF NOT public.can_permission(''pos.order.create'') THEN';
- v_new:='IF NOT public.can_permission(''pos.order.create'') AND NOT (public.can_permission(''pos.order.quick_create'') AND COALESCE(p_order_type=''takeaway'' AND p_table_id IS NULL,false)) THEN';
+ v_new:='IF NOT public.can_permission(''pos.order.create'') AND NOT (public.can_permission(''pos.order.quick_create'') AND COALESCE(p_order_type=''takeaway'' AND p_table_id IS NULL AND (public.can_permission(''pos.discount'') OR (COALESCE(p_discount_amount,0)=0 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p_items) qi WHERE COALESCE((qi->>''discount_amount'')::numeric,0)<>0 OR COALESCE((qi->>''bonus_quantity'')::numeric,0)<>0))),false)) THEN';
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'QUICK_CREATE_RPC_BASELINE_MISMATCH'; END IF;
  EXECUTE replace(v_def,v_old,v_new);
  v_def:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure);
  v_old:='IF NOT public.can_permission(''pos.order.create'') THEN';
- v_new:='IF NOT public.can_permission(''pos.order.create'') AND NOT (public.can_permission(''pos.order.quick_create'') AND COALESCE(NEW.order_type=''takeaway'' AND NEW.table_id IS NULL AND NEW.status=''open'' AND NEW.cashier_id=auth.uid() AND public.user_may_access_branch(NEW.branch_id),false)) THEN';
+ v_new:='IF NOT public.can_permission(''pos.order.create'') AND NOT (public.can_permission(''pos.order.quick_create'') AND COALESCE(NEW.order_type=''takeaway'' AND NEW.table_id IS NULL AND NEW.status=''open'' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission(''pos.discount'')) AND NEW.cashier_id=auth.uid() AND public.user_may_access_branch(NEW.branch_id),false)) THEN';
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'QUICK_CREATE_TRIGGER_BASELINE_MISMATCH'; END IF;
  v_def:=replace(v_def,v_old,v_new);
  v_old:='IF NOT public.can_permission(''pos.order.create'') AND NOT public.can_permission(''pos.order.edit'') THEN';
- v_new:='IF NOT public.can_permission(''pos.order.create'') AND NOT public.can_permission(''pos.order.edit'') AND NOT (public.can_permission(''pos.order.quick_create'') AND EXISTS(SELECT 1 FROM public.orders qo WHERE qo.id=NEW.order_id AND qo.order_type=''takeaway'' AND qo.table_id IS NULL AND qo.cashier_id=auth.uid() AND qo.status=''open'' AND qo.created_at>=transaction_timestamp() AND public.user_may_access_branch(qo.branch_id))) THEN';
+ v_new:='IF NOT public.can_permission(''pos.order.create'') AND NOT public.can_permission(''pos.order.edit'') AND NOT (public.can_permission(''pos.order.quick_create'') AND (public.can_permission(''pos.discount'') OR (COALESCE(NEW.discount_amount,0)=0 AND COALESCE(NEW.bonus_quantity,0)=0)) AND EXISTS(SELECT 1 FROM public.orders qo WHERE qo.id=NEW.order_id AND qo.order_type=''takeaway'' AND qo.table_id IS NULL AND qo.cashier_id=auth.uid() AND qo.status=''open'' AND qo.created_at>=transaction_timestamp() AND public.user_may_access_branch(qo.branch_id))) THEN';
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'QUICK_CREATE_ITEMS_BASELINE_MISMATCH'; END IF;
  v_def:=replace(v_def,v_old,v_new);
  -- Item inserts synchronously recalculate this just-created order. Authorize

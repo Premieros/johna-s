@@ -4,10 +4,10 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `4b31f2412eadf624ecb1d6f32cfdf54469c37614` (#519 deployed)
+- Latest main baseline reconciled: `6d9cf06bbd2572a525e2b4419bdf971437265c1b` (#522 merged; this task has not changed production)
 - Current active branch: `feature/reports-month-close-quick-orders-20261020`
 - Mandatory active work log: `docs/MONTH_CLOSE_REPORTS_20261020.md`
-- Owner directs repair NOW while retaining installed Windows agent, then explicitly requests last approved raw prices rather than heavy FIFO costing. Bound future report payloads atomically and idempotently at enqueue. Value operational consumption quantities at latest approved raw price once per consumed material. Preserve historical stock/accounting transactions and all quantity writers. No agent/claim/start/complete/kitchen/bar changes or replay. Fix noisy CI FIFO issue measurement using zero projection-trigger calls/writes with a purchase positive control, not arbitrary WAL median thresholds.
+- Owner approved monthly report restructuring, a clear purchase-only consumption report and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
 ## Owner-approved reporting rebuild — 2026-10-20
 - Single active writer on main baseline `6d9cf06bbd2572a525e2b4419bdf971437265c1b`.

@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'reader', role: 'manager' } }) }));
+vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => 'branch-a' }));
+vi.mock('@/hooks/useReportPermissionVersion', () => ({ useReportPermissionVersion: () => 1 }));
 const permissions = vi.hoisted(() => new Set<string>());
 vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => permissions.has(permission) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en' }) }));
