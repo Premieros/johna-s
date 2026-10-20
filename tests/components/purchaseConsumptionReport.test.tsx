@@ -38,6 +38,7 @@ describe('purchase-priced consumption workspace',()=>{
   state.load.mockResolvedValueOnce({data:{...data,summary},error:null}).mockResolvedValueOnce({data:{...data,rows:Array.from({length:101},(_,i)=>({...row,raw_material_id:String(i)})),summary},error:null});
   open();fireEvent.click(screen.getByRole('button',{name:'Run report'}));await screen.findByText('Flour');fireEvent.click(screen.getByRole('button',{name:'Excel'}));
   await waitFor(()=>expect(state.excel).toHaveBeenCalledTimes(1));expect(state.excel.mock.calls[0][0].data).toHaveLength(101);
+  expect(state.excel.mock.calls[0][0]).toMatchObject({title:'Consumption at last purchase price',totalRow:{'Total consumption value':4545,'Rows without a purchase price':0}});
   state.load.mockResolvedValue({data:{...data,summary:{...summary,total:1}},error:null});fireEvent.click(screen.getByRole('button',{name:'Excel'}));
   await screen.findByRole('alert');expect(state.excel).toHaveBeenCalledTimes(1);
  });

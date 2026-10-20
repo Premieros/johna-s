@@ -90,8 +90,11 @@ export function ConsumptionReportPage() {
    if(liveScope.current!==requestScope || controller.signal.aborted) { win?.close();return; }
    const output=records(rows);
    const note=`${result.query.from} — ${result.query.to} · ${text('صافي الاستهلاك × آخر سعر شراء متاح وقت الاستخراج؛ إجمالي المسعّر فقط','Net consumption × latest purchase at extraction; priced subtotal only')}`;
-   if(kind==='excel') await exportToExcelAdvanced({data:output,columns,filename:'consumption_purchase',sheetName:'Consumption',sourceNote:note,lang});
-   else openPrintWindow({title:text('استهلاك الخامات بآخر سعر شراء','Consumption at last purchase price'),subtitle:note,headers:columns,rows:output.map(row=>columns.map(key=>String(row[key]??''))),lang},win);
+   const title=text('استهلاك الخامات بآخر سعر شراء','Consumption at last purchase price');
+   const totalLabel=text(result.result.summary.complete?'إجمالي قيمة الاستهلاك':'إجمالي المسعّر فقط',result.result.summary.complete?'Total consumption value':'Priced subtotal only');
+   const missingLabel=text('صفوف بلا سعر شراء','Rows without a purchase price');
+   if(kind==='excel') await exportToExcelAdvanced({data:output,columns,filename:'consumption_purchase',sheetName:'Consumption',title,subtitle:`${result.query.from} — ${result.query.to} · ${currency}`,totalRow:{[totalLabel]:result.result.summary.total,[missingLabel]:result.result.summary.unpriced_count},currencyColumns:[labels.last_purchase_price,labels.consumption_value],sourceNote:note,lang});
+   else openPrintWindow({title,subtitle:`${note} · ${totalLabel}: ${number(result.result.summary.total)} ${currency} · ${missingLabel}: ${result.result.summary.unpriced_count}`,headers:columns,rows:output.map(row=>columns.map(key=>String(row[key]??''))),lang},win);
   } catch(failure) { win?.close();if(!controller.signal.aborted && liveScope.current===requestScope) setError(failure); }
   finally { if(pending.current===controller && liveScope.current===requestScope)setBusy(false); }
  }
