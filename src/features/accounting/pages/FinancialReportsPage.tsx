@@ -290,12 +290,13 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     { key: 'party_statement', label: t('partyStatement'), icon: <Receipt className="w-4 h-4" /> },
   ];
 
+  const periodView = ['ledger','treasury_statement','inventory_movement','income','cash_flow','party_statement'].includes(view);
   const exportData = () => {
     const ar = (arabic: string, english: string) => isAr ? arabic : english;
     const currentTitle = views.find((item) => item.key === view)?.label || view;
     const base = {
       title: currentTitle,
-      subtitle: `${from} — ${to}`,
+      subtitle: periodView ? `${from} — ${to}` : `${t('asOf')}: ${to}`,
       lang: lang as 'ar' | 'en',
       sourceNote: ar(
         'الأرقام من نفس RPC المحاسبي المستخدم في الشاشة؛ لا يعاد حسابها داخل ملف Excel.',
@@ -331,6 +332,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `general_ledger_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('مدين','Debit')]: sum(gl,row=>row.debit), [ar('دائن','Credit')]: sum(gl,row=>row.credit), [ar('الرصيد','Balance')]: gl.length ? gl[gl.length-1].balance : null },
         currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('البيان', 'Description')]: 38, [ar('المرجع', 'Reference')]: 20 },
@@ -348,6 +350,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `treasury_statement_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('وارد','Inflow')]:treasuryStmt.total_inflow, [ar('منصرف','Outflow')]:treasuryStmt.total_outflow, [ar('الرصيد','Balance')]:treasuryStmt.closing_balance },
         currencyColumns: [ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('نوع الحركة', 'Movement'), ar('المرجع', 'Reference'), ar('البيان', 'Description'), ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الرصيد', 'Balance')],
         columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('نوع الحركة', 'Movement')]: 18, [ar('المرجع', 'Reference')]: 20, [ar('البيان', 'Description')]: 38 },
@@ -368,6 +371,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `inventory_movement_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('وارد','In')]:inventoryStmt.total_in, [ar('منصرف','Out')]:inventoryStmt.total_out, [ar('الرصيد','Balance')]:inventoryStmt.closing_quantity },
         currencyColumns: [ar('تكلفة الوحدة', 'Unit Cost'), ar('إجمالي التكلفة', 'Total Cost')],
         columns: [ar('التاريخ', 'Date'), ar('نوع الحركة', 'Type'), ar('المخزن', 'Warehouse'), ar('المرجع', 'Reference'), ar('التشغيلة', 'Batch'), ar('وارد', 'In'), ar('منصرف', 'Out'), ar('الرصيد', 'Balance'), ar('تكلفة الوحدة', 'Unit Cost'), ar('إجمالي التكلفة', 'Total Cost')],
         columnWidths: { [ar('التاريخ', 'Date')]: 18, [ar('نوع الحركة', 'Type')]: 18, [ar('المخزن', 'Warehouse')]: 22, [ar('المرجع', 'Reference')]: 20, [ar('التشغيلة', 'Batch')]: 18 },
@@ -405,6 +409,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `${view}_${to}`, sheetName: currentTitle,
+        totalRow: { [outstandingLabel]:sum<ArAgingRow | ApAgingRow>(source,row=>row.open_amount), '0-30':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_0_30), '31-60':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_31_60), '61-90':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_61_90), '90+':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_90_plus) },
         currencyColumns: [outstandingLabel, '0-30', '31-60', '61-90', '90+'],
         columns: [partyLabel, ar('الهاتف', 'Phone'), outstandingLabel, '0-30', '31-60', '61-90', '90+'],
         columnWidths: { [partyLabel]: 30, [ar('الهاتف', 'Phone')]: 18 },
@@ -425,6 +430,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `cash_flow_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('وارد','Inflow')]:sum(cashFlow,row=>row.inflow), [ar('منصرف','Outflow')]:sum(cashFlow,row=>row.outflow), [ar('الصافي','Net')]:sum(cashFlow,row=>row.net) },
         currencyColumns: [ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الصافي', 'Net')],
         columns: [ar('الحساب', 'Account'), ar('النوع', 'Type'), ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الصافي', 'Net')],
         columnWidths: { [ar('الحساب', 'Account')]: 32, [ar('النوع', 'Type')]: 18 },
@@ -442,6 +448,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `party_statement_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('مدين','Debit')]:sum(partyStmt.rows,row=>row.debit), [ar('دائن','Credit')]:sum(partyStmt.rows,row=>row.credit), [ar('الرصيد','Balance')]:partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length-1].balance : partyStmt.opening },
         currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('البيان', 'Description')]: 38, [ar('المرجع', 'Reference')]: 20 },
@@ -467,6 +474,9 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   ] : [];
 
   const tbTotals = tb.reduce((acc, r) => ({ debit: acc.debit + Number(r.debit), credit: acc.credit + Number(r.credit) }), { debit: 0, credit: 0 });
+
+  const footer = (cells: Array<string | number | null>) => <tfoot><tr>{cells.map((value,index)=><td key={index} className="text-end">{typeof value==='number'?formatCurrency(value,currency,lang):value ?? '—'}</td>)}</tr></tfoot>;
+  const sum = <T,>(rows: T[], value: (row: T) => number) => rows.every(row=>Number.isFinite(value(row))) ? rows.reduce((total,row)=>total+value(row),0) : null;
 
   const partyList = partySide === 'ar' ? customers : suppliers;
   const movementLabel = (type: string | null | undefined) => {
@@ -498,7 +508,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </div>
       )}
 
-      <details className="mb-2"><summary className="cursor-pointer text-sm font-semibold">{isAr ? 'الفترة والفلاتر' : 'Period & filters'} · {from} — {to}</summary><DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
+      <details open className="mb-2"><summary className="cursor-pointer text-sm font-semibold">{isAr ? 'الفترة والفلاتر' : 'Period & filters'}{periodView ? ` · ${from} — ${to}` : ` · ${t('asOf')}: ${to}`}</summary><DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">
           {!hideViewPicker && (
             <div className="flex flex-wrap gap-2">
@@ -511,8 +521,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
             </div>
           )}
           <div className="flex flex-wrap items-end gap-4">
-            {(view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
-            <Input label={view === 'income' || view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
+            {periodView && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
+            <Input label={periodView ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
             {view === 'ledger' && accounts.length > 0 && (
               <Select label={t('accountName')} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">{t('allAccounts')}</option>
@@ -602,6 +612,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                     <td className={`px-4 py-3 text-end font-semibold ${r.balance < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{formatCurrency(r.balance, currency, lang)}</td>
                   </tr>
                 ))}
+              </tbody>
+              <tfoot>
                 {tb.length > 0 && (
                   <tr className="bg-ui-page-alt/60 font-semibold text-ui-text">
                     <td className="px-4 py-3" colSpan={3}>{t('total')}</td>
@@ -610,7 +622,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                     <td className="px-4 py-3 text-end">{formatCurrency(tbTotals.debit - tbTotals.credit, currency, lang)}</td>
                   </tr>
                 )}
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </Card>
@@ -643,6 +655,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'','','',sum(gl,row=>row.debit),sum(gl,row=>row.credit),gl.length ? gl[gl.length-1].balance : null])}
             </table>
           </div>
         </Card>
@@ -680,6 +693,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                       <td className="px-3 py-3 text-end font-semibold">{formatCurrency(r.balance, currency, lang)}</td>
                     </tr>)}
                   </tbody>
+              {footer([t('total'),'','','',treasuryStmt.total_inflow,treasuryStmt.total_outflow,treasuryStmt.closing_balance])}
                 </table>
               </div>
             </>
@@ -719,7 +733,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                       <td className="px-3 py-3 text-end font-semibold">{r.balance}</td>
                       <td className="px-3 py-3 text-end">{formatCurrency(r.unit_cost, currency, lang)}</td>
                     </tr>)}
-                  </tbody>
+                  </tbody><tfoot><tr><td>{t('total')}</td><td></td><td></td><td></td><td>{inventoryStmt.total_in}</td><td>{inventoryStmt.total_out}</td><td>{inventoryStmt.closing_quantity}</td><td></td></tr></tfoot>
                 </table>
               </div>
             </>
@@ -799,6 +813,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'',sum(arAging,row=>row.open_amount),sum(arAging,row=>row.bucket_0_30),sum(arAging,row=>row.bucket_31_60),sum(arAging,row=>row.bucket_61_90),sum(arAging,row=>row.bucket_90_plus)])}
             </table>
           </div>
         </Card>
@@ -831,6 +846,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'',sum(apAging,row=>row.open_amount),sum(apAging,row=>row.bucket_0_30),sum(apAging,row=>row.bucket_31_60),sum(apAging,row=>row.bucket_61_90),sum(apAging,row=>row.bucket_90_plus)])}
             </table>
           </div>
         </Card>
@@ -904,6 +920,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'',sum(cashFlow,row=>row.inflow),sum(cashFlow,row=>row.outflow),sum(cashFlow,row=>row.net)])}
             </table>
           </div>
         </Card>
@@ -944,6 +961,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                       </tr>
                     ))}
                   </tbody>
+              {footer([t('total'),'','',sum(partyStmt.rows,row=>row.debit),sum(partyStmt.rows,row=>row.credit),partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length-1].balance : partyStmt.opening])}
                 </table>
               </div>
             </>

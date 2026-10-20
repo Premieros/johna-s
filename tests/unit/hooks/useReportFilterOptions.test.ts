@@ -39,6 +39,20 @@ describe('scoped report filter options', () => {
     expect(mocks.options).toHaveBeenCalledTimes(2);
   });
 
+  it('loads one scoped set for all permitted branches, including purchase materials',async()=>{
+    const {result}=renderHook(()=>useReportFilterOptions('purchases',null,'reader',['a','b']));
+    await waitFor(()=>expect(result.current.loading).toBe(false));
+    expect(mocks.options).toHaveBeenCalledOnce();
+    expect(mocks.options.mock.calls[0]).toEqual([['a','b'],expect.objectContaining({raw_material:true,material_category:true,supplier:true,product:false})]);
+  });
+
+  it('reuses equivalent branch scopes and reloads when the permitted branches actually change',async()=>{
+    const {result,rerender}=renderHook(({branches})=>useReportFilterOptions('purchases',null,'reader',branches),{initialProps:{branches:['a','b']}});
+    await waitFor(()=>expect(result.current.loading).toBe(false));expect(mocks.options).toHaveBeenCalledOnce();
+    rerender({branches:['a','b']});await act(async()=>{});expect(mocks.options).toHaveBeenCalledOnce();
+    rerender({branches:['b']});await waitFor(()=>expect(mocks.options).toHaveBeenCalledTimes(2));expect(mocks.options.mock.calls[1][0]).toEqual(['b']);
+  });
+
   it('exposes a partial-read failure and retries the whole snapshot', async () => {
     mocks.categories.mockRejectedValueOnce(new Error('categories unavailable')).mockResolvedValueOnce(['Recovered']);
     const { result } = renderHook(() => useReportFilterOptions('expenses' as ReportType, 'a', 'reader'));

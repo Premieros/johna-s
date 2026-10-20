@@ -38,6 +38,8 @@ export interface AnalysisColumn {
 }
 
 const aliases: [string, string][] = [
+  ['إجمالي البنود', 'Line Gross'], ['مرتجع البنود', 'Line Returned'], ['صافي قيمة البنود', 'Line Net'], ['نوع الخامة', 'Material Category'], ['الخامة', 'Material'],
+  ['تكلفة المباع بسعر وقت الإرسال', 'Sale-time Ingredient Cost'], ['مجمل الربح بالتكلفة المحفوظة', 'Gross Profit (Saved Cost)'], ['تكلفة بسعر وقت الإرسال (تقديرية)', 'Sale-time Cost (Estimated)'], ['تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)'],
   ['قبل الخصم والضريبة', 'Subtotal'], ['الخصم', 'Discount'], ['الضريبة', 'Tax'],
   ['إجمالي الفاتورة', 'Invoice Total'], ['المدفوع', 'Paid'], ['صافي التحصيل', 'Net Collection'],
   ['المستخدم', 'User'], ['المخزن', 'Warehouse'], ['نوع الطلب', 'Order Type'],
@@ -63,6 +65,8 @@ const additive = new Set([
   'Net Revenue', 'Net Sales', 'Original Total', 'Invoice Total', 'Refunded', 'Refunded Amount',
   'Subtotal', 'Discount', 'Tax', 'Paid', 'Net Paid', 'Net Collection', 'Returned', 'Net Purchases', 'Amount',
   'Recorded Cost', 'Current-price Sold Cost', 'Priced Components Only', 'Recorded Gross Profit', 'Current-price Gross Profit',
+  'Sale-time Ingredient Cost', 'Gross Profit (Saved Cost)', 'Sale-time Cost (Estimated)', 'Priced Components Cost (Estimated)',
+  'Line Gross', 'Line Returned', 'Line Net', 'Consumption Value', 'Opening Value', 'Purchase Value', 'Sales Consumption Value', 'Closing Value', 'Current Inventory Value', 'End-of-day Recorded Value', 'Theoretical Value', 'Actual Value', 'Value Difference', 'Cash', 'Card', 'Transfer', 'Legacy Bank', 'Credit — Customer outstanding', 'Cash GL', 'Bank GL', 'Cash Difference', 'Bank Difference', 'Gross Sales', 'Discounts', 'Taxes', 'Returns', 'Other Payment', 'Cash Purchases', 'Cash After Outflows', 'Net Sale',
   'COGS', 'Gross Profit', 'Expenses', 'Net Profit', 'Total Cost', 'Consumption Cost', 'Invoices',
 ]);
 
@@ -75,6 +79,6 @@ export function analysisColumns(type: ReportType, rows: Record<string, unknown>[
   return Object.keys(rows[0] || {}).map(key => {
     const id = map.get(key) || `${type}:${key}`;
     const numeric = rows.some(row => typeof row[key] === 'number');
-    return { id, key, numeric, aggregation: numeric && additive.has(id) ? 'sum' : 'none' };
+    return { id, key, numeric, aggregation: numeric && additive.has(id) && !(type==='sales_by_payment' && id==='Invoices') ? 'sum' : 'none' };
   });
 }
