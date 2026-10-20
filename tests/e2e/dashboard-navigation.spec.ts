@@ -193,7 +193,7 @@ test.describe('dashboard and navigation actions', () => {
         id: `p-${start + i}`, invoice_number: `PAGE-${start + i}`, created_at: '2026-10-06T08:00:00Z',
         total: 10, paid_amount: 10, refunded_amount: 0, status: 'completed',
       }));
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { total: 2050, count: 205 } }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, summary: { total: 2050, count: 205 }, metrics: {'Subtotal':0,'Discount':0,'Tax':0,'Invoice Total':2050,'Paid':2050,'Refunded':0,'Net Sales':2050,'Net Collection':2050} }) });
     });
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
@@ -209,7 +209,13 @@ test.describe('dashboard and navigation actions', () => {
         await expect(grid.locator('thead')).toHaveCSS('position', 'sticky');
         await expect(results.getByText('PAGE-0', { exact: true })).toHaveAttribute('data-primary', 'true');
         await expect(results.getByText('PAGE-0', { exact: true })).toHaveCSS('position', 'sticky');
-        await expect(page.getByTestId('report-grand-total')).toContainText('205');
+        const headings = await grid.locator('thead th').allTextContents();
+        const netColumn = headings.findIndex(text => /صافي المبيعات|Net Sales/.test(text));
+        expect(netColumn).toBeGreaterThanOrEqual(0);
+        const totalCells = page.getByTestId('report-grand-total').locator('td');
+        await expect(totalCells).toHaveCount(headings.length);
+        await expect(totalCells.nth(netColumn)).toContainText('2,050');
+        expect(await totalCells.nth(netColumn).getAttribute('colspan')).toBeNull();
         const top = await grid.locator('thead').evaluate(el => el.getBoundingClientRect().top);
         await grid.evaluate(el => { el.scrollTop = 350; });
         expect(Math.abs((await grid.locator('thead').evaluate(el => el.getBoundingClientRect().top)) - top)).toBeLessThan(2);
@@ -220,6 +226,7 @@ test.describe('dashboard and navigation actions', () => {
       await expect(results.getByText('PAGE-100', { exact: true })).toBeVisible();
       expect(reads[reads.length - 1]?.p_page).toBe(1);
       await expect(pager).toContainText('205');
+      if (width>=640) { const headings=await results.locator('thead th').allTextContents(); const index=headings.findIndex(text=>/صافي المبيعات|Net Sales/.test(text)); await expect(page.getByTestId('report-grand-total').locator('td').nth(index)).toContainText('2,050'); }
       expect(fullSalesReads).toBe(0);
     }
   });
