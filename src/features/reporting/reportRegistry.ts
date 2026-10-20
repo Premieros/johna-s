@@ -173,9 +173,9 @@ export const REPORT_REGISTRY: ReportDefinition[] = [
   {
     key: 'component_consumption',
     category: 'manufacturing_costing',
-    title: 'استهلاك المكونات',
-    titleEn: 'Component Consumption',
-    description: 'كمية كل مكون مستهلكة من تشغيل المبيعات',
+    title: 'استهلاك الخامات بآخر سعر شراء',
+    titleEn: 'Material Consumption at Last Purchase',
+    description: 'صافي الاستهلاك الفعلي خلال الفترة بالخامـة أو المنتج، مضروبًا في آخر سعر شراء مكتمل',
     descriptionEn: 'Raw materials consumed by sales operations',
     icon: 'Factory',
     permissions: ['reports.view', 'reports.costing'],

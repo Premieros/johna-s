@@ -26,6 +26,7 @@ export interface PermissionContract {
 
 const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'pos.order.create': ['pos.view'],
+  'pos.order.quick_create': ['pos.view'],
   'pos.order.edit': ['pos.view'],
   'pos.payment.take': ['pos.view'],
   'pos.order.split': ['pos.view'],
@@ -379,6 +380,7 @@ export function missingPermissionDependencies(input: Iterable<Permission>): Arra
 export const POS_INTERACTIVE_PRESET_SCOPE: Permission[] = [
   'pos.view',
   'pos.order.create',
+  'pos.order.quick_create',
   'pos.order.edit',
   'pos.payment.take',
   'pos.order.split',

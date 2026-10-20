@@ -4,6 +4,7 @@ import { useCan } from '@/lib/permissions';
 export interface PosPermissions {
   canViewPos: boolean;
   canCreateOrder: boolean;
+  canCreateQuickOrder: boolean;
   canEditOrder: boolean;
   canDeleteItem: boolean;
   canVoidSentItem: boolean;
@@ -36,6 +37,7 @@ export function usePosPermissions(): PosPermissions {
   return useMemo<PosPermissions>(() => ({
     canViewPos: can('pos.view'),
     canCreateOrder: can('pos.order.create'),
+    canCreateQuickOrder: can('pos.order.create') || can('pos.order.quick_create'),
     canEditOrder: can('pos.order.edit'),
     // Unsent line removal is an order edit. Sent-item Void stays a separate
     // direct capability; users without it can still enter the approval path.

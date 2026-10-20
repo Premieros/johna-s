@@ -148,7 +148,7 @@ export function PosTopBar({
           <p className="text-sm font-black text-ui-text">Premier</p>
           <p className="text-[9px] font-black uppercase tracking-[.16em] text-ui-accent">{t('pos')}</p>
         </div>
-        {perms.canCreateOrder && (
+        {(perms.canCreateOrder || perms.canCreateQuickOrder) && (
           <button
             onClick={onNewOrder}
             data-testid="pos-action-new-order"

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PERMISSION_GROUPS } from '@/lib/permissionDefs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -30,7 +31,7 @@ describe('POS customer receipt print contract', () => {
     const defs = fs.readFileSync(path.join(root, 'src/lib/permissionDefs.ts'), 'utf8');
     expect(defs).toContain("'pos.receipt.print'");
     expect(defs).toContain('إظهار زر طباعة إيصال البيع (أول مرة)');
-    expect(defs).toContain("permissions: ['pos.view', 'pos.order.create', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print'");
+    expect(PERMISSION_GROUPS.find(group => group.key === 'pos')?.permissions).toContain('pos.receipt.print');
   });
 
   it('prints the current open table order as a customer check before payment', () => {

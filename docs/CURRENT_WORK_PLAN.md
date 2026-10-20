@@ -5,9 +5,14 @@
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
 - Latest main baseline reconciled: `4b31f2412eadf624ecb1d6f32cfdf54469c37614` (#519 deployed)
-- Current active branch: `fix/safe-operational-ui-clarity-20261017`
-- Mandatory active work log: `docs/SAFE_OPERATIONAL_UI_CLARITY_20261017.md`
+- Current active branch: `feature/reports-month-close-quick-orders-20261020`
+- Mandatory active work log: `docs/MONTH_CLOSE_REPORTS_20261020.md`
 - Owner directs repair NOW while retaining installed Windows agent, then explicitly requests last approved raw prices rather than heavy FIFO costing. Bound future report payloads atomically and idempotently at enqueue. Value operational consumption quantities at latest approved raw price once per consumed material. Preserve historical stock/accounting transactions and all quantity writers. No agent/claim/start/complete/kitchen/bar changes or replay. Fix noisy CI FIFO issue measurement using zero projection-trigger calls/writes with a purchase positive control, not arbitrary WAL median thresholds.
+
+## Owner-approved reporting rebuild — 2026-10-20
+- Single active writer on main baseline `6d9cf06bbd2572a525e2b4419bdf971437265c1b`.
+- Implement essential monthly reports, explicit purchase-only consumption pricing and independent quick-takeaway creation permission. Use focused behavioral checks; retain required release gates. Prepare changes and PR before separate production approval.
+- Preserve installed Windows agents, kitchen/bar/receipt pipelines and stock/accounting writers. No production mutations or replay during development. Older scopes below are historical.
 
 ## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
 - The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.

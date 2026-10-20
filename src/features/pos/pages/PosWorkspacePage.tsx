@@ -151,7 +151,7 @@ export function PosWorkspacePage() {
     products,
     stockMap: EMPTY_POS_STOCK_MAP,
   });
-  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;
+  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : (pos.orderType === 'takeaway' ? perms.canCreateQuickOrder : perms.canCreateOrder);
 
   useEffect(() => {
     if (pos.receiptSaleId) setMobileOrderOpen(false);
@@ -206,7 +206,7 @@ export function PosWorkspacePage() {
       const send = kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id);
       return Number(send?.sent_quantity || 0) < cItem.quantity;
     });
-  }, [pos.cart, kitchenSendsByOrder, orderItemsForActive]);
+  }, [pos.cart, kitchenSendsForActive, orderItemsForActive]);
 
   const handlePay = useCallback(() => {
     if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
@@ -496,7 +496,7 @@ export function PosWorkspacePage() {
   };
 
   const handleStartOrder = (opts: StartOrderOptions) => {
-    if (!perms.canCreateOrder) return;
+    if (opts.orderType === 'takeaway' ? !perms.canCreateQuickOrder : !perms.canCreateOrder) return;
     pos.resetWorkspace();
     pos.setOrderType(opts.orderType);
     if (opts.tableId) pos.setTableId(opts.tableId);
@@ -797,19 +797,19 @@ export function PosWorkspacePage() {
               setTransferSourceTable(tb);
               setTransferModalOpen(true);
             }}
-            onStartQuick={() => handleStartOrder({ orderType: 'takeaway' })}
-            onStartDelivery={() => {
+            onStartQuick={perms.canCreateQuickOrder ? () => handleStartOrder({ orderType: 'takeaway' }) : undefined}
+            onStartDelivery={perms.canCreateOrder ? () => {
               setStartStep('delivery');
               setPreselectedTableId(null);
               setPanel(null);
               setMobileOrderOpen(false);
-            }}
-            onStartDriveThru={() => {
+            } : undefined}
+            onStartDriveThru={perms.canCreateOrder ? () => {
               setStartStep('car');
               setPreselectedTableId(null);
               setPanel(null);
               setMobileOrderOpen(false);
-            }}
+            } : undefined}
             onOpenActiveOrders={() => {
               setStartStep(null);
               setPreselectedTableId(null);
