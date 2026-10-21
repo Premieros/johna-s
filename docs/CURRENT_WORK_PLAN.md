@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `9114865abdd198ee609f946715a1a83b17f1e206` (#527 merged/deployed)
-- Current active branch: `fix/production-audit-20261021`
-- Mandatory active work log: `docs/PRODUCTION_AUDIT_REPAIRS_20261021.md`
+- Latest main baseline reconciled: `c42e516f425175fc5bdd413e061601f76e9817c1` (#528 merged/deployed)
+- Current active branch: `fix/finance-payment-feedback-20261021`
+- Mandatory active work log: `docs/FINANCE_PAYMENT_REPAIRS_20261021.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active production audit repairs — 2026-10-21
+## Active finance payment repair — 2026-10-21
+Owner authorizes fixing verified supplier-payment/treasury failures at their cause. Compare exact production source and historical chronology first. Preserve server balance, invoice, permission and ledger guards. Frontend-only candidate; no production mutation/merge during preparation. Previous #528 is released; installed Windows agents and local pilot remain unchanged.
+
+## Historical production audit repairs — 2026-10-21
 Owner authorized repairing the five findings from the read-only production audit. Prepare and test on this isolated branch; preserve installed print agents, all operational security and data. No merge or production migration during preparation. Local Windows pilot remains isolated and forbidden to merge.
 
 ## Historical sold-recipe cost report — 2026-10-20

@@ -57,6 +57,54 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
 };
 
 const messages: Record<string, { ar: string; en: string }> = {
+  MAIN_TREASURY_PAYMENT_PERMISSION_REQUIRED: {
+    ar: 'لا تملك صلاحية «السداد من الخزنة الرئيسية». اختر مصدرًا مسموحًا أو راجع المسؤول.',
+    en: 'You do not have Pay from Main Treasury permission. Choose an authorized source or contact an administrator.',
+  },
+  INSUFFICIENT_TREASURY_BALANCE: {
+    ar: 'رصيد مصدر السداد لا يكفي للمبلغ المطلوب. لم تُعتمد العملية. راجع الرصيد المحدّث أو اختر مصدرًا آخر مسموحًا.',
+    en: 'The funding account balance is insufficient. The operation was rejected. Review the updated balance or choose another authorized source.',
+  },
+  PAYMENT_EXCEEDS_INVOICE: {
+    ar: 'المبلغ أكبر من المتبقي على الفاتورة المختارة. عدّل المبلغ أو اختر السداد على جميع الفواتير.',
+    en: 'The amount exceeds the selected invoice balance. Adjust it or choose all invoices.',
+  },
+  PAYMENT_EXCEEDS_AR: {
+    ar: 'المبلغ أكبر من إجمالي المستحق على العميل. راجع المبلغ وكشف الحساب المحدّث.',
+    en: 'The amount exceeds the customer balance. Review the amount and updated statement.',
+  },
+  SALE_NOT_FOUND: {
+    ar: 'الفاتورة المختارة غير متاحة لهذا العميل والفرع. أعد تحميل الفواتير قبل السداد.',
+    en: 'The selected invoice is unavailable for this customer and branch. Reload invoices before paying.',
+  },
+  NOT_ALLOWED: {
+    ar: 'لا تملك صلاحية تنفيذ هذه العملية. راجع المسؤول.',
+    en: 'You do not have permission for this operation. Contact an administrator.',
+  },
+  INVALID_AMOUNT: {
+    ar: 'أدخل مبلغًا صحيحًا أكبر من صفر.',
+    en: 'Enter a valid amount greater than zero.',
+  },
+  PAYMENT_EXCEEDS_AP: {
+    ar: 'المبلغ أكبر من إجمالي المستحق للمورد. راجع المبلغ والمديونية المحدّثة.',
+    en: 'The amount exceeds the supplier balance. Review the amount and updated outstanding balance.',
+  },
+  FINANCE_INVOICES_UNAVAILABLE: {
+    ar: 'تعذر تحميل الفواتير المستحقة. أعد فتح نافذة السداد لتحميلها؛ لم تُعرض قائمة ناقصة.',
+    en: 'Outstanding invoices could not be loaded. Reopen the payment dialog to reload; no incomplete list was shown.',
+  },
+  FINANCE_INVOICE_LIMIT: {
+    ar: 'تاريخ هذا الحساب يتجاوز حد القراءة الآمنة. لم تُعرض قائمة فواتير جزئية؛ راجع كشف الحساب مع المسؤول.',
+    en: 'This account history exceeds the safe read limit. No partial invoice list was shown; review the statement with an administrator.',
+  },
+  FINANCE_RESULT_UNCONFIRMED: {
+    ar: 'تعذر تأكيد نتيجة العملية بسبب مشكلة اتصال. راجع سجل المدفوعات أو التحويلات قبل إعادة المحاولة لتجنب تكرارها.',
+    en: 'The operation outcome could not be confirmed. Review payment or transfer history before retrying to avoid duplication.',
+  },
+  FINANCE_BALANCE_UNAVAILABLE: {
+    ar: 'تعذر تحميل رصيد الخزينة. أعد تحميل البيانات قبل السداد؛ الرصيد غير معروف وليس صفرًا.',
+    en: 'The treasury balance could not be loaded. Reload before paying; the balance is unknown, not zero.',
+  },
   KITCHEN_WAREHOUSE_MISMATCH: {
     ar: 'تغيّر مخزن الطلب. لم يتم التحصيل؛ راجع المعاينة المحدّثة ثم أكّد مرة أخرى. لا تغيّر المخزن يدويًا.',
     en: 'The order warehouse changed. Payment was not taken; review the refreshed preview and confirm again. Do not switch warehouses manually.',

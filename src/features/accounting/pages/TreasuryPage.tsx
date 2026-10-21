@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Landmark, ArrowLeftRight, PiggyBank, HandCoins, Wallet, FileText } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -21,6 +21,10 @@ import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { TreasurySource, TreasuryTransaction } from '@/lib/types';
 import { buildA4DayClosingReportHtml, fetchDayClosingReportServer } from '@/features/trade/services/dayClosingReport';
+
+import { useFinanceScope } from '../hooks/useFinanceScope';
+import { financeRejectionMessage, type FinanceResult } from '../services/financeFeedback';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 type ModalType = 'transfer' | 'deposit' | 'withdrawal' | null;
 type TreasuryScopeView = 'branch' | 'main';
@@ -84,11 +88,11 @@ export function TreasuryPage() {
   const { branches } = useBranches();
   const isAr = lang === 'ar';
 
-  const [balances, setBalances] = useState<TreasurySource[]>([]);
-  const [accounts, setAccounts] = useState<TreasurySource[]>([]);
+  const [storedBalances, setBalances] = useState<TreasurySource[]>([]);
+  const [storedAccounts, setAccounts] = useState<TreasurySource[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminBranchFilter, setAdminBranchFilter] = useState('');
-  const [dayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
+  const [storedDayCloses, setDayCloses] = useState<TreasuryDayCloseRow[]>([]);
   const [treasuryView, setTreasuryView] = useState<TreasuryScopeView>('branch');
   const dailyColumnOptions = [
     'business_date','cash_opening_balance','bank_opening_balance','shift_cash_net','cash_day_net','cash_sales','bank_sales','credit_sales','cash_purchases','expenses','transfer_in','transfer_out','cash_balance_after_close','bank_balance_after_close','closing_balance','report',
@@ -120,6 +124,16 @@ export function TreasuryPage() {
 
   const effectiveBranchFilter = isAdminRole(user?.role) ? (adminBranchFilter || null) : branchFilter;
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const { key: scopeKey, capture } = useFinanceScope(effectiveBranchFilter);
+  const [loadedScope, setLoadedScope] = useState('');
+  const [dialogScope, setDialogScope] = useState('');
+  const [overviewError, setOverviewError] = useState('');
+  const [dayError, setDayError] = useState('');
+  const [outcomeUnconfirmed, setOutcomeUnconfirmed] = useState(false);
+  const submitting = useRef(false);
+  const balances = loadedScope === scopeKey ? storedBalances : [];
+  const accounts = loadedScope === scopeKey ? storedAccounts : [];
+  const dayCloses = useMemo(() => loadedScope === scopeKey ? storedDayCloses : [], [loadedScope, scopeKey, storedDayCloses]);
   const mainTreasuryAccounts = balances.filter((b) => b.scope === 'organization');
   const mainTreasuryBalance = mainTreasuryAccounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
   const mainAccountIds = mainTreasuryAccounts.map((account) => account.id);
@@ -142,38 +156,38 @@ export function TreasuryPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ from_account_id: '', to_account_id: '', account_id: '', amount: '', notes: '' });
 
-  const loadOverview = useCallback(async () => {
-    setLoading(true);
+  const loadOverview = useCallback(async (balanceOnly = false) => {
+    const isCurrent = capture('overview');
+    setLoading(true); setOverviewError(''); setLoadedScope('');
     try {
       if (effectiveBranchFilter) {
-        const { data } = await api.accounting.getAccessibleTreasuryAccounts({
-          p_branch_id: effectiveBranchFilter,
-        });
-        const sourceRows = (data as TreasurySource[]) || [];
-        setBalances(sourceRows);
-        setAccounts(sourceRows);
-        const { data: closeData } = await api.accounting.getBranchTreasuryDayCloseReconciliation({
-          p_branch_id: effectiveBranchFilter,
-          p_limit: 60,
-        });
+        const { data, error } = await api.accounting.getAccessibleTreasuryAccounts({ p_branch_id: effectiveBranchFilter });
+        if (!isCurrent()) return;
+        if (error || !Array.isArray(data)) throw new Error('FINANCE_BALANCE_UNAVAILABLE');
+        const sourceRows = data as TreasurySource[];
+        setBalances(sourceRows); setAccounts(sourceRows); setLoadedScope(scopeKey);
+        if (balanceOnly) return;
+        const { data: closeData, error: closeError } = await api.accounting.getBranchTreasuryDayCloseReconciliation({ p_branch_id: effectiveBranchFilter, p_limit: 60 });
+        if (!isCurrent()) return;
         const closePayload = closeData as { success?: boolean; rows?: TreasuryDayCloseRow[] } | null;
+        setDayError(closeError || !closePayload?.success ? userFacingErrorMessage('FINANCE_BALANCE_UNAVAILABLE', lang) : '');
         setDayCloses(closePayload?.success ? (closePayload.rows || []) : []);
-      } else {
-        setBalances([]);
-        setAccounts([]);
-        setDayCloses([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [effectiveBranchFilter]);
+      } else { setBalances([]); setAccounts([]); setDayCloses([]); }
+    } catch {
+      if (isCurrent()) { setOverviewError(userFacingErrorMessage('FINANCE_BALANCE_UNAVAILABLE', lang)); setLoadedScope(''); }
+    } finally { if (isCurrent()) setLoading(false); }
+  }, [effectiveBranchFilter, capture, scopeKey, lang]);
 
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
+  useEffect(() => { setModal(null); setSelectedDay(null); setOutcomeUnconfirmed(false); }, [scopeKey]);
+
   const openDayCloseDetail = async (row: TreasuryDayCloseRow) => {
     if (!effectiveBranchFilter) return;
+    const isCurrent = capture('day-detail');
     try {
       const report = await fetchDayClosingReportServer(effectiveBranchFilter, row.business_date);
+      if (!isCurrent()) return;
       const html = buildA4DayClosingReportHtml(report, currency, lang);
       const w = window.open('', '_blank', 'width=1000,height=850');
       if (!w) {
@@ -183,55 +197,50 @@ export function TreasuryPage() {
       w.document.write(html);
       w.document.close();
     } catch (err: unknown) {
+      if (!isCurrent()) return;
       show(err instanceof Error ? err.message : (isAr ? 'تعذر تحميل تقرير إغلاق اليوم' : 'Could not load day-closing report'), 'error');
     }
   };
 
   const openModal = (m: Exclude<ModalType, null>) => {
+    if (loadedScope !== scopeKey || overviewError || submitting.current) return;
+    setDialogScope(scopeKey); setOutcomeUnconfirmed(false);
     setForm({ from_account_id: '', to_account_id: '', account_id: '', amount: '', notes: '' });
     setModal(m);
   };
 
   const submit = async () => {
+    if (!effectiveBranchFilter || dialogScope !== scopeKey || loadedScope !== scopeKey || submitting.current || outcomeUnconfirmed) return;
     const amount = Number(form.amount);
-    if (!amount || amount <= 0) { show(t('required'), 'error'); return; }
-    if (!effectiveBranchFilter) { show(t('filterByBranch'), 'error'); return; }
-    setSaving(true);
-    let result: { data: unknown; error: { message: string } | null };
-    if (modal === 'transfer') {
-      if (!form.from_account_id || !form.to_account_id) { setSaving(false); show(t('required'), 'error'); return; }
-      result = await api.accounting.processTreasuryTransferV2({
-        p_from_account_id: form.from_account_id,
-        p_to_account_id: form.to_account_id,
-        p_amount: amount,
-        p_notes: form.notes || null,
-      });
-    } else if (modal === 'deposit') {
-      if (!form.account_id) { setSaving(false); show(t('required'), 'error'); return; }
-      result = await api.accounting.processTreasuryDeposit({
-        p_branch_id: effectiveBranchFilter,
-        p_account_id: form.account_id,
-        p_amount: amount,
-        p_notes: form.notes || null,
-      });
-    } else {
-      if (!form.account_id) { setSaving(false); show(t('required'), 'error'); return; }
-      result = await api.accounting.processTreasuryWithdrawal({
-        p_branch_id: effectiveBranchFilter,
-        p_account_id: form.account_id,
-        p_amount: amount,
-        p_notes: form.notes || null,
-      });
-    }
-    setSaving(false);
-    const { data, error } = result as { data: { success: boolean; error?: string; detail?: string; reference_number?: string } | null; error: { message: string } | null };
-    if (error) { show(error.message, 'error'); return; }
-    if (!data?.success) { show(data?.detail || data?.error || t('error'), 'error'); return; }
-    show(`${formatCurrency(amount, currency, lang)} (${data.reference_number || ''})`, 'success');
-    await logAudit('create', 'treasury_transactions', undefined, { type: modal, amount, reference: data.reference_number });
-    setModal(null);
-    void loadOverview();
-    reloadTx();
+    if (!Number.isFinite(amount) || amount <= 0) { show(t('required'), 'error'); return; }
+    if (modal === 'transfer' && (!form.from_account_id || !form.to_account_id)) { show(t('required'), 'error'); return; }
+    if (modal === 'transfer' && form.from_account_id === form.to_account_id) { show(isAr ? 'اختر حسابين مختلفين للتحويل.' : 'Choose two different accounts.', 'error'); return; }
+    if (modal !== 'transfer' && !form.account_id) { show(t('required'), 'error'); return; }
+    const branchId = effectiveBranchFilter;
+    const source = accounts.find((account) => account.id === (modal === 'transfer' ? form.from_account_id : form.account_id));
+    const isCurrent = capture();
+    submitting.current = true; setSaving(true);
+    try {
+      const result = modal === 'transfer'
+        ? await api.accounting.processTreasuryTransferV2({ p_from_account_id: form.from_account_id, p_to_account_id: form.to_account_id, p_amount: amount, p_notes: form.notes || null })
+        : modal === 'deposit'
+          ? await api.accounting.processTreasuryDeposit({ p_branch_id: branchId, p_account_id: form.account_id, p_amount: amount, p_notes: form.notes || null })
+          : await api.accounting.processTreasuryWithdrawal({ p_branch_id: branchId, p_account_id: form.account_id, p_amount: amount, p_notes: form.notes || null });
+      if (result.error || !result.data) throw result.error || new Error('FINANCE_RESULT_UNCONFIRMED');
+      const data = result.data as FinanceResult;
+      // Transfer RPC owns its audit; deposit/withdrawal still need a branch-attributed UI audit.
+      if (data.success && modal !== 'transfer') await logAudit('create', 'treasury_transactions', undefined, { type: modal, amount, reference: data.reference_number }, source?.branch_id || branchId);
+      if (!isCurrent()) return;
+      if (!data.success) {
+        show(financeRejectionMessage(data, currency, lang), 'error', { source: data, branchId });
+        if (data.error === 'INSUFFICIENT_TREASURY_BALANCE') void loadOverview(true);
+        return;
+      }
+      show(`${formatCurrency(amount, currency, lang)} (${data.reference_number || ''})`, 'success');
+      setModal(null); void loadOverview(); reloadTx();
+    } catch (error) {
+      if (isCurrent()) { setOutcomeUnconfirmed(true); reloadTx(); show(userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang), 'error', { source: error, branchId }); }
+    } finally { submitting.current = false; setSaving(false); }
   };
 
   const localAccounts = accounts.filter(
@@ -351,12 +360,13 @@ export function TreasuryPage() {
         )}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {overviewError && <p role="alert" className="text-ui-danger">{overviewError}<Button onClick={() => void loadOverview()}>{t('refresh')}</Button></p>}
+      {loadedScope === scopeKey && !overviewError && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard title={isAr ? 'إجمالي خزائن الفرع' : 'Branch treasury total'} value={formatCurrency(totalCash + totalBank, currency, lang)} icon={<Wallet className="w-5 h-5" />} color="brand" />
         <StatCard title={isAr ? 'خزنة الفرع' : 'Branch cash'} value={formatCurrency(totalCash, currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
         <StatCard title={t('bank')} value={formatCurrency(totalBank, currency, lang)} icon={<Landmark className="w-5 h-5" />} color="blue" />
         <StatCard title={isAr ? 'الخزنة الرئيسية' : 'Main Treasury'} value={formatCurrency(mainTreasuryBalance, currency, lang)} icon={<PiggyBank className="w-5 h-5" />} color="purple" />
-      </div>
+      </div>}
 
       {isAdminRole(user?.role) && branches.length > 0 && (
         <DesignPanel testId="treasury-branch-panel" className="ui-accent-finance">
@@ -383,11 +393,12 @@ export function TreasuryPage() {
       </DesignPanel>
 
       <DesignPanel title={treasuryView === 'main' ? (isAr ? 'رصيد الخزنة الرئيسية' : 'Main treasury balance') : t('treasuryBalances')} testId="treasury-balances-panel">
-        <DataTable columns={balanceColumns} data={displayedBalances} loading={loading} error={txError} emptyMessage={t('noData')} />
+        <DataTable columns={balanceColumns} data={displayedBalances} loading={loading} error={overviewError || txError} emptyMessage={t('noData')} />
       </DesignPanel>
 
       {treasuryView === 'branch' && (
         <DesignPanel title={isAr ? 'يومية الخزينة' : 'Treasury Daily Journal'} testId="treasury-day-close-reconciliation-panel">
+          {dayError && <p role="alert" className="text-ui-danger">{dayError}</p>}
           <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
             {isAr
               ? 'يومية خزينة متصلة حسب يوم العمل: رصيد نقدي أول اليوم + صافي نقدي اليوم = رصيد نقدي آخر اليوم، ورصيد آخر اليوم يصبح رصيد أول اليوم التالي. صافي الشفتات مستقل ويُستخدم لعهدة الموظف، والعد النقدي لا يدخل في الحساب.'
@@ -469,8 +480,12 @@ export function TreasuryPage() {
         <DesignPagination loaded={transactions.length} total={txTotal} hasMore={txHasMore} loadingMore={loadingMoreTx} onLoadMore={loadMoreTx} />
       </DesignPanel>
 
-      <Modal open={modal === 'transfer'} onClose={() => setModal(null)} title={t('transfer')}>
+      <Modal open={modal === 'transfer' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('transfer')}>
         <div className="space-y-4">
+          {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
+          {overviewError && <p role="alert" className="text-ui-danger">{overviewError}</p>}
+          <p className="text-xs text-ui-muted">{isAr ? 'الرصيد المعروض وقت آخر تحميل. يُراجع الخادم الرصيد عند التنفيذ.' : 'Balance at last load. The server checks the current balance when submitting.'}</p>
+          <Button variant="secondary" disabled={saving || loading} onClick={() => void loadOverview(true)}>{isAr ? 'تحديث الرصيد' : 'Refresh balance'}</Button>
           <Select label={t('fromAccount')} value={form.from_account_id} onChange={(e) => setForm({ ...form, from_account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
             {accounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
@@ -483,13 +498,17 @@ export function TreasuryPage() {
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModal(null)}>{t('cancel')}</Button>
-            <Button onClick={submit} disabled={saving}><ArrowLeftRight className="w-4 h-4" /> {saving ? t('loading') : t('transfer')}</Button>
+            <Button onClick={submit} disabled={saving || loading || loadedScope !== scopeKey || outcomeUnconfirmed}><ArrowLeftRight className="w-4 h-4" /> {saving ? t('loading') : t('transfer')}</Button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={modal === 'deposit'} onClose={() => setModal(null)} title={t('deposit')}>
+      <Modal open={modal === 'deposit' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('deposit')}>
         <div className="space-y-4">
+          {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
+          {overviewError && <p role="alert" className="text-ui-danger">{overviewError}</p>}
+          <p className="text-xs text-ui-muted">{isAr ? 'الرصيد المعروض وقت آخر تحميل. يُراجع الخادم الرصيد عند التنفيذ.' : 'Balance at last load. The server checks the current balance when submitting.'}</p>
+          <Button variant="secondary" disabled={saving || loading} onClick={() => void loadOverview(true)}>{isAr ? 'تحديث الرصيد' : 'Refresh balance'}</Button>
           <Select label={t('accountName')} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
             {localAccounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
@@ -498,13 +517,17 @@ export function TreasuryPage() {
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModal(null)}>{t('cancel')}</Button>
-            <Button onClick={submit} disabled={saving}><PiggyBank className="w-4 h-4" /> {saving ? t('loading') : t('deposit')}</Button>
+            <Button onClick={submit} disabled={saving || loading || loadedScope !== scopeKey || outcomeUnconfirmed}><PiggyBank className="w-4 h-4" /> {saving ? t('loading') : t('deposit')}</Button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={modal === 'withdrawal'} onClose={() => setModal(null)} title={t('withdrawal')}>
+      <Modal open={modal === 'withdrawal' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('withdrawal')}>
         <div className="space-y-4">
+          {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
+          {overviewError && <p role="alert" className="text-ui-danger">{overviewError}</p>}
+          <p className="text-xs text-ui-muted">{isAr ? 'الرصيد المعروض وقت آخر تحميل. يُراجع الخادم الرصيد عند التنفيذ.' : 'Balance at last load. The server checks the current balance when submitting.'}</p>
+          <Button variant="secondary" disabled={saving || loading} onClick={() => void loadOverview(true)}>{isAr ? 'تحديث الرصيد' : 'Refresh balance'}</Button>
           <Select label={t('accountName')} value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
             {localAccounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)} — {formatCurrency(a.balance, currency, lang)}</option>)}
@@ -513,7 +536,7 @@ export function TreasuryPage() {
           <Textarea label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModal(null)}>{t('cancel')}</Button>
-            <Button variant="warning" onClick={submit} disabled={saving}><HandCoins className="w-4 h-4" /> {saving ? t('loading') : t('withdrawal')}</Button>
+            <Button variant="warning" onClick={submit} disabled={saving || loading || loadedScope !== scopeKey || outcomeUnconfirmed}><HandCoins className="w-4 h-4" /> {saving ? t('loading') : t('withdrawal')}</Button>
           </div>
         </div>
       </Modal>
