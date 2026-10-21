@@ -51,3 +51,6 @@ Run exact-head CI with the generated migration, review the guarded rollout/rollb
 
 ## Mandatory update protocol
 Before writes, reconcile branch/main. Stop on unexpected head divergence. Update this ledger for material changes, evidence, checks and blockers. Keep unfinished causes explicit; never report the production system fixed while the candidate is only staged.
+
+## Exact-head CI follow-up
+At head 28478ebc429ad79426cc3c8eb4be5fb3a6850890, the generated migration applied successfully; 1112/1113 DB checks passed. The historical emergency FIFO-index WAL comparison exceeded its 10% budget after later receipt indexes entered its fixture. Keep the original 10% threshold, transactionally remove the later indexes only within that historical experiment, and independently test each new index on owned logged tables: positive receipt overhead <= 1024 bytes/row and excluded sale/debt overhead <= 64 bytes/row. No production fixture/read/write is used. Await fresh full CI before concluding that the write budget is acceptable.

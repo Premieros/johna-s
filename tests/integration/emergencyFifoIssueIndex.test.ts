@@ -15,6 +15,10 @@ describe.skipIf(!owned)('emergency FIFO issue index: owned disposable DB only', 
   const indexSql = candidate.slice(candidate.indexOf('CREATE INDEX '), candidate.indexOf('CREATE OR REPLACE FUNCTION'));
   beforeAll(async () => {
     db = openDb(url!); await db.connect(); await db.query('BEGIN');
+    // Reproduce the original 2026-10-15 experiment, not later receipt indexes.
+    // Both drops are rolled back; the new indexes have their own WAL budget test.
+    await db.query('DROP INDEX IF EXISTS public.idx_inventory_ledger_priced_receipt_recent');
+    await db.query('DROP INDEX IF EXISTS public.idx_raw_batches_real_price_recent');
     await db.query('INSERT INTO public.branches(id,name) VALUES($1,$2)', [branch, 'Emergency index fixture']);
     await db.query('INSERT INTO public.warehouses(id,name,branch_id) VALUES($1,$2,$3)', [warehouse, 'Emergency W', branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,'Emergency raw',$3,7.25)", [raw, randomUUID(), branch]);
