@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `99deb5813eedb6554fffbf64ad8100f134428276` (#526 merged/deployed, all gates green)
-- Current active branch: `feature/sold-recipe-consumption-20261020`
-- Mandatory active work log: `docs/SOLD_RECIPE_CONSUMPTION_20261020.md`
+- Latest main baseline reconciled: `9114865abdd198ee609f946715a1a83b17f1e206` (#527 merged/deployed)
+- Current active branch: `fix/production-audit-20261021`
+- Mandatory active work log: `docs/PRODUCTION_AUDIT_REPAIRS_20261021.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active sold-recipe cost report — 2026-10-20
+## Active production audit repairs — 2026-10-21
+Owner authorized repairing the five findings from the read-only production audit. Prepare and test on this isolated branch; preserve installed print agents, all operational security and data. No merge or production migration during preparation. Local Windows pilot remains isolated and forbidden to merge.
+
+## Historical sold-recipe cost report — 2026-10-20
 Owner approves preparing sold products × current canonical recipes × latest approved prices, with minimal reads and no sale/printing overhead. Use one batch read on explicit request; no materialized cache table or trigger. Preserve actual inventory/accounting and historical snapshots. #526 is complete; see its PR release ledger. Separate production release approval is required.
 
 ## Owner-approved reporting rebuild — 2026-10-20
