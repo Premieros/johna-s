@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/finance-low-read-20261021`
-Current PR: `0`
+Current PR: `530`
 Last updated: 2026-10-21
 
 ## Work status
@@ -22,7 +22,7 @@ Offset histories can repeat/skip rows after insertions and lack an id tie-breake
 Opt-in created_at/id keyset for three financial histories. Two security-invoker views filter outstanding invoices server-side; 100 invoices + one lookahead per manual request, UUID cursor, no automatic loops or count query. Opening/aggregate payment remains available; partial invoice list is explicitly labelled. Customer rejection updates open from the same server response with no extra read.
 
 ## Verification ledger
-Focused behavioral/type/security checks pending. No live transaction or production SQL.
+24 focused assertions passed; application/test typechecks and targeted lint passed. Canonical DB/security and exact-head CI pending. Existing supplier/customer indexes verified read-only; no claim of zero reads or measured peak CPU improvement. No live transaction or production SQL.
 
 ## Production gate
 State: **BLOCKED**

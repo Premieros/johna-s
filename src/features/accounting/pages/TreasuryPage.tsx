@@ -151,6 +151,7 @@ export function TreasuryPage() {
     or: transactionScope,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
+    cursorPagination: true,
     enabled: treasuryView === 'main' ? mainAccountIds.length > 0 : !!effectiveBranchFilter,
   });
 

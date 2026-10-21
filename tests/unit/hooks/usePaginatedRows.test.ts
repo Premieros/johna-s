@@ -32,6 +32,8 @@ const mockSupabase = vi.hoisted(() => {
       this.filters.push({ col, val });
       return this;
     }
+    cursorFilter?: string;
+    or(value: string) { this.cursorFilter=value; return this; }
     order() {
       return this;
     }
@@ -41,7 +43,12 @@ const mockSupabase = vi.hoisted(() => {
       return this;
     }
     then(resolve: (v: unknown) => void) {
-      const state = mockState.tables[this.table] || { data: [], count: 0 };
+      const source = mockState.tables[this.table] || { data: [], count: 0 };
+      const cursor=this.cursorFilter?.match(/^created_at\.(lt|gt)\.([^,]+),and\(created_at\.eq\.[^,]+,id\.(?:lt|gt)\.([^)]+)\)$/);
+      const state={...source,data:cursor ? source.data.filter(item=>{
+        const row=item as {created_at:string;id:string};
+        return cursor[1]==='lt' ? row.created_at<cursor[2] || row.created_at===cursor[2] && row.id<cursor[3] : row.created_at>cursor[2] || row.created_at===cursor[2] && row.id>cursor[3];
+      }):source.data};
       mockState.calls.push({
         table: this.table,
         range: this.selectOpts?.head ? undefined : [this.rangeFrom ?? 0, this.rangeTo ?? 0],
@@ -89,6 +96,19 @@ describe('usePaginatedRows', () => {
     mockState.calls = [];
     mockAuth.userId = 'user-1';
     clearPaginatedRowsSessionCache();
+  });
+
+  it('keeps tied timestamps stable when newer financial rows arrive between pages', async () => {
+    const id=(n:number)=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+    const timestamp='2026-10-21T13:00:00.000Z';
+    mockState.tables.treasury={data:[4,3,2,1].map(n=>({id:id(n),created_at:timestamp})),count:4};
+    const {result}=renderHook(()=>usePaginatedRows<{id:string;created_at:string}>({table:'treasury',pageSize:2,order:{column:'created_at',ascending:false},cursorPagination:true}));
+    await waitFor(()=>expect(result.current.rows).toHaveLength(2));
+    mockState.tables.treasury.data.unshift({id:id(5),created_at:timestamp});
+    await act(async()=>{await Promise.all([result.current.loadMore(),result.current.loadMore()]);});
+    expect(result.current.rows.map(row=>row.id)).toEqual([4,3,2,1].map(id));
+    expect(dataCalls('treasury')).toHaveLength(2);
+    expect(dataCalls('treasury')[1].range).toEqual([0,2]);
   });
 
   it('fetches pageSize+1 without an exact count and exposes only pageSize rows', async () => {

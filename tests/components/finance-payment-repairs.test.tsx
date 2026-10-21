@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ branch: 'smouha', show: vi.fn(), ap: vi.fn(), ar: vi.fn(), sources: vi.fn(), pay: vi.fn(), transfer: vi.fn(), invoices: vi.fn(), audit: vi.fn(), refresh: vi.fn() }));
-vi.mock('@/api', () => ({ accounting: { getApAging: mocks.ap, getArAging: mocks.ar, getAccessibleTreasuryAccounts: mocks.sources, paySupplierFromTreasury: mocks.pay, processTreasuryTransferV2: mocks.transfer, getBranchTreasuryDayCloseReconciliation: async () => ({ data: { success: true, rows: [] }, error: null }) } }));
+const mocks = vi.hoisted(() => ({ branch: 'smouha', show: vi.fn(), ap: vi.fn(), ar: vi.fn(), sources: vi.fn(), pay: vi.fn(), collect: vi.fn(), transfer: vi.fn(), invoices: vi.fn(), audit: vi.fn(), refresh: vi.fn() }));
+vi.mock('@/api', () => ({ accounting: { receivePayment: mocks.collect, getApAging: mocks.ap, getArAging: mocks.ar, getAccessibleTreasuryAccounts: mocks.sources, paySupplierFromTreasury: mocks.pay, processTreasuryTransferV2: mocks.transfer, getBranchTreasuryDayCloseReconciliation: async () => ({ data: { success: true, rows: [] }, error: null }) } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
@@ -18,7 +18,7 @@ import { PaymentsPage } from '@/features/accounting/pages/PaymentsPage';
 import { TreasuryPage } from '@/features/accounting/pages/TreasuryPage';
 const party = { supplier_id: 'supplier', name: 'Supplier', open_amount: 5900, bucket_0_30: 5900, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 0 };
 const source = { id: 'cash', branch_id: 'smouha', account_name: 'Branch Cash', branch_name: 'Smouha', kind: 'branch_cash', scope: 'branch', account_type: 'cash', balance: 10000 };
-function app(page: 'payments' | 'treasury' = 'payments') { return <MemoryRouter initialEntries={['/payments?tab=ap']}>{page === 'payments' ? <PaymentsPage /> : <TreasuryPage />}</MemoryRouter>; }
+function app(page: 'payments' | 'treasury' | 'ar' = 'payments') { return <MemoryRouter initialEntries={[page === 'ar' ? '/payments?tab=ar' : '/payments?tab=ap']}>{page !== 'treasury' ? <PaymentsPage /> : <TreasuryPage />}</MemoryRouter>; }
 async function openPayment() {
   await waitFor(() => expect(within(screen.getByTestId('payments-ap-aging-panel')).getAllByText('paySupplier', { selector: 'button' })[0]).toBeEnabled());
   fireEvent.click(within(screen.getByTestId('payments-ap-aging-panel')).getAllByText('paySupplier', { selector: 'button' })[0]);
@@ -30,11 +30,39 @@ beforeEach(() => {
   vi.resetAllMocks(); mocks.branch = 'smouha';
   mocks.ap.mockResolvedValue({ data: [party], error: null }); mocks.ar.mockResolvedValue({ data: [], error: null });
   mocks.sources.mockResolvedValue({ data: [source, { ...source, id: 'main', scope: 'organization', kind: 'main_cash', account_name: 'Main' }], error: null });
-  mocks.invoices.mockResolvedValue([{ id: 'invoice', invoice_number: 'INV', open: 3500 }]);
+  mocks.invoices.mockResolvedValue({ rows: [{ id: 'invoice', invoice_number: 'INV', open: 3500 }], hasMore: false });
   mocks.pay.mockResolvedValue({ data: { success: true, reference_number: 'PAY-1' }, error: null });
   mocks.transfer.mockResolvedValue({ data: { success: false, error: 'INSUFFICIENT_TREASURY_BALANCE', available: 50 }, error: null });
 });
 describe('finance payment root regressions', () => {
+  it('loads further invoices only on request and keeps earlier selections available', async () => {
+    mocks.invoices.mockResolvedValueOnce({rows:[{id:'invoice',invoice_number:'INV',open:3500}],hasMore:true})
+      .mockResolvedValueOnce({rows:[{id:'next',invoice_number:'NEXT',open:50}],hasMore:false});
+    render(app()); const dialog = await openPayment();
+    expect(mocks.invoices).toHaveBeenCalledTimes(1);
+    fireEvent.click(dialog.getByText('Load more invoices', {selector:'button'}));
+    await waitFor(() => expect(dialog.getByText(/NEXT -/)).toBeInTheDocument());
+    expect(mocks.invoices).toHaveBeenLastCalledWith(expect.objectContaining({afterId:'invoice',branchId:'smouha'}));
+    expect(dialog.getByText(/INV -/)).toBeInTheDocument();
+    expect(mocks.pay).not.toHaveBeenCalled();
+  });
+  it('uses rejected customer invoice open amount without an extra read or mutation retry', async () => {
+    mocks.ar.mockResolvedValue({data:[{...party,customer_id:'customer'}],error:null});
+    mocks.collect.mockResolvedValue({data:{success:false,error:'PAYMENT_EXCEEDS_INVOICE',open:20},error:null});
+    render(app('ar'));
+    const panel = await screen.findByTestId('payments-ar-aging-panel');
+    await waitFor(() => expect(within(panel).getAllByText('collect',{selector:'button'})[0]).toBeEnabled());
+    fireEvent.click(within(panel).getAllByText('collect',{selector:'button'})[0]);
+    const dialog=within(screen.getByRole('dialog'));
+    await waitFor(() => expect(dialog.getByLabelText('invoice')).toBeInTheDocument());
+    fireEvent.change(dialog.getByLabelText('invoice'),{target:{value:'invoice'}});
+    fireEvent.click(dialog.getByText('collect',{selector:'button'}));
+    await waitFor(() => expect(mocks.show).toHaveBeenCalled());
+    fireEvent.change(dialog.getByLabelText('invoice'),{target:{value:''}});
+    fireEvent.change(dialog.getByLabelText('invoice'),{target:{value:'invoice'}});
+    expect(dialog.getByLabelText('amount')).toHaveValue(20);
+    expect(mocks.invoices).toHaveBeenCalledTimes(1); expect(mocks.collect).toHaveBeenCalledTimes(1);
+  });
   it('uses the selected invoice balance and refuses an overpayment before any mutation', async () => {
     render(app()); const dialog = await openPayment();
     fireEvent.change(dialog.getByLabelText('invoice'), { target: { value: 'invoice' } });
