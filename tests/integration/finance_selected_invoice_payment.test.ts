@@ -26,7 +26,7 @@ describe.skipIf(!owned)('selected invoice collection on owned canonical database
     expect(missing.error).toBeUndefined(); expect(missing.rows[0].result).toMatchObject({success:false,error:'SALE_NOT_FOUND'});
     const paid = await runAsPersist(client, ids.users.branch_manager, `SELECT public.receive_payment($1,$2,25,'cash',$3,'owned regression') result`, [ids.custA, ids.branchA, saleId]);
     expect(paid.error).toBeUndefined(); expect(paid.rows[0].result).toMatchObject({success:true,unapplied:0});
-    const paymentId = paid.rows[0].result.payment_id;
+    const paymentId = (paid.rows[0].result as { payment_id: string }).payment_id;
     expect(Number((await client.query('SELECT paid_amount FROM public.sales WHERE id=$1', [saleId])).rows[0].paid_amount)).toBe(25);
     expect((await client.query('SELECT count(*)::int n FROM public.customer_payments WHERE sale_id=$1', [saleId])).rows[0].n).toBe(1);
     const journal = await client.query(`SELECT count(DISTINCT j.id)::int entries,sum(l.debit) debit,sum(l.credit) credit FROM public.journal_entries j JOIN public.journal_entry_lines l ON l.journal_entry_id=j.id WHERE j.reference_type='payment' AND j.reference_id=$1`, [paymentId]);
