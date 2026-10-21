@@ -175,8 +175,8 @@ export function TransfersPage() {
     setCostErrors(previous => previous.filter(i => i !== idx));
     setCostPending(previous => [...previous.filter(i => i !== idx),idx]);
     try {
-      const cost = itemId ? await lookupAvgCost({ ...EMPTY_LINE, item_id:itemId }) : 0;
-      if (current()) setLines(previous => previous.map((line,i) => i === idx && line.item_id === itemId ? {...line,unit_cost:Number(cost.toFixed(2))} : line));
+      const cost = Number((itemId ? await lookupAvgCost({ ...EMPTY_LINE, item_id:itemId }) : 0).toFixed(2));
+      if (current()) setLines(previous => previous.map((line,i) => i === idx && line.item_id === itemId ? {...line,unit_cost:cost} : line));
     } catch { if (current()) setCostErrors(previous => [...previous.filter(i => i !== idx),idx]); }
     finally { if (current()) setCostPending(previous => previous.filter(i => i !== idx)); }
   };
