@@ -20,8 +20,8 @@ const party = { supplier_id: 'supplier', name: 'Supplier', open_amount: 5900, bu
 const source = { id: 'cash', branch_id: 'smouha', account_name: 'Branch Cash', branch_name: 'Smouha', kind: 'branch_cash', scope: 'branch', account_type: 'cash', balance: 10000 };
 function app(page: 'payments' | 'treasury' = 'payments') { return <MemoryRouter initialEntries={['/payments?tab=ap']}>{page === 'payments' ? <PaymentsPage /> : <TreasuryPage />}</MemoryRouter>; }
 async function openPayment() {
-  await waitFor(() => expect(screen.getAllByRole('button', { name: 'paySupplier' })[0]).toBeEnabled());
-  fireEvent.click(screen.getAllByRole('button', { name: 'paySupplier' })[0]);
+  await waitFor(() => expect(within(screen.getByTestId('payments-ap-aging-panel')).getAllByText('paySupplier', { selector: 'button' })[0]).toBeEnabled());
+  fireEvent.click(within(screen.getByTestId('payments-ap-aging-panel')).getAllByText('paySupplier', { selector: 'button' })[0]);
   const dialog = screen.getByRole('dialog');
   await waitFor(() => expect(within(dialog).getByRole('button', { name: 'paySupplier' })).toBeEnabled());
   return within(dialog);
@@ -40,24 +40,24 @@ describe('finance payment root regressions', () => {
     fireEvent.change(dialog.getByLabelText('invoice'), { target: { value: 'invoice' } });
     expect(dialog.getByLabelText('amount')).toHaveValue(3500);
     fireEvent.change(dialog.getByLabelText('amount'), { target: { value: '5900' } });
-    fireEvent.click(dialog.getByRole('button', { name: 'paySupplier' }));
+    fireEvent.click(dialog.getByText('paySupplier', { selector: 'button' }));
     expect(mocks.pay).not.toHaveBeenCalled();
     expect(mocks.show).toHaveBeenCalledWith(expect.stringContaining('selected invoice'), 'error');
   });
   it('blocks payment on invoice read failure instead of treating it as no invoices', async () => {
     mocks.invoices.mockRejectedValue(new Error('FINANCE_INVOICES_UNAVAILABLE'));
     render(app());
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'paySupplier' })[0]).toBeEnabled());
-    fireEvent.click(screen.getAllByRole('button', { name: 'paySupplier' })[0]);
+    await waitFor(() => expect(within(screen.getByTestId('payments-ap-aging-panel')).getAllByText('paySupplier', { selector: 'button' })[0]).toBeEnabled());
+    fireEvent.click(within(screen.getByTestId('payments-ap-aging-panel')).getAllByText('paySupplier', { selector: 'button' })[0]);
     expect(await screen.findByRole('alert')).toHaveTextContent('Outstanding invoices could not be loaded');
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'paySupplier' })).toBeDisabled();
+    expect(within(screen.getByRole('dialog')).getByText('paySupplier', { selector: 'button' })).toBeDisabled();
     expect(mocks.pay).not.toHaveBeenCalled();
   });
   it('keeps a successful supplier payment in its submitted branch without duplicating the server audit', async () => {
     let resolve!: (result: unknown) => void;
     mocks.pay.mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
     const view = render(app()); const dialog = await openPayment();
-    fireEvent.click(dialog.getByRole('button', { name: 'paySupplier' }));
+    fireEvent.click(dialog.getByText('paySupplier', { selector: 'button' }));
     mocks.branch = 'cleopatra'; view.rerender(app());
     await act(async () => { resolve({ data: { success: true }, error: null }); });
     expect(mocks.pay).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ p_branch_id: 'smouha' }));
@@ -67,9 +67,9 @@ describe('finance payment root regressions', () => {
   it('does not retry an ambiguous payment or describe it as rolled back', async () => {
     mocks.pay.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     render(app()); const dialog = await openPayment();
-    fireEvent.click(dialog.getByRole('button', { name: 'paySupplier' }));
+    fireEvent.click(dialog.getByText('paySupplier', { selector: 'button' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('outcome could not be confirmed');
-    expect(dialog.getByRole('button', { name: 'paySupplier' })).toBeDisabled();
+    expect(dialog.getByText('paySupplier', { selector: 'button' })).toBeDisabled();
     expect(mocks.pay).toHaveBeenCalledTimes(1);
   });
   it('ignores an old branch aging response after the new branch has loaded', async () => {
