@@ -53,12 +53,19 @@ END $patch$;
 
 -- The negative-issue index is already deployed. Optimize only the two
 -- remaining fallbacks, with exactly the current predicates and ordering.
-CREATE INDEX idx_inventory_ledger_priced_receipt_recent
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_priced_receipt_recent
  ON public.inventory_ledger(raw_material_id,branch_id,warehouse_id,created_at DESC NULLS LAST,id DESC)
  INCLUDE(unit_cost)
  WHERE quantity>0 AND COALESCE(unit_cost,0)>0
  AND (COALESCE(entry_type,'')='purchase' OR COALESCE(reference_type,'') IN ('purchase','purchase_receipt'));
-CREATE INDEX idx_raw_batches_real_price_recent
+CREATE INDEX IF NOT EXISTS idx_raw_batches_real_price_recent
  ON public.raw_material_batches(raw_material_id,branch_id,warehouse_id,created_at DESC NULLS LAST,id DESC)
  INCLUDE(unit_cost)
  WHERE COALESCE(unit_cost,0)>0 AND COALESCE(source_type,'') NOT LIKE '%_oversold';
+
+DO $valid$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_index WHERE indexrelid='public.idx_inventory_ledger_priced_receipt_recent'::regclass AND indisvalid AND indisready)
+ OR NOT EXISTS(SELECT 1 FROM pg_index WHERE indexrelid='public.idx_raw_batches_real_price_recent'::regclass AND indisvalid AND indisready) THEN
+  RAISE EXCEPTION 'AUDIT_INDEX_NOT_VALID';
+ END IF;
+END $valid$;

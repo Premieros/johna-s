@@ -28,7 +28,9 @@ jobs:
         run: |
           supabase --help >/dev/null
           supabase migration new --help >/dev/null
-          supabase migration new production_audit_repairs
+          if ! ls supabase/migrations/*_production_audit_repairs.sql >/dev/null 2>&1; then
+            supabase migration new production_audit_repairs
+          fi
           generated=$(ls supabase/migrations/*_production_audit_repairs.sql)
           cp scripts/db/candidates/production_audit_repairs.sql "$generated"
           echo "MIGRATION_CANDIDATE=$generated"
