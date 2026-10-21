@@ -51,6 +51,8 @@ export function PaymentsPage() {
   const [sourcesScope, setSourcesScope] = useState('');
   const [dialogScope, setDialogScope] = useState('');
   const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesHasMore, setInvoicesHasMore] = useState(false);
+  const invoiceReadBusy = useRef(false);
   const [invoicesError, setInvoicesError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [sourceError, setSourceError] = useState('');
@@ -65,6 +67,7 @@ export function PaymentsPage() {
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
+    cursorPagination: true,
     enabled: !!effectiveBranchFilter && tab === 'ar',
   });
   const { rows: supplierPayments, loading: supplierPaymentsLoading, error: supplierPaymentsError, total: supplierPaymentsTotal, hasMore: supplierPaymentsHasMore, loadMore: loadMoreSupplierPayments, loadingMore: loadingMoreSupplierPayments, refresh: reloadSupplierPayments } = usePaginatedRows<SupplierPayment>({
@@ -74,6 +77,7 @@ export function PaymentsPage() {
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
+    cursorPagination: true,
     enabled: !!effectiveBranchFilter && tab === 'ap',
   });
 
@@ -155,10 +159,10 @@ export function PaymentsPage() {
     const isCurrent = capture('invoices');
     setDialogScope(scopeKey); setCollecting(row); setOutcomeUnconfirmed(false);
     setForm({ sale_id: '', amount: String(row.open_amount), payment_method: 'cash', notes: '' });
-    setOpenInvoices([]); setInvoicesError(''); setInvoicesLoading(true);
+    setInvoicesHasMore(false); setOpenInvoices([]); setInvoicesError(''); setInvoicesLoading(true);
     try {
       const invoices = await fetchOpenCustomerInvoices({ customerId: row.customer_id, branchId: effectiveBranchFilter, isCurrent });
-      if (isCurrent()) setOpenInvoices(invoices);
+      if (isCurrent()) { setOpenInvoices(invoices.rows); setInvoicesHasMore(invoices.hasMore); }
     } catch (error) {
       if (isCurrent()) setInvoicesError(userFacingErrorMessage(error, lang));
     } finally { if (isCurrent()) setInvoicesLoading(false); }
@@ -171,13 +175,32 @@ export function PaymentsPage() {
     const preferredSource = treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'branch_cash')
       || treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'bank') || treasurySources[0];
     setApForm({ purchase_id: '', amount: String(row.open_amount), treasury_account_id: preferredSource?.id || '', notes: '' });
-    setOpenApInvoices([]); setInvoicesError(''); setInvoicesLoading(true);
+    setInvoicesHasMore(false); setOpenApInvoices([]); setInvoicesError(''); setInvoicesLoading(true);
     try {
       const invoices = await fetchOpenSupplierPurchases({ supplierId: row.supplier_id, branchId: effectiveBranchFilter, isCurrent });
-      if (isCurrent()) setOpenApInvoices(invoices);
+      if (isCurrent()) { setOpenApInvoices(invoices.rows); setInvoicesHasMore(invoices.hasMore); }
     } catch (error) {
       if (isCurrent()) setInvoicesError(userFacingErrorMessage(error, lang));
     } finally { if (isCurrent()) setInvoicesLoading(false); }
+  }
+
+  async function loadMoreInvoices() {
+    if (!effectiveBranchFilter || dialogScope !== scopeKey || invoicesLoading || invoiceReadBusy.current || !invoicesHasMore) return;
+    const isCurrent = capture('invoices');
+    invoiceReadBusy.current = true; setInvoicesLoading(true); setInvoicesError('');
+    try {
+      const previous = paying ? openApInvoices : openInvoices;
+      const afterId = previous[previous.length - 1]?.id;
+      const page = paying
+        ? await fetchOpenSupplierPurchases({ supplierId: paying.supplier_id, branchId: effectiveBranchFilter, afterId, isCurrent })
+        : collecting ? await fetchOpenCustomerInvoices({ customerId: collecting.customer_id, branchId: effectiveBranchFilter, afterId, isCurrent }) : null;
+      if (!isCurrent() || !page) return;
+      const append = (rows: typeof openInvoices) => [...rows, ...page.rows.filter(row => !rows.some(old => old.id === row.id))];
+      if (paying) setOpenApInvoices(append); else setOpenInvoices(append);
+      setInvoicesHasMore(page.hasMore);
+    } catch (error) {
+      if (isCurrent()) setInvoicesError(userFacingErrorMessage(error, lang));
+    } finally { invoiceReadBusy.current = false; if (isCurrent()) setInvoicesLoading(false); }
   }
 
   const collect = async () => {
@@ -195,7 +218,14 @@ export function PaymentsPage() {
       const r = data as FinanceResult;
       if (r.success) await logAudit('create', 'customer_payments', undefined, { customer_id: collecting.customer_id, amount }, branchId);
       if (!isCurrent()) return;
-      if (!r.success) { show(financeRejectionMessage(r, currency, lang), 'error', { source: r, branchId }); return; }
+      if (!r.success) {
+        show(financeRejectionMessage(r, currency, lang), 'error', { source: r, branchId });
+        if (r.open != null && Number.isFinite(Number(r.open))) {
+          if (r.error === 'PAYMENT_EXCEEDS_INVOICE') setOpenInvoices(invoices => invoices.map(invoice => invoice.id === form.sale_id ? { ...invoice, open: Number(r.open) } : invoice));
+          if (r.error === 'PAYMENT_EXCEEDS_AR') setCollecting({ ...collecting, open_amount: Number(r.open) });
+        }
+        return;
+      }
       show(`${t('collect')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
       setCollecting(null); void loadAging(); reloadPayments();
     } catch (error) {
@@ -347,6 +377,7 @@ export function PaymentsPage() {
         {collecting && (
           <div className="space-y-4">
             {invoicesLoading && <p role="status">{t('loading')}</p>}
+            {invoicesHasMore && <div className="space-y-2"><p className="text-xs text-ui-muted">{lang === 'ar' ? 'توجد فواتير مفتوحة أخرى. حمّل المزيد لاختيار فاتورة محددة.' : 'More outstanding invoices are available. Load more to select another invoice.'}</p><Button variant="secondary" disabled={invoicesLoading || saving} onClick={() => void loadMoreInvoices()}>{lang === 'ar' ? 'تحميل فواتير أخرى' : 'Load more invoices'}</Button></div>}
             {invoicesError && <p role="alert" className="text-ui-danger">{invoicesError}</p>}
             {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
             <div className="flex items-center gap-3 p-3 rounded-xl bg-ui-page-alt dark:bg-navy-800/60">
@@ -387,6 +418,7 @@ export function PaymentsPage() {
         {paying && (
           <div className="space-y-4">
             {invoicesLoading && <p role="status">{t('loading')}</p>}
+            {invoicesHasMore && <div className="space-y-2"><p className="text-xs text-ui-muted">{lang === 'ar' ? 'توجد فواتير مفتوحة أخرى. حمّل المزيد لاختيار فاتورة محددة.' : 'More outstanding invoices are available. Load more to select another invoice.'}</p><Button variant="secondary" disabled={invoicesLoading || saving} onClick={() => void loadMoreInvoices()}>{lang === 'ar' ? 'تحميل فواتير أخرى' : 'Load more invoices'}</Button></div>}
             {invoicesError && <p role="alert" className="text-ui-danger">{invoicesError}</p>}
             {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
             <div className="flex items-center gap-3 p-3 rounded-xl bg-ui-page-alt dark:bg-navy-800/60">
