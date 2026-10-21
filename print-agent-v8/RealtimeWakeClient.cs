@@ -13,6 +13,7 @@ internal sealed class RealtimeWakeClient : IDisposable
     private Task? _loop;
     private long _refCounter;
     private string _joinRef = "";
+    private DateTime _lastInboundUtc = DateTime.UtcNow;
 
     internal bool Connected { get; private set; }
 
@@ -55,6 +56,7 @@ internal sealed class RealtimeWakeClient : IDisposable
                     new Uri(BuildConfig.RealtimeUrl),
                     token).ConfigureAwait(false);
 
+                _lastInboundUtc = DateTime.UtcNow;
                 _joinRef = await SendJoinAsync(socket, token).ConfigureAwait(false);
                 var joinDeadlineUtc = DateTime.UtcNow.AddSeconds(12);
                 var receiveTask = ReceiveMessageAsync(socket, token);
@@ -69,6 +71,8 @@ internal sealed class RealtimeWakeClient : IDisposable
 
                     if (completed == timer)
                     {
+                        if (ConnectionStale(DateTime.UtcNow))
+                            throw new TimeoutException("Realtime heartbeat not acknowledged — fallback فعال");
                         if (!Connected && DateTime.UtcNow >= joinDeadlineUtc)
                             throw new TimeoutException(
                                 "Realtime join timeout — postgres_changes غير مؤكد");
@@ -203,8 +207,12 @@ internal sealed class RealtimeWakeClient : IDisposable
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    internal bool ConnectionStale(DateTime nowUtc) =>
+        Connected && nowUtc - _lastInboundUtc > TimeSpan.FromSeconds(60);
+
     private void HandleMessage(string json)
     {
+        _lastInboundUtc = DateTime.UtcNow;
         try
         {
             using var doc = JsonDocument.Parse(json);

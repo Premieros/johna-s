@@ -1,7 +1,7 @@
 import { fireEvent,render,screen } from '@testing-library/react';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 const calls=vi.hoisted(()=>({metrics:vi.fn(),cost:vi.fn()}));
-vi.mock('@/api',()=>({reporting:{getOperationalReportMetrics:calls.metrics,getConsumptionLatestReport:calls.cost}}));
+vi.mock('@/api',()=>({reporting:{getOperationalReportMetrics:calls.metrics,getSoldRecipeConsumptionReport:calls.cost}}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:{id:'reviewer',role:'manager'}})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/lib/useBranchFilter',()=>({useBranchFilter:()=> 'A'}));
@@ -15,6 +15,7 @@ describe('explicit month review summary',()=>{
   render(<MonthCloseReview views={[costView]} onSelect={vi.fn()} />);expect(calls.metrics).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText('Review month'),{target:{value:'2026-09'}});fireEvent.click(screen.getByRole('button',{name:'Show month summary'}));
   await screen.findByText(/Materials without prices counted as zero/);expect(calls.metrics).toHaveBeenCalledTimes(3);expect(calls.cost).toHaveBeenCalledTimes(1);
+  expect(calls.cost.mock.calls[0][0]).toMatchObject({p_branch_id:'A',p_from_date:'2026-09-01',p_to_date:'2026-09-30',p_group_by:'material',p_page_size:1});expect(calls.cost.mock.calls[0][0]).not.toHaveProperty('p_include_waste');
   expect(calls.metrics.mock.calls[0][0]).toMatchObject({p_branch_id:'A',p_from_date:'2026-09-01',p_to_date:'2026-09-30'});expect(screen.getByText('100')).toBeTruthy();
  });
  it('keeps failed or null amounts unavailable and never queries costing without its permission',async()=>{

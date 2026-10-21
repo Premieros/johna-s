@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/production-audit-20261021`
-Current PR: `0`
+Current PR: `528`
 Last updated: 2026-10-21
 
 ## Work status
@@ -24,17 +24,26 @@ Production/main: `9114865abdd198ee609f946715a1a83b17f1e206` (#527). Separate loc
 - Telemetry currently omits the app version and some preview errors lose structured diagnostic codes.
 
 ## Change ledger
-Implementation in progress. No production changes.
+- Month summary now uses the sold-recipe report with unchanged explicit/manual loading and costing permission gate.
+- Build SHA is attached to safe telemetry; preview failures retain structured diagnostic sources without persisting raw payloads.
+- Explicit warehouse rejection refreshes the same order preview and requires user confirmation; no automatic payment retry or warehouse override.
+- Guarded SQL candidate serializes KDS order first, avoids same-status writes after authorization, preserves treasury balances via account-indexed lateral aggregation and adds two exact-predicate FIFO fallback indexes. No deployed function or policy changed.
+- Windows recovery source candidate wakes on connection state changes, detects silent half-open sockets and schedules one coalesced recovery read after claimed lease expiry. Idle polling, batch size, RPCs, branch binding, physical print rendering and installed binaries/configuration remain unchanged.
+- SQL is staged under scripts/db/candidates, NOT an applied migration. CLI-created migration packaging remains a release prerequisite.
 
 ## Verification ledger
-Baseline identity and production source verified read-only. Focused tests pending; exact-head release gates remain required.
+- Baseline identity and production source verified read-only.
+- Focused frontend regression suite: 34 assertions passed, including wrong-scope settlement, explicit warehouse rejection and ambiguous-network non-retry.
+- Typecheck and targeted lint passed (two pre-existing hook dependency warnings).
+- Owned PGlite SQL proof passed: repeated KDS audit/served baseline once, same-status authorization/station denial, NULL validation, ACL/security-mode parity, treasury result parity and targeted index usage with 50,000 unrelated journal rows and 50,000 unpriced receipts. Synthetic timings are not production latency claims.
+- Windows compilation/protocol/render tests and exact-head release gates pending CI.
 
 ## Production gate
 State: **BLOCKED**
 No Merge ولا Production migration without complete candidate verification and separate explicit release approval. Success of development checks is not deployment authorization.
 
 ## Next action
-Unify consumption summary; preserve structured diagnostics and build identity; reproduce operational query/locking failures; prepare tested targeted SQL and print recovery candidate without modifying installed agents.
+Run exact-head CI, review source and SQL proof, package the CLI-generated migration and rollback, and retain the production release gate. Installed-agent availability/PC sleep and physical printer behavior require device verification; these are not proven fixed by staged source alone.
 
 ## Mandatory update protocol
 Before writes, reconcile branch/main. Stop on unexpected head divergence. Update this ledger for material changes, evidence, checks and blockers. Keep unfinished causes explicit; never report the production system fixed while the candidate is only staged.

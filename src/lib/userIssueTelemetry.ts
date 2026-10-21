@@ -132,7 +132,7 @@ export async function reportUserIssue(
       p_error_code: code,
       p_user_message: safeMessage,
       p_issue_kind: issueKind,
-      p_app_version: null,
+      p_app_version: String(import.meta.env.VITE_APP_VERSION || 'development').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 80) || 'development',
       p_correlation_id: options.correlationId ?? null,
       p_entity_type: options.entityType ?? null,
       p_entity_id: options.entityId ?? null,

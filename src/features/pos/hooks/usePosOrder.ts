@@ -154,16 +154,16 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (!base.activeOrderId) return null;
     if (saveSnapshot && !(await saveOpenOrderSnapshot())) return null;
 
-    const { preview, error } = await loadScopedSettlementPreview();
+    const { preview, error, diagnostic } = await loadScopedSettlementPreview();
     // A superseded or closed checkout read must not open another order checkout.
     if (!preview && !error) return null;
     if (error || !preview?.has_payable_items) {
-      show(error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for settlement'), 'error');
+      show(error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for settlement'), 'error', { source: diagnostic, action: 'pos_settlement_preview', branchId: input.branchId, entityType: 'order', entityId: base.activeOrderId });
       return null;
     }
 
     return preview;
-  }, [base.activeOrderId, isAr, loadScopedSettlementPreview, saveOpenOrderSnapshot, show]);
+  }, [base.activeOrderId, input.branchId, isAr, loadScopedSettlementPreview, saveOpenOrderSnapshot, show]);
 
   const applyApprovedDiscount = useCallback(async (
     type: 'amount' | 'percent', amount: number, requestId: string,
@@ -459,6 +459,16 @@ export function usePosOrder(input: UsePosOrderInput) {
       });
 
       if (error || !result?.success) {
+        // Refresh only an explicit rejection; transport failures can follow a
+        // committed sale. Never resubmit a payment automatically.
+        if (result?.success === false && result.error === 'KITCHEN_WAREHOUSE_MISMATCH') {
+          clearSettlementPreview();
+          const refreshed = await loadPaymentPreview();
+          if (refreshed && isCurrentSettlementPreview(refreshed)) {
+            base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : refreshed.total);
+            base.setCheckoutOpen(true);
+          }
+        }
         show(error || result?.detail || result?.error || (isAr ? 'تعذر تحصيل الأصناف المرسلة' : 'Could not settle sent items'), 'error', { source: diagnostic, action: 'pos_settlement_submit', branchId: input.branchId, entityType: 'order', entityId: base.activeOrderId });
         return false;
       }

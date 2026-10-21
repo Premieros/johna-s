@@ -1,0 +1,23 @@
+name: Production audit isolated SQL proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/db/candidates/production*'
+      - '.github/workflows/production-audit-proofs.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned disposable Postgres engine outside application dependencies
+        run: npm install --prefix /tmp/production-audit-proof --no-save @electric-sql/pglite@0.3.14
+      - name: Verify candidate SQL against synthetic rows without production access
+        env:
+          AUDIT_PGLITE_MODULE: /tmp/production-audit-proof/node_modules/@electric-sql/pglite
+        run: node scripts/db/candidates/production-audit-proof.mjs

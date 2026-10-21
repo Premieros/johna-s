@@ -57,6 +57,10 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
 };
 
 const messages: Record<string, { ar: string; en: string }> = {
+  KITCHEN_WAREHOUSE_MISMATCH: {
+    ar: 'تغيّر مخزن الطلب. لم يتم التحصيل؛ راجع المعاينة المحدّثة ثم أكّد مرة أخرى. لا تغيّر المخزن يدويًا.',
+    en: 'The order warehouse changed. Payment was not taken; review the refreshed preview and confirm again. Do not switch warehouses manually.',
+  },
   REPORT_SOURCE_LIMIT: {
     ar: 'حجم التقرير يتجاوز حد القراءة الآمنة. قلّل الفترة أو حدّد الفرع والفلاتر؛ لم تُعرض نتائج جزئية.',
     en: 'The report exceeds the safe read limit. Narrow the period, branch or filters; partial results are not displayed.',
