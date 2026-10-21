@@ -127,13 +127,15 @@ export function TreasuryPage() {
   const { key: scopeKey, capture } = useFinanceScope(effectiveBranchFilter);
   const [loadedScope, setLoadedScope] = useState('');
   const [dialogScope, setDialogScope] = useState('');
+  const [daysScope, setDaysScope] = useState('');
+  const [dayLoading, setDayLoading] = useState(false);
   const [overviewError, setOverviewError] = useState('');
   const [dayError, setDayError] = useState('');
   const [outcomeUnconfirmed, setOutcomeUnconfirmed] = useState(false);
   const submitting = useRef(false);
   const balances = loadedScope === scopeKey ? storedBalances : [];
   const accounts = loadedScope === scopeKey ? storedAccounts : [];
-  const dayCloses = useMemo(() => loadedScope === scopeKey ? storedDayCloses : [], [loadedScope, scopeKey, storedDayCloses]);
+  const dayCloses = useMemo(() => daysScope === scopeKey ? storedDayCloses : [], [daysScope, scopeKey, storedDayCloses]);
   const mainTreasuryAccounts = balances.filter((b) => b.scope === 'organization');
   const mainTreasuryBalance = mainTreasuryAccounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
   const mainAccountIds = mainTreasuryAccounts.map((account) => account.id);
@@ -159,23 +161,25 @@ export function TreasuryPage() {
   const loadOverview = useCallback(async (balanceOnly = false) => {
     const isCurrent = capture('overview');
     setLoading(true); setOverviewError(''); setLoadedScope('');
+    if (!balanceOnly) { setDayLoading(true); setDayError(''); setDaysScope(''); }
     try {
       if (effectiveBranchFilter) {
         const { data, error } = await api.accounting.getAccessibleTreasuryAccounts({ p_branch_id: effectiveBranchFilter });
         if (!isCurrent()) return;
         if (error || !Array.isArray(data)) throw new Error('FINANCE_BALANCE_UNAVAILABLE');
         const sourceRows = data as TreasurySource[];
-        setBalances(sourceRows); setAccounts(sourceRows); setLoadedScope(scopeKey);
+        setBalances(sourceRows); setAccounts(sourceRows); setLoadedScope(scopeKey); setLoading(false);
         if (balanceOnly) return;
         const { data: closeData, error: closeError } = await api.accounting.getBranchTreasuryDayCloseReconciliation({ p_branch_id: effectiveBranchFilter, p_limit: 60 });
         if (!isCurrent()) return;
         const closePayload = closeData as { success?: boolean; rows?: TreasuryDayCloseRow[] } | null;
         setDayError(closeError || !closePayload?.success ? userFacingErrorMessage('FINANCE_BALANCE_UNAVAILABLE', lang) : '');
         setDayCloses(closePayload?.success ? (closePayload.rows || []) : []);
+        setDaysScope(scopeKey);
       } else { setBalances([]); setAccounts([]); setDayCloses([]); }
     } catch {
       if (isCurrent()) { setOverviewError(userFacingErrorMessage('FINANCE_BALANCE_UNAVAILABLE', lang)); setLoadedScope(''); }
-    } finally { if (isCurrent()) setLoading(false); }
+    } finally { if (isCurrent()) { setLoading(false); setDayLoading(false); } }
   }, [effectiveBranchFilter, capture, scopeKey, lang]);
 
   useEffect(() => { void loadOverview(); }, [loadOverview]);
@@ -420,7 +424,7 @@ export function TreasuryPage() {
               ))}
             </div>
           </details>
-          <DataTable columns={dailyColumns} data={dailyRows} loading={loading} error={txError} emptyMessage={t('noData')} />
+          <DataTable columns={dailyColumns} data={dailyRows} loading={loading || dayLoading} error={dayError || txError} emptyMessage={t('noData')} />
 
           {dailyRows.length > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
