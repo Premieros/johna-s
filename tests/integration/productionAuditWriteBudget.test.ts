@@ -15,7 +15,7 @@ describe.skipIf(!owned)('audit fallback index WAL budgets: owned synthetic table
   ['inventory_ledger','idx_inventory_ledger_priced_receipt_recent'],
   ['raw_material_batches','idx_raw_batches_real_price_recent'],
  ])('caps positive receipt overhead and excludes sale/debt rows for %s',async(source,index)=>{
-  const suffix=randomUUID().replaceAll('-','');const table='public.qa_audit_write_'+suffix;
+  const suffix=randomUUID().replace(/-/g,'');const table='public.qa_audit_write_'+suffix;
   // Logged regular tables, not TEMP/UNLOGGED: WAL must be measurable. All roll back.
   await db.query(`CREATE TABLE ${table}(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
    raw_material_id uuid,branch_id uuid,warehouse_id uuid,quantity numeric,unit_cost numeric,
