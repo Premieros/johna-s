@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {PGlite}=require(process.env.TRANSFER_PGLITE_MODULE || '@electric-sql/pglite');
+const db=new PGlite();
+await db.exec(`CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT '00000000-0000-0000-0000-000000000099'::uuid $$;
+CREATE FUNCTION is_pos_admin() RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
+CREATE FUNCTION can_permission(text) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+CREATE FUNCTION user_may_access_branch(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+CREATE SEQUENCE doc_seq;
+CREATE FUNCTION next_document_number(text) RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_build_object('number',nextval('doc_seq')) $$;
+CREATE TABLE warehouses(id uuid,branch_id uuid,is_active boolean);
+CREATE TABLE products(id uuid,branch_id uuid,is_active boolean);
+CREATE TABLE raw_materials(id uuid,branch_id uuid,unit_id uuid,is_active boolean);
+CREATE TABLE warehouse_transfers(id uuid DEFAULT gen_random_uuid(),transfer_number text,from_warehouse_id uuid,to_warehouse_id uuid,branch_id uuid,to_branch_id uuid,reason text,notes text,requested_by uuid);
+CREATE TABLE warehouse_transfer_items(transfer_id uuid,product_id uuid,destination_product_id uuid,raw_material_id uuid,destination_raw_material_id uuid,quantity numeric,unit_cost numeric);
+INSERT INTO warehouses VALUES('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000001',true),('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000002',true);
+INSERT INTO raw_materials VALUES('00000000-0000-0000-0000-000000000021','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000031',true),('00000000-0000-0000-0000-000000000022','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000032',true);`);
+
+await db.exec(`ALTER TABLE warehouse_transfers ADD COLUMN status text DEFAULT 'pending',ADD COLUMN approved_by uuid,ADD COLUMN approved_at timestamptz,ADD COLUMN updated_at timestamptz;`);
+const baseline=JSON.parse(readFileSync('scripts/db/candidates/raw_transfer_safety_baseline.json','utf8'));
+for(const row of baseline) await db.exec(row.definition);
+const before=await db.query(`SELECT proname,prosecdef,proacl::text acl FROM pg_proc WHERE proname IN ('create_warehouse_transfer','approve_warehouse_transfer') ORDER BY proname`);
+await db.exec('BEGIN;'+readFileSync('supabase/migrations/20261021145048_raw_transfer_safety.sql','utf8')+'COMMIT;');
+const call="SELECT create_warehouse_transfer('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000001',$1::jsonb,null,null) result";
+const items=JSON.stringify([{item_type:'raw_material',item_id:'00000000-0000-0000-0000-000000000021',destination_item_id:'00000000-0000-0000-0000-000000000022',quantity:4,unit_cost:4}]);
+assert.deepEqual((await db.query(call,[items])).rows[0].result,{success:false,error:'TRANSFER_UNIT_MISMATCH'});
+assert.equal(Number((await db.query('SELECT count(*) n FROM warehouse_transfers')).rows[0].n),0);
+await db.exec(`UPDATE raw_materials SET unit_id='00000000-0000-0000-0000-000000000031';`);
+const created=(await db.query(call,[items])).rows[0].result; assert.equal(created.success,true);
+await db.exec(`UPDATE raw_materials SET unit_id='00000000-0000-0000-0000-000000000032' WHERE id='00000000-0000-0000-0000-000000000022';`);
+assert.deepEqual((await db.query('SELECT approve_warehouse_transfer($1) result',[created.transfer_id])).rows[0].result,{success:false,error:'TRANSFER_UNIT_MISMATCH'});
+assert.equal((await db.query('SELECT status FROM warehouse_transfers WHERE id=$1',[created.transfer_id])).rows[0].status,'pending');
+const after=await db.query(`SELECT proname,prosecdef,proacl::text acl FROM pg_proc WHERE proname IN ('create_warehouse_transfer','approve_warehouse_transfer') ORDER BY proname`);
+assert.deepEqual(after.rows,before.rows);
+await db.exec(readFileSync('scripts/rollback/raw_transfer_safety_20261021.sql','utf8'));
+for(const row of baseline) {
+ const restored=await db.query("SELECT replace(prosrc,chr(13),'') body FROM pg_proc WHERE proname=$1",[row.proname]);assert.equal(restored.rows[0].body,row.normalized_original);
+}
+console.log('PASS: create unit rejection, matching-unit create, pending approval rejection, metadata preservation, guarded rollback');
+await db.close();

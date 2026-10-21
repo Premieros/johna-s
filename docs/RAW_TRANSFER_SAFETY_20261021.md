@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-transfer-safety-20261021`
-Current PR: `0`
+Current PR: `531`
 Last updated: 2026-10-21
 
 ## Work status

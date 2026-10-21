@@ -20,6 +20,7 @@ export async function loadTransferMeta(): Promise<{
     supabase.from('branches').select('*').eq('is_active', true).order('name'),
   ]);
 
+  if ([warehousesResult, rawMaterialsResult, branchesResult].some(result => result.error || !Array.isArray(result.data))) throw new Error('TRANSFER_META_UNAVAILABLE');
   return {
     warehouses: (warehousesResult.data as Warehouse[]) || [],
     rawMaterials: (rawMaterialsResult.data as TransferRawMaterialChoice[]) || [],
@@ -32,7 +33,7 @@ export async function loadTransferAverageCost(params: {
   branchId: string;
   warehouseId: string;
 }): Promise<number> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('raw_material_warehouse_inventory')
     .select('avg_cost')
     .eq('raw_material_id', params.rawMaterialId)
@@ -40,5 +41,8 @@ export async function loadTransferAverageCost(params: {
     .eq('warehouse_id', params.warehouseId)
     .maybeSingle();
 
-  return Number((data as { avg_cost?: number } | null)?.avg_cost || 0);
+  if (error) throw new Error('TRANSFER_COST_UNAVAILABLE');
+  const cost = Number((data as { avg_cost?: number } | null)?.avg_cost ?? 0);
+  if (!Number.isFinite(cost) || cost < 0) throw new Error('TRANSFER_COST_UNAVAILABLE');
+  return cost;
 }
