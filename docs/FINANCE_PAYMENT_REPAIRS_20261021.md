@@ -33,3 +33,6 @@ Implement scoped reads, clear business feedback, bounded complete invoice select
 
 ## Mandatory update protocol
 Reconcile main/head before mutation; update material findings and checks. Never claim an ambiguous transport failure means no financial operation committed.
+
+## Canonical-source reconciliation
+Exact-head CI stopped on the strict hash guard. Canonical receive_payment hash 0e75b5e6af772dca7d25873b17029a8c differs from live 61cef56d5a382ee177d0c9113559ac6e only in two employee-collection comment lines. Accept those two explicitly known bodies, patch only the identical broken projection, reject unknown bodies, and restore each exact original on rollback. The isolated proof exercises both variants; no old applied migration is edited.

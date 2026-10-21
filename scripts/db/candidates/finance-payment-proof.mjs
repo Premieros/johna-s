@@ -54,5 +54,13 @@ try {
  assert.equal(Number((await db.query('SELECT paid_amount FROM sales')).rows[0].paid_amount),35);
  await db.exec(`UPDATE customers SET customer_type='employee'`); assert.equal((await pay(10,null)).employee_delegate,true);
  await db.exec('BEGIN; '+readFileSync(resolve(root,'scripts/rollback/finance_receive_payment_20261021.sql'),'utf8')+' COMMIT;'); const restored=await metadata(); assert.deepEqual(restored,before);
+ // The canonical migration differs from production only in two employee-path comments.
+ await db.exec(baseline.canonical_definition);
+ const canonicalBefore = await metadata(); assert.equal(canonicalBefore.hash,baseline.canonical_hash);
+ assert.equal((await pay()).error,'TRANSACTION_FAILED');
+ await db.exec(`BEGIN; ${patch} COMMIT;`);
+ assert.equal((await pay()).success,true);
+ await db.exec('BEGIN; '+readFileSync(resolve(root,'scripts/rollback/finance_receive_payment_20261021.sql'),'utf8')+' COMMIT;');
+ assert.deepEqual(await metadata(),canonicalBefore);
  console.log(JSON.stringify({proof:'finance receive_payment projection',baselineFailure:original.error,candidateHash:after.hash,authorization:true,invoiceLimit:true,refundNetting:true,allocation:true,journalRollback:true,employeeDelegate:true,metadataPreserved:true,exactRollback:true,scope:'owned synthetic database only; no live payments'}));
 } finally { await db.close(); }
